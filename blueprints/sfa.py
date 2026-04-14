@@ -757,12 +757,19 @@ def sync_sinan():
     from services.sfa_service import sincronizar_respostas_t0, sincronizar_sinan
     resultado = sincronizar_sinan()
     resultado_t0 = sincronizar_respostas_t0()
+    detalhes = [
+        detalhe
+        for detalhe in [resultado.get("mensagem"), resultado_t0.get("mensagem")]
+        if detalhe
+    ]
     flash(
         f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s). "
         f"T0: {resultado_t0['importados']} importada(s), {resultado_t0['ignorados']} ignorada(s), "
         f"{resultado_t0['erros']} erro(s).",
         "info",
     )
+    if detalhes:
+        flash(" | ".join(detalhes), "warning")
     return redirect(url_for("sfa_routes.dashboard"))
 
 
@@ -790,4 +797,6 @@ def rodar_rotina():
         f"{resultado_t0['importados']} T0 importada(s).",
         "info"
     )
+    if resultado_t0.get("mensagem"):
+        flash(resultado_t0["mensagem"], "warning")
     return redirect(url_for("sfa_routes.dashboard"))

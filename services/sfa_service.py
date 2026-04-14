@@ -1589,7 +1589,11 @@ def sincronizar_sinan() -> dict:
     spreadsheet_id = _extract_google_sheet_id(SHEET_ID_SINAN)
     if not spreadsheet_id:
         log.warning("SFA_SHEET_ID_SINAN não configurado — sincronização SINAN ignorada.")
-        return {"novos": 0, "erros": 0}
+        return {
+            "novos": 0,
+            "erros": 0,
+            "mensagem": "SFA_SHEET_ID_SINAN nao configurado no ambiente.",
+        }
 
     from extensions import db
     from models.sfa import SfaPaciente, SfaSinanLog
@@ -1608,7 +1612,11 @@ def sincronizar_sinan() -> dict:
         log.error("Erro ao ler planilha SINAN: %s", exc)
         registrar_auditoria("ERROR", "SINAN_SYNC", "sincronizar_sinan",
                              f"Falha ao ler Google Sheets: {exc}")
-        return {"novos": 0, "erros": 1}
+        return {
+            "novos": 0,
+            "erros": 1,
+            "mensagem": f"Falha ao ler Google Sheets: {exc}",
+        }
 
     if len(rows) < 2:
         log.info("Planilha SINAN vazia ou sem linhas de dados.")
@@ -1954,7 +1962,12 @@ def sincronizar_respostas_t0() -> dict:
     """Importa respostas T0 a partir da planilha vinculada ao Google Forms."""
     if not T0_RESPONSE_SHEET:
         log.info("SFA_T0_RESPONSE_SHEET nao configurado — sincronizacao T0 ignorada.")
-        return {"importados": 0, "ignorados": 0, "erros": 0}
+        return {
+            "importados": 0,
+            "ignorados": 0,
+            "erros": 0,
+            "mensagem": "SFA_T0_RESPONSE_SHEET nao configurado no ambiente.",
+        }
 
     try:
         service = _get_sheets_service()
@@ -1974,7 +1987,12 @@ def sincronizar_respostas_t0() -> dict:
             "sincronizar_respostas_t0",
             f"Falha ao ler planilha de respostas T0: {exc}",
         )
-        return {"importados": 0, "ignorados": 0, "erros": 1}
+        return {
+            "importados": 0,
+            "ignorados": 0,
+            "erros": 1,
+            "mensagem": f"Falha ao ler planilha de respostas T0: {exc}",
+        }
 
     if len(rows) < 2:
         return {"importados": 0, "ignorados": 0, "erros": 0}

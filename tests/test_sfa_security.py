@@ -76,3 +76,39 @@ def test_sfa_webhook_accepts_configured_secret(app, client, monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["ok"] is True
+
+
+def test_sfa_sync_flashes_detailed_error_message(app, client, monkeypatch):
+    monkeypatch.setenv("SFA_ALLOW_OPEN_ACCESS", "0")
+    monkeypatch.delenv("SFA_ADMIN_TOKEN", raising=False)
+    app.config["TESTING"] = False
+
+    with app.app_context():
+        admin = User(name="Admin Sync", email="admin-sync@test", password_hash="x", role="admin")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    _login(client, admin_id)
+    monkeypatch.setattr(
+        "services.sfa_service.sincronizar_sinan",
+        lambda: {
+            "novos": 0,
+            "erros": 1,
+            "mensagem": "Falha ao ler Google Sheets: Credenciais Google nao configuradas.",
+        },
+    )
+    monkeypatch.setattr(
+        "services.sfa_service.sincronizar_respostas_t0",
+        lambda: {"importados": 0, "ignorados": 0, "erros": 0},
+    )
+
+    response = client.post("/sfa/sync")
+
+    assert response.status_code == 302
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes", [])
+    assert (
+        "warning",
+        "Falha ao ler Google Sheets: Credenciais Google nao configuradas.",
+    ) in flashes

@@ -731,13 +731,15 @@ document.addEventListener('form-sync-success', function(ev) {
         }
       }
     }
-    const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
-    modal?.hide();
+    if (typeof window.hideTutorDetailModal === 'function') {
+      window.hideTutorDetailModal(form.closest('.modal'));
+    } else {
+      const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
+      modal?.hide();
+    }
   }
 });
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}
 
 {% block scripts %}

@@ -16,6 +16,38 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function clearStaleModalArtifacts() {
+  if (document.querySelector('.modal.show')) return;
+  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('padding-right');
+  document.body.style.removeProperty('overflow');
+}
+
+function hideTutorDetailModal(modalElement) {
+  if (!modalElement) return;
+
+  const modalApi = window.bootstrap && window.bootstrap.Modal;
+  if (modalApi) {
+    const instance = modalApi.getInstance(modalElement) || modalApi.getOrCreateInstance(modalElement);
+    instance.hide();
+  } else {
+    modalElement.classList.remove('show');
+    modalElement.style.display = 'none';
+    modalElement.setAttribute('aria-hidden', 'true');
+  }
+
+  window.setTimeout(clearStaleModalArtifacts, 250);
+}
+
+window.hideTutorDetailModal = hideTutorDetailModal;
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#modalNovoAnimal, [id^="modalEditarAnimal"]').forEach((modalElement) => {
+    modalElement.addEventListener('hidden.bs.modal', clearStaleModalArtifacts);
+  });
+});
+
 function updateAnimalsEmptyState(tableBody) {
   if (!tableBody) return;
   const hasAnimalRows = tableBody.querySelector('tr[id^="animal-row-"]');
@@ -290,8 +322,7 @@ document.addEventListener('form-sync-success', (ev) => {
     }
   }
 
-  const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
-  modal?.hide();
+  hideTutorDetailModal(form.closest('.modal'));
   form.reset();
 
   if (typeof showToast === 'function') {
