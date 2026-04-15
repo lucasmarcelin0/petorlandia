@@ -21,7 +21,14 @@
       "Bash(git pull:*)",
       "Bash(git reset:*)",
       "Bash(heroku logs:*)",
-      "WebFetch(domain:www.petorlandia.com.br)"
+      "WebFetch(domain:www.petorlandia.com.br)",
+      "Bash(gh pr create --title 'fix: corrige busca de espécie/raça e bugs nos filtros' --body ':*)",
+      "Bash(where gh:*)",
+      "Bash(winget list:*)",
+      "Bash(flask db:*)",
+      "Bash(pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(ls -lt migrations/versions/*.py)"
     ]
   }
 }
