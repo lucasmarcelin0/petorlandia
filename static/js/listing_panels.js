@@ -267,7 +267,9 @@
     applyStatusFilters(panel);
 
     if (persisted.shouldFetch) {
-      fetchPage(panel, 1);
+      // Busca silenciosa de restauração de preferências:
+      // se falhar, mantém o conteúdo do servidor sem mostrar erro.
+      fetchPage(panel, 1, { silent: true });
     } else {
       syncUrl(panel);
     }
@@ -340,7 +342,7 @@
     debounceTimers.set(panel, timer);
   }
 
-  async function fetchPage(panel, page) {
+  async function fetchPage(panel, page, { silent = false } = {}) {
     const panelData = panelStates.get(panel);
     if (!panelData) return;
     const { state, config } = panelData;
@@ -353,7 +355,7 @@
     const controller = new AbortController();
     activeControllers.set(panel, controller);
 
-    setLoadingState(panel, true);
+    if (!silent) setLoadingState(panel, true);
 
     let response;
     try {
@@ -367,22 +369,26 @@
       });
     } catch (error) {
       if (error.name === 'AbortError') {
-        setLoadingState(panel, false);
+        if (!silent) setLoadingState(panel, false);
         return;
       }
-      console.error('Listing panel request failed.', error);
-      setLoadingState(panel, false);
-      setErrorState(panel, true, () => fetchPage(panel, page));
+      console.warn('[listing-panel] fetch falhou:', error.message, 'url:', requestUrl.toString());
+      if (!silent) {
+        setLoadingState(panel, false);
+        setErrorState(panel, true, () => fetchPage(panel, page));
+      }
       return;
     } finally {
       activeControllers.delete(panel);
     }
 
-    setLoadingState(panel, false);
+    if (!silent) setLoadingState(panel, false);
 
     if (!response || !response.ok) {
-      console.warn('Listing panel received non-ok response:', response?.status);
-      setErrorState(panel, true, () => fetchPage(panel, page));
+      console.warn('[listing-panel] resposta não-ok:', response?.status, 'url:', requestUrl.toString());
+      if (!silent) {
+        setErrorState(panel, true, () => fetchPage(panel, page));
+      }
       return;
     }
 
@@ -390,14 +396,19 @@
     try {
       payload = await response.json();
     } catch (error) {
-      console.error('Invalid JSON response for listing panel.', error);
-      setErrorState(panel, true, () => fetchPage(panel, page));
+      console.warn('[listing-panel] JSON inválido na resposta. Status:', response.status,
+        'Content-Type:', response.headers.get('content-type'));
+      if (!silent) {
+        setErrorState(panel, true, () => fetchPage(panel, page));
+      }
       return;
     }
 
     if (!payload || typeof payload.html !== 'string') {
-      console.warn('Listing panel response missing html payload.');
-      setErrorState(panel, true, () => fetchPage(panel, page));
+      console.warn('[listing-panel] payload sem html. Chaves recebidas:', Object.keys(payload || {}));
+      if (!silent) {
+        setErrorState(panel, true, () => fetchPage(panel, page));
+      }
       return;
     }
 
