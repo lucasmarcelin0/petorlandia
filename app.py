@@ -8221,7 +8221,7 @@ def list_animals():
     name_query = request.args.get('name')
 
     # Base query: ignora animais removidos e sem responsável cadastrado
-    query = Animal.query.filter(Animal.removido_em == None, Animal.user_id.isnot(None))
+    query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
 
     # Filtro por modo
     if modo and modo.lower() != 'todos':
@@ -10493,6 +10493,7 @@ TUTOR_SEARCH_LIMIT = 50
 
 
 @app.route('/buscar_tutores', methods=['GET'])
+@login_required
 def buscar_tutores():
     raw_query = request.args.get('q', '')
     query = raw_query.strip()
@@ -10546,7 +10547,7 @@ def buscar_tutores():
     if numeric_like:
         filters.extend(column.ilike(numeric_like) for column in digit_columns)
 
-    visibility_clause = _user_visibility_clause(clinic_scope=current_user_clinic_id())
+    visibility_clause = _user_visibility_clause(clinic_scope=clinic_id)
 
     tutores_query = (
         User.query.outerjoin(Endereco)
@@ -10626,9 +10627,6 @@ def buscar_tutores():
                 else '',
             }
         )
-
-    if sort_param == 'name_asc':
-        resultados.sort(key=lambda item: (item['name'] or '').lower())
 
     return jsonify(resultados)
 
@@ -11246,7 +11244,7 @@ def clinic_detail(clinica_id):
     animais_adicionados = (
         Animal.query
         .filter_by(clinica_id=clinica_id)
-        .filter(Animal.removido_em == None)
+        .filter(Animal.removido_em.is_(None))
         .all()
     )
     tutores_adicionados = (
@@ -17146,7 +17144,7 @@ def _get_recent_animais(
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
 
-    base_query = Animal.query.filter(Animal.removido_em == None)
+    base_query = Animal.query.filter(Animal.removido_em.is_(None))
 
     search_value = (search or '').strip().lower()
     sort_value = (sort_option or 'date_desc').strip().lower() or 'date_desc'
