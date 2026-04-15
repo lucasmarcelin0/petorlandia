@@ -13869,12 +13869,18 @@ def tutores():
                 tutores_adicionados=tutores_adicionados,
                 pagination=pagination,
                 scope=resolved_scope,
+                tutor_sort=tutor_sort,
                 scope_param=request.args.get('scope_param', 'scope'),
                 search_param='tutor_search',
                 sort_param='tutor_sort',
                 page_param=request.args.get('page_param', 'page'),
                 fetch_url=url_for('tutores'),
                 compact=True,
+                shared_access_map={
+                    t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope)
+                    for t in tutores_adicionados
+                },
+                viewer_clinic_id=clinic_id,
             )
             return jsonify(
                 message='Tutor criado com sucesso!',

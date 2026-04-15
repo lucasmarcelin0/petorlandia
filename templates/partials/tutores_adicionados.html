@@ -44,7 +44,21 @@
     <div class="row g-3 align-items-end mb-4">
       <div class="col-12 col-lg-7">
         <label for="tutor-filter" class="form-label small text-muted mb-1">Buscar</label>
-        <input type="text" id="tutor-filter" class="form-control" placeholder="Buscar por nome, CPF, telefone..." value="{{ current_search }}">
+        <div class="input-group">
+          <input type="text" id="tutor-filter" class="form-control"
+                 placeholder="Buscar por nome, CPF, telefone..."
+                 value="{{ current_search }}"
+                 title="Pressione Enter para buscar imediatamente">
+          <button type="button"
+                  class="btn btn-primary"
+                  data-apply-filter
+                  title="Aplicar filtros agora">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+        <div class="form-text text-muted" style="font-size:.75rem">
+          A busca atualiza automaticamente. Use o botão <i class="fas fa-search"></i> se precisar forçar.
+        </div>
       </div>
       <div class="col-12 col-lg-5">
         <label for="tutor-sort" class="form-label small text-muted mb-1">Ordenar por</label>

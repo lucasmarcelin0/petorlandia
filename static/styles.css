@@ -1529,3 +1529,24 @@ body {
   border-radius: 12px;
   padding: 0.85rem;
 }
+
+/* ── Listing panel: loading + error states ─────────────────────────── */
+.listing-panel-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: .6rem 1rem;
+  color: #6c757d;
+  font-size: .88rem;
+  gap: .4rem;
+}
+
+.listing-panel-error {
+  font-size: .88rem;
+  border-radius: 10px;
+}
+
+[data-listing-loading="true"] [data-apply-filter] {
+  pointer-events: none;
+  opacity: .65;
+}
