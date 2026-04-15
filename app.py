@@ -22881,6 +22881,104 @@ def bulario_detalhe(medicamento_id):
 
 
 @login_required
+def bulario_novo():
+    """Cria um novo medicamento — somente admin."""
+    if not _is_admin():
+        abort(403)
+    from models.base import Medicamento, ApresentacaoMedicamento
+
+    if request.method == "POST":
+        med = Medicamento(
+            nome                = request.form.get("nome", "").strip()[:100],
+            classificacao       = request.form.get("classificacao", "").strip()[:100] or None,
+            principio_ativo     = request.form.get("principio_ativo", "").strip()[:200] or None,
+            via_administracao   = request.form.get("via_administracao", "").strip()[:80] or None,
+            dosagem_recomendada = request.form.get("dosagem_recomendada", "").strip() or None,
+            frequencia          = request.form.get("frequencia", "").strip()[:100] or None,
+            duracao_tratamento  = request.form.get("duracao_tratamento", "").strip() or None,
+            observacoes         = request.form.get("observacoes", "").strip() or None,
+            bula                = request.form.get("bula", "").strip() or None,
+            created_by          = current_user.id,
+        )
+        db.session.add(med)
+        db.session.flush()
+
+        # Apresentações dinâmicas
+        formas = request.form.getlist("apres_forma[]")
+        concs  = request.form.getlist("apres_conc[]")
+        for forma, conc in zip(formas, concs):
+            forma = forma.strip()[:50]
+            conc  = conc.strip()[:100]
+            if forma:
+                db.session.add(ApresentacaoMedicamento(
+                    medicamento_id=med.id, forma=forma, concentracao=conc
+                ))
+
+        db.session.commit()
+        flash("Medicamento criado com sucesso.", "success")
+        return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
+
+    return render_template("bulario/form.html", med=None, titulo="Novo medicamento")
+
+
+@login_required
+def bulario_editar(medicamento_id):
+    """Edita um medicamento existente — somente admin."""
+    if not _is_admin():
+        abort(403)
+    from models.base import Medicamento, ApresentacaoMedicamento
+
+    med = Medicamento.query.get_or_404(medicamento_id)
+
+    if request.method == "POST":
+        med.nome                = request.form.get("nome", "").strip()[:100]
+        med.classificacao       = request.form.get("classificacao", "").strip()[:100] or None
+        med.principio_ativo     = request.form.get("principio_ativo", "").strip()[:200] or None
+        med.via_administracao   = request.form.get("via_administracao", "").strip()[:80] or None
+        med.dosagem_recomendada = request.form.get("dosagem_recomendada", "").strip() or None
+        med.frequencia          = request.form.get("frequencia", "").strip()[:100] or None
+        med.duracao_tratamento  = request.form.get("duracao_tratamento", "").strip() or None
+        med.observacoes         = request.form.get("observacoes", "").strip() or None
+        med.bula                = request.form.get("bula", "").strip() or None
+
+        # Recriar apresentações
+        for apres in list(med.apresentacoes):
+            db.session.delete(apres)
+        db.session.flush()
+
+        formas = request.form.getlist("apres_forma[]")
+        concs  = request.form.getlist("apres_conc[]")
+        for forma, conc in zip(formas, concs):
+            forma = forma.strip()[:50]
+            conc  = conc.strip()[:100]
+            if forma:
+                db.session.add(ApresentacaoMedicamento(
+                    medicamento_id=med.id, forma=forma, concentracao=conc
+                ))
+
+        db.session.commit()
+        flash("Medicamento atualizado com sucesso.", "success")
+        return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
+
+    return render_template("bulario/form.html", med=med, titulo=f"Editar — {med.nome}")
+
+
+@login_required
+def bulario_excluir(medicamento_id):
+    """Exclui um medicamento — somente admin."""
+    if not _is_admin():
+        abort(403)
+    from models.base import Medicamento
+
+    med = Medicamento.query.get_or_404(medicamento_id)
+    nome = med.nome
+    db.session.delete(med)
+    db.session.commit()
+    flash(f'Medicamento "{nome}" excluído.', "info")
+    return redirect(url_for("bulario"))
+
+
+@login_required
 def bulario_buscar_api():
     """API JSON para autocomplete de medicamentos (usado em prescrições)."""
     from models.base import Medicamento

@@ -286,15 +286,12 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
 
     # ── Administração e doses ─────────────────────────────────────────────
     admin_txt = secoes.get('Administração e doses') or ''
+    admin = _parsear_admin_doses(admin_txt)
 
-    via_administracao   = _extrair_via(admin_txt)
-    dosagem_recomendada = _extrair_dose(admin_txt)
-    frequencia          = _extrair_campo_estrito(admin_txt, 'Frequência', 'Frequencia', 'Intervalo de')
-    duracao_tratamento  = _extrair_campo_estrito(admin_txt, 'Duração do tratamento', 'Período de tratamento')
-
-    # Se não extraiu campos individuais mas há conteúdo real, usa o texto completo como posologia
-    if admin_txt and not dosagem_recomendada and not via_administracao:
-        dosagem_recomendada = _limpar(admin_txt, 500)
+    via_administracao   = admin['via']
+    dosagem_recomendada = admin['dose']
+    frequencia          = admin['frequencia']
+    duracao_tratamento  = admin['duracao']
 
     # ── Indicações / Observações / Interações / Farmacologia ─────────────
     indicacoes  = _limpar(secoes.get('Indicações e contraindicações'), 800)
@@ -341,6 +338,97 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         bula                = bula,
         apresentacoes       = apresentacoes,
     )
+
+
+def _parsear_admin_doses(texto: str) -> dict:
+    """
+    Parseia a seção 'Administração e doses' do VetSmart linha a linha.
+
+    Estrutura real observada:
+      Via(s)
+        Oral / Tópica / Oftálmica ...
+        Videos da(s) via(s)          ← ruído (botão)
+      Frequência de utilização
+        2 vezes ao dia
+      Dosagem indicada
+        Doses
+        Dosagem para Cães e Gatos
+        Recomendado 5 mg/kg
+        Modo de usar ...
+      Duração do tratamento
+        7 dias
+      Observações
+        ...
+    """
+    TITULOS = {
+        'via(s)':                    'via',
+        'frequência de utilização':  'frequencia',
+        'frequencia de utilizacao':  'frequencia',
+        'dosagem indicada':          'dose',
+        'duração do tratamento':     'duracao',
+        'duracao do tratamento':     'duracao',
+        'período de tratamento':     'duracao',
+        'observações':               'obs',
+        'observacoes':               'obs',
+    }
+    # Linhas que são ruído dentro das subseções
+    RUIDO = {
+        'videos da(s) via(s)',
+        'doses',
+        'dosagem para caes e gatos',
+        'dosagem para caes',
+        'dosagem para gatos',
+        'dosagem para caes e gatos',
+        'dosagem para cao',
+        'dosagem para gato',
+        'recomendado',
+        'modo de usar',
+        'dosagem indicada',
+        'dosagem',
+    }
+    # Prefixos a remover mesmo que não sejam linha exata
+    PREFIXOS_RUIDO = [
+        'dosagem para caes e gatos',
+        'dosagem para caes',
+        'dosagem para gatos',
+        'dosagem para cao',
+        'dosagem para gato',
+    ]
+
+    import unicodedata
+    def _norm_titulo(t):
+        nfkd = unicodedata.normalize('NFKD', t.lower().strip())
+        return nfkd.encode('ASCII', 'ignore').decode()
+
+    coleta: Dict[str, list] = {'via': [], 'dose': [], 'frequencia': [], 'duracao': [], 'obs': []}
+    atual = None
+
+    for linha in texto.split('\n'):
+        linha = linha.strip()
+        if not linha:
+            continue
+        ln = _norm_titulo(linha)
+        if ln in TITULOS:
+            atual = TITULOS[ln]
+            continue
+        if ln in RUIDO or any(ln.startswith(r) for r in PREFIXOS_RUIDO):
+            continue
+        if atual and atual in coleta:
+            coleta[atual].append(linha)
+
+    def _juntar(linhas, max_len=300):
+        if not linhas:
+            return None
+        txt = ' '.join(linhas).strip()
+        return txt[:max_len] if len(txt) > 2 else None
+
+    return {
+        'via':       _juntar(coleta['via'][:2], 80),
+        'dose':      _juntar(coleta['dose'][:6], 300),
+        'frequencia': _juntar(coleta['frequencia'][:2], 100),
+        'duracao':   _juntar(coleta['duracao'][:2], 100),
+        'obs':       _juntar(coleta['obs'][:4], 400),
+    }
 
 
 def _extrair_campo(texto: str, *rotulos) -> Optional[str]:

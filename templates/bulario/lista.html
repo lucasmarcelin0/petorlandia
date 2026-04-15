@@ -10,8 +10,11 @@
       </span>
       <h1 class="bulario-hero__title mt-3">Medicamentos para cães e gatos</h1>
       <p class="bulario-hero__sub">
-        Consulte princípios ativos, posologia, apresentações e contraindicações
+        Consulte, adicione, edite e remova medicamentos com praticidade
       </p>
+      <a href="{{ url_for('bulario_novo') }}" class="btn bulario-btn-novo mt-3">
+        <i class="fas fa-plus me-2"></i>Novo medicamento
+      </a>
     </div>
 
     <form method="GET" action="{{ url_for('bulario') }}" id="bulario-form">
@@ -100,59 +103,105 @@
   <div class="row g-3">
     {% for med in medicamentos %}
     <div class="col-sm-6 col-lg-4 col-xl-3">
-      <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) }}"
-         class="bulario-card text-decoration-none">
+      <div class="bulario-card">
 
-        <!-- Ícone de categoria -->
-        <div class="bulario-card__icon">
-          {% if med.classificacao and 'antibi' in med.classificacao|lower %}
-            <i class="fas fa-bacteria"></i>
-          {% elif med.classificacao and ('anti-inflamat' in med.classificacao|lower or 'antiinflamat' in med.classificacao|lower) %}
-            <i class="fas fa-fire-flame-curved"></i>
-          {% elif med.classificacao and 'parasit' in med.classificacao|lower %}
-            <i class="fas fa-bug"></i>
-          {% elif med.classificacao and 'vacin' in med.classificacao|lower %}
-            <i class="fas fa-syringe"></i>
-          {% elif med.classificacao and 'hormôn' in med.classificacao|lower %}
-            <i class="fas fa-dna"></i>
-          {% else %}
-            <i class="fas fa-pills"></i>
-          {% endif %}
-        </div>
-
-        <div class="bulario-card__body">
-          <h6 class="bulario-card__name">{{ med.nome }}</h6>
-
-          {% if med.principio_ativo %}
-          <p class="bulario-card__pa">{{ med.principio_ativo | truncate(55) }}</p>
-          {% endif %}
-
-          <div class="bulario-card__badges">
-            {% if med.classificacao %}
-            <span class="bulario-badge bulario-badge--blue">{{ med.classificacao | truncate(28) }}</span>
+        <!-- Ícone + ações rápidas -->
+        <div class="bulario-card__icon d-flex align-items-center justify-content-between">
+          <span>
+            {% if med.classificacao and 'antibi' in med.classificacao|lower %}
+              <i class="fas fa-bacteria"></i>
+            {% elif med.classificacao and ('anti-inflamat' in med.classificacao|lower or 'antiinflamat' in med.classificacao|lower) %}
+              <i class="fas fa-fire-flame-curved"></i>
+            {% elif med.classificacao and 'parasit' in med.classificacao|lower %}
+              <i class="fas fa-bug"></i>
+            {% elif med.classificacao and 'vacin' in med.classificacao|lower %}
+              <i class="fas fa-syringe"></i>
+            {% elif med.classificacao and 'hormôn' in med.classificacao|lower %}
+              <i class="fas fa-dna"></i>
+            {% else %}
+              <i class="fas fa-pills"></i>
             {% endif %}
-            {% if med.via_administracao %}
-            <span class="bulario-badge bulario-badge--gray">
-              <i class="fas fa-route me-1" style="font-size:.65em"></i>{{ med.via_administracao }}
-            </span>
-            {% endif %}
+          </span>
+          <div class="bulario-card__actions">
+            <a href="{{ url_for('bulario_editar', medicamento_id=med.id) }}"
+               class="bulario-action-btn bulario-action-btn--edit"
+               title="Editar" onclick="event.stopPropagation()">
+              <i class="fas fa-pen"></i>
+            </a>
+            <button type="button"
+               class="bulario-action-btn bulario-action-btn--delete"
+               title="Excluir"
+               onclick="confirmarExclusao({{ med.id }}, '{{ med.nome | e }}')">
+              <i class="fas fa-trash"></i>
+            </button>
           </div>
         </div>
 
-        <div class="bulario-card__footer">
-          {% if med.dosagem_recomendada %}
-          <span class="bulario-card__dose">
-            <i class="fas fa-ruler-combined me-1"></i>{{ med.dosagem_recomendada | truncate(50) }}
-          </span>
-          {% else %}
-          <span class="bulario-card__dose text-muted">Ver informações</span>
-          {% endif %}
-          <i class="fas fa-arrow-right bulario-card__arrow"></i>
-        </div>
+        <!-- Conteúdo clicável -->
+        <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) }}"
+           class="text-decoration-none text-dark flex-grow-1 d-flex flex-column">
+          <div class="bulario-card__body">
+            <h6 class="bulario-card__name">{{ med.nome }}</h6>
+            {% if med.principio_ativo %}
+            <p class="bulario-card__pa">{{ med.principio_ativo | truncate(55) }}</p>
+            {% endif %}
+            <div class="bulario-card__badges">
+              {% if med.classificacao %}
+              <span class="bulario-badge bulario-badge--blue">{{ med.classificacao | truncate(28) }}</span>
+              {% endif %}
+              {% if med.via_administracao %}
+              <span class="bulario-badge bulario-badge--gray">
+                <i class="fas fa-route me-1" style="font-size:.65em"></i>{{ med.via_administracao }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="bulario-card__footer">
+            {% if med.dosagem_recomendada %}
+            <span class="bulario-card__dose">
+              <i class="fas fa-ruler-combined me-1"></i>{{ med.dosagem_recomendada | truncate(50) }}
+            </span>
+            {% else %}
+            <span class="bulario-card__dose text-muted">Ver informações</span>
+            {% endif %}
+            <i class="fas fa-arrow-right bulario-card__arrow"></i>
+          </div>
+        </a>
 
-      </a>
+      </div>
     </div>
     {% endfor %}
+
+    <!-- Modal de confirmação de exclusão -->
+    <div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-0 pb-0">
+            <div class="d-flex align-items-center gap-2">
+              <div class="bd-warn-icon-sm"><i class="fas fa-triangle-exclamation"></i></div>
+              <h5 class="modal-title fw-bold mb-0">Excluir medicamento</h5>
+            </div>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted mb-0">
+              Tem certeza que deseja excluir <strong id="modalExcluirNome"></strong>?
+              <br><small class="text-danger">Esta ação não pode ser desfeita.</small>
+            </p>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+            <form id="formExcluir" method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash me-1"></i>Excluir
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Paginação -->
@@ -313,6 +362,18 @@
   color: #fff;
 }
 
+/* ── Botão Novo ───────────────────────────────────── */
+.bulario-btn-novo {
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.4);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: .55rem 1.4rem;
+  transition: background .15s;
+}
+.bulario-btn-novo:hover { background: rgba(255,255,255,.28); color: #fff; }
+
 /* ── Cards ────────────────────────────────────────── */
 .bulario-card {
   display: flex;
@@ -323,12 +384,49 @@
   overflow: hidden;
   height: 100%;
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s;
-  color: inherit;
 }
 .bulario-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 32px rgba(25,118,210,.12);
   border-color: #93c5fd;
+}
+
+/* ── Botões de ação nos cards ─────────────────────── */
+.bulario-card__actions {
+  display: flex;
+  gap: .35rem;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.bulario-card:hover .bulario-card__actions { opacity: 1; }
+.bulario-action-btn {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .75rem;
+  cursor: pointer;
+  transition: all .15s;
+  text-decoration: none;
+}
+.bulario-action-btn--edit {
+  background: #eff6ff; color: #1976d2;
+}
+.bulario-action-btn--edit:hover {
+  background: #1976d2; color: #fff;
+}
+.bulario-action-btn--delete {
+  background: #fff1f2; color: #e11d48;
+}
+.bulario-action-btn--delete:hover {
+  background: #e11d48; color: #fff;
+}
+.bd-warn-icon-sm {
+  width: 32px; height: 32px;
+  background: #fef3c7; color: #d97706;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .9rem;
 }
 .bulario-card__icon {
   background: linear-gradient(135deg, #eff6ff, #dbeafe);
@@ -401,4 +499,11 @@
 }
 </style>
 
+<script>
+function confirmarExclusao(id, nome) {
+  document.getElementById('modalExcluirNome').textContent = nome;
+  document.getElementById('formExcluir').action = `/bulario/${id}/excluir`;
+  new bootstrap.Modal(document.getElementById('modalExcluir')).show();
+}
+</script>
 {% endblock %}

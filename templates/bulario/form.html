@@ -1,0 +1,380 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<!-- ════════  HERO  ════════ -->
+<div class="bd-hero">
+  <div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb bd-breadcrumb">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('bulario') }}"><i class="fas fa-capsules me-1"></i>Bulário</a>
+        </li>
+        {% if med %}
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) }}">{{ med.nome }}</a>
+        </li>
+        <li class="breadcrumb-item active text-white-50">Editar</li>
+        {% else %}
+        <li class="breadcrumb-item active text-white-50">Novo medicamento</li>
+        {% endif %}
+      </ol>
+    </nav>
+    <div class="d-flex align-items-center gap-3">
+      <div class="bd-hero__icon">
+        <i class="fas fa-{% if med %}pen{% else %}plus{% endif %}"></i>
+      </div>
+      <div>
+        <h1 class="bd-hero__name mb-0">{{ titulo }}</h1>
+        <p class="bd-hero__pa mb-0">
+          {% if med %}Atualize os campos desejados abaixo{% else %}Preencha os dados do novo medicamento{% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════  FORMULÁRIO  ════════ -->
+<div class="container py-4">
+  <form method="POST" id="form-medicamento" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="row g-4">
+
+      <!-- ── Coluna principal ── -->
+      <div class="col-lg-8">
+
+        <!-- Identificação -->
+        <div class="bf-section mb-4">
+          <h6 class="bf-section__title">
+            <i class="fas fa-tag me-2 text-primary"></i>Identificação
+          </h6>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label bf-label">Nome do medicamento <span class="text-danger">*</span></label>
+              <input type="text" name="nome" class="form-control bf-input"
+                     value="{{ med.nome if med else '' }}"
+                     placeholder="Ex: Amoxicilina" required maxlength="100">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label bf-label">Classificação</label>
+              <input type="text" name="classificacao" class="form-control bf-input"
+                     value="{{ med.classificacao or '' if med else '' }}"
+                     placeholder="Ex: Antibiótico, Anti-inflamatório"
+                     list="lista-classificacoes" maxlength="100">
+              <datalist id="lista-classificacoes">
+                <option value="Antibiótico">
+                <option value="Anti-inflamatório">
+                <option value="Antiparasitário">
+                <option value="Analgésico">
+                <option value="Antifúngico">
+                <option value="Anti-helmíntico">
+                <option value="Corticosteroide">
+                <option value="Hormônio">
+                <option value="Vacina">
+                <option value="Teste Diagnóstico">
+                <option value="Suplemento">
+                <option value="Oftálmico">
+                <option value="Dermatológico">
+              </datalist>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label bf-label">Princípio ativo</label>
+              <input type="text" name="principio_ativo" class="form-control bf-input"
+                     value="{{ med.principio_ativo or '' if med else '' }}"
+                     placeholder="Ex: Amoxicilina triidratada" maxlength="200">
+            </div>
+          </div>
+        </div>
+
+        <!-- Posologia -->
+        <div class="bf-section mb-4">
+          <h6 class="bf-section__title">
+            <i class="fas fa-ruler-combined me-2 text-primary"></i>Posologia
+          </h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label bf-label">Via de administração</label>
+              <input type="text" name="via_administracao" class="form-control bf-input"
+                     value="{{ med.via_administracao or '' if med else '' }}"
+                     placeholder="Ex: Oral, IM, IV, Tópica"
+                     list="lista-vias" maxlength="80">
+              <datalist id="lista-vias">
+                <option value="Oral">
+                <option value="Intramuscular (IM)">
+                <option value="Intravenosa (IV)">
+                <option value="Subcutânea (SC)">
+                <option value="Tópica">
+                <option value="Oftálmica">
+                <option value="Auricular">
+                <option value="Nasal">
+              </datalist>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label bf-label">Frequência</label>
+              <input type="text" name="frequencia" class="form-control bf-input"
+                     value="{{ med.frequencia or '' if med else '' }}"
+                     placeholder="Ex: SID, BID, 2x ao dia"
+                     list="lista-freq" maxlength="100">
+              <datalist id="lista-freq">
+                <option value="SID — uma vez ao dia">
+                <option value="BID — duas vezes ao dia">
+                <option value="TID — três vezes ao dia">
+                <option value="QID — quatro vezes ao dia">
+                <option value="A cada 48 horas">
+                <option value="A cada 72 horas">
+                <option value="Dose única">
+              </datalist>
+            </div>
+            <div class="col-12">
+              <label class="form-label bf-label">Dose recomendada</label>
+              <textarea name="dosagem_recomendada" class="form-control bf-input" rows="2"
+                        placeholder="Ex: 10–20 mg/kg, Cães: 5 mg/kg, Gatos: 2,5 mg/kg">{{ med.dosagem_recomendada or '' if med else '' }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label bf-label">Duração do tratamento</label>
+              <input type="text" name="duracao_tratamento" class="form-control bf-input"
+                     value="{{ med.duracao_tratamento or '' if med else '' }}"
+                     placeholder="Ex: 7 dias, 5–10 dias" maxlength="100">
+            </div>
+          </div>
+        </div>
+
+        <!-- Observações / Contraindicações -->
+        <div class="bf-section mb-4">
+          <h6 class="bf-section__title">
+            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>Contraindicações e observações
+          </h6>
+          <textarea name="observacoes" class="form-control bf-input" rows="4"
+                    placeholder="Contraindicações, precauções, interações medicamentosas, efeitos adversos...">{{ med.observacoes or '' if med else '' }}</textarea>
+        </div>
+
+        <!-- Bula -->
+        <div class="bf-section mb-4">
+          <h6 class="bf-section__title">
+            <i class="fas fa-file-medical me-2 text-primary"></i>Bula / Informações técnicas
+          </h6>
+          <textarea name="bula" class="form-control bf-input" rows="8"
+                    placeholder="Texto completo da bula, farmacologia, mecanismo de ação...">{{ med.bula or '' if med else '' }}</textarea>
+        </div>
+
+      </div>
+
+      <!-- ── Coluna lateral ── -->
+      <div class="col-lg-4">
+
+        <!-- Apresentações -->
+        <div class="bf-section mb-4 sticky-top" style="top: calc(var(--topbar-height, 56px) + 1rem)">
+          <h6 class="bf-section__title">
+            <i class="fas fa-box-open me-2 text-primary"></i>Apresentações
+          </h6>
+          <p class="text-muted small mb-3">Formas farmacêuticas e embalagens disponíveis.</p>
+
+          <div id="apresentacoes-lista">
+            {% if med and med.apresentacoes %}
+              {% for ap in med.apresentacoes %}
+              <div class="bf-apres-row" data-apres-row>
+                <div class="row g-2 align-items-center mb-2">
+                  <div class="col">
+                    <input type="text" name="apres_forma[]"
+                           class="form-control form-control-sm bf-input"
+                           placeholder="Forma (ex: cápsula)"
+                           value="{{ ap.forma }}" list="lista-formas">
+                  </div>
+                  <div class="col">
+                    <input type="text" name="apres_conc[]"
+                           class="form-control form-control-sm bf-input"
+                           placeholder="Concentração / embal."
+                           value="{{ ap.concentracao }}">
+                  </div>
+                  <div class="col-auto">
+                    <button type="button" class="btn btn-link text-danger p-1 bf-apres-remove"
+                            onclick="removerApres(this)" title="Remover">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+
+          <datalist id="lista-formas">
+            <option value="Comprimido">
+            <option value="Cápsula">
+            <option value="Frasco">
+            <option value="Ampola">
+            <option value="Solução oral">
+            <option value="Suspensão oral">
+            <option value="Injetável">
+            <option value="Pomada">
+            <option value="Creme">
+            <option value="Gel">
+            <option value="Spray">
+            <option value="Gotas">
+            <option value="Sachê">
+            <option value="Bisnaga">
+            <option value="Caixa">
+          </datalist>
+
+          <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-1" onclick="adicionarApres()">
+            <i class="fas fa-plus me-1"></i>Adicionar apresentação
+          </button>
+
+          <!-- Ações do formulário -->
+          <hr class="my-4">
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary bf-btn-salvar">
+              <i class="fas fa-save me-2"></i>
+              {% if med %}Salvar alterações{% else %}Criar medicamento{% endif %}
+            </button>
+            <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) if med else url_for('bulario') }}"
+               class="btn btn-outline-secondary">
+              Cancelar
+            </a>
+            {% if med %}
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    onclick="confirmarExclusao({{ med.id }}, '{{ med.nome | e }}')">
+              <i class="fas fa-trash me-1"></i>Excluir este medicamento
+            </button>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Modal exclusão (só no modo edição) -->
+{% if med %}
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <div class="d-flex align-items-center gap-2">
+          <div class="bd-warn-icon-sm"><i class="fas fa-triangle-exclamation"></i></div>
+          <h5 class="modal-title fw-bold mb-0">Excluir medicamento</h5>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-0">
+          Tem certeza que deseja excluir <strong>{{ med.nome }}</strong>?
+          <br><small class="text-danger">Esta ação não pode ser desfeita.</small>
+        </p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" action="{{ url_for('bulario_excluir', medicamento_id=med.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="fas fa-trash me-1"></i>Excluir
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ════════  CSS  ════════ -->
+<style>
+.bf-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.4rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.bf-section__title {
+  font-size: .85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #374151;
+  margin-bottom: 1rem;
+  padding-bottom: .6rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+.bf-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: .35rem;
+}
+.bf-input {
+  border-color: #e5e7eb;
+  border-radius: 8px;
+  font-size: .92rem;
+  transition: border-color .15s, box-shadow .15s;
+}
+.bf-input:focus {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25,118,210,.12);
+}
+.bf-btn-salvar {
+  border-radius: 10px;
+  font-weight: 600;
+  padding: .65rem;
+}
+.bf-apres-row { border-bottom: 1px solid #f3f4f6; padding-bottom: .25rem; }
+.bf-apres-row:last-child { border-bottom: none; }
+.bf-apres-remove { line-height: 1; }
+.bd-warn-icon-sm {
+  width: 32px; height: 32px;
+  background: #fef3c7; color: #d97706;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .9rem;
+}
+</style>
+
+<!-- ════════  JS  ════════ -->
+<script>
+function adicionarApres() {
+  const lista = document.getElementById('apresentacoes-lista');
+  const row = document.createElement('div');
+  row.className = 'bf-apres-row';
+  row.setAttribute('data-apres-row', '');
+  row.innerHTML = `
+    <div class="row g-2 align-items-center mb-2">
+      <div class="col">
+        <input type="text" name="apres_forma[]"
+               class="form-control form-control-sm bf-input"
+               placeholder="Forma (ex: cápsula)" list="lista-formas" autofocus>
+      </div>
+      <div class="col">
+        <input type="text" name="apres_conc[]"
+               class="form-control form-control-sm bf-input"
+               placeholder="Concentração / embal.">
+      </div>
+      <div class="col-auto">
+        <button type="button" class="btn btn-link text-danger p-1"
+                onclick="removerApres(this)" title="Remover">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>`;
+  lista.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function removerApres(btn) {
+  btn.closest('[data-apres-row]').remove();
+}
+
+function confirmarExclusao(id, nome) {
+  document.getElementById('modalExcluir') && new bootstrap.Modal(document.getElementById('modalExcluir')).show();
+}
+
+// Validação simples antes de submeter
+document.getElementById('form-medicamento').addEventListener('submit', function(e) {
+  const nome = this.querySelector('[name="nome"]').value.trim();
+  if (!nome) {
+    e.preventDefault();
+    this.querySelector('[name="nome"]').classList.add('is-invalid');
+    this.querySelector('[name="nome"]').focus();
+  }
+});
+</script>
+
+{% endblock %}
