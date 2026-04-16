@@ -357,22 +357,13 @@
       const parseJsonSafe = async (response) => {
         if (!response) return null;
         const contentType = response.headers.get('Content-Type') || '';
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:349',message:'parseJsonSafe entry',data:{hasResponse:!!response,contentType:contentType,includesJson:contentType.includes('application/json')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
 
         if (!contentType.includes('application/json')) return null;
         try {
           const clone = response.clone();
           const parsed = await clone.json();
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:355',message:'parseJsonSafe success',data:{parsedKeys:parsed?Object.keys(parsed):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           return parsed;
         } catch (err) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:357',message:'parseJsonSafe error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           return null;
         }
       };
@@ -498,9 +489,6 @@
             
             // Prevent double submission
             if (form.dataset.submitting === 'true') {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:483',message:'Prevented double submission',data:{formAction:form.action},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-              // #endregion
               return;
             }
             form.dataset.submitting = 'true';
@@ -529,9 +517,6 @@
                   credentials: 'same-origin',
                 }));
 
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:488',message:'After fetchOrQueue',data:{queued:queued,responseStatus:response?.status,responseOk:response?.ok,responseType:response?.type,responseUrl:response?.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
 
                 if (queued) {
                   const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
@@ -542,23 +527,14 @@
 
                 const data = await parseJsonSafe(response);
                 const contentType = response?.headers?.get('Content-Type') || '';
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:502',message:'After parseJsonSafe',data:{dataIsNull:data===null,contentType:contentType,hasMessage:!!data?.message,hasCategory:!!data?.category,hasHtml:!!data?.html,hasCounts:!!data?.counts,dataKeys:data?Object.keys(data):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
 
                 const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
                 // Check if response has valid delivery data even if status is not 200
                 // This handles cases where backend returns 400 with valid JSON payload (e.g., CSRF errors that still include html/counts)
                 const hasValidDeliveryData = data && (data.html || data.counts);
                 const successLike = isLikelySuccess(response) || (hasValidDeliveryData && data.category !== 'danger');
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:504',message:'After isLikelySuccess',data:{successLike:successLike,responseOk:response?.ok,responseStatus:response?.status,responseType:response?.type,hasValidDeliveryData:hasValidDeliveryData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                // #endregion
 
                 if (successLike) {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:506',message:'Entering success branch',data:{hasData:!!data,hasRedirect:!!data?.redirect,hasHtml:!!data?.html,hasDeliverySections:hasDeliverySections},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                  // #endregion
 
                   const successData = ensureMessageCategory(
                     data,
@@ -568,30 +544,18 @@
 
                   if (hasDeliverySections && data) {
                     applyDeliveryPayload(data);
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:514',message:'After applyDeliveryPayload',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                    // #endregion
                   }
 
                   if (data?.redirect) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:568',message:'Redirect detected',data:{hasDeliverySections:hasDeliverySections,redirect:data.redirect,forceRedirect:form.dataset.forceRedirect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                    // #endregion
                     
                     // If we have delivery sections, ALWAYS update UI instead of redirecting
                     // User can navigate manually if needed
                     if (hasDeliverySections) {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:571',message:'Skipping redirect - hasDeliverySections=true',data:{hasHtml:!!data?.html},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                      // #endregion
                       
                       if (data?.html) {
                         applyDeliveryPayload(data);
                       } else {
                         await refreshDeliverySections();
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:519',message:'After refreshDeliverySections (redirect path)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                        // #endregion
                       }
                       const eventDetail = {
                         form,
@@ -608,9 +572,6 @@
                     }
                     // Only redirect if we don't have delivery sections
                     if (!form.dataset.forceRedirect) {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:595',message:'Executing redirect - no delivery sections',data:{redirect:data.redirect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                      // #endregion
                       window.location.href = data.redirect;
                       return { success: true, keepButton: true };
                     }
@@ -637,9 +598,6 @@
 
                   showToast(successData.message, successData.category);
                   await refreshDeliverySections();
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:545',message:'After refreshDeliverySections (normal path)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                  // #endregion
                   emitSyncEvent({
                     form,
                     data: successData,
@@ -651,20 +609,13 @@
                   return { success: true, message: successData.message, level: successData.category };
                 }
 
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:557',message:'Entering error branch',data:{hasData:!!data,responseOk:response?.ok,responseStatus:response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                // #endregion
 
                 // Even if response status indicates error, if we have valid delivery data (html/counts),
                 // treat it as a success case and update the UI. This handles cases where backend
                 // returns error status but still includes updated data (e.g., CSRF errors that include html/counts)
-                const hasValidDeliveryData = data && (data.html || data.counts);
                 const shouldTreatAsSuccess = hasValidDeliveryData && data.category !== 'danger';
                 
                 if (shouldTreatAsSuccess) {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:600',message:'Treating error response as success due to valid delivery data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                  // #endregion
                   
                   // When we have valid delivery data, use a success message instead of the warning/error message
                   const successData = ensureMessageCategory(
@@ -692,9 +643,6 @@
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
                 const errorData = ensureMessageCategory(data, errorMessage, errorCategory);
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:559',message:'Error data prepared',data:{errorMessage:errorMessage,errorCategory:errorCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                // #endregion
 
                 if (hasDeliverySections) {
                   if (data?.html) {
@@ -721,9 +669,6 @@
                 }
                 return { success: false, message: errorData.message, level: errorData.category };
               } catch (error) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:584',message:'Exception caught',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                // #endregion
 
                 console.error('Erro ao enviar formulário de entrega', error);
                 emitSyncEvent({
@@ -766,9 +711,6 @@
               }
             } catch (error) {
               console.error('Error in delivery form handler:', error);
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:720',message:'Error in form handler',data:{errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-              // #endregion
             } finally {
               // Reset submitting flag after a delay to allow UI updates
               setTimeout(() => {
