@@ -12,6 +12,10 @@ def get_blueprint():
         view_func=lazy_view("vet_detail"),
     )
     bp.add_url_rule(
+        "/veterinario/<int:veterinario_id>/relatorio-atividades",
+        view_func=lazy_view("veterinarian_activity_report"),
+    )
+    bp.add_url_rule(
         "/admin/veterinario/<int:veterinario_id>/especialidades",
         view_func=lazy_view("edit_vet_specialties"),
         methods=["GET", "POST"],

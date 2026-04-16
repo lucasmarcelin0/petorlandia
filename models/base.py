@@ -367,8 +367,6 @@ class Animal(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
-    species = db.Column(db.String(50))
-    breed = db.Column(db.String(100))
     age = db.Column(db.String(50))
     peso = db.Column(db.Float, nullable=True)
     date_of_birth = db.Column(db.Date, nullable=True)

@@ -1,0 +1,142 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <h2 class="mb-1">Relatório de atividades</h2>
+      <div class="text-muted small">
+        <strong>Veterinário:</strong> {{ veterinario.user.name }}
+        <span class="mx-2">|</span>
+        <strong>CRMV:</strong> {{ veterinario.crmv or 'Não informado' }}
+        {% if veterinario.clinica %}
+        <span class="mx-2">|</span>
+        <strong>Clínica:</strong> {{ veterinario.clinica.nome }}
+        {% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary" href="{{ url_for('vet_detail', veterinario_id=veterinario.id) }}">Voltar ao perfil</a>
+      <a class="btn btn-outline-success" href="{{ url_for('veterinarian_activity_report', veterinario_id=veterinario.id, **csv_args) }}">Exportar CSV</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('veterinarian_activity_report', veterinario_id=veterinario.id, **pdf_args) }}">Exportar PDF</a>
+    </div>
+  </div>
+
+  <form method="get" class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Data inicial</label>
+          <input type="date" class="form-control" name="start_date" value="{{ filters.start_date }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Data final</label>
+          <input type="date" class="form-control" name="end_date" value="{{ filters.end_date }}">
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+          <button class="btn btn-primary">Atualizar relatório</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('veterinarian_activity_report', veterinario_id=veterinario.id) }}">Limpar</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">Atividades</div>
+          <div class="display-6 fw-semibold">{{ summary.total }}</div>
+          <div class="small text-muted">{{ summary.days_with_activity }} dias com registro</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">Atendimentos</div>
+          <div class="h3 mb-1">{{ summary.consultas }}</div>
+          <div class="small text-muted">{{ summary.appointments }} agendamentos</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">Procedimentos</div>
+          <div class="h3 mb-1">{{ summary.prescriptions + summary.exam_requests + summary.vaccines }}</div>
+          <div class="small text-muted">
+            {{ summary.prescriptions }} prescrições, {{ summary.exam_requests }} exames, {{ summary.vaccines }} vacinas
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">Abrangência</div>
+          <div class="h3 mb-1">{{ summary.animals }}</div>
+          <div class="small text-muted">{{ summary.documents }} documentos anexados</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <strong>Linha do tempo detalhada</strong>
+        <div class="small text-muted">Registros consolidados do período selecionado.</div>
+      </div>
+      <span class="badge text-bg-light">{{ summary.total }} itens</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th>Animal</th>
+            <th>Tutor</th>
+            <th>Clínica</th>
+            <th>Detalhes</th>
+            <th>Registro</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in activities %}
+          <tr>
+            <td class="text-nowrap">{{ item.timestamp.strftime('%d/%m/%Y %H:%M') if item.timestamp else '—' }}</td>
+            <td>{{ {
+              'appointment': 'Agendamento',
+              'consulta': 'Consulta',
+              'prescription': 'Prescrição',
+              'exam_request': 'Exame solicitado',
+              'vaccine': 'Vacina',
+              'document': 'Documento'
+            }[item.kind] }}</td>
+            <td><span class="badge text-bg-light">{{ item.status }}</span></td>
+            <td>{{ item.animal_name }}</td>
+            <td>{{ item.tutor_name }}</td>
+            <td>{{ item.clinic_name }}</td>
+            <td class="small" style="min-width: 280px;">{{ item.detail }}</td>
+            <td class="text-nowrap">
+              {% if item.detail_url %}
+              <a href="{{ item.detail_url }}" class="btn btn-sm btn-outline-secondary">#{{ item.record_id }}</a>
+              {% else %}
+              #{{ item.record_id }}
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center py-4 text-muted">Nenhuma atividade encontrada para o período informado.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

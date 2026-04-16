@@ -137,12 +137,15 @@ def _verificar_webhook_secret() -> bool:
 @bp.route("/")
 @require_sfa_internal_access
 def dashboard():
-    from services.sfa_service import stats_painel, link_whatsapp, normalizar_telefone
+    from services.sfa_service import (
+        stats_painel, link_whatsapp, normalizar_telefone, diagnostico_configuracao
+    )
     from services.sfa_service import (
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
     )
 
     stats = stats_painel()
+    diagnostico = diagnostico_configuracao()
 
     # Enriquece a fila com links WhatsApp prontos
     for p in stats["fila"]:
@@ -164,7 +167,7 @@ def dashboard():
             except Exception:
                 pass
 
-    return render_template("sfa/dashboard.html", stats=stats)
+    return render_template("sfa/dashboard.html", stats=stats, diagnostico=diagnostico)
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +435,22 @@ def marcar_whatsapp(id_estudo: str):
     db.session.commit()
     flash(f"WhatsApp marcado como {novo_status}.", "success")
     return redirect(url_for("sfa_routes.paciente_detail", id_estudo=id_estudo))
+
+
+@bp.route("/paciente/manual", methods=["POST"])
+@require_sfa_internal_access
+def criar_paciente_manual():
+    from services.sfa_service import criar_paciente_manual as criar_manual_service
+
+    ok, resultado, paciente = criar_manual_service(request.form)
+    if not ok:
+        flash(resultado, "warning")
+        if paciente is not None:
+            return redirect(url_for("sfa_routes.paciente_detail", id_estudo=paciente.id_estudo))
+        return redirect(url_for("sfa_routes.dashboard"))
+
+    flash(f"Participante {resultado} criado com sucesso.", "success")
+    return redirect(url_for("sfa_routes.paciente_detail", id_estudo=resultado))
 
 
 # ---------------------------------------------------------------------------

@@ -106,6 +106,12 @@
         <i class="fas fa-signature"></i> Assinaturas TCLE
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.dashboard' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.dashboard') }}#cadastro-manual">
+        <i class="fas fa-user-plus"></i> Cadastro Manual
+      </a>
+    </li>
     <li class="nav-item mt-3">
       <span class="nav-link text-white-50" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.8px">Ações</span>
     </li>

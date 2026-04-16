@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Iterable, List, Optional
 
 from sqlalchemy import func, or_, true
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import contains_eager, joinedload
 
 from extensions import db
 from models import Animal
@@ -40,30 +40,6 @@ def _coerce_sort(value: Optional[str]) -> str:
     return "recent_added"
 
 
-def _serialize_species(animal: Animal) -> Optional[str]:
-    species = getattr(animal, "species", None)
-    if species is None:
-        return None
-    name = getattr(species, "name", None)
-    if name:
-        return name
-    if isinstance(species, str):
-        return species
-    return None
-
-
-def _serialize_breed(animal: Animal) -> Optional[str]:
-    breed = getattr(animal, "breed", None)
-    if breed is None:
-        return None
-    name = getattr(breed, "name", None)
-    if name:
-        return name
-    if isinstance(breed, str):
-        return breed
-    return None
-
-
 def search_animals(
     *,
     term: str,
@@ -75,36 +51,36 @@ def search_animals(
     limit: Optional[int] = None,
 ) -> List[dict]:
     """Return serialized animals for the search endpoint."""
+    from models.base import Breed, Species
 
     like_term = f"%{(term or '').strip()}%"
 
-    filters = [Animal.name.ilike(like_term)]
-
-    species_column = getattr(Animal.__table__.c, "species", None)
-    if species_column is not None:
-        filters.append(species_column.ilike(like_term))
-
-    breed_column = getattr(Animal.__table__.c, "breed", None)
-    if breed_column is not None:
-        filters.append(breed_column.ilike(like_term))
-
-    filters.append(Animal.microchip_number.ilike(like_term))
-
-    clause = or_(*filters) if filters else true()
-
     last_appt = _build_last_appointment_subquery(clinic_scope)
 
+    # outerjoin Species and Breed so we can filter by their names
     query = (
-        Animal.query.options(
+        Animal.query
+        .outerjoin(Animal.species)
+        .outerjoin(Animal.breed)
+        .options(
             joinedload(Animal.owner),
-            joinedload(Animal.species),
-            joinedload(Animal.breed),
+            contains_eager(Animal.species),
+            contains_eager(Animal.breed),
         )
         .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
         .add_columns(last_appt.c.last_at.label("last_appointment_at"))
-        .filter(clause)
         .filter(Animal.removido_em.is_(None))
     )
+
+    # Apply text filter only when a term is provided
+    if (term or '').strip():
+        filters = [
+            Animal.name.ilike(like_term),
+            Animal.microchip_number.ilike(like_term),
+            Species.name.ilike(like_term),
+            Breed.name.ilike(like_term),
+        ]
+        query = query.filter(or_(*filters))
 
     if visibility_clause is not None:
         query = query.filter(Animal.owner.has(visibility_clause))
@@ -132,8 +108,12 @@ def search_animals(
         owner = getattr(animal, "owner", None)
         date_of_birth = animal.date_of_birth.strftime("%Y-%m-%d") if animal.date_of_birth else ""
         last_at_value = last_at.isoformat() if isinstance(last_at, datetime) else None
-        species_name = _serialize_species(animal)
-        breed_name = _serialize_breed(animal)
+
+        species_obj = getattr(animal, "species", None)
+        species_name = getattr(species_obj, "name", None)
+
+        breed_obj = getattr(animal, "breed", None)
+        breed_name = getattr(breed_obj, "name", None)
 
         serialized.append(
             {

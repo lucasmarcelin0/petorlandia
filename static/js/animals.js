@@ -2,6 +2,8 @@ const filterForm = document.getElementById('filterForm');
 const animalsContainer = document.getElementById('animals-container');
 const basePath = filterForm ? new URL(filterForm.action, window.location.origin).pathname : window.location.pathname;
 
+let activeLoadController = null;
+
 function buildParams(overrides = {}) {
   if (!filterForm) {
     const params = new URLSearchParams(window.location.search);
@@ -61,6 +63,10 @@ function syncFormWithParams(params) {
 async function loadAnimals(params, { pushState = true } = {}) {
   if (!animalsContainer) return;
 
+  // Cancel any in-flight request to avoid stale results overwriting newer ones
+  if (activeLoadController) activeLoadController.abort();
+  activeLoadController = new AbortController();
+
   const search = params.toString();
   const requestUrl = search ? `${basePath}?${search}` : basePath;
 
@@ -71,7 +77,8 @@ async function loadAnimals(params, { pushState = true } = {}) {
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         'Accept': 'application/json'
-      }
+      },
+      signal: activeLoadController.signal,
     });
 
     if (!response.ok) {
@@ -86,6 +93,7 @@ async function loadAnimals(params, { pushState = true } = {}) {
     animalsContainer.innerHTML = data.html;
     initializePopovers();
   } catch (error) {
+    if (error.name === 'AbortError') return;
     console.error(error);
     window.location.href = requestUrl;
     return;

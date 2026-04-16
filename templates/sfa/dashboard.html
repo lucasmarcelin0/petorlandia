@@ -104,6 +104,36 @@
 
   <!-- Coluna lateral -->
   <div class="col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header" style="background:#0d6efd;color:white">
+        <i class="fas fa-stethoscope me-2"></i>Prontidão do ambiente
+      </div>
+      <div class="card-body">
+        {% if diagnostico.pendencias %}
+        <div class="alert alert-warning py-2 small">
+          Ainda existem ajustes pendentes: {{ diagnostico.pendencias|join(', ') }}.
+        </div>
+        {% else %}
+        <div class="alert alert-success py-2 small mb-3">
+          Configuração principal do SFA pronta para uso.
+        </div>
+        {% endif %}
+        <div class="list-group list-group-flush small">
+          {% for check in diagnostico.checks %}
+          <div class="list-group-item px-0 d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">{{ check.label }}</div>
+              <div class="text-muted" style="font-size:.75rem;word-break:break-word">{{ check.detail }}</div>
+            </div>
+            <span class="badge {% if check.ok %}bg-success{% else %}bg-warning text-dark{% endif %}">
+              {{ 'OK' if check.ok else 'Pendente' }}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
     <!-- Pendências de revisão -->
     <div class="card shadow-sm mb-3">
       <div class="card-header" style="background:#ffc107">
@@ -148,6 +178,78 @@
         {% else %}
         <p class="p-3 mb-0 text-muted small">Sem alertas recentes.</p>
         {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1" id="cadastro-manual">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--sfa-orange);color:white">
+        <i class="fas fa-user-plus me-2"></i>Cadastrar participante manualmente
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">
+          Use este formulário para testar o fluxo da pesquisa sem depender da planilha SINAN.
+          O participante já entra na fila operacional com link T0 gerado.
+        </p>
+        <form method="POST" action="{{ url_for('sfa_routes.criar_paciente_manual') }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-6">
+            <label class="form-label form-label-sm">Nome</label>
+            <input type="text" name="nome" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label form-label-sm">Nascimento</label>
+            <input type="date" name="data_nascimento" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label form-label-sm">Grupo</label>
+            <select name="grupo" class="form-select form-select-sm">
+              <option value="PENDENTE_REVISAO">Pendente revisão</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label form-label-sm">Telefone</label>
+            <input type="text" name="telefone" class="form-control form-control-sm" placeholder="(16) 99999-9999">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label form-label-sm">Bairro</label>
+            <input type="text" name="bairro" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label form-label-sm">Ficha SINAN</label>
+            <input type="text" name="ficha_sinan" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label class="form-label form-label-sm">Endereço</label>
+            <input type="text" name="endereco" class="form-control form-control-sm">
+          </div>
+          <div class="col-12 d-flex justify-content-end">
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="fas fa-plus me-1"></i>Criar participante
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header">
+        <i class="fas fa-route me-2"></i>Fluxo local recomendado
+      </div>
+      <div class="card-body small">
+        <ol class="mb-0 ps-3">
+          <li>Cadastre um participante manualmente.</li>
+          <li>Abra o detalhe do paciente e teste o link T0.</li>
+          <li>Valide o texto do WhatsApp gerado pelo sistema.</li>
+          <li>Amanhã, conecte a planilha SINAN e compare o fluxo automático.</li>
+        </ol>
       </div>
     </div>
   </div>
