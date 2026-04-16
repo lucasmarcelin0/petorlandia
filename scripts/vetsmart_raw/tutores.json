@@ -1,0 +1,6008 @@
+[
+  {
+    "objectId": "csP3vNsE9S",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-06-16T15:23:12.707Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.53.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Cristiana de Souza Oliveira Santos",
+    "cpf": "035.776.766-71",
+    "addressStreet": "Rua Farmaceutico Raul Machado",
+    "addressNumber": "133Ap 101 bloco 7",
+    "phone": "(31) 99358-6293",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.53.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-06-16T15:23:12.702Z",
+    "updatedAt": "2025-06-16T15:23:12.702Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "qIXVofp78i",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1978-03-30T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-04-17T15:14:58.035Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.50.16",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Katiane de Freitas Carvalho",
+    "cpf": "289.553.768-20",
+    "addressStreet": "Rua 16",
+    "addressNumber": "481",
+    "neighborhood": "centro",
+    "phone": "(16) 99151-5264",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.50.16",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-04-17T15:14:58.033Z",
+    "updatedAt": "2025-04-17T15:14:58.033Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "FVwDy0wcgG",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-04-11T13:44:26.961Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.50.12",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Anaine Vieira",
+    "email": "anainevieira321@gmail.com",
+    "cpf": "461.209.588-00",
+    "addressStreet": "Rua 3",
+    "addressNumber": "2137",
+    "neighborhood": "Jardim Nova Orlândia",
+    "phone": "(16) 99245-5954",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.50.12",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-04-11T13:44:26.958Z",
+    "updatedAt": "2025-04-11T13:44:26.958Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "y2KiEv4vSb",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1966-07-04T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-04-01T12:17:13.493Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.50.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "José Milton Galvão",
+    "cpf": "071.518.018-58",
+    "addressStreet": "Avenida 102",
+    "addressNumber": "1101",
+    "neighborhood": "José Vieira Brasão",
+    "phone": "(16) 99146-9567",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.50.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-04-01T12:17:13.489Z",
+    "updatedAt": "2025-04-01T12:17:13.489Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "oLSLUqG0Jd",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-28T19:51:40.600Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.50.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Victória Maria Monteiro",
+    "cpf": "508.320.798-20",
+    "addressStreet": "Alameda 3",
+    "addressNumber": "1620A",
+    "addressComplement": "Jardim Parisi",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.50.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-28T19:51:40.574Z",
+    "updatedAt": "2025-03-28T19:51:40.574Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ueMtnH1u8i",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1993-03-11T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-26T20:21:41.879Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.50.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Gulherme Martins dos Santos",
+    "cpf": "118.364.196-60",
+    "addressStreet": "rua 26",
+    "addressNumber": "2330",
+    "neighborhood": "Jardim São Joao - Vilinha",
+    "phone": "(16) 99362-5575",
+    "referredBy": "Márcia",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.50.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-26T20:21:41.862Z",
+    "updatedAt": "2025-03-26T20:21:41.862Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "rDUcp1cKhw",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1961-11-18T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-17T10:33:26.248Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Paulo Roberto Rosário",
+    "cpf": "037.699.458-40",
+    "addressStreet": "avenida R",
+    "addressNumber": "542",
+    "neighborhood": "Jardim Santa Rita",
+    "phone": "(16) 99440-1625",
+    "referredBy": "Tatiane",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-17T10:33:26.240Z",
+    "updatedAt": "2025-03-17T10:33:26.240Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "wKWPpSAYYx",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-13T17:38:52.514Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Renata Lopes Fernandes",
+    "cpf": "355.385.418-94",
+    "addressStreet": "Rua um",
+    "addressNumber": "1743",
+    "neighborhood": "Gruta",
+    "phone": "(16) 99237-7307",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-13T17:38:52.488Z",
+    "updatedAt": "2025-03-13T17:38:52.488Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ihQE4pazvy",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-13T20:19:34.983Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Alexandre Alves",
+    "addressStreet": "Avenida 19",
+    "addressNumber": "135",
+    "neighborhood": "Gruta",
+    "referredBy": "CAPS",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-13T13:08:46.587Z",
+    "updatedAt": "2025-03-13T20:19:34.966Z",
+    "cpf": "301.875.188-40",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "MXRPFTsJij",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1982-07-30T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-12T13:24:52.865Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Iraneide Maria de Sousa",
+    "cpf": "001.009.203-06",
+    "addressStreet": "Alameda 22",
+    "addressNumber": "1941",
+    "neighborhood": "Jardim São João",
+    "phone": "(16) 98181-2250",
+    "referredBy": "Maisse",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-12T13:24:52.806Z",
+    "updatedAt": "2025-03-12T13:24:52.806Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "vjLdvHCVM9",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-03-11T17:28:41.766Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Sidney Nascimento Silva",
+    "cpf": "403.728.818-40",
+    "addressStreet": "Avenida H",
+    "addressNumber": "378",
+    "addressComplement": "Jardim Boa Vista",
+    "phone": "(16) 99466-9770",
+    "referredBy": "Márcia Belato",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-03-11T17:28:41.719Z",
+    "updatedAt": "2025-03-11T17:28:41.719Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "wOVm7poMaI",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-27T13:50:01.649Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Edimir Souza Campos",
+    "cpf": "156.242.968-00",
+    "addressStreet": "Avenida 6",
+    "addressNumber": "1251",
+    "phone": "(16) 99364-0939",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-27T13:49:18.735Z",
+    "updatedAt": "2025-02-27T13:50:01.631Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "s4B9Waju3P",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1956-05-04T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-26T10:27:19.561Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Sebastiana Aparecida Da Silva Toledo",
+    "cpf": "930.300.028-53",
+    "addressStreet": "Travessa w",
+    "addressNumber": "1191",
+    "neighborhood": "Brasão",
+    "phone": "(16) 99165-8007",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-26T10:27:19.548Z",
+    "updatedAt": "2025-02-26T10:27:19.548Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "KNxvsNkAyf",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-21T13:12:21.473Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.5",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Amanda Rodrigues dos Santos",
+    "cpf": "067.723.523-27",
+    "phone": "(89) 9971-1244",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.5",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-21T12:55:00.955Z",
+    "updatedAt": "2025-02-21T13:12:21.464Z",
+    "addressNumber": "772",
+    "addressStreet": "Avenida B",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "cCfcTPT6OK",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-17T18:54:27.575Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Iracema da Silva",
+    "zipCode": "14620-000",
+    "addressNumber": "387",
+    "city": "Orlândia",
+    "cityId": "3534302",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2025-02-17T18:36:32.675Z",
+    "updatedAt": "2025-02-17T18:54:27.552Z",
+    "phone": "(16) 99920-0081",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DI1llwMszD",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-17T11:10:40.255Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Silvana Aparecida da Silva (Mãe - Dona Iracema)",
+    "cpf": "196.291.738-08",
+    "addressStreet": "Avenida S",
+    "addressNumber": "387",
+    "neighborhood": "Santa Rita",
+    "phone": "(16) 99337-8922",
+    "notes": "Quase na esquina com a rua 1. casa branca e amarela.",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-17T11:10:19.904Z",
+    "updatedAt": "2025-02-17T11:10:40.242Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "dmWmBTcyma",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "1989-06-01T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-14T14:45:03.916Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Tatiane Cristina da Silva",
+    "cpf": "399.092.268-80",
+    "addressStreet": "Avenida G",
+    "addressNumber": "865",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 99313-8187",
+    "referredBy": "Uma amiga passou o número. Fabiana - Protetores dos animais.",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-14T14:45:03.899Z",
+    "updatedAt": "2025-02-14T14:45:03.899Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "MTRovJZQoP",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-14T14:23:23.346Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Suelen Aparecida De Souza",
+    "cpf": "409.682.178-00",
+    "addressStreet": "Avenida O",
+    "addressNumber": "1540",
+    "neighborhood": "Max Define",
+    "phone": "(16) 99427-8204",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-14T14:23:23.296Z",
+    "updatedAt": "2025-02-14T14:23:23.296Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Fd6vZWghlJ",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-07T14:35:26.691Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "APARECIDA DE LURDES COELHO",
+    "cpf": "159.768.198-93",
+    "addressStreet": "Avenida D",
+    "addressNumber": "736",
+    "neighborhood": "Jardim Boa vista",
+    "phone": "(16) 99275-8122",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-07T14:35:26.670Z",
+    "updatedAt": "2025-02-07T14:35:26.670Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "rIkkjORc6U",
+    "birthdate": {
+      "__type": "Date",
+      "iso": "2005-10-18T02:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-07T11:46:06.191Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Elisa de Almeida Cantacini Lourençato",
+    "cpf": "528.064.948-18",
+    "addressStreet": "Rua 22",
+    "addressNumber": "625",
+    "addressComplement": "Em frente a Hipica",
+    "neighborhood": "Jardim Teixeira.",
+    "phone": "(16) 99998-8858",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-07T11:46:06.177Z",
+    "updatedAt": "2025-02-07T11:46:06.177Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "pSDHUFUH6F",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-06T23:21:12.558Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Kyvia Alvarenga Barbosa",
+    "cpf": "128.549.896-86",
+    "addressStreet": "Rua doutor Antônio Gonçalves de matos",
+    "addressNumber": "55",
+    "addressComplement": "Ap 408",
+    "phone": "(31) 99528-5331",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-06T23:21:12.540Z",
+    "updatedAt": "2025-02-06T23:21:12.540Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "lxZgTEdZW0",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-04T18:39:30.820Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Gisele De Souza Gertrudes",
+    "cpf": "465.167.778-96",
+    "addressStreet": "Rua 3",
+    "addressNumber": "939",
+    "addressComplement": "A",
+    "neighborhood": "Santa Helena",
+    "phone": "(16) 99343-4758",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-04T18:39:30.776Z",
+    "updatedAt": "2025-02-04T18:39:30.776Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "oMCV6e0ThK",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-04T12:13:37.470Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Regina Celia Fernandes Meneses",
+    "cpf": "007.286.203-32",
+    "addressStreet": "Rua 11",
+    "addressNumber": "1841",
+    "addressComplement": "A",
+    "neighborhood": "Birucão",
+    "phone": "(16) 99977-6648",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-02-04T12:13:37.180Z",
+    "updatedAt": "2025-02-04T12:13:37.180Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "AHouLkoy6b",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-30T12:59:22.607Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Santa Zanulo Nicolette",
+    "cpf": "554.106.699-91",
+    "addressStreet": "Avenida B",
+    "addressNumber": "1132",
+    "landlinePhone": "(16) 3726-6957",
+    "referredBy": "Frente de trabalho",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-30T12:59:22.571Z",
+    "updatedAt": "2025-01-30T12:59:22.571Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "edN0g5PLSb",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-29T12:28:42.796Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Marli Aparecida de Moura",
+    "cpf": "979.778.708-78",
+    "addressStreet": "Avenida do Café",
+    "addressNumber": "1294",
+    "neighborhood": "Centro",
+    "phone": "(16) 99172-9003",
+    "referredBy": "Márcia",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-29T12:28:42.736Z",
+    "updatedAt": "2025-01-29T12:28:42.736Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "AQHC581oct",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-27T15:23:26.907Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.49.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Aparecida Carmo Manso",
+    "cpf": "020.368.468-07",
+    "zipCode": "14620-000",
+    "addressStreet": "Av 20",
+    "addressNumber": "291",
+    "neighborhood": "Jd Nova Orlândia",
+    "city": "Orlândia",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2025-01-27T14:21:50.434Z",
+    "updatedAt": "2025-01-27T15:23:26.891Z",
+    "phone": "(16) 99318-2910",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "PoeH1I3XeN",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-23T14:15:55.769Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.48.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Andreia tavares forastieli",
+    "cpf": "200.619.318-02",
+    "rg": "232153899",
+    "phone": "(16) 9925-0851",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.48.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-23T14:15:55.748Z",
+    "updatedAt": "2025-01-23T14:15:55.748Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "4ITHwl6IXj",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-21T12:09:51.932Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.48.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Priscila Silva",
+    "cpf": "353.294.158-96",
+    "addressStreet": "Rua três",
+    "addressNumber": "671",
+    "addressComplement": "Centro, entre 7 e 8 - Portão cinza.",
+    "phone": "(16) 99397-6339",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.48.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-21T12:09:51.904Z",
+    "updatedAt": "2025-01-21T12:09:51.904Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "rczLkmnoUO",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-15T12:58:05.194Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.48.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Viviane Cristina Carvalho Nascimento",
+    "cpf": "381.358.588-33",
+    "addressStreet": "Avenida G",
+    "addressNumber": "670",
+    "phone": "(16) 98872-2746",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.48.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-15T12:58:05.187Z",
+    "updatedAt": "2025-01-15T12:58:05.187Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "YUxnsf1K4z",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-13T15:24:26.037Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.47.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Eliana",
+    "cpf": "191.449.718-00",
+    "addressStreet": "Rua 7",
+    "addressNumber": "1391A",
+    "neighborhood": "Parise",
+    "phone": "(16) 98194-7029",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.47.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-13T15:24:26.018Z",
+    "updatedAt": "2025-01-13T15:24:26.018Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "WvsAPDcXQu",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-09T10:40:11.857Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.46.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maria Do Carmo de Paula",
+    "cpf": "048.562.858-90",
+    "addressStreet": "Avenida O",
+    "addressNumber": "789",
+    "addressComplement": "Entre rua 8 e 6",
+    "neighborhood": "Jardim Siena",
+    "phone": "(16) 99997-6202",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.46.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-09T10:40:00.188Z",
+    "updatedAt": "2025-01-09T10:40:11.849Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "GJ4VCVNFG4",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-08T14:21:14.748Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.46.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Antônio Alves Ferreira",
+    "cpf": "442.367.868-34",
+    "addressStreet": "Avenida G",
+    "addressNumber": "340",
+    "phone": "(16) 99106-2878",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.46.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2025-01-08T14:21:14.714Z",
+    "updatedAt": "2025-01-08T14:21:14.714Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "0izW3VxhrC",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-19T11:16:24.449Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.45.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Elaine dos Anjos Silva",
+    "cpf": "199.633.538-35",
+    "addressStreet": "Travessa 17",
+    "addressNumber": "1617",
+    "neighborhood": "Jardim cidade alta",
+    "phone": "(16) 99118-7347",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.45.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-19T11:16:24.423Z",
+    "updatedAt": "2024-12-19T11:16:24.423Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DvAadRg4aS",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-17T16:31:32.396Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.45.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Adryelly Caroline de Freitas Rocha",
+    "cpf": "429.737.788-83",
+    "addressStreet": "Travessa 18",
+    "addressNumber": "1638",
+    "neighborhood": "Julio Bucci",
+    "phone": "(16) 97406-5379",
+    "referredBy": "Márcia",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.45.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-17T16:26:38.342Z",
+    "updatedAt": "2024-12-17T16:31:32.364Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "KZyLzJrE78",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-16T14:06:00.597Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.45.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Cássia Angélica de Oliveira",
+    "cpf": "255.397.788-39",
+    "addressStreet": "Rua vinte seis",
+    "addressNumber": "494",
+    "addressComplement": "A",
+    "neighborhood": "Paineiras.",
+    "phone": "(16) 99126-7313",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.45.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-16T14:06:00.576Z",
+    "updatedAt": "2024-12-16T14:06:00.576Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "VErCujGK9e",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-10T20:10:56.941Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.45.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Gabriele Aparecida Pereira Gonçalves",
+    "cpf": "548.316.488-17",
+    "addressStreet": "Alameda 7",
+    "addressNumber": "1701A",
+    "addressComplement": "A",
+    "neighborhood": "Birucão",
+    "phone": "(16) 99154-2538",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.45.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-10T20:10:56.908Z",
+    "updatedAt": "2024-12-10T20:10:56.908Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "NLsVduz0fP",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-10T19:54:34.187Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.45.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Eduarda Aparecida Galerani Pianta",
+    "cpf": "451.996.498-92",
+    "addressStreet": "Alameda 17",
+    "addressNumber": "1711",
+    "addressComplement": "A",
+    "neighborhood": "Jequitibá",
+    "phone": "(16) 99461-7945",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.45.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-10T19:54:34.145Z",
+    "updatedAt": "2024-12-10T19:54:34.145Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "RoXe33iV3v",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-09T15:14:34.838Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.45.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Roseli Caetano",
+    "cpf": "275.720.738-59",
+    "addressStreet": "Rua onze",
+    "addressNumber": "1810",
+    "addressComplement": "A",
+    "phone": "(16) 99348-4680",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.45.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-09T15:14:34.806Z",
+    "updatedAt": "2024-12-09T15:14:34.806Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "IatzmEFlxT",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-12-03T12:52:58.072Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.44.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Catia Cristina Cavaton",
+    "cpf": "227.160.268-82",
+    "addressStreet": "Alameda nove",
+    "addressNumber": "1921A",
+    "neighborhood": "Birucão",
+    "phone": "(16) 99196-4489",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.44.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-12-03T12:52:58.061Z",
+    "updatedAt": "2024-12-03T12:52:58.061Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "qtzSBdSsry",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-28T19:28:43.006Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.44.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Nathalia Soares Marques",
+    "cpf": "082.101.153-75",
+    "zipCode": "14620-000",
+    "addressStreet": "Rua 02",
+    "addressNumber": "245",
+    "addressComplement": "A",
+    "neighborhood": "Jd Boa vista",
+    "city": "Orlândia",
+    "phone": "(16) 98181-0266",
+    "cityId": "3534302",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.44.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-11-28T19:28:42.953Z",
+    "updatedAt": "2024-11-28T19:28:42.953Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DDNTgB5EpM",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-28T19:05:19.504Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.44.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Caio Caldas Rodrigues",
+    "cpf": "416.557.688-32",
+    "addressStreet": "Rua dois",
+    "addressNumber": "247",
+    "addressComplement": "A",
+    "phone": "(16) 99338-3594",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.44.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-28T19:05:19.470Z",
+    "updatedAt": "2024-11-28T19:05:19.470Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "3ImqqBNMDB",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-27T18:44:52.135Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.44.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Francisca dos Santos Pereira",
+    "cpf": "745.765.263-91",
+    "addressStreet": "Avenida I",
+    "addressNumber": "514",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 99378-4970",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.44.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-27T18:44:52.110Z",
+    "updatedAt": "2024-11-27T18:44:52.110Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "GspKxTk5gh",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-22T15:14:53.161Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Daniela Lago Lima",
+    "cpf": "184.795.518-52",
+    "addressStreet": "Avenida C",
+    "addressNumber": "1206",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 99136-5399",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-22T15:14:53.132Z",
+    "updatedAt": "2024-11-22T15:14:53.132Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "eCaLGXn5Le",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-19T11:34:25.670Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maria Moura de souza.",
+    "cpf": "199.650.328-66",
+    "addressStreet": "Rua quatro",
+    "addressNumber": "1402A",
+    "neighborhood": "Jardim Siena",
+    "phone": "(16) 99189-1944",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-19T11:34:25.655Z",
+    "updatedAt": "2024-11-19T11:34:25.655Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "g2qfMBzzrA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-19T11:14:41.688Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Joana Dark dos Santos Luciano",
+    "cpf": "055.009.058-48",
+    "addressStreet": "Rua 10",
+    "addressNumber": "692A",
+    "addressComplement": "Ao lado do azilo",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 99273-4464",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-19T11:14:41.677Z",
+    "updatedAt": "2024-11-19T11:14:41.677Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Cl9hZv1oq5",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-18T14:36:00.023Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Janaina Aparecida Medeiros",
+    "cpf": "330.894.168-67",
+    "addressStreet": "Avenida marginal do Jequitibá",
+    "addressNumber": "804",
+    "phone": "(16) 98848-8295",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-18T14:35:35.488Z",
+    "updatedAt": "2024-11-18T14:36:00.016Z",
+    "notes": "Última casa - sentido Sales",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "HF7nM8TPhB",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-14T13:56:01.108Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Renata Aparecida Vasco",
+    "cpf": "348.888.678-60",
+    "addressStreet": "Alameda 11",
+    "addressNumber": "1670A",
+    "neighborhood": "Birucão",
+    "phone": "(16) 99393-2898",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-14T13:56:01.078Z",
+    "updatedAt": "2024-11-14T13:56:01.078Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "thNxQhRAHF",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-01-16T11:15:19.670Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Patrícia Ferreira",
+    "cpf": "218.396.418-94",
+    "addressStreet": "Travessa O",
+    "addressNumber": "1142",
+    "neighborhood": "Jardim Siena",
+    "phone": "(16) 99439-8620",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.48.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-07T15:43:04.449Z",
+    "updatedAt": "2025-01-16T11:15:19.661Z",
+    "notes": "Segundo endereço: Avenida F 1440",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Q9CMVGpRZ0",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-04T15:34:26.629Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Josiani Da Silva Alves",
+    "cpf": "218.219.948-92",
+    "addressStreet": "Avenida F",
+    "addressNumber": "163",
+    "phone": "(16) 99352-9005",
+    "referredBy": "Cidinha",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-04T15:34:26.622Z",
+    "updatedAt": "2024-11-04T15:34:26.622Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "vuZQUDaWLD",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-04T11:55:26.190Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.43.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Fábio de Souza Giraldelly",
+    "cpf": "067.425.881-95",
+    "addressStreet": "AVENIDA F",
+    "addressNumber": "788",
+    "phone": "(16) 99439-5213",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.43.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-04T11:55:26.174Z",
+    "updatedAt": "2024-11-04T11:55:26.174Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "llCHU1l6uQ",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-04T11:01:06.545Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Vilma Aparecida da Silva Vieira",
+    "cpf": "172.253.228-93",
+    "addressStreet": "Rua quatro",
+    "addressNumber": "1879",
+    "neighborhood": "Santa Rita",
+    "phone": "(16) 99308-3160",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-04T11:01:06.538Z",
+    "updatedAt": "2024-11-04T11:01:06.538Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "WiF3vp35uv",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-11-01T12:59:59.950Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Gabriel Vieira",
+    "cpf": "460.607.058-71",
+    "addressStreet": "Rua quatro",
+    "addressNumber": "1879A",
+    "neighborhood": "Santa Rita",
+    "phone": "(16) 9443-8596",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-11-01T12:59:59.926Z",
+    "updatedAt": "2024-11-01T12:59:59.926Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "UXaDv6Dgp6",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-10-30T11:26:01.522Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Debora Cristina da Silva Santos",
+    "cpf": "470.617.798-70",
+    "addressStreet": "Rua 24",
+    "addressNumber": "1621",
+    "addressComplement": "Kitnet casa 5",
+    "neighborhood": "Morada do sol",
+    "phone": "(16) 99365-9519",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-10-30T11:26:01.512Z",
+    "updatedAt": "2024-10-30T11:26:01.512Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "htNWx5BeUH",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-10-30T11:04:20.048Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Janaina Cristina da Silva",
+    "cpf": "225.766.858-89",
+    "addressStreet": "Alameda 13",
+    "addressNumber": "1880A",
+    "neighborhood": "Birucão",
+    "phone": "(16) 99273-9451",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-10-30T11:04:20.038Z",
+    "updatedAt": "2024-10-30T11:04:20.038Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "sQ4pMcJqLR",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-10-24T15:37:18.217Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.43.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Alice Ferreira do Nascimento Botelho",
+    "cpf": "570.123.218-22",
+    "addressStreet": "travessa 18",
+    "addressNumber": "1642",
+    "phone": "(16) 99112-3245",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.43.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-10-24T15:37:18.210Z",
+    "updatedAt": "2024-10-24T15:37:18.210Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Lg9xoPVsSt",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-10-14T15:08:36.333Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.42.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Bruna Evaristo Pereira",
+    "cpf": "465.642.218-51",
+    "addressStreet": "Rua 28",
+    "addressNumber": "2333",
+    "neighborhood": "Jardim São João",
+    "phone": "(16) 99150-3857",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.42.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-10-14T15:08:36.228Z",
+    "updatedAt": "2024-10-14T15:08:36.228Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "7E46DtqseA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-30T14:29:46.709Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Reginaldo Henrique Marçal",
+    "cpf": "392.256.368-65",
+    "addressStreet": "Avenida F",
+    "addressNumber": "214",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 98130-0515",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-30T14:29:46.698Z",
+    "updatedAt": "2024-09-30T14:29:46.698Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DQjIE9BLIf",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-26T12:18:31.858Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Marcela Bianche",
+    "addressStreet": "Avenida 17",
+    "addressNumber": "1859",
+    "neighborhood": "Vilinha",
+    "phone": "(16) 99298-7479",
+    "referredBy": "Márcia",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-26T12:18:31.829Z",
+    "updatedAt": "2024-09-26T12:18:31.829Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "v3rIjHXHpd",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-19T21:43:38.545Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Sabrina Carvalho Pereira",
+    "cpf": "464.257.688-60",
+    "addressStreet": "Walterzinho José Caridade",
+    "addressNumber": "2170",
+    "neighborhood": "Jardim Alvorada",
+    "city": "São Joaquim da Barra",
+    "phone": "(16) 98252-7313",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-19T21:43:38.537Z",
+    "updatedAt": "2024-09-19T21:43:38.537Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "NlyERKfVES",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-19T20:26:13.759Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Angela Cristina Arzoli Cordeiro",
+    "cpf": "487.835.968-44",
+    "addressStreet": "Rua seis",
+    "addressNumber": "875",
+    "addressComplement": "A",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(16) 99180-6322",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-19T20:26:13.744Z",
+    "updatedAt": "2024-09-19T20:26:13.744Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "LMl26FlkLA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-18T19:02:42.630Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maria Aparecida Antônio Vieira",
+    "cpf": "298.493.928-00",
+    "zipCode": "14620-000",
+    "addressStreet": "Rua 06",
+    "addressNumber": "1497",
+    "addressComplement": "Centro",
+    "city": "Orlândia",
+    "landlinePhone": "(16) 3726-4670",
+    "cityId": "3534302",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-18T18:36:27.007Z",
+    "updatedAt": "2024-09-18T19:02:42.620Z",
+    "phone": "(16) 9110-2059",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "f6n5dKhF7j",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-09T17:28:05.632Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.41.19",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Igor Henrique Enos",
+    "zipCode": "14620-000",
+    "addressStreet": "Rua 11",
+    "addressNumber": "1770",
+    "addressComplement": "A",
+    "neighborhood": "Birucão",
+    "city": "Orlândia",
+    "phone": "(16) 99283-8252",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.41.19",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-09-09T17:28:05.240Z",
+    "updatedAt": "2024-09-09T17:28:05.240Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "5gjFCQ9rLf",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-06T12:32:30.669Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.17",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Valéria Aparecida Pimenta Melo",
+    "cpf": "122.469.038-90",
+    "addressStreet": "Avenida Y",
+    "addressNumber": "1250",
+    "neighborhood": "Brasão",
+    "phone": "(16) 98875-7455",
+    "referredBy": "Nova chance",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.17",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-06T12:32:30.651Z",
+    "updatedAt": "2024-09-06T12:32:30.651Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "4FcOwofo14",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-05T20:37:52.596Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.17",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Osvaldo Luis da Silva",
+    "cpf": "747.916.998-15",
+    "addressStreet": "Avenida 18",
+    "addressNumber": "1874",
+    "phone": "(16) 99453-1329",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.17",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-05T20:37:52.584Z",
+    "updatedAt": "2024-09-05T20:37:52.584Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "cFZkC2Vp34",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-05T12:33:18.433Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.16",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Franciele Batista Pereira",
+    "cpf": "432.486.188-92",
+    "addressStreet": "Avenida Y",
+    "addressNumber": "1014",
+    "neighborhood": "Jardim Santa Rita",
+    "phone": "(16) 99369-7679",
+    "referredBy": "Márcia Belato",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.16",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-05T12:33:18.413Z",
+    "updatedAt": "2024-09-05T12:33:18.413Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "NiWszDOCJA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-05T10:59:21.522Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.16",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maximiliana Aparecida Lucia",
+    "cpf": "277.342.598-71",
+    "addressStreet": "Avenida 13",
+    "addressNumber": "1864",
+    "neighborhood": "Vila Bucci",
+    "phone": "(16) 99148-3328",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.16",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-05T10:59:21.506Z",
+    "updatedAt": "2024-09-05T10:59:21.506Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ds9sAdEbcX",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-02T12:41:15.662Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.12",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Angela Maria Rodriges",
+    "cpf": "196.281.808-00",
+    "addressStreet": "Travessa y",
+    "addressNumber": "1181",
+    "addressComplement": "entre rua 14 e 16 - perto santa rita",
+    "neighborhood": "Brasão",
+    "city": "Orlândia",
+    "phone": "(16) 99323-2934",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.12",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-09-02T12:41:15.646Z",
+    "updatedAt": "2024-09-02T12:41:15.646Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "78QTA6MLGd",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-29T18:02:24.712Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.41.12",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Sueide da Silva",
+    "phone": "(16) 99301-7499",
+    "notes": "O animal está com um tumor na perna, aparenta estar exposto o ferimento",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.41.12",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-08-28T17:27:39.253Z",
+    "updatedAt": "2024-08-29T18:02:24.702Z",
+    "addressNumber": "S/N",
+    "addressStreet": "Estrada capão do meio",
+    "city": "Orlândia",
+    "cityId": "3534302",
+    "cpf": "150.861.618-35",
+    "neighborhood": "Zona rural",
+    "stateId": "SP",
+    "zipCode": "14620-000",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DM2vMbbhmf",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-16T12:07:24.281Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.40.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Geraldo Scorsato",
+    "cpf": "627.343.268-68",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.40.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-16T12:07:24.263Z",
+    "updatedAt": "2024-08-16T12:07:24.263Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "UHYl0a4ZxH",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-14T14:46:08.950Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.40.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Mario Gabriel Cardoso Mendes",
+    "cpf": "388.122.688-54",
+    "addressStreet": "Chácara MM",
+    "phone": "(16) 99449-4959",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.40.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-14T14:46:08.943Z",
+    "updatedAt": "2024-08-14T14:46:08.943Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "PryDCTdzvn",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-13T13:18:16.209Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.40.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Jessica Melisse de Souza",
+    "cpf": "353.938.458-80",
+    "addressStreet": "Alameda 7",
+    "addressNumber": "1680A",
+    "neighborhood": "Birucão",
+    "city": "Orlândia",
+    "phone": "(16) 99145-9023",
+    "notes": "Letícia indicou",
+    "referredBy": "Indicação",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.40.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-13T13:18:16.199Z",
+    "updatedAt": "2024-08-13T13:18:16.199Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "uFPDsiBLIB",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-07T14:17:33.886Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.40.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Letícia Maíra Pereira",
+    "cpf": "349.639.508-71",
+    "addressStreet": "Alameda 7",
+    "addressNumber": "1701A",
+    "phone": "(16) 99442-7044",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.40.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-07T14:17:33.869Z",
+    "updatedAt": "2024-08-07T14:17:33.869Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Gh7p0hsH6F",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-05T12:55:23.243Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.40.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Camilo Alves Teixeira",
+    "cpf": "020.367.488-05",
+    "addressStreet": "Avenida P",
+    "addressNumber": "1153",
+    "neighborhood": "Jardim Siena",
+    "phone": "(16) 99205-3422",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.40.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-05T12:55:23.234Z",
+    "updatedAt": "2024-08-05T12:55:23.234Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "HvBgn6FseO",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-08-02T12:14:35.049Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.40.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Natália Aparecida Marques",
+    "cpf": "384.725.188-09",
+    "addressStreet": "Avenida V",
+    "addressNumber": "1130",
+    "neighborhood": "Brasão",
+    "city": "Orlândia",
+    "phone": "(16) 99271-4058",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.40.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-08-02T12:14:35.039Z",
+    "updatedAt": "2024-08-02T12:14:35.039Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "RYGg6CTwwu",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-07-16T20:53:03.265Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.40.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Matilde Silva de Oliveira",
+    "cpf": "081.469.108-07",
+    "addressStreet": "Avenida Z",
+    "addressNumber": "1181",
+    "neighborhood": "Brasão",
+    "city": "Orlândia",
+    "phone": "(16) 99171-9057",
+    "stateId": "SP",
+    "referredBy": "Vizinha",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.40.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-07-16T20:53:03.249Z",
+    "updatedAt": "2024-07-16T20:53:03.249Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "VoEkA0qBRF",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-07-16T18:02:23.878Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.40.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Luciene Toledo Estevan",
+    "cpf": "156.241.188-80",
+    "addressStreet": "Rua 3",
+    "addressNumber": "2123",
+    "neighborhood": "Gruta",
+    "city": "Orlândia",
+    "phone": "(16) 99343-3457",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.40.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-07-16T18:02:23.867Z",
+    "updatedAt": "2024-07-16T18:02:23.867Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "wfob1zc6rk",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-07-16T15:43:30.441Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.40.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Leticia Marina Rodrigues Lopes",
+    "cpf": "543.957.978-81",
+    "addressStreet": "Travessa 17",
+    "addressNumber": "1854",
+    "neighborhood": "Vilinha - Jardim São João",
+    "city": "Orlândia",
+    "phone": "(16) 99192-7870",
+    "stateId": "SP",
+    "referredBy": "Prima - Paula",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.40.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-07-16T15:43:30.431Z",
+    "updatedAt": "2024-07-16T15:43:30.431Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ZwB52u3Br4",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-07-12T16:47:05.789Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.40.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Camila da Silva Felipe",
+    "addressStreet": "Avenida D",
+    "addressNumber": "983",
+    "neighborhood": "Jardim Boa Vista",
+    "city": "Orlândia",
+    "phone": "(16) 99356-3492",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.40.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-07-12T16:21:20.777Z",
+    "updatedAt": "2024-07-12T16:47:05.779Z",
+    "cpf": "403.411.458-40",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "hdRFN007Bk",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-30T14:48:52.586Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.10",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Carlos Alberto de Souza",
+    "cpf": "063.286.508-33",
+    "addressStreet": "Rua quatro",
+    "addressNumber": "1908",
+    "neighborhood": "Jardim Santa Rita",
+    "phone": "(16) 99304-0064",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.10",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-30T14:48:52.579Z",
+    "updatedAt": "2024-06-30T14:48:52.579Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "exelKAqQi5",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-28T15:17:46.760Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.10",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Paula Ribeiro Galego",
+    "cpf": "277.130.778-20",
+    "rg": "272287179",
+    "addressStreet": "Rua 2",
+    "addressNumber": "1159",
+    "addressComplement": "A",
+    "neighborhood": "Jardim Leonor de Jeovane",
+    "city": "Orlândia",
+    "phone": "(16) 99172-4612",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.10",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-28T15:17:46.743Z",
+    "updatedAt": "2024-06-28T15:17:46.743Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "tdLUAdnwo8",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-25T13:30:57.638Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.9",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Tainar Cristina Razanauskas",
+    "cpf": "393.306.878-90",
+    "addressStreet": "Rua A",
+    "addressNumber": "casa 1",
+    "addressComplement": "comove",
+    "phone": "(16) 99281-6964",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.9",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-25T13:30:57.626Z",
+    "updatedAt": "2024-06-25T13:30:57.626Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "oEnpy42uhr",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-24T14:29:09.986Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.9",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Tiana Toledo",
+    "cpf": "930.300.028-53",
+    "addressStreet": "Travessa W",
+    "addressNumber": "1191",
+    "phone": "(16) 99165-8007",
+    "referredBy": "Marcia",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.9",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-24T14:29:09.974Z",
+    "updatedAt": "2024-06-24T14:29:09.974Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "wWQJjCNDTY",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-19T15:02:27.546Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.9",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Ana Carolina De Mello Oliveira",
+    "cpf": "223.758.738-82",
+    "addressStreet": "Rua 3",
+    "addressNumber": "1590A",
+    "neighborhood": "Jardim Parise",
+    "city": "Orlândia",
+    "phone": "(16) 99127-7048",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.9",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-19T15:02:27.535Z",
+    "updatedAt": "2024-06-19T15:02:27.535Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "KeUD3tiZbt",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-12T15:43:42.206Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Vanessa Rodrigues de Araujo",
+    "cpf": "700.545.201-18",
+    "addressStreet": "Avenida H",
+    "addressNumber": "348",
+    "addressComplement": "Do lado coperlogue",
+    "neighborhood": "Jardim Boa Vista",
+    "city": "Orlândia",
+    "phone": "(16) 99304-6353",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-12T15:43:42.194Z",
+    "updatedAt": "2024-06-12T15:43:42.194Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "DJBDVaGJ8V",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-11T15:32:46.815Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maria José dos Santos",
+    "cpf": "186.534.838-45",
+    "addressStreet": "Rua nove",
+    "addressNumber": "633",
+    "addressComplement": "centro - Entre avenida 7 e 8",
+    "city": "Orlândia",
+    "phone": "(16) 99323-2934",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-11T15:32:46.804Z",
+    "updatedAt": "2024-06-11T15:32:46.804Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "r7u0PHneIS",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-10T15:31:55.661Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Eduardo De Morais Garcia",
+    "cpf": "489.713.798-55",
+    "addressStreet": "Avenida 7",
+    "addressNumber": "2270",
+    "city": "Orlândia",
+    "phone": "(16) 99305-3309",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-10T15:31:55.648Z",
+    "updatedAt": "2024-06-10T15:31:55.648Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "zGmaBDpMUT",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-05T16:51:27.455Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Ana Cláudia Gonçalves Nascimento",
+    "cpf": "222.822.528-29",
+    "addressStreet": "rua nove",
+    "addressNumber": "1022",
+    "phone": "(16) 99207-9058",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-05T16:51:27.441Z",
+    "updatedAt": "2024-06-05T16:51:27.441Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "2RvPUK3DBH",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-05T14:06:54.719Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Beatriz Xavier Rodriguez Ribeiro",
+    "cpf": "276.092.958-25",
+    "addressStreet": "Casinha dentro do parque da gruta.",
+    "phone": "(16) 99217-0571",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-05T14:06:54.357Z",
+    "updatedAt": "2024-06-05T14:06:54.357Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "mI30cCbtHD",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-04T15:43:03.553Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Karina Manso de Souza Rodrigues",
+    "cpf": "369.290.408-86",
+    "addressStreet": "Rua dezenove",
+    "addressNumber": "1831A",
+    "neighborhood": "Jequitibá",
+    "city": "Orlândia",
+    "phone": "(16) 99228-7068",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.39.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-04T15:43:03.538Z",
+    "updatedAt": "2024-06-04T15:43:03.538Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "r8J3G8zsDZ",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-04T13:57:42.073Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.39.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Paula Cristina Dos Santos Froes de Melo",
+    "cpf": "443.684.568-07",
+    "addressStreet": "Alameda 5",
+    "addressNumber": "1821",
+    "neighborhood": "Parise",
+    "city": "Orlândia",
+    "phone": "(16) 99363-6615",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-04T12:48:41.354Z",
+    "updatedAt": "2024-06-04T13:57:42.031Z",
+    "addressComplement": "C1",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "RfsPJXHkyF",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-03T17:52:57.395Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Thayenne Brisa Neves dos Santos",
+    "cpf": "105.407.136-51",
+    "addressStreet": "Avenida vilarinho",
+    "addressNumber": "2550",
+    "phone": "(31) 98980-6682",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-03T17:52:57.381Z",
+    "updatedAt": "2024-06-03T17:52:57.381Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "98Px76EH2b",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-06-01T23:54:43.854Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Fabiola Vilela",
+    "cpf": "997.644.316-15",
+    "addressStreet": "Rua hildeu santos figueiredo",
+    "addressNumber": "48",
+    "phone": "(31) 99614-8111",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-06-01T23:25:31.197Z",
+    "updatedAt": "2024-06-01T23:54:43.845Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "jZIUF710p7",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-05-21T12:58:55.608Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Luiz Orlando Lago",
+    "cpf": "077.679.088-95",
+    "addressStreet": "Rua 10",
+    "addressNumber": "2181A",
+    "addressComplement": "Santa Rita",
+    "phone": "(16) 99278-9520",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-05-21T12:58:55.441Z",
+    "updatedAt": "2024-05-21T12:58:55.441Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "q4pZvBWYSP",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-05-16T13:14:26.507Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Gustavo Lucio",
+    "phone": "(16) 99448-5765",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-05-16T11:30:31.252Z",
+    "updatedAt": "2024-05-16T13:14:26.497Z",
+    "addressNumber": "1620",
+    "addressStreet": "Rua 11",
+    "city": "Orlandia",
+    "cpf": "411.011.398-97",
+    "neighborhood": "Parise",
+    "stateId": "SP",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Pj6NXiUChV",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-05-15T20:49:04.708Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.39.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Ronaldo Aparecido Galete",
+    "addressStreet": "rua nove",
+    "addressNumber": "988",
+    "phone": "(16) 99117-8591",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.39.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-05-15T20:49:04.692Z",
+    "updatedAt": "2024-05-15T20:49:04.692Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "wMbnpO33pl",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-05-10T12:32:29.534Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.38.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Nei Fernandes da Silva",
+    "zipCode": "14620-000",
+    "addressStreet": "Travessa 21",
+    "addressNumber": "2527",
+    "city": "Orlândia",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.38.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-05-10T12:16:48.957Z",
+    "updatedAt": "2024-05-10T12:32:29.525Z",
+    "phone": "(16) 99342-3858",
+    "cpf": "090.011.958-65",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "H6yJwLyCMg",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-05-06T13:03:32.558Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.38.4",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Eva vilma Ribeiro",
+    "cpf": "292.325.228-45",
+    "zipCode": "14620-000",
+    "addressStreet": "Rua seis",
+    "addressNumber": "875A",
+    "addressComplement": "Jardim Boa Vista",
+    "neighborhood": "Jardim Boa Vista",
+    "city": "Orlândia",
+    "phone": "(16) 9338-0633",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.38.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-05-06T13:03:32.523Z",
+    "updatedAt": "2024-05-06T13:03:32.523Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "x9bokbMQg7",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-24T15:39:38.205Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.36.10",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Washington Ribeiro da Silva",
+    "rg": "221479843",
+    "zipCode": "14620-000",
+    "addressStreet": "Travessa 19",
+    "addressNumber": "2456",
+    "addressComplement": "casa",
+    "neighborhood": "Julio Bucci",
+    "city": "Orlândia",
+    "phone": "(16) 98182-2406",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.36.10",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-24T15:39:38.193Z",
+    "updatedAt": "2024-04-24T15:39:38.193Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "6uqm7CwpFg",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-24T14:46:12.198Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.10",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Gustavo Reis",
+    "cpf": "366.160.238-18",
+    "zipCode": "14620-000",
+    "addressStreet": "Travessa 19",
+    "addressNumber": "2456",
+    "neighborhood": "Julio Bucci",
+    "city": "Orlândia",
+    "phone": "(16) 99286-7833",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.10",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-04-24T14:46:12.182Z",
+    "updatedAt": "2024-04-24T14:46:12.182Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "o7jFj6JbkX",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-18T15:17:42.855Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Adriana Pereira",
+    "cpf": "270.283.668-20",
+    "addressStreet": "Prefeitura",
+    "phone": "(16) 99855-0175",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-18T15:17:42.838Z",
+    "updatedAt": "2024-04-18T15:17:42.838Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "kxNHzAewd0",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-19T10:37:57.093Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.8",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Radja Grazieli Lima Fernandes",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.36.8",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-18T14:49:09.154Z",
+    "updatedAt": "2024-04-19T10:37:57.085Z",
+    "cpf": "445.597.068-16",
+    "notes": "Helena telefone",
+    "phone": "(16) 99422-1840",
+    "addressComplement": "Fundo",
+    "addressNumber": "939",
+    "addressStreet": "Avenida cem",
+    "city": "Orlândia",
+    "neighborhood": "Brazão",
+    "stateId": "SP",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "VfUS0sso7A",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-17T13:47:24.221Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.7",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Tais Cristina Barbosa",
+    "cpf": "468.662.868-75",
+    "phone": "(16) 99427-8756",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.7",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-17T13:47:24.208Z",
+    "updatedAt": "2024-04-17T13:47:24.208Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "opJrf5n0Eh",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-15T14:17:52.214Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.6",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Jose Mário Correia",
+    "cpf": "020.025.248-82",
+    "addressStreet": "Rua três",
+    "addressNumber": "1672",
+    "addressComplement": "Gruta",
+    "neighborhood": "Gruta",
+    "city": "Orlândia",
+    "phone": "(16) 99262-4147",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-15T14:17:52.182Z",
+    "updatedAt": "2024-04-15T14:17:52.182Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "i10a4W1vp3",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-10T11:17:46.766Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.36.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "isDeleted": false,
+    "name": "Eliana Fernandes Ribas",
+    "cpf": "311.377.788-73",
+    "zipCode": "14620-000",
+    "addressStreet": "Rua 15",
+    "addressNumber": "1811",
+    "addressComplement": "A",
+    "city": "Orlândia",
+    "phone": "(16) 98858-2073",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "PmyqEZTLgY"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "PmyqEZTLgY",
+    "createdAt": "2024-04-10T11:17:46.754Z",
+    "updatedAt": "2024-04-10T11:17:46.754Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "dIxPCcrSwH",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-05T18:53:31.416Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.34.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Leandro Gomes",
+    "cpf": "373.482.078-20",
+    "phone": "(16) 99277-9692",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.34.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-05T18:53:31.399Z",
+    "updatedAt": "2024-04-05T18:53:31.399Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "xghOq2G1BG",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-05T14:26:24.977Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.34.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "João Guilherme Lisboa De Souza",
+    "cpf": "545.489.578-47",
+    "phone": "(16) 99334-7090",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.34.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-05T14:26:24.957Z",
+    "updatedAt": "2024-04-05T14:26:24.957Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "FMK822NDmA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-01T14:20:34.164Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.33.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Silas da Silva Dedemo",
+    "addressStreet": "Cemitério",
+    "phone": "(16) 99286-3945",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.33.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-04-01T14:20:34.135Z",
+    "updatedAt": "2024-04-01T14:20:34.135Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "lcTd5teX5g",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-20T12:45:58.065Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.32.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Antonio Ricardo Nascimento",
+    "cpf": "342.115.288-82",
+    "addressStreet": "travessa 12",
+    "addressNumber": "50",
+    "phone": "(16) 99106-4751",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.32.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-20T12:45:58.052Z",
+    "updatedAt": "2024-03-20T12:45:58.052Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Agi5rvo2eO",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-17T13:21:32.802Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.32.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Lucas Vilanova Pinheiro",
+    "cpf": "129.064.576-04",
+    "addressStreet": "Rua hildeus Santos Figueiredo",
+    "addressNumber": "17",
+    "phone": "(31) 97113-5091",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.32.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-17T13:21:32.791Z",
+    "updatedAt": "2024-03-17T13:21:32.791Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "IXSciG7iFY",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-15T11:54:10.560Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.32.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Adriana Guimarães",
+    "zipCode": "14620-000",
+    "addressStreet": "Avenida G",
+    "addressNumber": "360",
+    "city": "Orlândia",
+    "phone": "(16) 99986-0555",
+    "stateId": "SP",
+    "notes": "Cabeleireira",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.32.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-15T11:54:10.547Z",
+    "updatedAt": "2024-03-15T11:54:10.547Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "TjJYF6ZBuC",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-13T14:49:13.328Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.32.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Beatriz da Silva",
+    "addressStreet": "Rua 6",
+    "addressNumber": "1438A",
+    "neighborhood": "Jardim Siena",
+    "phone": "(16) 99172-5080",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.32.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-13T14:45:03.734Z",
+    "updatedAt": "2024-03-13T14:49:13.316Z",
+    "cpf": "429.949.218-80",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "cYKQo2npAj",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-11T14:12:02.814Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.31.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Jaqueline de Oliveira Nogueira",
+    "cpf": "029.250.453-59",
+    "landlinePhone": "(16) 9943-2720",
+    "phone": "(16) 99432-7205",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.31.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-11T14:12:02.796Z",
+    "updatedAt": "2024-03-11T14:12:02.796Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "5duTudkjVR",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-06T23:52:50.853Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.30.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Valdo Antônio Campos Ferreira",
+    "email": "lucas.marcbh@hotmail.com",
+    "cpf": "124.793.736-49",
+    "zipCode": "31842-330",
+    "addressStreet": "Rua Nelson Hungria",
+    "addressNumber": "103",
+    "addressComplement": "casa",
+    "neighborhood": "Tupi A",
+    "city": "Belo Horizonte",
+    "landlinePhone": "(31) 9995-0574",
+    "phone": "(31) 99196-8948",
+    "stateId": "MG",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.30.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-06T23:52:50.837Z",
+    "updatedAt": "2024-03-06T23:52:50.837Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "flcKTB2QI6",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-06T15:04:00.551Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.30.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Eliete Aparecida Guedes",
+    "zipCode": "14620-000",
+    "addressStreet": "rua cinco",
+    "addressNumber": "605",
+    "city": "Orlândia",
+    "phone": "(16) 99452-1649",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.30.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-06T15:04:00.536Z",
+    "updatedAt": "2024-03-06T15:04:00.536Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "RH5zh8JMfr",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-04T15:24:51.988Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.27.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Vanessa Ferreira Lima",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.27.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-03-04T13:57:38.618Z",
+    "updatedAt": "2024-03-04T15:24:51.973Z",
+    "addressComplement": "Jardim Boa Vista",
+    "addressNumber": "617",
+    "addressStreet": "Rua cinco",
+    "city": "Orlândia",
+    "cpf": "106.797.673-63",
+    "landlinePhone": "(89) 9928-1709",
+    "neighborhood": "Jardim Boa Vista",
+    "phone": "(89) 99928-1709",
+    "stateId": "SP",
+    "zipCode": "14620-000",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "Hxkk84mAN1",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-04T12:51:15.724Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.24.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Aparecido Donizete Messias de Oliveira",
+    "cpf": "044.199.418-04",
+    "zipCode": "14620-000",
+    "city": "Orlândia",
+    "phone": "(16) 97403-0756",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.27.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-02-19T14:10:09.361Z",
+    "updatedAt": "2024-03-04T12:51:15.705Z",
+    "addressComplement": "Ao lado da sorveteira.",
+    "addressNumber": "504A",
+    "addressStreet": "Rua 4",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "rZEkmIfr7j",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-02-07T20:12:26.881Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.24.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Keila Vilela da Silva",
+    "zipCode": "14620-000",
+    "addressStreet": "alameda 19",
+    "addressNumber": "1760A",
+    "neighborhood": "Jequitibá",
+    "city": "Orlândia",
+    "landlinePhone": "(16) 9939-2659",
+    "phone": "(16) 9939-2659",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.24.0",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-02-07T20:12:26.865Z",
+    "updatedAt": "2024-02-07T20:12:26.865Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "CkK1savsO5",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-02-05T15:48:52.056Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.22.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Maria de Lurdes",
+    "cpf": "149.623.408-16",
+    "zipCode": "14620-000",
+    "addressStreet": "Avenida 22",
+    "addressNumber": "2486",
+    "city": "Orlândia",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.22.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-02-05T13:13:04.495Z",
+    "updatedAt": "2024-02-05T15:48:52.044Z",
+    "phone": "(16) 99339-6660",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "e2DV6OuGeM",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-02-05T11:40:09.961Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.22.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "José Antônio da Silva",
+    "zipCode": "14620-000",
+    "addressStreet": "Avenida 17",
+    "addressNumber": "1809",
+    "addressComplement": "Telhas e cão na porta.",
+    "city": "Orlândia",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.22.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-02-05T11:40:09.944Z",
+    "updatedAt": "2024-02-05T11:40:09.944Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "cMe8XKzpbe",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-02-05T10:06:46.745Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.22.2",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "name": "Sandra",
+    "zipCode": "14620-000",
+    "addressStreet": "Travessa V",
+    "addressNumber": "1072",
+    "addressComplement": "Portão lata",
+    "city": "Orlândia",
+    "landlinePhone": "(16) 9938-5026",
+    "phone": "(16) 99385-0268",
+    "stateId": "SP",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.22.2",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-02-05T10:06:46.727Z",
+    "updatedAt": "2024-02-05T10:06:46.727Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "yTupekEkJC",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-01-29T12:46:31.617Z"
+    },
+    "changedDevice": "android",
+    "addressComplement": "A - Jardim Boa Vista",
+    "changedAppVersion": "2.22.1",
+    "createdAppVersion": "7.9.0",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(16) 99277-5942",
+    "addressStreet": "Rua cinco",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Bianca Braz Tonetto",
+    "addressNumber": "617",
+    "changedApp": "Prontuário",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-01-25T18:30:25.078Z",
+    "updatedAt": "2024-01-29T12:46:31.607Z",
+    "cpf": "476.145.388-54",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "CKz9Eammgh",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-07-14T12:09:16.946Z"
+    },
+    "changedDevice": "android",
+    "changedAppVersion": "2.54.2",
+    "createdAppVersion": "7.9.0",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Damião Nascimento",
+    "cpf": "116.586.858-06",
+    "addressNumber": "1331",
+    "changedApp": "Prontuário",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2024-01-15T12:42:13.487Z",
+    "updatedAt": "2025-07-14T12:09:16.939Z",
+    "city": "Orlândia",
+    "phone": "(16) 99323-9228",
+    "stateId": "SP",
+    "zipCode": "14620-000",
+    "addressStreet": "Alameda 7",
+    "neighborhood": "Jardim Parisi",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "gRcxNB3sFv",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-12-18T15:28:38.595Z"
+    },
+    "changedDevice": "android",
+    "changedAppVersion": "7.9.0",
+    "createdAppVersion": "7.9.0",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(99) 4180-946",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Tatiane - Jade",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-12-18T15:28:38.466Z",
+    "updatedAt": "2023-12-18T15:28:38.466Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "cICL8rW71K",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-12-12T20:07:31.102Z"
+    },
+    "changedDevice": "android",
+    "changedAppVersion": "7.8.9",
+    "createdAppVersion": "7.8.9",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(31) 99985-3658",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Talita Fabiene Neves Santos ",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-12-12T20:07:31.085Z",
+    "updatedAt": "2023-12-12T20:07:31.085Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "titniBwO2a",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-11-16T12:46:44.334Z"
+    },
+    "zipCode": "14620-000",
+    "changedDevice": "android",
+    "addressComplement": "casa",
+    "city": "Orlândia",
+    "changedAppVersion": "7.8.9",
+    "stateId": "SP",
+    "createdAppVersion": "7.8.9",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(16) 99130-8591",
+    "addressStreet": "Rua 10 centro",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Maria Aparecida (Cida)",
+    "cpf": "286.829.158-98",
+    "addressNumber": "955",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-11-16T12:46:44.321Z",
+    "updatedAt": "2023-11-16T12:46:44.321Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "LXWPXsV0TW",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-11-09T22:21:47.642Z"
+    },
+    "zipCode": "94649-4",
+    "changedDevice": "android",
+    "addressComplement": "hdhshsh",
+    "notes": "jsjsh",
+    "city": "jahshsh",
+    "changedAppVersion": "7.8.9",
+    "stateId": "SP",
+    "landlinePhone": "(69) 4956-5",
+    "createdAppVersion": "7.8.9",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "rg": "64.863.8",
+    "phone": "(64) 6464-",
+    "addressStreet": "gshshbd",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Fulano",
+    "cpf": "976.49",
+    "addressNumber": "9898968",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "email": "bebsujs",
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-11-09T22:21:47.623Z",
+    "updatedAt": "2023-11-09T22:21:47.623Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "22HmDRzEcA",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-10-11T13:27:19.675Z"
+    },
+    "changedDevice": "android",
+    "changedAppVersion": "7.8.8",
+    "createdAppVersion": "7.8.8",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(16) 99453-3299",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Aloísio Merigo ",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-10-11T13:27:16.614Z",
+    "updatedAt": "2023-10-11T13:27:16.614Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ZxKBeDvpqR",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-10-02T14:46:35.135Z"
+    },
+    "changedDevice": "android",
+    "changedAppVersion": "7.8.7",
+    "createdAppVersion": "7.8.7",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "phone": "(51) 69914-7796",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Marcia Belato Protetora",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-10-02T14:46:34.971Z",
+    "updatedAt": "2023-10-02T14:46:34.971Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "9wB2d3dqSf",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-25T16:49:51.307Z"
+    },
+    "changedDevice": "android",
+    "createdDevice": "android",
+    "isDeleted": false,
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedAppVersion": "7.8.6",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "name": "Karina Paula Marcelino de Souza",
+    "changedApp": "DC",
+    "createdApp": "DC",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdAppVersion": "7.8.6",
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-08-23T01:31:04.591Z",
+    "updatedAt": "2023-08-25T16:49:51.291Z",
+    "phone": "(31) 99184-2425",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "c1g7Nu41sw",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-03-01T23:06:26.626Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.17.1",
+    "isDeleted": false,
+    "name": "Juliana Santos de Oliveira",
+    "addressStreet": "rua fortunato pinto junior",
+    "addressNumber": "103",
+    "neighborhood": "",
+    "cityId": "",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.27.1",
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-08-05T18:06:18.001Z",
+    "updatedAt": "2024-03-01T23:06:26.618Z",
+    "phone": "(31) 99816-0025",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "g0BJ03lvgP",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-05T18:35:30.600Z"
+    },
+    "changedApp": "Prontuário",
+    "changedAppVersion": "2.17.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedDevice": "web",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdAppVersion": "2.17.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdDevice": "web",
+    "isDeleted": false,
+    "name": "Rosa Marlene [Tutor(a) teste]",
+    "notes": "Cadastro de Exemplo",
+    "clinicId": "33UAFzEPV1",
+    "createdById": "hjkBbPkuJL",
+    "createdAt": "2023-08-05T18:05:30.807Z",
+    "updatedAt": "2023-08-05T18:35:30.590Z",
+    "email": "",
+    "phone": "",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  }
+]

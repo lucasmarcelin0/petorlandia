@@ -946,14 +946,18 @@ class ExameModeloAdminView(MyModelView):
 def init_admin(app):
     dashboard_view = AdminDashboard(endpoint='painel_admin')
 
-    admin = Admin(
-        app,
+    admin_kwargs = dict(
         name='Administração PetOrlândia',
         url='/painel',
         endpoint='painel_admin',       # mantém compatibilidade com url_for('painel_admin.index')
         index_view=dashboard_view,     # dashboard é a home
-        template_mode=None             # usa templates customizados (master.html)
     )
+
+    # Flask-Admin 1.x aceita template_mode; versões mais antigas não.
+    try:
+        admin = Admin(app, template_mode=None, **admin_kwargs)
+    except TypeError:
+        admin = Admin(app, **admin_kwargs)
 
     # Registro das demais views
     admin.add_view(AnimalAdminView(

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VetSmart Exporter</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 360px;
+      min-height: 200px;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    .header {
+      background: #1a73e8;
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header .subtitle { font-size: 11px; opacity: 0.85; }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: white;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 12px;
+    }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.green { background: #28a745; }
+    .dot.red { background: #dc3545; }
+    .dot.yellow { background: #ffc107; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .body { padding: 14px 16px; }
+
+    .token-box {
+      background: #e8f4fd;
+      border: 1px solid #bee3f8;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      margin-bottom: 12px;
+    }
+    .token-box label { font-weight: 600; color: #1a73e8; display: block; margin-bottom: 4px; }
+    .token-box .token-val {
+      word-break: break-all;
+      color: #495057;
+      font-family: monospace;
+      max-height: 50px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-info { background: #17a2b8; color: white; }
+
+    .progress-area {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .progress-area.visible { display: block; }
+    .progress-line { margin-bottom: 3px; color: #495057; }
+    .progress-line.success { color: #28a745; }
+    .progress-line.error { color: #dc3545; }
+
+    .keys-area {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 11px;
+      margin-bottom: 10px;
+      display: none;
+      word-break: break-all;
+    }
+    .keys-area.visible { display: block; }
+    .keys-area label { font-weight: 600; display: block; margin-bottom: 5px; color: #856404; }
+
+    .result-area {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .result-area.visible { display: block; }
+    .result-area strong { color: #155724; }
+
+    .footer {
+      padding: 8px 16px;
+      text-align: center;
+      font-size: 10px;
+      color: #6c757d;
+      border-top: 1px solid #dee2e6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>🐾 VetSmart Exporter</h1>
+      <div class="subtitle">Exporta tutores e animais para o Petorlandia</div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="dot yellow" id="statusDot"></div>
+    <span id="statusText">Verificando conexão...</span>
+  </div>
+
+  <div class="body">
+    <div class="token-box" id="tokenBox" style="display:none">
+      <label>🔑 Token detectado</label>
+      <div class="token-val" id="tokenVal"></div>
+    </div>
+
+    <div class="keys-area" id="keysArea">
+      <label>🔍 Chaves do localStorage (diagnóstico)</label>
+      <div id="keysVal"></div>
+    </div>
+
+    <button class="btn btn-primary" id="btnDetectToken">🔍 Detectar Token</button>
+    <button class="btn btn-info" id="btnShowKeys" style="display:none">📋 Ver Chaves do localStorage</button>
+    <button class="btn btn-success" id="btnExport" style="display:none" disabled>⬇ Exportar Tutores e Animais</button>
+    <button class="btn btn-secondary" id="btnDownload" style="display:none">💾 Baixar JSON</button>
+
+    <div class="progress-area" id="progressArea"></div>
+    <div class="result-area" id="resultArea"></div>
+  </div>
+
+  <div class="footer">VetSmart Exporter v1.2 · Petorlandia</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

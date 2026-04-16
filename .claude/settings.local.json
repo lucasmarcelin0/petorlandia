@@ -28,7 +28,13 @@
       "Bash(flask db:*)",
       "Bash(pip install:*)",
       "Bash(pip show:*)",
-      "Bash(ls -lt migrations/versions/*.py)"
+      "Bash(ls -lt migrations/versions/*.py)",
+      "WebFetch(domain:prontuario.vetsmart.com.br)",
+      "WebFetch(domain:vetsmart.com.br)",
+      "WebFetch(domain:www.vetsmart.com.br)",
+      "WebSearch",
+      "WebFetch(domain:pl-vetsmart.zendesk.com)",
+      "WebFetch(domain:plano.vetsmart.com.br)"
     ]
   }
 }

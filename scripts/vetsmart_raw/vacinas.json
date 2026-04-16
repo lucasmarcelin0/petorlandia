@@ -1,0 +1,971 @@
+[
+  {
+    "objectId": "BlcIdnIxz0",
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2025-09-19T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-04-22T13:09:20.243Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "android",
+    "createdAppVersion": "2.50.16",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "patient": {
+      "objectId": "TNxRzdH2rv",
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2024-09-19T22:10:00.443Z"
+      },
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdDevice": "web",
+      "createdAppVersion": "2.41.21",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "v3rIjHXHpd"
+      },
+      "name": "Jacob",
+      "specie": "Felino",
+      "deceased": "0",
+      "changedApp": "Prontuário",
+      "changedDevice": "android",
+      "changedAppVersion": "2.41.21",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "isDeleted": false,
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "patientNumberId": 3600389,
+      "createdAt": "2024-09-19T21:44:31.667Z",
+      "updatedAt": "2025-10-20T09:49:14.301Z",
+      "image": {
+        "__type": "File",
+        "name": "261ab76d159912b30155a8c03df7b384_image.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/261ab76d159912b30155a8c03df7b384_image.png"
+      },
+      "thumbnail": {
+        "__type": "File",
+        "name": "98d37f87c1b58277f6f5e3bdc45fc14a_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/98d37f87c1b58277f6f5e3bdc45fc14a_thumbnail.jpg"
+      },
+      "TEMP_lastWeight": true,
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "isReminder": true,
+    "vaccineType": "Antirrábica",
+    "vaccineId": "2591",
+    "vaccine": "Bioraiva®Pet",
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.50.16",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "clinicId": "33UAFzEPV1",
+    "patientId": "TNxRzdH2rv",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2025-04-22T13:09:20.234Z",
+    "updatedAt": "2025-04-22T13:09:20.292Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "KF29QnCEJr",
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2025-02-08T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2025-02-07T15:16:57.277Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.49.3",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "patient": {
+      "objectId": "krJWKf9Ka6",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2025-01-31T03:00:00.000Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2025-02-07T15:15:18.617Z"
+      },
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdDevice": "android",
+      "createdAppVersion": "2.49.3",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "rIkkjORc6U"
+      },
+      "name": "Sansão/Bob",
+      "specie": "Canino",
+      "breed": "SRD",
+      "gender": "Macho",
+      "deceased": "0",
+      "changedApp": "Prontuário",
+      "changedDevice": "web",
+      "changedAppVersion": "2.49.3",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "isDeleted": false,
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "0131",
+      "patientNumberId": 4218351,
+      "createdAt": "2025-02-07T11:46:55.552Z",
+      "updatedAt": "2025-10-19T02:16:33.159Z",
+      "TEMP_lastWeight": true,
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "isReminder": true,
+    "vaccineType": "V10",
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.49.3",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "clinicId": "33UAFzEPV1",
+    "patientId": "krJWKf9Ka6",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2025-02-07T15:16:57.240Z",
+    "updatedAt": "2025-02-07T15:16:57.623Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "8LlAJ9U7P4",
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2024-09-19T22:10:11.848Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-09-19T22:10:37.694Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.41.21",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "patient": {
+      "objectId": "TNxRzdH2rv",
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2024-09-19T22:10:00.443Z"
+      },
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdDevice": "web",
+      "createdAppVersion": "2.41.21",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "v3rIjHXHpd"
+      },
+      "name": "Jacob",
+      "specie": "Felino",
+      "deceased": "0",
+      "changedApp": "Prontuário",
+      "changedDevice": "android",
+      "changedAppVersion": "2.41.21",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "isDeleted": false,
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "patientNumberId": 3600389,
+      "createdAt": "2024-09-19T21:44:31.667Z",
+      "updatedAt": "2025-10-20T09:49:14.301Z",
+      "image": {
+        "__type": "File",
+        "name": "261ab76d159912b30155a8c03df7b384_image.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/261ab76d159912b30155a8c03df7b384_image.png"
+      },
+      "thumbnail": {
+        "__type": "File",
+        "name": "98d37f87c1b58277f6f5e3bdc45fc14a_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/98d37f87c1b58277f6f5e3bdc45fc14a_thumbnail.jpg"
+      },
+      "TEMP_lastWeight": true,
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "isReminder": false,
+    "vaccineType": "Antirrábica",
+    "vaccineId": "2591",
+    "vaccine": "Bioraiva®Pet",
+    "currentShot": 1,
+    "totalShots": 1,
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.41.21",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "clinicId": "33UAFzEPV1",
+    "patientId": "TNxRzdH2rv",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2024-09-19T22:10:37.679Z",
+    "updatedAt": "2024-09-19T22:10:37.758Z",
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "B1H4wmW2ON",
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2024-04-17T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2024-04-11T13:19:21.319Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.34.0",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "patient": {
+      "objectId": "9D5tZBvpXm",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2019-12-28T03:00:00.000Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2024-03-06T23:55:38.798Z"
+      },
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdDevice": "android",
+      "createdAppVersion": "2.30.0",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "5duTudkjVR"
+      },
+      "name": "Malu",
+      "specie": "Canino",
+      "breed": "Pastor belga",
+      "gender": "Fêmea",
+      "pelage": "Preta",
+      "temperament": "Afetuoso",
+      "castrated": "0",
+      "deceased": "0",
+      "size": "Grande",
+      "image": {
+        "__type": "File",
+        "name": "59ddfe952e62ebd2df69764283f7548e_image.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/59ddfe952e62ebd2df69764283f7548e_image.png"
+      },
+      "changedApp": "Prontuário",
+      "changedDevice": "android",
+      "changedAppVersion": "2.30.0",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "isDeleted": false,
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "1228",
+      "patientNumberId": 2822480,
+      "thumbnail": {
+        "__type": "File",
+        "name": "27a9d3c425ba23194f9825f0a36e4d3e_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/27a9d3c425ba23194f9825f0a36e4d3e_thumbnail.jpg"
+      },
+      "createdAt": "2024-03-06T23:55:38.584Z",
+      "updatedAt": "2025-10-22T14:48:57.373Z",
+      "TEMP_lastWeight": true,
+      "lastWeightByDocumentDate": {
+        "__type": "Pointer",
+        "className": "Weight",
+        "objectId": "vzt0yFCO5e"
+      },
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "isReminder": true,
+    "vaccineType": "Antirrábica",
+    "vaccineId": "2591",
+    "vaccine": "Bioraiva®Pet",
+    "currentShot": 1,
+    "totalShots": 1,
+    "changedApp": "Prontuário",
+    "changedDevice": "android",
+    "changedAppVersion": "2.36.4",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "isDeleted": false,
+    "clinicId": "33UAFzEPV1",
+    "patientId": "9D5tZBvpXm",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2024-04-04T12:43:49.321Z",
+    "updatedAt": "2024-04-11T13:19:21.277Z",
+    "messages": [
+      {
+        "__type": "Pointer",
+        "className": "Message",
+        "objectId": "gAA2wmyVDk"
+      }
+    ],
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "PpxZVCQhH9",
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2023-08-29T03:00:00.000Z"
+    },
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-05T18:35:30.500Z"
+    },
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdApp": "Prontuário",
+    "createdDevice": "web",
+    "createdAppVersion": "2.17.1",
+    "isDeleted": true,
+    "patient": {
+      "objectId": "pDlatvhyEG",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2023-04-05T18:05:20.289Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2025-04-17T15:15:48.363Z"
+      },
+      "breed": "Buldogue francês",
+      "castrated": "0",
+      "changedApp": "Prontuário",
+      "changedAppVersion": "2.50.16",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "changedDevice": "web",
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdAppVersion": "2.17.1",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "createdDevice": "web",
+      "deceased": "0",
+      "gender": "Fêmea",
+      "image": {
+        "__type": "File",
+        "name": "df2f835b068d49033e48589cf139b6b9_Mel.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/df2f835b068d49033e48589cf139b6b9_Mel.png"
+      },
+      "isDeleted": true,
+      "name": "Mel [Animal teste]",
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "g0BJ03lvgP"
+      },
+      "pelage": "Castanha",
+      "size": "Pequeno",
+      "specie": "Canino",
+      "temperament": "Dócil",
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "0405",
+      "patientNumberId": 2122201,
+      "thumbnail": {
+        "__type": "File",
+        "name": "c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg"
+      },
+      "createdAt": "2023-08-05T18:05:31.093Z",
+      "updatedAt": "2025-04-17T15:15:48.354Z",
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "isReminder": true,
+    "vaccineId": "716",
+    "vaccineType": "V8",
+    "vaccine": "Vanguard HTLP 5 CV-L, ampola",
+    "currentShot": 3,
+    "totalShots": 3,
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedApp": "Prontuário",
+    "changedDevice": "web",
+    "changedAppVersion": "2.17.1",
+    "parentVaccine": {
+      "__type": "Pointer",
+      "className": "Vaccine",
+      "objectId": "x2j2uD7vLH"
+    },
+    "clinicId": "33UAFzEPV1",
+    "patientId": "pDlatvhyEG",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2023-08-05T18:35:30.473Z",
+    "updatedAt": "2025-04-17T15:15:48.406Z",
+    "deletedByParent": true,
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "x2j2uD7vLH",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-05T18:35:30.380Z"
+    },
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2023-08-08T03:00:00.000Z"
+    },
+    "changedApp": "Prontuário",
+    "changedAppVersion": "2.17.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedDevice": "web",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdAppVersion": "2.17.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdDevice": "web",
+    "currentShot": 3,
+    "isDeleted": true,
+    "isReminder": false,
+    "parentVaccine": {
+      "__type": "Pointer",
+      "className": "Vaccine",
+      "objectId": "ED0r4hApg8"
+    },
+    "patient": {
+      "objectId": "pDlatvhyEG",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2023-04-05T18:05:20.289Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2025-04-17T15:15:48.363Z"
+      },
+      "breed": "Buldogue francês",
+      "castrated": "0",
+      "changedApp": "Prontuário",
+      "changedAppVersion": "2.50.16",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "changedDevice": "web",
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdAppVersion": "2.17.1",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "createdDevice": "web",
+      "deceased": "0",
+      "gender": "Fêmea",
+      "image": {
+        "__type": "File",
+        "name": "df2f835b068d49033e48589cf139b6b9_Mel.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/df2f835b068d49033e48589cf139b6b9_Mel.png"
+      },
+      "isDeleted": true,
+      "name": "Mel [Animal teste]",
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "g0BJ03lvgP"
+      },
+      "pelage": "Castanha",
+      "size": "Pequeno",
+      "specie": "Canino",
+      "temperament": "Dócil",
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "0405",
+      "patientNumberId": 2122201,
+      "thumbnail": {
+        "__type": "File",
+        "name": "c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg"
+      },
+      "createdAt": "2023-08-05T18:05:31.093Z",
+      "updatedAt": "2025-04-17T15:15:48.354Z",
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "totalShots": 3,
+    "vaccine": "Vanguard HTLP 5 CV-L, ampola",
+    "vaccineId": "716",
+    "vaccineType": "V8",
+    "clinicId": "33UAFzEPV1",
+    "patientId": "pDlatvhyEG",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2023-08-05T18:05:32.017Z",
+    "updatedAt": "2025-04-17T15:15:48.407Z",
+    "deletedByParent": true,
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "ED0r4hApg8",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-05T18:05:31.969Z"
+    },
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2023-07-11T18:05:20.289Z"
+    },
+    "changedApp": "Prontuário",
+    "changedAppVersion": "2.17.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedDevice": "web",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdAppVersion": "2.17.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdDevice": "web",
+    "currentShot": 2,
+    "isDeleted": true,
+    "isReminder": false,
+    "parentVaccine": {
+      "__type": "Pointer",
+      "className": "Vaccine",
+      "objectId": "nyKXlfckdF"
+    },
+    "patient": {
+      "objectId": "pDlatvhyEG",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2023-04-05T18:05:20.289Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2025-04-17T15:15:48.363Z"
+      },
+      "breed": "Buldogue francês",
+      "castrated": "0",
+      "changedApp": "Prontuário",
+      "changedAppVersion": "2.50.16",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "changedDevice": "web",
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdAppVersion": "2.17.1",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "createdDevice": "web",
+      "deceased": "0",
+      "gender": "Fêmea",
+      "image": {
+        "__type": "File",
+        "name": "df2f835b068d49033e48589cf139b6b9_Mel.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/df2f835b068d49033e48589cf139b6b9_Mel.png"
+      },
+      "isDeleted": true,
+      "name": "Mel [Animal teste]",
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "g0BJ03lvgP"
+      },
+      "pelage": "Castanha",
+      "size": "Pequeno",
+      "specie": "Canino",
+      "temperament": "Dócil",
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "0405",
+      "patientNumberId": 2122201,
+      "thumbnail": {
+        "__type": "File",
+        "name": "c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg"
+      },
+      "createdAt": "2023-08-05T18:05:31.093Z",
+      "updatedAt": "2025-04-17T15:15:48.354Z",
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "totalShots": 3,
+    "vaccine": "Vanguard HTLP 5 CV-L, ampola",
+    "vaccineId": "716",
+    "vaccineType": "V8",
+    "clinicId": "33UAFzEPV1",
+    "patientId": "pDlatvhyEG",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2023-08-05T18:05:31.967Z",
+    "updatedAt": "2025-04-17T15:15:48.404Z",
+    "deletedByParent": true,
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  {
+    "objectId": "nyKXlfckdF",
+    "changedAt": {
+      "__type": "Date",
+      "iso": "2023-08-05T18:05:31.605Z"
+    },
+    "documentDate": {
+      "__type": "Date",
+      "iso": "2023-07-14T18:05:20.289Z"
+    },
+    "changedApp": "Prontuário",
+    "changedAppVersion": "2.17.1",
+    "changedBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "changedDevice": "web",
+    "clinic": {
+      "__type": "Pointer",
+      "className": "Clinic",
+      "objectId": "33UAFzEPV1"
+    },
+    "createdApp": "Prontuário",
+    "createdAppVersion": "2.17.1",
+    "createdBy": {
+      "__type": "Pointer",
+      "className": "_User",
+      "objectId": "hjkBbPkuJL"
+    },
+    "createdDevice": "web",
+    "currentShot": 1,
+    "isDeleted": true,
+    "isReminder": false,
+    "patient": {
+      "objectId": "pDlatvhyEG",
+      "birthdate": {
+        "__type": "Date",
+        "iso": "2023-04-05T18:05:20.289Z"
+      },
+      "changedAt": {
+        "__type": "Date",
+        "iso": "2025-04-17T15:15:48.363Z"
+      },
+      "breed": "Buldogue francês",
+      "castrated": "0",
+      "changedApp": "Prontuário",
+      "changedAppVersion": "2.50.16",
+      "changedBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "changedDevice": "web",
+      "clinic": {
+        "__type": "Pointer",
+        "className": "Clinic",
+        "objectId": "33UAFzEPV1"
+      },
+      "createdApp": "Prontuário",
+      "createdAppVersion": "2.17.1",
+      "createdBy": {
+        "__type": "Pointer",
+        "className": "_User",
+        "objectId": "hjkBbPkuJL"
+      },
+      "createdDevice": "web",
+      "deceased": "0",
+      "gender": "Fêmea",
+      "image": {
+        "__type": "File",
+        "name": "df2f835b068d49033e48589cf139b6b9_Mel.png",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/df2f835b068d49033e48589cf139b6b9_Mel.png"
+      },
+      "isDeleted": true,
+      "name": "Mel [Animal teste]",
+      "owner": {
+        "__type": "Pointer",
+        "className": "Owner",
+        "objectId": "g0BJ03lvgP"
+      },
+      "pelage": "Castanha",
+      "size": "Pequeno",
+      "specie": "Canino",
+      "temperament": "Dócil",
+      "clinicId": "33UAFzEPV1",
+      "createdById": "hjkBbPkuJL",
+      "birthday": "0405",
+      "patientNumberId": 2122201,
+      "thumbnail": {
+        "__type": "File",
+        "name": "c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg",
+        "url": "https://parse.vetsmart.com.br/parse/files/XhI4EJ09WGTwlYIT8kpQDrsVEsCjwatFNHDHQOEi/c81ac4ec2f3daea06eeb595a29a2b9c2_thumbnail.jpg"
+      },
+      "createdAt": "2023-08-05T18:05:31.093Z",
+      "updatedAt": "2025-04-17T15:15:48.354Z",
+      "ACL": {
+        "role:Clinic_33UAFzEPV1": {
+          "read": true,
+          "write": true
+        }
+      },
+      "__type": "Object",
+      "className": "Patient"
+    },
+    "totalShots": 3,
+    "vaccine": "Vanguard HTLP 5 CV-L, ampola",
+    "vaccineId": "716",
+    "vaccineType": "V8",
+    "clinicId": "33UAFzEPV1",
+    "patientId": "pDlatvhyEG",
+    "createdById": "hjkBbPkuJL",
+    "ignoreReminder": false,
+    "createdAt": "2023-08-05T18:05:31.603Z",
+    "updatedAt": "2025-04-17T15:15:48.405Z",
+    "deletedByParent": true,
+    "ACL": {
+      "role:Clinic_33UAFzEPV1": {
+        "read": true,
+        "write": true
+      }
+    }
+  }
+]
