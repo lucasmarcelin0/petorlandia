@@ -365,6 +365,7 @@
           'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'same-origin',
+        cache: 'no-store',   // nunca servir do cache — sempre buscar do servidor
         signal: controller.signal,
       });
     } catch (error) {

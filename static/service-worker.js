@@ -1,5 +1,5 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v4';
+const CACHE_NAME = 'petorlandia-cache-v5';
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
@@ -28,24 +28,25 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // For navigation requests (like visiting "/"), prefer the network so
-  // users always see the latest authenticated content. Fall back to cache
-  // when offline.
+  // AJAX requests (listing panels, autocomplete, etc.) — vai direto à rede,
+  // sem tocar no cache. Evita retornar HTML cacheado no lugar de JSON.
+  const isAjax = event.request.headers.get('X-Requested-With') === 'XMLHttpRequest'
+    || event.request.headers.get('Accept') === 'application/json';
+  if (isAjax) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Requisições de navegação (visitar uma página) — rede primeiro, sem
+  // cachear a resposta (páginas são dinâmicas e dependem de autenticação).
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (event.request.method === 'GET') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request))
+      fetch(event.request).catch(() => caches.match(event.request))
     );
     return;
   }
 
+  // Assets estáticos — cache primeiro, rede como fallback.
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
   );
