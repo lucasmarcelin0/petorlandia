@@ -9182,7 +9182,6 @@ def oauth_authorize():
         nonce=nonce,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        csrf_token=generate_csrf(),
     )
 
 
