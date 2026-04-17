@@ -8630,7 +8630,7 @@ def integration_bearer_required(*required_scopes: str):
                     missing_scopes=missing_scopes,
                 )
 
-            auth_user = User.query.get(token.user_id)
+            auth_user = db.session.get(User, token.user_id)
             if not auth_user:
                 return _integration_error(
                     'invalid_token_subject',
@@ -8808,7 +8808,7 @@ def oauth_token():
         access_token = secrets.token_urlsafe(48)
         private_jwk, _ = _oauth_get_signing_keys()
 
-        user = User.query.get(auth_code.user_id)
+        user = db.session.get(User, auth_code.user_id)
         claims = {
             'iss': _oauth_issuer(),
             'sub': str(auth_code.user_id),
@@ -9053,7 +9053,7 @@ def oauth_userinfo():
     if not token or not token.is_active:
         return _oauth_error_response('invalid_token', 'Access token is invalid or expired.', 401)
 
-    user = User.query.get(token.user_id)
+    user = db.session.get(User, token.user_id)
     if not user:
         return _oauth_error_response('invalid_token', 'Token subject no longer exists.', 401)
 
@@ -9071,7 +9071,7 @@ def oauth_revoke():
         token.revoke()
         db.session.add(token)
         if token.refresh_token_id:
-            refresh = OAuthRefreshToken.query.get(token.refresh_token_id)
+            refresh = db.session.get(OAuthRefreshToken, token.refresh_token_id)
             if refresh and refresh.revoked_at is None:
                 _oauth_revoke_refresh_family(refresh)
         db.session.commit()
@@ -9217,7 +9217,7 @@ def mcp_server():
     if not token_obj or not token_obj.is_active:
         return _mcp_unauthorized()
 
-    user = User.query.get(token_obj.user_id)
+    user = db.session.get(User, token_obj.user_id)
     if not user:
         return _mcp_unauthorized()
     token_scope_set = {item.strip() for item in (token_obj.scope or '').split() if item.strip()}

@@ -1717,11 +1717,11 @@ class Appointment(db.Model):
     def _set_clinica(mapper, connection, target):
         """Populate clinica_id from veterinarian or animal if not set."""
         if target.veterinario_id:
-            vet = Veterinario.query.get(target.veterinario_id)
+            vet = db.session.get(Veterinario, target.veterinario_id)
             if vet and vet.clinica_id:
                 target.clinica_id = vet.clinica_id
         if not target.clinica_id and target.animal_id:
-            animal = Animal.query.get(target.animal_id)
+            animal = db.session.get(Animal, target.animal_id)
             if animal and animal.clinica_id:
                 target.clinica_id = animal.clinica_id
 
@@ -1736,18 +1736,20 @@ def _create_veterinarian_membership(mapper, connection, target):
     """Ensure every veterinarian profile starts with a membership record."""
 
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
-    session = object_session(target) or db.session
-
-    membership = getattr(target, 'membership', None)
-    if membership is None:
-        membership = VeterinarianMembership(
-            veterinario_id=target.id,
-            started_at=utcnow(),
-            trial_ends_at=utcnow() + timedelta(days=trial_days),
+    now = utcnow()
+    membership_row = connection.execute(
+        VeterinarianMembership.__table__.select().where(
+            VeterinarianMembership.veterinario_id == target.id
         )
-        session.add(membership)
-    else:
-        membership.ensure_trial_dates(trial_days)
+    ).first()
+    if membership_row is None:
+        connection.execute(
+            VeterinarianMembership.__table__.insert().values(
+                veterinario_id=target.id,
+                started_at=now,
+                trial_ends_at=now + timedelta(days=trial_days),
+            )
+        )
 
 
 event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)
