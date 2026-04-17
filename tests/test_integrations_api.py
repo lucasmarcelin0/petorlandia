@@ -596,7 +596,7 @@ def test_mcp_write_tools_create_records(app, client):
         pet = Animal.query.filter_by(id=animal_id).one()
         assert tutor.email.endswith("@cadastro.petorlandia.local")
         assert pet.user_id == tutor.id
-        consulta = Consulta.query.get(consulta_id)
+        consulta = db.session.get(Consulta, consulta_id)
         assert "Diagnóstico" in (consulta.conduta or "")
         assert ExameSolicitado.query.count() == 1
         assert Appointment.query.filter_by(animal_id=animal_id).count() >= 2
