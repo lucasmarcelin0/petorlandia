@@ -450,16 +450,21 @@ def _sex(v: str) -> str:
 
 def _dedup_email(email: str, existing_emails: set) -> str:
     """Garante e-mail único adicionando sufixo se necessário."""
-    base  = email.lower().strip() if email else ""
-    if not base:
-        base = f"tutor_{hashlib.md5(email.encode() if email else b'x').hexdigest()[:8]}@vetsmart.import"
+    base = email.lower().strip() if email else ""
+    # Descarta valores que não são e-mails válidos (sem @, ou domínio vazio)
+    parts = base.split("@")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        seed = base.encode() if base else b"x"
+        base = f"tutor_{hashlib.md5(seed).hexdigest()[:8]}@vetsmart.import"
+        parts = base.split("@")
+
     if base not in existing_emails:
         existing_emails.add(base)
         return base
     i = 1
-    while f"{base.split('@')[0]}_{i}@{base.split('@')[1]}" in existing_emails:
+    while f"{parts[0]}_{i}@{parts[1]}" in existing_emails:
         i += 1
-    unique = f"{base.split('@')[0]}_{i}@{base.split('@')[1]}"
+    unique = f"{parts[0]}_{i}@{parts[1]}"
     existing_emails.add(unique)
     return unique
 
@@ -821,41 +826,75 @@ def build_species_breed_maps(db, Species, Breed, raw_animals: list) -> tuple[dic
     db.session.flush()
     return species_map, breed_map
 
-def get_or_create_vet_user(db, User, clinica_id: int, preferred_user_id: int | None = None) -> int:
-    """Retorna o ID de um usuário veterinário padrão para as consultas importadas."""
-    if preferred_user_id:
-        return preferred_user_id
-    if PETORLANDIA_VET_USER_ID:
-        return PETORLANDIA_VET_USER_ID
+def _prompt_select(titulo: str, opcoes: list[tuple]) -> int:
+    """
+    Exibe uma lista numerada de opções e retorna o id do item escolhido.
+    opcoes: lista de (id, label)
+    """
+    print(f"\n{'─'*50}")
+    print(f"  {titulo}")
+    print(f"{'─'*50}")
+    for i, (oid, label) in enumerate(opcoes, 1):
+        print(f"  [{i}] (id={oid}) {label}")
+    print(f"{'─'*50}")
+    while True:
+        resp = input(f"  Escolha [1-{len(opcoes)}]: ").strip()
+        if resp.isdigit() and 1 <= int(resp) <= len(opcoes):
+            chosen_id, chosen_label = opcoes[int(resp) - 1]
+            log.info("  ✔ Selecionado: %s (id=%d)", chosen_label, chosen_id)
+            return chosen_id
+        print(f"  Entrada inválida. Digite um número entre 1 e {len(opcoes)}.")
 
-    sentinel_email = "importacao_vetsmart@petorlandia.internal"
-    u = User.query.filter_by(email=sentinel_email).first()
-    if not u:
-        u = User(
-            name="Importação VetSmart",
-            email=sentinel_email,
-            role="veterinario",
-            clinica_id=clinica_id,
-            is_private=True,
-        )
-        u.set_password("VetSmart@Import2024")
-        db.session.add(u)
-        db.session.flush()
-        log.info("  + Usuário sentinela criado: %s (id=%s)", sentinel_email, u.id)
-    return u.id
 
 def get_clinica_id(db, Clinica, preferred_clinic_id: int | None = None) -> int:
     if preferred_clinic_id:
+        log.info("🏥 Clínica via argumento: id=%d", preferred_clinic_id)
         return preferred_clinic_id
     if PETORLANDIA_CLINICA_ID:
+        log.info("🏥 Clínica via configuração: id=%d", PETORLANDIA_CLINICA_ID)
         return PETORLANDIA_CLINICA_ID
-    clinica = Clinica.query.filter(
-        Clinica.nome.ilike("%orlando%")
-    ).first() or Clinica.query.first()
-    if not clinica:
+
+    clinicas = Clinica.query.order_by(Clinica.nome).all()
+    if not clinicas:
         raise RuntimeError("Nenhuma clínica encontrada no Petorlandia. Crie uma antes de importar.")
-    log.info("🏥 Clínica detectada: %s (id=%d)", clinica.nome, clinica.id)
-    return clinica.id
+
+    if len(clinicas) == 1:
+        log.info("🏥 Clínica (única): %s (id=%d)", clinicas[0].nome, clinicas[0].id)
+        return clinicas[0].id
+
+    opcoes = [(c.id, c.nome) for c in clinicas]
+    print("\n🏥 Selecione a CLÍNICA destino da importação:")
+    return _prompt_select("Clínicas disponíveis", opcoes)
+
+
+def get_vet_user_id(db, User, clinica_id: int, preferred_user_id: int | None = None) -> int:
+    """Pergunta ao usuário qual veterinário deve constar como responsável."""
+    if preferred_user_id:
+        log.info("👨‍⚕️ Veterinário via argumento: id=%d", preferred_user_id)
+        return preferred_user_id
+    if PETORLANDIA_VET_USER_ID:
+        log.info("👨‍⚕️ Veterinário via configuração: id=%d", PETORLANDIA_VET_USER_ID)
+        return PETORLANDIA_VET_USER_ID
+
+    vets = User.query.filter(
+        User.role.in_(["veterinario", "admin"]),
+        User.clinica_id == clinica_id,
+    ).order_by(User.name).all()
+
+    if not vets:
+        # Fallback: qualquer usuário da clínica
+        vets = User.query.filter_by(clinica_id=clinica_id).order_by(User.name).all()
+
+    if not vets:
+        raise RuntimeError("Nenhum usuário encontrado para a clínica selecionada.")
+
+    if len(vets) == 1:
+        log.info("👨‍⚕️ Veterinário (único): %s (id=%d)", vets[0].name, vets[0].id)
+        return vets[0].id
+
+    opcoes = [(u.id, f"{u.name} [{u.role}]") for u in vets]
+    print("\n👨‍⚕️ Selecione o VETERINÁRIO responsável pelas consultas e vacinas importadas:")
+    return _prompt_select("Veterinários disponíveis", opcoes)
 
 
 # ─── Pipeline de inserção ────────────────────────────────────────────────────
@@ -887,7 +926,7 @@ def import_all(
         log.info("=" * 60)
 
         clinica_id = get_clinica_id(db, Clinica, preferred_clinic_id=target_clinic_id)
-        vet_user_id = get_or_create_vet_user(
+        vet_user_id = get_vet_user_id(
             db,
             User,
             clinica_id,
@@ -1053,26 +1092,52 @@ def import_all(
 
         # ── e) Prescrições ────────────────────────────────────────────────
         log.info("\n[4b] Importando prescrições (%d)...", len(raw.get("prescricoes", [])))
+        blocos_criados = 0
+        itens_criados = 0
         for vs_p in raw.get("prescricoes", []):
-            pat_ptr  = vs_p.get("patient") or vs_p.get("animal") or {}
+            pat_ptr   = vs_p.get("patient") or vs_p.get("animal") or {}
             animal_vs = pat_ptr.get("objectId") if isinstance(pat_ptr, dict) else None
+            if not animal_vs:
+                animal_vs = vs_p.get("patientId")
             animal_pet_id = animal_id_map.get(animal_vs)
             if not animal_pet_id:
+                log.warning("  ⚠ Prescrição '%s' sem animal mapeado (vs=%s). Pulando.",
+                            vs_p.get("objectId"), animal_vs)
                 continue
 
-            for presc_data in transform_prescricao(vs_p, animal_pet_id):
-                if not presc_data["medicamento"]:
-                    continue
+            resultado = transform_prescricao(vs_p, animal_pet_id)
+            itens = resultado["itens"]
+            bloco_data = resultado["bloco"]
+
+            if not itens:
+                continue
+
+            bloco = BlocoPrescricao(
+                animal_id        = animal_pet_id,
+                clinica_id       = clinica_id,
+                saved_by_id      = vet_user_id,
+                data_criacao     = bloco_data["data_criacao"] or datetime.utcnow(),
+                instrucoes_gerais= bloco_data["instrucoes_gerais"],
+            )
+            db.session.add(bloco)
+            db.session.flush()
+            blocos_criados += 1
+
+            for item in itens:
                 p = Prescricao(
+                    bloco_id        = bloco.id,
                     animal_id       = animal_pet_id,
-                    medicamento     = presc_data["medicamento"],
-                    dosagem         = presc_data["dosagem"],
-                    frequencia      = presc_data["frequencia"],
-                    duracao         = presc_data["duracao"],
-                    observacoes     = presc_data["observacoes"],
-                    data_prescricao = presc_data["data_prescricao"] or datetime.utcnow(),
+                    medicamento     = item["medicamento"],
+                    dosagem         = item["dosagem"],
+                    frequencia      = item["frequencia"],
+                    duracao         = item["duracao"],
+                    observacoes     = item["observacoes"],
+                    data_prescricao = item["data_prescricao"] or datetime.utcnow(),
                 )
                 db.session.add(p)
+                itens_criados += 1
+
+        log.info("  Blocos criados: %d | Medicamentos: %d", blocos_criados, itens_criados)
 
         # ── f) Vacinas ────────────────────────────────────────────────────
         log.info("\n[5/5] Importando vacinas (%d)...", len(raw.get("vacinas", [])))

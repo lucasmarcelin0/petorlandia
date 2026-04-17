@@ -63,6 +63,8 @@ Todos exigem `Authorization: Bearer <token>`.
 
 - `listar_meus_pets`
 - `listar_agendamentos`
+- `interpretar_mensagem_livre_atendimento`
+- `assistente_operacional_veterinario`
 - `obter_resumo_clinico_animal`
 - `listar_agenda_do_dia`
 - `listar_pendencias_clinicas`
@@ -96,6 +98,40 @@ Regras adicionais:
 - `registrar_bloco_exames`: cria um bloco estruturado de exames solicitados para o animal.
 - `agendar_consulta`: cria agendamento clínico vinculado ao animal e à clínica.
 - `agendar_retorno`: agenda retorno a partir de uma consulta já existente.
+
+## Interpretação de mensagens livres
+
+Para uso mais próximo da rotina real do WhatsApp e de anotações curtas no ChatGPT, a integração também expõe:
+
+- `interpretar_mensagem_livre_atendimento`
+
+Essa tool:
+
+- recebe texto livre ou blocos de conversa;
+- extrai dados candidatos como nome, telefone, links de localização e datas;
+- devolve um rascunho operacional;
+- sugere a próxima action/tool adequada;
+- informa quais campos ainda precisam ser confirmados antes de cadastro, consulta ou agendamento.
+
+Ela não grava nada no banco. Serve como camada de preparo antes das tools de escrita.
+
+## Assistente operacional
+
+A tool `assistente_operacional_veterinario` é a primeira camada de orquestração conversacional.
+
+Ela:
+
+- recebe texto natural do veterinário;
+- infere a intenção principal, como cadastro, agendamento ou registro de consulta;
+- monta argumentos internos compatíveis com as tools operacionais;
+- informa o que ainda falta;
+- executa a ação quando houver dados suficientes, escopo OAuth compatível e `confirmar_gravacao: "sim"`.
+
+Exemplos de uso:
+
+- `Cadastrar tutor Ligia. Telefone: 16999990000. Endereço: Rua das Flores, 10. Pet: Mel. Espécie: cão.`
+- `Agendar consulta para pet Rex em 2026-04-20 às 09:30. Motivo: retorno respiratório.`
+- `Registrar consulta do paciente Thor. Queixa: coceira intensa. Diagnóstico: dermatite alérgica. Conduta: banho terapêutico.`
 
 ## Exemplos de perguntas que o ChatGPT já consegue responder
 
