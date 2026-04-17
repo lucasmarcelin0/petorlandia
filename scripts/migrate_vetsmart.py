@@ -1033,6 +1033,16 @@ def import_all(
                 tutor_pet_id = vet_user_id
 
             t = transform_animal(vs_animal, tutor_pet_id, species_map, breed_map)
+
+            # Idempotência: pula se animal com mesmo nome+tutor+clínica já existe
+            existing_animal = Animal.query.filter_by(
+                name=t["name"], user_id=tutor_pet_id, clinica_id=clinica_id
+            ).first()
+            if existing_animal:
+                animal_id_map[vs_id] = existing_animal.id
+                log.debug("  skip animal '%s' (já existe id=%d)", t["name"], existing_animal.id)
+                continue
+
             animal = Animal(
                 name             = t["name"],
                 sex              = t["sex"],
@@ -1112,11 +1122,23 @@ def import_all(
             if not itens:
                 continue
 
+            # Idempotência: pula se já existe bloco na mesma data para este animal
+            data_criacao = bloco_data["data_criacao"] or datetime.utcnow()
+            existing_bloco = BlocoPrescricao.query.filter(
+                BlocoPrescricao.animal_id == animal_pet_id,
+                BlocoPrescricao.clinica_id == clinica_id,
+                db.func.date(BlocoPrescricao.data_criacao) == data_criacao.date(),
+                BlocoPrescricao.instrucoes_gerais == bloco_data["instrucoes_gerais"],
+            ).first()
+            if existing_bloco:
+                log.debug("  skip bloco animal=%d data=%s (já existe)", animal_pet_id, data_criacao.date())
+                continue
+
             bloco = BlocoPrescricao(
                 animal_id        = animal_pet_id,
                 clinica_id       = clinica_id,
                 saved_by_id      = vet_user_id,
-                data_criacao     = bloco_data["data_criacao"] or datetime.utcnow(),
+                data_criacao     = data_criacao,
                 instrucoes_gerais= bloco_data["instrucoes_gerais"],
             )
             db.session.add(bloco)
