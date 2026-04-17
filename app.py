@@ -7297,7 +7297,16 @@ def _oauth_error_response(error: str, description: str, status_code: int = 400):
 
 
 def _oauth_allowed_scopes() -> set[str]:
-    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email pets:read appointments:read')
+    configured = app.config.get(
+        'OAUTH_ALLOWED_SCOPES',
+        (
+            'openid profile email '
+            'pets:read appointments:read tutors:write pets:write '
+            'appointments:write consultations:write exams:write '
+            'clinical_summary:read consultations:read prescriptions:read '
+            'exams:read vaccines:read handoff:read tutor_guidance:generate'
+        ),
+    )
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
 
 
@@ -7313,7 +7322,25 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
     if not requested.issubset(allowed):
         raise ValueError('Requested scope is not allowed.')
 
-    scope_order = ['openid', 'profile', 'email', 'pets:read', 'appointments:read']
+    scope_order = [
+        'openid',
+        'profile',
+        'email',
+        'pets:read',
+        'appointments:read',
+        'tutors:write',
+        'pets:write',
+        'appointments:write',
+        'consultations:write',
+        'exams:write',
+        'clinical_summary:read',
+        'consultations:read',
+        'prescriptions:read',
+        'exams:read',
+        'vaccines:read',
+        'handoff:read',
+        'tutor_guidance:generate',
+    ]
     ordered_scopes = [scope for scope in scope_order if scope in requested]
     ordered_scopes.extend(sorted(requested.difference(set(scope_order))))
     return ' '.join(ordered_scopes)
@@ -7387,9 +7414,1186 @@ def _integration_ok(data, status_code: int = 200):
 
 def _integration_user_clinic_id(user: User) -> int | None:
     if has_veterinarian_profile(user):
-        membership = ensure_veterinarian_membership(getattr(user, 'veterinario', None))
-        return membership.clinica_id if membership else None
+        veterinario = getattr(user, 'veterinario', None)
+        membership = ensure_veterinarian_membership(veterinario)
+        clinic_id = getattr(veterinario, 'clinica_id', None) or getattr(user, 'clinica_id', None)
+        if clinic_id:
+            return clinic_id
+        return getattr(getattr(membership, 'veterinario', None), 'clinica_id', None) if membership else None
     return getattr(user, 'clinica_id', None)
+
+
+def _integration_empty_query(model):
+    return model.query.filter(model.id.is_(None))
+
+
+def _integration_accessible_animals_query(user: User, clinic_id: int | None = None):
+    query = (
+        Animal.query
+        .options(
+            joinedload(Animal.species),
+            joinedload(Animal.breed),
+            joinedload(Animal.owner),
+            joinedload(Animal.clinica),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(Animal)
+        return query.filter(Animal.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_accessible_appointments_query(user: User, clinic_id: int | None = None):
+    query = (
+        Appointment.query
+        .options(
+            joinedload(Appointment.animal).joinedload(Animal.owner),
+            joinedload(Appointment.veterinario).joinedload(Veterinario.user),
+            joinedload(Appointment.clinica),
+            joinedload(Appointment.consulta),
+        )
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Appointment.clinica_id == clinic_id)
+        return query
+
+    if has_veterinarian_profile(user):
+        veterinario = getattr(user, 'veterinario', None)
+        if not veterinario:
+            return _integration_empty_query(Appointment)
+        return query.filter(Appointment.veterinario_id == veterinario.id)
+
+    if getattr(user, 'worker', None) == 'colaborador':
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(Appointment)
+        return query.filter(Appointment.clinica_id == professional_clinic_id)
+
+    return query.filter(Appointment.tutor_id == user.id)
+
+
+def _integration_accessible_exam_appointments_query(user: User, clinic_id: int | None = None):
+    query = (
+        ExamAppointment.query
+        .join(Animal, ExamAppointment.animal_id == Animal.id)
+        .options(
+            joinedload(ExamAppointment.animal).joinedload(Animal.owner),
+            joinedload(ExamAppointment.specialist).joinedload(Veterinario.user),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(ExamAppointment)
+        return query.filter(Animal.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_accessible_consultas_query(user: User, clinic_id: int | None = None):
+    query = (
+        Consulta.query
+        .join(Animal, Consulta.animal_id == Animal.id)
+        .options(
+            joinedload(Consulta.animal).joinedload(Animal.owner),
+            joinedload(Consulta.clinica),
+            joinedload(Consulta.veterinario),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Consulta.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(Consulta)
+        return query.filter(Consulta.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_accessible_prescription_blocks_query(user: User, clinic_id: int | None = None):
+    query = (
+        BlocoPrescricao.query
+        .join(Animal, BlocoPrescricao.animal_id == Animal.id)
+        .options(
+            joinedload(BlocoPrescricao.animal).joinedload(Animal.owner),
+            joinedload(BlocoPrescricao.prescricoes),
+            joinedload(BlocoPrescricao.clinica),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(BlocoPrescricao.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(BlocoPrescricao)
+        return query.filter(BlocoPrescricao.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_accessible_exam_requests_query(user: User, clinic_id: int | None = None):
+    query = (
+        ExameSolicitado.query
+        .join(BlocoExames, ExameSolicitado.bloco_id == BlocoExames.id)
+        .join(Animal, BlocoExames.animal_id == Animal.id)
+        .options(
+            joinedload(ExameSolicitado.bloco).joinedload(BlocoExames.animal).joinedload(Animal.owner),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(ExameSolicitado)
+        return query.filter(Animal.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_accessible_vaccines_query(user: User, clinic_id: int | None = None):
+    query = (
+        Vacina.query
+        .join(Animal, Vacina.animal_id == Animal.id)
+        .options(
+            joinedload(Vacina.animal).joinedload(Animal.owner),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+        return query
+
+    if has_professional_access(user):
+        professional_clinic_id = _integration_user_clinic_id(user)
+        if not professional_clinic_id:
+            return _integration_empty_query(Vacina)
+        return query.filter(Animal.clinica_id == professional_clinic_id)
+
+    return query.filter(Animal.user_id == user.id)
+
+
+def _integration_find_accessible_animal(
+    user: User,
+    *,
+    animal_id: int | None = None,
+    animal_name: str | None = None,
+    clinic_id: int | None = None,
+):
+    query = _integration_accessible_animals_query(user, clinic_id=clinic_id)
+    if animal_id is not None:
+        return query.filter(Animal.id == animal_id).first()
+
+    normalized_name = (animal_name or '').strip().lower()
+    if normalized_name:
+        return (
+            query
+            .filter(func.lower(Animal.name) == normalized_name)
+            .order_by(Animal.date_added.desc(), Animal.id.desc())
+            .first()
+        )
+
+    return None
+
+
+def _integration_format_datetime(value):
+    if not value:
+        return None
+    localized = value
+    if getattr(value, 'tzinfo', None) is None:
+        localized = value.replace(tzinfo=timezone.utc)
+    return localized.astimezone(BR_TZ).isoformat()
+
+
+def _integration_collect_animal_pendencies(animal: Animal):
+    now = utcnow()
+    today = datetime.now(BR_TZ).date()
+
+    overdue_vaccines = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        .filter(Vacina.aplicada_em.isnot(None))
+        .filter(Vacina.aplicada_em < today)
+        .order_by(Vacina.aplicada_em.asc())
+        .all()
+    )
+    upcoming_vaccines = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        .filter(Vacina.aplicada_em.isnot(None))
+        .filter(Vacina.aplicada_em >= today)
+        .order_by(Vacina.aplicada_em.asc())
+        .all()
+    )
+    upcoming_returns = (
+        Appointment.query.filter_by(animal_id=animal.id)
+        .filter(Appointment.consulta_id.isnot(None))
+        .filter(Appointment.status.in_(['scheduled', 'accepted']))
+        .filter(Appointment.scheduled_at >= now)
+        .order_by(Appointment.scheduled_at.asc())
+        .all()
+    )
+    pending_exam_appointments = (
+        ExamAppointment.query.filter_by(animal_id=animal.id)
+        .filter(ExamAppointment.status.in_(['pending', 'confirmed']))
+        .order_by(ExamAppointment.scheduled_at.asc())
+        .all()
+    )
+    pending_exam_requests = (
+        ExameSolicitado.query
+        .join(BlocoExames, ExameSolicitado.bloco_id == BlocoExames.id)
+        .filter(BlocoExames.animal_id == animal.id)
+        .filter(
+            or_(
+                func.lower(func.coalesce(ExameSolicitado.status, '')) == 'pendente',
+                and_(
+                    ExameSolicitado.resultado.is_(None),
+                    func.lower(func.coalesce(ExameSolicitado.status, '')) != 'concluido',
+                ),
+            )
+        )
+        .order_by(ExameSolicitado.id.desc())
+        .all()
+    )
+
+    return {
+        'vacinas_atrasadas': overdue_vaccines,
+        'proximas_vacinas': upcoming_vaccines,
+        'retornos_agendados': upcoming_returns,
+        'exames_agendados': pending_exam_appointments,
+        'exames_pendentes': pending_exam_requests,
+    }
+
+
+def _integration_prescription_items(block: BlocoPrescricao):
+    items = []
+    for item in (block.prescricoes or []):
+        items.append({
+            'medicamento': item.medicamento,
+            'dosagem': item.dosagem,
+            'frequencia': item.frequencia,
+            'duracao': item.duracao,
+            'observacoes': item.observacoes,
+        })
+    return items
+
+
+def _integration_build_clinical_summary(user: User, animal: Animal):
+    latest_consulta = (
+        _integration_accessible_consultas_query(user)
+        .filter(Consulta.animal_id == animal.id)
+        .order_by(Consulta.finalizada_em.desc().nullslast(), Consulta.created_at.desc())
+        .first()
+    )
+    recent_consultas = (
+        _integration_accessible_consultas_query(user)
+        .filter(Consulta.animal_id == animal.id)
+        .order_by(Consulta.finalizada_em.desc().nullslast(), Consulta.created_at.desc())
+        .limit(3)
+        .all()
+    )
+    latest_prescription = (
+        _integration_accessible_prescription_blocks_query(user)
+        .filter(BlocoPrescricao.animal_id == animal.id)
+        .order_by(BlocoPrescricao.data_criacao.desc())
+        .first()
+    )
+    recent_exam_requests = (
+        _integration_accessible_exam_requests_query(user)
+        .filter(BlocoExames.animal_id == animal.id)
+        .order_by(ExameSolicitado.id.desc())
+        .limit(5)
+        .all()
+    )
+    pendencias = _integration_collect_animal_pendencies(animal)
+
+    return {
+        'animal': {
+            'id': animal.id,
+            'nome': animal.name,
+            'especie': animal.species.name if animal.species else None,
+            'raca': animal.breed.name if animal.breed else None,
+            'sexo': animal.sex,
+            'idade': animal.age_display,
+            'peso_kg': animal.peso,
+            'clinica_id': animal.clinica_id,
+            'clinica_nome': animal.clinica.nome if animal.clinica else None,
+        },
+        'tutor': {
+            'id': animal.owner.id if getattr(animal, 'owner', None) else None,
+            'nome': animal.owner.name if getattr(animal, 'owner', None) else None,
+            'email': animal.owner.email if getattr(animal, 'owner', None) else None,
+            'telefone': animal.owner.phone if getattr(animal, 'owner', None) else None,
+        },
+        'ultima_consulta': (
+            {
+                'id': latest_consulta.id,
+                'status': latest_consulta.status,
+                'finalizada_em': _integration_format_datetime(
+                    latest_consulta.finalizada_em or latest_consulta.created_at
+                ),
+                'queixa_principal': latest_consulta.queixa_principal,
+                'historico_clinico': latest_consulta.historico_clinico,
+                'exame_fisico': latest_consulta.exame_fisico,
+                'conduta': latest_consulta.conduta,
+                'exames_solicitados': latest_consulta.exames_solicitados,
+                'retorno_de_id': latest_consulta.retorno_de_id,
+            }
+            if latest_consulta else None
+        ),
+        'consultas_recentes': [
+            {
+                'id': consulta.id,
+                'status': consulta.status,
+                'finalizada_em': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
+                'queixa_principal': consulta.queixa_principal,
+                'conduta': consulta.conduta,
+                'exames_solicitados': consulta.exames_solicitados,
+            }
+            for consulta in recent_consultas
+        ],
+        'prescricao_mais_recente': (
+            {
+                'id': latest_prescription.id,
+                'emitida_em': _integration_format_datetime(latest_prescription.data_criacao),
+                'instrucoes_gerais': latest_prescription.instrucoes_gerais,
+                'itens': _integration_prescription_items(latest_prescription),
+            }
+            if latest_prescription else None
+        ),
+        'exames_recentes': [
+            {
+                'id': exam.id,
+                'nome': exam.nome,
+                'status': exam.status,
+                'justificativa': exam.justificativa,
+                'resultado': exam.resultado,
+            }
+            for exam in recent_exam_requests
+        ],
+        'pendencias': {
+            'vacinas_atrasadas': [
+                {
+                    'id': vaccine.id,
+                    'nome': vaccine.nome,
+                    'tipo': vaccine.tipo,
+                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+                }
+                for vaccine in pendencias['vacinas_atrasadas']
+            ],
+            'proximas_vacinas': [
+                {
+                    'id': vaccine.id,
+                    'nome': vaccine.nome,
+                    'tipo': vaccine.tipo,
+                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+                }
+                for vaccine in pendencias['proximas_vacinas'][:5]
+            ],
+            'retornos_agendados': [
+                {
+                    'id': appointment.id,
+                    'data': _integration_format_datetime(appointment.scheduled_at),
+                    'status': appointment.status,
+                    'observacoes': appointment.notes,
+                }
+                for appointment in pendencias['retornos_agendados'][:5]
+            ],
+            'exames_agendados': [
+                {
+                    'id': exam.id,
+                    'data': _integration_format_datetime(exam.scheduled_at),
+                    'status': exam.status,
+                    'especialista': (
+                        exam.specialist.user.name
+                        if getattr(getattr(exam, 'specialist', None), 'user', None) else None
+                    ),
+                }
+                for exam in pendencias['exames_agendados'][:5]
+            ],
+            'exames_pendentes': [
+                {
+                    'id': exam.id,
+                    'nome': exam.nome,
+                    'status': exam.status,
+                    'justificativa': exam.justificativa,
+                }
+                for exam in pendencias['exames_pendentes'][:5]
+            ],
+        },
+    }
+
+
+def _integration_build_today_agenda(user: User, target_date: date | None = None):
+    target_date = target_date or datetime.now(BR_TZ).date()
+    appointments = (
+        _integration_accessible_appointments_query(user)
+        .order_by(Appointment.scheduled_at.asc())
+        .limit(500)
+        .all()
+    )
+
+    today_items = []
+    for appointment in appointments:
+        if not appointment.scheduled_at:
+            continue
+        if appointment.scheduled_at.astimezone(BR_TZ).date() != target_date:
+            continue
+        animal = appointment.animal
+        pendencias = _integration_collect_animal_pendencies(animal) if animal else {}
+        today_items.append({
+            'appointment_id': appointment.id,
+            'data_hora': _integration_format_datetime(appointment.scheduled_at),
+            'status': appointment.status,
+            'tipo': appointment.kind,
+            'animal': {
+                'id': animal.id if animal else None,
+                'nome': animal.name if animal else None,
+                'tutor_nome': animal.owner.name if animal and getattr(animal, 'owner', None) else None,
+            },
+            'observacoes': appointment.notes,
+            'pendencias_clinicas': {
+                'vacinas_atrasadas': len(pendencias.get('vacinas_atrasadas', [])),
+                'retornos_agendados': len(pendencias.get('retornos_agendados', [])),
+                'exames_pendentes': len(pendencias.get('exames_pendentes', [])),
+            },
+        })
+
+    return {
+        'data': target_date.isoformat(),
+        'total_agendamentos': len(today_items),
+        'agendamentos': today_items,
+    }
+
+
+def _integration_build_clinical_pendencies(user: User, clinic_id: int | None = None):
+    now = utcnow()
+    today = datetime.now(BR_TZ).date()
+
+    overdue_vaccines = (
+        _integration_accessible_vaccines_query(user, clinic_id=clinic_id)
+        .filter(Vacina.aplicada.is_(False))
+        .filter(Vacina.aplicada_em.isnot(None))
+        .filter(Vacina.aplicada_em < today)
+        .order_by(Vacina.aplicada_em.asc())
+        .limit(100)
+        .all()
+    )
+    upcoming_returns = (
+        _integration_accessible_appointments_query(user, clinic_id=clinic_id)
+        .filter(Appointment.consulta_id.isnot(None))
+        .filter(Appointment.status.in_(['scheduled', 'accepted']))
+        .filter(Appointment.scheduled_at >= now)
+        .order_by(Appointment.scheduled_at.asc())
+        .limit(100)
+        .all()
+    )
+    pending_exam_appointments = (
+        _integration_accessible_exam_appointments_query(user, clinic_id=clinic_id)
+        .filter(ExamAppointment.status.in_(['pending', 'confirmed']))
+        .order_by(ExamAppointment.scheduled_at.asc())
+        .limit(100)
+        .all()
+    )
+    pending_exam_requests = (
+        _integration_accessible_exam_requests_query(user, clinic_id=clinic_id)
+        .filter(
+            or_(
+                func.lower(func.coalesce(ExameSolicitado.status, '')) == 'pendente',
+                and_(
+                    ExameSolicitado.resultado.is_(None),
+                    func.lower(func.coalesce(ExameSolicitado.status, '')) != 'concluido',
+                ),
+            )
+        )
+        .order_by(ExameSolicitado.id.desc())
+        .limit(100)
+        .all()
+    )
+
+    return {
+        'resumo': {
+            'vacinas_atrasadas': len(overdue_vaccines),
+            'retornos_pendentes': len(upcoming_returns),
+            'agendamentos_de_exame_pendentes': len(pending_exam_appointments),
+            'solicitacoes_de_exame_pendentes': len(pending_exam_requests),
+        },
+        'vacinas_atrasadas': [
+            {
+                'id': vaccine.id,
+                'animal_id': vaccine.animal_id,
+                'animal_nome': vaccine.animal.name if vaccine.animal else None,
+                'tutor_nome': vaccine.animal.owner.name if vaccine.animal and getattr(vaccine.animal, 'owner', None) else None,
+                'nome': vaccine.nome,
+                'tipo': vaccine.tipo,
+                'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+            }
+            for vaccine in overdue_vaccines
+        ],
+        'retornos_pendentes': [
+            {
+                'id': appointment.id,
+                'animal_id': appointment.animal_id,
+                'animal_nome': appointment.animal.name if appointment.animal else None,
+                'tutor_nome': appointment.animal.owner.name if appointment.animal and getattr(appointment.animal, 'owner', None) else None,
+                'data_hora': _integration_format_datetime(appointment.scheduled_at),
+                'status': appointment.status,
+            }
+            for appointment in upcoming_returns
+        ],
+        'exames_agendados_pendentes': [
+            {
+                'id': exam.id,
+                'animal_id': exam.animal_id,
+                'animal_nome': exam.animal.name if exam.animal else None,
+                'tutor_nome': exam.animal.owner.name if exam.animal and getattr(exam.animal, 'owner', None) else None,
+                'data_hora': _integration_format_datetime(exam.scheduled_at),
+                'status': exam.status,
+            }
+            for exam in pending_exam_appointments
+        ],
+        'exames_solicitados_pendentes': [
+            {
+                'id': exam.id,
+                'animal_id': exam.bloco.animal_id if exam.bloco else None,
+                'animal_nome': exam.bloco.animal.name if exam.bloco and exam.bloco.animal else None,
+                'tutor_nome': (
+                    exam.bloco.animal.owner.name
+                    if exam.bloco and exam.bloco.animal and getattr(exam.bloco.animal, 'owner', None) else None
+                ),
+                'nome': exam.nome,
+                'status': exam.status,
+                'justificativa': exam.justificativa,
+            }
+            for exam in pending_exam_requests
+        ],
+    }
+
+
+def _integration_generate_tutor_guidance(user: User, animal: Animal, consulta_id: int | None = None):
+    consultas_query = _integration_accessible_consultas_query(user).filter(Consulta.animal_id == animal.id)
+    if consulta_id:
+        consultas_query = consultas_query.filter(Consulta.id == consulta_id)
+    consulta = consultas_query.order_by(Consulta.finalizada_em.desc().nullslast(), Consulta.created_at.desc()).first()
+    prescricao = (
+        _integration_accessible_prescription_blocks_query(user)
+        .filter(BlocoPrescricao.animal_id == animal.id)
+        .order_by(BlocoPrescricao.data_criacao.desc())
+        .first()
+    )
+    pendencias = _integration_collect_animal_pendencies(animal)
+
+    medicamentos = []
+    if prescricao:
+        for item in prescricao.prescricoes or []:
+            parts = [item.medicamento]
+            if item.dosagem:
+                parts.append(f"dosagem {item.dosagem}")
+            if item.frequencia:
+                parts.append(f"frequência {item.frequencia}")
+            if item.duracao:
+                parts.append(f"duração {item.duracao}")
+            medicamentos.append(', '.join(parts))
+
+    text_parts = [
+        f"Olá! Seguem as orientações do atendimento de {animal.name}.",
+    ]
+    if consulta and consulta.queixa_principal:
+        text_parts.append(f"Motivo principal do atendimento: {consulta.queixa_principal}.")
+    if consulta and consulta.conduta:
+        text_parts.append(f"Conduta registrada: {consulta.conduta}.")
+    if medicamentos:
+        text_parts.append("Medicamentos/orientações de uso: " + '; '.join(medicamentos) + ".")
+    if prescricao and prescricao.instrucoes_gerais:
+        text_parts.append(f"Cuidados gerais: {prescricao.instrucoes_gerais}.")
+    if consulta and consulta.exames_solicitados:
+        text_parts.append(f"Exames solicitados: {consulta.exames_solicitados}.")
+    if pendencias['retornos_agendados']:
+        next_return = pendencias['retornos_agendados'][0]
+        text_parts.append(
+            "Retorno agendado para "
+            f"{next_return.scheduled_at.astimezone(BR_TZ).strftime('%d/%m/%Y às %H:%M')}."
+        )
+    if pendencias['proximas_vacinas']:
+        next_vaccine = pendencias['proximas_vacinas'][0]
+        if next_vaccine.aplicada_em:
+            text_parts.append(
+                f"Próxima vacina prevista: {next_vaccine.nome} em {next_vaccine.aplicada_em.strftime('%d/%m/%Y')}."
+            )
+    text_parts.append("Texto gerado a partir do prontuário. Revise antes de enviar ao tutor.")
+
+    return {
+        'animal': {
+            'id': animal.id,
+            'nome': animal.name,
+        },
+        'consulta_id': consulta.id if consulta else None,
+        'prescricao_id': prescricao.id if prescricao else None,
+        'medicacoes': medicamentos,
+        'orientacoes_gerais': prescricao.instrucoes_gerais if prescricao else None,
+        'rascunho': ' '.join(text_parts),
+    }
+
+
+def _integration_build_handoff(user: User, animal: Animal, consulta_id: int | None = None):
+    consultas_query = _integration_accessible_consultas_query(user).filter(Consulta.animal_id == animal.id)
+    if consulta_id:
+        consultas_query = consultas_query.filter(Consulta.id == consulta_id)
+    consultas = consultas_query.order_by(Consulta.finalizada_em.desc().nullslast(), Consulta.created_at.desc()).limit(3).all()
+    latest_consulta = consultas[0] if consultas else None
+    prescricao = (
+        _integration_accessible_prescription_blocks_query(user)
+        .filter(BlocoPrescricao.animal_id == animal.id)
+        .order_by(BlocoPrescricao.data_criacao.desc())
+        .first()
+    )
+    pendencias = _integration_collect_animal_pendencies(animal)
+
+    next_steps = []
+    if latest_consulta and latest_consulta.conduta:
+        next_steps.append(latest_consulta.conduta)
+    if latest_consulta and latest_consulta.exames_solicitados:
+        next_steps.append(f"Acompanhar exames solicitados: {latest_consulta.exames_solicitados}")
+    if pendencias['retornos_agendados']:
+        appointment = pendencias['retornos_agendados'][0]
+        next_steps.append(
+            "Retorno marcado em "
+            f"{appointment.scheduled_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
+        )
+    if pendencias['vacinas_atrasadas']:
+        next_steps.append(
+            f"Há {len(pendencias['vacinas_atrasadas'])} vacina(s) atrasada(s) para revisar."
+        )
+
+    handoff_lines = [
+        f"Handoff clínico do paciente {animal.name}.",
+    ]
+    if latest_consulta and latest_consulta.queixa_principal:
+        handoff_lines.append(f"Queixa principal: {latest_consulta.queixa_principal}.")
+    if latest_consulta and latest_consulta.exame_fisico:
+        handoff_lines.append(f"Exame físico: {latest_consulta.exame_fisico}.")
+    if latest_consulta and latest_consulta.conduta:
+        handoff_lines.append(f"Conduta: {latest_consulta.conduta}.")
+    if prescricao and prescricao.instrucoes_gerais:
+        handoff_lines.append(f"Orientações gerais ativas: {prescricao.instrucoes_gerais}.")
+    if next_steps:
+        handoff_lines.append("Próximos passos: " + ' | '.join(next_steps) + ".")
+
+    return {
+        'animal': {
+            'id': animal.id,
+            'nome': animal.name,
+            'especie': animal.species.name if animal.species else None,
+            'tutor_nome': animal.owner.name if getattr(animal, 'owner', None) else None,
+        },
+        'caso_atual': (
+            {
+                'consulta_id': latest_consulta.id,
+                'queixa_principal': latest_consulta.queixa_principal,
+                'historico_clinico': latest_consulta.historico_clinico,
+                'exame_fisico': latest_consulta.exame_fisico,
+                'conduta': latest_consulta.conduta,
+            }
+            if latest_consulta else None
+        ),
+        'ultimos_atendimentos': [
+            {
+                'id': consulta.id,
+                'data': _integration_format_datetime(consulta.finalizada_em or consulta.created_at),
+                'queixa_principal': consulta.queixa_principal,
+                'conduta': consulta.conduta,
+            }
+            for consulta in consultas
+        ],
+        'prescricoes_ativas': (
+            {
+                'bloco_id': prescricao.id,
+                'emitida_em': _integration_format_datetime(prescricao.data_criacao),
+                'instrucoes_gerais': prescricao.instrucoes_gerais,
+                'itens': _integration_prescription_items(prescricao),
+            }
+            if prescricao else None
+        ),
+        'pendencias': {
+            'exames_pendentes': [
+                {
+                    'id': exam.id,
+                    'nome': exam.nome,
+                    'status': exam.status,
+                }
+                for exam in pendencias['exames_pendentes']
+            ],
+            'retornos_agendados': [
+                {
+                    'id': appointment.id,
+                    'data': _integration_format_datetime(appointment.scheduled_at),
+                    'status': appointment.status,
+                }
+                for appointment in pendencias['retornos_agendados']
+            ],
+            'vacinas_atrasadas': [
+                {
+                    'id': vaccine.id,
+                    'nome': vaccine.nome,
+                    'data_prevista': vaccine.aplicada_em.isoformat() if vaccine.aplicada_em else None,
+                }
+                for vaccine in pendencias['vacinas_atrasadas']
+            ],
+        },
+        'proximos_passos': next_steps,
+        'handoff_texto': ' '.join(handoff_lines),
+    }
+
+
+def _integration_normalize_lookup_token(value: str | None) -> str:
+    normalized = unicodedata.normalize('NFKD', str(value or ''))
+    without_accents = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
+
+
+def _integration_parse_date_arg(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    return date.fromisoformat(str(value).strip())
+
+
+def _integration_parse_time_arg(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, time):
+        return value
+    return time.fromisoformat(str(value).strip())
+
+
+def _integration_parse_datetime_arg(date_value, time_value):
+    parsed_date = _integration_parse_date_arg(date_value)
+    parsed_time = _integration_parse_time_arg(time_value)
+    if not parsed_date or not parsed_time:
+        raise ValueError('Data e hora são obrigatórias.')
+    return datetime.combine(parsed_date, parsed_time)
+
+
+def _integration_generate_provisional_email(name: str) -> str:
+    token = _integration_normalize_lookup_token(name)[:40] or 'tutor'
+    base = f'{token}@cadastro.petorlandia.local'
+    if not User.query.filter_by(email=base).first():
+        return base
+
+    suffix = 2
+    while True:
+        candidate = f'{token}.{suffix}@cadastro.petorlandia.local'
+        if not User.query.filter_by(email=candidate).first():
+            return candidate
+        suffix += 1
+
+
+def _integration_resolve_species(species_name: str | None):
+    if not species_name:
+        return None
+    token = _integration_normalize_lookup_token(species_name)
+    aliases = {
+        'cao': {'cao', 'cachorro', 'canino'},
+        'gato': {'gato', 'gata', 'felino'},
+    }
+    canonical_names = {
+        'cao': 'Cachorro',
+        'gato': 'Gato',
+    }
+    species_rows = Species.query.order_by(Species.name).all()
+    for species in species_rows:
+        species_token = _integration_normalize_lookup_token(species.name)
+        if token == species_token:
+            return species
+        for alias_group in aliases.values():
+            if token in alias_group and species_token in alias_group:
+                return species
+    for canonical_token, alias_group in aliases.items():
+        if token in alias_group:
+            created_species = Species(name=canonical_names[canonical_token])
+            db.session.add(created_species)
+            db.session.flush()
+            return created_species
+    return None
+
+
+def _integration_resolve_breed(species, breed_name: str | None):
+    if not species or not breed_name:
+        return None
+    token = _integration_normalize_lookup_token(breed_name)
+    breed_rows = Breed.query.filter_by(species_id=species.id).order_by(Breed.name).all()
+    for breed in breed_rows:
+        if _integration_normalize_lookup_token(breed.name) == token:
+            return breed
+    return None
+
+
+def _integration_require_professional_writer(user: User, *, require_veterinarian: bool = False):
+    if require_veterinarian:
+        return has_veterinarian_profile(user)
+    return has_professional_access(user)
+
+
+def _integration_find_existing_tutor(clinic_id: int | None, tutor_data: dict):
+    email = (tutor_data.get('email') or '').strip().lower()
+    phone = (tutor_data.get('telefone') or tutor_data.get('phone') or '').strip()
+    cpf = (tutor_data.get('cpf') or '').strip()
+    name = (tutor_data.get('nome') or tutor_data.get('name') or '').strip()
+
+    if email:
+        found = User.query.filter(func.lower(User.email) == email).first()
+        if found:
+            return found
+    if cpf:
+        found = User.query.filter_by(cpf=cpf).first()
+        if found:
+            return found
+    if clinic_id and name:
+        query = User.query.filter(
+            User.clinica_id == clinic_id,
+            func.lower(User.name) == name.lower(),
+            User.role == 'adotante',
+        )
+        if phone:
+            query = query.filter(User.phone == phone)
+        found = query.first()
+        if found:
+            return found
+    return None
+
+
+def _integration_find_existing_pet(tutor_id: int, pet_data: dict):
+    pet_name = (pet_data.get('nome') or pet_data.get('name') or '').strip()
+    if not pet_name:
+        return None
+    query = Animal.query.filter(
+        Animal.user_id == tutor_id,
+        Animal.removido_em.is_(None),
+        func.lower(Animal.name) == pet_name.lower(),
+    )
+
+    microchip = (pet_data.get('microchip_number') or '').strip()
+    if microchip:
+        found = query.filter(Animal.microchip_number == microchip).first()
+        if found:
+            return found
+    return query.first()
+
+
+def _integration_create_initial_consulta(animal: Animal, user: User, observacao_clinica: str | None = None, disponibilidade: str | None = None):
+    consulta = Consulta(
+        animal_id=animal.id,
+        created_by=user.id,
+        clinica_id=_integration_user_clinic_id(user) or getattr(animal, 'clinica_id', None),
+        status='in_progress',
+        queixa_principal=(observacao_clinica or '').strip() or None,
+        historico_clinico=(
+            f"Disponibilidade informada: {disponibilidade.strip()}"
+            if (disponibilidade or '').strip() else None
+        ),
+    )
+    db.session.add(consulta)
+    db.session.flush()
+    return consulta
+
+
+def _integration_create_or_reuse_tutor_and_pets(user: User, tutor_data: dict, pets_data: list[dict], observacao_clinica: str | None = None, disponibilidade: str | None = None):
+    clinic_id = _integration_user_clinic_id(user)
+    tutor = _integration_find_existing_tutor(clinic_id, tutor_data)
+    tutor_already_exists = tutor is not None
+    provisional_email = False
+
+    if tutor is None:
+        tutor_email = (tutor_data.get('email') or '').strip().lower()
+        if not tutor_email:
+            tutor_email = _integration_generate_provisional_email(tutor_data.get('nome') or tutor_data.get('name') or 'tutor')
+            provisional_email = True
+        tutor = User(
+            name=(tutor_data.get('nome') or tutor_data.get('name') or '').strip() or 'Tutor sem nome',
+            email=tutor_email,
+            phone=(tutor_data.get('telefone') or tutor_data.get('phone') or '').strip() or None,
+            address=(tutor_data.get('endereco') or tutor_data.get('address') or '').strip() or None,
+            cpf=(tutor_data.get('cpf') or '').strip() or None,
+            rg=(tutor_data.get('rg') or '').strip() or None,
+            role='adotante',
+            clinica_id=clinic_id,
+            added_by=current_user if has_request_context() and current_user.is_authenticated else user,
+            is_private=True,
+        )
+        date_of_birth = tutor_data.get('date_of_birth')
+        if date_of_birth:
+            tutor.date_of_birth = _integration_parse_date_arg(date_of_birth)
+        tutor.set_password('123456789')
+        db.session.add(tutor)
+        db.session.flush()
+
+    pets_result = []
+    consultas_criadas = 0
+    pets_created = 0
+    pets_reused = 0
+
+    for pet_data in pets_data:
+        existing_pet = _integration_find_existing_pet(tutor.id, pet_data)
+        if existing_pet:
+            pets_reused += 1
+            pets_result.append({
+                'id': existing_pet.id,
+                'nome': existing_pet.name,
+                'ja_existia': True,
+            })
+            continue
+
+        species = _integration_resolve_species(pet_data.get('especie') or pet_data.get('species'))
+        breed = _integration_resolve_breed(species, pet_data.get('raca') or pet_data.get('breed'))
+        dob = _integration_parse_date_arg(pet_data.get('date_of_birth'))
+        age_number = pet_data.get('idade_numero')
+        age_text = (pet_data.get('idade') or pet_data.get('age') or '').strip()
+        age_unit = pet_data.get('age_unit') or 'anos'
+        if not dob and age_text:
+            match = re.search(r'(\d+)', age_text)
+            if match:
+                age_number = int(match.group(1))
+            if age_number is not None:
+                normalized_unit = _normalizar_unidade_idade(age_unit if pet_data.get('age_unit') else age_text)
+                if normalized_unit == 'meses':
+                    dob = date.today() - relativedelta(months=int(age_number))
+                else:
+                    dob = date.today() - relativedelta(years=int(age_number))
+
+        age_formatted = None
+        if age_number is not None:
+            age_formatted = _formatar_idade(int(age_number), age_unit)
+        elif age_text:
+            age_formatted = age_text
+
+        peso = pet_data.get('peso') or pet_data.get('peso_kg')
+        try:
+            peso_float = float(peso) if peso not in (None, '') else None
+        except (TypeError, ValueError):
+            peso_float = None
+
+        pet = Animal(
+            name=(pet_data.get('nome') or pet_data.get('name') or '').strip() or 'Pet sem nome',
+            species_id=species.id if species else None,
+            breed_id=breed.id if breed else None,
+            sex=(pet_data.get('sexo') or pet_data.get('sex') or '').strip() or None,
+            date_of_birth=dob,
+            age=age_formatted,
+            microchip_number=(pet_data.get('microchip_number') or '').strip() or None,
+            peso=peso_float,
+            health_plan=(pet_data.get('health_plan') or '').strip() or None,
+            description=(pet_data.get('descricao') or pet_data.get('description') or '').strip() or None,
+            user_id=tutor.id,
+            added_by_id=user.id,
+            clinica_id=clinic_id,
+            status='disponível',
+            image=None,
+            is_alive=True,
+            modo='adotado',
+        )
+        db.session.add(pet)
+        db.session.flush()
+        pets_created += 1
+
+        _integration_create_initial_consulta(
+            pet,
+            user,
+            observacao_clinica=observacao_clinica,
+            disponibilidade=disponibilidade,
+        )
+        consultas_criadas += 1
+        pets_result.append({
+            'id': pet.id,
+            'nome': pet.name,
+            'ja_existia': False,
+        })
+
+    db.session.commit()
+
+    return {
+        'tutor': {
+            'id': tutor.id,
+            'nome': tutor.name,
+            'email': tutor.email,
+            'ja_existia': tutor_already_exists,
+            'email_provisorio': provisional_email,
+        },
+        'pets': pets_result,
+        'resumo': {
+            'pets_criados': pets_created,
+            'pets_reaproveitados': pets_reused,
+            'consultas_iniciais_criadas': consultas_criadas,
+        },
+    }
+
+
+def _integration_upsert_consulta(user: User, animal: Animal, payload: dict):
+    clinic_id = _integration_user_clinic_id(user) or animal.clinica_id
+    consulta_id = payload.get('consulta_id')
+    consulta = None
+    if consulta_id is not None:
+        try:
+            consulta_id = int(consulta_id)
+        except (TypeError, ValueError):
+            raise ValueError('consulta_id inválido.')
+        consulta = (
+            _integration_accessible_consultas_query(user, clinic_id=clinic_id)
+            .filter(Consulta.id == consulta_id, Consulta.animal_id == animal.id)
+            .first()
+        )
+    if consulta is None:
+        consulta = (
+            _integration_accessible_consultas_query(user, clinic_id=clinic_id)
+            .filter(Consulta.animal_id == animal.id, Consulta.status == 'in_progress')
+            .order_by(Consulta.created_at.desc())
+            .first()
+        )
+    if consulta is None:
+        consulta = Consulta(
+            animal_id=animal.id,
+            created_by=user.id,
+            clinica_id=clinic_id,
+            status='in_progress',
+        )
+        db.session.add(consulta)
+        db.session.flush()
+
+    diagnostico = (payload.get('diagnostico') or '').strip()
+    conduta = (payload.get('conduta') or '').strip()
+    if diagnostico:
+        conduta = f"Diagnóstico: {diagnostico}\n{conduta}".strip()
+
+    consulta.queixa_principal = (payload.get('queixa_principal') or consulta.queixa_principal or '').strip() or None
+    consulta.historico_clinico = (payload.get('historico_clinico') or consulta.historico_clinico or '').strip() or None
+    consulta.exame_fisico = (payload.get('exame_fisico') or consulta.exame_fisico or '').strip() or None
+    consulta.conduta = conduta or consulta.conduta
+    consulta.exames_solicitados = (payload.get('exames_solicitados') or consulta.exames_solicitados or '').strip() or None
+    consulta.prescricao = (payload.get('prescricao') or consulta.prescricao or '').strip() or None
+
+    finalizada = bool(payload.get('finalizar'))
+    if finalizada:
+        consulta.status = 'finalizada'
+        consulta.finalizada_em = utcnow()
+        if consulta.appointment and consulta.appointment.status != 'completed':
+            consulta.appointment.status = 'completed'
+
+    db.session.add(consulta)
+    db.session.commit()
+    return consulta
+
+
+def _integration_create_exam_block(user: User, animal: Animal, payload: dict):
+    exames_data = payload.get('exames') or []
+    if not exames_data:
+        raise ValueError('Informe pelo menos um exame.')
+
+    bloco = BlocoExames(
+        animal_id=animal.id,
+        observacoes_gerais=(payload.get('observacoes_gerais') or '').strip() or None,
+    )
+    db.session.add(bloco)
+    db.session.flush()
+
+    for exam in exames_data:
+        performed_at = exam.get('performed_at')
+        parsed_performed_at = None
+        if performed_at:
+            parsed_performed_at = datetime.fromisoformat(str(performed_at))
+        db.session.add(
+            ExameSolicitado(
+                bloco_id=bloco.id,
+                nome=(exam.get('nome') or '').strip(),
+                justificativa=(exam.get('justificativa') or '').strip() or None,
+                status=(exam.get('status') or 'pendente').strip() or 'pendente',
+                resultado=(exam.get('resultado') or '').strip() or None,
+                performed_at=parsed_performed_at,
+            )
+        )
+
+    db.session.commit()
+    return bloco
+
+
+def _integration_schedule_consulta(user: User, animal: Animal, payload: dict):
+    if not has_veterinarian_profile(user):
+        raise PermissionError('Somente contas veterinárias podem agendar consultas via ChatGPT.')
+
+    veterinario = getattr(user, 'veterinario', None)
+    vet_id = payload.get('veterinario_id') or (veterinario.id if veterinario else None)
+    if not vet_id:
+        raise ValueError('veterinario_id é obrigatório.')
+    try:
+        vet_id = int(vet_id)
+    except (TypeError, ValueError):
+        raise ValueError('veterinario_id inválido.')
+
+    scheduled_at_local = _integration_parse_datetime_arg(payload.get('data'), payload.get('hora'))
+    appointment_kind = (payload.get('tipo') or 'consulta').strip() or 'consulta'
+    if not is_slot_available(vet_id, scheduled_at_local, kind=appointment_kind):
+        raise ValueError('Horário indisponível para o veterinário selecionado.')
+
+    duration = get_appointment_duration(appointment_kind)
+    if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
+        raise ValueError('Horário indisponível para o veterinário selecionado.')
+
+    appointment = Appointment(
+        animal_id=animal.id,
+        tutor_id=animal.user_id,
+        veterinario_id=vet_id,
+        scheduled_at=normalize_to_utc(scheduled_at_local),
+        status='accepted' if veterinario and veterinario.id == vet_id else 'scheduled',
+        kind=appointment_kind,
+        notes=(payload.get('motivo') or payload.get('reason') or '').strip() or None,
+        created_by=user.id,
+        created_at=utcnow(),
+        clinica_id=_integration_user_clinic_id(user) or animal.clinica_id,
+    )
+    db.session.add(appointment)
+    db.session.commit()
+    return appointment
 
 
 def integration_bearer_required(*required_scopes: str):
@@ -7803,7 +9007,25 @@ def openid_configuration():
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
-        'scopes_supported': ['openid', 'profile', 'email', 'pets:read', 'appointments:read'],
+        'scopes_supported': [
+            'openid',
+            'profile',
+            'email',
+            'pets:read',
+            'appointments:read',
+            'tutors:write',
+            'pets:write',
+            'appointments:write',
+            'consultations:write',
+            'exams:write',
+            'clinical_summary:read',
+            'consultations:read',
+            'prescriptions:read',
+            'exams:read',
+            'vaccines:read',
+            'handoff:read',
+            'tutor_guidance:generate',
+        ],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post', 'client_secret_basic'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
@@ -7894,6 +9116,61 @@ def _mcp_err(req_id, code, message):
     return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': {'code': code, 'message': message}})
 
 
+def _mcp_err_with_data(req_id, code, message, data):
+    return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': {'code': code, 'message': message, 'data': data}})
+
+
+def _mcp_json_content(payload):
+    return {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
+
+
+def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
+    required_scope_set = {scope for scope in required_scopes if scope}
+    missing_scopes = sorted(required_scope_set.difference(token_scope_set))
+    if not missing_scopes:
+        return None
+    return _mcp_err_with_data(
+        req_id,
+        -32003,
+        'This MCP tool requires additional OAuth scopes.',
+        {
+            'required_scopes': sorted(required_scope_set),
+            'granted_scopes': sorted(token_scope_set),
+            'missing_scopes': missing_scopes,
+        },
+    )
+
+
+def _mcp_require_confirmation(req_id, tool_args, *, field_name='confirmar_gravacao'):
+    value = str(tool_args.get(field_name) or '').strip().lower()
+    accepted_values = {'sim', 'true', '1', 'confirmado', 'confirmar'}
+    if value in accepted_values:
+        return None
+    return _mcp_err_with_data(
+        req_id,
+        -32003,
+        'Esta tool grava dados no sistema e exige confirmação explícita.',
+        {
+            'required_argument': field_name,
+            'accepted_values': sorted(accepted_values),
+        },
+    )
+
+
+def _mcp_find_animal_for_tool(user, tool_args):
+    animal_id = tool_args.get('animal_id')
+    animal_name = tool_args.get('nome_animal') or tool_args.get('animal_nome') or tool_args.get('nome')
+    try:
+        parsed_animal_id = int(animal_id) if animal_id is not None else None
+    except (TypeError, ValueError):
+        parsed_animal_id = None
+    return _integration_find_accessible_animal(
+        user,
+        animal_id=parsed_animal_id,
+        animal_name=animal_name,
+    )
+
+
 def _mcp_unauthorized():
     """Return 401 with WWW-Authenticate so that OAuth clients know how to auth."""
     issuer = _oauth_issuer()
@@ -7943,6 +9220,7 @@ def mcp_server():
     user = User.query.get(token_obj.user_id)
     if not user:
         return _mcp_unauthorized()
+    token_scope_set = {item.strip() for item in (token_obj.scope or '').split() if item.strip()}
 
     # Parse JSON-RPC
     data = request.get_json(silent=True) or {}
@@ -7987,6 +9265,184 @@ def mcp_server():
                             'enum': ['scheduled', 'completed', 'cancelled'],
                             'description': 'Filtrar pelo status do agendamento (opcional).',
                         }
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'cadastrar_tutor_e_pets',
+                'description': (
+                    'Cadastra ou reaproveita um tutor e um ou mais pets, criando também '
+                    'consultas iniciais em andamento quando novos pets forem criados.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'tutor': {'type': 'object', 'description': 'Dados básicos do tutor.'},
+                        'pets': {'type': 'array', 'description': 'Lista de pets a cadastrar ou reaproveitar.'},
+                        'observacao_clinica': {'type': 'string'},
+                        'disponibilidade': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['tutor', 'pets', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'registrar_consulta_clinica',
+                'description': (
+                    'Cria ou atualiza uma consulta clínica do animal, preenchendo queixa, histórico, '
+                    'exame físico, diagnóstico, conduta e exames solicitados.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome_animal': {'type': 'string'},
+                        'consulta_id': {'type': 'integer'},
+                        'queixa_principal': {'type': 'string'},
+                        'historico_clinico': {'type': 'string'},
+                        'exame_fisico': {'type': 'string'},
+                        'diagnostico': {'type': 'string'},
+                        'conduta': {'type': 'string'},
+                        'exames_solicitados': {'type': 'string'},
+                        'prescricao': {'type': 'string'},
+                        'finalizar': {'type': 'boolean'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'registrar_bloco_exames',
+                'description': (
+                    'Registra exames solicitados ou resultados em um novo bloco de exames do paciente.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome_animal': {'type': 'string'},
+                        'observacoes_gerais': {'type': 'string'},
+                        'exames': {'type': 'array'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['exames', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'agendar_consulta',
+                'description': (
+                    'Agenda consulta, vacina, retorno ou outro compromisso clínico para um animal.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome_animal': {'type': 'string'},
+                        'veterinario_id': {'type': 'integer'},
+                        'data': {'type': 'string', 'description': 'YYYY-MM-DD'},
+                        'hora': {'type': 'string', 'description': 'HH:MM'},
+                        'tipo': {'type': 'string'},
+                        'motivo': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['data', 'hora', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'agendar_retorno',
+                'description': (
+                    'Agenda retorno a partir de uma consulta já existente usando a lógica de retorno do sistema.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'consulta_id': {'type': 'integer'},
+                        'data': {'type': 'string', 'description': 'YYYY-MM-DD'},
+                        'hora': {'type': 'string', 'description': 'HH:MM'},
+                        'veterinario_id': {'type': 'integer'},
+                        'motivo': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['consulta_id', 'data', 'hora', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'obter_resumo_clinico_animal',
+                'description': (
+                    'Retorna um resumo clínico estruturado do paciente, incluindo última consulta, '
+                    'histórico recente, prescrição mais recente, exames recentes e pendências clínicas.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID não for informado.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'listar_agenda_do_dia',
+                'description': (
+                    'Lista a agenda do dia do usuário autenticado com resumo de pendências clínicas por paciente.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'data': {'type': 'string', 'description': 'Data opcional no formato YYYY-MM-DD.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'listar_pendencias_clinicas',
+                'description': (
+                    'Lista vacinas atrasadas, retornos pendentes e exames pendentes/agendados do escopo acessível.'
+                ),
+                'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'listar_vacinas_pendentes',
+                'description': 'Lista vacinas atrasadas e próximas vacinas do escopo acessível.',
+                'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'listar_exames_pendentes',
+                'description': 'Lista exames solicitados pendentes e exames agendados ainda em aberto.',
+                'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'listar_retornos_pendentes',
+                'description': 'Lista retornos futuros relacionados a consultas já registradas.',
+                'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'gerar_orientacao_tutor',
+                'description': (
+                    'Gera um rascunho de orientação ao tutor com base no prontuário e prescrições existentes.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID não for informado.'},
+                        'consulta_id': {'type': 'integer', 'description': 'Consulta opcional para guiar a orientação.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'gerar_handoff_clinico',
+                'description': (
+                    'Gera um handoff clínico resumido para troca entre veterinários e plantonistas.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID não for informado.'},
+                        'consulta_id': {'type': 'integer', 'description': 'Consulta opcional a destacar no handoff.'},
                     },
                     'required': [],
                 },
@@ -8044,6 +9500,247 @@ def mcp_server():
             ]
             text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
             return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+
+        if tool_name == 'cadastrar_tutor_e_pets':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            tutor_data = tool_args.get('tutor') or {}
+            pets_data = tool_args.get('pets') or []
+            if not tutor_data or not isinstance(pets_data, list) or not pets_data:
+                return _mcp_err(req_id, -32602, 'Informe tutor e ao menos um pet para cadastro.')
+            result = _integration_create_or_reuse_tutor_and_pets(
+                user,
+                tutor_data,
+                pets_data,
+                observacao_clinica=tool_args.get('observacao_clinica'),
+                disponibilidade=tool_args.get('disponibilidade'),
+            )
+            return _mcp_ok(req_id, _mcp_json_content(result))
+
+        if tool_name == 'registrar_consulta_clinica':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'consultations:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            try:
+                consulta = _integration_upsert_consulta(user, animal, tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({
+                'consulta_id': consulta.id,
+                'animal_id': consulta.animal_id,
+                'status': consulta.status,
+                'finalizada_em': _integration_format_datetime(consulta.finalizada_em),
+                'queixa_principal': consulta.queixa_principal,
+                'conduta': consulta.conduta,
+            }))
+
+        if tool_name == 'registrar_bloco_exames':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            try:
+                bloco = _integration_create_exam_block(user, animal, tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({
+                'bloco_id': bloco.id,
+                'animal_id': bloco.animal_id,
+                'observacoes_gerais': bloco.observacoes_gerais,
+                'total_exames': len(bloco.exames or []),
+            }))
+
+        if tool_name == 'agendar_consulta':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            try:
+                appointment = _integration_schedule_consulta(user, animal, tool_args)
+            except PermissionError as exc:
+                return _mcp_err(req_id, -32003, str(exc))
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({
+                'appointment_id': appointment.id,
+                'animal_id': appointment.animal_id,
+                'tipo': appointment.kind,
+                'status': appointment.status,
+                'scheduled_at': _integration_format_datetime(appointment.scheduled_at),
+                'clinica_id': appointment.clinica_id,
+            }))
+
+        if tool_name == 'agendar_retorno':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            consulta_id = tool_args.get('consulta_id')
+            try:
+                consulta_id = int(consulta_id)
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'consulta_id deve ser numérico.')
+            consulta = _integration_accessible_consultas_query(user).filter(Consulta.id == consulta_id).first()
+            if not consulta:
+                return _mcp_err(req_id, -32004, 'Consulta não encontrada no escopo disponível para este usuário.')
+            try:
+                payload = ReturnAppointmentDTO(
+                    date=_integration_parse_date_arg(tool_args.get('data')),
+                    time=_integration_parse_time_arg(tool_args.get('hora')),
+                    veterinarian_id=int(tool_args.get('veterinario_id') or user.veterinario.id),
+                    reason=(tool_args.get('motivo') or '').strip() or None,
+                )
+                result = schedule_return_appointment(
+                    consulta=consulta,
+                    actor_id=user.id,
+                    actor_vet_id=getattr(getattr(user, 'veterinario', None), 'id', None),
+                    payload=payload,
+                )
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            latest_return = (
+                Appointment.query
+                .filter_by(consulta_id=consulta.id, kind='retorno')
+                .order_by(Appointment.id.desc())
+                .first()
+            )
+            return _mcp_ok(req_id, _mcp_json_content({
+                'success': result.success,
+                'message': result.message,
+                'category': result.category,
+                'appointment_id': latest_return.id if latest_return else None,
+                'scheduled_at': _integration_format_datetime(latest_return.scheduled_at) if latest_return else None,
+            }))
+
+        if tool_name == 'obter_resumo_clinico_animal':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'clinical_summary:read')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            return _mcp_ok(req_id, _mcp_json_content(_integration_build_clinical_summary(user, animal)))
+
+        if tool_name == 'listar_agenda_do_dia':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')
+            if scope_error:
+                return scope_error
+            target_date = None
+            raw_date = str(tool_args.get('data') or '').strip()
+            if raw_date:
+                try:
+                    target_date = date.fromisoformat(raw_date)
+                except ValueError:
+                    return _mcp_err(req_id, -32602, 'A data deve estar no formato YYYY-MM-DD.')
+            return _mcp_ok(req_id, _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date)))
+
+        if tool_name == 'listar_pendencias_clinicas':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read', 'exams:read', 'vaccines:read')
+            if scope_error:
+                return scope_error
+            return _mcp_ok(req_id, _mcp_json_content(_integration_build_clinical_pendencies(user)))
+
+        if tool_name == 'listar_vacinas_pendentes':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'vaccines:read')
+            if scope_error:
+                return scope_error
+            pendencias = _integration_build_clinical_pendencies(user)
+            return _mcp_ok(req_id, _mcp_json_content({
+                'resumo': {
+                    'vacinas_atrasadas': pendencias['resumo']['vacinas_atrasadas'],
+                },
+                'vacinas_atrasadas': pendencias['vacinas_atrasadas'],
+            }))
+
+        if tool_name == 'listar_exames_pendentes':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:read')
+            if scope_error:
+                return scope_error
+            pendencias = _integration_build_clinical_pendencies(user)
+            return _mcp_ok(req_id, _mcp_json_content({
+                'resumo': {
+                    'agendamentos_de_exame_pendentes': pendencias['resumo']['agendamentos_de_exame_pendentes'],
+                    'solicitacoes_de_exame_pendentes': pendencias['resumo']['solicitacoes_de_exame_pendentes'],
+                },
+                'exames_agendados_pendentes': pendencias['exames_agendados_pendentes'],
+                'exames_solicitados_pendentes': pendencias['exames_solicitados_pendentes'],
+            }))
+
+        if tool_name == 'listar_retornos_pendentes':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')
+            if scope_error:
+                return scope_error
+            pendencias = _integration_build_clinical_pendencies(user)
+            return _mcp_ok(req_id, _mcp_json_content({
+                'resumo': {
+                    'retornos_pendentes': pendencias['resumo']['retornos_pendentes'],
+                },
+                'retornos_pendentes': pendencias['retornos_pendentes'],
+            }))
+
+        if tool_name == 'gerar_orientacao_tutor':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutor_guidance:generate')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            consulta_id = tool_args.get('consulta_id')
+            try:
+                parsed_consulta_id = int(consulta_id) if consulta_id is not None else None
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'consulta_id deve ser numérico quando informado.')
+            return _mcp_ok(
+                req_id,
+                _mcp_json_content(_integration_generate_tutor_guidance(user, animal, consulta_id=parsed_consulta_id)),
+            )
+
+        if tool_name == 'gerar_handoff_clinico':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'handoff:read')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            consulta_id = tool_args.get('consulta_id')
+            try:
+                parsed_consulta_id = int(consulta_id) if consulta_id is not None else None
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'consulta_id deve ser numérico quando informado.')
+            return _mcp_ok(
+                req_id,
+                _mcp_json_content(_integration_build_handoff(user, animal, consulta_id=parsed_consulta_id)),
+            )
 
         return _mcp_err(req_id, -32601, f'Tool not found: {tool_name}')
 
@@ -20617,6 +22314,80 @@ def api_integrations_appointments():
         for item in appointments
     ]
     return _integration_ok(payload)
+
+
+@integration_bearer_required('clinical_summary:read')
+def api_integrations_clinical_summary(animal_id):
+    auth_user = g.integration_current_user
+    clinic_id = request.args.get('clinica_id', type=int)
+    animal = _integration_find_accessible_animal(auth_user, animal_id=animal_id, clinic_id=clinic_id)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+            animal_id=animal_id,
+        )
+    return _integration_ok(_integration_build_clinical_summary(auth_user, animal))
+
+
+@integration_bearer_required('appointments:read')
+def api_integrations_today_agenda():
+    auth_user = g.integration_current_user
+    raw_date = request.args.get('date', '').strip()
+    target_date = None
+    if raw_date:
+        try:
+            target_date = date.fromisoformat(raw_date)
+        except ValueError:
+            return _integration_error(
+                'invalid_date',
+                'The date query parameter must use the YYYY-MM-DD format.',
+                400,
+                date=raw_date,
+            )
+    return _integration_ok(_integration_build_today_agenda(auth_user, target_date=target_date))
+
+
+@integration_bearer_required('appointments:read', 'exams:read', 'vaccines:read')
+def api_integrations_clinical_pendencies():
+    auth_user = g.integration_current_user
+    clinic_id = request.args.get('clinica_id', type=int)
+    return _integration_ok(_integration_build_clinical_pendencies(auth_user, clinic_id=clinic_id))
+
+
+@integration_bearer_required('tutor_guidance:generate')
+def api_integrations_tutor_guidance(animal_id):
+    auth_user = g.integration_current_user
+    clinic_id = request.args.get('clinica_id', type=int)
+    animal = _integration_find_accessible_animal(auth_user, animal_id=animal_id, clinic_id=clinic_id)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+            animal_id=animal_id,
+        )
+
+    consulta_id = request.args.get('consulta_id', type=int)
+    return _integration_ok(_integration_generate_tutor_guidance(auth_user, animal, consulta_id=consulta_id))
+
+
+@integration_bearer_required('handoff:read')
+def api_integrations_handoff(animal_id):
+    auth_user = g.integration_current_user
+    clinic_id = request.args.get('clinica_id', type=int)
+    animal = _integration_find_accessible_animal(auth_user, animal_id=animal_id, clinic_id=clinic_id)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+            animal_id=animal_id,
+        )
+
+    consulta_id = request.args.get('consulta_id', type=int)
+    return _integration_ok(_integration_build_handoff(auth_user, animal, consulta_id=consulta_id))
 
 
 @login_required

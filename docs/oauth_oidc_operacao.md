@@ -18,7 +18,19 @@ Assumindo `ISSUER=https://<dominio-publico>`:
 - `profile`
 - `email`
 - `pets:read`
+- `pets:write`
 - `appointments:read`
+- `appointments:write`
+- `clinical_summary:read`
+- `consultations:read`
+- `consultations:write`
+- `prescriptions:read`
+- `exams:read`
+- `exams:write`
+- `vaccines:read`
+- `handoff:read`
+- `tutor_guidance:generate`
+- `tutors:write`
 
 > Observação: o servidor exige consentimento explícito por escopo no fluxo de autorização.
 
@@ -88,6 +100,22 @@ O PetOrlândia agora aceita dois perfis no Authorization Code:
    - Token URL: `https://<dominio-publico>/oauth/token`
    - Client ID/Secret iguais aos do `OAuthClient`
 3. Garanta HTTPS público no domínio (`issuer` e redirect precisam ser válidos externamente).
+
+## Superfície clínica exposta ao ChatGPT
+
+Além de `me`, `pets` e `appointments`, a integração clínica também pode expor:
+
+- resumo clínico do animal;
+- agenda do dia;
+- pendências clínicas;
+- orientação ao tutor;
+- handoff clínico.
+- cadastro assistido de tutor e pets;
+- registro estruturado de consulta clínica;
+- criação de blocos de exames;
+- agendamento de consultas e retornos via MCP com confirmação explícita.
+
+Veja também: `docs/chatgpt_clinical_integration.md`.
 
 > Se o cliente for público/mobile/web SPA, mantenha PKCE obrigatório como já está implementado.
 

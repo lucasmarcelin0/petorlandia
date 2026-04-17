@@ -463,6 +463,34 @@ def _dedup_email(email: str, existing_emails: set) -> str:
     existing_emails.add(unique)
     return unique
 
+def _build_address_string(vs: dict) -> str:
+    """Monta string de endereço legível a partir dos campos estruturados do VetSmart."""
+    parts = []
+    street = _str(vs.get("addressStreet") or vs.get("address") or vs.get("endereco") or "").strip()
+    number = _str(vs.get("addressNumber") or "").strip()
+    complement = _str(vs.get("addressComplement") or vs.get("complemento") or "").strip()
+    neighborhood = _str(vs.get("neighborhood") or vs.get("bairro") or "").strip()
+    city = _str(vs.get("city") or vs.get("cidade") or "").strip()
+    state = _str(vs.get("stateId") or vs.get("state") or vs.get("estado") or "").strip()
+    zipcode = _str(vs.get("zipCode") or vs.get("cep") or "").strip()
+
+    if street:
+        parts.append(f"{street}, {number}" if number else street)
+    elif number:
+        parts.append(f"Nº {number}")
+    if complement:
+        parts.append(complement)
+    if neighborhood:
+        parts.append(neighborhood)
+    if city and state:
+        parts.append(f"{city}/{state}")
+    elif city:
+        parts.append(city)
+    if zipcode:
+        parts.append(f"CEP {zipcode}")
+    return " – ".join(parts)
+
+
 def transform_tutor(vs: dict, existing_emails: set) -> dict:
     """Transforma um registro de tutor do VetSmart para o schema User do Petorlandia."""
     raw_email = _str(vs.get("email") or vs.get("ownerEmail") or vs.get("mail") or "")
@@ -475,20 +503,40 @@ def transform_tutor(vs: dict, existing_emails: set) -> dict:
              email.split("@")[0])
     ).strip() or "Tutor Importado"
 
+    # Campos de endereço estruturado do VetSmart
+    addr_street     = _str(vs.get("addressStreet") or "").strip()
+    addr_number     = _str(vs.get("addressNumber") or "").strip()
+    addr_complement = _str(vs.get("addressComplement") or "").strip()
+    addr_bairro     = _str(vs.get("neighborhood") or "").strip()
+    addr_city       = _str(vs.get("city") or "").strip()
+    addr_state      = _str(vs.get("stateId") or "").strip()
+    addr_cep        = _str(vs.get("zipCode") or "").strip()
+
     return {
-        "vetsmart_id":  vs.get("objectId", ""),
-        "name":         name,
-        "email":        email,
-        "source_email": normalized_email or None,
-        "phone":        _phone(vs.get("phone") or vs.get("cellphone") or
-                               vs.get("telefone") or vs.get("celular") or ""),
-        "cpf":          _str(vs.get("cpf") or vs.get("document") or "").replace(".", "").replace("-", "") or None,
-        "address":      _str(vs.get("address") or vs.get("endereco") or ""),
-        "role":         "tutor",
-        "is_private":   True,
-        "created_at":   _dt(vs.get("createdAt") or vs.get("changedAt") or vs.get("updatedAt")),
-        "password_hash": generate_password_hash(TUTOR_DEFAULT_PASSWORD),
-        "vs_raw":       vs,   # guardado para diagnóstico
+        "vetsmart_id":      vs.get("objectId", ""),
+        "name":             name,
+        "email":            email,
+        "source_email":     normalized_email or None,
+        "phone":            _phone(vs.get("phone") or vs.get("cellphone") or
+                                   vs.get("telefone") or vs.get("celular") or ""),
+        "cpf":              _str(vs.get("cpf") or vs.get("document") or "").replace(".", "").replace("-", "") or None,
+        "rg":               _str(vs.get("rg") or "").strip() or None,
+        "date_of_birth":    _date(vs.get("birthdate") or vs.get("birthday")),
+        "address":          _build_address_string(vs),
+        # campos para criar Endereco estruturado
+        "addr_rua":         addr_street,
+        "addr_numero":      addr_number,
+        "addr_complemento": addr_complement,
+        "addr_bairro":      addr_bairro,
+        "addr_cidade":      addr_city,
+        "addr_estado":      addr_state,
+        "addr_cep":         addr_cep,
+        "has_address":      bool(addr_street or addr_city or addr_cep),
+        "role":             "tutor",
+        "is_private":       True,
+        "created_at":       _dt(vs.get("createdAt") or vs.get("changedAt") or vs.get("updatedAt")),
+        "password_hash":    generate_password_hash(TUTOR_DEFAULT_PASSWORD),
+        "vs_raw":           vs,   # guardado para diagnóstico
     }
 
 def transform_animal(vs: dict, tutor_pet_id: int,
@@ -509,21 +557,42 @@ def transform_animal(vs: dict, tutor_pet_id: int,
         vs.get("name") or vs.get("nome") or vs.get("petName") or "Animal Importado"
     ).strip()
 
+    # Verifica se o animal está vivo (deceased="0" → vivo, "1" → falecido)
+    deceased_val = _str(vs.get("deceased") or "0").strip()
+    is_alive = deceased_val not in ("1", "true", "True", "sim")
+
+    # Monta descrição com campos extras disponíveis
+    description_parts = []
+    if vs.get("temperament"):
+        description_parts.append(f"Temperamento: {_str(vs['temperament'])}")
+    if vs.get("pelage"):
+        description_parts.append(f"Pelagem: {_str(vs['pelage'])}")
+    if vs.get("size"):
+        description_parts.append(f"Porte: {_str(vs['size'])}")
+    if vs.get("notes"):
+        description_parts.append(_str(vs["notes"]))
+    if vs.get("otherInfo"):
+        description_parts.append(_str(vs["otherInfo"]))
+    if vs.get("allergies"):
+        description_parts.append(f"Alergias: {_str(vs['allergies'])}")
+    description = " | ".join(description_parts) or None
+
     return {
-        "vetsmart_id":   vs.get("objectId", ""),
-        "name":          name,
-        "sex":           _sex(vs.get("sex") or vs.get("gender") or vs.get("sexo") or ""),
-        "date_of_birth": _date(vs.get("birthdate") or vs.get("birthday") or vs.get("dateOfBirth") or vs.get("dataNascimento")),
-        "species_id":    species_id,
-        "breed_id":      breed_id,
-        "neutered":      bool(vs.get("neutered") or vs.get("castrated") or vs.get("castrado")),
+        "vetsmart_id":      vs.get("objectId", ""),
+        "name":             name,
+        "sex":              _sex(vs.get("sex") or vs.get("gender") or vs.get("sexo") or ""),
+        "date_of_birth":    _date(vs.get("birthdate") or vs.get("birthday") or vs.get("dateOfBirth") or vs.get("dataNascimento")),
+        "species_id":       species_id,
+        "breed_id":         breed_id,
+        "neutered":         bool(vs.get("neutered") or vs.get("castrated") or vs.get("castrado")),
         "microchip_number": _str(vs.get("microchip") or vs.get("chip") or ""),
-        "peso":          vs.get("weight") or vs.get("peso"),
-        "status":        "ativo",
-        "is_alive":      True,
-        "user_id":       tutor_pet_id,     # FK → User (tutor)
-        "date_added":    _dt(vs.get("createdAt") or vs.get("changedAt") or vs.get("updatedAt")),
-        "vs_raw":        vs,
+        "peso":             vs.get("weight") or vs.get("peso"),
+        "description":      description,
+        "status":           "ativo" if is_alive else "inativo",
+        "is_alive":         is_alive,
+        "user_id":          tutor_pet_id,
+        "date_added":       _dt(vs.get("createdAt") or vs.get("changedAt") or vs.get("updatedAt")),
+        "vs_raw":           vs,
     }
 
 def transform_consulta(vs: dict, animal_pet_id: int,
@@ -552,63 +621,160 @@ def transform_consulta(vs: dict, animal_pet_id: int,
         "vs_raw":           vs,
     }
 
-def transform_prescricao(vs: dict, animal_pet_id: int) -> list[dict]:
+def _prescricao_frequencia(dosage_data: dict) -> str:
+    """Monta string de frequência a partir do dosageData estruturado do VetSmart."""
+    if not dosage_data:
+        return ""
+    interval = _str(dosage_data.get("interval") or "").strip()
+    unit = _str(dosage_data.get("intervalUnit") or "").strip()
+    if interval and unit:
+        return f"A cada {interval} {unit}"
+    return ""
+
+
+def _prescricao_duracao(dosage_data: dict) -> str:
+    """Monta string de duração a partir do dosageData estruturado do VetSmart."""
+    if not dosage_data:
+        return ""
+    duration = _str(dosage_data.get("duration") or "").strip()
+    unit = _str(dosage_data.get("durationUnit") or "").strip()
+    if duration and unit:
+        return f"{duration} {unit}"
+    return ""
+
+
+def transform_prescricao(vs: dict, animal_pet_id: int) -> dict:
     """
     Uma prescrição do VetSmart pode conter múltiplos medicamentos.
-    Retorna uma lista de dicts prontos para Prescricao.
+    Retorna um dict com:
+      - 'bloco': dados para criar BlocoPrescricao (instrucoes_gerais, data)
+      - 'itens': lista de dicts prontos para Prescricao
     """
     drugs = vs.get("drugs") or vs.get("medications") or vs.get("medicamentos") or []
     if not drugs and vs.get("drug"):
         drugs = [vs]
 
-    results = []
     base_date = _dt(
         vs.get("documentDate")
-        or vs.get("displayDate")
         or vs.get("createdAt")
         or vs.get("date")
         or vs.get("updatedAt")
     )
 
-    for drug in drugs:
-        results.append({
-            "vetsmart_id":   f"{vs.get('objectId','')}_{drug.get('objectId','') or len(results)}",
-            "animal_id":     animal_pet_id,
-            "medicamento":   _str(drug.get("name") or drug.get("drug") or drug.get("medicamento") or ""),
-            "dosagem":       _str(drug.get("dosage") or drug.get("dose") or drug.get("dosagem") or ""),
-            "frequencia":    _str(drug.get("frequency") or drug.get("frequencia") or ""),
-            "duracao":       _str(drug.get("duration") or drug.get("duracao") or ""),
-            "observacoes":   _str(drug.get("notes") or drug.get("observacoes") or ""),
+    # Observações gerais da prescrição (campo notes no nível da prescrição)
+    notas_gerais = _str(vs.get("notes") or "").strip()
+
+    # Tipo da prescrição: "0"=simples, "1"=especial/controlado
+    presc_type = _str(vs.get("prescriptionType") or "")
+    tipo_label = "Receituário Especial/Controlado" if presc_type == "1" else ""
+
+    instrucoes_bloco_parts = []
+    if tipo_label:
+        instrucoes_bloco_parts.append(tipo_label)
+    if notas_gerais:
+        instrucoes_bloco_parts.append(notas_gerais)
+
+    itens = []
+    for idx, drug in enumerate(drugs):
+        nome = _str(drug.get("drug") or drug.get("name") or drug.get("medicamento") or "").strip()
+        if not nome:
+            continue
+
+        dosage_form = _str(drug.get("dosageForm") or "").strip()
+        # Inclui a forma farmacêutica no nome do medicamento para clareza
+        medicamento = f"{nome} – {dosage_form}" if dosage_form else nome
+
+        dosagem = _str(drug.get("dosage") or drug.get("dosagem") or "").strip()
+
+        # frequencia e duracao vêm de dosageData (não existem no nível raiz do drug)
+        dosage_data = drug.get("dosageData") or {}
+        frequencia = _prescricao_frequencia(dosage_data)
+        duracao = _prescricao_duracao(dosage_data)
+
+        # Observações do item: via de administração + tipo (humana/vet)
+        obs_parts = []
+        usage = _str(drug.get("usage") or "").strip()
+        if usage:
+            obs_parts.append(f"Via: {usage}")
+        human_or_vet = _str(drug.get("humanOrVet") or "").strip()
+        if human_or_vet:
+            obs_parts.append(f"Medicamento {human_or_vet}")
+
+        itens.append({
+            "vetsmart_id":     f"{vs.get('objectId', '')}_{idx}",
+            "animal_id":       animal_pet_id,
+            "medicamento":     medicamento,
+            "dosagem":         dosagem,
+            "frequencia":      frequencia,
+            "duracao":         duracao,
+            "observacoes":     " | ".join(obs_parts) or None,
             "data_prescricao": base_date,
         })
 
-    # Se não tem lista de drugs, usa o próprio registro
-    if not results:
-        results.append({
-            "vetsmart_id":   vs.get("objectId", ""),
-            "animal_id":     animal_pet_id,
-            "medicamento":   _str(vs.get("medication") or vs.get("drug") or
-                                   vs.get("medicamento") or "Importado do VetSmart"),
-            "dosagem":       _str(vs.get("dosage") or vs.get("dosagem") or ""),
-            "frequencia":    _str(vs.get("frequency") or vs.get("frequencia") or ""),
-            "duracao":       _str(vs.get("duration") or vs.get("duracao") or ""),
-            "observacoes":   _str(vs.get("notes") or vs.get("observacoes") or ""),
+    # Fallback: prescrição sem lista de drugs
+    if not itens:
+        nome = _str(vs.get("medication") or vs.get("drug") or
+                    vs.get("medicamento") or "Importado do VetSmart")
+        dosage_data = vs.get("dosageData") or {}
+        itens.append({
+            "vetsmart_id":     vs.get("objectId", ""),
+            "animal_id":       animal_pet_id,
+            "medicamento":     nome,
+            "dosagem":         _str(vs.get("dosage") or vs.get("dosagem") or ""),
+            "frequencia":      _prescricao_frequencia(dosage_data),
+            "duracao":         _prescricao_duracao(dosage_data),
+            "observacoes":     None,
             "data_prescricao": base_date,
         })
-    return results
+
+    return {
+        "bloco": {
+            "animal_id":         animal_pet_id,
+            "data_criacao":      base_date,
+            "instrucoes_gerais": "\n".join(instrucoes_bloco_parts) or None,
+        },
+        "itens": itens,
+    }
 
 def transform_vacina(vs: dict, animal_pet_id: int, vet_user_id: int) -> dict:
     vaccine_data = vs.get("vaccine")
     vaccine_name = vaccine_data.get("name") if isinstance(vaccine_data, dict) else vaccine_data
+
+    # isReminder=True significa agendamento futuro — não aplicado ainda
+    is_reminder = bool(vs.get("isReminder"))
+    aplicada = not is_reminder
+
+    # Nome da vacina: prioriza campo vaccine direto, depois vaccineType como fallback
+    nome = _str(
+        vs.get("name") or vaccine_name or
+        vs.get("vaccineName") or vs.get("nome") or
+        vs.get("vaccine") or "Vacina"
+    )
+
+    # Tipo da vacina (ex: "Antirrábica", "V10") como observação adicional
+    vaccine_type = _str(vs.get("vaccineType") or "")
+    obs_parts = []
+    if vaccine_type:
+        obs_parts.append(f"Tipo: {vaccine_type}")
+    if vs.get("currentShot") and vs.get("totalShots"):
+        obs_parts.append(f"Dose {vs['currentShot']} de {vs['totalShots']}")
+    if is_reminder:
+        obs_parts.append("(agendamento futuro importado do VetSmart)")
+    extra_obs = _str(vs.get("notes") or vs.get("observacoes") or "")
+    if extra_obs:
+        obs_parts.append(extra_obs)
+
     return {
         "vetsmart_id":  vs.get("objectId", ""),
         "animal_id":    animal_pet_id,
-        "nome":         _str(vs.get("name") or vaccine_name or vs.get("vaccineName") or vs.get("nome") or "Vacina"),
+        "nome":         nome,
+        "tipo":         vaccine_type or None,
         "fabricante":   _str(vs.get("manufacturer") or vs.get("brand") or vs.get("fabricante") or ""),
-        "aplicada":     True,
+        "aplicada":     aplicada,
         "aplicada_em":  _date(vs.get("applicationDate") or vs.get("documentDate") or vs.get("date") or vs.get("data") or vs.get("createdAt")),
-        "aplicada_por": vet_user_id,
-        "observacoes":  _str(vs.get("notes") or vs.get("observacoes") or ""),
+        "aplicada_por": vet_user_id if aplicada else None,
+        "created_by":   vet_user_id,
+        "observacoes":  " | ".join(obs_parts) or None,
     }
 
 
@@ -711,7 +877,7 @@ def import_all(
     from models.base import (
         User, Animal, Species, Breed,
         Consulta, Prescricao, BlocoPrescricao,
-        Vacina, Clinica,
+        Vacina, Clinica, Endereco,
     )
 
     app = create_app()
@@ -769,24 +935,44 @@ def import_all(
                              i, len(raw["tutores"]), t["name"], existing.id)
                     continue
 
+            # Cria Endereco estruturado se houver dados de endereço
+            endereco_id = None
+            if t["has_address"]:
+                endereco = Endereco(
+                    cep         = t["addr_cep"] or "",
+                    rua         = t["addr_rua"] or None,
+                    numero      = t["addr_numero"] or None,
+                    complemento = t["addr_complemento"] or None,
+                    bairro      = t["addr_bairro"] or None,
+                    cidade      = t["addr_cidade"] or None,
+                    estado      = t["addr_estado"] or None,
+                )
+                db.session.add(endereco)
+                db.session.flush()
+                endereco_id = endereco.id
+
             user = User(
-                name         = t["name"],
-                email        = t["email"],
-                password_hash= t["password_hash"],
-                phone        = t["phone"],
-                cpf          = t["cpf"],
-                address      = t["address"],
-                role         = "tutor",
-                clinica_id   = clinica_id,
-                added_by_id  = added_by_user_id,
-                is_private   = True,
-                created_at   = t["created_at"] or datetime.utcnow(),
+                name          = t["name"],
+                email         = t["email"],
+                password_hash = t["password_hash"],
+                phone         = t["phone"],
+                cpf           = t["cpf"],
+                rg            = t["rg"],
+                date_of_birth = t["date_of_birth"],
+                address       = t["address"],
+                endereco_id   = endereco_id,
+                role          = "tutor",
+                clinica_id    = clinica_id,
+                added_by_id   = added_by_user_id,
+                is_private    = True,
+                created_at    = t["created_at"] or datetime.utcnow(),
             )
             db.session.add(user)
             db.session.flush()
             tutor_id_map[vs_id] = user.id
-            log.info("  [%d/%d] Tutor: %s → id=%d",
-                     i, len(raw["tutores"]), t["name"], user.id)
+            log.info("  [%d/%d] Tutor: %s → id=%d%s",
+                     i, len(raw["tutores"]), t["name"], user.id,
+                     " (com endereço)" if endereco_id else "")
 
         db.session.flush()
 
@@ -809,20 +995,21 @@ def import_all(
 
             t = transform_animal(vs_animal, tutor_pet_id, species_map, breed_map)
             animal = Animal(
-                name           = t["name"],
-                sex            = t["sex"],
-                date_of_birth  = t["date_of_birth"],
-                species_id     = t["species_id"],
-                breed_id       = t["breed_id"],
-                neutered       = t["neutered"],
+                name             = t["name"],
+                sex              = t["sex"],
+                date_of_birth    = t["date_of_birth"],
+                species_id       = t["species_id"],
+                breed_id         = t["breed_id"],
+                neutered         = t["neutered"],
                 microchip_number = t["microchip_number"],
-                peso           = t["peso"],
-                status         = "ativo",
-                is_alive       = True,
-                user_id        = tutor_pet_id,
-                added_by_id    = added_by_user_id,
-                clinica_id     = clinica_id,
-                date_added     = t["date_added"] or datetime.utcnow(),
+                peso             = t["peso"],
+                description      = t["description"],
+                status           = t["status"],
+                is_alive         = t["is_alive"],
+                user_id          = tutor_pet_id,
+                added_by_id      = added_by_user_id,
+                clinica_id       = clinica_id,
+                date_added       = t["date_added"] or datetime.utcnow(),
             )
             db.session.add(animal)
             db.session.flush()
@@ -898,14 +1085,15 @@ def import_all(
 
             tv = transform_vacina(vs_v, animal_pet_id, vet_user_id)
             v = Vacina(
-                animal_id  = animal_pet_id,
-                nome       = tv["nome"],
-                fabricante = tv["fabricante"],
-                aplicada   = True,
-                aplicada_em= tv["aplicada_em"],
-                aplicada_por = tv["aplicada_por"],
-                observacoes= tv["observacoes"],
-                created_by = vet_user_id,
+                animal_id   = animal_pet_id,
+                nome        = tv["nome"],
+                tipo        = tv["tipo"],
+                fabricante  = tv["fabricante"],
+                aplicada    = tv["aplicada"],
+                aplicada_em = tv["aplicada_em"],
+                aplicada_por= tv["aplicada_por"],
+                observacoes = tv["observacoes"],
+                created_by  = tv["created_by"],
             )
             db.session.add(v)
 

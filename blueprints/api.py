@@ -140,4 +140,24 @@ def get_blueprint():
         "/api/integrations/appointments",
         view_func=lazy_view("api_integrations_appointments"),
     )
+    bp.add_url_rule(
+        "/api/integrations/clinical-summary/<int:animal_id>",
+        view_func=lazy_view("api_integrations_clinical_summary"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/today-agenda",
+        view_func=lazy_view("api_integrations_today_agenda"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/clinical-pendencies",
+        view_func=lazy_view("api_integrations_clinical_pendencies"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/tutor-guidance/<int:animal_id>",
+        view_func=lazy_view("api_integrations_tutor_guidance"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/handoff/<int:animal_id>",
+        view_func=lazy_view("api_integrations_handoff"),
+    )
     return bp

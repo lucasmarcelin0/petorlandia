@@ -6,7 +6,7 @@ import pytest
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
-os.environ.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory:")
+os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
 from app_factory import create_app
 from extensions import db
@@ -23,9 +23,6 @@ def app():
         WTF_CSRF_ENABLED=False,
     )
     with app.app_context():
-        if hasattr(db, "engines"):
-            db.engines.pop(None, None)
-            db.engines.pop(app, None)
         db.create_all()
         yield app
         db.session.remove()
