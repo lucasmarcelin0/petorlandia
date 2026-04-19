@@ -220,6 +220,62 @@
             <i class="fas fa-plus me-1"></i>Adicionar apresentação
           </button>
 
+          <!-- Doses estruturadas -->
+          <hr class="my-4">
+          <h6 class="bf-section__title">
+            <i class="fas fa-table me-2 text-primary"></i>Tabela de doses
+          </h6>
+          <p class="text-muted small mb-3">Doses por espécie / faixa de peso. Opcional.</p>
+
+          <div id="doses-lista">
+            {% if med and med.doses %}
+              {% for d in med.doses %}
+              <div class="bf-dose-row border rounded p-2 mb-2" data-dose-row>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <input type="text" name="dose_especie[]" class="form-control form-control-sm"
+                           placeholder="Espécie" value="{{ d.especie or '' }}">
+                  </div>
+                  <div class="col-6">
+                    <input type="text" name="dose_faixa_peso[]" class="form-control form-control-sm"
+                           placeholder="Faixa de peso" value="{{ d.faixa_peso or '' }}">
+                  </div>
+                  <div class="col-6">
+                    <input type="text" name="dose_via[]" class="form-control form-control-sm"
+                           placeholder="Via" value="{{ d.via or '' }}">
+                  </div>
+                  <div class="col-6">
+                    <input type="text" name="dose_valor[]" class="form-control form-control-sm"
+                           placeholder="Dose" value="{{ d.dose or '' }}">
+                  </div>
+                  <div class="col-6">
+                    <input type="text" name="dose_frequencia[]" class="form-control form-control-sm"
+                           placeholder="Frequência" value="{{ d.frequencia or '' }}">
+                  </div>
+                  <div class="col-6">
+                    <input type="text" name="dose_duracao[]" class="form-control form-control-sm"
+                           placeholder="Duração" value="{{ d.duracao or '' }}">
+                  </div>
+                  <div class="col-12">
+                    <textarea name="dose_observacao[]" class="form-control form-control-sm"
+                              rows="1" placeholder="Observação">{{ d.observacao or '' }}</textarea>
+                  </div>
+                  <div class="col-12 text-end">
+                    <button type="button" class="btn btn-link text-danger btn-sm p-0"
+                            onclick="this.closest('[data-dose-row]').remove()">
+                      <i class="fas fa-times me-1"></i>Remover
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+
+          <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-1" onclick="adicionarDose()">
+            <i class="fas fa-plus me-1"></i>Adicionar linha de dose
+          </button>
+
           <!-- Ações do formulário -->
           <hr class="my-4">
           <div class="d-grid gap-2">
@@ -360,6 +416,31 @@ function adicionarApres() {
 
 function removerApres(btn) {
   btn.closest('[data-apres-row]').remove();
+}
+
+function adicionarDose() {
+  const lista = document.getElementById('doses-lista');
+  const row = document.createElement('div');
+  row.className = 'bf-dose-row border rounded p-2 mb-2';
+  row.setAttribute('data-dose-row', '');
+  row.innerHTML = `
+    <div class="row g-2">
+      <div class="col-6"><input type="text" name="dose_especie[]" class="form-control form-control-sm" placeholder="Espécie"></div>
+      <div class="col-6"><input type="text" name="dose_faixa_peso[]" class="form-control form-control-sm" placeholder="Faixa de peso"></div>
+      <div class="col-6"><input type="text" name="dose_via[]" class="form-control form-control-sm" placeholder="Via"></div>
+      <div class="col-6"><input type="text" name="dose_valor[]" class="form-control form-control-sm" placeholder="Dose"></div>
+      <div class="col-6"><input type="text" name="dose_frequencia[]" class="form-control form-control-sm" placeholder="Frequência"></div>
+      <div class="col-6"><input type="text" name="dose_duracao[]" class="form-control form-control-sm" placeholder="Duração"></div>
+      <div class="col-12"><textarea name="dose_observacao[]" class="form-control form-control-sm" rows="1" placeholder="Observação"></textarea></div>
+      <div class="col-12 text-end">
+        <button type="button" class="btn btn-link text-danger btn-sm p-0"
+                onclick="this.closest('[data-dose-row]').remove()">
+          <i class="fas fa-times me-1"></i>Remover
+        </button>
+      </div>
+    </div>`;
+  lista.appendChild(row);
+  row.querySelector('input').focus();
 }
 
 function confirmarExclusao(id, nome) {

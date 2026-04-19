@@ -1841,6 +1841,7 @@ class Medicamento(db.Model):
     )
 
     apresentacoes = db.relationship('ApresentacaoMedicamento', backref='medicamento', cascade='all, delete-orphan')
+    doses = db.relationship('DoseMedicamento', backref='medicamento', cascade='all, delete-orphan', order_by='DoseMedicamento.id')
 
     def __str__(self):
         return self.nome
@@ -1853,8 +1854,47 @@ class ApresentacaoMedicamento(db.Model):
     forma = db.Column(db.String(50), nullable=False)          # cápsula, líquido, etc.
     concentracao = db.Column(db.String(100), nullable=False)  # Ex: 50 mg/mL, 500 mg/cápsula
 
+    # Campos numéricos para cálculo de dose
+    nome_variante        = db.Column(db.String(100))          # "Advocate Cães até 4 kg"
+    concentracao_valor   = db.Column(db.Numeric(12, 3))       # 250
+    concentracao_unidade = db.Column(db.String(20))           # 'mg' | 'mg/ml' | 'UI' | '%'
+    volume_valor         = db.Column(db.Numeric(12, 3))       # 10 (un) ou 50 (ml)
+    volume_unidade       = db.Column(db.String(20))           # 'un' | 'ml' | 'g'
+
     def __str__(self):
         return f"{self.medicamento.nome} – {self.forma} ({self.concentracao})"
+
+
+class DoseMedicamento(db.Model):
+    __tablename__ = 'dose_medicamento'
+    id = db.Column(db.Integer, primary_key=True)
+    medicamento_id = db.Column(db.Integer, db.ForeignKey('medicamento.id', ondelete='CASCADE'), nullable=False)
+
+    especie = db.Column(db.String(80))          # Ex: "Cães", "Gatos", "Cães e Gatos"
+    faixa_peso = db.Column(db.String(80))       # Ex: "Até 4 kg", "Entre 10 e 25 kg"
+    via = db.Column(db.String(80))              # Ex: "Oral", "Tópica"
+    dose = db.Column(db.String(200))            # Ex: "20 - 30 mg/kg", "0,4 mL/animal"
+    frequencia = db.Column(db.String(120))      # Ex: "A cada 12 horas"
+    duracao = db.Column(db.String(120))         # Ex: "7 dias"
+    observacao = db.Column(db.Text)             # Notas/modo de usar
+
+    # Campos numéricos para cálculo automático
+    especie_code       = db.Column(db.String(10))              # 'CAES' | 'GATOS' | 'AMBOS' | 'OUTRO'
+    peso_min_kg        = db.Column(db.Numeric(8, 2))           # null = sem mínimo
+    peso_max_kg        = db.Column(db.Numeric(8, 2))           # null = sem máximo
+    dose_min           = db.Column(db.Numeric(12, 3))
+    dose_max           = db.Column(db.Numeric(12, 3))
+    dose_unidade       = db.Column(db.String(30))              # 'MG_KG'|'ML_KG'|'UI_KG'|'MG_ANIMAL'|...
+    intervalo_horas    = db.Column(db.Integer)                 # 12 (null se dose única)
+    duracao_min_dias   = db.Column(db.Integer)
+    duracao_max_dias   = db.Column(db.Integer)
+    dose_raw_text      = db.Column(db.Text)                    # trecho original do VetSmart
+    fonte              = db.Column(db.String(15), default='HUMANO')  # 'SCRAPER'|'LLM'|'HUMANO'
+    confianca          = db.Column(db.String(10), default='MEDIA')   # 'ALTA'|'MEDIA'|'BAIXA'
+
+    def __str__(self):
+        partes = [p for p in [self.especie, self.faixa_peso, self.dose] if p]
+        return " · ".join(partes) or f"Dose #{self.id}"
 
 
 class ExameModelo(db.Model):
@@ -1959,6 +1999,41 @@ class Notification(db.Model):
     sent_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
+
+
+class DeliveryResearchContact(db.Model):
+    __tablename__ = 'delivery_research_contact'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    sent = db.Column(db.Boolean, nullable=False, default=False)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    sent_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    replied = db.Column(db.Boolean, nullable=False, default=False)
+    replied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    replied_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    recorded = db.Column(db.Boolean, nullable=False, default=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    do_not_send = db.Column(db.Boolean, nullable=False, default=False)
+    do_not_send_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    do_not_send_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    interest_answer = db.Column(db.String(20), nullable=True)
+    current_food = db.Column(db.String(255), nullable=True)
+    bag_size = db.Column(db.String(80), nullable=True)
+    price_paid = db.Column(db.String(80), nullable=True)
+    purchase_channel = db.Column(db.String(120), nullable=True)
+    duration_estimate = db.Column(db.String(120), nullable=True)
+    response_notes = db.Column(db.Text, nullable=True)
+    response_collected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    tutor = db.relationship('User', foreign_keys=[tutor_id], backref=db.backref('delivery_research_contact', uselist=False, cascade='all, delete-orphan'))
+    sent_by = db.relationship('User', foreign_keys=[sent_by_id])
+    replied_by = db.relationship('User', foreign_keys=[replied_by_id])
+    recorded_by = db.relationship('User', foreign_keys=[recorded_by_id])
+    do_not_send_by = db.relationship('User', foreign_keys=[do_not_send_by_id])
 
 
 class TipoRacao(db.Model):

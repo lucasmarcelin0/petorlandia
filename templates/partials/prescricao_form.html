@@ -90,6 +90,52 @@
     </div>
   </div>
 
+  <!-- Card de sugestão de dose pré-calculada (bulário) -->
+  <div id="sugestao-dose-card" class="card border-info mb-3 d-none">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+      <span>
+        <i class="bi bi-calculator-fill me-1"></i>
+        <strong>Dose pré-calculada</strong>
+        <small class="ms-2 opacity-75" id="sugestao-dose-fonte"></small>
+      </span>
+      <button type="button" class="btn-close btn-close-white btn-sm" aria-label="Fechar" onclick="fecharSugestaoDose()"></button>
+    </div>
+    <div class="card-body">
+      <div id="sugestao-dose-loading" class="text-muted small d-none">
+        <span class="spinner-border spinner-border-sm me-2"></span>
+        Calculando sugestão de dose para este animal...
+      </div>
+      <div id="sugestao-dose-indisponivel" class="text-muted small d-none"></div>
+      <div id="sugestao-dose-conteudo" class="d-none">
+        <div class="row">
+          <div class="col-md-6">
+            <p class="mb-1"><strong>Animal:</strong> <span id="sug-animal" class="text-muted">–</span></p>
+            <p class="mb-1"><strong>Dose sugerida:</strong> <span id="sug-dose" class="fs-5 text-primary fw-bold">–</span></p>
+            <p class="mb-1 small text-muted"><span id="sug-faixa"></span></p>
+          </div>
+          <div class="col-md-6">
+            <p class="mb-1"><strong>Via:</strong> <span id="sug-via" class="text-muted">–</span></p>
+            <p class="mb-1"><strong>Frequência:</strong> <span id="sug-frequencia" class="text-muted">–</span></p>
+            <p class="mb-1"><strong>Duração:</strong> <span id="sug-duracao" class="text-muted">–</span></p>
+          </div>
+        </div>
+        <div id="sug-apresentacoes-wrap" class="mt-2 d-none">
+          <p class="mb-1 small fw-semibold">Equivalência por apresentação:</p>
+          <ul id="sug-apresentacoes" class="small text-muted mb-2 ps-3"></ul>
+        </div>
+        <p id="sug-observacao" class="small text-muted fst-italic mb-2 d-none"></p>
+        <div class="d-flex gap-2 align-items-center">
+          <button type="button" class="btn btn-success btn-sm" onclick="usarDoseSugerida()">
+            <i class="bi bi-check2-circle"></i> Usar esta dose
+          </button>
+          <span class="small text-muted">
+            Você pode editar os campos depois — preenchimento manual continua disponível.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Alternador de modo -->
   <div class="form-check form-switch mb-3">
     <input class="form-check-input" type="checkbox" id="modo-personalizado">
@@ -173,6 +219,10 @@
     let medicamentoSelecionado = null;
     let prescricoes = [];
     let prescricaoArrastando = null;
+    // ID do animal da consulta (vindo do contexto do template). Usado para
+    // pedir a sugestão de dose pré-calculada ao bulário.
+    const ANIMAL_ID_CONSULTA = {{ animal.id|tojson if animal else 'null' }};
+    let sugestaoDoseAtual = null;
 
   function aplicarHistoricoPrescricoes(html) {
     const container = document.getElementById('historico-prescricoes');
@@ -402,6 +452,121 @@
     };
   }
 
+  // ─── Sugestão de dose pré-calculada (bulário) ────────────────────────
+  function fecharSugestaoDose() {
+    const card = document.getElementById('sugestao-dose-card');
+    if (card) card.classList.add('d-none');
+    sugestaoDoseAtual = null;
+  }
+
+  function _mostrarEstadoSugestao({loading=false, indisponivel=null, conteudo=false}) {
+    const card = document.getElementById('sugestao-dose-card');
+    if (!card) return;
+    card.classList.remove('d-none');
+    document.getElementById('sugestao-dose-loading').classList.toggle('d-none', !loading);
+    const indispEl = document.getElementById('sugestao-dose-indisponivel');
+    if (indisponivel) {
+      indispEl.textContent = indisponivel;
+      indispEl.classList.remove('d-none');
+    } else {
+      indispEl.classList.add('d-none');
+    }
+    document.getElementById('sugestao-dose-conteudo').classList.toggle('d-none', !conteudo);
+  }
+
+  async function carregarSugestaoDose(medicamentoId) {
+    if (!medicamentoId) return;
+    if (!ANIMAL_ID_CONSULTA) {
+      // Sem animal na consulta — silenciosamente não exibe sugestão.
+      fecharSugestaoDose();
+      return;
+    }
+    sugestaoDoseAtual = null;
+    _mostrarEstadoSugestao({loading: true});
+
+    try {
+      const url = `/api/bulario/sugerir-dose?medicamento_id=${encodeURIComponent(medicamentoId)}&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}`;
+      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!data || data.disponivel === false) {
+        const motivo = data?.motivo || 'Sem sugestão de dose para este caso.';
+        _mostrarEstadoSugestao({indisponivel: motivo});
+        return;
+      }
+
+      const s = data.sugestao || {};
+      sugestaoDoseAtual = {
+        ...s,
+        medicamento: data.medicamento,
+        animal: data.animal,
+      };
+
+      // Preenche card
+      const a = data.animal || {};
+      document.getElementById('sug-animal').textContent =
+        `${a.nome || '–'} (${a.especie || '–'}, ${a.peso_kg ?? '?'} kg)`;
+      document.getElementById('sug-dose').textContent = s.dose_exibir || '–';
+      document.getElementById('sug-faixa').textContent = s.faixa_texto ? `(${s.faixa_texto})` : '';
+      document.getElementById('sug-via').textContent = s.via || '–';
+      document.getElementById('sug-frequencia').textContent = s.frequencia_texto || '–';
+      document.getElementById('sug-duracao').textContent = s.duracao_texto || '–';
+      document.getElementById('sugestao-dose-fonte').textContent =
+        s.fonte ? `· fonte: ${s.fonte.toLowerCase()} · confiança: ${(s.confianca||'').toLowerCase()}` : '';
+
+      const apresWrap = document.getElementById('sug-apresentacoes-wrap');
+      const apresUl = document.getElementById('sug-apresentacoes');
+      apresUl.innerHTML = '';
+      const apresComEquiv = (s.apresentacoes || []).filter(ap => ap.equivalencia || ap.descricao);
+      if (apresComEquiv.length) {
+        apresComEquiv.forEach(ap => {
+          const li = document.createElement('li');
+          if (ap.equivalencia) {
+            li.innerHTML = `<strong>${ap.descricao}</strong> → ${ap.equivalencia}`;
+          } else {
+            li.textContent = ap.descricao;
+          }
+          apresUl.appendChild(li);
+        });
+        apresWrap.classList.remove('d-none');
+      } else {
+        apresWrap.classList.add('d-none');
+      }
+
+      const obsEl = document.getElementById('sug-observacao');
+      if (s.observacao) {
+        obsEl.textContent = `Obs: ${s.observacao}`;
+        obsEl.classList.remove('d-none');
+      } else {
+        obsEl.classList.add('d-none');
+      }
+
+      _mostrarEstadoSugestao({conteudo: true});
+    } catch (err) {
+      console.error('Erro ao buscar sugestão de dose:', err);
+      _mostrarEstadoSugestao({indisponivel: 'Não foi possível calcular a sugestão de dose agora.'});
+    }
+  }
+
+  function usarDoseSugerida() {
+    if (!sugestaoDoseAtual) return;
+    const s = sugestaoDoseAtual;
+    // Garante que estamos no modo detalhado (3 campos)
+    const chk = document.getElementById('modo-personalizado');
+    if (chk && chk.checked) {
+      chk.checked = false;
+      alternarModo();
+    }
+    if (s.dose_exibir) document.getElementById('dose').value = s.dose_exibir;
+    if (s.frequencia_texto && s.frequencia_texto !== '—') {
+      document.getElementById('frequencia').value = s.frequencia_texto;
+    }
+    if (s.duracao_texto && s.duracao_texto !== '—') {
+      document.getElementById('duracao').value = s.duracao_texto;
+    }
+    mostrarFeedback('Dose pré-calculada aplicada — você ainda pode editar os campos.', 'success');
+  }
+
   // Preencher card de informações do medicamento
   function preencherCardMedicamento(m) {
     document.getElementById('med-nome-card').textContent = m.nome;
@@ -588,6 +753,7 @@
     document.getElementById('duracao').value = '';
     document.getElementById('info-medicamento').classList.add('d-none');
     medicamentoSelecionado = null;
+    fecharSugestaoDose();
   }
 
   // Remover prescrição da lista
@@ -692,6 +858,10 @@
     // Busca de medicamentos com debounce
     input.addEventListener('input', debounce(function() {
       const q = this.value.trim();
+      // Se o usuário começou a editar o nome, a sugestão anterior não vale mais.
+      if (sugestaoDoseAtual && (sugestaoDoseAtual.medicamento?.nome || '') !== q) {
+        fecharSugestaoDose();
+      }
       if (q.length < 2) {
         sugestoes.innerHTML = '';
         sugestoes.style.display = 'none';
@@ -728,6 +898,8 @@
                 document.getElementById('duracao').value = item.duracao_tratamento || '';
                 sugestoes.innerHTML = '';
                 sugestoes.style.display = 'none';
+                // Tenta buscar uma dose pré-calculada do bulário para este animal.
+                if (item.id) carregarSugestaoDose(item.id);
               };
               sugestoes.appendChild(li);
             });

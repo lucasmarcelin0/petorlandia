@@ -61,6 +61,7 @@ __all__ = [
     "PagamentoPlantonista",
     "CoberturaPlantonista",
     "DeliveryRequest",
+    "DeliveryResearchContact",
     "Order",
     "OrderItem",
     "Payment",
