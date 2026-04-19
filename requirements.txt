@@ -25,7 +25,7 @@ cffi==1.17.1
 channels==4.3.2
 charset-normalizer==3.4.1
 click==8.2.1
-codex==1.8.21
+codex==1.8.22
 colorama==0.4.6
 comicbox==2.1.0
 comicbox-pdffile==0.3.0
