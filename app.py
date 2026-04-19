@@ -1,5 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
+import subprocess
 import requests
 from collections import defaultdict, Counter
 import math
@@ -10,6 +11,8 @@ from decimal import Decimal, InvalidOperation
 from functools import wraps
 from urllib.parse import urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
+
+sys.modules.setdefault("petorlandia_app", sys.modules[__name__])
 
 
 
@@ -50,7 +53,7 @@ import json
 import csv
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
-from sqlalchemy.exc import NoSuchTableError, OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 # ----------------------------------------------------------------
@@ -16641,6 +16644,825 @@ def relatorio_racoes():
     return render_template("loja/relatorio_racoes.html", racoes_por_tipo=racoes_por_tipo)
 
 
+def _build_delivery_research_message(tutor_name, animal_name):
+    tutor_name = (tutor_name or "tutor").strip()
+    if isinstance(animal_name, (list, tuple)):
+        animal_names = [str(item).strip() for item in animal_name if str(item).strip()]
+    else:
+        animal_names = [str(animal_name).strip()] if str(animal_name or "").strip() else []
+
+    if not animal_names:
+        pet_intro = "do seu pet"
+        pet_question = "seu pet"
+        pet_subject = "ele"
+    elif len(animal_names) == 1:
+        pet_intro = f"do {animal_names[0]}"
+        pet_question = animal_names[0]
+        pet_subject = animal_names[0]
+    elif len(animal_names) == 2:
+        joined_names = f"{animal_names[0]} e {animal_names[1]}"
+        pet_intro = f"dos pets {joined_names}"
+        pet_question = "eles"
+        pet_subject = joined_names
+    else:
+        joined_names = ", ".join(animal_names[:-1]) + f" e {animal_names[-1]}"
+        pet_intro = f"dos pets {joined_names}"
+        pet_question = "eles"
+        pet_subject = joined_names
+
+    return (
+        f"Oi, {tutor_name}! Tudo bem?\n\n"
+        f"Aqui \u00e9 o Lucas Marcelino, m\u00e9dico veterin\u00e1rio. Vi aqui o cadastro {pet_intro} e estou organizando "
+        "em Orl\u00e2ndia um servi\u00e7o de entrega r\u00e1pida de ra\u00e7\u00e3o, direto na casa do tutor, para facilitar "
+        "o dia a dia e evitar faltar ra\u00e7\u00e3o.\n\n"
+        "Queria validar rapidinho com voc\u00ea:\n\n"
+        "Se tivesse ra\u00e7\u00e3o com pre\u00e7o igual ou melhor que os sites, com entrega r\u00e1pida, voc\u00ea compraria?\n\n"
+        "1 - Sim\n"
+        "2 - Talvez\n"
+        "3 - N\u00e3o\n\n"
+        "Se puder, me ajuda com mais algumas informa\u00e7\u00f5es:\n\n"
+        f"- Qual ra\u00e7\u00e3o {pet_question} usa hoje?\n"
+        "- Qual o tamanho do saco?\n"
+        "- Quanto voc\u00ea costuma pagar nesse saco?\n"
+        "Se n\u00e3o souber o valor exato, pode ser uma faixa:\n"
+        "at\u00e9 R$50 / R$50-100 / R$100-150 / R$150-200 / R$200-250 / acima de R$250\n\n"
+        "- Onde voc\u00ea costuma comprar?\n"
+        "(pet shop, agropecu\u00e1ria, internet ou outro)\n\n"
+        f"- E normalmente esse saco de ra\u00e7\u00e3o de {pet_subject} dura quanto tempo?\n\n"
+        "Se fizer sentido, posso te avisar quando come\u00e7armos com condi\u00e7\u00f5es especiais."
+    )
+
+
+def _build_whatsapp_research_url(phone, message):
+    phone_digits = digits_only(formatar_telefone(phone or ""))
+    if not phone_digits:
+        return None
+    return f"https://api.whatsapp.com/send?phone={phone_digits}&text={urlencode({'text': message})[5:]}"
+
+
+def _latest_racao_for_animal(animal):
+    racoes = sorted(
+        getattr(animal, "racoes", []) or [],
+        key=lambda item: item.data_cadastro.timestamp() if item.data_cadastro else float("-inf"),
+        reverse=True,
+    )
+    return racoes[0] if racoes else None
+
+
+def _delivery_research_contact_table_available():
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table("delivery_research_contact"):
+            return False
+        columns = {
+            column.get("name")
+            for column in inspector.get_columns("delivery_research_contact")
+        }
+        required = {
+            "id",
+            "tutor_id",
+            "sent",
+            "sent_at",
+            "sent_by_id",
+            "replied",
+            "replied_at",
+            "replied_by_id",
+            "recorded",
+            "recorded_at",
+            "recorded_by_id",
+            "do_not_send",
+            "do_not_send_at",
+            "do_not_send_by_id",
+            "interest_answer",
+            "current_food",
+            "bag_size",
+            "price_paid",
+            "purchase_channel",
+            "duration_estimate",
+            "response_notes",
+            "response_collected_at",
+            "created_at",
+            "updated_at",
+        }
+        return required.issubset(columns)
+    except (ProgrammingError, OperationalError, NoSuchTableError):
+        return False
+
+
+def _delivery_research_stage(status):
+    if status and getattr(status, "do_not_send", False):
+        return "do_not_send"
+    if status and getattr(status, "recorded", False):
+        return "recorded"
+    if status and getattr(status, "replied", False):
+        return "replied"
+    if status and getattr(status, "sent", False):
+        return "sent"
+    return "pending"
+
+
+def _delivery_research_stage_label(stage):
+    labels = {
+        "pending": "Falta enviar",
+        "sent": "Ja enviei",
+        "replied": "Ja responderam",
+        "recorded": "Ja cadastrei",
+        "do_not_send": "Nao enviar agora",
+    }
+    return labels.get(stage, "Falta enviar")
+
+
+def _delivery_research_interest_label(value):
+    labels = {
+        "1": "Sim",
+        "2": "Talvez",
+        "3": "Nao",
+    }
+    return labels.get((value or "").strip(), value or "Nao informado")
+
+
+def _parse_delivery_research_price(value):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    normalized = raw.lower().replace("r$", "").replace(" ", "")
+    normalized = normalized.replace(".", "").replace(",", ".")
+    match = re.search(r"\d+(?:\.\d+)?", normalized)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _split_delivery_research_food_label(value):
+    raw = (value or "").strip()
+    if not raw:
+        return (None, None)
+    if " - " in raw:
+        marca, linha = raw.split(" - ", 1)
+        return (marca.strip() or raw, linha.strip() or None)
+    return (raw, None)
+
+
+def _delivery_research_food_label_for_type(tipo_racao):
+    if not tipo_racao:
+        return None
+    marca = (tipo_racao.marca or "").strip()
+    linha = (tipo_racao.linha or "").strip()
+    if marca and linha:
+        return f"{marca} - {linha}"
+    return marca or linha or None
+
+
+def _find_tipo_racao_for_delivery_research_label(value):
+    marca, linha = _split_delivery_research_food_label(value)
+    if not marca:
+        return None
+    return TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+
+
+def _sync_delivery_research_answers_to_racoes(tutor, contact, selected_animal_ids):
+    if not contact or not contact.current_food:
+        return 0
+
+    selected_ids = {int(item) for item in selected_animal_ids if str(item).isdigit()}
+    animais = [
+        animal for animal in (tutor.animals or [])
+        if not getattr(animal, "removido_em", None) and (not selected_ids or animal.id in selected_ids)
+    ]
+    if not animais:
+        return 0
+
+    tipo_racao = _find_tipo_racao_for_delivery_research_label(contact.current_food)
+    if tipo_racao is None:
+        marca, linha = _split_delivery_research_food_label(contact.current_food)
+        if not marca:
+            return 0
+
+        tipo_racao = TipoRacao(
+            marca=marca,
+            linha=linha,
+            created_by=current_user.id,
+        )
+        db.session.add(tipo_racao)
+        db.session.flush()
+        try:
+            list_rations.cache_clear()
+        except Exception:
+            pass
+    elif not getattr(tipo_racao, "id", None):
+        return 0
+
+    preco_pago = _parse_delivery_research_price(contact.price_paid)
+    bag_size = contact.bag_size or None
+    collected_at = contact.response_collected_at or utcnow()
+    observacoes = [
+        "Pesquisa de tutores",
+        f"Coletado em {collected_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}" if collected_at else None,
+        f"Canal de compra: {contact.purchase_channel}" if contact.purchase_channel else None,
+        f"Duracao estimada: {contact.duration_estimate}" if contact.duration_estimate else None,
+        f"Interesse: {_delivery_research_interest_label(contact.interest_answer)}" if contact.interest_answer else None,
+        f"Observacoes: {contact.response_notes}" if contact.response_notes else None,
+    ]
+    observacoes_racao = "\n".join(item for item in observacoes if item)
+
+    synced = 0
+    for animal in animais:
+        latest_racao = _latest_racao_for_animal(animal)
+        should_update_latest = (
+            latest_racao is not None
+            and latest_racao.tipo_racao_id == tipo_racao.id
+            and (latest_racao.tamanho_embalagem or None) == bag_size
+            and (latest_racao.preco_pago or None) == preco_pago
+            and latest_racao.created_by == current_user.id
+            and (latest_racao.observacoes_racao or "").startswith("Pesquisa de tutores")
+        )
+
+        if should_update_latest:
+            latest_racao.observacoes_racao = observacoes_racao
+            latest_racao.data_cadastro = collected_at
+            synced += 1
+            continue
+
+        db.session.add(
+            Racao(
+                animal_id=animal.id,
+                tipo_racao_id=tipo_racao.id,
+                observacoes_racao=observacoes_racao,
+                preco_pago=preco_pago,
+                tamanho_embalagem=bag_size,
+                created_by=current_user.id,
+                data_cadastro=collected_at,
+            )
+        )
+        synced += 1
+
+    return synced
+
+
+def _build_delivery_research_contact_map():
+    return {
+        item["tutor"].id: item
+        for item in _build_delivery_research_contacts()
+    }
+
+
+def _get_or_create_delivery_research_contact(tutor_id):
+    status = DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+    if status is not None:
+        return status
+
+    status = DeliveryResearchContact(tutor_id=tutor_id)
+    db.session.add(status)
+    return status
+
+
+def _commit_delivery_research_contact_changes(tutor_id):
+    try:
+        db.session.commit()
+        return DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+    except IntegrityError:
+        db.session.rollback()
+        return DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+
+
+def _run_whatsapp_batch_selenium(batch_items, warmup_only=False):
+    if not batch_items and not warmup_only:
+        return {"results": []}
+
+    script_path = PROJECT_ROOT / "scripts" / "send_whatsapp_batch_selenium.py"
+    if not script_path.exists():
+        raise RuntimeError("Script de envio em lote nao encontrado.")
+
+    temp_root = PROJECT_ROOT / "instance" / "whatsapp_batch"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    batch_dir = temp_root / uuid.uuid4().hex
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    input_path = batch_dir / "input.json"
+    output_path = batch_dir / "output.json"
+
+    try:
+        input_path.write_text(json.dumps({"items": batch_items}, ensure_ascii=False), encoding="utf-8")
+
+        command = [
+            r"C:\edb\languagepack\v3\Python-3.10\python.exe",
+            str(script_path),
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+        if warmup_only:
+            command.append("--warmup-only")
+
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT_ROOT),
+            timeout=1800,
+        )
+
+        if not output_path.exists():
+            if completed.returncode != 0:
+                raise RuntimeError((completed.stderr or completed.stdout or "Falha no envio em lote.").strip())
+            raise RuntimeError("O script de envio nao gerou arquivo de resultado.")
+
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        if completed.returncode != 0:
+            payload["process_error"] = (completed.stderr or completed.stdout or "Falha no envio em lote.").strip()
+        return payload
+    finally:
+        for temp_file in (input_path, output_path):
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except OSError:
+                pass
+        try:
+            batch_dir.rmdir()
+        except OSError:
+            pass
+
+
+def _build_delivery_research_contacts():
+    status_available = _delivery_research_contact_table_available()
+
+    query = (
+        User.query
+        .join(Animal, Animal.user_id == User.id)
+        .options(
+            selectinload(User.animals)
+            .selectinload(Animal.racoes)
+            .joinedload(Racao.tipo_racao),
+        )
+        .distinct()
+        .order_by(User.name.asc(), User.id.asc())
+    )
+
+    if status_available:
+        query = query.options(joinedload(User.delivery_research_contact))
+
+    tutors = query.all()
+
+    contatos = []
+    for tutor in tutors:
+        animais = sorted(
+            [animal for animal in (tutor.animals or []) if not getattr(animal, "removido_em", None)],
+            key=lambda item: ((item.name or "").lower(), item.id),
+        )
+        nomes_animais = [animal.name for animal in animais if animal.name]
+        mensagem = _build_delivery_research_message(tutor.name, nomes_animais)
+        latest_racoes = []
+        for animal in animais:
+            racao = _latest_racao_for_animal(animal)
+            if racao:
+                latest_racoes.append(
+                    {
+                        "animal_id": animal.id,
+                        "animal_nome": animal.name or "Pet sem nome",
+                        "racao": racao,
+                    }
+                )
+
+        status_envio = getattr(tutor, "delivery_research_contact", None) if status_available else None
+        stage = _delivery_research_stage(status_envio)
+        current_food_option = None
+        current_food_manual = ""
+        if status_envio and status_envio.current_food:
+            current_food_option = _find_tipo_racao_for_delivery_research_label(status_envio.current_food)
+            if current_food_option is None:
+                current_food_manual = status_envio.current_food
+
+        contatos.append(
+            {
+                "tutor": tutor,
+                "animais": animais,
+                "nomes_animais": nomes_animais,
+                "mensagem": mensagem,
+                "whatsapp_url": _build_whatsapp_research_url(getattr(tutor, "phone", None), mensagem),
+                "status_envio": status_envio,
+                "status_disponivel": status_available,
+                "stage": stage,
+                "stage_label": _delivery_research_stage_label(stage),
+                "interest_label": _delivery_research_interest_label(getattr(status_envio, "interest_answer", None)) if status_envio else "Nao informado",
+                "current_food_option_id": current_food_option.id if current_food_option else None,
+                "current_food_manual": current_food_manual,
+                "response_collected_label": (
+                    status_envio.response_collected_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+                    if status_envio and getattr(status_envio, "response_collected_at", None)
+                    else None
+                ),
+                "do_not_send_label": (
+                    status_envio.do_not_send_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+                    if status_envio and getattr(status_envio, "do_not_send_at", None)
+                    else None
+                ),
+                "racoes_recentes": latest_racoes,
+            }
+        )
+
+    return contatos
+
+
+@app.route("/relatorio/racoes/pesquisa")
+@login_required
+def pesquisa_racoes_tutores():
+    if not _is_admin():
+        abort(403)
+
+    contatos = _build_delivery_research_contacts()
+    racao_options = [
+        {
+            "id": tipo.id,
+            "label": _delivery_research_food_label_for_type(tipo),
+        }
+        for tipo in list_rations()
+        if _delivery_research_food_label_for_type(tipo)
+    ]
+    status_disponivel = contatos[0]["status_disponivel"] if contatos else _delivery_research_contact_table_available()
+    stage_counts = {
+        "pending": 0,
+        "sent": 0,
+        "replied": 0,
+        "recorded": 0,
+        "do_not_send": 0,
+    }
+    for item in contatos:
+        stage_counts[item["stage"]] += 1
+    if not status_disponivel:
+        flash(
+            "A pesquisa foi carregada, mas o controle de envio ainda depende da nova migração do banco.",
+            "warning",
+        )
+
+    return render_template(
+        "loja/pesquisa_racoes_tutores.html",
+        contatos=contatos,
+        racao_options=racao_options,
+        status_disponivel=status_disponivel,
+        stage_counts=stage_counts,
+    )
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/toggle", methods=["POST"])
+@login_required
+def toggle_pesquisa_racoes_tutor(tutor_id):
+    if not _is_admin():
+        abort(403)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O controle de envio ainda não está disponível porque a migração do banco não foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    if status.sent:
+        status.sent = False
+        status.sent_at = None
+        status.sent_by_id = None
+        status.do_not_send = False
+        status.do_not_send_at = None
+        status.do_not_send_by_id = None
+        status.replied = False
+        status.replied_at = None
+        status.replied_by_id = None
+        status.recorded = False
+        status.recorded_at = None
+        status.recorded_by_id = None
+        flash(f"Envio para {tutor.name} desmarcado.", "info")
+    else:
+        status.do_not_send = False
+        status.do_not_send_at = None
+        status.do_not_send_by_id = None
+        status.sent = True
+        status.sent_at = utcnow()
+        status.sent_by_id = current_user.id
+        flash(f"Envio para {tutor.name} marcado como realizado.", "success")
+
+    _commit_delivery_research_contact_changes(tutor.id)
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/status/<status_key>", methods=["POST"])
+@login_required
+def update_pesquisa_racoes_tutor_status(tutor_id, status_key):
+    if not _is_admin():
+        abort(403)
+
+    if status_key not in {"sent", "replied", "recorded", "do_not_send"}:
+        abort(400)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O controle de status ainda nÃ£o estÃ¡ disponÃ­vel porque a migraÃ§Ã£o do banco nÃ£o foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    now = utcnow()
+
+    if status_key == "do_not_send":
+        if status.do_not_send:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            flash(f"{tutor.name} voltou para a fila normal da pesquisa.", "info")
+        else:
+            status.do_not_send = True
+            status.do_not_send_at = now
+            status.do_not_send_by_id = current_user.id
+            flash(f"{tutor.name} foi separado na lista de nao enviar agora.", "success")
+
+    elif status_key == "sent":
+        if status.sent:
+            status.sent = False
+            status.sent_at = None
+            status.sent_by_id = None
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            status.replied = False
+            status.replied_at = None
+            status.replied_by_id = None
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Status de envio removido para {tutor.name}.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            status.sent = True
+            status.sent_at = now
+            status.sent_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de enviados.", "success")
+
+    elif status_key == "replied":
+        if status.replied:
+            status.replied = False
+            status.replied_at = None
+            status.replied_by_id = None
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Resposta de {tutor.name} desmarcada.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            if not status.sent:
+                status.sent = True
+                status.sent_at = status.sent_at or now
+                status.sent_by_id = status.sent_by_id or current_user.id
+            status.replied = True
+            status.replied_at = now
+            status.replied_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de respostas recebidas.", "success")
+
+    elif status_key == "recorded":
+        if status.recorded:
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Cadastro das respostas de {tutor.name} desmarcado.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            if not status.sent:
+                status.sent = True
+                status.sent_at = status.sent_at or now
+                status.sent_by_id = status.sent_by_id or current_user.id
+            if not status.replied:
+                status.replied = True
+                status.replied_at = status.replied_at or now
+                status.replied_by_id = status.replied_by_id or current_user.id
+            status.recorded = True
+            status.recorded_at = now
+            status.recorded_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de respostas cadastradas.", "success")
+
+    _commit_delivery_research_contact_changes(tutor.id)
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/answers", methods=["POST"])
+@login_required
+def save_pesquisa_racoes_tutor_answers(tutor_id):
+    if not _is_admin():
+        abort(403)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O registro estruturado ainda nao esta disponivel porque a migracao do banco nao foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    now = utcnow()
+    selected_tipo_racao_id = request.form.get("current_food_tipo_racao_id")
+    selected_tipo_racao = None
+    if str(selected_tipo_racao_id or "").isdigit():
+        selected_tipo_racao = TipoRacao.query.get(int(selected_tipo_racao_id))
+
+    manual_current_food = (request.form.get("current_food") or "").strip()
+    resolved_current_food = manual_current_food or None
+    if selected_tipo_racao is not None:
+        resolved_current_food = _delivery_research_food_label_for_type(selected_tipo_racao)
+
+    status.response_collected_at = now
+    status.do_not_send = False
+    status.do_not_send_at = None
+    status.do_not_send_by_id = None
+    status.interest_answer = (request.form.get("interest_answer") or "").strip() or None
+    status.current_food = resolved_current_food
+    status.bag_size = (request.form.get("bag_size") or "").strip() or None
+    status.price_paid = (request.form.get("price_paid") or "").strip() or None
+    status.purchase_channel = (request.form.get("purchase_channel") or "").strip() or None
+    status.duration_estimate = (request.form.get("duration_estimate") or "").strip() or None
+    status.response_notes = (request.form.get("response_notes") or "").strip() or None
+
+    if not status.sent:
+        status.sent = True
+        status.sent_at = status.sent_at or now
+        status.sent_by_id = status.sent_by_id or current_user.id
+    if not status.replied:
+        status.replied = True
+        status.replied_at = status.replied_at or now
+        status.replied_by_id = status.replied_by_id or current_user.id
+    if not status.recorded:
+        status.recorded = True
+        status.recorded_at = now
+        status.recorded_by_id = current_user.id
+    else:
+        status.recorded_at = now
+        status.recorded_by_id = current_user.id
+
+    synced_count = _sync_delivery_research_answers_to_racoes(
+        tutor,
+        status,
+        request.form.getlist("sync_animal_ids"),
+    )
+
+    db.session.commit()
+    flash(
+        f"Respostas estruturadas de {tutor.name} salvas com sucesso. {synced_count} pet(s) sincronizado(s) com o historico de racoes.",
+        "success",
+    )
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/send-selected", methods=["POST"])
+@login_required
+def send_selected_pesquisa_racoes_tutores():
+    if not _is_admin():
+        abort(403)
+
+    selected_ids = []
+    for raw in request.form.getlist("selected_tutor_ids"):
+        if str(raw).isdigit():
+            selected_ids.append(int(raw))
+
+    if not selected_ids:
+        flash("Selecione ao menos um tutor para envio em lote.", "warning")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    contact_map = _build_delivery_research_contact_map()
+    batch_items = []
+    skipped = 0
+    excluded = 0
+    for tutor_id in selected_ids:
+        item = contact_map.get(tutor_id)
+        if not item or not item.get("whatsapp_url"):
+            skipped += 1
+            continue
+        status_envio = item.get("status_envio")
+        if status_envio and getattr(status_envio, "do_not_send", False):
+            excluded += 1
+            continue
+
+        tutor = item["tutor"]
+        batch_items.append(
+            {
+                "tutor_id": tutor.id,
+                "tutor_name": tutor.name,
+                "phone": digits_only(formatar_telefone(tutor.phone or "")),
+                "message": item["mensagem"],
+            }
+        )
+
+    if not batch_items:
+        if excluded and not skipped:
+            flash("Os tutores selecionados estao marcados como nao enviar agora.", "warning")
+        else:
+            flash("Nenhum dos tutores selecionados possui WhatsApp valido para envio.", "warning")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    whatsapp_runner = getattr(sys.modules.get("app", sys.modules[__name__]), "_run_whatsapp_batch_selenium", _run_whatsapp_batch_selenium)
+
+    try:
+        result_payload = whatsapp_runner(batch_items)
+    except subprocess.TimeoutExpired:
+        flash("O envio em lote demorou mais que o esperado e foi interrompido.", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+    except Exception as exc:
+        current_app.logger.exception("Erro ao executar envio em lote via Selenium")
+        message = str(exc)
+        if "DevToolsActivePort" in message or "session not created" in message.lower():
+            message = (
+                "Nao foi possivel abrir o navegador da automacao. "
+                "Feche janelas abertas do Chrome e do Edge que possam estar usando o perfil do WhatsApp "
+                "e tente novamente."
+            )
+        flash(f"Falha ao executar envio em lote: {message}", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    success_count = 0
+    failed_count = 0
+    failed_examples = []
+    for result in result_payload.get("results", []):
+        tutor_id = result.get("tutor_id")
+        if not tutor_id:
+            continue
+        if result.get("status") == "sent" and _delivery_research_contact_table_available():
+            status = _get_or_create_delivery_research_contact(tutor_id)
+            status.sent = True
+            status.sent_at = utcnow()
+            status.sent_by_id = current_user.id
+            success_count += 1
+        else:
+            failed_count += 1
+            if len(failed_examples) < 3:
+                failed_examples.append(
+                    {
+                        "name": result.get("tutor_name") or f"Tutor {tutor_id}",
+                        "error": (result.get("error") or "Falha nao detalhada.")[:180],
+                    }
+                )
+
+    if success_count:
+        db.session.commit()
+
+    summary = f"Envio em lote concluido: {success_count} enviado(s)"
+    if failed_count:
+        summary += f", {failed_count} com falha"
+    if skipped:
+        summary += f", {skipped} sem WhatsApp valido"
+    if excluded:
+        summary += f", {excluded} em nao enviar agora"
+    flash(summary + ".", "success" if success_count else "warning")
+
+    for failure in failed_examples:
+        flash(f"Falha em {failure['name']}: {failure['error']}", "warning")
+
+    process_error = result_payload.get("process_error")
+    if process_error:
+        flash(
+            "O lote foi interrompido no meio do processo, mas os envios ja confirmados foram preservados. "
+            "Revise os que faltaram antes de reenviar.",
+            "warning",
+        )
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/warmup-whatsapp", methods=["POST"])
+@login_required
+def warmup_pesquisa_racoes_whatsapp():
+    if not _is_admin():
+        abort(403)
+
+    try:
+        result_payload = _run_whatsapp_batch_selenium([], warmup_only=True)
+    except subprocess.TimeoutExpired:
+        flash("O aquecimento do WhatsApp demorou mais que o esperado e foi interrompido.", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+    except Exception as exc:
+        current_app.logger.exception("Erro ao aquecer WhatsApp Web via Selenium")
+        flash(f"Falha ao aquecer WhatsApp Web: {exc}", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    browser_used = result_payload.get("browser") or "navegador"
+    flash(
+        f"WhatsApp Web aquecido com sucesso no {browser_used}. Se a sessao pedir QR Code, conecte agora antes do envio em lote.",
+        "success",
+    )
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
 @app.route("/historico_animal/<int:animal_id>")
 @login_required
 def historico_animal(animal_id):
@@ -24627,11 +25449,45 @@ def bulario_novo():
                     medicamento_id=med.id, forma=forma, concentracao=conc
                 ))
 
+        _salvar_doses_do_form(med.id, request.form)
+
         db.session.commit()
         flash("Medicamento criado com sucesso.", "success")
         return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
 
     return render_template("bulario/form.html", med=None, titulo="Novo medicamento")
+
+
+def _salvar_doses_do_form(medicamento_id, form):
+    """Lê os campos `dose_*[]` do form e substitui as doses do medicamento."""
+    from models.base import DoseMedicamento
+    # remove as existentes
+    DoseMedicamento.query.filter_by(medicamento_id=medicamento_id).delete()
+    db.session.flush()
+
+    especies   = form.getlist("dose_especie[]")
+    pesos      = form.getlist("dose_faixa_peso[]")
+    vias       = form.getlist("dose_via[]")
+    valores    = form.getlist("dose_valor[]")
+    freqs      = form.getlist("dose_frequencia[]")
+    duracoes   = form.getlist("dose_duracao[]")
+    obs        = form.getlist("dose_observacao[]")
+
+    linhas = zip(especies, pesos, vias, valores, freqs, duracoes, obs)
+    for esp, peso, via, dose, freq, dur, o in linhas:
+        # Ignora linha totalmente vazia
+        if not any(v.strip() for v in (esp, peso, via, dose, freq, dur, o)):
+            continue
+        db.session.add(DoseMedicamento(
+            medicamento_id = medicamento_id,
+            especie        = (esp.strip()[:80] or None),
+            faixa_peso     = (peso.strip()[:80] or None),
+            via            = (via.strip()[:80] or None),
+            dose           = (dose.strip()[:200] or None),
+            frequencia     = (freq.strip()[:120] or None),
+            duracao        = (dur.strip()[:120] or None),
+            observacao     = (o.strip() or None),
+        ))
 
 
 @login_required
@@ -24667,6 +25523,8 @@ def bulario_editar(medicamento_id):
                 db.session.add(ApresentacaoMedicamento(
                     medicamento_id=med.id, forma=forma, concentracao=conc
                 ))
+
+        _salvar_doses_do_form(med.id, request.form)
 
         db.session.commit()
         flash("Medicamento atualizado com sucesso.", "success")
@@ -24724,6 +25582,91 @@ def bulario_buscar_api():
         }
         for m in resultados
     ])
+
+
+@login_required
+def bulario_sugerir_dose_api():
+    """API JSON: dado um medicamento + animal, devolve uma sugestão de dose
+    pré-calculada (peso × mg/kg) ou indica que não há protocolo aplicável.
+
+    Query params:
+      - medicamento_id (int, obrigatório)
+      - animal_id      (int, obrigatório)
+    """
+    from models.base import Medicamento, Animal
+    from services.bulario import sugerir_dose
+
+    med_id = request.args.get("medicamento_id", type=int)
+    animal_id = request.args.get("animal_id", type=int)
+    if not med_id or not animal_id:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Parâmetros medicamento_id e animal_id são obrigatórios.",
+        }), 400
+
+    med = Medicamento.query.get(med_id)
+    if med is None:
+        return jsonify({"disponivel": False, "motivo": "Medicamento não encontrado."}), 404
+
+    animal = Animal.query.get(animal_id)
+    if animal is None:
+        return jsonify({"disponivel": False, "motivo": "Animal não encontrado."}), 404
+
+    # Diagnóstico antes de delegar para o serviço — para que o front consiga
+    # explicar por que não há sugestão automática.
+    peso = getattr(animal, "peso", None)
+    try:
+        peso_f = float(peso) if peso is not None else None
+    except (TypeError, ValueError):
+        peso_f = None
+    if not peso_f or peso_f <= 0:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Peso do animal não está cadastrado — preencha o peso para usar a dose pré-calculada.",
+        })
+
+    if not (med.doses or []):
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Este medicamento ainda não tem protocolo de dose cadastrado no bulário.",
+        })
+
+    sugestao = sugerir_dose(med, animal)
+    if not sugestao:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Não há protocolo aplicável para a espécie/peso deste animal.",
+        })
+
+    # Converte Decimals → float para JSON
+    def _safe(v):
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return v
+
+    sugestao["peso_kg"] = _safe(sugestao.get("peso_kg"))
+    sugestao["dose_min"] = _safe(sugestao.get("dose_min"))
+    sugestao["dose_max"] = _safe(sugestao.get("dose_max"))
+
+    return jsonify({
+        "disponivel": True,
+        "medicamento": {
+            "id": med.id,
+            "nome": med.nome,
+            "principio_ativo": med.principio_ativo or "",
+            "fabricante": med.fabricante or "",
+        },
+        "animal": {
+            "id": animal.id,
+            "nome": getattr(animal, "name", None) or getattr(animal, "nome", None) or "",
+            "especie": (getattr(getattr(animal, "species", None), "name", None) or ""),
+            "peso_kg": peso_f,
+        },
+        "sugestao": sugestao,
+    })
 
 
 from blueprint_utils import register_domain_blueprints

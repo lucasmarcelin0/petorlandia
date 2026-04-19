@@ -156,6 +156,48 @@
       </div>
       {% endif %}
 
+      <!-- Tabela de doses estruturadas -->
+      {% if med.doses %}
+      <div class="bd-section mb-4">
+        <h6 class="bd-section__title">
+          <i class="fas fa-table me-2 text-primary"></i>Tabela de dosagem
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle bd-dose-table">
+            <thead class="table-light">
+              <tr>
+                <th>Espécie</th>
+                <th>Faixa de peso</th>
+                <th>Via</th>
+                <th>Dose</th>
+                <th>Frequência</th>
+                <th>Duração</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in med.doses %}
+              <tr>
+                <td>{{ d.especie or '—' }}</td>
+                <td>{{ d.faixa_peso or '—' }}</td>
+                <td>{{ d.via or '—' }}</td>
+                <td><strong>{{ d.dose or '—' }}</strong></td>
+                <td>{{ d.frequencia or '—' }}</td>
+                <td>{{ d.duracao or '—' }}</td>
+              </tr>
+              {% if d.observacao %}
+              <tr class="bd-dose-obs">
+                <td colspan="6" class="text-muted small ps-4">
+                  <i class="fas fa-circle-info me-1"></i>{{ d.observacao }}
+                </td>
+              </tr>
+              {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Apresentações em resumo -->
       {% if med.apresentacoes %}
       <div class="bd-section mb-4">
@@ -175,7 +217,7 @@
       </div>
       {% endif %}
 
-      {% if not med.dosagem_recomendada and not med.frequencia and not med.duracao_tratamento and not med.apresentacoes %}
+      {% if not med.dosagem_recomendada and not med.frequencia and not med.duracao_tratamento and not med.apresentacoes and not med.doses %}
       <div class="bd-empty">
         <i class="fas fa-circle-info fa-2x mb-2 text-muted"></i>
         <p class="text-muted mb-0">Posologia não disponível ainda para este medicamento.</p>

@@ -34,7 +34,9 @@
       "WebFetch(domain:www.vetsmart.com.br)",
       "WebSearch",
       "WebFetch(domain:pl-vetsmart.zendesk.com)",
-      "WebFetch(domain:plano.vetsmart.com.br)"
+      "WebFetch(domain:plano.vetsmart.com.br)",
+      "Bash(playwright install *)",
+      "Bash(tee /tmp/scrape_batch.log)"
     ]
   }
 }

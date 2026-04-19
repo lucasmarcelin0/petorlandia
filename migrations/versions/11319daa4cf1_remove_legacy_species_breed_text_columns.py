@@ -405,6 +405,15 @@ def upgrade():
                type_=sa.DateTime(timezone=True),
                existing_nullable=True)
 
+    with op.batch_alter_table('sfa_resposta_t0', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t0_id_estudo_fkey'), type_='foreignkey')
+
+    with op.batch_alter_table('sfa_resposta_t10', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t10_id_estudo_fkey'), type_='foreignkey')
+
+    with op.batch_alter_table('sfa_resposta_t30', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t30_id_estudo_fkey'), type_='foreignkey')
+
     with op.batch_alter_table('sfa_paciente', schema=None) as batch_op:
         batch_op.drop_constraint(batch_op.f('sfa_paciente_id_estudo_key'), type_='unique')
         batch_op.drop_constraint(batch_op.f('sfa_paciente_token_acesso_key'), type_='unique')
@@ -412,6 +421,15 @@ def upgrade():
         batch_op.create_index(batch_op.f('ix_sfa_paciente_id_estudo'), ['id_estudo'], unique=True)
         batch_op.drop_index(batch_op.f('ix_sfa_paciente_token_acesso'))
         batch_op.create_index(batch_op.f('ix_sfa_paciente_token_acesso'), ['token_acesso'], unique=True)
+
+    with op.batch_alter_table('sfa_resposta_t0', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t0_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
+
+    with op.batch_alter_table('sfa_resposta_t10', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t10_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
+
+    with op.batch_alter_table('sfa_resposta_t30', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t30_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
 
     with op.batch_alter_table('sfa_sinan_log', schema=None) as batch_op:
         batch_op.drop_constraint(batch_op.f('sfa_sinan_log_chave_dedup_key'), type_='unique')
@@ -528,6 +546,15 @@ def downgrade():
         batch_op.create_index(batch_op.f('ix_sfa_sinan_log_chave_dedup'), ['chave_dedup'], unique=False)
         batch_op.create_unique_constraint(batch_op.f('sfa_sinan_log_chave_dedup_key'), ['chave_dedup'], postgresql_nulls_not_distinct=False)
 
+    with op.batch_alter_table('sfa_resposta_t0', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t0_id_estudo_fkey'), type_='foreignkey')
+
+    with op.batch_alter_table('sfa_resposta_t10', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t10_id_estudo_fkey'), type_='foreignkey')
+
+    with op.batch_alter_table('sfa_resposta_t30', schema=None) as batch_op:
+        batch_op.drop_constraint(batch_op.f('sfa_resposta_t30_id_estudo_fkey'), type_='foreignkey')
+
     with op.batch_alter_table('sfa_paciente', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_sfa_paciente_token_acesso'))
         batch_op.create_index(batch_op.f('ix_sfa_paciente_token_acesso'), ['token_acesso'], unique=False)
@@ -535,6 +562,15 @@ def downgrade():
         batch_op.create_index(batch_op.f('ix_sfa_paciente_id_estudo'), ['id_estudo'], unique=False)
         batch_op.create_unique_constraint(batch_op.f('sfa_paciente_token_acesso_key'), ['token_acesso'], postgresql_nulls_not_distinct=False)
         batch_op.create_unique_constraint(batch_op.f('sfa_paciente_id_estudo_key'), ['id_estudo'], postgresql_nulls_not_distinct=False)
+
+    with op.batch_alter_table('sfa_resposta_t0', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t0_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
+
+    with op.batch_alter_table('sfa_resposta_t10', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t10_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
+
+    with op.batch_alter_table('sfa_resposta_t30', schema=None) as batch_op:
+        batch_op.create_foreign_key(batch_op.f('sfa_resposta_t30_id_estudo_fkey'), 'sfa_paciente', ['id_estudo'], ['id_estudo'])
 
     with op.batch_alter_table('review', schema=None) as batch_op:
         batch_op.alter_column('date',
