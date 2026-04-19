@@ -41,6 +41,9 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -105,6 +108,7 @@ class ProdutoVetsmart:
     farmacologia:         Optional[str] = None
     bula:                 Optional[str] = None
     apresentacoes: List[Dict[str, str]] = field(default_factory=list)
+    doses: List[Dict[str, Optional[str]]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +197,42 @@ def _limpar(texto: Optional[str], max_len: int = 500) -> Optional[str]:
     return texto[:max_len] if texto else None
 
 
+def _limpar_dose(texto: Optional[str]) -> Optional[str]:
+    """Remove ruído típico do campo dosagem do VetSmart."""
+    if not texto:
+        return None
+    # Remove o placeholder "INDICAÇÃO: 0 unidade" (vem do input vazio de cálculo)
+    texto = re.sub(r'\s*INDICAÇÃO:\s*0\s*\w*\s*', ' ', texto, flags=re.IGNORECASE)
+    # Remove "Doses" e "Dosagem indicada" duplicados no início
+    texto = re.sub(r'^\s*(Doses|Dosagem indicada)\s+', '', texto, flags=re.IGNORECASE)
+    # Remove hífen e prefixo "- Cães/Gatos" inicial
+    texto = re.sub(r'^[-–]\s*', '', texto)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto[:300] if texto else None
+
+
+def _itemprops(soup, prop: str) -> List[str]:
+    """Coleta todos os textos/contents de elementos com itemprop=prop."""
+    valores = []
+    for tag in soup.find_all(attrs={'itemprop': prop}):
+        v = tag.get('content') or tag.get_text(' ', strip=True)
+        v = re.sub(r'\s+', ' ', v).strip() if v else ''
+        if v and not _eh_vazio(v):
+            valores.append(v)
+    return valores
+
+
+def _itemprop(soup, prop: str) -> Optional[str]:
+    vals = _itemprops(soup, prop)
+    return vals[0] if vals else None
+
+
 def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoVetsmart:
-    """Extrai todos os dados do produto a partir do HTML completo da página."""
+    """Extrai todos os dados do produto a partir do HTML completo da página.
+
+    Estratégia: Schema.org metadata (itemprop) como fonte primária,
+    com fallback para parsing das seções textuais.
+    """
     soup = BeautifulSoup(html, 'html.parser')
 
     # ── Nome ──────────────────────────────────────────────────────────────
@@ -202,35 +240,44 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
     nome = nome_el.get_text(strip=True) if nome_el else nome_fallback
     nome = nome[:100] or nome_fallback
 
-    # ── Fabricante ────────────────────────────────────────────────────────
-    fab_el = soup.find(class_='side-nav-subtitle')
-    fabricante = None
-    if fab_el:
-        # Usa separator=' ' para preservar espaços entre elementos filhos
-        fab_raw = fab_el.get_text(separator=' ', strip=True)
-        fabricante = re.sub(r'^POR\s+', '', fab_raw, flags=re.IGNORECASE).strip() or None
+    # ── Schema.org: campos diretos ────────────────────────────────────────
+    fabricante         = _itemprop(soup, 'manufacturer')
+    classificacao      = _itemprop(soup, 'drugClass')
+    via_administracao  = _itemprop(soup, 'administrationRoute')
+    farmacologia_meta  = _itemprop(soup, 'clinicalPharmacology')
+    description_meta   = _itemprop(soup, 'description')
+    warning_meta       = _itemprop(soup, 'warning')
 
-    # ── Classificação e Espécies ──────────────────────────────────────────
-    classificacao = None
+    # Princípio ativo — pode ter múltiplos (combinações)
+    principios = _itemprops(soup, 'activeIngredient')
+    principio_ativo = ' + '.join(principios) if principios else None
+
+    # Fallback: fabricante via side-nav-subtitle (caso schema.org falhe)
+    if not fabricante:
+        fab_el = soup.find(class_='side-nav-subtitle')
+        if fab_el:
+            fab_raw = fab_el.get_text(separator=' ', strip=True)
+            fabricante = re.sub(r'^POR\s+', '', fab_raw, flags=re.IGNORECASE).strip() or None
+
+    # ── Espécies (não tem schema.org, parse da seção Sobre) ──────────────
     especies = None
     for p in soup.find_all('p'):
         b = p.find('b')
         if not b:
             continue
         b_txt = b.get_text(strip=True)
-        # Usa separator=' ' para não colapsar "Classificação:Valor" em uma string sem espaço
         p_txt = p.get_text(separator=' ', strip=True)
-        if 'Classifica' in b_txt and not classificacao:
-            # VetSmart usa 'ā' (mácron U+0101) em vez de 'ã', então usamos [\w\W]{1,3}
-            classificacao = re.sub(
-                r'Classifica.{1,4}o\s*:\s*', '', p_txt, flags=re.IGNORECASE
-            ).strip() or None
         if 'Espécie' in b_txt and not especies:
             especies = re.sub(
                 r'Espécies?\s*:\s*', '', p_txt, flags=re.IGNORECASE
             ).strip() or None
+        # Fallback de classificação se schema falhou
+        if not classificacao and 'Classifica' in b_txt:
+            classificacao = re.sub(
+                r'Classifica.{1,4}o\s*:\s*', '', p_txt, flags=re.IGNORECASE
+            ).strip() or None
 
-    # ── Coleta todas as seções ────────────────────────────────────────────
+    # ── Coleta todas as seções textuais ──────────────────────────────────
     secoes: Dict[str, Optional[str]] = {}
     secoes_uls: Dict[str, Any] = {}
 
@@ -240,7 +287,6 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
             continue
         titulo = title_el.get_text(strip=True)
 
-        # Seção vazia?
         disabled = sec.find('p', class_='disabled')
         if disabled:
             conteudo = disabled.get_text(strip=True)
@@ -252,11 +298,9 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
             secoes[titulo] = None
             continue
 
-        # Remove o título do conteúdo para não repetir
         for el in content_div.find_all(class_='title-content'):
             el.decompose()
 
-        # Salva a <ul> para parsing especial das apresentações
         ul = content_div.find('ul')
         if ul:
             secoes_uls[titulo] = ul
@@ -264,61 +308,86 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         conteudo = content_div.get_text(separator='\n', strip=True)
         secoes[titulo] = None if _eh_vazio(conteudo) else conteudo
 
-    # ── Apresentações ─────────────────────────────────────────────────────
+    # ── Apresentações (Schema.org availableStrength + dosageForm) ────────
+    # Cada <li> tem o nome da apresentação + <span itemprop="dosageForm"> + (volume opcional)
     apresentacoes = []
     ul_apres = secoes_uls.get('Apresentações e concentrações')
     if ul_apres:
         for li in ul_apres.find_all('li'):
-            forma_el = li.find('span')
+            forma_el = li.find('span', attrs={'itemprop': 'dosageForm'}) or li.find('span')
             forma = forma_el.get_text(strip=True) if forma_el else ''
-            # Concentração / embalagem = texto do li sem o span
-            if forma_el:
-                forma_el.extract()
-            li_txt = li.get_text(separator=' ', strip=True)
-            # Remove traço inicial e nome do produto
-            conc = re.sub(r'^[-–]\s*' + re.escape(nome) + r'\s*,?\s*', '', li_txt, flags=re.I).strip()
-            conc = re.sub(r'^,\s*', '', conc).strip()
-            if forma or conc:
-                apresentacoes.append({
-                    'forma': forma[:50] if forma else 'N/A',
-                    'concentracao': conc[:100] if conc else ''
-                })
 
-    # ── Administração e doses ─────────────────────────────────────────────
+            # Texto do <li> sem o span
+            li_clone = BeautifulSoup(str(li), 'html.parser').find('li')
+            for s in li_clone.find_all('span'):
+                s.decompose()
+            txt_resto = li_clone.get_text(' ', strip=True)
+            # Limpa traço inicial e formata: "- Cefalexina, (250mg)" → "Cefalexina (250mg)"
+            txt_resto = re.sub(r'^[-–]\s*', '', txt_resto).strip()
+            txt_resto = re.sub(r',\s*$', '', txt_resto).strip()
+            # Remove vírgula órfã antes do parêntese: "Cefalexina, (250mg)" → "Cefalexina (250mg)"
+            txt_resto = re.sub(r',\s*\(', ' (', txt_resto).strip()
+
+            # Se a "concentração" é só o princípio ativo sem volume, zera
+            # (quando há volume, vem entre parênteses)
+            if txt_resto and principios and txt_resto.lower().strip() == (principios[0] if principios else '').lower().strip():
+                txt_resto = ''
+            # Mesma coisa se for o nome do produto sem volume
+            if txt_resto and txt_resto.lower().strip() == nome.lower().strip():
+                txt_resto = ''
+
+            if forma or txt_resto:
+                ap = {
+                    'forma': (forma or 'N/A')[:50],
+                    'concentracao': txt_resto[:100],
+                }
+                # Campos numéricos para cálculo de dose
+                ap.update(_estruturar_apresentacao_campos(forma or '', txt_resto or '', nome))
+                apresentacoes.append(ap)
+
+    # ── Administração e doses (texto, com cleanup) ───────────────────────
     admin_txt = secoes.get('Administração e doses') or ''
     admin = _parsear_admin_doses(admin_txt)
 
-    via_administracao   = admin['via']
-    dosagem_recomendada = admin['dose']
+    if not via_administracao:
+        via_administracao = admin['via']
+
+    dosagem_recomendada = _limpar_dose(admin['dose'])
     frequencia          = admin['frequencia']
     duracao_tratamento  = admin['duracao']
 
-    # ── Indicações / Observações / Interações / Farmacologia ─────────────
+    # Doses estruturadas (tabela) — agora com dose_min/dose_max numéricos
+    doses_estruturadas = _extrair_doses_estruturadas(
+        dose_linhas=admin.get('dose_linhas') or [],
+        via=via_administracao,
+        frequencia_texto=frequencia,
+        duracao_texto=duracao_tratamento,
+        especies_str=especies,
+    )
+
+    # ── Indicações / Interações / Farmacologia ───────────────────────────
     indicacoes  = _limpar(secoes.get('Indicações e contraindicações'), 800)
     interacoes  = _limpar(secoes.get('Interações medicamentosas'), 500)
-    farmacologia = _limpar(secoes.get('Farmacologia'), 800)
 
-    # Observações = indicações + interações concatenadas
+    # Farmacologia: prefere schema.org (mais limpo), fallback para seção
+    farmacologia = _limpar(farmacologia_meta or secoes.get('Farmacologia'), 2000)
+
+    # Observações: indicações + interações + warnings
     obs_partes = []
     if indicacoes:
         obs_partes.append(f"Indicações/Contraindicações:\n{indicacoes}")
     if interacoes:
         obs_partes.append(f"Interações medicamentosas:\n{interacoes}")
+    if warning_meta:
+        obs_partes.append(f"Advertências:\n{_limpar(warning_meta, 600)}")
     observacoes = '\n\n'.join(obs_partes) or None
 
-    # Bula = farmacologia ou descritivo do produto (seção Sobre)
+    # Bula: farmacologia (rica) → description schema.org → descritivo da seção Sobre
     sobre_txt = secoes.get('Sobre') or ''
-    bula = _limpar(farmacologia or _extrair_descritivo(sobre_txt), 5000)
-
-    # Princípio ativo — tenta extrair da seção Sobre
-    principio_ativo = _extrair_campo(
-        sobre_txt,
-        'Princípio ativo', 'Princípio Ativo', 'Substância ativa',
-        'Composição', 'Componente ativo', 'Fórmula'
+    bula = _limpar(
+        farmacologia or description_meta or _extrair_descritivo(sobre_txt),
+        5000
     )
-    # Fallback: classificação como princípio se não encontrou
-    if not principio_ativo and especies:
-        principio_ativo = None  # não força
 
     return ProdutoVetsmart(
         vetsmart_id         = pid,
@@ -337,6 +406,7 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         farmacologia        = farmacologia,
         bula                = bula,
         apresentacoes       = apresentacoes,
+        doses               = doses_estruturadas,
     )
 
 
@@ -425,10 +495,309 @@ def _parsear_admin_doses(texto: str) -> dict:
     return {
         'via':       _juntar(coleta['via'][:2], 80),
         'dose':      _juntar(coleta['dose'][:6], 300),
+        'dose_linhas': coleta['dose'],  # linhas brutas para parser estruturado
         'frequencia': _juntar(coleta['frequencia'][:2], 100),
         'duracao':   _juntar(coleta['duracao'][:2], 100),
         'obs':       _juntar(coleta['obs'][:4], 400),
     }
+
+
+# --- Parser estruturado de doses (com campos numéricos) ---------------------
+_RE_DOSE_MGKG = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'(mg|mcg|ml|ui)\s*/\s*kg',
+    re.IGNORECASE,
+)
+_RE_DOSE_ANIMAL = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'(mg|mcg|ml|pipeta|gotas?|comprimidos?|c[aá]psulas?)\s*/\s*animal',
+    re.IGNORECASE,
+)
+_RE_FAIXA_ATE   = re.compile(r'at[eé]\s*(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
+_RE_FAIXA_ACIMA = re.compile(r'acima\s+de\s+(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
+_RE_FAIXA_ENTRE = re.compile(
+    r'entre\s+(\d+(?:[,\.]\d+)?)\s*(?:e|-|–|a)\s*(\d+(?:[,\.]\d+)?)\s*kg',
+    re.IGNORECASE,
+)
+# Ruído (word-boundary para "0 mg" NÃO casar com "50 mg")
+_RE_RUIDO = re.compile(
+    r'(?:^|\s)(?:indica[cç][aã]o:\s*0|0\s*(?:mg|ml)\b)(?:\s|$)',
+    re.IGNORECASE,
+)
+_RE_ESPECIE_TXT = re.compile(
+    r'\b(c[aã]es?\s*e\s*gatos?|c[aã]es?|gatos?|c[aã]o|gato|felinos?|caninos?)\b',
+    re.IGNORECASE,
+)
+
+
+def _f(v: str) -> float:
+    return float(str(v).replace(',', '.'))
+
+
+def _norm_especie_code(txt: str) -> str:
+    t = (txt or '').lower()
+    ta = t.replace('ã', 'a').replace('ç', 'c')
+    tem_cao = 'cao' in ta or 'canino' in ta or 'cães' in t
+    tem_gato = 'gato' in ta or 'felino' in ta
+    if tem_cao and tem_gato:
+        return 'AMBOS'
+    if tem_gato:
+        return 'GATOS'
+    if tem_cao:
+        return 'CAES'
+    return 'AMBOS'
+
+
+def _intervalo_horas(freq_texto: str) -> Optional[int]:
+    """Converte texto de frequência em intervalo em horas.
+    Cobre: '12/12 horas', '12 em 12 horas', '2 vezes ao dia', 'a cada 8h'."""
+    if not freq_texto:
+        return None
+    t = freq_texto.lower()
+    if 'dose unica' in t.replace('ú', 'u') or 'dose única' in t:
+        return None
+    for pat in [
+        r'(\d+)\s*/\s*\d+\s*horas?',
+        r'(\d+)\s*em\s*\d+\s*horas?',          # "12 em 12 horas"
+        r'a\s+cada\s+(\d+)\s*(?:h|horas?)\b',
+        r'a\s+cada\s+(\d+)\s*dias?',           # vira *24
+    ]:
+        m = re.search(pat, t)
+        if m:
+            v = int(m.group(1))
+            return v * 24 if 'dia' in pat else v
+    m = re.search(r'(\d+)\s*(?:x|vezes?)\s*(?:ao|por)?\s*dia', t)
+    if m:
+        n = int(m.group(1))
+        return 24 // n if n > 0 else None
+    return None
+
+
+def _duracao_dias(dur_texto: str):
+    """Retorna (min, max) em dias. (None, None) se não detectou."""
+    if not dur_texto:
+        return (None, None)
+    t = dur_texto.lower()
+    m = re.search(r'(\d+)\s*(?:a|-|–|até)\s*(\d+)\s*dias?', t)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    m = re.search(r'(?:até|ate)\s*(\d+)\s*dias?', t)
+    if m:
+        return (None, int(m.group(1)))
+    m = re.search(r'(\d+)\s*dias?', t)
+    if m:
+        n = int(m.group(1))
+        return (n, n)
+    m = re.search(r'(\d+)\s*semanas?', t)
+    if m:
+        d = int(m.group(1)) * 7
+        return (d, d)
+    return (None, None)
+
+
+def _extrair_doses_estruturadas(
+    dose_linhas: List[str],
+    via: Optional[str],
+    frequencia_texto: Optional[str],
+    duracao_texto: Optional[str],
+    especies_str: Optional[str],
+) -> List[Dict[str, Any]]:
+    """Monta registros de dose estruturados a partir das linhas brutas da
+    seção 'Administração e doses'.
+
+    Formato de saída (compatível com DoseMedicamento extendido):
+      {especie, faixa_peso (string legível), via, dose (string legível),
+       frequencia, duracao, observacao,
+       -- numéricos --
+       especie_code (CAES|GATOS|AMBOS|OUTRO),
+       peso_min_kg, peso_max_kg,
+       dose_min, dose_max, dose_unidade (MG_KG|...),
+       intervalo_horas, duracao_min_dias, duracao_max_dias,
+       dose_raw_text, fonte, confianca}
+    """
+    if not dose_linhas:
+        return []
+
+    intervalo = _intervalo_horas(frequencia_texto or '')
+    dur_min, dur_max = _duracao_dias(duracao_texto or '')
+    esp_default = _norm_especie_code(especies_str or '')
+
+    # Linhas — usa o split existente + quebra adicional por "." e ";"
+    texto_join = '\n'.join(dose_linhas)
+    linhas = [l.strip() for l in re.split(r'[\n.;]+', texto_join) if l.strip()]
+
+    registros: List[Dict[str, Any]] = []
+    esp_ctx = esp_default
+    peso_min_ctx, peso_max_ctx = None, None
+    peso_faixa_str = None
+
+    for linha in linhas:
+        if _RE_RUIDO.search(linha):
+            continue
+
+        code_linha = _norm_especie_code(linha)
+        if code_linha != esp_default and code_linha != 'AMBOS':
+            esp_ctx = code_linha
+
+        # Contexto de faixa de peso (só com preposição)
+        m = _RE_FAIXA_ENTRE.search(linha)
+        if m:
+            peso_min_ctx, peso_max_ctx = _f(m.group(1)), _f(m.group(2))
+            peso_faixa_str = f"Entre {m.group(1)} e {m.group(2)} kg"
+        elif _RE_FAIXA_ATE.search(linha):
+            m = _RE_FAIXA_ATE.search(linha)
+            peso_min_ctx, peso_max_ctx = 0.0, _f(m.group(1))
+            peso_faixa_str = f"Até {m.group(1)} kg"
+        elif _RE_FAIXA_ACIMA.search(linha):
+            m = _RE_FAIXA_ACIMA.search(linha)
+            peso_min_ctx, peso_max_ctx = _f(m.group(1)), None
+            peso_faixa_str = f"Acima de {m.group(1)} kg"
+
+        # mg/kg (com espaços tolerados)
+        m = _RE_DOSE_MGKG.search(linha)
+        if m:
+            dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
+            un_map = {'mg': 'MG_KG', 'mcg': 'MCG_KG', 'ml': 'ML_KG', 'ui': 'UI_KG'}
+            unidade = un_map.get(m.group(3).lower(), 'MG_KG')
+            dose_str = (f"{m.group(1)} - {m.group(2)} {m.group(3)}/kg"
+                        if m.group(2) else f"{m.group(1)} {m.group(3)}/kg")
+            registros.append({
+                'especie':       _especie_label(esp_ctx),
+                'especie_code':  esp_ctx,
+                'faixa_peso':    peso_faixa_str,
+                'peso_min_kg':   peso_min_ctx,
+                'peso_max_kg':   peso_max_ctx,
+                'via':           via,
+                'dose':          dose_str,
+                'dose_min':      dose_min,
+                'dose_max':      dose_max,
+                'dose_unidade':  unidade,
+                'frequencia':    frequencia_texto,
+                'intervalo_horas': intervalo,
+                'duracao':       duracao_texto,
+                'duracao_min_dias': dur_min,
+                'duracao_max_dias': dur_max,
+                'observacao':    linha[:500] if len(linha) > 30 else None,
+                'dose_raw_text': linha,
+                'fonte':         'SCRAPER',
+                'confianca':     'MEDIA',
+            })
+            continue
+
+        # X/animal
+        m = _RE_DOSE_ANIMAL.search(linha)
+        if m:
+            dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
+            un_txt = m.group(3).lower()
+            un_map = {
+                'mg': 'MG_ANIMAL', 'mcg': 'MCG_ANIMAL', 'ml': 'ML_ANIMAL',
+                'pipeta': 'PIPETA_ANIMAL',
+                'gota': 'GOTAS_ANIMAL', 'gotas': 'GOTAS_ANIMAL',
+                'comprimido': 'COMPRIMIDOS_ANIMAL', 'comprimidos': 'COMPRIMIDOS_ANIMAL',
+                'capsula': 'COMPRIMIDOS_ANIMAL', 'capsulas': 'COMPRIMIDOS_ANIMAL',
+                'cápsula': 'COMPRIMIDOS_ANIMAL', 'cápsulas': 'COMPRIMIDOS_ANIMAL',
+            }
+            unidade = un_map.get(un_txt, 'MG_ANIMAL')
+            dose_str = (f"{m.group(1)} - {m.group(2)} {un_txt}/animal"
+                        if m.group(2) else f"{m.group(1)} {un_txt}/animal")
+            registros.append({
+                'especie':       _especie_label(esp_ctx),
+                'especie_code':  esp_ctx,
+                'faixa_peso':    peso_faixa_str,
+                'peso_min_kg':   peso_min_ctx,
+                'peso_max_kg':   peso_max_ctx,
+                'via':           via,
+                'dose':          dose_str,
+                'dose_min':      dose_min,
+                'dose_max':      dose_max,
+                'dose_unidade':  unidade,
+                'frequencia':    frequencia_texto,
+                'intervalo_horas': intervalo,
+                'duracao':       duracao_texto,
+                'duracao_min_dias': dur_min,
+                'duracao_max_dias': dur_max,
+                'observacao':    linha[:500] if len(linha) > 30 else None,
+                'dose_raw_text': linha,
+                'fonte':         'SCRAPER',
+                'confianca':     'MEDIA',
+            })
+
+    # Dedup por (especie_code, peso_min, peso_max, dose_min, dose_max, unidade)
+    vistos = set()
+    unicos = []
+    for r in registros:
+        chave = (r['especie_code'], r['peso_min_kg'], r['peso_max_kg'],
+                 r['dose_min'], r['dose_max'], r['dose_unidade'])
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        unicos.append(r)
+    return unicos
+
+
+def _especie_label(code: str) -> str:
+    return {'CAES': 'Cães', 'GATOS': 'Gatos', 'AMBOS': 'Cães e Gatos'}.get(code, code)
+
+
+# --- Parser numérico de apresentação -----------------------------------------
+_RE_CONC_MGML = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|ui)\s*/\s*ml\b', re.IGNORECASE)
+_RE_CONC_MG   = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui|%)\b', re.IGNORECASE)
+_RE_VOL_PAREN = re.compile(r'\((\d+(?:[,\.]\d+)?)\s*(ml|un|g|kg|l)\b', re.IGNORECASE)
+_RE_NOME_NUM_FINAL = re.compile(r'\b(\d+(?:[,\.]\d+)?)\s*$')  # "Rilexine palatável 75"
+
+
+def _estruturar_apresentacao_campos(forma: str, conc_raw: str, nome_produto: str) -> Dict[str, Any]:
+    """Extrai valores numéricos da string de concentração/nome da apresentação.
+
+    Retorna dict com: nome_variante, concentracao_valor, concentracao_unidade,
+    volume_valor, volume_unidade.
+    """
+    out: Dict[str, Any] = {
+        'nome_variante':        None,
+        'concentracao_valor':   None,
+        'concentracao_unidade': None,
+        'volume_valor':         None,
+        'volume_unidade':       None,
+    }
+    if not conc_raw:
+        # Pode ter número no nome da variante — precisa consultar contexto mais amplo
+        return out
+
+    # 1) Volume entre parênteses — "(10 un)", "(50 ml)"
+    m = _RE_VOL_PAREN.search(conc_raw)
+    if m:
+        out['volume_valor'] = _f(m.group(1))
+        out['volume_unidade'] = m.group(2).lower()
+
+    # 2) Concentração mg/ml (checa antes de mg só)
+    m = _RE_CONC_MGML.search(conc_raw)
+    if m:
+        out['concentracao_valor'] = _f(m.group(1))
+        out['concentracao_unidade'] = f"{m.group(2).lower()}/ml"
+    else:
+        m = _RE_CONC_MG.search(conc_raw)
+        if m:
+            out['concentracao_valor'] = _f(m.group(1))
+            out['concentracao_unidade'] = m.group(2).lower()
+
+    # 3) Nome variante — texto antes da concentração/volume
+    nv = conc_raw
+    nv = re.sub(r'\s*\([^)]*\)\s*$', '', nv).strip()
+    nv = re.sub(r'\s*\d+(?:[,\.]\d+)?\s*(mg|mcg|g|ui|%|ml)[\s/]*\w*\s*$', '', nv, flags=re.IGNORECASE).strip()
+    if nv and nv.lower() != (nome_produto or '').lower():
+        out['nome_variante'] = nv[:100]
+    else:
+        out['nome_variante'] = nome_produto[:100] if nome_produto else None
+
+    # 4) Fallback: se não achou concentração, tenta pegar número no final do nome_variante
+    # Ex.: "Rilexine palatável 75" → 75 mg (heurística, assume mg)
+    if out['concentracao_valor'] is None and out['nome_variante']:
+        m = _RE_NOME_NUM_FINAL.search(out['nome_variante'])
+        if m:
+            out['concentracao_valor'] = _f(m.group(1))
+            out['concentracao_unidade'] = 'mg'  # presume mg
+
+    return out
 
 
 def _extrair_campo(texto: str, *rotulos) -> Optional[str]:
@@ -533,50 +902,73 @@ def _extrair_descritivo(sobre_txt: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Scraping da lista de produtos
 # ---------------------------------------------------------------------------
-def scrape_lista_produtos(page) -> List[Dict[str, Any]]:
-    log.info(f"Abrindo lista: {LIST_URL}")
-    page.goto(LIST_URL, wait_until="networkidle", timeout=60000)
-    aguardar_e_aceitar_cookies(page)
+def _coletar_links_da_pagina(page, ids_vistos: set) -> List[Dict[str, Any]]:
+    """Extrai todos os links de produto novos da página atual."""
+    novos = []
+    links = page.query_selector_all("a[href*='/produto/']")
+    for link in links:
+        href = link.get_attribute("href") or ""
+        m = re.search(r"/(?:cg|CG)/produto/(\d+)", href, re.IGNORECASE)
+        if not m:
+            continue
+        pid = int(m.group(1))
+        if pid in ids_vistos:
+            continue
+        ids_vistos.add(pid)
+        nome_raw = (link.inner_text() or "").strip()
+        nome = re.sub(r"^\s*(Avaliar|Ver|Detalhes)\s+", "", nome_raw, flags=re.IGNORECASE).strip()
+        # O <a> do card contém nome + fabricante em linhas separadas
+        # (ex: "ACQUA Limp\nBIOFARM"). Pegamos só a primeira linha não vazia
+        # para bater com o nome limpo que o detalhe retorna (e evitar duplicatas).
+        for linha in nome.splitlines():
+            linha = linha.strip()
+            if linha:
+                nome = linha
+                break
+        url = BASE_URL + href if href.startswith("/") else href
+        novos.append({"id": pid, "nome": (nome or f"Produto #{pid}")[:100], "url": url})
+    return novos
 
-    produtos = []
-    pagina = 1
 
-    while True:
-        log.info(f"  → Página {pagina}")
+def scrape_lista_produtos(page, pagina_max: int = 61) -> List[Dict[str, Any]]:
+    """Coleta todos os produtos percorrendo as páginas numeradas do VetSmart.
+
+    URL: https://vetsmart.com.br/cg/produto/lista/{N}  (N de 1 a pagina_max)
+    Última página conhecida (2026-04): 61 (56 produtos; páginas 1–60 têm 100 cada).
+    """
+    produtos: List[Dict[str, Any]] = []
+    ids_vistos: set = set()
+    cookies_aceitos = False
+
+    for n in range(1, pagina_max + 1):
+        url_pag = f"{LIST_URL}/{n}"
+        log.info(f"Abrindo lista página {n}/{pagina_max}: {url_pag}")
         try:
-            page.wait_for_selector("a[href*='/produto/']", timeout=15000)
+            page.goto(url_pag, wait_until="networkidle", timeout=60000)
+        except Exception as e:
+            log.warning(f"  ! erro ao abrir página {n}: {e}")
+            continue
+
+        if not cookies_aceitos:
+            aguardar_e_aceitar_cookies(page)
+            cookies_aceitos = True
+
+        try:
+            page.wait_for_selector("a[href*='/produto/']", timeout=10000)
         except Exception:
+            log.warning(f"  ! página {n} sem produtos — parando")
             break
 
-        links = page.query_selector_all("a[href*='/produto/']")
-        encontrados = 0
-        for link in links:
-            href = link.get_attribute("href") or ""
-            m = re.search(r"/(?:cg|CG)/produto/(\d+)", href, re.IGNORECASE)
-            if not m:
-                continue
-            pid = int(m.group(1))
-            if any(p["id"] == pid for p in produtos):
-                continue
-            nome_raw = (link.inner_text() or "").strip()
-            nome = re.sub(r"^\s*(Avaliar|Ver|Detalhes)\s+", "", nome_raw, flags=re.IGNORECASE).strip()
-            url = BASE_URL + href if href.startswith("/") else href
-            produtos.append({"id": pid, "nome": (nome or f"Produto #{pid}")[:100], "url": url})
-            encontrados += 1
+        novos = _coletar_links_da_pagina(page, ids_vistos)
+        produtos.extend(novos)
+        log.info(f"  +{len(novos)} (total acumulado: {len(produtos)})")
 
-        log.info(f"     +{encontrados} (total: {len(produtos)})")
-        if encontrados == 0:
+        if not novos:
+            # Nenhum produto novo → fim da paginação
+            log.info(f"  → página {n} não trouxe produtos novos, encerrando")
             break
 
-        proximo = page.query_selector(
-            "a[rel='next'], .pagination .next, a:has-text('Próxima'), a:has-text('>')"
-        )
-        if not proximo:
-            break
-        proximo.click()
-        page.wait_for_load_state("networkidle", timeout=15000)
-        pagina += 1
-        time.sleep(0.8)
+        time.sleep(DELAY_PAGINAS)
 
     log.info(f"Total na lista: {len(produtos)} produtos.")
     return produtos
@@ -609,12 +1001,72 @@ def scrape_detalhe_produto(page, info: Dict) -> ProdutoVetsmart:
 # Banco – cruzar e atualizar
 # ---------------------------------------------------------------------------
 def _norm(texto: str) -> str:
+    """Normaliza nome para comparação idempotente: remove acentos, baixa,
+    colapsa espaços/quebras internas em um único espaço, strip."""
     import unicodedata
-    return unicodedata.normalize("NFKD", texto or "").encode("ASCII", "ignore").decode().lower().strip()
+    s = unicodedata.normalize("NFKD", texto or "").encode("ASCII", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _inserir_doses(cur, medicamento_id: int, doses: List[Dict[str, Optional[str]]]):
+    """Insere doses estruturadas (campos legados + numéricos). Só roda se o
+    medicamento ainda não tem doses cadastradas."""
+    if not doses:
+        return
+    cur.execute("SELECT COUNT(*) AS c FROM dose_medicamento WHERE medicamento_id = %s", (medicamento_id,))
+    row = cur.fetchone()
+    existentes = row["c"] if isinstance(row, dict) else row[0]
+    if existentes:
+        return  # não sobrescreve doses já cadastradas
+
+    def _trunc(v, n):
+        """Trunca para caber em varchar(n); retorna None se v vier vazio/None."""
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        return s[:n]
+
+    for d in doses:
+        cur.execute("""
+            INSERT INTO dose_medicamento
+              (medicamento_id, especie, faixa_peso, via, dose, frequencia, duracao, observacao,
+               especie_code, peso_min_kg, peso_max_kg,
+               dose_min, dose_max, dose_unidade,
+               intervalo_horas, duracao_min_dias, duracao_max_dias,
+               dose_raw_text, fonte, confianca)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
+                    %s,%s,%s,
+                    %s,%s,%s,
+                    %s,%s,%s,
+                    %s,%s,%s)
+        """, (
+            medicamento_id,
+            _trunc(d.get("especie"),       80),
+            _trunc(d.get("faixa_peso"),    80),
+            _trunc(d.get("via"),           80),
+            _trunc(d.get("dose"),         200),
+            _trunc(d.get("frequencia"),   120),
+            _trunc(d.get("duracao"),      120),
+            (d.get("observacao") or None),  # TEXT — sem limite
+            _trunc(d.get("especie_code"),  10),
+            d.get("peso_min_kg"),
+            d.get("peso_max_kg"),
+            d.get("dose_min"),
+            d.get("dose_max"),
+            _trunc(d.get("dose_unidade"),  30),
+            d.get("intervalo_horas"),
+            d.get("duracao_min_dias"),
+            d.get("duracao_max_dias"),
+            (d.get("dose_raw_text") or None),  # TEXT — sem limite
+            _trunc(d.get("fonte") or 'SCRAPER',     15),
+            _trunc(d.get("confianca") or 'MEDIA',   10),
+        ))
 
 
 def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
-    stats = {"atualizados": 0, "inseridos": 0, "sem_alteracao": 0}
+    stats = {"atualizados": 0, "inseridos": 0, "sem_alteracao": 0, "doses_inseridas": 0}
     por_nome = {_norm(m["nome"]): m for m in medicamentos_banco}
 
     for p in produtos:
@@ -660,10 +1112,32 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
                     if not dry_run:
                         with conn.cursor() as cur:
                             cur.execute(
-                                "INSERT INTO apresentacao_medicamento (medicamento_id, forma, concentracao) VALUES (%s,%s,%s)",
-                                (existente["id"], ap["forma"][:50], ap["concentracao"][:100])
+                                """INSERT INTO apresentacao_medicamento
+                                     (medicamento_id, forma, concentracao,
+                                      nome_variante, concentracao_valor, concentracao_unidade,
+                                      volume_valor, volume_unidade)
+                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                                (existente["id"], ap["forma"][:50], ap["concentracao"][:100],
+                                 (ap.get("nome_variante") or None) and ap.get("nome_variante")[:100],
+                                 ap.get("concentracao_valor"),
+                                 (ap.get("concentracao_unidade") or None) and ap.get("concentracao_unidade")[:20],
+                                 ap.get("volume_valor"),
+                                 (ap.get("volume_unidade") or None) and ap.get("volume_unidade")[:20])
                             )
                     apres_existentes.add(chave)
+
+            # Doses estruturadas (não sobrescreve existentes)
+            if p.doses and not dry_run:
+                with conn.cursor() as cur:
+                    antes = stats["doses_inseridas"]
+                    _inserir_doses(cur, existente["id"], p.doses)
+                    # checa quantas foram inseridas realmente
+                    cur.execute("SELECT COUNT(*) AS c FROM dose_medicamento WHERE medicamento_id = %s", (existente["id"],))
+                    row = cur.fetchone()
+                    total = row["c"] if isinstance(row, dict) else row[0]
+                    # Se bateu com len(p.doses), contabiliza
+                    if total == len(p.doses) and antes == stats["doses_inseridas"]:
+                        stats["doses_inseridas"] += len(p.doses)
         else:
             log.info(f"  INSERIR: '{p.nome}'  [{p.classificacao or '—'}]")
             if not dry_run:
@@ -686,9 +1160,21 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
                     for ap in p.apresentacoes:
                         if ap.get("forma") not in ("N/A", "", None):
                             cur.execute(
-                                "INSERT INTO apresentacao_medicamento (medicamento_id, forma, concentracao) VALUES (%s,%s,%s)",
-                                (novo_id, ap["forma"][:50], ap["concentracao"][:100])
+                                """INSERT INTO apresentacao_medicamento
+                                     (medicamento_id, forma, concentracao,
+                                      nome_variante, concentracao_valor, concentracao_unidade,
+                                      volume_valor, volume_unidade)
+                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                                (novo_id, ap["forma"][:50], ap["concentracao"][:100],
+                                 (ap.get("nome_variante") or None),
+                                 ap.get("concentracao_valor"),
+                                 (ap.get("concentracao_unidade") or None),
+                                 ap.get("volume_valor"),
+                                 (ap.get("volume_unidade") or None))
                             )
+                    _inserir_doses(cur, novo_id, p.doses)
+                    if p.doses:
+                        stats["doses_inseridas"] += len(p.doses)
             stats["inseridos"] += 1
 
     return stats
@@ -701,12 +1187,25 @@ def main():
     global CREATED_BY_USER_ID
 
     p = argparse.ArgumentParser()
-    p.add_argument("--dry-run",        action="store_true")
-    p.add_argument("--somente-listar", action="store_true")
-    p.add_argument("--limite",         type=int, default=0)
-    p.add_argument("--usar-cache",     action="store_true")
+    p.add_argument("--dry-run",        action="store_true",
+                   help="Não grava no banco; só simula a importação.")
+    p.add_argument("--somente-listar", action="store_true",
+                   help="Apenas lista medicamentos já existentes no banco e sai.")
+    p.add_argument("--somente-cache",  action="store_true",
+                   help="Faz scraping e atualiza o cache, mas não importa nada para o banco.")
+    p.add_argument("--limite",         type=int, default=0,
+                   help="Limita ao N primeiro produtos da lista (0 = sem limite).")
+    p.add_argument("--usar-cache",     action="store_true",
+                   help="Usa o cache existente em vez de raspar do site.")
+    p.add_argument("--resume",         action="store_true",
+                   help="Continua um scraping interrompido — pula produtos já no cache.")
+    p.add_argument("--scrape-importar", action="store_true",
+                   help="Modo Heroku/streaming: scrape + INSERT direto no banco (sem depender "
+                        "do cache em disco). Skipa produtos cujo nome já existe no DB. "
+                        "Commita a cada 25 produtos, então é seguro contra crash de dyno.")
     p.add_argument("--created-by",     type=int, default=CREATED_BY_USER_ID)
-    p.add_argument("--visible",        action="store_true")
+    p.add_argument("--visible",        action="store_true",
+                   help="Roda o navegador em modo visível (debug).")
     args = p.parse_args()
     CREATED_BY_USER_ID = args.created_by
 
@@ -720,6 +1219,129 @@ def main():
         conn.close()
         return
 
+    # ─── Modo streaming (Heroku-friendly, sem cache em disco) ─────────────
+    if args.scrape_importar:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            log.error("Instale: pip install playwright && playwright install chromium")
+            conn.close()
+            sys.exit(1)
+
+        nomes_existentes = {_norm(m["nome"]) for m in medicamentos_banco}
+        log.info(f"Modo --scrape-importar: {len(nomes_existentes)} nomes já no DB serão pulados.")
+
+        COMMIT_EVERY = 25
+        contador = {"scrapeados": 0, "inseridos": 0, "pulados": 0, "falhas": 0}
+
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=not args.visible)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                locale="pt-BR",
+                viewport={"width": 1280, "height": 800},
+            )
+            page = context.new_page()
+
+            log.info("Abrindo home para aceitar cookies…")
+            page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
+            aguardar_e_aceitar_cookies(page, timeout=8000)
+            time.sleep(1)
+
+            lista = scrape_lista_produtos(page)
+            if args.limite > 0:
+                lista = lista[:args.limite]
+
+            total = len(lista)
+            for i, info in enumerate(lista, 1):
+                nome_norm = _norm(info["nome"])
+                if nome_norm in nomes_existentes:
+                    contador["pulados"] += 1
+                    if i % 50 == 0:
+                        log.info(f"[{i}/{total}] (pulado: já no DB) {info['nome']}")
+                    continue
+
+                log.info(f"[{i}/{total}] {info['nome']}")
+                try:
+                    prod = scrape_detalhe_produto(page, info)
+                    contador["scrapeados"] += 1
+                    log.info(
+                        f"    ✓ class={prod.classificacao!r} "
+                        f"pa={prod.principio_ativo!r} "
+                        f"apres={len(prod.apresentacoes)} "
+                        f"doses={len(prod.doses)}"
+                    )
+
+                    # INSERT imediato no DB (mas sem commit ainda)
+                    try:
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO medicamento
+                                  (nome, classificacao, principio_ativo, via_administracao,
+                                   dosagem_recomendada, frequencia, duracao_tratamento,
+                                   observacoes, bula, created_by)
+                                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                            """, (
+                                prod.nome[:100],
+                                (prod.classificacao or "")[:100] or None,
+                                (prod.principio_ativo or "")[:200] or None,
+                                (prod.via_administracao or "")[:80] or None,
+                                prod.dosagem_recomendada,
+                                (prod.frequencia or "")[:100] or None,
+                                prod.duracao_tratamento, prod.observacoes,
+                                prod.bula, CREATED_BY_USER_ID,
+                            ))
+                            novo_id = cur.fetchone()["id"]
+                            for ap in prod.apresentacoes:
+                                if ap.get("forma") not in ("N/A", "", None):
+                                    cur.execute(
+                                        """INSERT INTO apresentacao_medicamento
+                                             (medicamento_id, forma, concentracao,
+                                              nome_variante, concentracao_valor, concentracao_unidade,
+                                              volume_valor, volume_unidade)
+                                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                                        (novo_id, ap["forma"][:50], ap["concentracao"][:100],
+                                         (ap.get("nome_variante") or None) and ap.get("nome_variante")[:100],
+                                         ap.get("concentracao_valor"),
+                                         (ap.get("concentracao_unidade") or None) and ap.get("concentracao_unidade")[:20],
+                                         ap.get("volume_valor"),
+                                         (ap.get("volume_unidade") or None) and ap.get("volume_unidade")[:20])
+                                    )
+                            _inserir_doses(cur, novo_id, prod.doses)
+                        nomes_existentes.add(nome_norm)
+                        contador["inseridos"] += 1
+                    except Exception as e_db:
+                        log.error(f"    ✗ ERRO INSERT '{prod.nome}': {e_db}")
+                        conn.rollback()
+                        contador["falhas"] += 1
+                except Exception as exc:
+                    log.warning(f"    ⚠ Erro scrape: {exc}")
+                    contador["falhas"] += 1
+
+                time.sleep(DELAY_PAGINAS)
+
+                # Commit batched a cada COMMIT_EVERY produtos
+                if i % COMMIT_EVERY == 0:
+                    conn.commit()
+                    log.info(f"  ↳ commit ({contador['inseridos']} inseridos, {contador['pulados']} pulados, {contador['falhas']} falhas)")
+
+            conn.commit()  # commit final
+            browser.close()
+
+        conn.close()
+        print(f"""
+{'='*65}
+  RESULTADO (modo streaming)
+{'='*65}
+  Total na lista:    {total}
+  Scrapeados:        {contador['scrapeados']}
+  Inseridos no DB:   {contador['inseridos']}
+  Pulados (já no DB):{contador['pulados']}
+  Falhas:            {contador['falhas']}
+{'='*65}
+""")
+        return
+
     produtos: List[ProdutoVetsmart] = []
 
     if args.usar_cache and os.path.exists(CACHE_FILE):
@@ -730,6 +1352,8 @@ def main():
             # Compatibilidade com caches antigos
             for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia']:
                 d.setdefault(campo_novo, None)
+            d.setdefault('doses', [])
+            d.setdefault('apresentacoes', [])
             produtos.append(ProdutoVetsmart(**d))
         log.info(f"{len(produtos)} produtos carregados do cache.")
     else:
@@ -759,48 +1383,90 @@ def main():
             if args.limite > 0:
                 lista = lista[:args.limite]
 
+            # Resumo: pula produtos já no cache (modo --resume).
+            ja_scrapeados_ids: set = set()
+            if args.resume and os.path.exists(CACHE_FILE):
+                try:
+                    with open(CACHE_FILE, encoding='utf-8') as fh:
+                        cache_prev = json.load(fh)
+                    for d in cache_prev:
+                        d.setdefault('doses', [])
+                        d.setdefault('apresentacoes', [])
+                        for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia']:
+                            d.setdefault(campo_novo, None)
+                        produtos.append(ProdutoVetsmart(**d))
+                        ja_scrapeados_ids.add(d.get('vetsmart_id'))
+                    log.info(f"Resume: {len(produtos)} produtos já no cache. Continuando…")
+                except Exception as e:
+                    log.warning(f"Resume: cache inválido ({e}); recomeçando do zero.")
+                    produtos.clear()
+                    ja_scrapeados_ids.clear()
+
+            def _persistir_cache():
+                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump([{
+                        "vetsmart_id":         pp.vetsmart_id,
+                        "nome":                pp.nome,
+                        "fabricante":          pp.fabricante,
+                        "classificacao":       pp.classificacao,
+                        "especies":            pp.especies,
+                        "principio_ativo":     pp.principio_ativo,
+                        "via_administracao":   pp.via_administracao,
+                        "dosagem_recomendada": pp.dosagem_recomendada,
+                        "frequencia":          pp.frequencia,
+                        "duracao_tratamento":  pp.duracao_tratamento,
+                        "indicacoes":          pp.indicacoes,
+                        "observacoes":         pp.observacoes,
+                        "interacoes":          pp.interacoes,
+                        "farmacologia":        pp.farmacologia,
+                        "bula":                pp.bula,
+                        "apresentacoes":       pp.apresentacoes,
+                        "doses":               pp.doses,
+                    } for pp in produtos], f, ensure_ascii=False, indent=2)
+
+            CACHE_EVERY = 25
             total = len(lista)
             for i, info in enumerate(lista, 1):
+                if info["id"] in ja_scrapeados_ids:
+                    log.info(f"[{i}/{total}] (cache) {info['nome']}")
+                    continue
                 log.info(f"[{i}/{total}] {info['nome']}")
                 try:
                     prod = scrape_detalhe_produto(page, info)
                     produtos.append(prod)
+                    ja_scrapeados_ids.add(info["id"])
                     log.info(
                         f"    ✓ fab={prod.fabricante!r} "
                         f"class={prod.classificacao!r} "
                         f"pa={prod.principio_ativo!r} "
                         f"via={prod.via_administracao!r} "
                         f"dose={prod.dosagem_recomendada!r} "
-                        f"apres={len(prod.apresentacoes)}"
+                        f"apres={len(prod.apresentacoes)} "
+                        f"doses={len(prod.doses)}"
                     )
                 except Exception as exc:
                     log.warning(f"    ⚠ Erro: {exc}")
                     produtos.append(ProdutoVetsmart(vetsmart_id=info["id"], nome=info["nome"]))
+                    ja_scrapeados_ids.add(info["id"])
                 time.sleep(DELAY_PAGINAS)
+                # Persistência incremental — preserva progresso se o script for interrompido.
+                if i % CACHE_EVERY == 0:
+                    try:
+                        _persistir_cache()
+                        log.info(f"  ↳ cache parcial salvo ({len(produtos)} produtos)")
+                    except Exception as e:
+                        log.warning(f"  ⚠ Falha ao salvar cache parcial: {e}")
 
             browser.close()
 
-        # Salva cache
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump([{
-                "vetsmart_id":         p.vetsmart_id,
-                "nome":                p.nome,
-                "fabricante":          p.fabricante,
-                "classificacao":       p.classificacao,
-                "especies":            p.especies,
-                "principio_ativo":     p.principio_ativo,
-                "via_administracao":   p.via_administracao,
-                "dosagem_recomendada": p.dosagem_recomendada,
-                "frequencia":          p.frequencia,
-                "duracao_tratamento":  p.duracao_tratamento,
-                "indicacoes":          p.indicacoes,
-                "observacoes":         p.observacoes,
-                "interacoes":          p.interacoes,
-                "farmacologia":        p.farmacologia,
-                "bula":                p.bula,
-                "apresentacoes":       p.apresentacoes,
-            } for p in produtos], f, ensure_ascii=False, indent=2)
+        # Salva cache final
+        _persistir_cache()
         log.info(f"Cache salvo em '{CACHE_FILE}'.")
+
+    if args.somente_cache:
+        log.info(f"--somente-cache: {len(produtos)} produtos no cache; sem importar para o banco.")
+        conn.close()
+        return
 
     if args.dry_run:
         log.info("⚠️  DRY-RUN — sem alterações no banco.")

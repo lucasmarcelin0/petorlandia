@@ -150,6 +150,8 @@ ruamel.yaml==0.18.16
 ruamel.yaml.clib==0.2.15
 s3transfer==0.13.0
 service-identity==24.2.0
+selenium==4.43.0
+playwright==1.51.0
 signxml==4.4.0
 simple-websocket==1.1.0
 simplejson==3.20.2
