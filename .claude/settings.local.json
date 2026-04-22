@@ -36,7 +36,15 @@
       "WebFetch(domain:pl-vetsmart.zendesk.com)",
       "WebFetch(domain:plano.vetsmart.com.br)",
       "Bash(playwright install *)",
-      "Bash(tee /tmp/scrape_batch.log)"
+      "Bash(tee /tmp/scrape_batch.log)",
+      "Bash(awk -F: '$1+0>=12335 && $1+0<=12650 {print}')",
+      "Bash(awk 'NR>=12335 && NR<=12560 && /render_template|^def /' C:/Users/lucas/petorlandia/petorlandia/app.py)",
+      "Bash(awk -F: 'BEGIN{last=0} {if \\($1>=12335 && $1<=12551\\) print $0}')",
+      "Bash(tee /tmp/prednisona_scrape.log)",
+      "Bash(node -e ' *)",
+      "Bash(find /c/Users/lucas/petorlandia/petorlandia -type f -name \"*.py\" -exec grep -l \"TODO\\\\|FIXME\" {} \\\\;)",
+      "WebFetch(domain:prefeitura.pbh.gov.br)",
+      "WebFetch(domain:www.gov.br)"
     ]
   }
 }

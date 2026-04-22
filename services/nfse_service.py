@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 from typing import Any, Dict, Optional, Protocol
-from xml.etree import ElementTree as ET
+# Parsing de XML externo (resposta de prefeitura): usamos defusedxml.ElementTree
+# como drop-in do stdlib para blindar XXE, billion-laughs, SSRF via DTD.
+# Veja security/xml_safe.py para a justificativa detalhada.
+from xml.etree import ElementTree as _ET_NATIVE  # só para os tipos de exceção
+from security.xml_safe import SafeET as ET
 
 import logging
 
@@ -434,7 +438,14 @@ def _parse_nfse_error_xml(xml_text: str) -> tuple[Optional[str], Optional[str], 
         return None, None, None
     try:
         root = ET.fromstring(xml_text)
-    except ET.ParseError:
+    except _ET_NATIVE.ParseError:
+        # defusedxml re-levanta a ParseError nativa do stdlib; o except precisa
+        # apontar para a classe real, não para o alias SafeET.
+        return None, None, None
+    except Exception:
+        # defusedxml levanta EntitiesForbidden/DTDForbidden/ExternalReferenceForbidden
+        # em caso de ataque — aqui tratamos como "XML inválido" do ponto de vista
+        # da prefeitura, sem vazar o tipo exato pro chamador.
         return None, None, None
 
     def _local(tag: str) -> str:

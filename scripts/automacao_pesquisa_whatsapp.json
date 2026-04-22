@@ -1,0 +1,31 @@
+{
+  "capture": {
+    "width": 240,
+    "height": 90
+  },
+  "match": {
+    "coarse_stride": 5,
+    "fine_radius": 18,
+    "pixel_tolerance": 36,
+    "score_threshold": 0.92
+  },
+  "delays": {
+    "after_send_pesquisa": 1.2,
+    "after_whatsapp_send": 0.9,
+    "after_site_tab": 0.6,
+    "after_status_click": 1.8
+  },
+  "buttons": {
+    "send_pesquisa": {
+      "fallback_point": {
+        "x": 1139,
+        "y": 438
+      },
+      "template_path": "C:\\Users\\lucas\\petorlandia\\petorlandia\\scripts\\automacao_pesquisa_templates\\send_pesquisa.png",
+      "template_size": {
+        "width": 240,
+        "height": 90
+      }
+    }
+  }
+}

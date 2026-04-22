@@ -1,92 +1,141 @@
 {
-  "title": "T10 Estudo SFA Orlandia",
-  "subtitle": "Acompanhamento de 10 dias apos a primeira entrevista. Apenas 15 perguntas rapidas sobre sua evolucao.",
+  "title": "T10 Atualizacao Forms Codex - SFA Orlandia",
+  "subtitle": "Acompanhamento padronizado de 10 dias, com escalas comparaveis ao T30.",
   "submit_label": "Enviar acompanhamento T10",
   "sections": [
     {
       "title": "Secao 1: Identificacao",
-      "description": "Dados para vincular esta resposta ao seu registro inicial.",
+      "description": "Confirmacao para vinculo da resposta.",
       "fields": [
         {
           "key": "cpf",
           "label": "CPF",
           "type": "text",
           "required": false,
-          "prefill": "cpf",
-          "placeholder": "Digite apenas numeros"
+          "prefill": "cpf"
         },
         {
           "key": "nome",
-          "label": "2. Nome completo (confirmacao)",
+          "label": "Nome completo",
           "type": "text",
           "required": false,
           "prefill": "nome"
         },
         {
           "key": "data_entrevista_t10",
-          "label": "3. Data desta entrevista (T10)",
+          "label": "Data desta entrevista (T10)",
           "type": "date",
           "required": true
         }
       ]
     },
     {
-      "title": "Secao 2: Evolucao da sua saude",
-      "description": "Como voce esta se sentindo 10 dias apos a primeira entrevista?",
+      "title": "Secao 2: Evolucao clinica",
+      "description": "Estado de saude e sintomas persistentes.",
       "fields": [
         {
           "key": "classificacao_melhora",
-          "label": "4. Como classifica sua melhora desde a primeira entrevista?",
+          "label": "Como classifica sua melhora desde o T0?",
           "type": "radio",
           "required": true,
           "options": [
-            "Curado(a) - Sem sintomas, retomei atividades normais",
-            "Melhorando - Sintomas leves, em recuperacao",
-            "Estacionado(a) - Nem piorou, nem melhorou",
-            "Piorando - Sintomas persistem ou pioraram",
-            "Recaida - Melhorei e piorou novamente"
+            "Curado(a) - sem sintomas",
+            "Melhorando - sintomas leves",
+            "Estavel - sem piora nem melhora",
+            "Piorando - sintomas persistem ou pioraram",
+            "Recaida - melhorei e piorei novamente"
+          ]
+        },
+        {
+          "key": "percentual_recuperacao",
+          "label": "Quanto sente que recuperou em relacao ao estado antes da doenca?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "100% recuperado - como antes da doenca",
+            "90-99% recuperado - diferencas minimas",
+            "70-89% recuperado - sequelas leves",
+            "50-69% recuperado - sequelas moderadas",
+            "Menos de 50% recuperado - limitacoes importantes",
+            "Ainda doente - sem melhora significativa"
           ]
         },
         {
           "key": "sintomas_persistentes",
-          "label": "5. Quais sintomas ainda persistem? (marque todos)",
+          "label": "Sintomas persistentes hoje (marque todos)",
           "type": "checkboxes",
           "required": true,
           "options": [
-            "Febre",
-            "Dores articulares (juntas)",
-            "Dores musculares",
-            "Cansaco extremo/fadiga",
+            "Febre alta (>38,5 C)",
+            "Dor forte atras dos olhos",
+            "Dores musculares intensas",
+            "Dores nas articulacoes (juntas)",
             "Manchas vermelhas na pele",
-            "Coceira",
-            "Dor de cabeca",
-            "Nausea/tontura",
-            "Falta de ar",
-            "Outro"
+            "Coceira no corpo",
+            "Cansaco extremo/fadiga",
+            "Dor de cabeca forte",
+            "Nausea/vomitos",
+            "Nenhum sintoma persistente"
           ]
         },
         {
-          "key": "sintomas_persistentes_outro",
-          "label": "Se marcou outro sintoma, qual?",
-          "type": "text",
-          "required": false
+          "key": "sinais_alerta",
+          "label": "Sinais de alerta desde a ultima entrevista",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Sangramento (nariz, gengiva, pele)",
+            "Urina muito escura",
+            "Olhos ou pele amarelados",
+            "Vomitos persistentes",
+            "Dor abdominal intensa",
+            "Confusao mental/tontura",
+            "Falta de ar",
+            "Nenhum sinal de alerta"
+          ]
         },
         {
-          "key": "dor_articulacoes_impacto",
-          "label": "6. A dor nas articulacoes ainda impede atividades diarias?",
+          "key": "dor_articular_intensidade",
+          "label": "Dor articular hoje (1 a 5)",
           "type": "radio",
           "required": true,
           "options": [
-            "Nao tenho mais dor articular",
-            "Sim, totalmente impedido(a) de realizar atividades",
-            "Sim, parcialmente impedido(a)",
-            "Sinto dor, mas nao impede minhas atividades",
-            "Tenho dor apenas ao realizar esforcos"
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "fadiga_intensidade",
+          "label": "Fadiga/cansaco hoje (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "impacto_atividades",
+          "label": "Impacto atual nas atividades",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nenhum",
+            "Leve - incomoda, mas nao limita",
+            "Moderado - limita algumas atividades",
+            "Importante - impede varias atividades",
+            "Incapacitante - impede atividades basicas"
           ]
         },
         {
           "key": "retornou_servico_saude",
-          "label": "7. Precisou retornar a algum servico de saude apos a primeira consulta?",
+          "label": "Precisou retornar a servico de saude desde o T0?",
           "type": "radio",
           "required": true,
           "options": [
@@ -100,32 +149,11 @@
           "type": "number",
           "required": false,
           "min": 0,
-          "step": 1,
-          "help_text": "Se nao retornou, deixe em branco ou informe 0."
-        },
-        {
-          "key": "motivo_retorno_servico",
-          "label": "Por qual motivo? (marque todos)",
-          "type": "checkboxes",
-          "required": false,
-          "options": [
-            "Piora dos sintomas",
-            "Consulta de retorno/monitoramento",
-            "Realizacao de exames",
-            "Receber resultados",
-            "Buscar segunda opiniao",
-            "Outro"
-          ]
-        },
-        {
-          "key": "motivo_retorno_servico_outro",
-          "label": "Se marcou outro motivo, qual?",
-          "type": "text",
-          "required": false
+          "step": 1
         },
         {
           "key": "internacao_t10",
-          "label": "8. Foi internado(a) ou hospitalizado(a)?",
+          "label": "Foi internado(a) desde o T0?",
           "type": "radio",
           "required": true,
           "options": [
@@ -134,87 +162,44 @@
           ]
         },
         {
-          "key": "dias_internado_t10",
-          "label": "Por quantos dias?",
+          "key": "diagnostico_definitivo",
+          "label": "Recebeu diagnostico definitivo?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim, dengue",
+            "Sim, outra arbovirose",
+            "Sim, outra sindrome febril",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Secao 3: Impacto funcional e economico acumulado",
+      "description": "Valores acumulados desde o inicio dos sintomas ate hoje.",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "Total acumulado de dias completamente incapacitado desde o inicio",
           "type": "number",
-          "required": false,
+          "required": true,
           "min": 0,
           "step": 1
         },
         {
-          "key": "local_internacao_t10",
-          "label": "Onde foi internado(a)?",
-          "type": "radio",
-          "required": false,
-          "options": [
-            "Hospital publico",
-            "Hospital particular",
-            "Ambos"
-          ]
-        },
-        {
-          "key": "diagnostico_definitivo",
-          "label": "9. Recebeu algum diagnostico definitivo de profissional de saude?",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "Nao, ainda nao sei o que tenho",
-            "Sim, recebi diagnostico (qual?)",
-            "Fiz exames mas ainda nao recebi resultado",
-            "Recebi resultado mas nao entendi/me explicaram"
-          ]
-        },
-        {
-          "key": "diagnostico_informado",
-          "label": "Se recebeu diagnostico, qual foi informado?",
-          "type": "text",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "Secao 3: Impacto acumulado",
-      "description": "Impacto total da doenca ate o momento.",
-      "fields": [
-        {
-          "key": "dias_incap_novos",
-          "label": "10. Total de dias completamente incapacitado (desde o inicio)",
-          "type": "number",
-          "required": true,
-          "min": 0,
-          "step": 1,
-          "help_text": "Soma de todos os dias que nao pode trabalhar ou estudar, incluindo os ja informados antes."
-        },
-        {
-          "key": "ausencia_familiar",
-          "label": "11. Alguem da familia ainda precisa se ausentar para cuidar de voce?",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "Nao, ninguem mais precisa faltar",
-            "Sim, ainda faltam alguns dias por semana",
-            "Nao, mas alguem reduziu carga horaria",
-            "Sim, precisamos de cuidador profissional"
-          ]
-        }
-      ]
-    },
-    {
-      "title": "Secao 4: Gastos totais ate hoje",
-      "description": "Preencha os valores acumulados ate o momento.",
-      "fields": [
-        {
           "key": "custo_remedios",
-          "label": "12a. Medicamentos (R$)",
+          "label": "Medicamentos acumulados (R$)",
           "type": "number",
           "required": true,
           "min": 0,
-          "step": 0.01,
-          "help_text": "Valor total gasto com remedios."
+          "step": 0.01
         },
         {
           "key": "custo_consultas",
-          "label": "12b. Consultas e exames (R$)",
+          "label": "Consultas/exames acumulados (R$)",
           "type": "number",
           "required": true,
           "min": 0,
@@ -222,47 +207,56 @@
         },
         {
           "key": "custo_transporte",
-          "label": "12c. Transporte para atendimento (R$)",
+          "label": "Transporte acumulado (R$)",
           "type": "number",
           "required": true,
           "min": 0,
           "step": 0.01
         },
         {
-          "key": "custo_outros",
-          "label": "12d. Outros gastos (R$)",
+          "key": "custo_internacao",
+          "label": "Internacao acumulada (R$)",
           "type": "number",
           "required": false,
           "min": 0,
-          "step": 0.01,
-          "help_text": "Alimentacao especial, produtos medicos e outros gastos relacionados."
+          "step": 0.01
+        },
+        {
+          "key": "custo_outros",
+          "label": "Outros gastos acumulados (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "perda_renda_estimada",
+          "label": "Perda estimada de renda acumulada (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
         },
         {
           "key": "renda_familiar_afetada",
-          "label": "13. Sua renda familiar foi significativamente afetada?",
+          "label": "A renda familiar foi afetada?",
           "type": "radio",
           "required": true,
           "options": [
-            "Nao, recebo/ganho normalmente",
-            "Sim, reducao temporaria da renda",
-            "Sim, perdi o emprego/trabalho temporariamente",
-            "Sim, precisei usar economias/reservas",
+            "Nao",
+            "Sim, reducao temporaria",
+            "Sim, perda de trabalho temporaria",
+            "Sim, uso de economias/reservas",
             "Sim, outros impactos financeiros"
           ]
-        }
-      ]
-    },
-    {
-      "title": "Secao 5: Perspectiva e observacoes",
-      "description": "Ultimas perguntas sobre sua recuperacao neste ponto do acompanhamento.",
-      "fields": [
+        },
         {
           "key": "retorno_atividades_previsao",
-          "label": "14. Quando acha que conseguira retomar 100% das atividades?",
+          "label": "Quando espera retomar 100% das atividades?",
           "type": "radio",
           "required": true,
           "options": [
-            "Ja retomei todas as atividades",
+            "Ja retomei todas",
             "Em 1 semana ou menos",
             "Em 2-4 semanas",
             "Mais de 1 mes",
@@ -272,10 +266,9 @@
         },
         {
           "key": "observacoes_finais",
-          "label": "15. Observacoes importantes sobre sua evolucao:",
+          "label": "Observacoes importantes (opcional)",
           "type": "textarea",
-          "required": false,
-          "help_text": "Conte algo que nao perguntamos, alguma preocupacao, ou algo importante sobre sua recuperacao."
+          "required": false
         }
       ]
     }

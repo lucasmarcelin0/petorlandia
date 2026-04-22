@@ -1,11 +1,12 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from flask import Flask
 
-from blueprints.sfa import bp as sfa_bp
+from blueprints.sfa import _coletar_filtros_pacientes, bp as sfa_bp
 from services import sfa_service
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -65,20 +66,24 @@ def _payload_t0():
         "sexo_biologico": "Feminino",
         "vacinas_12_meses": ["Nenhuma"],
         "ocupacao_principal": "Estudante",
-        "fuma_ou_bebe": "Nao",
+        "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
+        "exposicao_animal": ["Nenhum contato animal relevante"],
+        "exposicao_alimentar": ["Nenhuma dessas"],
+        "outras_pessoas_com_sintomas": "Nao sei",
         "data_inicio_sintomas": "2026-03-18",
         "teve_febre": "Sim",
-        "padrao_febre": "Vai e volta",
-        "sintomas_principais": ["Cansaco extremo"],
-        "dor_mais_intensa": "Cabeca",
-        "contato_agua_suja": "Nao",
-        "contato_carrapato_mata": "Nao",
-        "outras_pessoas_com_sintomas": "Nao sei",
-        "contato_animais": ["Nenhum contato com animais"],
-        "consumo_recente": ["Nenhum desses"],
-        "atividades_recentes": ["Nenhuma dessas atividades"],
+        "intensidade_febre": "4",
+        "sintomas_principais": ["Cansaco extremo/fadiga"],
+        "sinais_alerta": ["Nenhum sinal de alerta"],
+        "dor_articular_intensidade": "4",
+        "fadiga_intensidade": "5",
+        "impacto_atividades": "Moderado - limita algumas atividades",
         "dias_incap": "2",
         "internacao": "Nao",
+        "custo_remedios": "8.50",
+        "custo_consultas": "0",
+        "custo_transporte": "7.25",
+        "custo_outros": "0",
         "custo_total": "15.75",
         "ausencia_familiar": "Nao",
         "aceite_tcle": [sfa_service.T0_CONSENT_ACCEPTED],
@@ -92,8 +97,12 @@ def _payload_t10():
         "nome": "Maria Teste",
         "data_entrevista_t10": "2026-03-23",
         "classificacao_melhora": "Melhorando - Sintomas leves, em recuperacao",
-        "sintomas_persistentes": ["Cansaco extremo/fadiga", "Dor de cabeca"],
-        "dor_articulacoes_impacto": "Sinto dor, mas nao impede minhas atividades",
+        "percentual_recuperacao": "70-89% recuperado - sequelas leves",
+        "sintomas_persistentes": ["Cansaco extremo/fadiga", "Dor de cabeca forte"],
+        "sinais_alerta": ["Nenhum sinal de alerta"],
+        "dor_articular_intensidade": "3",
+        "fadiga_intensidade": "5",
+        "impacto_atividades": "Moderado - limita algumas atividades",
         "retornou_servico_saude": "Sim",
         "quantas_vezes_retornou": "2",
         "motivo_retorno_servico": ["Consulta de retorno/monitoramento", "Realizacao de exames"],
@@ -104,7 +113,9 @@ def _payload_t10():
         "custo_remedios": "10.50",
         "custo_consultas": "20.00",
         "custo_transporte": "5.25",
+        "custo_internacao": "0",
         "custo_outros": "2.00",
+        "perda_renda_estimada": "80.00",
         "renda_familiar_afetada": "Sim, reducao temporaria da renda",
         "retorno_atividades_previsao": "Em 1 semana ou menos",
         "observacoes_finais": "Melhorando aos poucos",
@@ -115,20 +126,25 @@ def _payload_t30():
     return {
         "cpf": "12345678900",
         "nome": "Maria Teste",
-        "estado_saude_final": "Quase recuperado - 90-99% recuperado, diferencas minimas",
-        "sequelas_atuais": ["Fadiga cronica (cansaco extremo que nao passa)", "Dor muscular residual"],
-        "dor_articulacoes_final": "Ocorre apenas apos esforco fisico",
+        "estado_saude_final": "90-99% recuperado - diferencas minimas",
+        "sequelas_atuais": ["Fadiga cronica", "Dor muscular residual"],
+        "sintomas_persistentes": ["Cansaco extremo/fadiga"],
+        "sinais_alerta": ["Nenhum sinal de alerta"],
+        "dor_articular_intensidade": "2",
+        "fadiga_intensidade": "3",
+        "impacto_atividades": "Leve - incomoda, mas nao limita",
         "dias_incap_novos": "1",
-        "retorno_atividades_normais": "75-99% retomadas - Quase normal, pequenas limitacoes",
+        "retorno_atividades_normais": "Em 4 a 7 dias",
         "custo_remedios": "0",
         "custo_consultas": "0",
         "custo_transporte": "3.50",
+        "custo_internacao": "0",
         "perda_renda_estimada": "120.00",
         "custo_outros": "0",
-        "impacto_emocional_familiar": "Leve estresse familiar - Resolvido rapidamente",
+        "impacto_emocional_familiar": "Leve estresse familiar",
         "conselho_outras_pessoas": "Procure atendimento cedo e descanse bastante.",
-        "avaliacao_atendimento_saude": "Bom - Atendeu as necessidades",
-        "participaria_outro_estudo": "Sim, com certeza - Acho importante contribuir",
+        "avaliacao_atendimento_saude": "Bom",
+        "participaria_outro_estudo": "Sim, com certeza",
         "observacoes_finais": "Recuperado",
     }
 
@@ -141,7 +157,7 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert "T0 Estudo SFA Orlandia" in html
+    assert "T0 Atualizacao Forms Codex - SFA Orlandia" in html
     assert "Maria Teste" in html
     assert 'name="data_inicio_sintomas"' in html
     assert 'name="ficha_sinan"' in html
@@ -198,7 +214,7 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
     assert captured["condicoes_previas"] == ["Nenhuma das acima"]
-    assert captured["sintomas_principais"] == ["Cansaco extremo"]
+    assert captured["sintomas_principais"] == ["Cansaco extremo/fadiga"]
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
@@ -249,8 +265,8 @@ def test_tcle_signatures_page_renderiza_lista(native_t0_app, monkeypatch):
 @pytest.mark.parametrize(
     ("url", "expected_title"),
     [
-        ("/sfa/p/token-abc/t10", "T10 Estudo SFA Orlandia"),
-        ("/sfa/p/token-abc/t30", "T30 Estudo SFA Orlandia"),
+        ("/sfa/p/token-abc/t10", "T10 Atualizacao Forms Codex - SFA Orlandia"),
+        ("/sfa/p/token-abc/t30", "T30 Atualizacao Forms Codex - SFA Orlandia"),
     ],
 )
 def test_public_native_followups_get_renderiza_formulario(native_t0_app, url, expected_title):
@@ -284,7 +300,7 @@ def test_public_native_t10_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t10_form"
     assert captured["dias_incap_novos"] == "3"
-    assert captured["sintomas_persistentes"] == ["Cansaco extremo/fadiga", "Dor de cabeca"]
+    assert captured["sintomas_persistentes"] == ["Cansaco extremo/fadiga", "Dor de cabeca forte"]
 
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -308,7 +324,7 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert captured["_origem"] == "native_t30_form"
     assert captured["custo_transporte"] == "3.50"
     assert captured["sequelas_atuais"] == [
-        "Fadiga cronica (cansaco extremo que nao passa)",
+        "Fadiga cronica",
         "Dor muscular residual",
     ]
 
@@ -430,6 +446,24 @@ class _FakeExportQuery:
         return self._pacientes
 
 
+class _FakePagination:
+    def __init__(self, items):
+        self.items = items
+        self.total = len(items)
+        self.pages = 1
+        self.page = 1
+        self.has_prev = False
+        self.has_next = False
+
+    def iter_pages(self, left_edge=1, right_edge=1, left_current=2, right_current=2):
+        return [1]
+
+
+class _FakePaginatedQuery(_FakeExportQuery):
+    def paginate(self, page=1, per_page=50, error_out=False):
+        return _FakePagination(self._pacientes)
+
+
 @pytest.mark.parametrize(
     ("url", "csv_text", "expected_name"),
     [
@@ -451,3 +485,150 @@ def test_export_routes_retornam_csv(native_t0_app, monkeypatch, url, csv_text, e
     assert response.mimetype == "text/csv"
     assert expected_name in response.headers["Content-Disposition"]
     assert "SFA-910" in response.get_data(as_text=True)
+
+
+def test_patient_filters_collect_month_and_symptom_start_date(native_t0_app):
+    app, _paciente, _schema_holder = native_t0_app
+
+    with app.test_request_context(
+        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_inicio_sintomas_ate=2026-03-31&data_notificacao_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t0_de=2026-03-18&respondido_t10_ate=2026-03-28&respondido_t30_de=2026-04-01&proxima_acao_ate=2026-03-25&situacao_data=atrasados&grupo=A"
+    ):
+        filtros = _coletar_filtros_pacientes()
+
+    assert filtros["mes_inicio_sintomas"] == "2026-03"
+    assert filtros["data_inicio_sintomas"] == "2026-03-18"
+    assert filtros["data_inicio_sintomas_de"] == "2026-03-01"
+    assert filtros["data_inicio_sintomas_ate"] == "2026-03-31"
+    assert filtros["data_notificacao_de"] == "2026-03-01"
+    assert filtros["data_notificacao_ate"] == "2026-03-20"
+    assert filtros["respondido_t0_de"] == "2026-03-18"
+    assert filtros["respondido_t10_ate"] == "2026-03-28"
+    assert filtros["respondido_t30_de"] == "2026-04-01"
+    assert filtros["proxima_acao_ate"] == "2026-03-25"
+    assert filtros["situacao_data"] == "atrasados"
+    assert filtros["grupo"] == "A"
+
+
+def test_patient_list_renders_new_symptom_filters(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+    client = app.test_client()
+    paciente.resposta_t0 = SimpleNamespace(data_inicio_sintomas="18/03/2026")
+    paciente.status_geral = "SINAN_Notificado"
+    paciente._data_notificacao_sinan = "20/03/2026"
+
+    monkeypatch.setattr(
+        "blueprints.sfa._consulta_pacientes_filtrada",
+        lambda filtros=None: _FakePaginatedQuery([paciente]),
+    )
+    monkeypatch.setattr("blueprints.sfa._anexar_datas_notificacao_sinan", lambda pacientes: None)
+
+    response = client.get(
+        "/sfa/pacientes?mes_inicio_sintomas=2026-03&data_inicio_sintomas=2026-03-18&data_inicio_sintomas_de=2026-03-01&data_notificacao_ate=2026-03-20&respondido_t10_de=2026-03-23&respondido_t30_ate=2026-04-17&proxima_acao_ate=2026-03-28&situacao_data=vence_7_dias"
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'name="mes_inicio_sintomas"' in html
+    assert 'value="2026-03"' in html
+    assert 'name="data_inicio_sintomas"' in html
+    assert 'value="2026-03-18"' in html
+    assert 'name="data_inicio_sintomas_de"' in html
+    assert 'value="2026-03-01"' in html
+    assert 'name="data_notificacao_ate"' in html
+    assert 'value="2026-03-20"' in html
+    assert 'name="respondido_t10_de"' in html
+    assert 'value="2026-03-23"' in html
+    assert 'name="respondido_t30_ate"' in html
+    assert 'value="2026-04-17"' in html
+    assert 'name="proxima_acao_ate"' in html
+    assert 'value="2026-03-28"' in html
+    assert 'name="situacao_data"' in html
+    assert 'value="vence_7_dias" selected' in html
+    assert "18/03/2026" in html
+    assert "20/03/2026" in html
+
+
+def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeypatch):
+    app, paciente, _schema_holder = native_t0_app
+    client = app.test_client()
+    paciente.grupo = "A"
+    paciente.bairro = "Centro"
+    paciente.data_t0 = "20/03/2026"
+    paciente.data_t10 = "30/03/2026"
+    paciente.data_t30 = "19/04/2026"
+    paciente.resposta_t0 = SimpleNamespace(
+        data_inicio_sintomas="18/03/2026",
+        dias_incap=3,
+        custo_total=42,
+        tipo_residencia="Casa urbana",
+        dados_json=json.dumps(
+            {
+                "data_inicio_sintomas": "18/03/2026",
+                "tipo_residencia": "Casa urbana",
+                "sexo_biologico": "Feminino",
+                "ocupacao_principal": "Estudante",
+                "sintomas_principais": ["Cansaco extremo", "Dores musculares intensas"],
+            }
+        ),
+    )
+    paciente.respostas_t10 = [
+        SimpleNamespace(
+            timestamp=datetime(2026, 3, 30, 10, 0, 0),
+            dias_incap_novos=4,
+            custo_remedios=10,
+            custo_consultas=20,
+            custo_transporte=5,
+            custo_outros=3,
+            dados_json=json.dumps(
+                {
+                    "classificacao_melhora": "Melhorando - Sintomas leves, em recuperacao",
+                }
+            ),
+        )
+    ]
+    paciente.respostas_t30 = [
+        SimpleNamespace(
+            timestamp=datetime(2026, 4, 19, 10, 0, 0),
+            dias_incap_novos=5,
+            custo_remedios=12,
+            custo_consultas=22,
+            custo_transporte=4,
+            custo_outros=2,
+            dados_json=json.dumps(
+                {
+                    "estado_saude_final": "Quase recuperado - 90-99% recuperado, diferencas minimas",
+                    "retorno_atividades_normais": "Em 8 a 14 dias",
+                }
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "blueprints.sfa._consulta_pacientes_filtrada",
+        lambda filtros=None: _FakePaginatedQuery([paciente]),
+    )
+    monkeypatch.setattr("blueprints.sfa._anexar_datas_notificacao_sinan", lambda pacientes: None)
+
+    response = client.get("/sfa/pacientes?visao=testes")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Pacientes avaliados" in html
+    assert "Custos Médios no T30" in html
+    assert "Leitura Analítica" in html
+    assert "Alertas de Pesquisa" in html
+    assert "Hipóteses e Padrões" in html
+    assert "Clusters do Lote" in html
+    assert "dias desde início dos sintomas até melhora/fechamento" in html
+    assert "Sintomas Mais Discriminantes" in html
+    assert "Sintomas x Grupo" in html
+    assert "Recuperação Alta por Segmento" in html
+    assert "Custo Médio por Retorno às Atividades" in html
+    assert "Comparação Grupo A vs B" in html
+    assert "Prevalência de Sintomas no T0" in html
+    assert "Evolução percebida no T10" in html
+    assert "Estado final no T30" in html
+    assert "Retorno às atividades" in html
+    assert "Sexo biológico" in html
+    assert "Faixa etária" in html
+    assert "Ocupação principal" in html

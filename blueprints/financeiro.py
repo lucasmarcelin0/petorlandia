@@ -15,6 +15,36 @@ def get_blueprint():
         view_func=lazy_view("contabilidade_financeiro"),
     )
     bp.add_url_rule(
+        "/contabilidade/dre",
+        view_func=lazy_view("contabilidade_dre"),
+    )
+    bp.add_url_rule(
+        "/contabilidade/fluxo-caixa",
+        view_func=lazy_view("contabilidade_fluxo_caixa"),
+    )
+    bp.add_url_rule(
+        "/contabilidade/contas",
+        view_func=lazy_view("contabilidade_contas"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/contabilidade/conciliacao/importar",
+        view_func=lazy_view("contabilidade_conciliacao_importar"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/contabilidade/exportar/xlsx",
+        view_func=lazy_view("contabilidade_exportar_xlsx"),
+    )
+    bp.add_url_rule(
+        "/api/contabilidade/dashboard",
+        view_func=lazy_view("api_contabilidade_dashboard"),
+    )
+    bp.add_url_rule(
+        "/api/contabilidade/veterinarios",
+        view_func=lazy_view("api_contabilidade_veterinarios"),
+    )
+    bp.add_url_rule(
         "/contabilidade/pagamentos",
         view_func=lazy_view("contabilidade_pagamentos"),
     )

@@ -259,6 +259,12 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
             fab_raw = fab_el.get_text(separator=' ', strip=True)
             fabricante = re.sub(r'^POR\s+', '', fab_raw, flags=re.IGNORECASE).strip() or None
 
+    # "Princípio Ativo" não é um fabricante real — é o rótulo que a VetSmart
+    # usa em páginas de PA genérico. Nesses casos, queremos fabricante NULL
+    # (a "apresentação" da página de PA tb é filtrada em outro trecho).
+    if fabricante and re.fullmatch(r'princ[ií]pio\s+ativo', fabricante.strip(), flags=re.IGNORECASE):
+        fabricante = None
+
     # ── Espécies (não tem schema.org, parse da seção Sobre) ──────────────
     especies = None
     for p in soup.find_all('p'):
@@ -314,6 +320,23 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
     ul_apres = secoes_uls.get('Apresentações e concentrações')
     if ul_apres:
         for li in ul_apres.find_all('li'):
+            # Em páginas de *princípio ativo* (ex: /produto/1970 "Prednisona"),
+            # a seção "Apresentações" lista PRODUTOS COMERCIAIS que contêm a PA,
+            # não apresentações reais. Esses <li> têm o padrão:
+            #   "Meticorten Veterinário 20 mg | Princípio(s) Ativo(s): | X | Empresa: | MSD"
+            # e NÃO possuem span itemprop=dosageForm. Quando detectamos esse padrão
+            # pulamos o <li> — os produtos comerciais serão raspados separadamente
+            # pelo próprio loop da lista.
+            li_txt = li.get_text(' ', strip=True)
+            tem_dosage_form = bool(li.find('span', attrs={'itemprop': 'dosageForm'}))
+            eh_produto_relacionado = (
+                not tem_dosage_form
+                and re.search(r'empresa\s*:', li_txt, re.IGNORECASE)
+                and re.search(r'princ[ií]pio', li_txt, re.IGNORECASE)
+            )
+            if eh_produto_relacionado:
+                continue
+
             forma_el = li.find('span', attrs={'itemprop': 'dosageForm'}) or li.find('span')
             forma = forma_el.get_text(strip=True) if forma_el else ''
 
@@ -328,13 +351,29 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
             # Remove vírgula órfã antes do parêntese: "Cefalexina, (250mg)" → "Cefalexina (250mg)"
             txt_resto = re.sub(r',\s*\(', ' (', txt_resto).strip()
 
-            # Se a "concentração" é só o princípio ativo sem volume, zera
-            # (quando há volume, vem entre parênteses)
-            if txt_resto and principios and txt_resto.lower().strip() == (principios[0] if principios else '').lower().strip():
-                txt_resto = ''
-            # Mesma coisa se for o nome do produto sem volume
-            if txt_resto and txt_resto.lower().strip() == nome.lower().strip():
-                txt_resto = ''
+            # Se a "concentração" é só um nome (princípio ativo, nome do produto,
+            # ou variação do fabricante) SEM número — não é concentração, zera.
+            # Isso evita que o campo venha como "Prednisona Animalia" quando não
+            # há número e nem unidade no li — o scraper estava pegando o texto
+            # de fallback como se fosse concentração.
+            def _sem_numero(s: str) -> bool:
+                return bool(s) and not re.search(r'\d', s)
+
+            if _sem_numero(txt_resto):
+                alvo = txt_resto.lower().strip()
+                pa = (principios[0] if principios else '').lower().strip()
+                nom = (nome or '').lower().strip()
+                # Match exato OU substring (contém PA / contido no nome do produto).
+                if (
+                    (pa and (alvo == pa or pa in alvo or alvo in pa))
+                    or (nom and (alvo == nom or alvo in nom or nom in alvo))
+                ):
+                    txt_resto = ''
+                else:
+                    # Também zera se for claramente "só um nome próprio"
+                    # (3+ palavras sem dígito nenhum → não é concentração).
+                    if len(alvo.split()) >= 2:
+                        txt_resto = ''
 
             if forma or txt_resto:
                 ap = {
@@ -529,6 +568,106 @@ _RE_ESPECIE_TXT = re.compile(
     re.IGNORECASE,
 )
 
+# Indicações clínicas conhecidas. A ordem da lista resolve patterns que se
+# sobrepõem: "dermatite atópica" vence "alergia", etc. Inclui typos comuns do
+# VetSmart (ex.: "Imun**u**ssupressão").
+_INDICACAO_PATTERNS = [
+    # Dermato específicos têm prioridade sobre "alergia" genérica.
+    (r'dermatite\s+at[oó]pica|atopia\b',                       'Dermatite atópica'),
+    (r'dermatite\s+seborr[eé]ica|seborreia',                   'Dermatite seborreica'),
+    (r'dermatopatia|dermatose',                                'Dermatopatia'),
+    # Imunológicos / reumato.
+    # Tolera typos da VetSmart nos dois 's' (imunosupressão, imunossupresão),
+    # espaço/hífen entre 'imuno' e 'supressão', e no inglês "suppression".
+    (r'imun[ouó]s{0,2}[\s-]?s?upres{1,2}[aã]o|imuno[\s-]?suppress?[aã]o|imun[ouó]s{0,2}[\s-]?s?upressor',
+        'Imunossupressão'),
+    (r'artrite\s+reumat[oó]ide|lupus|lúpus',                   'Autoimune'),
+    (r'osteoartrite|osteoarticular|artrose',                   'Osteoarticular'),
+    # Endócrino (Addison/Cushing são nomes próprios na literatura).
+    (r'hipocort(?:icismo|isolismo)|addison',                   'Hipoadrenocorticismo'),
+    (r'hipercort(?:icismo|isolismo)|cushing',                  'Hipercortisolismo'),
+    (r'endocrinopat(?:ia|ias)',                                'Endocrinopatia'),
+    # Outras sistêmicas.
+    (r'neoplas(?:ia|ias|ico|icos)|tumor(?:es)?\b|\bc[aâ]ncer\b',
+        'Neoplasia'),
+    (r'choque\b',                                              'Choque'),
+    (r'oftalmopat(?:ia|ias)|uve[ií]te|conjuntivite',           'Oftalmopatia'),
+    (r'edema\s+cerebral|edema\s+(?:cranian|medular)',          'Edema do SNC'),
+    # Uso / duração.
+    (r'uso\s+prolongado|manuten[cç][aã]o\b',                   'Uso prolongado'),
+    # Genéricos (ficam no fim porque perdem de patterns mais específicos).
+    (r'anti[-\s]?inflamat[oó]rio',                             'Anti-inflamatório'),
+    (r'analges?i[ao]|controle\s+da\s+dor|\bdor\b',             'Analgesia'),
+    (r'asma|broncoespasmo|broncopat|bronqu',                   'Respiratório'),
+    (r'infec[cç][aã]o|bacteri|infec[cç][oõ]es',                'Infecção'),
+    (r'alerg(?:ia|ias|ico|icos|ica|icas)',                     'Alergia'),
+    (r'prurido|coceira',                                       'Prurido'),
+]
+
+
+def _extrair_indicacao(texto: str) -> Optional[str]:
+    """Mapeia texto → nome canônico da indicação clínica, ou None.
+
+    Entre múltiplas matches, vence a que aparece PRIMEIRO no texto
+    (ex.: "Alergias e imunossupressão" → "Alergia"). Patterns específicos
+    (dermatite atópica) ainda vencem genéricos (alergia) quando casam na
+    MESMA posição, porque ordem-na-lista é o critério de desempate.
+    """
+    if not texto:
+        return None
+    melhor: Optional[tuple] = None  # (pos, prioridade_lista, nome)
+    for prioridade, (pat, nome) in enumerate(_INDICACAO_PATTERNS):
+        m = re.search(pat, texto, flags=re.IGNORECASE)
+        if not m:
+            continue
+        chave = (m.start(), prioridade)
+        if melhor is None or chave < melhor[0]:
+            melhor = (chave, nome)
+    return melhor[1] if melhor else None
+
+
+def _splitar_por_indicacao(linha: str):
+    """Quebra uma linha em segmentos [(indicacao, texto), ...].
+
+    Exemplos:
+      'Alergia VO, IM 0,5-1 mg/kg Imunossupressão VO, IM 2 mg/kg'
+        → [('Alergia', 'VO, IM 0,5-1 mg/kg'),
+           ('Imunossupressão', 'VO, IM 2 mg/kg')]
+
+      'Alergias e imunossupressão: 12h'
+        → [('Alergia', 'e imunossupressão: 12h')]  (a primeira vence, parser
+           de dose a resolve sem ambiguidade)
+
+      '0,5 mg/kg'  (sem indicação)
+        → [(None, '0,5 mg/kg')]
+    """
+    if not linha:
+        return [(None, linha)]
+    positions = []
+    for pat, nome in _INDICACAO_PATTERNS:
+        for m in re.finditer(pat, linha, flags=re.IGNORECASE):
+            positions.append((m.start(), m.end(), nome))
+    if not positions:
+        return [(None, linha)]
+    # Dedup por posição (primeira match vence para patterns que se sobrepõem)
+    positions.sort()
+    merged = []
+    for ini, fim, nome in positions:
+        if merged and ini < merged[-1][1]:
+            continue
+        merged.append((ini, fim, nome))
+    segmentos = []
+    for i, (ini, fim, nome) in enumerate(merged):
+        prox_ini = merged[i + 1][0] if i + 1 < len(merged) else len(linha)
+        seg_texto = linha[fim:prox_ini].strip(' -:—,.')
+        segmentos.append((nome, seg_texto))
+    # Se texto antes da primeira indicação contém dose numérica, adicionamos
+    # como segmento sem indicação (raro — normalmente indicação vem antes)
+    pre = linha[:merged[0][0]].strip(' -:—,.')
+    if pre and (_RE_DOSE_MGKG.search(pre) or _RE_DOSE_ANIMAL.search(pre)):
+        segmentos.insert(0, (None, pre))
+    return segmentos
+
 
 def _f(v: str) -> float:
     return float(str(v).replace(',', '.'))
@@ -550,7 +689,11 @@ def _norm_especie_code(txt: str) -> str:
 
 def _intervalo_horas(freq_texto: str) -> Optional[int]:
     """Converte texto de frequência em intervalo em horas.
-    Cobre: '12/12 horas', '12 em 12 horas', '2 vezes ao dia', 'a cada 8h'."""
+    Cobre:
+      - Formais: '12/12 horas', '12 em 12 horas', 'a cada 8h', '2 vezes ao dia'
+      - Liberal (fallback): pega o primeiro 'Nh' ou 'N horas' isolado, como
+        em 'Alergia: 12 horas. Imunossupressão: 48 horas' (VetSmart costuma
+        colar dois protocolos nesse formato)."""
     if not freq_texto:
         return None
     t = freq_texto.lower()
@@ -559,7 +702,7 @@ def _intervalo_horas(freq_texto: str) -> Optional[int]:
     for pat in [
         r'(\d+)\s*/\s*\d+\s*horas?',
         r'(\d+)\s*em\s*\d+\s*horas?',          # "12 em 12 horas"
-        r'a\s+cada\s+(\d+)\s*(?:h|horas?)\b',
+        r'a\s+cada\s+(\d+)\s*(?:h|horas?|hrs?)\b',
         r'a\s+cada\s+(\d+)\s*dias?',           # vira *24
     ]:
         m = re.search(pat, t)
@@ -570,6 +713,15 @@ def _intervalo_horas(freq_texto: str) -> Optional[int]:
     if m:
         n = int(m.group(1))
         return 24 // n if n > 0 else None
+    # Fallback liberal: primeiro 'Nh' / 'N horas' / 'N hrs' isolado.
+    # Exige que o token logo antes não seja dígito (evita casar com '0,5mg/kg/48hs'
+    # onde o 48 é intervalo real mas já cobrimos em outro protocolo).
+    # Só aceita valores plausíveis (2–72h) para não confundir com dose numérica.
+    m = re.search(r'(?<!\d)(?<![\.,])\b(\d{1,2})\s*(?:h|horas?|hrs?)\b', t)
+    if m:
+        v = int(m.group(1))
+        if 2 <= v <= 72:
+            return v
     return None
 
 
@@ -620,6 +772,13 @@ def _extrair_doses_estruturadas(
 
     intervalo = _intervalo_horas(frequencia_texto or '')
     dur_min, dur_max = _duracao_dias(duracao_texto or '')
+    # VetSmart costuma colar duração dentro do próprio texto de frequência:
+    # "Dermatite atópica: 24hrs por 7 dias". Se a duração ficou vazia,
+    # tenta extrair do campo de frequência.
+    if dur_min is None and dur_max is None:
+        dur_min_freq, dur_max_freq = _duracao_dias(frequencia_texto or '')
+        if dur_min_freq is not None or dur_max_freq is not None:
+            dur_min, dur_max = dur_min_freq, dur_max_freq
     esp_default = _norm_especie_code(especies_str or '')
 
     # Linhas — usa o split existente + quebra adicional por "." e ";"
@@ -630,6 +789,12 @@ def _extrair_doses_estruturadas(
     esp_ctx = esp_default
     peso_min_ctx, peso_max_ctx = None, None
     peso_faixa_str = None
+    indicacao_ctx: Optional[str] = None
+
+    # Indicação vinda da frequência/texto geral serve como fallback quando a
+    # linha da dose não tem uma indicação explícita adjacente. Ex.:
+    # freq="Alergias e imunossupressão: 12h" → indicação default "Alergia".
+    indicacao_freq = _extrair_indicacao(frequencia_texto or '')
 
     for linha in linhas:
         if _RE_RUIDO.search(linha):
@@ -653,81 +818,99 @@ def _extrair_doses_estruturadas(
             peso_min_ctx, peso_max_ctx = _f(m.group(1)), None
             peso_faixa_str = f"Acima de {m.group(1)} kg"
 
-        # mg/kg (com espaços tolerados)
-        m = _RE_DOSE_MGKG.search(linha)
-        if m:
-            dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
-            un_map = {'mg': 'MG_KG', 'mcg': 'MCG_KG', 'ml': 'ML_KG', 'ui': 'UI_KG'}
-            unidade = un_map.get(m.group(3).lower(), 'MG_KG')
-            dose_str = (f"{m.group(1)} - {m.group(2)} {m.group(3)}/kg"
-                        if m.group(2) else f"{m.group(1)} {m.group(3)}/kg")
-            registros.append({
-                'especie':       _especie_label(esp_ctx),
-                'especie_code':  esp_ctx,
-                'faixa_peso':    peso_faixa_str,
-                'peso_min_kg':   peso_min_ctx,
-                'peso_max_kg':   peso_max_ctx,
-                'via':           via,
-                'dose':          dose_str,
-                'dose_min':      dose_min,
-                'dose_max':      dose_max,
-                'dose_unidade':  unidade,
-                'frequencia':    frequencia_texto,
-                'intervalo_horas': intervalo,
-                'duracao':       duracao_texto,
-                'duracao_min_dias': dur_min,
-                'duracao_max_dias': dur_max,
-                'observacao':    linha[:500] if len(linha) > 30 else None,
-                'dose_raw_text': linha,
-                'fonte':         'SCRAPER',
-                'confianca':     'MEDIA',
-            })
-            continue
+        # Atualiza contexto de indicação se a linha inteira começa com uma
+        # (ex.: cabeçalho "Alergias" sozinho numa linha).
+        ind_linha = _extrair_indicacao(linha)
+        if ind_linha:
+            indicacao_ctx = ind_linha
 
-        # X/animal
-        m = _RE_DOSE_ANIMAL.search(linha)
-        if m:
-            dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
-            un_txt = m.group(3).lower()
-            un_map = {
-                'mg': 'MG_ANIMAL', 'mcg': 'MCG_ANIMAL', 'ml': 'ML_ANIMAL',
-                'pipeta': 'PIPETA_ANIMAL',
-                'gota': 'GOTAS_ANIMAL', 'gotas': 'GOTAS_ANIMAL',
-                'comprimido': 'COMPRIMIDOS_ANIMAL', 'comprimidos': 'COMPRIMIDOS_ANIMAL',
-                'capsula': 'COMPRIMIDOS_ANIMAL', 'capsulas': 'COMPRIMIDOS_ANIMAL',
-                'cápsula': 'COMPRIMIDOS_ANIMAL', 'cápsulas': 'COMPRIMIDOS_ANIMAL',
-            }
-            unidade = un_map.get(un_txt, 'MG_ANIMAL')
-            dose_str = (f"{m.group(1)} - {m.group(2)} {un_txt}/animal"
-                        if m.group(2) else f"{m.group(1)} {un_txt}/animal")
-            registros.append({
-                'especie':       _especie_label(esp_ctx),
-                'especie_code':  esp_ctx,
-                'faixa_peso':    peso_faixa_str,
-                'peso_min_kg':   peso_min_ctx,
-                'peso_max_kg':   peso_max_ctx,
-                'via':           via,
-                'dose':          dose_str,
-                'dose_min':      dose_min,
-                'dose_max':      dose_max,
-                'dose_unidade':  unidade,
-                'frequencia':    frequencia_texto,
-                'intervalo_horas': intervalo,
-                'duracao':       duracao_texto,
-                'duracao_min_dias': dur_min,
-                'duracao_max_dias': dur_max,
-                'observacao':    linha[:500] if len(linha) > 30 else None,
-                'dose_raw_text': linha,
-                'fonte':         'SCRAPER',
-                'confianca':     'MEDIA',
-            })
+        # Quebra a linha em segmentos por indicação — se a mesma linha tem
+        # duas indicações (ex.: "Alergia VO 0,5-1 mg/kg Imunossupressão VO 2 mg/kg")
+        # cada uma vira um segmento próprio.
+        segmentos = _splitar_por_indicacao(linha)
 
-    # Dedup por (especie_code, peso_min, peso_max, dose_min, dose_max, unidade)
+        for ind_seg, seg_txt in segmentos:
+            # Resolve indicação para este segmento: segmento > linha > freq.
+            indicacao_final = ind_seg or indicacao_ctx or indicacao_freq
+
+            # mg/kg (com espaços tolerados)
+            m = _RE_DOSE_MGKG.search(seg_txt)
+            if m:
+                dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
+                un_map = {'mg': 'MG_KG', 'mcg': 'MCG_KG', 'ml': 'ML_KG', 'ui': 'UI_KG'}
+                unidade = un_map.get(m.group(3).lower(), 'MG_KG')
+                dose_str = (f"{m.group(1)} - {m.group(2)} {m.group(3)}/kg"
+                            if m.group(2) else f"{m.group(1)} {m.group(3)}/kg")
+                registros.append({
+                    'especie':       _especie_label(esp_ctx),
+                    'especie_code':  esp_ctx,
+                    'faixa_peso':    peso_faixa_str,
+                    'peso_min_kg':   peso_min_ctx,
+                    'peso_max_kg':   peso_max_ctx,
+                    'via':           via,
+                    'dose':          dose_str,
+                    'dose_min':      dose_min,
+                    'dose_max':      dose_max,
+                    'dose_unidade':  unidade,
+                    'frequencia':    frequencia_texto,
+                    'intervalo_horas': intervalo,
+                    'duracao':       duracao_texto,
+                    'duracao_min_dias': dur_min,
+                    'duracao_max_dias': dur_max,
+                    'indicacao':     indicacao_final,
+                    'observacao':    linha[:500] if len(linha) > 30 else None,
+                    'dose_raw_text': linha,
+                    'fonte':         'SCRAPER',
+                    'confianca':     'MEDIA',
+                })
+                continue
+
+            # X/animal
+            m = _RE_DOSE_ANIMAL.search(seg_txt)
+            if m:
+                dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
+                un_txt = m.group(3).lower()
+                un_map = {
+                    'mg': 'MG_ANIMAL', 'mcg': 'MCG_ANIMAL', 'ml': 'ML_ANIMAL',
+                    'pipeta': 'PIPETA_ANIMAL',
+                    'gota': 'GOTAS_ANIMAL', 'gotas': 'GOTAS_ANIMAL',
+                    'comprimido': 'COMPRIMIDOS_ANIMAL', 'comprimidos': 'COMPRIMIDOS_ANIMAL',
+                    'capsula': 'COMPRIMIDOS_ANIMAL', 'capsulas': 'COMPRIMIDOS_ANIMAL',
+                    'cápsula': 'COMPRIMIDOS_ANIMAL', 'cápsulas': 'COMPRIMIDOS_ANIMAL',
+                }
+                unidade = un_map.get(un_txt, 'MG_ANIMAL')
+                dose_str = (f"{m.group(1)} - {m.group(2)} {un_txt}/animal"
+                            if m.group(2) else f"{m.group(1)} {un_txt}/animal")
+                registros.append({
+                    'especie':       _especie_label(esp_ctx),
+                    'especie_code':  esp_ctx,
+                    'faixa_peso':    peso_faixa_str,
+                    'peso_min_kg':   peso_min_ctx,
+                    'peso_max_kg':   peso_max_ctx,
+                    'via':           via,
+                    'dose':          dose_str,
+                    'dose_min':      dose_min,
+                    'dose_max':      dose_max,
+                    'dose_unidade':  unidade,
+                    'frequencia':    frequencia_texto,
+                    'intervalo_horas': intervalo,
+                    'duracao':       duracao_texto,
+                    'duracao_min_dias': dur_min,
+                    'duracao_max_dias': dur_max,
+                    'indicacao':     indicacao_final,
+                    'observacao':    linha[:500] if len(linha) > 30 else None,
+                    'dose_raw_text': linha,
+                    'fonte':         'SCRAPER',
+                    'confianca':     'MEDIA',
+                })
+
+    # Dedup por (especie_code, peso_min, peso_max, dose_min, dose_max, unidade, indicacao)
     vistos = set()
     unicos = []
     for r in registros:
         chave = (r['especie_code'], r['peso_min_kg'], r['peso_max_kg'],
-                 r['dose_min'], r['dose_max'], r['dose_unidade'])
+                 r['dose_min'], r['dose_max'], r['dose_unidade'],
+                 r.get('indicacao'))
         if chave in vistos:
             continue
         vistos.add(chave)
@@ -1008,39 +1191,227 @@ def _norm(texto: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _inserir_doses(cur, medicamento_id: int, doses: List[Dict[str, Optional[str]]]):
-    """Insere doses estruturadas (campos legados + numéricos). Só roda se o
-    medicamento ainda não tem doses cadastradas."""
+def _trunc(v, n):
+    """Trunca para caber em varchar(n); retorna None se v vier vazio/None."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    return s[:n]
+
+
+def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
+    """Garante que existe exatamente 1 Medicamento para o princípio ativo de
+    `prod`. Retorna o medicamento_id.
+
+    Estratégia:
+      1. Se prod tem `principio_ativo` → busca medicamento com
+         principio_ativo normalizado igual. Se achou, retorna esse.
+      2. Senão, busca medicamento com `nome` normalizado igual a
+         `prod.principio_ativo` (ex.: nome = "Prednisona").
+      3. Senão, cria novo com nome = `prod.principio_ativo` ou `prod.nome`.
+
+    Também atualiza campos faltantes do medicamento canônico com dados do
+    prod (fabricante não é copiado — ele vive nas apresentações).
+    """
+    pa = (prod.principio_ativo or '').strip()
+    pa_norm = _norm(pa) if pa else ''
+
+    medicamento_id: Optional[int] = None
+    if pa_norm:
+        # Match por principio_ativo (pode haver várias linhas com mesmo PA;
+        # pega a mais antiga/com maior número de apresentações já pelo id asc)
+        cur.execute("""
+            SELECT id, nome, classificacao, principio_ativo, via_administracao,
+                   dosagem_recomendada, frequencia, duracao_tratamento,
+                   observacoes, bula, vetsmart_produto_id
+              FROM medicamento
+             WHERE LOWER(REGEXP_REPLACE(
+                     TRANSLATE(principio_ativo,
+                               'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                               'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'),
+                     '\\s+', ' ', 'g')) = %s
+             ORDER BY id ASC
+             LIMIT 1
+        """, (pa_norm,))
+        row = cur.fetchone()
+        if row:
+            medicamento_id = row["id"] if isinstance(row, dict) else row[0]
+
+    if medicamento_id is None:
+        # Cria novo medicamento usando PA como nome (ou o nome bruto como fallback)
+        nome_final = pa if pa else prod.nome
+        cur.execute("""
+            INSERT INTO medicamento
+              (nome, classificacao, principio_ativo, via_administracao,
+               dosagem_recomendada, frequencia, duracao_tratamento,
+               observacoes, bula, vetsmart_produto_id, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (
+            nome_final[:100],
+            _trunc(prod.classificacao, 100),
+            _trunc(prod.principio_ativo, 200),
+            _trunc(prod.via_administracao, 80),
+            prod.dosagem_recomendada,
+            _trunc(prod.frequencia, 100),
+            prod.duracao_tratamento,
+            prod.observacoes,
+            prod.bula,
+            prod.vetsmart_id,
+            CREATED_BY_USER_ID,
+        ))
+        medicamento_id = cur.fetchone()["id"]
+    else:
+        # Atualiza campos vazios/faltantes com dados novos do prod (se úteis)
+        cur.execute("""
+            UPDATE medicamento SET
+              classificacao       = COALESCE(NULLIF(classificacao,''), %s),
+              principio_ativo     = COALESCE(NULLIF(principio_ativo,''), %s),
+              via_administracao   = COALESCE(NULLIF(via_administracao,''), %s),
+              vetsmart_produto_id = COALESCE(vetsmart_produto_id, %s),
+              bula                = COALESCE(NULLIF(bula,''), %s),
+              observacoes         = COALESCE(NULLIF(observacoes,''), %s)
+             WHERE id = %s
+        """, (
+            _trunc(prod.classificacao, 100),
+            _trunc(prod.principio_ativo, 200),
+            _trunc(prod.via_administracao, 80),
+            prod.vetsmart_id,
+            prod.bula,
+            prod.observacoes,
+            medicamento_id,
+        ))
+
+    return medicamento_id
+
+
+def _inserir_apresentacoes_consolidado(
+    cur, medicamento_id: int, prod: 'ProdutoVetsmart',
+) -> int:
+    """Insere apresentações de `prod` sob o medicamento consolidado, evitando
+    duplicatas (dedupe por forma+concentracao+fabricante).
+
+    Retorna quantas foram efetivamente inseridas.
+    """
+    if not prod.apresentacoes:
+        return 0
+
+    # Carrega apresentações já existentes
+    cur.execute("""
+        SELECT id, forma, concentracao, fabricante
+          FROM apresentacao_medicamento
+         WHERE medicamento_id = %s
+    """, (medicamento_id,))
+    existentes = {
+        (_norm(r.get("forma") or ''),
+         _norm(r.get("concentracao") or ''),
+         _norm(r.get("fabricante") or '')): r["id"]
+        for r in cur.fetchall()
+    }
+
+    inseridas = 0
+    for ap in prod.apresentacoes:
+        forma = ap.get("forma")
+        if forma in ("N/A", "", None):
+            continue
+        chave = (
+            _norm(forma or ''),
+            _norm(ap.get("concentracao") or ''),
+            _norm(prod.fabricante or ''),
+        )
+        if chave in existentes:
+            continue  # já tem essa apresentação/fabricante
+        cur.execute(
+            """INSERT INTO apresentacao_medicamento
+                 (medicamento_id, forma, concentracao,
+                  nome_variante, concentracao_valor, concentracao_unidade,
+                  volume_valor, volume_unidade,
+                  fabricante, vetsmart_produto_id)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (
+                medicamento_id,
+                forma[:50],
+                (ap.get("concentracao") or '')[:100],
+                _trunc(ap.get("nome_variante"), 100),
+                ap.get("concentracao_valor"),
+                _trunc(ap.get("concentracao_unidade"), 20),
+                ap.get("volume_valor"),
+                _trunc(ap.get("volume_unidade"), 20),
+                _trunc(prod.fabricante, 150),
+                prod.vetsmart_id,
+            ),
+        )
+        existentes[chave] = -1  # marca como inserida
+        inseridas += 1
+    return inseridas
+
+
+def _inserir_doses_consolidado(
+    cur, medicamento_id: int, doses: List[Dict[str, Optional[str]]],
+) -> int:
+    """Insere doses novas sob o medicamento consolidado.
+
+    Faz dedup por (especie_code, peso_min, peso_max, dose_min, dose_max,
+    dose_unidade, intervalo_horas, indicacao). Doses existentes com as mesmas
+    chaves numéricas são preservadas.
+
+    Retorna quantas foram efetivamente inseridas.
+    """
     if not doses:
-        return
-    cur.execute("SELECT COUNT(*) AS c FROM dose_medicamento WHERE medicamento_id = %s", (medicamento_id,))
-    row = cur.fetchone()
-    existentes = row["c"] if isinstance(row, dict) else row[0]
-    if existentes:
-        return  # não sobrescreve doses já cadastradas
+        return 0
 
-    def _trunc(v, n):
-        """Trunca para caber em varchar(n); retorna None se v vier vazio/None."""
-        if v is None:
-            return None
-        s = str(v).strip()
-        if not s:
-            return None
-        return s[:n]
+    # Carrega doses já existentes pro dedup
+    cur.execute("""
+        SELECT especie_code, peso_min_kg, peso_max_kg,
+               dose_min, dose_max, dose_unidade,
+               intervalo_horas, indicacao
+          FROM dose_medicamento
+         WHERE medicamento_id = %s
+    """, (medicamento_id,))
+    def _dec(v):
+        # Normaliza Decimal → float para comparação com o parser
+        return float(v) if v is not None else None
+    existentes = {
+        (
+            (r.get("especie_code") or '').upper() or None,
+            _dec(r.get("peso_min_kg")),
+            _dec(r.get("peso_max_kg")),
+            _dec(r.get("dose_min")),
+            _dec(r.get("dose_max")),
+            (r.get("dose_unidade") or '').upper() or None,
+            r.get("intervalo_horas"),
+            (r.get("indicacao") or '').strip() or None,
+        )
+        for r in cur.fetchall()
+    }
 
+    inseridas = 0
     for d in doses:
+        chave = (
+            (d.get("especie_code") or '').upper() or None,
+            _dec(d.get("peso_min_kg")),
+            _dec(d.get("peso_max_kg")),
+            _dec(d.get("dose_min")),
+            _dec(d.get("dose_max")),
+            (d.get("dose_unidade") or '').upper() or None,
+            d.get("intervalo_horas"),
+            (d.get("indicacao") or '').strip() or None,
+        )
+        if chave in existentes:
+            continue
         cur.execute("""
             INSERT INTO dose_medicamento
               (medicamento_id, especie, faixa_peso, via, dose, frequencia, duracao, observacao,
                especie_code, peso_min_kg, peso_max_kg,
                dose_min, dose_max, dose_unidade,
                intervalo_horas, duracao_min_dias, duracao_max_dias,
-               dose_raw_text, fonte, confianca)
+               dose_raw_text, fonte, confianca, indicacao)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,
                     %s,%s,%s,
                     %s,%s,%s,
-                    %s,%s,%s)
+                    %s,%s,%s,%s)
         """, (
             medicamento_id,
             _trunc(d.get("especie"),       80),
@@ -1062,120 +1433,80 @@ def _inserir_doses(cur, medicamento_id: int, doses: List[Dict[str, Optional[str]
             (d.get("dose_raw_text") or None),  # TEXT — sem limite
             _trunc(d.get("fonte") or 'SCRAPER',     15),
             _trunc(d.get("confianca") or 'MEDIA',   10),
+            _trunc(d.get("indicacao"),    120),
         ))
+        existentes.add(chave)
+        inseridas += 1
+    return inseridas
+
+
+# Preservado apenas como alias defensivo para código legado — chamadas novas
+# devem usar `_inserir_doses_consolidado`.
+def _inserir_doses(cur, medicamento_id: int, doses):
+    return _inserir_doses_consolidado(cur, medicamento_id, doses)
 
 
 def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
-    stats = {"atualizados": 0, "inseridos": 0, "sem_alteracao": 0, "doses_inseridas": 0}
-    por_nome = {_norm(m["nome"]): m for m in medicamentos_banco}
+    """Importa `produtos` do cache consolidando-os por princípio ativo.
+
+    Para cada produto do VetSmart:
+      1. Encontra (ou cria) UM único Medicamento com o mesmo principio_ativo.
+      2. Faz merge das apresentações (dedup por forma+concentração+fabricante).
+      3. Faz merge das doses (dedup por chave numérica+indicação).
+
+    Resultado: "Prednisona Ligvet" + "Prednisona Animalia" + "Prednisona (PA)"
+    viram um único Medicamento "Prednisona" com várias apresentações e doses.
+    """
+    stats = {
+        "novos_medicamentos": 0,
+        "medicamentos_atualizados": 0,
+        "apres_inseridas": 0,
+        "doses_inseridas": 0,
+    }
+
+    if dry_run:
+        # Modo simulação: apenas loga o que seria feito
+        for p in produtos:
+            log.info(f"  [dry-run] '{p.nome}' PA={p.principio_ativo!r} "
+                     f"fab={p.fabricante!r} "
+                     f"apres={len(p.apresentacoes)} doses={len(p.doses)}")
+        return stats
 
     for p in produtos:
-        existente = por_nome.get(_norm(p.nome))
+        with conn.cursor() as cur:
+            # Verifica se o PA já existe ANTES de criar (pra contabilizar)
+            pa_norm = _norm(p.principio_ativo or '')
+            existia = False
+            if pa_norm:
+                cur.execute("""
+                    SELECT 1 FROM medicamento
+                     WHERE LOWER(REGEXP_REPLACE(
+                             TRANSLATE(principio_ativo,
+                                       'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                                       'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'),
+                             '\\s+', ' ', 'g')) = %s
+                     LIMIT 1
+                """, (pa_norm,))
+                existia = cur.fetchone() is not None
 
-        if existente:
-            updates = {}
-            mapa = {
-                "classificacao":        p.classificacao,
-                "principio_ativo":      p.principio_ativo,
-                "via_administracao":    p.via_administracao,
-                "dosagem_recomendada":  p.dosagem_recomendada,
-                "frequencia":           p.frequencia,
-                "duracao_tratamento":   p.duracao_tratamento,
-                "observacoes":          p.observacoes,
-                "bula":                 p.bula,
-            }
-            for campo, valor in mapa.items():
-                if not existente.get(campo) and valor:
-                    updates[campo] = valor
+            med_id = _encontrar_ou_criar_medicamento_por_pa(cur, p)
 
-            if updates:
-                log.info(f"  ATUALIZAR '{existente['nome']}': {list(updates.keys())}")
-                if not dry_run:
-                    set_clause = ", ".join(f"{k} = %s" for k in updates)
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            f"UPDATE medicamento SET {set_clause} WHERE id = %s",
-                            list(updates.values()) + [existente["id"]],
-                        )
-                stats["atualizados"] += 1
+            if existia:
+                stats["medicamentos_atualizados"] += 1
             else:
-                stats["sem_alteracao"] += 1
+                stats["novos_medicamentos"] += 1
 
-            # Apresentações novas
-            apres_existentes = {
-                (_norm(a.get("forma", "")), _norm(a.get("concentracao", "")))
-                for a in (existente.get("apresentacoes") or [])
-            }
-            for ap in p.apresentacoes:
-                chave = (_norm(ap.get("forma", "")), _norm(ap.get("concentracao", "")))
-                if chave not in apres_existentes and ap.get("forma") not in ("N/A", "", None):
-                    if not dry_run:
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                """INSERT INTO apresentacao_medicamento
-                                     (medicamento_id, forma, concentracao,
-                                      nome_variante, concentracao_valor, concentracao_unidade,
-                                      volume_valor, volume_unidade)
-                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                                (existente["id"], ap["forma"][:50], ap["concentracao"][:100],
-                                 (ap.get("nome_variante") or None) and ap.get("nome_variante")[:100],
-                                 ap.get("concentracao_valor"),
-                                 (ap.get("concentracao_unidade") or None) and ap.get("concentracao_unidade")[:20],
-                                 ap.get("volume_valor"),
-                                 (ap.get("volume_unidade") or None) and ap.get("volume_unidade")[:20])
-                            )
-                    apres_existentes.add(chave)
+            n_apres = _inserir_apresentacoes_consolidado(cur, med_id, p)
+            n_doses = _inserir_doses_consolidado(cur, med_id, p.doses or [])
+            stats["apres_inseridas"] += n_apres
+            stats["doses_inseridas"] += n_doses
 
-            # Doses estruturadas (não sobrescreve existentes)
-            if p.doses and not dry_run:
-                with conn.cursor() as cur:
-                    antes = stats["doses_inseridas"]
-                    _inserir_doses(cur, existente["id"], p.doses)
-                    # checa quantas foram inseridas realmente
-                    cur.execute("SELECT COUNT(*) AS c FROM dose_medicamento WHERE medicamento_id = %s", (existente["id"],))
-                    row = cur.fetchone()
-                    total = row["c"] if isinstance(row, dict) else row[0]
-                    # Se bateu com len(p.doses), contabiliza
-                    if total == len(p.doses) and antes == stats["doses_inseridas"]:
-                        stats["doses_inseridas"] += len(p.doses)
-        else:
-            log.info(f"  INSERIR: '{p.nome}'  [{p.classificacao or '—'}]")
-            if not dry_run:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO medicamento
-                          (nome, classificacao, principio_ativo, via_administracao,
-                           dosagem_recomendada, frequencia, duracao_tratamento,
-                           observacoes, bula, created_by)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-                    """, (
-                        p.nome[:100],
-                        (p.classificacao or "")[:100] or None,
-                        (p.principio_ativo or "")[:200] or None,
-                        (p.via_administracao or "")[:80] or None,
-                        p.dosagem_recomendada, (p.frequencia or "")[:100] or None,
-                        p.duracao_tratamento, p.observacoes, p.bula, CREATED_BY_USER_ID,
-                    ))
-                    novo_id = cur.fetchone()["id"]
-                    for ap in p.apresentacoes:
-                        if ap.get("forma") not in ("N/A", "", None):
-                            cur.execute(
-                                """INSERT INTO apresentacao_medicamento
-                                     (medicamento_id, forma, concentracao,
-                                      nome_variante, concentracao_valor, concentracao_unidade,
-                                      volume_valor, volume_unidade)
-                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                                (novo_id, ap["forma"][:50], ap["concentracao"][:100],
-                                 (ap.get("nome_variante") or None),
-                                 ap.get("concentracao_valor"),
-                                 (ap.get("concentracao_unidade") or None),
-                                 ap.get("volume_valor"),
-                                 (ap.get("volume_unidade") or None))
-                            )
-                    _inserir_doses(cur, novo_id, p.doses)
-                    if p.doses:
-                        stats["doses_inseridas"] += len(p.doses)
-            stats["inseridos"] += 1
+            acao = "ATUALIZAR" if existia else "CRIAR"
+            log.info(
+                f"  {acao} PA={p.principio_ativo!r} (med_id={med_id}) "
+                f"+{n_apres} apres (fab={p.fabricante!r}) "
+                f"+{n_doses} doses"
+            )
 
     return stats
 
@@ -1206,6 +1537,9 @@ def main():
     p.add_argument("--created-by",     type=int, default=CREATED_BY_USER_ID)
     p.add_argument("--visible",        action="store_true",
                    help="Roda o navegador em modo visível (debug).")
+    p.add_argument("--filtro-nome",    type=str, default=None,
+                   help="Só processa produtos cujo nome (normalizado) contém esta substring. "
+                        "Útil para testar um medicamento específico (ex: --filtro-nome prednisona).")
     args = p.parse_args()
     CREATED_BY_USER_ID = args.created_by
 
@@ -1228,11 +1562,14 @@ def main():
             conn.close()
             sys.exit(1)
 
-        nomes_existentes = {_norm(m["nome"]) for m in medicamentos_banco}
-        log.info(f"Modo --scrape-importar: {len(nomes_existentes)} nomes já no DB serão pulados.")
-
+        # No modo consolidado não pulamos por nome: um produto "Prednisona Ligvet"
+        # é válido mesmo que já exista "Prednisona" no DB — suas apresentações
+        # e doses serão mergeadas no medicamento consolidado.
         COMMIT_EVERY = 25
-        contador = {"scrapeados": 0, "inseridos": 0, "pulados": 0, "falhas": 0}
+        contador = {
+            "scrapeados": 0, "medicamentos_novos": 0, "medicamentos_atualizados": 0,
+            "apres_inseridas": 0, "doses_inseridas": 0, "falhas": 0,
+        }
 
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=not args.visible)
@@ -1249,67 +1586,56 @@ def main():
             time.sleep(1)
 
             lista = scrape_lista_produtos(page)
+            if args.filtro_nome:
+                alvo = _norm(args.filtro_nome)
+                antes = len(lista)
+                lista = [it for it in lista if alvo in _norm(it["nome"])]
+                log.info(f"Filtro por nome {args.filtro_nome!r}: {antes} → {len(lista)} produtos.")
             if args.limite > 0:
                 lista = lista[:args.limite]
 
             total = len(lista)
             for i, info in enumerate(lista, 1):
-                nome_norm = _norm(info["nome"])
-                if nome_norm in nomes_existentes:
-                    contador["pulados"] += 1
-                    if i % 50 == 0:
-                        log.info(f"[{i}/{total}] (pulado: já no DB) {info['nome']}")
-                    continue
-
                 log.info(f"[{i}/{total}] {info['nome']}")
                 try:
                     prod = scrape_detalhe_produto(page, info)
                     contador["scrapeados"] += 1
                     log.info(
-                        f"    ✓ class={prod.classificacao!r} "
-                        f"pa={prod.principio_ativo!r} "
+                        f"    ✓ PA={prod.principio_ativo!r} "
+                        f"fab={prod.fabricante!r} "
                         f"apres={len(prod.apresentacoes)} "
                         f"doses={len(prod.doses)}"
                     )
 
-                    # INSERT imediato no DB (mas sem commit ainda)
+                    # Consolidação por PA + merge de apresentações/doses
                     try:
                         with conn.cursor() as cur:
-                            cur.execute("""
-                                INSERT INTO medicamento
-                                  (nome, classificacao, principio_ativo, via_administracao,
-                                   dosagem_recomendada, frequencia, duracao_tratamento,
-                                   observacoes, bula, created_by)
-                                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-                            """, (
-                                prod.nome[:100],
-                                (prod.classificacao or "")[:100] or None,
-                                (prod.principio_ativo or "")[:200] or None,
-                                (prod.via_administracao or "")[:80] or None,
-                                prod.dosagem_recomendada,
-                                (prod.frequencia or "")[:100] or None,
-                                prod.duracao_tratamento, prod.observacoes,
-                                prod.bula, CREATED_BY_USER_ID,
-                            ))
-                            novo_id = cur.fetchone()["id"]
-                            for ap in prod.apresentacoes:
-                                if ap.get("forma") not in ("N/A", "", None):
-                                    cur.execute(
-                                        """INSERT INTO apresentacao_medicamento
-                                             (medicamento_id, forma, concentracao,
-                                              nome_variante, concentracao_valor, concentracao_unidade,
-                                              volume_valor, volume_unidade)
-                                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                                        (novo_id, ap["forma"][:50], ap["concentracao"][:100],
-                                         (ap.get("nome_variante") or None) and ap.get("nome_variante")[:100],
-                                         ap.get("concentracao_valor"),
-                                         (ap.get("concentracao_unidade") or None) and ap.get("concentracao_unidade")[:20],
-                                         ap.get("volume_valor"),
-                                         (ap.get("volume_unidade") or None) and ap.get("volume_unidade")[:20])
-                                    )
-                            _inserir_doses(cur, novo_id, prod.doses)
-                        nomes_existentes.add(nome_norm)
-                        contador["inseridos"] += 1
+                            # Verifica se o PA já existia antes do upsert (pra contabilizar)
+                            pa_norm = _norm(prod.principio_ativo or '')
+                            existia = False
+                            if pa_norm:
+                                cur.execute("""
+                                    SELECT 1 FROM medicamento
+                                     WHERE LOWER(REGEXP_REPLACE(
+                                             TRANSLATE(principio_ativo,
+                                                       'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                                                       'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'),
+                                             '\\s+', ' ', 'g')) = %s
+                                     LIMIT 1
+                                """, (pa_norm,))
+                                existia = cur.fetchone() is not None
+
+                            med_id = _encontrar_ou_criar_medicamento_por_pa(cur, prod)
+                            n_apres = _inserir_apresentacoes_consolidado(cur, med_id, prod)
+                            n_doses = _inserir_doses_consolidado(cur, med_id, prod.doses or [])
+
+                            if existia:
+                                contador["medicamentos_atualizados"] += 1
+                            else:
+                                contador["medicamentos_novos"] += 1
+                            contador["apres_inseridas"] += n_apres
+                            contador["doses_inseridas"] += n_doses
+                            log.info(f"    → med_id={med_id} +{n_apres}ap +{n_doses}doses")
                     except Exception as e_db:
                         log.error(f"    ✗ ERRO INSERT '{prod.nome}': {e_db}")
                         conn.rollback()
@@ -1323,7 +1649,14 @@ def main():
                 # Commit batched a cada COMMIT_EVERY produtos
                 if i % COMMIT_EVERY == 0:
                     conn.commit()
-                    log.info(f"  ↳ commit ({contador['inseridos']} inseridos, {contador['pulados']} pulados, {contador['falhas']} falhas)")
+                    log.info(
+                        f"  ↳ commit ("
+                        f"{contador['medicamentos_novos']} novos, "
+                        f"{contador['medicamentos_atualizados']} atualizados, "
+                        f"{contador['apres_inseridas']} apres, "
+                        f"{contador['doses_inseridas']} doses, "
+                        f"{contador['falhas']} falhas)"
+                    )
 
             conn.commit()  # commit final
             browser.close()
@@ -1331,13 +1664,15 @@ def main():
         conn.close()
         print(f"""
 {'='*65}
-  RESULTADO (modo streaming)
+  RESULTADO (modo streaming — consolidado por PA)
 {'='*65}
-  Total na lista:    {total}
-  Scrapeados:        {contador['scrapeados']}
-  Inseridos no DB:   {contador['inseridos']}
-  Pulados (já no DB):{contador['pulados']}
-  Falhas:            {contador['falhas']}
+  Total na lista:        {total}
+  Scrapeados:            {contador['scrapeados']}
+  Medicamentos novos:    {contador['medicamentos_novos']}
+  Medicamentos updtd:    {contador['medicamentos_atualizados']}
+  Apresentações inser.:  {contador['apres_inseridas']}
+  Doses inseridas:       {contador['doses_inseridas']}
+  Falhas:                {contador['falhas']}
 {'='*65}
 """)
         return
@@ -1380,6 +1715,11 @@ def main():
             time.sleep(1)
 
             lista = scrape_lista_produtos(page)
+            if args.filtro_nome:
+                alvo = _norm(args.filtro_nome)
+                antes = len(lista)
+                lista = [it for it in lista if alvo in _norm(it["nome"])]
+                log.info(f"Filtro por nome {args.filtro_nome!r}: {antes} → {len(lista)} produtos.")
             if args.limite > 0:
                 lista = lista[:args.limite]
 
@@ -1480,14 +1820,15 @@ def main():
 
     print(f"""
 {'='*65}
-  RESULTADO
+  RESULTADO (cache → consolidado por PA)
 {'='*65}
-  Banco (antes):     {len(medicamentos_banco)}
-  Scrapeados:        {len(produtos)}
-  Atualizados:       {stats['atualizados']}
-  Inseridos:         {stats['inseridos']}
-  Sem alteração:     {stats['sem_alteracao']}
-  Dry-run:           {'SIM' if args.dry_run else 'NÃO'}
+  Banco (antes):          {len(medicamentos_banco)}
+  Produtos scrapeados:    {len(produtos)}
+  Medicamentos novos:     {stats['novos_medicamentos']}
+  Medicamentos updtd:     {stats['medicamentos_atualizados']}
+  Apresentações inser.:   {stats['apres_inseridas']}
+  Doses inseridas:        {stats['doses_inseridas']}
+  Dry-run:                {'SIM' if args.dry_run else 'NÃO'}
 {'='*65}
 """)
 

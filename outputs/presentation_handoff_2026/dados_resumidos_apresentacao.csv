@@ -1,0 +1,53 @@
+grupo,item,valor,observacao
+Base atual,Clientes totais,250,Dado do banco em 19/04/2026
+Base atual,Animais cadastrados,273,Dado do banco em 19/04/2026
+Base atual,Tutores com pets,216,Dado do banco em 19/04/2026
+Base atual,Tutores no fluxo de pesquisa,124,Dado do banco em 19/04/2026
+Base atual,Mensagens marcadas como enviadas,94,Dado do banco em 19/04/2026
+Base atual,Tutores que responderam,25,Dado do banco em 19/04/2026
+Base atual,Respostas estruturadas,14,Dado do banco em 19/04/2026
+Base atual,Não enviar agora,30,Dado do banco em 19/04/2026
+Base atual,Ainda sem ação na pesquisa,92,Dado do banco em 19/04/2026
+Interesse estruturado,Sim (1),12,Respostas estruturadas
+Interesse estruturado,Talvez (2),1,Respostas estruturadas
+Interesse estruturado,Não (3),1,Respostas estruturadas
+Ração atual estruturada,Marcas variadas,4,Contagem limpa
+Ração atual estruturada,Special Dog,4,Unificação de variantes de nome
+Ração atual estruturada,Sabor Natural,1,Contagem limpa
+Ração atual estruturada,Robust,1,Contagem limpa
+Ração atual estruturada,Nutrilus,1,Contagem limpa
+Ração atual estruturada,Speedy Dog,1,Contagem limpa
+Ração atual estruturada,Special Cat,1,Contagem limpa
+Embalagem estruturada,15 kg,7,Respostas estruturadas
+Embalagem estruturada,1 kg,4,Respostas estruturadas
+Embalagem estruturada,20 kg,1,Respostas estruturadas
+Embalagem estruturada,10 kg,1,Respostas estruturadas
+Preço estruturado,Até R$50,4,Faixa normalizada
+Preço estruturado,R$50–100,3,Faixa normalizada
+Preço estruturado,R$100–150,6,Faixa normalizada
+Canal de compra atual,Pet Shop,11,Normalização de grafias
+Canal de compra atual,Petlove,1,Respostas estruturadas
+Canal de compra atual,Agropecuária,1,Respostas estruturadas
+Histórico de ração limpo,Marcas variadas,8,Último registro por animal
+Histórico de ração limpo,Special Dog,4,Último registro por animal
+Histórico de ração limpo,Nutrilus,2,Último registro por animal
+Histórico de ração limpo,Coby,2,Último registro por animal
+Histórico de ração limpo,Quatree,1,Último registro por animal
+Histórico de ração limpo,Luck Dog,1,Último registro por animal
+Histórico de ração limpo,Speedy Dog,1,Último registro por animal
+Histórico de ração limpo,Robust,1,Último registro por animal
+Histórico de ração limpo,Sabor Natural,1,Último registro por animal
+Histórico de ração limpo,Special Cat,1,Último registro por animal
+Histórico de embalagem,15 kg,11,Último registro por animal
+Histórico de embalagem,1 kg,4,Último registro por animal
+Histórico de embalagem,10 kg,1,Último registro por animal
+Histórico de embalagem,20 kg,1,Último registro por animal
+Pesquisa anterior,Contatos pesquisados,29,Planilha do ano passado
+Pesquisa anterior,Special Dog,6,Planilha do ano passado
+Pesquisa anterior,Golden,5,Planilha do ano passado
+Pesquisa anterior,Variadas (preço),3,Planilha do ano passado
+Pesquisa anterior,Magnus super premium,2,Planilha do ano passado
+Pesquisa anterior,Formula Natural (gato),2,Planilha do ano passado
+Pesquisa anterior,Quatree,2,Planilha do ano passado
+Pesquisa anterior,Coby,2,Planilha do ano passado
+Pesquisa anterior,Premier hipoalergênica,2,Planilha do ano passado

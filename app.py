@@ -90,6 +90,7 @@ globals().update({
 })
 
 from models import (
+    AccountingAccount,
     DataShareAccess,
     DataSharePartyType,
     DataShareRequest,
@@ -1643,9 +1644,16 @@ from services import (
 )
 from services.geocode_queue import AddressGeocodeQueue
 from services.finance import (
+    build_accounting_dashboard,
+    build_cash_flow_report,
+    build_dre_report,
+    build_veterinarian_revenue_report,
     classify_transactions_for_month,
     determine_pj_payment_subcategory,
+    export_accountant_xlsx,
+    import_bank_statement,
     REQUIRED_PJ_PAYMENT_COLUMNS,
+    register_account,
     run_transactions_history_backfill,
 )
 from services.animal_search import search_animals
@@ -4205,6 +4213,16 @@ def contabilidade_financeiro():
             + projection_values
         )
     )
+    dashboard_metrics = (
+        build_accounting_dashboard(selected_clinic_id, current_month)
+        if selected_clinic_id
+        else None
+    )
+    vet_report = (
+        build_veterinarian_revenue_report(selected_clinic_id, current_month)
+        if selected_clinic_id
+        else []
+    )
 
     return render_template(
         'contabilidade/financeiro.html',
@@ -4231,7 +4249,172 @@ def contabilidade_financeiro():
         plantonista_media=plantonista_media,
         plantonista_custo_hora=plantonista_custo_hora,
         has_chart_data=has_chart_data,
+        dashboard_metrics=dashboard_metrics,
+        vet_report=vet_report,
     )
+
+
+def _decimal_json(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _decimal_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decimal_json(item) for item in value]
+    return value
+
+
+def _selected_accounting_context():
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=request.args.get('clinica_id', type=int),
+    )
+    selected_month = _parse_month_parameter(request.args.get('mes'))
+    return clinics, selected_clinic, selected_month
+
+
+@login_required
+def contabilidade_dre():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    period = (request.args.get('periodo') or 'monthly').lower()
+    report = build_dre_report(selected_clinic.id, selected_month, period) if selected_clinic else None
+    if request.accept_mimetypes.best == 'application/json' or request.args.get('format') == 'json':
+        return jsonify(_decimal_json(report or {}))
+    return render_template(
+        'contabilidade/dre.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        selected_period=period,
+        report=report,
+    )
+
+
+@login_required
+def contabilidade_fluxo_caixa():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    report = build_cash_flow_report(selected_clinic.id, selected_month) if selected_clinic else None
+    if request.accept_mimetypes.best == 'application/json' or request.args.get('format') == 'json':
+        return jsonify(_decimal_json(report or {}))
+    return render_template(
+        'contabilidade/fluxo_caixa.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        report=report,
+    )
+
+
+@login_required
+def contabilidade_contas():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return render_template('contabilidade/contas.html', clinics=clinics, selected_clinic=None, selected_month=selected_month, accounts=[])
+
+    if request.method == 'POST':
+        due_date_raw = request.form.get('due_date') or request.form.get('vencimento')
+        try:
+            due_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date()
+            register_account(
+                selected_clinic.id,
+                request.form.get('kind') or request.form.get('tipo') or 'payable',
+                request.form.get('description') or request.form.get('descricao') or 'Conta manual',
+                request.form.get('amount') or request.form.get('valor') or '0',
+                due_date,
+                counterparty_name=request.form.get('counterparty_name') or request.form.get('contraparte'),
+            )
+            flash('Conta registrada com sucesso.', 'success')
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.warning('Falha ao registrar conta: %s', exc, exc_info=exc)
+            flash('Nao foi possivel registrar a conta. Confira os campos.', 'danger')
+        return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+
+    month_end = selected_month + relativedelta(months=1)
+    accounts = (
+        AccountingAccount.query
+        .filter(AccountingAccount.clinic_id == selected_clinic.id)
+        .filter(or_(AccountingAccount.due_date.is_(None), and_(AccountingAccount.due_date >= selected_month, AccountingAccount.due_date < month_end)))
+        .order_by(AccountingAccount.status.asc(), AccountingAccount.due_date.asc(), AccountingAccount.id.desc())
+        .all()
+    )
+    if request.args.get('format') == 'json':
+        payload = [
+            {
+                'id': account.id,
+                'kind': account.kind,
+                'status': account.status,
+                'description': account.description,
+                'due_date': account.due_date,
+                'paid_at': account.paid_at,
+                'net_amount': account.net_amount,
+                'source_reference': account.source_reference,
+            }
+            for account in accounts
+        ]
+        return jsonify(_decimal_json(payload))
+    return render_template(
+        'contabilidade/contas.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        accounts=accounts,
+    )
+
+
+@login_required
+def contabilidade_conciliacao_importar():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        abort(400)
+    uploaded = request.files.get('arquivo') or request.files.get('file')
+    if not uploaded:
+        flash('Envie um arquivo OFX ou CNAB.', 'warning')
+        return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+    content = uploaded.read().decode('utf-8', errors='ignore')
+    result = import_bank_statement(selected_clinic.id, content, file_type=(uploaded.filename or '').rsplit('.', 1)[-1])
+    flash(f"Extrato importado: {result['total']} lancamento(s), {result['matched']} conciliado(s).", 'success')
+    return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+
+
+@login_required
+def contabilidade_exportar_xlsx():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        abort(400)
+    content = export_accountant_xlsx(selected_clinic.id, selected_month)
+    response = make_response(content)
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    filename = f"relatorio-contabil-{selected_clinic.id}-{selected_month:%Y-%m}.xlsx"
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def api_contabilidade_dashboard():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return jsonify({})
+    return jsonify(_decimal_json(build_accounting_dashboard(selected_clinic.id, selected_month)))
+
+
+@login_required
+def api_contabilidade_veterinarios():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return jsonify([])
+    return jsonify(_decimal_json(build_veterinarian_revenue_report(selected_clinic.id, selected_month)))
 
 
 def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[str, str]]:
@@ -25395,6 +25578,12 @@ def bulario():
 
     total = query.count()
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Agrupamento clínico: 176 classes cruas viram 10 macro-grupos
+    # (Antimicrobiano, Antiparasitário, Vacina, etc.) com drill-down.
+    from services.bulario import construir_macro_grupos
+    macro_grupos, macro_ativo = construir_macro_grupos(classes, classificacao)
+
     return render_template(
         "bulario/lista.html",
         medicamentos=paginacao.items,
@@ -25403,6 +25592,8 @@ def bulario():
         classificacao=classificacao,
         classes=classes,
         total=total,
+        macro_grupos=macro_grupos,
+        macro_ativo=macro_ativo,
     )
 
 
@@ -25592,12 +25783,16 @@ def bulario_sugerir_dose_api():
     Query params:
       - medicamento_id (int, obrigatório)
       - animal_id      (int, obrigatório)
+      - indicacao      (str, opcional) — 'Alergia', 'Imunossupressão', etc.
+        Quando há mais de uma indicação disponível e o cliente não passou
+        nenhuma, a resposta vem em modo "multiplo" com a lista de opções.
     """
     from models.base import Medicamento, Animal
     from services.bulario import sugerir_dose
 
     med_id = request.args.get("medicamento_id", type=int)
     animal_id = request.args.get("animal_id", type=int)
+    indicacao = (request.args.get("indicacao") or "").strip() or None
     if not med_id or not animal_id:
         return jsonify({
             "disponivel": False,
@@ -25631,7 +25826,7 @@ def bulario_sugerir_dose_api():
             "motivo": "Este medicamento ainda não tem protocolo de dose cadastrado no bulário.",
         })
 
-    sugestao = sugerir_dose(med, animal)
+    sugestao = sugerir_dose(med, animal, indicacao=indicacao)
     if not sugestao:
         return jsonify({
             "disponivel": False,
@@ -25651,13 +25846,32 @@ def bulario_sugerir_dose_api():
     sugestao["dose_min"] = _safe(sugestao.get("dose_min"))
     sugestao["dose_max"] = _safe(sugestao.get("dose_max"))
 
+    # Modo "múltiplas indicações": front exibe dropdown e recompõe a chamada
+    if sugestao.get("multiplo"):
+        return jsonify({
+            "disponivel": True,
+            "multiplo": True,
+            "medicamento": {
+                "id": med.id,
+                "nome": med.nome,
+                "principio_ativo": med.principio_ativo or "",
+            },
+            "animal": {
+                "id": animal.id,
+                "nome": getattr(animal, "name", None) or getattr(animal, "nome", None) or "",
+                "especie": (getattr(getattr(animal, "species", None), "name", None) or ""),
+                "peso_kg": peso_f,
+            },
+            "indicacoes": sugestao.get("indicacoes", []),
+        })
+
     return jsonify({
         "disponivel": True,
+        "multiplo": False,
         "medicamento": {
             "id": med.id,
             "nome": med.nome,
             "principio_ativo": med.principio_ativo or "",
-            "fabricante": med.fabricante or "",
         },
         "animal": {
             "id": animal.id,

@@ -1230,6 +1230,75 @@ class ClassifiedTransaction(db.Model):
         return f"<{self.origin} {self.category} R$ {self.value}>"
 
 
+class AccountingAccount(db.Model):
+    __tablename__ = 'accounting_accounts'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'source_type', 'source_id', 'kind', name='uq_accounting_account_source'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False, index=True)  # receivable/payable
+    status = db.Column(db.String(20), nullable=False, default='open', server_default='open', index=True)
+    description = db.Column(db.String(255), nullable=False)
+    counterparty_name = db.Column(db.String(150), nullable=True)
+    gross_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    tax_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    net_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    issue_date = db.Column(db.Date, nullable=True, index=True)
+    due_date = db.Column(db.Date, nullable=True, index=True)
+    paid_at = db.Column(db.Date, nullable=True, index=True)
+    source_type = db.Column(db.String(50), nullable=True)
+    source_id = db.Column(db.Integer, nullable=True)
+    source_reference = db.Column(db.String(120), nullable=True)
+    bank_transaction_id = db.Column(db.Integer, db.ForeignKey('bank_statement_transactions.id'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+    )
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('accounting_accounts', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def mark_paid(self, paid_date=None, bank_transaction=None):
+        self.status = 'paid'
+        self.paid_at = paid_date or date.today()
+        if bank_transaction is not None:
+            self.bank_transaction_id = bank_transaction.id
+
+
+class BankStatementTransaction(db.Model):
+    __tablename__ = 'bank_statement_transactions'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'fit_id', name='uq_bank_statement_fit_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    posted_at = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(14, 2), nullable=False)
+    memo = db.Column(db.String(255), nullable=True)
+    fit_id = db.Column(db.String(120), nullable=True)
+    matched_account_id = db.Column(db.Integer, db.ForeignKey('accounting_accounts.id'), nullable=True)
+    match_confidence = db.Column(db.Numeric(5, 2), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('bank_statement_transactions', cascade='all, delete-orphan', lazy=True),
+    )
+    matched_account = db.relationship(
+        'AccountingAccount',
+        foreign_keys=[matched_account_id],
+        backref=db.backref('bank_matches', lazy=True),
+    )
+
+
 class PJPayment(db.Model):
     __tablename__ = 'pj_payments'
     __table_args__ = (
@@ -1834,6 +1903,10 @@ class Medicamento(db.Model):
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
 
+    # Produto "canônico" no VetSmart que representa este PA
+    # (ex.: "Prednisona" PA genérico, id=1970)
+    vetsmart_produto_id = db.Column(db.Integer, index=True)
+
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -1860,6 +1933,14 @@ class ApresentacaoMedicamento(db.Model):
     concentracao_unidade = db.Column(db.String(20))           # 'mg' | 'mg/ml' | 'UI' | '%'
     volume_valor         = db.Column(db.Numeric(12, 3))       # 10 (un) ou 50 (ml)
     volume_unidade       = db.Column(db.String(20))           # 'un' | 'ml' | 'g'
+
+    # Fabricante específico desta apresentação.
+    # Um mesmo Medicamento (ex.: "Prednisona") pode ter apresentações
+    # da LigVet, Animalia, genérico, etc.
+    fabricante           = db.Column(db.String(150))
+
+    # Origem no VetSmart (produto comercial de onde veio a apresentação).
+    vetsmart_produto_id  = db.Column(db.Integer, index=True)
 
     def __str__(self):
         return f"{self.medicamento.nome} – {self.forma} ({self.concentracao})"
@@ -1891,6 +1972,11 @@ class DoseMedicamento(db.Model):
     dose_raw_text      = db.Column(db.Text)                    # trecho original do VetSmart
     fonte              = db.Column(db.String(15), default='HUMANO')  # 'SCRAPER'|'LLM'|'HUMANO'
     confianca          = db.Column(db.String(10), default='MEDIA')   # 'ALTA'|'MEDIA'|'BAIXA'
+
+    # Indicação clínica desta dose (Alergia, Imunossupressão, Dermatite atópica, ...).
+    # NULL quando o parser não consegue inferir com confiança — nesse caso o
+    # calculador de dose exibe todas as doses disponíveis e deixa o vet escolher.
+    indicacao          = db.Column(db.String(120), index=True)
 
     def __str__(self):
         partes = [p for p in [self.especie, self.faixa_peso, self.dose] if p]
@@ -2569,3 +2655,51 @@ def _format_age_label(number, unit):
     else:
         suffix = 'ano' if number == 1 else 'anos'
     return f"{number} {suffix}"
+
+
+def _normalize_person_name(value):
+    if value is None:
+        return None
+
+    normalized = " ".join(str(value).split())
+    if not normalized:
+        return normalized
+
+    lowered = normalized.lower()
+    result = []
+    capitalize_next = True
+
+    for char in lowered:
+        if capitalize_next and char.isalpha():
+            result.append(char.upper())
+            capitalize_next = False
+        else:
+            result.append(char)
+            capitalize_next = char in {" ", "-", "'"}
+
+    return "".join(result)
+
+
+def _normalize_model_name(target):
+    if hasattr(target, "name"):
+        target.name = _normalize_person_name(target.name)
+
+
+@event.listens_for(User, "before_insert")
+def _normalize_user_name_before_insert(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(User, "before_update")
+def _normalize_user_name_before_update(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(Animal, "before_insert")
+def _normalize_animal_name_before_insert(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(Animal, "before_update")
+def _normalize_animal_name_before_update(mapper, connection, target):
+    _normalize_model_name(target)

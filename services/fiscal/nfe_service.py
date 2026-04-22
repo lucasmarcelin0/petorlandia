@@ -9,6 +9,9 @@ from typing import Any, Optional
 from flask import current_app
 from lxml import etree
 
+# Blindagem XXE: parse de XML externo (resposta SEFAZ) via helper hardened.
+from security.xml_safe import safe_lxml_fromstring
+
 from extensions import db
 from models import (
     Appointment,
@@ -708,13 +711,18 @@ def _extract_xml_value(xml: str, tag: str) -> str | None:
     if not xml:
         return None
     try:
-        root = etree.fromstring(xml.encode("utf-8"))
+        root = safe_lxml_fromstring(xml)
         node = root.find(f".//{tag}")
         if node is None:
             node = root.find(f".//{{*}}{tag}")
         if node is not None and node.text:
             return node.text
-    except Exception:  # noqa: BLE001
+    except etree.XMLSyntaxError:
+        return None
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning(
+            "Falha ao extrair tag %s do XML NF-e: %s", tag, exc
+        )
         return None
     return None
 
@@ -723,7 +731,7 @@ def _redact_xml(xml: str | None) -> str | None:
     if not xml:
         return xml
     try:
-        root = etree.fromstring(xml.encode("utf-8"))
+        root = safe_lxml_fromstring(xml)
         for tag in ["CPF", "CNPJ", "IE"]:
             for node in root.findall(f".//{tag}"):
                 if node.text:

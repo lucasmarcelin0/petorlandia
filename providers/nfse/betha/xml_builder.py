@@ -7,6 +7,11 @@ from typing import Any, Iterable
 
 from lxml import etree
 
+# Blindagem: `item` no loop abaixo pode vir de um cache em banco (string RPS
+# serializada) — se um valor adulterado chegar aqui, o fromstring default do
+# lxml resolve entidades. Usamos o parser hardened mesmo em XML "de dentro".
+from security.xml_safe import safe_lxml_fromstring
+
 
 def _text(value: Any) -> str:
     return str(value) if value is not None else ""
@@ -113,9 +118,9 @@ def build_lote_xml(rps_list: Iterable[str | dict[str, Any]]) -> str:
     lista = etree.SubElement(lote_rps, "ListaRps")
     for item in lote_payloads:
         if isinstance(item, str):
-            rps_el = etree.fromstring(item.encode("utf-8"))
+            rps_el = safe_lxml_fromstring(item)
         else:
-            rps_el = etree.fromstring(build_rps_xml(item).encode("utf-8"))
+            rps_el = safe_lxml_fromstring(build_rps_xml(item))
         lista.append(rps_el)
 
     return etree.tostring(lote, encoding="unicode")

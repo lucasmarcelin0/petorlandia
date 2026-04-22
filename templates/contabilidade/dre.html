@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+{% set titulo = "DRE" %}
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">DRE</h2>
+      <p class="text-muted mb-0">Resultado por receitas, impostos, custos e despesas.</p>
+    </div>
+    {% if selected_clinic %}
+    <a class="btn btn-outline-success" href="{{ url_for('contabilidade_exportar_xlsx', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')) }}">
+      <i class="fas fa-file-excel me-1"></i>Relatorio XLSX
+    </a>
+    {% endif %}
+  </div>
+
+  <form class="card border-0 shadow-sm mb-4" method="get">
+    <div class="card-body row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Clinica</label>
+        <select class="form-select" name="clinica_id">
+          {% for clinic in clinics %}
+          <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>{{ clinic.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Mes</label>
+        <input class="form-control" type="month" name="mes" value="{{ selected_month.strftime('%Y-%m') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Periodo</label>
+        <select class="form-select" name="periodo">
+          <option value="monthly" {% if selected_period == 'monthly' %}selected{% endif %}>Mensal</option>
+          <option value="quarterly" {% if selected_period == 'quarterly' %}selected{% endif %}>Trimestral</option>
+          <option value="annual" {% if selected_period == 'annual' %}selected{% endif %}>Anual</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-primary w-100" type="submit"><i class="fas fa-search"></i></button>
+      </div>
+    </div>
+  </form>
+
+  {% if report %}
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Mes</th>
+            <th>Receitas</th>
+            <th>Impostos</th>
+            <th>Custos produtos</th>
+            <th>Despesas fixas</th>
+            <th>Resultado liquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.rows %}
+          <tr>
+            <td>{{ row.month.strftime('%m/%Y') }}</td>
+            <td>{{ row.receita_bruta | currency_br }}</td>
+            <td>{{ row.impostos | currency_br }}</td>
+            <td>{{ row.custos_produtos | currency_br }}</td>
+            <td>{{ row.despesas_fixas | currency_br }}</td>
+            <td class="fw-semibold">{{ row.resultado_liquido | currency_br }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
