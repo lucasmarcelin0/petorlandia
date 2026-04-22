@@ -1,11 +1,11 @@
 {
-  "title": "T0 Estudo SFA Orlandia",
-  "subtitle": "Pesquisa sobre sindromes febris agudas no municipio. Responda com calma. Leva cerca de 8 a 10 minutos.",
-  "submit_label": "Enviar resposta",
+  "title": "T0 Atualizacao Forms Codex - SFA Orlandia",
+  "subtitle": "Formulario inicial padronizado para sindromes febris agudas. Mantem as informacoes essenciais com escalas comparaveis.",
+  "submit_label": "Enviar resposta T0",
   "sections": [
     {
       "title": "Secao 1: Identificacao e contexto",
-      "description": "Informacoes iniciais sobre voce e onde vive.",
+      "description": "Dados minimos para vinculo e perfil epidemiologico.",
       "fields": [
         {
           "key": "cpf",
@@ -20,8 +20,7 @@
           "type": "text",
           "required": false,
           "readonly": true,
-          "prefill": "ficha_sinan",
-          "help_text": "Campo preenchido automaticamente com base no cadastro SINAN."
+          "prefill": "ficha_sinan"
         },
         {
           "key": "nome",
@@ -39,63 +38,38 @@
         },
         {
           "key": "endereco",
-          "label": "Endereco completo (rua, numero, bairro, ponto de referencia)",
+          "label": "Endereco completo",
           "type": "textarea",
           "required": true,
-          "prefill": "endereco"
+          "prefill": "endereco",
+          "help_text": "Usado para contato e eventual georreferencia segura; dashboards usam bairro/faixa territorial."
         },
         {
           "key": "tipo_residencia",
           "label": "Tipo de moradia",
           "type": "select",
           "required": true,
-          "options": ["Casa urbana", "Casa rural", "Apartamento", "Outro"]
+          "options": [
+            "Casa urbana",
+            "Casa rural",
+            "Apartamento",
+            "Outro"
+          ]
         }
       ]
     },
     {
-      "title": "Secao 2: Perfil de saude",
-      "description": "Algumas perguntas sobre historico pessoal e saude.",
+      "title": "Secao 2: Perfil de saude e exposicao",
+      "description": "Perfil individual e exposicoes agrupadas para reduzir redundancia.",
       "fields": [
-        {
-          "key": "diagnostico_dengue_previo",
-          "label": "Ja teve diagnostico confirmado de dengue antes?",
-          "type": "radio",
-          "required": true,
-          "options": ["Sim", "Nao", "Nao sei"]
-        },
-        {
-          "key": "condicoes_previas",
-          "label": "Tem alguma destas condicoes? (marque todas)",
-          "type": "checkboxes",
-          "required": true,
-          "options": [
-            "Diabetes",
-            "Hipertensao (pressao alta)",
-            "Problemas nos rins",
-            "Problemas no figado",
-            "Gestante (so mulheres)",
-            "Nenhuma das acima"
-          ]
-        },
         {
           "key": "sexo_biologico",
           "label": "Sexo biologico",
           "type": "radio",
           "required": true,
-          "options": ["Masculino", "Feminino"]
-        },
-        {
-          "key": "vacinas_12_meses",
-          "label": "Vacinas nos ultimos 12 meses (marque todas)",
-          "type": "checkboxes",
-          "required": true,
           "options": [
-            "Dengue (Qdenga)",
-            "Febre amarela",
-            "Gripe (influenza)",
-            "COVID-19 (reforco recente)",
-            "Nenhuma"
+            "Masculino",
+            "Feminino"
           ]
         },
         {
@@ -116,17 +90,101 @@
           ]
         },
         {
-          "key": "fuma_ou_bebe",
-          "label": "Fuma ou consome bebida alcoolica regularmente?",
+          "key": "condicoes_previas",
+          "label": "Condicoes previas relevantes (marque todas)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Diabetes",
+            "Hipertensao",
+            "Problemas nos rins",
+            "Problemas no figado",
+            "Gestante",
+            "Imunossupressao",
+            "Nenhuma das acima"
+          ]
+        },
+        {
+          "key": "diagnostico_dengue_previo",
+          "label": "Ja teve dengue confirmada antes?",
           "type": "radio",
           "required": true,
-          "options": ["Nao", "Fumo", "Alcool", "Ambos"]
+          "options": [
+            "Sim",
+            "Nao",
+            "Nao sei"
+          ]
+        },
+        {
+          "key": "vacinas_12_meses",
+          "label": "Vacinas nos ultimos 12 meses (marque todas)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Dengue (Qdenga)",
+            "Febre amarela",
+            "Gripe (influenza)",
+            "COVID-19 (reforco recente)",
+            "Nenhuma"
+          ]
+        },
+        {
+          "key": "exposicao_ambiental",
+          "label": "Exposicao ambiental nos 15 dias antes dos sintomas",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Agua suja/lama/enchente",
+            "Rio/corrego/pesca/natacao",
+            "Mata/trilha/camping",
+            "Area rural/chacara",
+            "Nenhuma exposicao ambiental"
+          ]
+        },
+        {
+          "key": "exposicao_animal",
+          "label": "Contato animal nos 15 dias antes dos sintomas",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Caes",
+            "Gatos",
+            "Gado/porcos/galinhas",
+            "Roedores",
+            "Carrapato",
+            "Nenhum contato animal relevante"
+          ]
+        },
+        {
+          "key": "exposicao_alimentar",
+          "label": "Exposicao alimentar/hidrica nos 7 dias antes dos sintomas",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Carne malpassada/crua",
+            "Leite cru/queijo nao pasteurizado",
+            "Ovos crus/maionese caseira",
+            "Agua nao tratada",
+            "Comida de rua/barracas",
+            "Nenhuma dessas"
+          ]
+        },
+        {
+          "key": "outras_pessoas_com_sintomas",
+          "label": "Na casa ou vizinhanca ha pessoas com sintomas parecidos?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Sim",
+            "Nao",
+            "Nao sei"
+          ]
         }
       ]
     },
     {
-      "title": "Secao 3: Sintomas atuais",
-      "description": "Perguntas sobre inicio dos sintomas e quadro atual.",
+      "title": "Secao 3: Quadro clinico inicial",
+      "description": "Sintomas e intensidade no inicio da doenca.",
       "fields": [
         {
           "key": "data_inicio_sintomas",
@@ -136,26 +194,30 @@
         },
         {
           "key": "teve_febre",
-          "label": "Teve febre (temperatura elevada)?",
-          "type": "radio",
-          "required": true,
-          "options": ["Sim", "Nao"]
-        },
-        {
-          "key": "padrao_febre",
-          "label": "Padrao da febre (se teve)",
+          "label": "Teve febre?",
           "type": "radio",
           "required": true,
           "options": [
-            "Continua (o dia todo)",
-            "Vai e volta",
-            "So a noite/madrugada",
-            "Nao tive febre"
+            "Sim",
+            "Nao"
+          ]
+        },
+        {
+          "key": "intensidade_febre",
+          "label": "Intensidade da febre percebida (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
           ]
         },
         {
           "key": "sintomas_principais",
-          "label": "Quais destes sintomas voce apresenta? (marque todos)",
+          "label": "Sintomas principais no inicio (marque todos)",
           "type": "checkboxes",
           "required": true,
           "options": [
@@ -165,132 +227,79 @@
             "Dores nas articulacoes (juntas)",
             "Manchas vermelhas na pele",
             "Coceira no corpo",
-            "Cansaco extremo"
+            "Cansaco extremo/fadiga",
+            "Dor de cabeca forte",
+            "Nausea/vomitos"
           ]
         },
         {
           "key": "sinais_alerta",
-          "label": "Apresentou algum destes sinais de alerta? (marque todos)",
+          "label": "Sinais de alerta no inicio (marque todos)",
           "type": "checkboxes",
-          "required": false,
+          "required": true,
           "options": [
             "Sangramento (nariz, gengiva, pele)",
-            "Urina muito escura (cor de Coca-Cola)",
+            "Urina muito escura",
             "Olhos ou pele amarelados",
             "Vomitos persistentes",
             "Dor abdominal intensa",
             "Confusao mental/tontura",
-            "Falta de ar"
+            "Falta de ar",
+            "Nenhum sinal de alerta"
           ]
         },
         {
-          "key": "outros_sintomas",
-          "label": "Outros sintomas (marque todos)",
-          "type": "checkboxes",
-          "required": false,
-          "options": [
-            "Diarreia",
-            "Nausea",
-            "Tosse",
-            "Dor de garganta",
-            "Coriza (nariz escorrendo)",
-            "Dor de cabeca forte"
-          ]
-        },
-        {
-          "key": "dor_mais_intensa",
-          "label": "Onde a dor e mais intensa?",
-          "type": "select",
+          "key": "dor_articular_intensidade",
+          "label": "Dor articular hoje/inicio (1 a 5)",
+          "type": "radio",
           "required": true,
           "options": [
-            "Cabeca",
-            "Atras dos olhos",
-            "Musculos",
-            "Articulacoes",
-            "Barriga (abdome)",
-            "Peito",
-            "Nao tenho dor intensa"
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "fadiga_intensidade",
+          "label": "Fadiga/cansaco hoje/inicio (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "impacto_atividades",
+          "label": "Impacto nas atividades no inicio",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nenhum",
+            "Leve - incomoda, mas nao limita",
+            "Moderado - limita algumas atividades",
+            "Importante - impede varias atividades",
+            "Incapacitante - impede atividades basicas"
           ]
         }
       ]
     },
     {
-      "title": "Secao 4: Exposicoes recentes",
-      "description": "Contato com agua, animais, alimentos e ambientes de risco.",
-      "fields": [
-        {
-          "key": "contato_agua_suja",
-          "label": "Nos ultimos 15 dias, teve contato com agua suja/lama/enchente?",
-          "type": "radio",
-          "required": true,
-          "options": ["Sim", "Nao"]
-        },
-        {
-          "key": "contato_carrapato_mata",
-          "label": "Nos ultimos 15 dias, teve picada de carrapato ou contato com areas de mata?",
-          "type": "radio",
-          "required": true,
-          "options": ["Sim", "Nao"]
-        },
-        {
-          "key": "outras_pessoas_com_sintomas",
-          "label": "Na sua casa ou vizinhanca, ha outras pessoas com sintomas parecidos?",
-          "type": "radio",
-          "required": true,
-          "options": ["Sim", "Nao", "Nao sei"]
-        },
-        {
-          "key": "contato_animais",
-          "label": "Nos ultimos 15 dias, teve contato com: (marque todos)",
-          "type": "checkboxes",
-          "required": true,
-          "options": [
-            "Caes ou gatos domesticos",
-            "Gado, porcos ou galinhas",
-            "Roedores (ratos, camundongos) vivos/mortos",
-            "Gatos filhotes ou limpeza de fezes de gato",
-            "Nenhum contato com animais"
-          ]
-        },
-        {
-          "key": "consumo_recente",
-          "label": "Nos ultimos 7 dias, consumiu: (marque todos)",
-          "type": "checkboxes",
-          "required": true,
-          "options": [
-            "Carne malpassada ou crua",
-            "Leite cru ou queijo nao pasteurizado",
-            "Ovos crus (gemada, maionese caseira)",
-            "Comida de rua ou barracas",
-            "Agua nao tratada (poco, rio, mina)",
-            "Nenhum desses"
-          ]
-        },
-        {
-          "key": "atividades_recentes",
-          "label": "Nos ultimos 15 dias, realizou: (marque todos)",
-          "type": "checkboxes",
-          "required": true,
-          "options": [
-            "Pesca ou natacao em rio/corrego",
-            "Trilha, camping ou caca",
-            "Trabalho em area rural/chacara",
-            "Lazer em area rural/chacara",
-            "Nenhuma dessas atividades"
-          ]
-        }
-      ]
-    },
-    {
-      "title": "Secao 5: Impacto no dia a dia",
-      "description": "Internacao, gastos e ausencia de familiares.",
+      "title": "Secao 4: Impacto funcional e economico inicial",
+      "description": "Use valores acumulados desde o inicio dos sintomas ate hoje.",
       "fields": [
         {
           "key": "dias_incap",
-          "label": "Quantos dias ficou completamente incapacitado(a) (0 se nenhum)",
+          "label": "Dias completamente incapacitado(a) desde o inicio",
           "type": "number",
           "required": true,
-          "min": 0
+          "min": 0,
+          "step": 1
         },
         {
           "key": "internacao",
@@ -299,22 +308,55 @@
           "required": true,
           "options": [
             "Nao",
-            "Sim, em hospital publico",
-            "Sim, em hospital particular",
-            "Sim, em ambos"
+            "Sim, hospital publico",
+            "Sim, hospital particular",
+            "Sim, ambos"
           ]
         },
         {
-          "key": "custo_total",
-          "label": "Gastos aproximados totais (R$) - remedios + exames + transporte",
+          "key": "custo_remedios",
+          "label": "Medicamentos ate hoje (R$)",
           "type": "number",
           "required": true,
           "min": 0,
-          "step": "0.01"
+          "step": 0.01
+        },
+        {
+          "key": "custo_consultas",
+          "label": "Consultas/exames ate hoje (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_transporte",
+          "label": "Transporte ate hoje (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_outros",
+          "label": "Outros gastos ate hoje (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_total",
+          "label": "Total aproximado ate hoje (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01,
+          "help_text": "Pode repetir a soma dos campos acima se preferir."
         },
         {
           "key": "ausencia_familiar",
-          "label": "Alguem da sua familia precisou faltar ao trabalho para cuidar de voce?",
+          "label": "Alguem da familia precisou faltar ao trabalho para cuidar de voce?",
           "type": "radio",
           "required": true,
           "options": [
@@ -326,22 +368,22 @@
         },
         {
           "key": "observacoes_finais",
-          "label": "Observacoes finais ou algo importante que nao perguntamos?",
+          "label": "Observacoes finais (opcional)",
           "type": "textarea",
           "required": false
         }
       ]
     },
     {
-      "title": "Secao 6: Consentimento para participar",
-      "description": "Antes de enviar, confirme que leu o termo e que aceita participar voluntariamente da pesquisa.",
+      "title": "Secao 5: Consentimento",
+      "description": "Confirme o consentimento para participar voluntariamente.",
       "fields": [
         {
           "key": "aceite_tcle",
           "label": "Aceite do TCLE",
           "type": "checkboxes",
           "required": true,
-          "help_text": "Marque a opcao abaixo para registrar seu aceite. O nome preenchido acima sera usado como assinatura do consentimento.",
+          "help_text": "O nome informado sera usado como assinatura do consentimento.",
           "options": [
             "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
           ]

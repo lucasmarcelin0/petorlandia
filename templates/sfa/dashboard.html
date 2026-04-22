@@ -136,6 +136,38 @@
 
     <!-- Pendências de revisão -->
     <div class="card shadow-sm mb-3">
+      <div class="card-header" style="background:var(--sfa-orange);color:white">
+        <i class="fas fa-flask me-2"></i>Base de testes
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Gera um lote isolado com pacientes marcados como teste, T0/T10/T30 preenchidos
+          e ocultos do fluxo real por padrÃ£o.
+        </p>
+        <div class="small mb-3">
+          <div><strong>Total:</strong> {{ resumo_testes.total }}</div>
+          <div><strong>T0:</strong> {{ resumo_testes.com_t0 }} | <strong>T10:</strong> {{ resumo_testes.com_t10 }} | <strong>T30:</strong> {{ resumo_testes.com_t30 }}</div>
+        </div>
+        <form method="POST" action="{{ url_for('sfa_routes.gerar_teste_dados') }}" class="row g-2 mb-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-6">
+            <input type="number" min="1" max="100" name="quantidade" value="20" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 d-grid">
+            <button type="submit" class="btn btn-sm btn-primary">Gerar lote de teste</button>
+          </div>
+        </form>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('sfa_routes.pacientes', visao='testes') }}" class="btn btn-sm btn-outline-secondary">Ver testes</a>
+          <form method="POST" action="{{ url_for('sfa_routes.apagar_teste_dados') }}" onsubmit="return confirm('Apagar todos os pacientes de teste da SFA?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Apagar testes</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
       <div class="card-header" style="background:#ffc107">
         <i class="fas fa-exclamation-triangle me-2"></i>Pendências de revisão
         <span class="badge bg-dark ms-1">{{ stats.pendentes_revisao }}</span>

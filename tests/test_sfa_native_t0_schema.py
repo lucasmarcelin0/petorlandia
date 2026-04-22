@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from werkzeug.datastructures import MultiDict
@@ -15,6 +16,8 @@ from services.sfa_service import (
     salvar_t0_form_schema,
     serializar_t0_form_schema,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _paciente_fake():
@@ -34,18 +37,22 @@ def _paciente_fake():
 def test_carregar_t0_form_schema_tem_campos_esperados():
     schema = carregar_t0_form_schema()
 
-    assert schema["title"] == "T0 Estudo SFA Orlandia"
+    assert schema["title"] == "T0 Atualizacao Forms Codex - SFA Orlandia"
     assert any(field["key"] == "nome" for section in schema["sections"] for field in section["fields"])
     assert any(field["key"] == "custo_total" for section in schema["sections"] for field in section["fields"])
     assert any(field["key"] == "aceite_tcle" for section in schema["sections"] for field in section["fields"])
+    animal_field = next(field for section in schema["sections"] for field in section["fields"] if field["key"] == "exposicao_animal")
+    assert "Caes" in animal_field["options"]
+    assert "Gatos" in animal_field["options"]
+    assert "Caes ou gatos" not in animal_field["options"]
 
 
 def test_carregar_t10_t30_form_schemas_tem_campos_esperados():
     schema_t10 = carregar_t10_form_schema()
     schema_t30 = carregar_t30_form_schema()
 
-    assert schema_t10["title"] == "T10 Estudo SFA Orlandia"
-    assert schema_t30["title"] == "T30 Estudo SFA Orlandia"
+    assert schema_t10["title"] == "T10 Atualizacao Forms Codex - SFA Orlandia"
+    assert schema_t30["title"] == "T30 Atualizacao Forms Codex - SFA Orlandia"
     assert any(field["key"] == "classificacao_melhora" for section in schema_t10["sections"] for field in section["fields"])
     assert any(field["key"] == "dias_incap_novos" for section in schema_t10["sections"] for field in section["fields"])
     assert any(field["key"] == "estado_saude_final" for section in schema_t30["sections"] for field in section["fields"])
@@ -96,20 +103,24 @@ def test_coletar_resposta_t0_nativa_normaliza_payload():
             ("sexo_biologico", "Feminino"),
             ("vacinas_12_meses", "Nenhuma"),
             ("ocupacao_principal", "Estudante"),
-            ("fuma_ou_bebe", "Nao"),
+            ("exposicao_ambiental", "Nenhuma exposicao ambiental"),
+            ("exposicao_animal", "Nenhum contato animal relevante"),
+            ("exposicao_alimentar", "Nenhuma dessas"),
             ("data_inicio_sintomas", "2026-03-18"),
             ("teve_febre", "Sim"),
-            ("padrao_febre", "Vai e volta"),
-            ("sintomas_principais", "Cansaco extremo"),
-            ("dor_mais_intensa", "Cabeca"),
-            ("contato_agua_suja", "Nao"),
-            ("contato_carrapato_mata", "Nao"),
+            ("intensidade_febre", "4"),
+            ("sintomas_principais", "Cansaco extremo/fadiga"),
+            ("sinais_alerta", "Nenhum sinal de alerta"),
+            ("dor_articular_intensidade", "4"),
+            ("fadiga_intensidade", "5"),
+            ("impacto_atividades", "Moderado - limita algumas atividades"),
             ("outras_pessoas_com_sintomas", "Nao sei"),
-            ("contato_animais", "Nenhum contato com animais"),
-            ("consumo_recente", "Nenhum desses"),
-            ("atividades_recentes", "Nenhuma dessas atividades"),
             ("dias_incap", "2"),
             ("internacao", "Nao"),
+            ("custo_remedios", "8.50"),
+            ("custo_consultas", "0"),
+            ("custo_transporte", "7.25"),
+            ("custo_outros", "0"),
             ("custo_total", "15.75"),
             ("ausencia_familiar", "Nao"),
             ("aceite_tcle", sfa_service.T0_CONSENT_ACCEPTED),
@@ -130,7 +141,7 @@ def test_coletar_resposta_t0_nativa_normaliza_payload():
     assert dados["data_nascimento"] == "01/01/2000"
     assert dados["data_inicio_sintomas"] == "18/03/2026"
     assert dados["condicoes_previas"] == ["Nenhuma das acima"]
-    assert dados["sintomas_principais"] == ["Cansaco extremo"]
+    assert dados["sintomas_principais"] == ["Cansaco extremo/fadiga"]
     assert dados["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
 
 
@@ -146,20 +157,24 @@ def test_coletar_resposta_t0_nativa_exige_aceite_do_tcle():
             ("sexo_biologico", "Feminino"),
             ("vacinas_12_meses", "Nenhuma"),
             ("ocupacao_principal", "Estudante"),
-            ("fuma_ou_bebe", "Nao"),
+            ("exposicao_ambiental", "Nenhuma exposicao ambiental"),
+            ("exposicao_animal", "Nenhum contato animal relevante"),
+            ("exposicao_alimentar", "Nenhuma dessas"),
             ("data_inicio_sintomas", "2026-03-18"),
             ("teve_febre", "Sim"),
-            ("padrao_febre", "Vai e volta"),
-            ("sintomas_principais", "Cansaco extremo"),
-            ("dor_mais_intensa", "Cabeca"),
-            ("contato_agua_suja", "Nao"),
-            ("contato_carrapato_mata", "Nao"),
+            ("intensidade_febre", "4"),
+            ("sintomas_principais", "Cansaco extremo/fadiga"),
+            ("sinais_alerta", "Nenhum sinal de alerta"),
+            ("dor_articular_intensidade", "4"),
+            ("fadiga_intensidade", "5"),
+            ("impacto_atividades", "Moderado - limita algumas atividades"),
             ("outras_pessoas_com_sintomas", "Nao sei"),
-            ("contato_animais", "Nenhum contato com animais"),
-            ("consumo_recente", "Nenhum desses"),
-            ("atividades_recentes", "Nenhuma dessas atividades"),
             ("dias_incap", "2"),
             ("internacao", "Nao"),
+            ("custo_remedios", "8.50"),
+            ("custo_consultas", "0"),
+            ("custo_transporte", "7.25"),
+            ("custo_outros", "0"),
             ("custo_total", "15.75"),
             ("ausencia_familiar", "Nao"),
         ]
@@ -174,8 +189,13 @@ def test_coletar_resposta_t0_nativa_exige_aceite_do_tcle():
     assert errors["aceite_tcle"] == "Voce precisa aceitar o TCLE para enviar o formulario."
 
 
-def test_salvar_t0_form_schema_em_arquivo_temporario(monkeypatch, tmp_path):
-    schema_path = tmp_path / "sfa_t0_form.json"
+def test_salvar_t0_form_schema_em_arquivo_temporario(monkeypatch):
+    temp_dir = PROJECT_ROOT / ".codex_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    schema_path = temp_dir / "sfa_t0_form_schema_test.json"
+    if schema_path.exists():
+        schema_path.unlink()
+
     schema = json.loads(serializar_t0_form_schema(carregar_t0_form_schema()))
     monkeypatch.setattr(sfa_service, "T0_FORM_SCHEMA_FILE", str(schema_path))
     schema["title"] = "T0 Ajustado em Teste"
@@ -185,3 +205,4 @@ def test_salvar_t0_form_schema_em_arquivo_temporario(monkeypatch, tmp_path):
 
     assert saved_path == schema_path
     assert persisted["title"] == "T0 Ajustado em Teste"
+    schema_path.unlink(missing_ok=True)

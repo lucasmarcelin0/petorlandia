@@ -7,6 +7,8 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 from signxml import XMLSigner
 
+from security.xml_safe import safe_lxml_fromstring
+
 
 @dataclass
 class SignedXmlResult:
@@ -35,7 +37,7 @@ def sign_event_xml(xml: str, pfx_bytes: bytes, password: str | None) -> str:
 
 def _sign_xml_node(xml: str, pfx_bytes: bytes, password: str | None, node_tag: str) -> str:
     private_key, certificate = _load_pfx(pfx_bytes, password)
-    xml_root = etree.fromstring(xml.encode("utf-8"))
+    xml_root = safe_lxml_fromstring(xml)
     signature_target = xml_root.find(f".//{{http://www.portalfiscal.inf.br/nfe}}{node_tag}")
     if signature_target is None:
         signature_target = xml_root.find(f".//{node_tag}")

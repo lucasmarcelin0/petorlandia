@@ -58,21 +58,43 @@
 </div>
 
 <!-- ═══════════════════════  FILTROS  ═══════════════════════ -->
-{% if classes %}
-<div class="bg-white border-bottom sticky-top" style="top: var(--topbar-height, 56px); z-index: 100;">
-  <div class="container py-2">
-    <div class="bulario-filters" id="bulario-filters">
+{% if macro_grupos %}
+<div class="bulario-filters-block">
+  <div class="container-fluid px-3 px-lg-4 py-2">
+    <!-- Nível 1: macro-grupos clínicos (máx 10) -->
+    <div class="bulario-macro-row" id="bulario-macro-row">
       <a href="{{ url_for('bulario', q=q) }}"
-         class="bulario-filter-chip {% if not classificacao %}active{% endif %}">
-        Todos
+         class="bulario-macro-chip {% if not classificacao %}active{% endif %}"
+         data-macro="__todos__">
+        <i class="fas fa-layer-group"></i>
+        <span>Todos</span>
       </a>
-      {% for cls in classes %}
+      {% for grupo in macro_grupos %}
+      <button type="button"
+              class="bulario-macro-chip {% if grupo.is_active %}active expanded{% endif %}"
+              data-macro="{{ grupo.key }}"
+              onclick="toggleMacroGrupo('{{ grupo.key }}')"
+              title="{{ grupo.count }} subcategoria(s)">
+        <i class="fas {{ grupo.icon }}"></i>
+        <span>{{ grupo.label }}</span>
+        <span class="bulario-macro-count">{{ grupo.count }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <!-- Nível 2: drawer de subclasses (abre ao clicar num macro) -->
+    {% for grupo in macro_grupos %}
+    <div class="bulario-sub-drawer {% if grupo.is_active %}open{% endif %}"
+         id="drawer-{{ grupo.key }}"
+         data-macro="{{ grupo.key }}">
+      {% for cls in grupo.subclasses %}
       <a href="{{ url_for('bulario', q=q, classe=cls) }}"
          class="bulario-filter-chip {% if classificacao == cls %}active{% endif %}">
         {{ cls }}
       </a>
       {% endfor %}
     </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
@@ -333,23 +355,91 @@
 .bulario-stats__item strong { font-size: 1.1rem; }
 .bulario-stats__sep { width: 1px; height: 1rem; background: rgba(255,255,255,.4); }
 
-/* ── Filtros ──────────────────────────────────────── */
-.bulario-filters {
-  display: flex;
-  gap: .5rem;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
+/* ── Bloco de filtros ─────────────────────────────── */
+/* Razão: antes era `sticky-top` e sobrepunha os cards numa faixa gorda.
+   Agora ele fica no fluxo normal do documento e tem uma borda inferior
+   nítida pra marcar onde termina o "chrome" de filtro e começa o
+   conteúdo que o vet quer ler. */
+.bulario-filters-block {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, .03);
 }
-.bulario-filters::-webkit-scrollbar { display: none; }
+
+/* ── Filtros: macro-grupos (nível 1) ─────────────── */
+.bulario-macro-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  align-items: center;
+}
+.bulario-macro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .4rem .9rem;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  font-size: .85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.bulario-macro-chip i { font-size: .9rem; color: #6b7280; transition: color .15s; }
+.bulario-macro-chip:hover {
+  border-color: #1976d2; color: #1976d2; background: #f8fbff;
+}
+.bulario-macro-chip:hover i { color: #1976d2; }
+.bulario-macro-chip.active,
+.bulario-macro-chip.expanded {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
+}
+.bulario-macro-chip.active i,
+.bulario-macro-chip.expanded i { color: #fff; }
+.bulario-macro-count {
+  background: rgba(0,0,0,.06);
+  color: inherit;
+  padding: 0 .45rem;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.bulario-macro-chip.active .bulario-macro-count,
+.bulario-macro-chip.expanded .bulario-macro-count {
+  background: rgba(255,255,255,.25);
+}
+
+/* ── Filtros: subclasses (nível 2 / drawer) ───────── */
+.bulario-sub-drawer {
+  display: none;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .5rem;
+  padding: .55rem .7rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  /* Cap ~3 linhas de chips — evita que um macro grande empurre o conteúdo
+     pra fora da fold. Passou disso, o usuário rola dentro do drawer. */
+  max-height: 9rem;
+  overflow-y: auto;
+}
+.bulario-sub-drawer.open { display: flex; }
 .bulario-filter-chip {
   flex-shrink: 0;
-  padding: .3rem .9rem;
+  padding: .28rem .85rem;
   border-radius: 999px;
   border: 1px solid #dee2e6;
   background: #fff;
   color: #495057;
-  font-size: .82rem;
+  font-size: .8rem;
   font-weight: 500;
   text-decoration: none;
   transition: all .15s;
@@ -504,6 +594,36 @@ function confirmarExclusao(id, nome) {
   document.getElementById('modalExcluirNome').textContent = nome;
   document.getElementById('formExcluir').action = `/bulario/${id}/excluir`;
   new bootstrap.Modal(document.getElementById('modalExcluir')).show();
+}
+
+/**
+ * Acordeão de macro-grupos: ao clicar num macro, abre seu drawer de
+ * subclasses e fecha os outros. Re-clicar no mesmo macro fecha (toggle).
+ * Nunca navega — só expande. Filtragem real acontece ao clicar numa
+ * subclasse dentro do drawer.
+ */
+function toggleMacroGrupo(key) {
+  const chips   = document.querySelectorAll('.bulario-macro-chip[data-macro]');
+  const drawers = document.querySelectorAll('.bulario-sub-drawer[data-macro]');
+  const alvoDrawer = document.getElementById('drawer-' + key);
+  const alvoChip   = document.querySelector('.bulario-macro-chip[data-macro="' + key + '"]');
+  if (!alvoDrawer || !alvoChip) return;
+  const estavaAberto = alvoDrawer.classList.contains('open');
+
+  // Fecha tudo primeiro
+  drawers.forEach(d => d.classList.remove('open'));
+  chips.forEach(c => {
+    // 'active' (filtro aplicado) é preservado; só limpamos o 'expanded' visual
+    if (c !== alvoChip) c.classList.remove('expanded');
+  });
+
+  // Abre o alvo se não estava aberto
+  if (!estavaAberto) {
+    alvoDrawer.classList.add('open');
+    alvoChip.classList.add('expanded');
+  } else {
+    alvoChip.classList.remove('expanded');
+  }
 }
 </script>
 {% endblock %}

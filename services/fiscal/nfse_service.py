@@ -8,6 +8,10 @@ from flask import current_app
 
 from lxml import etree
 
+# Parse seguro de XML externo (resposta Betha / prefeitura). Mantemos lxml
+# para serialização/XPath, mas entrada parseamos via helper hardened contra XXE.
+from security.xml_safe import safe_lxml_fromstring
+
 from extensions import db
 from models import (
     Appointment,
@@ -279,6 +283,8 @@ def poll_nfse(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
             if nfse_response.success:
                 _transition_status(document, FiscalDocumentStatus.AUTHORIZED, "consultar_nfse")
                 document.authorized_at = now_in_brazil()
+                from services.finance import sync_receivable_from_nfse
+                sync_receivable_from_nfse(document, commit=False)
             else:
                 _transition_status(document, FiscalDocumentStatus.REJECTED, "consultar_nfse")
                 document.error_message = _humanize_betha_error(nfse_response.error_message)
@@ -552,11 +558,19 @@ def _extract_xml_value(xml: str, tag: str) -> str | None:
     if not xml:
         return None
     try:
-        root = etree.fromstring(xml.encode("utf-8"))
+        root = safe_lxml_fromstring(xml)
         node = root.find(f".//{tag}")
         if node is not None and node.text:
             return node.text
-    except Exception:  # noqa: BLE001
+    except etree.XMLSyntaxError:
+        # XML malformado da prefeitura: devolve None (chamador decide o fallback).
+        return None
+    except Exception as exc:  # noqa: BLE001
+        # Inclui os erros de defusedxml (entities forbidden etc.) e qualquer
+        # outra falha inesperada. Log explícito pra auditoria.
+        current_app.logger.warning(
+            "Falha ao extrair tag %s do XML de resposta: %s", tag, exc
+        )
         return None
     return None
 
@@ -572,13 +586,17 @@ def _redact_xml(xml: str | None) -> str | None:
     if not xml:
         return xml
     try:
-        root = etree.fromstring(xml.encode("utf-8"))
+        # Parse seguro — mesmo em redaction, uma resposta maliciosa da
+        # prefeitura pode fazer XXE se parseada com o default do lxml.
+        root = safe_lxml_fromstring(xml)
         for tag in ["Cpf", "Cnpj", "InscricaoMunicipal", "Senha"]:
             for node in root.findall(f".//{tag}"):
                 if node.text:
                     node.text = "***"
         return etree.tostring(root, encoding="unicode")
     except Exception:  # noqa: BLE001
+        # Best-effort: se não der pra parsear, devolve original —
+        # o log já está redatado a nível de string em _compact_xml.
         return xml
 
 

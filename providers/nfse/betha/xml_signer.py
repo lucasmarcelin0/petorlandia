@@ -7,6 +7,11 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 from signxml import XMLSigner
 
+# Mesmo o XML que a gente vai assinar (construído localmente) pode ter
+# passado por string concatenation ou cache; parser hardened cobre o caso
+# de alguém introduzir entidades via template.
+from security.xml_safe import safe_lxml_fromstring
+
 
 @dataclass
 class SignedXmlResult:
@@ -37,7 +42,7 @@ def _sign_node(xml_root: etree._Element, node_tag: str) -> SignedXmlResult:
 
 def sign_betha_xml(xml: str, pfx_bytes: bytes, password: str | None, node_tag: str = "LoteRps") -> str:
     private_key, certificate = _load_pfx(pfx_bytes, password)
-    xml_root = etree.fromstring(xml.encode("utf-8"))
+    xml_root = safe_lxml_fromstring(xml)
     signature_target = xml_root.find(f".//{node_tag}")
     if signature_target is None:
         raise ValueError(f"Nó {node_tag} não encontrado para assinatura.")

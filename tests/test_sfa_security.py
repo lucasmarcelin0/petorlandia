@@ -2,6 +2,7 @@ import os
 
 from extensions import db
 from models import User
+from services.sfa_service import T0_CONSENT_ACCEPTED
 
 
 def _login(client, user_id: int) -> None:
@@ -70,6 +71,7 @@ def test_sfa_webhook_accepts_configured_secret(app, client, monkeypatch):
             "id_estudo": "SFA-001",
             "nome": "Participante Teste",
             "data_nascimento": "2000-01-01",
+            "aceite_tcle": [T0_CONSENT_ACCEPTED],
         },
         headers={"X-SFA-Secret": "segredo-webhook"},
     )

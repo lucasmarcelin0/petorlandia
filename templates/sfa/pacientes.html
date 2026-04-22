@@ -13,6 +13,16 @@
                placeholder="Buscar por nome, ID, bairro…" value="{{ filtros.q }}">
       </div>
       <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">Mês início sintomas (T0)</label>
+        <input type="month" name="mes_inicio_sintomas" class="form-control form-control-sm"
+               value="{{ filtros.mes_inicio_sintomas }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">Data início sintomas (T0)</label>
+        <input type="date" name="data_inicio_sintomas" class="form-control form-control-sm"
+               value="{{ filtros.data_inicio_sintomas }}">
+      </div>
+      <div class="col-sm-2">
         <select name="grupo" class="form-select form-select-sm">
           <option value="">Todos os grupos</option>
           <option value="A" {% if filtros.grupo == 'A' %}selected{% endif %}>A — Dengue+</option>
@@ -27,6 +37,77 @@
           <option value="Em_Andamento" {% if filtros.status == 'Em_Andamento' %}selected{% endif %}>Em andamento</option>
           <option value="COMPLETO" {% if filtros.status == 'COMPLETO' %}selected{% endif %}>Completo</option>
           <option value="PERDA_SEGUIMENTO" {% if filtros.status == 'PERDA_SEGUIMENTO' %}selected{% endif %}>Perda de seguimento</option>
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">Base</label>
+        <select name="visao" class="form-select form-select-sm">
+          <option value="reais" {% if filtros.visao == 'reais' %}selected{% endif %}>Somente reais</option>
+          <option value="testes" {% if filtros.visao == 'testes' %}selected{% endif %}>Somente testes</option>
+          <option value="todos" {% if filtros.visao == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label form-label-sm mb-1">Início sintomas de</label>
+        <input type="date" name="data_inicio_sintomas_de" class="form-control form-control-sm"
+               value="{{ filtros.data_inicio_sintomas_de }}">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label form-label-sm mb-1">Início sintomas até</label>
+        <input type="date" name="data_inicio_sintomas_ate" class="form-control form-control-sm"
+               value="{{ filtros.data_inicio_sintomas_ate }}">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label form-label-sm mb-1">Data SINAN/status de</label>
+        <input type="date" name="data_notificacao_de" class="form-control form-control-sm"
+               value="{{ filtros.data_notificacao_de }}">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label form-label-sm mb-1">Data SINAN/status até</label>
+        <input type="date" name="data_notificacao_ate" class="form-control form-control-sm"
+               value="{{ filtros.data_notificacao_ate }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T0 respondido de</label>
+        <input type="date" name="respondido_t0_de" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t0_de }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T0 respondido até</label>
+        <input type="date" name="respondido_t0_ate" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t0_ate }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T10 respondido de</label>
+        <input type="date" name="respondido_t10_de" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t10_de }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T10 respondido até</label>
+        <input type="date" name="respondido_t10_ate" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t10_ate }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T30 respondido de</label>
+        <input type="date" name="respondido_t30_de" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t30_de }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">T30 respondido até</label>
+        <input type="date" name="respondido_t30_ate" class="form-control form-control-sm"
+               value="{{ filtros.respondido_t30_ate }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">Próxima ação até</label>
+        <input type="date" name="proxima_acao_ate" class="form-control form-control-sm"
+               value="{{ filtros.proxima_acao_ate }}">
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label form-label-sm mb-1">Filtro rápido</label>
+        <select name="situacao_data" class="form-select form-select-sm">
+          <option value="">Sem filtro rápido</option>
+          <option value="atrasados" {% if filtros.situacao_data == 'atrasados' %}selected{% endif %}>Atrasados</option>
+          <option value="vence_7_dias" {% if filtros.situacao_data == 'vence_7_dias' %}selected{% endif %}>Vence em 7 dias</option>
         </select>
       </div>
       <div class="col-auto">
@@ -45,6 +126,379 @@
   </div>
 </div>
 
+{% if dashboard_testes %}
+<div class="row g-3 mb-3">
+  {% for card in dashboard_testes.cards %}
+  <div class="col-sm-6 col-xl">
+    <div class="card shadow-sm h-100">
+      <div class="card-body py-3">
+        <div class="text-muted small">{{ card.label }}</div>
+        <div class="fs-4 fw-bold" style="color:{{ card.tone }}">{{ card.value }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header" style="background:#f8f9fa;">
+    Leitura Analítica
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for card in dashboard_testes.research_cards %}
+      <div class="col-md-3">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small">{{ card.label }}</div>
+          <div class="fw-semibold mt-1">{{ card.value }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header" style="background:#fff3cd;">
+    Alertas de Pesquisa
+  </div>
+  <div class="card-body">
+    {% for alert in dashboard_testes.research_alerts %}
+    <div class="alert alert-warning py-2 mb-2">{{ alert }}</div>
+    {% else %}
+    <p class="text-muted small mb-0">Sem alertas relevantes no recorte atual.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header" style="background:#f8f9fa;">
+    Hipóteses e Padrões
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for item in dashboard_testes.hypothesis_cards %}
+      <div class="col-lg-3 col-md-6">
+        <div class="border rounded p-3 h-100">
+          <div class="fw-semibold mb-2">{{ item.title }}</div>
+          <div class="small text-muted">{{ item.body }}</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12">
+        <p class="text-muted small mb-0">Sem hipóteses calculadas para o recorte atual.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:var(--sfa-orange);color:white">Linha do Tempo</div>
+      <div class="card-body">
+        {% for item in dashboard_testes.timeline_cards %}
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+          <span class="small text-muted">{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:var(--sfa-teal);color:white">Custos Médios no T30</div>
+      <div class="card-body">
+        {% for item in dashboard_testes.cost_breakdown %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ item.label }}</span>
+            <strong>R$ {{ '%.1f'|format(item.value) }}</strong>
+          </div>
+          <div class="progress" style="height:10px;">
+            <div class="progress-bar" role="progressbar" style="width: {{ item.pct }}%; background: var(--sfa-orange);"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Clusters do Lote</div>
+      <div class="card-body">
+        {% for row in dashboard_testes.cluster_summary %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ row.label }}</span>
+            <strong>{{ row.count }} ({{ row.pct }}%)</strong>
+          </div>
+          <div class="small text-muted mb-1">
+            Média: {{ row.avg_days }} {{ row.time_label }}
+          </div>
+          <div class="progress" style="height: 12px;">
+            <div class="progress-bar" role="progressbar" style="width: {{ row.pct }}%; background: #0d6efd;"></div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">Sem dados suficientes.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Sintomas Mais Discriminantes</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Sintoma</th>
+                <th>Grupo líder</th>
+                <th>Diferença</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard_testes.top_differentiators %}
+              <tr>
+                <td>{{ row.label }}</td>
+                <td>{{ row.group }}</td>
+                <td>{{ row.gap }} p.p.</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="text-muted text-center py-3">Sem dados suficientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Sintomas x Grupo</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Sintoma</th>
+                <th>Grupo A</th>
+                <th>Grupo B</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard_testes.symptom_group_matrix %}
+              <tr>
+                <td>{{ row.symptom }}</td>
+                <td>{{ row.a }} ({{ row.a_pct }}%)</td>
+                <td>{{ row.b }} ({{ row.b_pct }}%)</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="text-muted text-center py-3">Sem dados suficientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Recuperação Alta por Segmento</div>
+      <div class="card-body">
+        {% for row in dashboard_testes.recovery_segments %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ row.segment }}</span>
+            <strong>{{ row.alta }}/{{ row.total }} ({{ row.pct }}%)</strong>
+          </div>
+          <div class="progress" style="height: 12px;">
+            <div class="progress-bar" role="progressbar" style="width: {{ row.pct }}%; background: #198754;"></div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">Sem dados suficientes.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header" style="background:#f8f9fa;">Custo Médio por Retorno às Atividades</div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for row in dashboard_testes.return_cost_segments %}
+      <div class="col-lg-4 col-md-6">
+        <div class="border rounded p-3 h-100">
+          <div class="small text-muted mb-1">{{ row.segment }}</div>
+          <div class="fw-semibold">R$ {{ '%.1f'|format(row.avg_cost) }}</div>
+          <div class="small text-muted">{{ row.count }} caso(s)</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12">
+        <p class="text-muted small mb-0">Sem dados suficientes.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Comparação Grupo A vs B</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Métrica</th>
+                <th>Grupo A</th>
+                <th>Grupo B</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard_testes.group_comparison %}
+              <tr>
+                <td>{{ row.metric }}</td>
+                <td>{{ row.a }}</td>
+                <td>{{ row.b }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background:#f8f9fa;">Prevalência de Sintomas no T0</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Sintoma</th>
+                <th>Total</th>
+                <th>Grupo A</th>
+                <th>Grupo B</th>
+                <th>Dif.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in dashboard_testes.symptom_prevalence %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }} ({{ item.pct }}%)</td>
+                <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+                <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+                <td>{{ item.gap }} p.p.</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-muted text-center py-3">Sem dados suficientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  {% for chart in dashboard_testes.distributions %}
+  <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fa;">
+            <span>{{ chart["title"] }}</span>
+            <small class="text-muted">Total {{ chart["total"] }} | A {{ chart["a_total"] }} | B {{ chart["b_total"] }}</small>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Resposta</th>
+                    <th>Total</th>
+                    <th>Grupo A</th>
+                    <th>Grupo B</th>
+                    <th>Dif.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in chart["items"] %}
+                  <tr>
+                    <td>{{ item.label }}</td>
+                    <td>{{ item.count }} ({{ item.pct }}%)</td>
+                    <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+                    <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+                    <td>{{ item.gap }} p.p.</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="5" class="text-muted text-center py-3">Sem dados suficientes.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  {% for chart in dashboard_testes.demographic_distributions %}
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fa;">
+        <span>{{ chart["title"] }}</span>
+        <small class="text-muted">Total {{ chart["total"] }} | A {{ chart["a_total"] }} | B {{ chart["b_total"] }}</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Categoria</th>
+                <th>Total</th>
+                <th>A</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in chart["items"] %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }} ({{ item.pct }}%)</td>
+                <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+                <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-muted text-center py-3">Sem dados suficientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <!-- Tabela -->
 <div class="card shadow-sm">
   <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
@@ -58,6 +512,8 @@
             <th>ID</th>
             <th>Nome</th>
             <th>Bairro</th>
+            <th>Início sintomas</th>
+            <th>Cadastro</th>
             <th>Grupo</th>
             <th>Status</th>
             <th>T0</th>
@@ -77,6 +533,8 @@
             </td>
             <td>{{ p.nome or '—' }}</td>
             <td><small>{{ p.bairro or '—' }}</small></td>
+            <td><small>{{ p.resposta_t0.data_inicio_sintomas if p.resposta_t0 and p.resposta_t0.data_inicio_sintomas else '—' }}</small></td>
+            <td><small>{{ p.timestamp_cadastro.strftime('%d/%m/%Y') if p.timestamp_cadastro else '—' }}</small></td>
             <td>
               {% if p.grupo == 'A' %}
                 <span class="badge badge-grupo-A">A</span>
@@ -86,7 +544,15 @@
                 <span class="badge badge-grupo-PR" title="Pendente revisão">PR</span>
               {% endif %}
             </td>
-            <td><small class="text-muted">{{ p.status_geral or '—' }}</small></td>
+            <td>
+              <small class="text-muted">
+                {% if p.status_geral == 'SINAN_Notificado' and p._data_notificacao_sinan %}
+                  {{ p._data_notificacao_sinan }}
+                {% else %}
+                  {{ p.status_geral or '—' }}
+                {% endif %}
+              </small>
+            </td>
             <td>
               <span class="badge {% if p.status_t0 == 'T0_Completo' %}bg-success{% else %}bg-secondary{% endif %}">
                 {{ 'OK' if p.status_t0 == 'T0_Completo' else '—' }}
@@ -125,7 +591,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="11" class="text-center text-muted py-4">Nenhum paciente encontrado.</td>
+            <td colspan="13" class="text-center text-muted py-4">Nenhum paciente encontrado.</td>
           </tr>
           {% endfor %}
         </tbody>
