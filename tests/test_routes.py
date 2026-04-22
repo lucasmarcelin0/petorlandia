@@ -18,6 +18,9 @@ from models import (
     Product,
     OrderItem,
     Animal,
+    DeliveryResearchContact,
+    Racao,
+    TipoRacao,
     Message,
     Endereco,
     SavedAddress,
@@ -2241,6 +2244,23 @@ def test_delivery_overview_shows_relatorio_racoes_link(monkeypatch, app):
         assert b'href="/relatorio/racoes"' in resp.data
 
 
+def test_delivery_overview_shows_pesquisa_racoes_link(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
+        db.session.add(admin)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        resp = client.get('/admin/delivery_overview')
+        assert b'href="/relatorio/racoes/pesquisa"' in resp.data
+
+
 def test_relatorio_racoes_includes_navbar(app):
     client = app.test_client()
 
@@ -2265,6 +2285,377 @@ def test_relatorio_racoes_includes_navbar(app):
 
     html = response.get_data(as_text=True)
     assert '<li class="nav-item dropdown"' in html or 'js/navbar-dropdown.js' in html
+
+
+def test_pesquisa_racoes_tutores_includes_whatsapp_link(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(
+            id=1,
+            name='Lucas',
+            email='lucas@test.com',
+            password_hash='x',
+            role='admin',
+            phone='16999998888',
+        )
+        animal = Animal(id=1, name='Rex', user_id=1)
+        animal2 = Animal(id=2, name='Luna', user_id=1)
+        tipo = TipoRacao(id=1, marca='Golden', linha='Senior', created_by=1)
+        racao = Racao(id=1, animal_id=1, tipo_racao_id=1)
+        racao2 = Racao(id=2, animal_id=2, tipo_racao_id=1)
+        db.session.add_all([admin, animal, animal2, tipo, racao, racao2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.get('/relatorio/racoes/pesquisa')
+        assert response.status_code == 200
+
+        html = response.get_data(as_text=True)
+        assert 'Pesquisa com Tutores' in html
+        assert 'Lucas' in html
+        assert 'Rex' in html
+        assert 'Luna' in html
+        assert 'api.whatsapp.com/send?phone=5516999998888' in html
+        assert 'Oi%2C+Lucas%21+Tudo+bem%3F' in html
+        assert html.count('api.whatsapp.com/send?phone=5516999998888') == 1
+
+
+def test_toggle_pesquisa_racoes_tutor_marks_sent(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Maria', email='maria@test.com', password_hash='x', phone='16999990000')
+        animal = Animal(id=1, name='Thor', user_id=2)
+        db.session.add_all([admin, tutor, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.post('/relatorio/racoes/pesquisa/2/toggle', follow_redirects=True)
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.sent is True
+        assert status.sent_by_id == 1
+        assert status.sent_at is not None
+
+
+def test_update_pesquisa_racoes_tutor_status_marks_replied_and_recorded(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin2@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Paula', email='paula@test.com', password_hash='x', phone='16999991111')
+        animal = Animal(id=1, name='Nina', user_id=2)
+        db.session.add_all([admin, tutor, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.post('/relatorio/racoes/pesquisa/2/status/replied', follow_redirects=True)
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.sent is True
+        assert status.replied is True
+        assert status.recorded is False
+
+        response = client.post('/relatorio/racoes/pesquisa/2/status/recorded', follow_redirects=True)
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status.recorded is True
+
+
+def test_update_pesquisa_racoes_tutor_status_marks_do_not_send(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin_skip@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Clara', email='clara@test.com', password_hash='x', phone='16999995555')
+        animal = Animal(id=1, name='Pingo', user_id=2)
+        db.session.add_all([admin, tutor, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.post('/relatorio/racoes/pesquisa/2/status/do_not_send', follow_redirects=True)
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.do_not_send is True
+        assert status.do_not_send_by_id == 1
+        assert status.do_not_send_at is not None
+
+
+def test_save_pesquisa_racoes_tutor_answers_persists_structured_fields(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin3@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Adriana', email='adriana@test.com', password_hash='x', phone='16999992222')
+        animal = Animal(id=1, name='Caramelo', user_id=2)
+        db.session.add_all([admin, tutor, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.post(
+            '/relatorio/racoes/pesquisa/2/answers',
+            data={
+                'interest_answer': '1',
+                'current_food': 'Robust',
+                'bag_size': '15kg',
+                'price_paid': '110',
+                'purchase_channel': 'Pet shop',
+                'duration_estimate': '2 semanas',
+                'response_notes': 'Primeira resposta recebida.',
+                'sync_animal_ids': ['1'],
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.sent is True
+        assert status.replied is True
+        assert status.recorded is True
+        assert status.interest_answer == '1'
+        assert status.current_food == 'Robust'
+        assert status.bag_size == '15kg'
+        assert status.price_paid == '110'
+        assert status.purchase_channel == 'Pet shop'
+        assert status.duration_estimate == '2 semanas'
+        assert status.response_notes == 'Primeira resposta recebida.'
+        assert status.response_collected_at is not None
+
+        racao = Racao.query.filter_by(animal_id=1).order_by(Racao.id.desc()).first()
+        assert racao is not None
+        assert racao.tamanho_embalagem == '15kg'
+        assert racao.preco_pago == 110.0
+        assert racao.tipo_racao is not None
+        assert racao.tipo_racao.marca == 'Robust'
+        assert 'Pesquisa de tutores' in (racao.observacoes_racao or '')
+
+
+def test_save_pesquisa_racoes_tutor_answers_uses_existing_ration_selection(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin5@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Bianca', email='bianca@test.com', password_hash='x', phone='16999994444')
+        animal = Animal(id=1, name='Mel', user_id=2)
+        tipo = TipoRacao(id=1, marca='Premier', linha='Ambientes Internos', created_by=1)
+        db.session.add_all([admin, tutor, animal, tipo])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        response = client.post(
+            '/relatorio/racoes/pesquisa/2/answers',
+            data={
+                'interest_answer': '2',
+                'current_food_tipo_racao_id': '1',
+                'current_food': '',
+                'bag_size': '10kg',
+                'price_paid': '189,90',
+                'purchase_channel': 'Internet',
+                'duration_estimate': '30 dias',
+                'response_notes': 'Preferiu escolher da lista.',
+                'sync_animal_ids': ['1'],
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.current_food == 'Premier - Ambientes Internos'
+
+        racao = Racao.query.filter_by(animal_id=1).order_by(Racao.id.desc()).first()
+        assert racao is not None
+        assert racao.tipo_racao_id == 1
+        assert racao.tipo_racao is not None
+        assert racao.tipo_racao.marca == 'Premier'
+        assert racao.tipo_racao.linha == 'Ambientes Internos'
+        assert racao.preco_pago == 189.9
+
+
+def test_send_selected_pesquisa_racoes_tutores_marks_successful_sends(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin4@test.com', password_hash='x', role='admin')
+        tutor = User(id=2, name='Lucia', email='lucia@test.com', password_hash='x', phone='16999993333')
+        animal = Animal(id=1, name='Bidu', user_id=2)
+        db.session.add_all([admin, tutor, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+        monkeypatch.setattr(
+            app_module,
+            '_run_whatsapp_batch_selenium',
+            lambda items: {'results': [{'tutor_id': 2, 'status': 'sent'}]},
+        )
+
+        response = client.post(
+            '/relatorio/racoes/pesquisa/send-selected',
+            data={'selected_tutor_ids': ['2']},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        status = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        assert status is not None
+        assert status.sent is True
+        assert status.sent_by_id == 1
+
+
+def test_send_selected_pesquisa_racoes_tutores_preserves_partial_progress(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin6@test.com', password_hash='x', role='admin')
+        tutor1 = User(id=2, name='Lucia', email='lucia2@test.com', password_hash='x', phone='16999993333')
+        tutor2 = User(id=3, name='Paulo', email='paulo@test.com', password_hash='x', phone='16999994444')
+        animal1 = Animal(id=1, name='Bidu', user_id=2)
+        animal2 = Animal(id=2, name='Nina', user_id=3)
+        db.session.add_all([admin, tutor1, tutor2, animal1, animal2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+        monkeypatch.setattr(
+            app_module,
+            '_run_whatsapp_batch_selenium',
+            lambda items: {
+                'results': [
+                    {'tutor_id': 2, 'status': 'sent'},
+                    {'tutor_id': 3, 'status': 'failed', 'error': 'Numero sem WhatsApp'},
+                ],
+                'process_error': 'Lote interrompido depois do primeiro envio.',
+            },
+        )
+
+        response = client.post(
+            '/relatorio/racoes/pesquisa/send-selected',
+            data={'selected_tutor_ids': ['2', '3']},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        status1 = DeliveryResearchContact.query.filter_by(tutor_id=2).first()
+        status2 = DeliveryResearchContact.query.filter_by(tutor_id=3).first()
+        assert status1 is not None
+        assert status1.sent is True
+        assert status2 is None
+
+
+def test_send_selected_pesquisa_racoes_tutores_skips_do_not_send(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin7@test.com', password_hash='x', role='admin')
+        tutor1 = User(id=2, name='Lucia', email='lucia3@test.com', password_hash='x', phone='16999993333')
+        tutor2 = User(id=3, name='Paulo', email='paulo2@test.com', password_hash='x', phone='16999994444')
+        animal1 = Animal(id=1, name='Bidu', user_id=2)
+        animal2 = Animal(id=2, name='Nina', user_id=3)
+        blocked = DeliveryResearchContact(tutor_id=3, do_not_send=True)
+        db.session.add_all([admin, tutor1, tutor2, animal1, animal2, blocked])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        captured = {}
+
+        def fake_runner(items):
+            captured['items'] = items
+            return {'results': [{'tutor_id': 2, 'status': 'sent'}]}
+
+        monkeypatch.setattr(app_module, '_run_whatsapp_batch_selenium', fake_runner)
+
+        response = client.post(
+            '/relatorio/racoes/pesquisa/send-selected',
+            data={'selected_tutor_ids': ['2', '3']},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert [item['tutor_id'] for item in captured['items']] == [2]
+
+
+def test_warmup_pesquisa_racoes_whatsapp(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin8@test.com', password_hash='x', role='admin')
+        db.session.add(admin)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+        monkeypatch.setattr(
+            app_module,
+            '_run_whatsapp_batch_selenium',
+            lambda items, warmup_only=False: {'browser': 'chrome', 'results': []},
+        )
+
+        response = client.post('/relatorio/racoes/pesquisa/warmup-whatsapp', follow_redirects=True)
+        assert response.status_code == 200
 
 
 def test_delivery_requests_hide_archived(monkeypatch, app):

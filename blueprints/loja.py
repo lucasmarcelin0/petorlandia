@@ -98,6 +98,35 @@ def get_blueprint():
         view_func=lazy_view("delivery_archive"),
     )
     bp.add_url_rule(
+        "/relatorio/racoes/pesquisa",
+        view_func=lazy_view("pesquisa_racoes_tutores"),
+    )
+    bp.add_url_rule(
+        "/relatorio/racoes/pesquisa/<int:tutor_id>/toggle",
+        view_func=lazy_view("toggle_pesquisa_racoes_tutor"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/relatorio/racoes/pesquisa/<int:tutor_id>/status/<status_key>",
+        view_func=lazy_view("update_pesquisa_racoes_tutor_status"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/relatorio/racoes/pesquisa/<int:tutor_id>/answers",
+        view_func=lazy_view("save_pesquisa_racoes_tutor_answers"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/relatorio/racoes/pesquisa/send-selected",
+        view_func=lazy_view("send_selected_pesquisa_racoes_tutores"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/relatorio/racoes/pesquisa/warmup-whatsapp",
+        view_func=lazy_view("warmup_pesquisa_racoes_whatsapp"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/admin/data-share-logs",
         view_func=lazy_view("admin_data_share_logs"),
     )

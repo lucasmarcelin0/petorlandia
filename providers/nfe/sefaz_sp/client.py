@@ -3,16 +3,20 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import logging
 import os
 import tempfile
 from typing import Any, Optional
 
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, pkcs12
 from zeep import Client, Settings
-from zeep.exceptions import Fault
+from zeep.exceptions import Fault, TransportError, XMLSyntaxError as ZeepXMLSyntaxError
 from zeep.plugins import HistoryPlugin
 from zeep.transports import Transport
 import requests
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,12 +96,24 @@ class SefazSpNfeClient:
                 response_xml = _history_xml(history.last_received)
                 return SefazSoapResponse(True, response, request_xml, response_xml)
             except Fault as exc:
+                # Fault = erro de negócio do SEFAZ (rejeição normativa).
+                # Não é bug: log em WARNING para ficar visível sem ruído.
                 request_xml = _history_xml(history.last_sent)
                 response_xml = _history_xml(history.last_received)
+                logger.warning(
+                    "SEFAZ SP retornou Fault em %s: %s", operation, exc,
+                )
                 return SefazSoapResponse(False, None, request_xml, response_xml, error_message=str(exc))
-            except Exception as exc:  # noqa: BLE001
+            except (requests.RequestException, TransportError, ZeepXMLSyntaxError, OSError) as exc:
+                # Falhas de rede/TLS/parsing da resposta. NÃO são bug nosso,
+                # mas precisam de traceback: sem log, a operação "some" da
+                # cadeia de erros — o chamador só vê a string opaca.
                 request_xml = _history_xml(history.last_sent)
                 response_xml = _history_xml(history.last_received)
+                logger.exception(
+                    "Erro de transporte/parsing em %s contra SEFAZ SP.",
+                    operation,
+                )
                 return SefazSoapResponse(False, None, request_xml, response_xml, error_message=str(exc))
 
     def autorizacao(self, xml_assinado: str) -> SefazSoapResponse:
@@ -123,23 +139,34 @@ class SefazSpNfeClient:
 
     def test_connection(self) -> SefazSoapResponse:
         """Carrega o WSDL para validar conectividade no ambiente configurado."""
+        # test_connection é o ponto onde o usuário clica "testar certificado"
+        # no onboarding. Se algo estourar aqui e não logarmos, a UI mostra
+        # só "Erro inesperado" e o suporte fica cego.
         try:
             Client(wsdl=self.wsdl_config.autorizacao)
             return SefazSoapResponse(True, None, None, None)
-        except Exception as exc:  # noqa: BLE001
+        except (requests.RequestException, TransportError, ZeepXMLSyntaxError, OSError) as exc:
+            logger.exception("Falha ao carregar WSDL SEFAZ SP em test_connection.")
             return SefazSoapResponse(False, None, None, None, error_message=str(exc))
 
 
 def _history_xml(history_item) -> str | None:
+    # Zeep's HistoryPlugin.last_sent/last_received retorna dict com
+    # .envelope em bytes (sucesso) ou lxml._Element (erro). Tratamos ambos.
+    # Qualquer acesso que não seja AttributeError/UnicodeDecodeError seria
+    # bug de zeep — deixamos estourar.
     if not history_item:
         return None
-    try:
-        return history_item.envelope.decode("utf-8")
-    except Exception:  # noqa: BLE001
+    envelope = getattr(history_item, "envelope", None)
+    if envelope is None:
+        return None
+    if isinstance(envelope, bytes):
         try:
-            return history_item.envelope
-        except Exception:  # noqa: BLE001
-            return None
+            return envelope.decode("utf-8")
+        except UnicodeDecodeError:
+            return envelope.decode("utf-8", errors="replace")
+    # lxml _Element ou string: devolve como está.
+    return str(envelope) if not isinstance(envelope, str) else envelope
 
 
 def _pfx_to_temp_pem(pfx_bytes: bytes, password: str | None) -> tuple[str, str]:

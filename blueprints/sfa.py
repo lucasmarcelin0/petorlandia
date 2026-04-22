@@ -17,7 +17,7 @@ Rotas:
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 import hmac
 import hashlib
 import json
@@ -138,7 +138,7 @@ def _verificar_webhook_secret() -> bool:
 @require_sfa_internal_access
 def dashboard():
     from services.sfa_service import (
-        stats_painel, link_whatsapp, normalizar_telefone, diagnostico_configuracao
+        stats_painel, link_whatsapp, normalizar_telefone, diagnostico_configuracao, resumo_dados_teste_sfa
     )
     from services.sfa_service import (
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
@@ -146,6 +146,7 @@ def dashboard():
 
     stats = stats_painel()
     diagnostico = diagnostico_configuracao()
+    resumo_testes = resumo_dados_teste_sfa()
 
     # Enriquece a fila com links WhatsApp prontos
     for p in stats["fila"]:
@@ -167,7 +168,7 @@ def dashboard():
             except Exception:
                 pass
 
-    return render_template("sfa/dashboard.html", stats=stats, diagnostico=diagnostico)
+    return render_template("sfa/dashboard.html", stats=stats, diagnostico=diagnostico, resumo_testes=resumo_testes)
 
 
 # ---------------------------------------------------------------------------
@@ -176,21 +177,141 @@ def dashboard():
 
 def _coletar_filtros_pacientes() -> dict[str, str]:
     return {
+        "visao": request.args.get("visao", "reais").strip() or "reais",
         "grupo": request.args.get("grupo", ""),
         "status": request.args.get("status", ""),
         "q": request.args.get("q", "").strip(),
+        "mes_inicio_sintomas": request.args.get("mes_inicio_sintomas", "").strip(),
+        "data_inicio_sintomas": request.args.get("data_inicio_sintomas", "").strip(),
+        "data_inicio_sintomas_de": request.args.get("data_inicio_sintomas_de", "").strip(),
+        "data_inicio_sintomas_ate": request.args.get("data_inicio_sintomas_ate", "").strip(),
+        "data_notificacao_de": request.args.get("data_notificacao_de", "").strip(),
+        "data_notificacao_ate": request.args.get("data_notificacao_ate", "").strip(),
+        "respondido_t0_de": request.args.get("respondido_t0_de", "").strip(),
+        "respondido_t0_ate": request.args.get("respondido_t0_ate", "").strip(),
+        "respondido_t10_de": request.args.get("respondido_t10_de", "").strip(),
+        "respondido_t10_ate": request.args.get("respondido_t10_ate", "").strip(),
+        "respondido_t30_de": request.args.get("respondido_t30_de", "").strip(),
+        "respondido_t30_ate": request.args.get("respondido_t30_ate", "").strip(),
+        "proxima_acao_ate": request.args.get("proxima_acao_ate", "").strip(),
+        "situacao_data": request.args.get("situacao_data", "").strip(),
     }
 
 
+def _parse_month_filter(value: str) -> tuple[int, int] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.strptime(text, "%Y-%m")
+    except ValueError:
+        return None
+    return parsed.year, parsed.month
+
+
+def _date_field_to_iso_expr(field):
+    from sqlalchemy import func
+
+    return (
+        func.substr(field, 7, 4)
+        + "-"
+        + func.substr(field, 4, 2)
+        + "-"
+        + func.substr(field, 1, 2)
+    )
+
+
+def _parse_date_filter(value: str):
+    from services.sfa_service import parse_data
+
+    return parse_data(value)
+
+
+def _apply_string_date_range(query, field, start_value: str, end_value: str):
+    parsed_start = _parse_date_filter(start_value)
+    parsed_end = _parse_date_filter(end_value)
+    iso_expr = _date_field_to_iso_expr(field)
+
+    if parsed_start:
+        query = query.filter(iso_expr >= parsed_start.isoformat())
+    if parsed_end:
+        query = query.filter(iso_expr <= parsed_end.isoformat())
+    return query
+
+
+def _apply_timestamp_range(query, field, start_value: str, end_value: str):
+    parsed_start = _parse_date_filter(start_value)
+    parsed_end = _parse_date_filter(end_value)
+
+    if parsed_start:
+        query = query.filter(field >= datetime.combine(parsed_start, time.min))
+    if parsed_end:
+        query = query.filter(field < datetime.combine(parsed_end + timedelta(days=1), time.min))
+    return query
+
+
+def _string_date_conditions(field, start_value: str, end_value: str):
+    parsed_start = _parse_date_filter(start_value)
+    parsed_end = _parse_date_filter(end_value)
+    iso_expr = _date_field_to_iso_expr(field)
+    conditions = []
+
+    if parsed_start:
+        conditions.append(iso_expr >= parsed_start.isoformat())
+    if parsed_end:
+        conditions.append(iso_expr <= parsed_end.isoformat())
+    return conditions
+
+
+def _timestamp_conditions(field, start_value: str, end_value: str):
+    parsed_start = _parse_date_filter(start_value)
+    parsed_end = _parse_date_filter(end_value)
+    conditions = []
+
+    if parsed_start:
+        conditions.append(field >= datetime.combine(parsed_start, time.min))
+    if parsed_end:
+        conditions.append(field < datetime.combine(parsed_end + timedelta(days=1), time.min))
+    return conditions
+
+
 def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
-    from models.sfa import SfaPaciente
+    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+    from services.sfa_service import SFA_TEST_MARKER, SFA_TEST_NAME_PREFIX, formatar_data, parse_data
+    from extensions import db
+    from sqlalchemy import exists, func
+    from sqlalchemy.orm import joinedload
 
     filtros = filtros or _coletar_filtros_pacientes()
+    visao = filtros.get("visao", "reais").strip().lower() or "reais"
     grupo = filtros.get("grupo", "")
     status = filtros.get("status", "")
     busca = filtros.get("q", "").strip()
+    mes_inicio_sintomas = filtros.get("mes_inicio_sintomas", "").strip()
+    data_inicio_sintomas = filtros.get("data_inicio_sintomas", "").strip()
+    data_inicio_sintomas_de = filtros.get("data_inicio_sintomas_de", "").strip()
+    data_inicio_sintomas_ate = filtros.get("data_inicio_sintomas_ate", "").strip()
+    data_notificacao_de = filtros.get("data_notificacao_de", "").strip()
+    data_notificacao_ate = filtros.get("data_notificacao_ate", "").strip()
+    respondido_t0_de = filtros.get("respondido_t0_de", "").strip()
+    respondido_t0_ate = filtros.get("respondido_t0_ate", "").strip()
+    respondido_t10_de = filtros.get("respondido_t10_de", "").strip()
+    respondido_t10_ate = filtros.get("respondido_t10_ate", "").strip()
+    respondido_t30_de = filtros.get("respondido_t30_de", "").strip()
+    respondido_t30_ate = filtros.get("respondido_t30_ate", "").strip()
+    proxima_acao_ate = filtros.get("proxima_acao_ate", "").strip()
+    situacao_data = filtros.get("situacao_data", "").strip()
 
-    q = SfaPaciente.query
+    q = SfaPaciente.query.options(joinedload(SfaPaciente.resposta_t0))
+
+    teste_expr = (
+        SfaPaciente.observacao_operacional.ilike(f"%{SFA_TEST_MARKER}%")
+        | SfaPaciente.nome.ilike(f"{SFA_TEST_NAME_PREFIX}%")
+    )
+    if visao == "testes":
+        q = q.filter(teste_expr)
+    elif visao != "todos":
+        q = q.filter((SfaPaciente.observacao_operacional.is_(None)) | (~teste_expr))
 
     if grupo:
         q = q.filter(SfaPaciente.grupo == grupo)
@@ -204,8 +325,721 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
             | SfaPaciente.bairro.ilike(like)
             | SfaPaciente.ficha_sinan.ilike(like)
         )
+    filtros_t0 = []
+    if mes_inicio_sintomas:
+        parsed_month = _parse_month_filter(mes_inicio_sintomas)
+        if parsed_month:
+            year, month = parsed_month
+            filtros_t0.append(SfaRespostaT0.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+    if data_inicio_sintomas:
+        parsed_date = parse_data(data_inicio_sintomas)
+        if parsed_date:
+            filtros_t0.append(SfaRespostaT0.data_inicio_sintomas == formatar_data(parsed_date))
+    if data_inicio_sintomas_de or data_inicio_sintomas_ate:
+        filtros_t0.extend(_string_date_conditions(SfaRespostaT0.data_inicio_sintomas, data_inicio_sintomas_de, data_inicio_sintomas_ate))
+    if respondido_t0_de or respondido_t0_ate:
+        filtros_t0.extend(_timestamp_conditions(SfaRespostaT0.timestamp, respondido_t0_de, respondido_t0_ate))
+    if filtros_t0:
+        q = q.filter(
+            exists()
+            .where(SfaRespostaT0.id_estudo == SfaPaciente.id_estudo)
+            .where(*filtros_t0)
+        )
 
-    return q.order_by(SfaPaciente.timestamp_cadastro.desc())
+    if data_notificacao_de or data_notificacao_ate:
+        filtros_sinan = _string_date_conditions(SfaSinanLog.data_notificacao, data_notificacao_de, data_notificacao_ate)
+        if filtros_sinan:
+            q = q.filter(
+                exists()
+                .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+                .where(*filtros_sinan)
+            )
+
+    if respondido_t10_de or respondido_t10_ate:
+        filtros_t10 = _timestamp_conditions(SfaRespostaT10.timestamp, respondido_t10_de, respondido_t10_ate)
+        if filtros_t10:
+            q = q.filter(
+                exists()
+                .where(SfaRespostaT10.id_estudo == SfaPaciente.id_estudo)
+                .where(*filtros_t10)
+            )
+
+    if respondido_t30_de or respondido_t30_ate:
+        filtros_t30 = _timestamp_conditions(SfaRespostaT30.timestamp, respondido_t30_de, respondido_t30_ate)
+        if filtros_t30:
+            q = q.filter(
+                exists()
+                .where(SfaRespostaT30.id_estudo == SfaPaciente.id_estudo)
+                .where(*filtros_t30)
+            )
+    if proxima_acao_ate:
+        q = _apply_string_date_range(q, SfaPaciente.data_proxima_acao, "", proxima_acao_ate)
+        q = q.filter((SfaPaciente.proxima_acao.isnot(None)) & (SfaPaciente.proxima_acao != "") & (SfaPaciente.proxima_acao != "Sem acao"))
+    if situacao_data:
+        hoje = date.today()
+        if situacao_data == "atrasados":
+            q = _apply_string_date_range(q, SfaPaciente.data_proxima_acao, "", hoje.isoformat())
+            q = q.filter((SfaPaciente.proxima_acao.isnot(None)) & (SfaPaciente.proxima_acao != "") & (SfaPaciente.proxima_acao != "Sem acao"))
+        elif situacao_data == "vence_7_dias":
+            q = _apply_string_date_range(
+                q,
+                SfaPaciente.data_proxima_acao,
+                hoje.isoformat(),
+                (hoje + timedelta(days=7)).isoformat(),
+            )
+            q = q.filter((SfaPaciente.proxima_acao.isnot(None)) & (SfaPaciente.proxima_acao != "") & (SfaPaciente.proxima_acao != "Sem acao"))
+
+    data_notificacao_order_sq = (
+        db.session.query(
+            SfaSinanLog.id_estudo_vinculado.label("id_estudo"),
+            func.max(_date_field_to_iso_expr(SfaSinanLog.data_notificacao)).label("data_notificacao_iso"),
+        )
+        .group_by(SfaSinanLog.id_estudo_vinculado)
+        .subquery()
+    )
+    q = q.outerjoin(
+        data_notificacao_order_sq,
+        data_notificacao_order_sq.c.id_estudo == SfaPaciente.id_estudo,
+    )
+
+    return q.order_by(
+        data_notificacao_order_sq.c.data_notificacao_iso.desc().nullslast(),
+        SfaPaciente.timestamp_cadastro.desc(),
+    )
+
+
+def _anexar_datas_notificacao_sinan(pacientes) -> None:
+    from models.sfa import SfaSinanLog
+
+    ids_estudo = [getattr(paciente, "id_estudo", "") for paciente in pacientes if getattr(paciente, "id_estudo", "")]
+    if not ids_estudo:
+        return
+
+    logs = (
+        SfaSinanLog.query
+        .filter(SfaSinanLog.id_estudo_vinculado.in_(ids_estudo))
+        .order_by(SfaSinanLog.id.desc())
+        .all()
+    )
+
+    datas_por_estudo = {}
+    for log in logs:
+        id_estudo = getattr(log, "id_estudo_vinculado", "")
+        if id_estudo and id_estudo not in datas_por_estudo:
+            datas_por_estudo[id_estudo] = getattr(log, "data_notificacao", "") or ""
+
+    for paciente in pacientes:
+        paciente._data_notificacao_sinan = datas_por_estudo.get(getattr(paciente, "id_estudo", ""), "")
+
+
+def _resposta_recente(respostas):
+    itens = list(respostas or [])
+    if not itens:
+        return None
+    return sorted(itens, key=lambda item: getattr(item, "timestamp", None) or datetime.min)[-1]
+
+
+def _dashboard_distribution(title: str, data: dict[str, int]) -> dict[str, object]:
+    total = sum(data.values())
+    items = []
+    for label, count in sorted(data.items(), key=lambda item: (-item[1], item[0])):
+        pct = round((count / total) * 100, 1) if total else 0
+        items.append({"label": label, "count": count, "pct": pct})
+    return {"title": title, "total": total, "items": items}
+
+
+def _dashboard_grouped_distribution(
+    title: str,
+    data: dict[str, dict[str, int]],
+    denominators: dict[str, int] | None = None,
+    limit: int | None = None,
+) -> dict[str, object]:
+    denominators = denominators or {}
+    total_denominator = denominators.get("total") or sum(data.get("total", {}).values())
+    a_denominator = denominators.get("A") or sum(data.get("A", {}).values())
+    b_denominator = denominators.get("B") or sum(data.get("B", {}).values())
+    labels = set(data.get("total", {})) | set(data.get("A", {})) | set(data.get("B", {}))
+    items = []
+
+    for label in labels:
+        total_count = data.get("total", {}).get(label, 0)
+        a_count = data.get("A", {}).get(label, 0)
+        b_count = data.get("B", {}).get(label, 0)
+        a_pct = _safe_ratio(a_count, a_denominator)
+        b_pct = _safe_ratio(b_count, b_denominator)
+        gap = round(abs(a_pct - b_pct), 1)
+        if a_pct > b_pct:
+            leader = "A"
+        elif b_pct > a_pct:
+            leader = "B"
+        else:
+            leader = "Empate"
+        items.append(
+            {
+                "label": label,
+                "count": total_count,
+                "pct": _safe_ratio(total_count, total_denominator),
+                "a_count": a_count,
+                "a_pct": a_pct,
+                "b_count": b_count,
+                "b_pct": b_pct,
+                "leader": leader,
+                "gap": gap,
+            }
+        )
+
+    items.sort(key=lambda item: (-item["count"], -item["gap"], item["label"]))
+    if limit:
+        items = items[:limit]
+    return {
+        "title": title,
+        "total": total_denominator,
+        "a_total": a_denominator,
+        "b_total": b_denominator,
+        "items": items,
+    }
+
+
+def _faixa_etaria_sfa(data_nascimento: str, referencia: date) -> str:
+    from services.sfa_service import calcular_idade, parse_data
+
+    nascimento = parse_data(data_nascimento)
+    idade = calcular_idade(nascimento, referencia) if nascimento else None
+    if idade is None:
+        return "Nao informado"
+    if idade < 18:
+        return "<18"
+    if idade < 30:
+        return "18-29"
+    if idade < 45:
+        return "30-44"
+    if idade < 60:
+        return "45-59"
+    return "60+"
+
+
+def _safe_ratio(numerator: int, denominator: int) -> float:
+    if not denominator:
+        return 0.0
+    return round((numerator / denominator) * 100, 1)
+
+
+def _recuperacao_alta_sfa(estado) -> bool:
+    estado_texto = str(estado or "")
+    return estado_texto.startswith(
+        (
+            "Totalmente recuperado",
+            "Quase recuperado",
+            "100% recuperado",
+            "90-99% recuperado",
+        )
+    )
+
+
+def _retorno_atividades_rapido_sfa(retorno) -> bool:
+    retorno_texto = str(retorno or "")
+    return retorno_texto.startswith(
+        (
+            "No mesmo dia",
+            "Em 2 a 3 dias",
+            "Em 4 a 7 dias",
+        )
+    )
+
+
+def _retorno_atividades_lento_sfa(retorno) -> bool:
+    retorno_texto = str(retorno or "")
+    return retorno_texto.startswith(
+        (
+            "Em 15 a 30 dias",
+            "Depois de 30 dias",
+            "Voltei parcialmente",
+            "Ainda nao voltei",
+        )
+    )
+
+
+def _retorno_atividades_temporal_sfa(retorno) -> str:
+    retorno_texto = str(retorno or "")
+    opcoes_temporais = {
+        "No mesmo dia ou em 1 dia",
+        "Em 2 a 3 dias",
+        "Em 4 a 7 dias",
+        "Em 8 a 14 dias",
+        "Em 15 a 30 dias",
+        "Depois de 30 dias",
+        "Voltei parcialmente, mas ainda nao totalmente",
+        "Ainda nao voltei",
+    }
+    return retorno_texto if retorno_texto in opcoes_temporais else ""
+
+
+def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
+    from services.sfa_service import parse_data
+
+    pacientes = list(pacientes or [])
+    total = len(pacientes)
+    if not total:
+        return {
+            "cards": [],
+            "distributions": [],
+            "cost_breakdown": [],
+            "timeline_cards": [],
+            "research_cards": [],
+            "group_comparison": [],
+            "symptom_prevalence": [],
+            "demographic_distributions": [],
+            "research_alerts": [],
+            "symptom_group_matrix": [],
+            "recovery_segments": [],
+            "return_cost_segments": [],
+            "hypothesis_cards": [],
+            "cluster_summary": [],
+            "top_differentiators": [],
+        }
+
+    def _avg(values):
+        nums = [float(value) for value in values if value is not None]
+        return round(sum(nums) / len(nums), 1) if nums else 0.0
+
+    def _days_between(start_value, end_value):
+        start = parse_data(start_value)
+        end = parse_data(end_value)
+        if not start or not end:
+            return None
+        return max((end - start).days, 0)
+
+    def _new_grouped_counts():
+        return {"total": {}, "A": {}, "B": {}}
+
+    def _increment_grouped(store, label, grupo):
+        label = label or "Nao informado"
+        store["total"][label] = store["total"].get(label, 0) + 1
+        if grupo in ("A", "B"):
+            store[grupo][label] = store[grupo].get(label, 0) + 1
+
+    grupo_a = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "A")
+    grupo_b = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "B")
+    t0s = [getattr(paciente, "resposta_t0", None) for paciente in pacientes if getattr(paciente, "resposta_t0", None)]
+    t10s = [_resposta_recente(getattr(paciente, "respostas_t10", [])) for paciente in pacientes]
+    t10s = [resposta for resposta in t10s if resposta]
+    t30s = [_resposta_recente(getattr(paciente, "respostas_t30", [])) for paciente in pacientes]
+    t30s = [resposta for resposta in t30s if resposta]
+
+    total_custos_t30 = [
+        float(
+            (getattr(resposta, "custo_remedios", 0) or 0)
+            + (getattr(resposta, "custo_consultas", 0) or 0)
+            + (getattr(resposta, "custo_transporte", 0) or 0)
+            + (getattr(resposta, "custo_outros", 0) or 0)
+        )
+        for resposta in t30s
+    ]
+    recuperacao_alta = 0
+    for resposta in t30s:
+        payload = json.loads(getattr(resposta, "dados_json", "{}") or "{}")
+        estado = str(payload.get("estado_saude_final") or "")
+        if _recuperacao_alta_sfa(estado):
+            recuperacao_alta += 1
+
+    cards = [
+        {"label": "Pacientes avaliados", "value": total, "tone": "var(--sfa-teal)"},
+        {"label": "Grupo A", "value": f"{grupo_a} ({round((grupo_a / total) * 100) if total else 0}%)", "tone": "#dc3545"},
+        {"label": "Grupo B", "value": f"{grupo_b} ({round((grupo_b / total) * 100) if total else 0}%)", "tone": "#6c757d"},
+        {"label": "Dias incapacitantes T0", "value": _avg([getattr(resposta, "dias_incap", None) for resposta in t0s]), "tone": "#fd7e14"},
+        {"label": "Dias incapacitantes T30", "value": _avg([getattr(resposta, "dias_incap_novos", None) for resposta in t30s]), "tone": "#198754"},
+        {"label": "Custo médio final", "value": f"R$ {_avg(total_custos_t30):.1f}", "tone": "#0d6efd"},
+        {"label": "Recuperação alta no T30", "value": f"{recuperacao_alta}/{len(t30s) or total}", "tone": "#20c997"},
+    ]
+
+    melhorias = {}
+    retornos = {}
+    estados_finais = {}
+    residencias = {}
+    bairros = {}
+    sexo_dist = {}
+    ocupacao_dist = {}
+    faixa_etaria_dist = {}
+    sintomas_dist = {}
+    symptom_group_matrix = {}
+    melhorias_grouped = _new_grouped_counts()
+    estados_finais_grouped = _new_grouped_counts()
+    retornos_grouped = _new_grouped_counts()
+    residencias_grouped = _new_grouped_counts()
+    bairros_grouped = _new_grouped_counts()
+    sexo_grouped = _new_grouped_counts()
+    ocupacao_grouped = _new_grouped_counts()
+    faixa_etaria_grouped = _new_grouped_counts()
+    sintomas_grouped = _new_grouped_counts()
+    return_cost_buckets = {
+        "No mesmo dia ou em 1 dia": [],
+        "Em 2 a 3 dias": [],
+        "Em 4 a 7 dias": [],
+        "Em 8 a 14 dias": [],
+        "Em 15 a 30 dias": [],
+        "Depois de 30 dias": [],
+        "Voltei parcialmente, mas ainda nao totalmente": [],
+        "Ainda nao voltei": [],
+    }
+    recovery_segments = {
+        "Masculino": {"total": 0, "alta": 0},
+        "Feminino": {"total": 0, "alta": 0},
+        "<18": {"total": 0, "alta": 0},
+        "18-29": {"total": 0, "alta": 0},
+        "30-44": {"total": 0, "alta": 0},
+        "45-59": {"total": 0, "alta": 0},
+        "60+": {"total": 0, "alta": 0},
+    }
+    grupo_metrics = {
+        "A": {"pacientes": 0, "custos": [], "dias_t30": [], "recuperacao_alta": 0},
+        "B": {"pacientes": 0, "custos": [], "dias_t30": [], "recuperacao_alta": 0},
+    }
+    for paciente in pacientes:
+        grupo = getattr(paciente, "grupo", "") or "Nao informado"
+        if grupo in grupo_metrics:
+            grupo_metrics[grupo]["pacientes"] += 1
+        bairro = paciente.bairro or "Nao informado"
+        bairros[bairro] = bairros.get(bairro, 0) + 1
+        _increment_grouped(bairros_grouped, bairro, grupo)
+        faixa = _faixa_etaria_sfa(getattr(paciente, "data_nascimento", ""), date.today())
+        faixa_etaria_dist[faixa] = faixa_etaria_dist.get(faixa, 0) + 1
+        _increment_grouped(faixa_etaria_grouped, faixa, grupo)
+        if paciente.resposta_t0:
+            payload_t0 = json.loads(getattr(paciente.resposta_t0, "dados_json", "{}") or "{}")
+            residencia = payload_t0.get("tipo_residencia") or getattr(paciente.resposta_t0, "tipo_residencia", "") or "Nao informado"
+            residencias[residencia] = residencias.get(residencia, 0) + 1
+            _increment_grouped(residencias_grouped, residencia, grupo)
+            sexo = payload_t0.get("sexo_biologico") or "Nao informado"
+            ocupacao = payload_t0.get("ocupacao_principal") or "Nao informado"
+            sexo_dist[sexo] = sexo_dist.get(sexo, 0) + 1
+            ocupacao_dist[ocupacao] = ocupacao_dist.get(ocupacao, 0) + 1
+            _increment_grouped(sexo_grouped, sexo, grupo)
+            _increment_grouped(ocupacao_grouped, ocupacao, grupo)
+            for sintoma in payload_t0.get("sintomas_principais") or []:
+                sintomas_dist[sintoma] = sintomas_dist.get(sintoma, 0) + 1
+                _increment_grouped(sintomas_grouped, sintoma, grupo)
+                symptom_group_matrix.setdefault(sintoma, {"A": 0, "B": 0, "total": 0})
+                if grupo in ("A", "B"):
+                    symptom_group_matrix[sintoma][grupo] += 1
+                symptom_group_matrix[sintoma]["total"] += 1
+        resposta_t10 = _resposta_recente(getattr(paciente, "respostas_t10", []))
+        if resposta_t10:
+            payload_t10 = json.loads(getattr(resposta_t10, "dados_json", "{}") or "{}")
+            melhora = payload_t10.get("classificacao_melhora") or "Nao informado"
+            melhorias[melhora] = melhorias.get(melhora, 0) + 1
+            _increment_grouped(melhorias_grouped, melhora, grupo)
+        resposta_t30 = _resposta_recente(getattr(paciente, "respostas_t30", []))
+        if resposta_t30:
+            payload_t30 = json.loads(getattr(resposta_t30, "dados_json", "{}") or "{}")
+            estado = payload_t30.get("estado_saude_final") or "Nao informado"
+            retorno = payload_t30.get("retorno_atividades_normais") or "Nao informado"
+            retorno_temporal = _retorno_atividades_temporal_sfa(retorno)
+            estados_finais[estado] = estados_finais.get(estado, 0) + 1
+            _increment_grouped(estados_finais_grouped, estado, grupo)
+            if retorno_temporal:
+                retornos[retorno_temporal] = retornos.get(retorno_temporal, 0) + 1
+                _increment_grouped(retornos_grouped, retorno_temporal, grupo)
+            custo_total = float(
+                (getattr(resposta_t30, "custo_remedios", 0) or 0)
+                + (getattr(resposta_t30, "custo_consultas", 0) or 0)
+                + (getattr(resposta_t30, "custo_transporte", 0) or 0)
+                + (getattr(resposta_t30, "custo_outros", 0) or 0)
+            )
+            if grupo in grupo_metrics:
+                grupo_metrics[grupo]["custos"].append(custo_total)
+                grupo_metrics[grupo]["dias_t30"].append(getattr(resposta_t30, "dias_incap_novos", 0) or 0)
+                if _recuperacao_alta_sfa(estado):
+                    grupo_metrics[grupo]["recuperacao_alta"] += 1
+            if retorno_temporal in return_cost_buckets:
+                return_cost_buckets[retorno_temporal].append(custo_total)
+            if sexo in recovery_segments:
+                recovery_segments[sexo]["total"] += 1
+            if faixa in recovery_segments:
+                recovery_segments[faixa]["total"] += 1
+            alta = _recuperacao_alta_sfa(estado)
+            if alta:
+                if sexo in recovery_segments:
+                    recovery_segments[sexo]["alta"] += 1
+                if faixa in recovery_segments:
+                    recovery_segments[faixa]["alta"] += 1
+
+    distributions = [
+        _dashboard_grouped_distribution("Evolução percebida no T10", melhorias_grouped),
+        _dashboard_grouped_distribution("Estado final no T30", estados_finais_grouped),
+        _dashboard_grouped_distribution("Retorno às atividades", retornos_grouped),
+        _dashboard_grouped_distribution("Tipo de residência", residencias_grouped),
+        _dashboard_grouped_distribution("Bairros do lote", bairros_grouped),
+    ]
+
+    cost_labels = [
+        ("Medicamentos", "custo_remedios"),
+        ("Consultas/exames", "custo_consultas"),
+        ("Transporte", "custo_transporte"),
+        ("Outros", "custo_outros"),
+    ]
+    cost_breakdown = []
+    max_cost = 0.0
+    for label, attr in cost_labels:
+        avg_value = _avg([getattr(resposta, attr, None) for resposta in t30s])
+        max_cost = max(max_cost, avg_value)
+        cost_breakdown.append({"label": label, "value": avg_value})
+    for item in cost_breakdown:
+        item["pct"] = round((item["value"] / max_cost) * 100, 1) if max_cost else 0
+
+    dias_t0 = []
+    dias_t10 = []
+    dias_t30 = []
+    for paciente in pacientes:
+        inicio = parse_data(getattr(getattr(paciente, "resposta_t0", None), "data_inicio_sintomas", ""))
+        if not inicio:
+            continue
+        if paciente.data_t0 and parse_data(paciente.data_t0):
+            dias_t0.append((parse_data(paciente.data_t0) - inicio).days)
+        if paciente.data_t10 and parse_data(paciente.data_t10):
+            dias_t10.append((parse_data(paciente.data_t10) - inicio).days)
+        if paciente.data_t30 and parse_data(paciente.data_t30):
+            dias_t30.append((parse_data(paciente.data_t30) - inicio).days)
+
+    timeline_cards = [
+        {"label": "Dias médios até T0", "value": _avg(dias_t0)},
+        {"label": "Dias médios até T10", "value": _avg(dias_t10)},
+        {"label": "Dias médios até T30", "value": _avg(dias_t30)},
+    ]
+
+    research_cards = [
+        {"label": "Sexo mais frequente", "value": max(sexo_dist, key=sexo_dist.get) if sexo_dist else "N/D"},
+        {"label": "Faixa etária mais frequente", "value": max(faixa_etaria_dist, key=faixa_etaria_dist.get) if faixa_etaria_dist else "N/D"},
+        {"label": "Ocupação mais frequente", "value": max(ocupacao_dist, key=ocupacao_dist.get) if ocupacao_dist else "N/D"},
+        {"label": "Sintoma mais frequente", "value": max(sintomas_dist, key=sintomas_dist.get) if sintomas_dist else "N/D"},
+    ]
+
+    group_comparison = [
+        {
+            "metric": "Pacientes",
+            "a": grupo_metrics["A"]["pacientes"],
+            "b": grupo_metrics["B"]["pacientes"],
+        },
+        {
+            "metric": "Custo final médio",
+            "a": f"R$ {_avg(grupo_metrics['A']['custos']):.1f}",
+            "b": f"R$ {_avg(grupo_metrics['B']['custos']):.1f}",
+        },
+        {
+            "metric": "Dias incapacitantes T30",
+            "a": _avg(grupo_metrics["A"]["dias_t30"]),
+            "b": _avg(grupo_metrics["B"]["dias_t30"]),
+        },
+        {
+            "metric": "Recuperação alta",
+            "a": f"{grupo_metrics['A']['recuperacao_alta']}/{grupo_metrics['A']['pacientes'] or 0}",
+            "b": f"{grupo_metrics['B']['recuperacao_alta']}/{grupo_metrics['B']['pacientes'] or 0}",
+        },
+    ]
+
+    symptom_prevalence = _dashboard_grouped_distribution(
+        "Sintomas principais no T0",
+        sintomas_grouped,
+        {"total": total, "A": grupo_metrics["A"]["pacientes"], "B": grupo_metrics["B"]["pacientes"]},
+        limit=8,
+    )["items"]
+    demographic_distributions = [
+        _dashboard_grouped_distribution("Sexo biológico", sexo_grouped),
+        _dashboard_grouped_distribution("Faixa etária", faixa_etaria_grouped),
+        _dashboard_grouped_distribution("Ocupação principal", ocupacao_grouped),
+    ]
+
+    symptom_group_rows = []
+    for sintoma, values in sorted(symptom_group_matrix.items(), key=lambda item: (-item[1]["total"], item[0])):
+        symptom_group_rows.append(
+            {
+                "symptom": sintoma,
+                "a": values["A"],
+                "b": values["B"],
+                "a_pct": _safe_ratio(values["A"], grupo_metrics["A"]["pacientes"]),
+                "b_pct": _safe_ratio(values["B"], grupo_metrics["B"]["pacientes"]),
+            }
+        )
+
+    recovery_segment_rows = []
+    for label, values in recovery_segments.items():
+        if not values["total"]:
+            continue
+        recovery_segment_rows.append(
+            {
+                "segment": label,
+                "alta": values["alta"],
+                "total": values["total"],
+                "pct": _safe_ratio(values["alta"], values["total"]),
+            }
+        )
+    recovery_segment_rows.sort(key=lambda item: (-item["pct"], item["segment"]))
+
+    return_cost_rows = []
+    for label, values in return_cost_buckets.items():
+        if not values:
+            continue
+        return_cost_rows.append(
+            {
+                "segment": label,
+                "avg_cost": _avg(values),
+                "count": len(values),
+            }
+        )
+    return_cost_rows.sort(key=lambda item: -item["avg_cost"])
+
+    top_differentiators = []
+    for row in symptom_group_rows:
+        gap = round(abs(row["a_pct"] - row["b_pct"]), 1)
+        top_differentiators.append(
+            {
+                "label": row["symptom"],
+                "group": "A" if row["a_pct"] >= row["b_pct"] else "B",
+                "gap": gap,
+                "a_pct": row["a_pct"],
+                "b_pct": row["b_pct"],
+            }
+        )
+    top_differentiators.sort(key=lambda item: (-item["gap"], item["label"]))
+
+    clusters = {
+        "Recuperação rápida e baixo custo": {"count": 0, "days": []},
+        "Recuperação clínica com custo alto": {"count": 0, "days": []},
+        "Recuperação lenta com limitação funcional": {"count": 0, "days": []},
+        "Persistência de impacto": {"count": 0, "days": []},
+    }
+    for paciente in pacientes:
+        resposta_t0 = getattr(paciente, "resposta_t0", None)
+        resposta_t10 = _resposta_recente(getattr(paciente, "respostas_t10", []))
+        resposta_t30 = _resposta_recente(getattr(paciente, "respostas_t30", []))
+        if not resposta_t30:
+            continue
+
+        payload_t0 = json.loads(getattr(resposta_t0, "dados_json", "{}") or "{}") if resposta_t0 else {}
+        payload_t10 = json.loads(getattr(resposta_t10, "dados_json", "{}") or "{}") if resposta_t10 else {}
+        payload_t30 = json.loads(getattr(resposta_t30, "dados_json", "{}") or "{}")
+        inicio_sintomas = payload_t0.get("data_inicio_sintomas") or getattr(resposta_t0, "data_inicio_sintomas", "")
+        estado = str(payload_t30.get("estado_saude_final") or "")
+        retorno = _retorno_atividades_temporal_sfa(payload_t30.get("retorno_atividades_normais"))
+        if not retorno:
+            continue
+        melhora_t10 = str(payload_t10.get("classificacao_melhora") or "").startswith("Melhorando")
+        dias_ate_t10 = _days_between(inicio_sintomas, getattr(paciente, "data_t10", ""))
+        dias_ate_t30 = _days_between(inicio_sintomas, getattr(paciente, "data_t30", ""))
+        dias_ate_melhora = dias_ate_t10 if melhora_t10 and dias_ate_t10 is not None else dias_ate_t30
+        custo_total = float(
+            (getattr(resposta_t30, "custo_remedios", 0) or 0)
+            + (getattr(resposta_t30, "custo_consultas", 0) or 0)
+            + (getattr(resposta_t30, "custo_transporte", 0) or 0)
+            + (getattr(resposta_t30, "custo_outros", 0) or 0)
+        )
+        if (
+            _recuperacao_alta_sfa(estado)
+            and _retorno_atividades_rapido_sfa(retorno)
+            and custo_total <= 30
+            and (dias_ate_melhora is None or dias_ate_melhora <= 14)
+        ):
+            cluster_label = "Recuperação rápida e baixo custo"
+        elif _recuperacao_alta_sfa(estado):
+            cluster_label = "Recuperação clínica com custo alto"
+        elif _retorno_atividades_lento_sfa(retorno) or (dias_ate_melhora is not None and dias_ate_melhora > 21):
+            cluster_label = "Recuperação lenta com limitação funcional"
+        else:
+            cluster_label = "Persistência de impacto"
+
+        clusters[cluster_label]["count"] += 1
+        if dias_ate_melhora is not None:
+            clusters[cluster_label]["days"].append(dias_ate_melhora)
+
+    cluster_summary = [
+        {
+            "label": label,
+            "count": values["count"],
+            "pct": _safe_ratio(values["count"], len(t30s)),
+            "avg_days": _avg(values["days"]),
+            "time_label": "dias desde início dos sintomas até melhora/fechamento",
+        }
+        for label, values in clusters.items()
+        if values["count"]
+    ]
+    cluster_summary.sort(key=lambda item: (-item["count"], item["label"]))
+
+    research_alerts = []
+    if grupo_metrics["A"]["custos"] and grupo_metrics["B"]["custos"]:
+        avg_a = _avg(grupo_metrics["A"]["custos"])
+        avg_b = _avg(grupo_metrics["B"]["custos"])
+        if avg_a > avg_b:
+            research_alerts.append(f"Grupo A com custo final médio maior: R$ {avg_a:.1f} vs R$ {avg_b:.1f}.")
+        elif avg_b > avg_a:
+            research_alerts.append(f"Grupo B com custo final médio maior: R$ {avg_b:.1f} vs R$ {avg_a:.1f}.")
+    if recovery_segment_rows:
+        top_segment = recovery_segment_rows[0]
+        research_alerts.append(
+            f"Melhor recuperação alta no segmento {top_segment['segment']}: {top_segment['pct']}%."
+        )
+    if symptom_group_rows:
+        top_symptom = symptom_group_rows[0]
+        if top_symptom["a_pct"] != top_symptom["b_pct"]:
+            grupo_lider = "A" if top_symptom["a_pct"] > top_symptom["b_pct"] else "B"
+            lider_pct = top_symptom["a_pct"] if grupo_lider == "A" else top_symptom["b_pct"]
+            research_alerts.append(
+                f"Sintoma '{top_symptom['symptom']}' mais concentrado no grupo {grupo_lider}: {lider_pct}%."
+            )
+    if return_cost_rows:
+        top_return = return_cost_rows[0]
+        research_alerts.append(
+            f"Maior custo médio aparece em '{top_return['segment']}': R$ {top_return['avg_cost']:.1f}."
+        )
+
+    lowest_recovery = recovery_segment_rows[-1] if recovery_segment_rows else None
+    strongest_diff = top_differentiators[0] if top_differentiators else None
+    highest_cost_return = return_cost_rows[0] if return_cost_rows else None
+    hypothesis_cards = []
+    if strongest_diff:
+        hypothesis_cards.append(
+            {
+                "title": "Sintoma discriminante",
+                "body": f"{strongest_diff['label']} diferencia mais os grupos, favorecendo o grupo {strongest_diff['group']} ({strongest_diff['gap']} p.p.).",
+            }
+        )
+    if highest_cost_return:
+        hypothesis_cards.append(
+            {
+                "title": "Custo e funcionalidade",
+                "body": f"O maior custo médio aparece em '{highest_cost_return['segment']}'.",
+            }
+        )
+    if lowest_recovery:
+        hypothesis_cards.append(
+            {
+                "title": "Recuperação mais lenta",
+                "body": f"O segmento {lowest_recovery['segment']} teve a menor taxa de recuperação alta ({lowest_recovery['pct']}%).",
+            }
+        )
+    if cluster_summary:
+        hypothesis_cards.append(
+            {
+                "title": "Cluster predominante",
+                "body": f"O cluster mais frequente foi '{cluster_summary[0]['label']}' com {cluster_summary[0]['count']} caso(s).",
+            }
+        )
+
+    return {
+        "cards": cards,
+        "distributions": distributions,
+        "cost_breakdown": cost_breakdown,
+        "timeline_cards": timeline_cards,
+        "research_cards": research_cards,
+        "group_comparison": group_comparison,
+        "symptom_prevalence": symptom_prevalence,
+        "demographic_distributions": demographic_distributions,
+        "research_alerts": research_alerts,
+        "symptom_group_matrix": symptom_group_rows[:8],
+        "recovery_segments": recovery_segment_rows[:8],
+        "return_cost_segments": return_cost_rows[:6],
+        "hypothesis_cards": hypothesis_cards,
+        "cluster_summary": cluster_summary[:6],
+        "top_differentiators": top_differentiators[:6],
+    }
 
 @bp.route("/pacientes")
 @require_sfa_internal_access
@@ -214,12 +1048,17 @@ def pacientes():
     page = request.args.get("page", 1, type=int)
 
     q = _consulta_pacientes_filtrada(filtros)
+    dashboard_testes = None
+    if filtros.get("visao") == "testes":
+        dashboard_testes = _montar_dashboard_testes_sfa(q.all())
     paginacao = q.paginate(page=page, per_page=50, error_out=False)
+    _anexar_datas_notificacao_sinan(paginacao.items)
 
     return render_template("sfa/pacientes.html",
                            pacientes=paginacao.items,
                            paginacao=paginacao,
-                           filtros=filtros)
+                           filtros=filtros,
+                           dashboard_testes=dashboard_testes)
 
 
 @bp.route("/analise-respostas")
@@ -400,7 +1239,7 @@ def paciente_detail(id_estudo: str):
                     ("Estado final", payload.get("estado_saude_final")),
                     ("Dias incapacitado", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
                     ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
-                    ("Retorno atividades", payload.get("retorno_atividades_normais")),
+                    ("Quando voltou as atividades", payload.get("retorno_atividades_normais")),
                 ]
             )
 
@@ -467,6 +1306,31 @@ def criar_paciente_manual():
 
     flash(f"Participante {resultado} criado com sucesso.", "success")
     return redirect(url_for("sfa_routes.paciente_detail", id_estudo=resultado))
+
+
+@bp.route("/teste-dados/gerar", methods=["POST"])
+@require_sfa_internal_access
+def gerar_teste_dados():
+    from services.sfa_service import gerar_lote_pacientes_teste_sfa
+
+    quantidade = request.form.get("quantidade", 10, type=int) or 10
+    resumo = gerar_lote_pacientes_teste_sfa(quantidade)
+    flash(
+        f"Lote de teste {resumo['batch_id']} criado com {resumo['total']} pacientes. "
+        "Os registros ficam ocultos do fluxo real por padrão.",
+        "success",
+    )
+    return redirect(url_for("sfa_routes.pacientes", visao="testes"))
+
+
+@bp.route("/teste-dados/apagar", methods=["POST"])
+@require_sfa_internal_access
+def apagar_teste_dados():
+    from services.sfa_service import apagar_lote_pacientes_teste_sfa
+
+    resumo = apagar_lote_pacientes_teste_sfa()
+    flash(f"{resumo['removidos']} paciente(s) de teste removido(s).", "success")
+    return redirect(url_for("sfa_routes.dashboard"))
 
 
 # ---------------------------------------------------------------------------

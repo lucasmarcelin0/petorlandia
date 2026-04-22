@@ -13,6 +13,12 @@
       <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2">
         <i class="fas fa-building me-1"></i>{{ selected_clinic.nome }}
       </span>
+      <div class="mt-2 d-flex flex-wrap gap-2 justify-content-end">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidade_dre', clinica_id=selected_clinic.id) }}">DRE</a>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidade_fluxo_caixa', clinica_id=selected_clinic.id) }}">Fluxo</a>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('contabilidade_contas', clinica_id=selected_clinic.id) }}">Contas</a>
+        <a class="btn btn-sm btn-outline-success" href="{{ url_for('contabilidade_exportar_xlsx', clinica_id=selected_clinic.id) }}">XLSX</a>
+      </div>
     </div>
     {% endif %}
   </div>
@@ -159,7 +165,64 @@
         </div>
       </div>
     </div>
+    <div class="col">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-dark bg-opacity-10 text-dark p-3 me-3">
+              <i class="fas fa-receipt"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Ticket medio</p>
+              <h4 class="mb-0">{{ (dashboard_metrics.ticket_medio if dashboard_metrics else 0) | currency_br }}</h4>
+              <small class="text-muted">Inadimplencia: {{ (dashboard_metrics.inadimplencia if dashboard_metrics else 0) | currency_br }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  {% if dashboard_metrics %}
+  <div class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="mb-3">Top servicos</h5>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <tbody>
+                {% for item in dashboard_metrics.top_servicos %}
+                <tr><td>{{ item.servico }}</td><td class="text-end">{{ item.quantidade }}</td><td class="text-end">{{ item.total | currency_br }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted">Sem servicos no mes.</td><td></td><td></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="mb-3">Faturamento por veterinario</h5>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <tbody>
+                {% for item in vet_report %}
+                <tr><td>{{ item.nome }}</td><td class="text-end">{{ item.faturamento | currency_br }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted">Sem rateio no mes.</td><td></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   {% if selected_clinic_id %}
     {% if has_chart_data %}

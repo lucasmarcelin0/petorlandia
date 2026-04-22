@@ -7,8 +7,16 @@ try:
 except ImportError:  # pragma: no cover - fallback for package import
     from .extensions import db
 
+from cryptography.fernet import InvalidToken
 from time_utils import now_in_brazil
 from sqlalchemy import Enum as PgEnum
+from sqlalchemy.orm import synonym
+from security.crypto import (
+    MissingMasterKeyError,
+    decrypt_text_for_clinic,
+    encrypt_text_for_clinic,
+    looks_encrypted_text,
+)
 
 
 class FiscalDocumentStatus(enum.Enum):
@@ -92,6 +100,10 @@ class FiscalCertificate(db.Model):
 
 class FiscalDocument(db.Model):
     __tablename__ = "fiscal_documents"
+    __table_args__ = (
+        db.Index("ix_fiscal_documents_source", "clinic_id", "source_type", "source_id"),
+        db.Index("ix_fiscal_documents_related", "clinic_id", "related_type", "related_id"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     emitter_id = db.Column(
@@ -122,8 +134,12 @@ class FiscalDocument(db.Model):
     protocol = db.Column(db.String(80))
     verification_code = db.Column(db.String(80))
     payload_json = db.Column(db.JSON)
-    xml_signed = db.Column(db.Text)
-    xml_authorized = db.Column(db.Text)
+    # XMLs são mantidos criptografados no banco com chave derivada por clínica
+    # (ver security.crypto). Eles contêm CPF/CNPJ do tomador, valores da nota
+    # e a assinatura digital — qualquer dump de backup ou replica exposta
+    # vazaria base fiscal inteira. Acesso sempre via property (get/set).
+    _xml_signed = db.Column("xml_signed", db.Text)
+    _xml_authorized = db.Column("xml_authorized", db.Text)
     pdf_path = db.Column(db.String(255))
     error_code = db.Column(db.String(50))
     error_message = db.Column(db.Text)
@@ -149,6 +165,58 @@ class FiscalDocument(db.Model):
         "FiscalEvent",
         back_populates="document",
         cascade="all, delete-orphan",
+    )
+
+    # ── XMLs criptografados ────────────────────────────────────────────────
+    # Padrão: getter descriptografa se o blob começar com FERNET_PREFIX;
+    # setter só cifra quando não reconhece um token já cifrado (idempotente,
+    # seguro para re-salvamentos). InvalidToken cai para retornar o valor
+    # bruto — backfill antigo pode ter blobs em plaintext que o backfill
+    # script vai migrar depois. MissingMasterKeyError NÃO é engolida: sem
+    # chave mestra, queremos barulho em produção, não silêncio.
+    def _decrypt_xml(self, blob):
+        if not blob:
+            return blob
+        try:
+            return decrypt_text_for_clinic(self.clinic_id, blob)
+        except InvalidToken:
+            return blob
+        except MissingMasterKeyError:
+            raise
+
+    def _encrypt_xml_for_set(self, value):
+        if not value:
+            return value
+        # Já cifrado? não re-envelopa. Cuidado: decrypt_text_for_clinic
+        # *silenciosamente* devolve plaintext se o blob não começar com
+        # FERNET_PREFIX (não levanta InvalidToken). Por isso não dá para
+        # usar try/except decrypt — a gente checa o prefixo explicitamente.
+        if looks_encrypted_text(value):
+            return value
+        if not self.clinic_id:
+            raise ValueError("clinic_id deve estar definido antes de armazenar XML fiscal.")
+        return encrypt_text_for_clinic(self.clinic_id, value)
+
+    def _get_xml_signed(self):
+        return self._decrypt_xml(self._xml_signed)
+
+    def _set_xml_signed(self, value):
+        self._xml_signed = self._encrypt_xml_for_set(value)
+
+    xml_signed = synonym(
+        "_xml_signed",
+        descriptor=property(_get_xml_signed, _set_xml_signed),
+    )
+
+    def _get_xml_authorized(self):
+        return self._decrypt_xml(self._xml_authorized)
+
+    def _set_xml_authorized(self, value):
+        self._xml_authorized = self._encrypt_xml_for_set(value)
+
+    xml_authorized = synonym(
+        "_xml_authorized",
+        descriptor=property(_get_xml_authorized, _set_xml_authorized),
     )
 
     @property

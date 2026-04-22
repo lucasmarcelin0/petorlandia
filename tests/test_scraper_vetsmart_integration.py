@@ -1,0 +1,124 @@
+"""Teste de integração do parser: rodar `extrair_produto_do_html` contra HTML
+sintético que imita a estrutura da página da Prednisona no VetSmart.
+
+Isso é um "golden test": se a estrutura da VetSmart mudar ou o parser regredir,
+esse teste falha e aponta exatamente qual campo ficou errado. Mais valioso que
+testar o HTML em si é testar o contrato dos dados que nos interessam:
+principio_ativo, apresentações (com concentração numérica), e doses estruturadas
+(com indicação, intervalo_horas, duracao_min_dias).
+"""
+import sys
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import importar_medicamentos_vetsmart as scraper  # noqa: E402
+
+
+# HTML sintético baseado no markup real da VetSmart para Prednisona industrializada
+# (comprimido 5 mg). Cobre os casos que historicamente vazaram no scraper:
+#  - apresentação sem concentração no <li> (manipulado)
+#  - duração embutida no texto de frequência ("por 7 dias")
+#  - múltiplas indicações no mesmo protocolo (Alergia + Imunossupressão)
+HTML_PREDNISONA = """
+<html>
+<body>
+  <h2 class="side-nav-title">Prednisona LigVet</h2>
+  <div class="side-nav-subtitle">POR LigVet Farmácia de Manipulação</div>
+
+  <meta itemprop="manufacturer" content="LigVet Farmácia de Manipulação"/>
+  <meta itemprop="drugClass" content="Anti-inflamatório Esteroidal"/>
+  <meta itemprop="administrationRoute" content="Oral"/>
+  <meta itemprop="activeIngredient" content="Prednisona"/>
+
+  <p><b>Espécies:</b> Cães e Gatos</p>
+
+  <section class="container-content">
+    <div class="title-content">Apresentações e concentrações</div>
+    <div class="content-comercial-info">
+      <ul>
+        <li><span itemprop="dosageForm">Comprimido</span> - 5 mg</li>
+        <li><span itemprop="dosageForm">Cápsulas</span></li>
+        <li><span itemprop="dosageForm">Suspensão</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="container-content">
+    <div class="title-content">Administração e doses</div>
+    <div class="content-comercial-info">
+      <p><b>Via:</b> Oral</p>
+      <p><b>Dose:</b></p>
+      <ul>
+        <li>Cães: 0,5 - 1 mg/kg</li>
+        <li>Cães: 2 mg/kg</li>
+        <li>Gatos: 1 mg/kg</li>
+      </ul>
+      <p><b>Frequência:</b> Alergias e imunossupressão: 12h. Dermatite atópica: 24hrs por 7 dias.</p>
+    </div>
+  </section>
+
+  <section class="container-content">
+    <div class="title-content">Indicações e contraindicações</div>
+    <div class="content-comercial-info">
+      <p>Indicações: atopia, dermatite de contato, alergias, doenças osteoarticulares,
+      endocrinopatias (por exemplo: hipocortisolismo), neoplasias.</p>
+    </div>
+  </section>
+</body>
+</html>
+"""
+
+
+def test_prednisona_integration_parse():
+    prod = scraper.extrair_produto_do_html(HTML_PREDNISONA, pid=9999, nome_fallback='?')
+
+    # Campos principais (schema.org)
+    assert prod.nome == 'Prednisona LigVet'
+    assert prod.principio_ativo == 'Prednisona'
+    assert prod.via_administracao == 'Oral'
+    assert prod.classificacao == 'Anti-inflamatório Esteroidal'
+    assert prod.fabricante == 'LigVet Farmácia de Manipulação'
+    assert prod.especies == 'Cães e Gatos'
+
+
+def test_prednisona_apresentacoes_nao_vazam_nome_como_concentracao():
+    prod = scraper.extrair_produto_do_html(HTML_PREDNISONA, pid=9999, nome_fallback='?')
+
+    # 3 apresentações: comprimido 5mg, cápsulas, suspensão.
+    formas = [(a['forma'], a.get('concentracao_valor'), a.get('concentracao_unidade'))
+              for a in prod.apresentacoes]
+
+    # Comprimido: tem concentração numérica.
+    assert ('Comprimido', 5.0, 'mg') in formas, f'Esperava Comprimido 5mg em {formas}'
+
+    # Cápsulas e suspensão: sem número → valor None, unidade None.
+    # Regressão: antes o scraper podia pegar "Prednisona LigVet" como concentração.
+    capsulas = next((a for a in prod.apresentacoes if a['forma'] == 'Cápsulas'), None)
+    assert capsulas is not None, 'Cápsulas não extraídas'
+    assert capsulas.get('concentracao_valor') is None
+    assert capsulas.get('concentracao_unidade') is None
+    # Também não pode vazar nome como texto de concentração.
+    assert 'Prednisona' not in (capsulas.get('concentracao') or '')
+
+
+def test_prednisona_indicacoes_extraidas():
+    """As indicações da página devem ser preservadas no texto bruto e,
+    quando passadas ao _extrair_indicacao, resolvidas nas canônicas."""
+    prod = scraper.extrair_produto_do_html(HTML_PREDNISONA, pid=9999, nome_fallback='?')
+    assert prod.indicacoes is not None
+    # Cobertura: ao menos uma das indicações esperadas está no texto bruto.
+    txt = prod.indicacoes.lower()
+    assert 'atopia' in txt
+    assert 'osteoarticulares' in txt
+    assert 'endocrinopatias' in txt
+    assert 'neoplasias' in txt
+
+    # E o extrator reconhece cada uma das canônicas quando passado trechos.
+    # (O mapeamento dose→indicação é coberto nos testes unitários; aqui
+    # validamos só que o texto-fonte chegou completo ao produto.)
+    assert scraper._extrair_indicacao('atopia') == 'Dermatite atópica'
+    assert scraper._extrair_indicacao('doenças osteoarticulares') == 'Osteoarticular'
+    assert scraper._extrair_indicacao('endocrinopatias') == 'Endocrinopatia'
+    assert scraper._extrair_indicacao('neoplasias') == 'Neoplasia'

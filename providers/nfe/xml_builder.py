@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from lxml import etree
@@ -221,9 +221,13 @@ def _append_inf_adic(parent: etree._Element, info: str | None) -> None:
 
 
 def _format_decimal(value: Decimal | str | float | int) -> str:
+    # Decimal(str(x)) pode levantar InvalidOperation (string não numérica)
+    # ou ValueError (ex: float NaN/Infinity via str()). Um pega-tudo aqui
+    # esconderia bugs de tipagem (ex: passar um dict). Restringimos aos
+    # erros realmente esperados.
     try:
         decimal_value = Decimal(str(value))
-    except Exception:  # noqa: BLE001
+    except (InvalidOperation, ValueError):
         decimal_value = Decimal("0")
     return f"{decimal_value:.2f}"
 

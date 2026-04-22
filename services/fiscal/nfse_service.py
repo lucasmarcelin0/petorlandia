@@ -1,12 +1,15 @@
 """Serviço de emissão NFS-e (Betha/Orlândia)."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Optional
 
 from flask import current_app
 
 from lxml import etree
+
+# Parse seguro de XML externo (resposta Betha / prefeitura). Mantemos lxml
+# para serialização/XPath, mas entrada parseamos via helper hardened contra XXE.
+from security.xml_safe import safe_lxml_fromstring
 
 from extensions import db
 from models import (
@@ -23,8 +26,13 @@ from providers.nfse.betha import build_lote_xml, sign_betha_xml
 from providers.nfse.betha.client import BethaNfseClient
 from providers.nfse.betha.client import BethaWsdlConfig
 from security.crypto import decrypt_bytes, decrypt_text
-from services.fiscal.numbering import reserve_next_number
+from security.redact import redact_sensitive_text, redact_xml
+from services.fiscal.numbering import NumberingReservationError, reserve_next_number
 from time_utils import now_in_brazil
+
+
+class FiscalXmlParseError(ValueError):
+    """Raised when an external fiscal XML response cannot be parsed safely."""
 
 
 def create_nfse_document(
@@ -211,9 +219,26 @@ def emit_nfse_sync(document_id: int, clinic_id: int | None = None) -> FiscalDocu
         db.session.add(document)
         db.session.commit()
         return document
+    except (ValueError, RuntimeError, NumberingReservationError, FiscalXmlParseError) as exc:
+        current_app.logger.warning("Falha esperada ao emitir NFS-e: %s", exc, exc_info=True)
+        _mark_failed(
+            document,
+            _humanize_betha_error(str(exc)),
+            "emitir_nfse",
+            error_code=type(exc).__name__,
+            error_details=str(exc),
+        )
+        db.session.commit()
+        return document
     except Exception as exc:  # noqa: BLE001
-        current_app.logger.exception("Falha ao emitir NFS-e", exc_info=exc)
-        _mark_failed(document, _humanize_betha_error(str(exc)), "emitir_nfse")
+        current_app.logger.exception("Falha inesperada ao emitir NFS-e")
+        _mark_failed(
+            document,
+            _humanize_betha_error(str(exc)),
+            "emitir_nfse",
+            error_code=type(exc).__name__,
+            error_details=repr(exc),
+        )
         db.session.commit()
         return document
 
@@ -279,6 +304,8 @@ def poll_nfse(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
             if nfse_response.success:
                 _transition_status(document, FiscalDocumentStatus.AUTHORIZED, "consultar_nfse")
                 document.authorized_at = now_in_brazil()
+                from services.finance import sync_receivable_from_nfse
+                sync_receivable_from_nfse(document, commit=False)
             else:
                 _transition_status(document, FiscalDocumentStatus.REJECTED, "consultar_nfse")
                 document.error_message = _humanize_betha_error(nfse_response.error_message)
@@ -293,9 +320,26 @@ def poll_nfse(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
         db.session.add(document)
         db.session.commit()
         return document
+    except (ValueError, RuntimeError, FiscalXmlParseError) as exc:
+        current_app.logger.warning("Falha esperada ao consultar NFS-e: %s", exc, exc_info=True)
+        _mark_failed(
+            document,
+            _humanize_betha_error(str(exc)),
+            "consultar_nfse",
+            error_code=type(exc).__name__,
+            error_details=str(exc),
+        )
+        db.session.commit()
+        return document
     except Exception as exc:  # noqa: BLE001
-        current_app.logger.exception("Falha ao consultar NFS-e", exc_info=exc)
-        _mark_failed(document, _humanize_betha_error(str(exc)), "consultar_nfse")
+        current_app.logger.exception("Falha inesperada ao consultar NFS-e")
+        _mark_failed(
+            document,
+            _humanize_betha_error(str(exc)),
+            "consultar_nfse",
+            error_code=type(exc).__name__,
+            error_details=repr(exc),
+        )
         db.session.commit()
         return document
 
@@ -358,7 +402,7 @@ def _normalize_payload(document: FiscalDocument, emitter: FiscalEmitter) -> dict
     payload.setdefault("rps", {})
     payload["rps"].setdefault("numero", document.number)
     payload["rps"].setdefault("serie", document.series)
-    payload["rps"].setdefault("data_emissao", datetime.now().isoformat())
+    payload["rps"].setdefault("data_emissao", now_in_brazil().isoformat())
 
     payload.setdefault("prestador", {})
     payload["prestador"].setdefault("cnpj", emitter.cnpj)
@@ -517,14 +561,26 @@ def _transition_status(
     _log_event(document, event_type, target.value)
 
 
-def _mark_failed(document: FiscalDocument, error_message: str, event_type: str) -> None:
+def _mark_failed(
+    document: FiscalDocument,
+    error_message: str,
+    event_type: str,
+    *,
+    error_code: str | None = None,
+    error_details: str | None = None,
+) -> None:
     if document.status != FiscalDocumentStatus.FAILED and _can_transition_status(
         document.status,
         FiscalDocumentStatus.FAILED,
     ):
         document.status = FiscalDocumentStatus.FAILED
     document.error_message = error_message
-    _log_event(document, event_type, document.status.value, error_message=error_message)
+    if error_code:
+        document.error_code = error_code
+    event_error = error_message
+    if error_details:
+        event_error = f"{error_message} | causa={error_details}"
+    _log_event(document, event_type, document.status.value, error_message=event_error)
 
 
 def _log_event(
@@ -552,12 +608,25 @@ def _extract_xml_value(xml: str, tag: str) -> str | None:
     if not xml:
         return None
     try:
-        root = etree.fromstring(xml.encode("utf-8"))
+        root = safe_lxml_fromstring(xml)
         node = root.find(f".//{tag}")
+        if node is None:
+            for candidate in root.iter():
+                local = str(candidate.tag).split("}", 1)[-1]
+                if local == tag:
+                    node = candidate
+                    break
         if node is not None and node.text:
             return node.text
-    except Exception:  # noqa: BLE001
-        return None
+    except etree.XMLSyntaxError as exc:
+        raise FiscalXmlParseError(f"XML fiscal malformado ao buscar tag {tag}.") from exc
+    except Exception as exc:  # noqa: BLE001
+        # Inclui os erros de defusedxml (entities forbidden etc.) e qualquer
+        # outra falha inesperada. Log explícito pra auditoria.
+        current_app.logger.warning(
+            "Falha ao extrair tag %s do XML de resposta: %s", tag, exc
+        )
+        raise FiscalXmlParseError(f"XML fiscal inseguro ou invalido ao buscar tag {tag}.") from exc
     return None
 
 
@@ -569,17 +638,24 @@ def _is_lote_processado(xml: str) -> bool:
 
 
 def _redact_xml(xml: str | None) -> str | None:
+    """Delega para security.redact.redact_xml.
+
+    Mantido como função local para não tocar nos call-sites
+    (`_log_event(response_xml=_redact_xml(...))`). A cobertura agora inclui
+    CPF/CNPJ mascarados (123.456.789-00 / 12.345.678/0001-90), chave NF-e
+    de 44 dígitos, e redação em nodos de texto não-sensíveis (ex:
+    InfoAdicional, Mensagem). Ver security/redact.py.
+    """
+    return redact_xml(xml)
+
+
+def _redact_xml_text(xml: str | None) -> str | None:
+    """Versão só-texto (fallback para strings que não são XML válido).
+    Delega pro módulo compartilhado — agora cobre CPF/CNPJ com e sem
+    máscara, chave NF-e de 44 dígitos, e tokens em tags conhecidas."""
     if not xml:
         return xml
-    try:
-        root = etree.fromstring(xml.encode("utf-8"))
-        for tag in ["Cpf", "Cnpj", "InscricaoMunicipal", "Senha"]:
-            for node in root.findall(f".//{tag}"):
-                if node.text:
-                    node.text = "***"
-        return etree.tostring(root, encoding="unicode")
-    except Exception:  # noqa: BLE001
-        return xml
+    return redact_sensitive_text(xml)
 
 
 def build_nfse_payload_from_appointment(appointment: Appointment) -> dict[str, Any]:

@@ -963,6 +963,29 @@ class ClinicStaff(db.Model):
 
 
 class NfseIssue(db.Model):
+    """⚠️  DEPRECATED — não usar em código novo.
+
+    Este modelo é o registro ORIGINAL de emissão NFS-e (stack legada
+    services/nfse_service.py + app.py routes). Ele foi superado por
+    `models.fiscal.FiscalDocument`, que:
+
+      - Suporta NFS-e E NF-e no mesmo modelo (via `doc_type` enum).
+      - Tem criptografia at-rest de `xml_signed` e `xml_authorized`
+        (Fase 1.3).
+      - Usa `reserve_next_number` com lock concorrente (Fase 1.2).
+      - Expõe `emitter` (FiscalEmitter) — fonte única de CNPJ/IM por
+        clínica, em vez dos campos soltos em Clinica.
+
+    Roadmap:
+      - Fase 1 (atual): FiscalDocument é o canônico para tudo NOVO.
+        NfseIssue permanece read-only para não quebrar telas existentes.
+      - Fase 2 (pós-NFS-e Nacional): data migration para consolidar as
+        linhas legadas em FiscalDocument e dropar esta tabela.
+
+    Se você precisa adicionar um campo aqui, PARE: adicione em
+    FiscalDocument/FiscalEvent/FiscalCounter e migre o caso de uso.
+    """
+
     __tablename__ = 'nfse_issues'
     id = db.Column(db.Integer, primary_key=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
@@ -1223,11 +1246,84 @@ class ClassifiedTransaction(db.Model):
 
     clinic = db.relationship(
         'Clinica',
-        backref=db.backref('classified_transactions', cascade='all, delete-orphan', lazy=True),
+        backref=db.backref('classified_transactions', cascade='all', lazy=True),
     )
 
     def __repr__(self):
         return f"<{self.origin} {self.category} R$ {self.value}>"
+
+
+class AccountingAccount(db.Model):
+    __tablename__ = 'accounting_accounts'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'source_type', 'source_id', 'kind', name='uq_accounting_account_source'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False, index=True)  # receivable/payable
+    status = db.Column(db.String(20), nullable=False, default='open', server_default='open', index=True)
+    description = db.Column(db.String(255), nullable=False)
+    counterparty_name = db.Column(db.String(150), nullable=True)
+    gross_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    tax_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    net_amount = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    issue_date = db.Column(db.Date, nullable=True, index=True)
+    due_date = db.Column(db.Date, nullable=True, index=True)
+    paid_at = db.Column(db.Date, nullable=True, index=True)
+    source_type = db.Column(db.String(50), nullable=True)
+    source_id = db.Column(db.Integer, nullable=True)
+    source_reference = db.Column(db.String(120), nullable=True)
+    bank_transaction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bank_statement_transactions.id', use_alter=True, name='fk_account_bank_transaction'),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+    )
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('accounting_accounts', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def mark_paid(self, paid_date=None, bank_transaction=None):
+        self.status = 'paid'
+        self.paid_at = paid_date or date.today()
+        if bank_transaction is not None:
+            self.bank_transaction_id = bank_transaction.id
+
+
+class BankStatementTransaction(db.Model):
+    __tablename__ = 'bank_statement_transactions'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'fit_id', name='uq_bank_statement_fit_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    posted_at = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(14, 2), nullable=False)
+    memo = db.Column(db.String(255), nullable=True)
+    fit_id = db.Column(db.String(120), nullable=True)
+    matched_account_id = db.Column(db.Integer, db.ForeignKey('accounting_accounts.id'), nullable=True)
+    match_confidence = db.Column(db.Numeric(5, 2), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('bank_statement_transactions', cascade='all, delete-orphan', lazy=True),
+    )
+    matched_account = db.relationship(
+        'AccountingAccount',
+        foreign_keys=[matched_account_id],
+        backref=db.backref('bank_matches', lazy=True),
+    )
 
 
 class PJPayment(db.Model):
@@ -1717,11 +1813,11 @@ class Appointment(db.Model):
     def _set_clinica(mapper, connection, target):
         """Populate clinica_id from veterinarian or animal if not set."""
         if target.veterinario_id:
-            vet = Veterinario.query.get(target.veterinario_id)
+            vet = db.session.get(Veterinario, target.veterinario_id)
             if vet and vet.clinica_id:
                 target.clinica_id = vet.clinica_id
         if not target.clinica_id and target.animal_id:
-            animal = Animal.query.get(target.animal_id)
+            animal = db.session.get(Animal, target.animal_id)
             if animal and animal.clinica_id:
                 target.clinica_id = animal.clinica_id
 
@@ -1736,18 +1832,20 @@ def _create_veterinarian_membership(mapper, connection, target):
     """Ensure every veterinarian profile starts with a membership record."""
 
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
-    session = object_session(target) or db.session
-
-    membership = getattr(target, 'membership', None)
-    if membership is None:
-        membership = VeterinarianMembership(
-            veterinario_id=target.id,
-            started_at=utcnow(),
-            trial_ends_at=utcnow() + timedelta(days=trial_days),
+    now = utcnow()
+    membership_row = connection.execute(
+        VeterinarianMembership.__table__.select().where(
+            VeterinarianMembership.veterinario_id == target.id
         )
-        session.add(membership)
-    else:
-        membership.ensure_trial_dates(trial_days)
+    ).first()
+    if membership_row is None:
+        connection.execute(
+            VeterinarianMembership.__table__.insert().values(
+                veterinario_id=target.id,
+                started_at=now,
+                trial_ends_at=now + timedelta(days=trial_days),
+            )
+        )
 
 
 event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)
@@ -1832,6 +1930,10 @@ class Medicamento(db.Model):
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
 
+    # Produto "canônico" no VetSmart que representa este PA
+    # (ex.: "Prednisona" PA genérico, id=1970)
+    vetsmart_produto_id = db.Column(db.Integer, index=True)
+
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -1839,6 +1941,7 @@ class Medicamento(db.Model):
     )
 
     apresentacoes = db.relationship('ApresentacaoMedicamento', backref='medicamento', cascade='all, delete-orphan')
+    doses = db.relationship('DoseMedicamento', backref='medicamento', cascade='all, delete-orphan', order_by='DoseMedicamento.id')
 
     def __str__(self):
         return self.nome
@@ -1851,8 +1954,60 @@ class ApresentacaoMedicamento(db.Model):
     forma = db.Column(db.String(50), nullable=False)          # cápsula, líquido, etc.
     concentracao = db.Column(db.String(100), nullable=False)  # Ex: 50 mg/mL, 500 mg/cápsula
 
+    # Campos numéricos para cálculo de dose
+    nome_variante        = db.Column(db.String(100))          # "Advocate Cães até 4 kg"
+    concentracao_valor   = db.Column(db.Numeric(12, 3))       # 250
+    concentracao_unidade = db.Column(db.String(20))           # 'mg' | 'mg/ml' | 'UI' | '%'
+    volume_valor         = db.Column(db.Numeric(12, 3))       # 10 (un) ou 50 (ml)
+    volume_unidade       = db.Column(db.String(20))           # 'un' | 'ml' | 'g'
+
+    # Fabricante específico desta apresentação.
+    # Um mesmo Medicamento (ex.: "Prednisona") pode ter apresentações
+    # da LigVet, Animalia, genérico, etc.
+    fabricante           = db.Column(db.String(150))
+
+    # Origem no VetSmart (produto comercial de onde veio a apresentação).
+    vetsmart_produto_id  = db.Column(db.Integer, index=True)
+
     def __str__(self):
         return f"{self.medicamento.nome} – {self.forma} ({self.concentracao})"
+
+
+class DoseMedicamento(db.Model):
+    __tablename__ = 'dose_medicamento'
+    id = db.Column(db.Integer, primary_key=True)
+    medicamento_id = db.Column(db.Integer, db.ForeignKey('medicamento.id', ondelete='CASCADE'), nullable=False)
+
+    especie = db.Column(db.String(80))          # Ex: "Cães", "Gatos", "Cães e Gatos"
+    faixa_peso = db.Column(db.String(80))       # Ex: "Até 4 kg", "Entre 10 e 25 kg"
+    via = db.Column(db.String(80))              # Ex: "Oral", "Tópica"
+    dose = db.Column(db.String(200))            # Ex: "20 - 30 mg/kg", "0,4 mL/animal"
+    frequencia = db.Column(db.String(120))      # Ex: "A cada 12 horas"
+    duracao = db.Column(db.String(120))         # Ex: "7 dias"
+    observacao = db.Column(db.Text)             # Notas/modo de usar
+
+    # Campos numéricos para cálculo automático
+    especie_code       = db.Column(db.String(10))              # 'CAES' | 'GATOS' | 'AMBOS' | 'OUTRO'
+    peso_min_kg        = db.Column(db.Numeric(8, 2))           # null = sem mínimo
+    peso_max_kg        = db.Column(db.Numeric(8, 2))           # null = sem máximo
+    dose_min           = db.Column(db.Numeric(12, 3))
+    dose_max           = db.Column(db.Numeric(12, 3))
+    dose_unidade       = db.Column(db.String(30))              # 'MG_KG'|'ML_KG'|'UI_KG'|'MG_ANIMAL'|...
+    intervalo_horas    = db.Column(db.Integer)                 # 12 (null se dose única)
+    duracao_min_dias   = db.Column(db.Integer)
+    duracao_max_dias   = db.Column(db.Integer)
+    dose_raw_text      = db.Column(db.Text)                    # trecho original do VetSmart
+    fonte              = db.Column(db.String(15), default='HUMANO')  # 'SCRAPER'|'LLM'|'HUMANO'
+    confianca          = db.Column(db.String(10), default='MEDIA')   # 'ALTA'|'MEDIA'|'BAIXA'
+
+    # Indicação clínica desta dose (Alergia, Imunossupressão, Dermatite atópica, ...).
+    # NULL quando o parser não consegue inferir com confiança — nesse caso o
+    # calculador de dose exibe todas as doses disponíveis e deixa o vet escolher.
+    indicacao          = db.Column(db.String(120), index=True)
+
+    def __str__(self):
+        partes = [p for p in [self.especie, self.faixa_peso, self.dose] if p]
+        return " · ".join(partes) or f"Dose #{self.id}"
 
 
 class ExameModelo(db.Model):
@@ -1957,6 +2112,41 @@ class Notification(db.Model):
     sent_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
+
+
+class DeliveryResearchContact(db.Model):
+    __tablename__ = 'delivery_research_contact'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    sent = db.Column(db.Boolean, nullable=False, default=False)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    sent_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    replied = db.Column(db.Boolean, nullable=False, default=False)
+    replied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    replied_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    recorded = db.Column(db.Boolean, nullable=False, default=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    do_not_send = db.Column(db.Boolean, nullable=False, default=False)
+    do_not_send_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    do_not_send_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    interest_answer = db.Column(db.String(20), nullable=True)
+    current_food = db.Column(db.String(255), nullable=True)
+    bag_size = db.Column(db.String(80), nullable=True)
+    price_paid = db.Column(db.String(80), nullable=True)
+    purchase_channel = db.Column(db.String(120), nullable=True)
+    duration_estimate = db.Column(db.String(120), nullable=True)
+    response_notes = db.Column(db.Text, nullable=True)
+    response_collected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    tutor = db.relationship('User', foreign_keys=[tutor_id], backref=db.backref('delivery_research_contact', uselist=False, cascade='all, delete-orphan'))
+    sent_by = db.relationship('User', foreign_keys=[sent_by_id])
+    replied_by = db.relationship('User', foreign_keys=[replied_by_id])
+    recorded_by = db.relationship('User', foreign_keys=[recorded_by_id])
+    do_not_send_by = db.relationship('User', foreign_keys=[do_not_send_by_id])
 
 
 class TipoRacao(db.Model):
@@ -2492,3 +2682,51 @@ def _format_age_label(number, unit):
     else:
         suffix = 'ano' if number == 1 else 'anos'
     return f"{number} {suffix}"
+
+
+def _normalize_person_name(value):
+    if value is None:
+        return None
+
+    normalized = " ".join(str(value).split())
+    if not normalized:
+        return normalized
+
+    lowered = normalized.lower()
+    result = []
+    capitalize_next = True
+
+    for char in lowered:
+        if capitalize_next and char.isalpha():
+            result.append(char.upper())
+            capitalize_next = False
+        else:
+            result.append(char)
+            capitalize_next = char in {" ", "-", "'"}
+
+    return "".join(result)
+
+
+def _normalize_model_name(target):
+    if hasattr(target, "name"):
+        target.name = _normalize_person_name(target.name)
+
+
+@event.listens_for(User, "before_insert")
+def _normalize_user_name_before_insert(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(User, "before_update")
+def _normalize_user_name_before_update(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(Animal, "before_insert")
+def _normalize_animal_name_before_insert(mapper, connection, target):
+    _normalize_model_name(target)
+
+
+@event.listens_for(Animal, "before_update")
+def _normalize_animal_name_before_update(mapper, connection, target):
+    _normalize_model_name(target)

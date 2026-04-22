@@ -36,5 +36,10 @@ def get_blueprint():
         view_func=lazy_view("bulario_buscar_api"),
         methods=["GET"],
     )
+    bp.add_url_rule(
+        "/api/bulario/sugerir-dose",
+        view_func=lazy_view("bulario_sugerir_dose_api"),
+        methods=["GET"],
+    )
 
     return bp

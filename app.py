@@ -1,5 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
+import subprocess
 import requests
 from collections import defaultdict, Counter
 import math
@@ -10,6 +11,8 @@ from decimal import Decimal, InvalidOperation
 from functools import wraps
 from urllib.parse import urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
+
+sys.modules.setdefault("petorlandia_app", sys.modules[__name__])
 
 
 
@@ -50,7 +53,7 @@ import json
 import csv
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
-from sqlalchemy.exc import NoSuchTableError, OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 # ----------------------------------------------------------------
@@ -87,6 +90,7 @@ globals().update({
 })
 
 from models import (
+    AccountingAccount,
     DataShareAccess,
     DataSharePartyType,
     DataShareRequest,
@@ -1640,9 +1644,16 @@ from services import (
 )
 from services.geocode_queue import AddressGeocodeQueue
 from services.finance import (
+    build_accounting_dashboard,
+    build_cash_flow_report,
+    build_dre_report,
+    build_veterinarian_revenue_report,
     classify_transactions_for_month,
     determine_pj_payment_subcategory,
+    export_accountant_xlsx,
+    import_bank_statement,
     REQUIRED_PJ_PAYMENT_COLUMNS,
+    register_account,
     run_transactions_history_backfill,
 )
 from services.animal_search import search_animals
@@ -4202,6 +4213,16 @@ def contabilidade_financeiro():
             + projection_values
         )
     )
+    dashboard_metrics = (
+        build_accounting_dashboard(selected_clinic_id, current_month)
+        if selected_clinic_id
+        else None
+    )
+    vet_report = (
+        build_veterinarian_revenue_report(selected_clinic_id, current_month)
+        if selected_clinic_id
+        else []
+    )
 
     return render_template(
         'contabilidade/financeiro.html',
@@ -4228,7 +4249,172 @@ def contabilidade_financeiro():
         plantonista_media=plantonista_media,
         plantonista_custo_hora=plantonista_custo_hora,
         has_chart_data=has_chart_data,
+        dashboard_metrics=dashboard_metrics,
+        vet_report=vet_report,
     )
+
+
+def _decimal_json(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _decimal_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decimal_json(item) for item in value]
+    return value
+
+
+def _selected_accounting_context():
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=request.args.get('clinica_id', type=int),
+    )
+    selected_month = _parse_month_parameter(request.args.get('mes'))
+    return clinics, selected_clinic, selected_month
+
+
+@login_required
+def contabilidade_dre():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    period = (request.args.get('periodo') or 'monthly').lower()
+    report = build_dre_report(selected_clinic.id, selected_month, period) if selected_clinic else None
+    if request.accept_mimetypes.best == 'application/json' or request.args.get('format') == 'json':
+        return jsonify(_decimal_json(report or {}))
+    return render_template(
+        'contabilidade/dre.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        selected_period=period,
+        report=report,
+    )
+
+
+@login_required
+def contabilidade_fluxo_caixa():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    report = build_cash_flow_report(selected_clinic.id, selected_month) if selected_clinic else None
+    if request.accept_mimetypes.best == 'application/json' or request.args.get('format') == 'json':
+        return jsonify(_decimal_json(report or {}))
+    return render_template(
+        'contabilidade/fluxo_caixa.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        report=report,
+    )
+
+
+@login_required
+def contabilidade_contas():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return render_template('contabilidade/contas.html', clinics=clinics, selected_clinic=None, selected_month=selected_month, accounts=[])
+
+    if request.method == 'POST':
+        due_date_raw = request.form.get('due_date') or request.form.get('vencimento')
+        try:
+            due_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date()
+            register_account(
+                selected_clinic.id,
+                request.form.get('kind') or request.form.get('tipo') or 'payable',
+                request.form.get('description') or request.form.get('descricao') or 'Conta manual',
+                request.form.get('amount') or request.form.get('valor') or '0',
+                due_date,
+                counterparty_name=request.form.get('counterparty_name') or request.form.get('contraparte'),
+            )
+            flash('Conta registrada com sucesso.', 'success')
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.warning('Falha ao registrar conta: %s', exc, exc_info=exc)
+            flash('Nao foi possivel registrar a conta. Confira os campos.', 'danger')
+        return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+
+    month_end = selected_month + relativedelta(months=1)
+    accounts = (
+        AccountingAccount.query
+        .filter(AccountingAccount.clinic_id == selected_clinic.id)
+        .filter(or_(AccountingAccount.due_date.is_(None), and_(AccountingAccount.due_date >= selected_month, AccountingAccount.due_date < month_end)))
+        .order_by(AccountingAccount.status.asc(), AccountingAccount.due_date.asc(), AccountingAccount.id.desc())
+        .all()
+    )
+    if request.args.get('format') == 'json':
+        payload = [
+            {
+                'id': account.id,
+                'kind': account.kind,
+                'status': account.status,
+                'description': account.description,
+                'due_date': account.due_date,
+                'paid_at': account.paid_at,
+                'net_amount': account.net_amount,
+                'source_reference': account.source_reference,
+            }
+            for account in accounts
+        ]
+        return jsonify(_decimal_json(payload))
+    return render_template(
+        'contabilidade/contas.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        selected_month=selected_month,
+        accounts=accounts,
+    )
+
+
+@login_required
+def contabilidade_conciliacao_importar():
+    _ensure_accounting_access()
+    clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        abort(400)
+    uploaded = request.files.get('arquivo') or request.files.get('file')
+    if not uploaded:
+        flash('Envie um arquivo OFX ou CNAB.', 'warning')
+        return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+    content = uploaded.read().decode('utf-8', errors='ignore')
+    result = import_bank_statement(selected_clinic.id, content, file_type=(uploaded.filename or '').rsplit('.', 1)[-1])
+    flash(f"Extrato importado: {result['total']} lancamento(s), {result['matched']} conciliado(s).", 'success')
+    return redirect(url_for('contabilidade_contas', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')))
+
+
+@login_required
+def contabilidade_exportar_xlsx():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        abort(400)
+    content = export_accountant_xlsx(selected_clinic.id, selected_month)
+    response = make_response(content)
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    filename = f"relatorio-contabil-{selected_clinic.id}-{selected_month:%Y-%m}.xlsx"
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def api_contabilidade_dashboard():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return jsonify({})
+    return jsonify(_decimal_json(build_accounting_dashboard(selected_clinic.id, selected_month)))
+
+
+@login_required
+def api_contabilidade_veterinarios():
+    _ensure_accounting_access()
+    _clinics, selected_clinic, selected_month = _selected_accounting_context()
+    if not selected_clinic:
+        return jsonify([])
+    return jsonify(_decimal_json(build_veterinarian_revenue_report(selected_clinic.id, selected_month)))
 
 
 def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[str, str]]:
@@ -8193,6 +8379,420 @@ def _integration_normalize_lookup_token(value: str | None) -> str:
     return re.sub(r'[^a-z0-9]+', '', without_accents.lower())
 
 
+def _integration_parse_freeform_messages(payload: dict):
+    raw_text = str(payload.get('texto') or '').strip()
+    raw_messages = payload.get('mensagens') or []
+    parsed_messages = []
+
+    whatsapp_pattern = re.compile(
+        r'^\[(?P<hora>[^,\]]+),\s*(?P<data>[^\]]+)\]\s*(?P<autor>[^:]+):\s*(?P<conteudo>.*)$'
+    )
+
+    def _append_message(content, *, author=None, timestamp=None):
+        content_text = str(content or '')
+        parsed_messages.append({
+            'autor': (author or '').strip() or None,
+            'timestamp': (timestamp or '').strip() or None,
+            'conteudo': content_text.strip(),
+            'conteudo_original': content_text,
+        })
+
+    if isinstance(raw_messages, list):
+        for item in raw_messages:
+            if isinstance(item, dict):
+                _append_message(
+                    item.get('conteudo') or item.get('content') or item.get('texto'),
+                    author=item.get('autor') or item.get('author') or item.get('sender'),
+                    timestamp=item.get('timestamp') or item.get('quando') or item.get('time'),
+                )
+            else:
+                line = str(item or '')
+                match = whatsapp_pattern.match(line.strip())
+                if match:
+                    _append_message(
+                        match.group('conteudo'),
+                        author=match.group('autor'),
+                        timestamp=f"{match.group('data')} {match.group('hora')}",
+                    )
+                else:
+                    _append_message(line)
+
+    if raw_text:
+        for line in raw_text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            match = whatsapp_pattern.match(stripped)
+            if match:
+                _append_message(
+                    match.group('conteudo'),
+                    author=match.group('autor'),
+                    timestamp=f"{match.group('data')} {match.group('hora')}",
+                )
+            else:
+                _append_message(stripped)
+
+    return parsed_messages
+
+
+def _integration_extract_freeform_intake(payload: dict):
+    messages = _integration_parse_freeform_messages(payload)
+    if not messages:
+        raise ValueError('Informe texto livre ou uma lista de mensagens para interpretação.')
+
+    url_pattern = re.compile(r'https?://\S+')
+    phone_pattern = re.compile(r'(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9?\d{4})[-\s]?\d{4}')
+    date_pattern = re.compile(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b')
+    time_pattern = re.compile(r'\b\d{1,2}:\d{2}\b')
+
+    map_links = []
+    other_links = []
+    phones = []
+    dates_found = []
+    times_found = []
+    name_candidates = []
+    empty_messages = 0
+
+    for message in messages:
+        content = (message.get('conteudo') or '').strip()
+        if not content:
+            empty_messages += 1
+            continue
+
+        for found_url in url_pattern.findall(content):
+            if 'maps.app.goo.gl' in found_url or 'google.com/maps' in found_url or 'goo.gl/maps' in found_url:
+                if found_url not in map_links:
+                    map_links.append(found_url)
+            elif found_url not in other_links:
+                other_links.append(found_url)
+
+        for found_phone in phone_pattern.findall(content):
+            normalized_phone = re.sub(r'\D+', '', found_phone)
+            if normalized_phone and normalized_phone not in phones:
+                phones.append(normalized_phone)
+
+        for found_date in date_pattern.findall(content):
+            if found_date not in dates_found:
+                dates_found.append(found_date)
+
+        for found_time in time_pattern.findall(content):
+            if found_time not in times_found:
+                times_found.append(found_time)
+
+        cleaned = re.sub(url_pattern, '', content).strip(' -–,:;')
+        if (
+            cleaned
+            and len(cleaned.split()) <= 3
+            and re.fullmatch(r"[A-Za-zÀ-ÿ' ]+", cleaned)
+            and len(cleaned) >= 3
+        ):
+            candidate = cleaned.strip()
+            if candidate not in name_candidates:
+                name_candidates.append(candidate)
+
+    tutor_name = name_candidates[0] if name_candidates else None
+    phone = phones[0] if phones else None
+    suggested_action = 'cadastrar_tutor_e_pets'
+    if dates_found or times_found:
+        suggested_action = 'agendar_consulta'
+
+    tutor_draft = {
+        'nome': tutor_name,
+        'telefone': phone,
+        'endereco_referencia': map_links[0] if map_links else None,
+    }
+
+    agendamento_draft = None
+    if dates_found or times_found:
+        agendamento_draft = {
+            'data_candidata': dates_found[0] if dates_found else None,
+            'hora_candidata': times_found[0] if times_found else None,
+        }
+
+    missing_fields = []
+    if not tutor_draft['nome']:
+        missing_fields.append('nome_do_tutor')
+    if not tutor_draft['telefone']:
+        missing_fields.append('telefone_do_tutor')
+    if not tutor_draft['endereco_referencia']:
+        missing_fields.append('endereco_ou_localizacao')
+    missing_fields.extend([
+        'nome_do_pet',
+        'especie_do_pet',
+        'motivo_clinico_ou_objetivo_do_atendimento',
+    ])
+    if agendamento_draft and not agendamento_draft['data_candidata']:
+        missing_fields.append('data_do_agendamento')
+    if agendamento_draft and not agendamento_draft['hora_candidata']:
+        missing_fields.append('hora_do_agendamento')
+
+    summary_parts = []
+    if tutor_draft['nome']:
+        summary_parts.append(f"Possível tutor identificado: {tutor_draft['nome']}.")
+    if tutor_draft['endereco_referencia']:
+        summary_parts.append('Foi identificado um link de localização/mapa.')
+    if empty_messages:
+        summary_parts.append(f'Há {empty_messages} mensagem(ns) vazia(s) ou sem conteúdo útil.')
+    summary_parts.append(
+        'Ainda faltam dados clínicos e do pet para converter a conversa em cadastro ou atendimento operacional.'
+    )
+
+    return {
+        'mensagens_processadas': len(messages),
+        'mensagens_vazias': empty_messages,
+        'dados_extraidos': {
+            'nomes_candidatos': name_candidates,
+            'telefones': phones,
+            'links_mapa': map_links,
+            'outros_links': other_links,
+            'datas_identificadas': dates_found,
+            'horarios_identificados': times_found,
+        },
+        'rascunho_operacional': {
+            'tutor': tutor_draft,
+            'pets': [],
+            'agendamento': agendamento_draft,
+            'consulta': None,
+        },
+        'acao_sugerida': suggested_action,
+        'campos_a_confirmar': list(dict.fromkeys(missing_fields)),
+        'resumo_interpretado': ' '.join(summary_parts),
+    }
+
+
+def _integration_parse_flexible_date(value: str | None):
+    raw = str(value or '').strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        pass
+    match = re.fullmatch(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', raw)
+    if not match:
+        return None
+    day, month, year = (int(part) for part in match.groups())
+    if year < 100:
+        year += 2000
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _integration_infer_assistant_action(user: User, payload: dict):
+    intake = _integration_extract_freeform_intake(payload)
+    messages = _integration_parse_freeform_messages(payload)
+    full_text = '\n'.join((message.get('conteudo_original') or '') for message in messages)
+    normalized_text = _integration_normalize_lookup_token(full_text)
+
+    def _extract_label(patterns):
+        for pattern in patterns:
+            match = re.search(pattern, full_text, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip(" .,:;-")
+        return None
+
+    tutor_name = (
+        _extract_label([
+            r'(?:tutor|respons[aá]vel|cliente)\s*[:\-]\s*([A-Za-zÀ-ÿ\' ]{3,80})',
+            r'cadastrar\s+tutor\s+([A-Za-zÀ-ÿ\' ]{3,80})',
+        ])
+        or intake['rascunho_operacional']['tutor'].get('nome')
+    )
+    pet_name = _extract_label([
+        r'(?:pet|animal|paciente)\s*[:\-]\s*([A-Za-zÀ-ÿ\' ]{2,80})',
+        r'(?:pet|animal|paciente)\s+([A-Za-zÀ-ÿ\' ]{2,80}?)(?=\s+em\b|[.,;]|$)',
+        r'cadel[ao]\s+([A-Za-zÀ-ÿ\' ]{2,80})',
+        r'gat[oa]\s+([A-Za-zÀ-ÿ\' ]{2,80})',
+    ])
+    phone = (
+        _extract_label([r'(?:telefone|fone|whatsapp)\s*[:\-]\s*([\d\+\-\(\) ]{8,30})'])
+        or intake['rascunho_operacional']['tutor'].get('telefone')
+    )
+    address = (
+        _extract_label([r'(?:endere[cç]o|local)\s*[:\-]\s*([^.\n]{5,160})'])
+        or intake['rascunho_operacional']['tutor'].get('endereco_referencia')
+    )
+    reason = _extract_label([
+        r'(?:motivo|queixa|objetivo)\s*[:\-]\s*([^.\n]{3,200})',
+        r'agendar\s+consulta\s+.*?para\s+([^\n]{3,120})',
+    ])
+    observacao_clinica = _extract_label([
+        r'(?:observa[cç][aã]o\s+cl[ií]nica|observa[cç][aã]o)\s*[:\-]\s*([^.\n]{3,200})',
+    ])
+    diagnostico = _extract_label([
+        r'(?:diagn[oó]stico|hip[oó]tese)\s*[:\-]\s*([^.\n]{3,200})',
+    ])
+    conduta = _extract_label([
+        r'conduta\s*[:\-]\s*([^.\n]{3,200})',
+    ])
+
+    species = None
+    labeled_species = _extract_label([r'esp[eé]cie\s*[:\-]\s*([A-Za-zÀ-ÿ ]{2,40})'])
+    normalized_species = _integration_normalize_lookup_token(labeled_species) if labeled_species else ''
+    if normalized_species in {'cao', 'cachorro', 'canino'} or any(
+        token in normalized_text for token in ('cachorro', 'cao', 'canino', 'cadela')
+    ):
+        species = 'cao'
+    elif normalized_species in {'gato', 'gata', 'felino'} or any(
+        token in normalized_text for token in ('gato', 'gata', 'felino')
+    ):
+        species = 'gato'
+
+    parsed_date = None
+    for found_date in intake['dados_extraidos']['datas_identificadas']:
+        parsed_date = _integration_parse_flexible_date(found_date)
+        if parsed_date:
+            break
+    parsed_time = None
+    for found_time in intake['dados_extraidos']['horarios_identificados']:
+        try:
+            parsed_time = _integration_parse_time_arg(found_time)
+            break
+        except ValueError:
+            continue
+
+    intent_scores = {
+        'cadastrar_tutor_e_pets': 0,
+        'agendar_consulta': 0,
+        'registrar_consulta_clinica': 0,
+    }
+    if any(token in normalized_text for token in ('cadastrar', 'cadastro', 'novotutor', 'novopet')):
+        intent_scores['cadastrar_tutor_e_pets'] += 3
+    if tutor_name:
+        intent_scores['cadastrar_tutor_e_pets'] += 1
+    if pet_name:
+        intent_scores['cadastrar_tutor_e_pets'] += 1
+
+    if any(token in normalized_text for token in ('agendar', 'agenda', 'marcar', 'retorno')):
+        intent_scores['agendar_consulta'] += 3
+    if parsed_date:
+        intent_scores['agendar_consulta'] += 2
+    if parsed_time:
+        intent_scores['agendar_consulta'] += 1
+
+    if any(token in normalized_text for token in ('consulta', 'diagnostico', 'conduta', 'queixa', 'examefisico')):
+        intent_scores['registrar_consulta_clinica'] += 2
+    if diagnostico:
+        intent_scores['registrar_consulta_clinica'] += 2
+    if conduta or reason:
+        intent_scores['registrar_consulta_clinica'] += 1
+
+    suggested_action = max(intent_scores, key=intent_scores.get)
+    if all(score == 0 for score in intent_scores.values()):
+        suggested_action = intake['acao_sugerida']
+
+    suggested_arguments = {}
+    missing_fields = []
+
+    if suggested_action == 'cadastrar_tutor_e_pets':
+        tutor_payload = {
+            'nome': tutor_name,
+            'telefone': phone,
+            'endereco': address,
+        }
+        pet_payload = {'nome': pet_name, 'especie': species}
+        suggested_arguments = {
+            'tutor': {key: value for key, value in tutor_payload.items() if value},
+            'pets': [{key: value for key, value in pet_payload.items() if value}] if pet_name else [],
+            'observacao_clinica': observacao_clinica or reason,
+        }
+        if not tutor_name:
+            missing_fields.append('nome_do_tutor')
+        if not pet_name:
+            missing_fields.append('nome_do_pet')
+    elif suggested_action == 'agendar_consulta':
+        suggested_arguments = {
+            'nome_animal': pet_name,
+            'data': parsed_date.isoformat() if parsed_date else None,
+            'hora': parsed_time.isoformat(timespec='minutes') if parsed_time else None,
+            'tipo': 'retorno' if 'retorno' in normalized_text else 'consulta',
+            'motivo': reason or observacao_clinica,
+        }
+        if not pet_name:
+            missing_fields.append('nome_do_pet_ja_cadastrado')
+        if not parsed_date:
+            missing_fields.append('data_do_agendamento')
+        if not parsed_time:
+            missing_fields.append('hora_do_agendamento')
+    elif suggested_action == 'registrar_consulta_clinica':
+        suggested_arguments = {
+            'nome_animal': pet_name,
+            'queixa_principal': reason,
+            'diagnostico': diagnostico,
+            'conduta': conduta,
+        }
+        if not pet_name:
+            missing_fields.append('nome_do_pet_ja_cadastrado')
+        if not any(suggested_arguments.get(key) for key in ('queixa_principal', 'diagnostico', 'conduta')):
+            missing_fields.append('dados_clinicos_da_consulta')
+
+    return {
+        'intake': intake,
+        'acao_sugerida': suggested_action,
+        'argumentos_sugeridos': suggested_arguments,
+        'campos_a_confirmar': list(dict.fromkeys(missing_fields)),
+    }
+
+
+def _integration_execute_assistant_action(user: User, planning: dict):
+    action = planning['acao_sugerida']
+    arguments = dict(planning.get('argumentos_sugeridos') or {})
+
+    if action == 'cadastrar_tutor_e_pets':
+        if not has_veterinarian_profile(user):
+            raise PermissionError('Somente contas veterinárias podem cadastrar tutor e pets via assistente.')
+        tutor_data = arguments.get('tutor') or {}
+        pets_data = arguments.get('pets') or []
+        if not tutor_data or not pets_data:
+            raise ValueError('Ainda faltam dados para cadastrar tutor e pet.')
+        result = _integration_create_or_reuse_tutor_and_pets(
+            user,
+            tutor_data,
+            pets_data,
+            observacao_clinica=arguments.get('observacao_clinica'),
+            disponibilidade=arguments.get('disponibilidade'),
+        )
+        return {'acao_executada': action, 'resultado': result}
+
+    if action == 'agendar_consulta':
+        animal = _mcp_find_animal_for_tool(user, arguments)
+        if not animal:
+            raise ValueError('Não foi possível identificar um animal já cadastrado para agendamento.')
+        appointment = _integration_schedule_consulta(user, animal, arguments)
+        return {
+            'acao_executada': action,
+            'resultado': {
+                'appointment_id': appointment.id,
+                'animal_id': appointment.animal_id,
+                'tipo': appointment.kind,
+                'status': appointment.status,
+                'scheduled_at': _integration_format_datetime(appointment.scheduled_at),
+            },
+        }
+
+    if action == 'registrar_consulta_clinica':
+        if not has_veterinarian_profile(user):
+            raise PermissionError('Somente contas veterinárias podem registrar consulta via assistente.')
+        animal = _mcp_find_animal_for_tool(user, arguments)
+        if not animal:
+            raise ValueError('Não foi possível identificar um animal já cadastrado para registrar a consulta.')
+        consulta = _integration_upsert_consulta(user, animal, arguments)
+        return {
+            'acao_executada': action,
+            'resultado': {
+                'consulta_id': consulta.id,
+                'animal_id': consulta.animal_id,
+                'status': consulta.status,
+                'queixa_principal': consulta.queixa_principal,
+                'conduta': consulta.conduta,
+            },
+        }
+
+    raise ValueError('A ação sugerida ainda não pode ser executada automaticamente.')
+
+
 def _integration_parse_date_arg(value):
     if value in (None, ''):
         return None
@@ -8630,7 +9230,7 @@ def integration_bearer_required(*required_scopes: str):
                     missing_scopes=missing_scopes,
                 )
 
-            auth_user = User.query.get(token.user_id)
+            auth_user = db.session.get(User, token.user_id)
             if not auth_user:
                 return _integration_error(
                     'invalid_token_subject',
@@ -8768,7 +9368,6 @@ def oauth_authorize():
         nonce=nonce,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        csrf_token=generate_csrf(),
     )
 
 
@@ -8808,7 +9407,7 @@ def oauth_token():
         access_token = secrets.token_urlsafe(48)
         private_jwk, _ = _oauth_get_signing_keys()
 
-        user = User.query.get(auth_code.user_id)
+        user = db.session.get(User, auth_code.user_id)
         claims = {
             'iss': _oauth_issuer(),
             'sub': str(auth_code.user_id),
@@ -9053,7 +9652,7 @@ def oauth_userinfo():
     if not token or not token.is_active:
         return _oauth_error_response('invalid_token', 'Access token is invalid or expired.', 401)
 
-    user = User.query.get(token.user_id)
+    user = db.session.get(User, token.user_id)
     if not user:
         return _oauth_error_response('invalid_token', 'Token subject no longer exists.', 401)
 
@@ -9071,7 +9670,7 @@ def oauth_revoke():
         token.revoke()
         db.session.add(token)
         if token.refresh_token_id:
-            refresh = OAuthRefreshToken.query.get(token.refresh_token_id)
+            refresh = db.session.get(OAuthRefreshToken, token.refresh_token_id)
             if refresh and refresh.revoked_at is None:
                 _oauth_revoke_refresh_family(refresh)
         db.session.commit()
@@ -9217,7 +9816,7 @@ def mcp_server():
     if not token_obj or not token_obj.is_active:
         return _mcp_unauthorized()
 
-    user = User.query.get(token_obj.user_id)
+    user = db.session.get(User, token_obj.user_id)
     if not user:
         return _mcp_unauthorized()
     token_scope_set = {item.strip() for item in (token_obj.scope or '').split() if item.strip()}
@@ -9265,6 +9864,42 @@ def mcp_server():
                             'enum': ['scheduled', 'completed', 'cancelled'],
                             'description': 'Filtrar pelo status do agendamento (opcional).',
                         }
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'interpretar_mensagem_livre_atendimento',
+                'description': (
+                    'Interpreta mensagens livres ou trechos de conversa e devolve um rascunho '
+                    'operacional com dados extraídos, ação sugerida e campos que ainda faltam. '
+                    'Não grava nada no sistema.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'texto': {'type': 'string', 'description': 'Texto livre ou bloco de conversa.'},
+                        'mensagens': {
+                            'type': 'array',
+                            'description': 'Lista opcional de mensagens em texto simples ou objetos com autor/conteudo/timestamp.',
+                        },
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'assistente_operacional_veterinario',
+                'description': (
+                    'Recebe linguagem natural do veterinário, infere a intenção operacional '
+                    'principal e, quando houver dados suficientes e confirmação explícita, '
+                    'executa cadastro, agendamento ou registro de consulta.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'texto': {'type': 'string', 'description': 'Texto livre do veterinário.'},
+                        'mensagens': {'type': 'array', 'description': 'Lista opcional de mensagens.'},
+                        'confirmar_gravacao': {'type': 'string'},
                     },
                     'required': [],
                 },
@@ -9500,6 +10135,69 @@ def mcp_server():
             ]
             text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
             return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+
+        if tool_name == 'interpretar_mensagem_livre_atendimento':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            try:
+                interpreted = _integration_extract_freeform_intake(tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content(interpreted))
+
+        if tool_name == 'assistente_operacional_veterinario':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            try:
+                planning = _integration_infer_assistant_action(user, tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+
+            action = planning.get('acao_sugerida')
+            missing_fields = planning.get('campos_a_confirmar') or []
+            needs_confirmation = action in {
+                'cadastrar_tutor_e_pets',
+                'agendar_consulta',
+                'registrar_consulta_clinica',
+            }
+            response_payload = {
+                'acao_sugerida': action,
+                'argumentos_sugeridos': planning.get('argumentos_sugeridos') or {},
+                'campos_a_confirmar': missing_fields,
+                'resumo_interpretado': (planning.get('intake') or {}).get('resumo_interpretado'),
+                'pode_executar_agora': needs_confirmation and not missing_fields,
+                'confirmacao_necessaria': needs_confirmation,
+                'executado': False,
+            }
+
+            confirmation_value = str(tool_args.get('confirmar_gravacao') or '').strip().lower()
+            confirmed = confirmation_value in {'sim', 'true', '1', 'confirmado', 'confirmar'}
+
+            if confirmed:
+                required_scopes_by_action = {
+                    'cadastrar_tutor_e_pets': ('tutors:write', 'pets:write'),
+                    'agendar_consulta': ('appointments:write',),
+                    'registrar_consulta_clinica': ('consultations:write',),
+                }
+                action_scopes = required_scopes_by_action.get(action, ())
+                if action_scopes:
+                    scope_error = _mcp_require_scopes(req_id, token_scope_set, *action_scopes)
+                    if scope_error:
+                        return scope_error
+                if missing_fields:
+                    return _mcp_ok(req_id, _mcp_json_content(response_payload))
+                try:
+                    execution = _integration_execute_assistant_action(user, planning)
+                except PermissionError as exc:
+                    return _mcp_err(req_id, -32003, str(exc))
+                except ValueError as exc:
+                    return _mcp_err(req_id, -32602, str(exc))
+                response_payload['executado'] = True
+                response_payload['resultado_execucao'] = execution
+
+            return _mcp_ok(req_id, _mcp_json_content(response_payload))
 
         if tool_name == 'cadastrar_tutor_e_pets':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write')
@@ -16127,6 +16825,825 @@ def relatorio_racoes():
         racoes_por_tipo[r.tipo_racao].append(r)
 
     return render_template("loja/relatorio_racoes.html", racoes_por_tipo=racoes_por_tipo)
+
+
+def _build_delivery_research_message(tutor_name, animal_name):
+    tutor_name = (tutor_name or "tutor").strip()
+    if isinstance(animal_name, (list, tuple)):
+        animal_names = [str(item).strip() for item in animal_name if str(item).strip()]
+    else:
+        animal_names = [str(animal_name).strip()] if str(animal_name or "").strip() else []
+
+    if not animal_names:
+        pet_intro = "do seu pet"
+        pet_question = "seu pet"
+        pet_subject = "ele"
+    elif len(animal_names) == 1:
+        pet_intro = f"do {animal_names[0]}"
+        pet_question = animal_names[0]
+        pet_subject = animal_names[0]
+    elif len(animal_names) == 2:
+        joined_names = f"{animal_names[0]} e {animal_names[1]}"
+        pet_intro = f"dos pets {joined_names}"
+        pet_question = "eles"
+        pet_subject = joined_names
+    else:
+        joined_names = ", ".join(animal_names[:-1]) + f" e {animal_names[-1]}"
+        pet_intro = f"dos pets {joined_names}"
+        pet_question = "eles"
+        pet_subject = joined_names
+
+    return (
+        f"Oi, {tutor_name}! Tudo bem?\n\n"
+        f"Aqui \u00e9 o Lucas Marcelino, m\u00e9dico veterin\u00e1rio. Vi aqui o cadastro {pet_intro} e estou organizando "
+        "em Orl\u00e2ndia um servi\u00e7o de entrega r\u00e1pida de ra\u00e7\u00e3o, direto na casa do tutor, para facilitar "
+        "o dia a dia e evitar faltar ra\u00e7\u00e3o.\n\n"
+        "Queria validar rapidinho com voc\u00ea:\n\n"
+        "Se tivesse ra\u00e7\u00e3o com pre\u00e7o igual ou melhor que os sites, com entrega r\u00e1pida, voc\u00ea compraria?\n\n"
+        "1 - Sim\n"
+        "2 - Talvez\n"
+        "3 - N\u00e3o\n\n"
+        "Se puder, me ajuda com mais algumas informa\u00e7\u00f5es:\n\n"
+        f"- Qual ra\u00e7\u00e3o {pet_question} usa hoje?\n"
+        "- Qual o tamanho do saco?\n"
+        "- Quanto voc\u00ea costuma pagar nesse saco?\n"
+        "Se n\u00e3o souber o valor exato, pode ser uma faixa:\n"
+        "at\u00e9 R$50 / R$50-100 / R$100-150 / R$150-200 / R$200-250 / acima de R$250\n\n"
+        "- Onde voc\u00ea costuma comprar?\n"
+        "(pet shop, agropecu\u00e1ria, internet ou outro)\n\n"
+        f"- E normalmente esse saco de ra\u00e7\u00e3o de {pet_subject} dura quanto tempo?\n\n"
+        "Se fizer sentido, posso te avisar quando come\u00e7armos com condi\u00e7\u00f5es especiais."
+    )
+
+
+def _build_whatsapp_research_url(phone, message):
+    phone_digits = digits_only(formatar_telefone(phone or ""))
+    if not phone_digits:
+        return None
+    return f"https://api.whatsapp.com/send?phone={phone_digits}&text={urlencode({'text': message})[5:]}"
+
+
+def _latest_racao_for_animal(animal):
+    racoes = sorted(
+        getattr(animal, "racoes", []) or [],
+        key=lambda item: item.data_cadastro.timestamp() if item.data_cadastro else float("-inf"),
+        reverse=True,
+    )
+    return racoes[0] if racoes else None
+
+
+def _delivery_research_contact_table_available():
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table("delivery_research_contact"):
+            return False
+        columns = {
+            column.get("name")
+            for column in inspector.get_columns("delivery_research_contact")
+        }
+        required = {
+            "id",
+            "tutor_id",
+            "sent",
+            "sent_at",
+            "sent_by_id",
+            "replied",
+            "replied_at",
+            "replied_by_id",
+            "recorded",
+            "recorded_at",
+            "recorded_by_id",
+            "do_not_send",
+            "do_not_send_at",
+            "do_not_send_by_id",
+            "interest_answer",
+            "current_food",
+            "bag_size",
+            "price_paid",
+            "purchase_channel",
+            "duration_estimate",
+            "response_notes",
+            "response_collected_at",
+            "created_at",
+            "updated_at",
+        }
+        return required.issubset(columns)
+    except (ProgrammingError, OperationalError, NoSuchTableError):
+        return False
+
+
+def _delivery_research_stage(status):
+    if status and getattr(status, "do_not_send", False):
+        return "do_not_send"
+    if status and getattr(status, "recorded", False):
+        return "recorded"
+    if status and getattr(status, "replied", False):
+        return "replied"
+    if status and getattr(status, "sent", False):
+        return "sent"
+    return "pending"
+
+
+def _delivery_research_stage_label(stage):
+    labels = {
+        "pending": "Falta enviar",
+        "sent": "Ja enviei",
+        "replied": "Ja responderam",
+        "recorded": "Ja cadastrei",
+        "do_not_send": "Nao enviar agora",
+    }
+    return labels.get(stage, "Falta enviar")
+
+
+def _delivery_research_interest_label(value):
+    labels = {
+        "1": "Sim",
+        "2": "Talvez",
+        "3": "Nao",
+    }
+    return labels.get((value or "").strip(), value or "Nao informado")
+
+
+def _parse_delivery_research_price(value):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    normalized = raw.lower().replace("r$", "").replace(" ", "")
+    normalized = normalized.replace(".", "").replace(",", ".")
+    match = re.search(r"\d+(?:\.\d+)?", normalized)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _split_delivery_research_food_label(value):
+    raw = (value or "").strip()
+    if not raw:
+        return (None, None)
+    if " - " in raw:
+        marca, linha = raw.split(" - ", 1)
+        return (marca.strip() or raw, linha.strip() or None)
+    return (raw, None)
+
+
+def _delivery_research_food_label_for_type(tipo_racao):
+    if not tipo_racao:
+        return None
+    marca = (tipo_racao.marca or "").strip()
+    linha = (tipo_racao.linha or "").strip()
+    if marca and linha:
+        return f"{marca} - {linha}"
+    return marca or linha or None
+
+
+def _find_tipo_racao_for_delivery_research_label(value):
+    marca, linha = _split_delivery_research_food_label(value)
+    if not marca:
+        return None
+    return TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+
+
+def _sync_delivery_research_answers_to_racoes(tutor, contact, selected_animal_ids):
+    if not contact or not contact.current_food:
+        return 0
+
+    selected_ids = {int(item) for item in selected_animal_ids if str(item).isdigit()}
+    animais = [
+        animal for animal in (tutor.animals or [])
+        if not getattr(animal, "removido_em", None) and (not selected_ids or animal.id in selected_ids)
+    ]
+    if not animais:
+        return 0
+
+    tipo_racao = _find_tipo_racao_for_delivery_research_label(contact.current_food)
+    if tipo_racao is None:
+        marca, linha = _split_delivery_research_food_label(contact.current_food)
+        if not marca:
+            return 0
+
+        tipo_racao = TipoRacao(
+            marca=marca,
+            linha=linha,
+            created_by=current_user.id,
+        )
+        db.session.add(tipo_racao)
+        db.session.flush()
+        try:
+            list_rations.cache_clear()
+        except Exception:
+            pass
+    elif not getattr(tipo_racao, "id", None):
+        return 0
+
+    preco_pago = _parse_delivery_research_price(contact.price_paid)
+    bag_size = contact.bag_size or None
+    collected_at = contact.response_collected_at or utcnow()
+    observacoes = [
+        "Pesquisa de tutores",
+        f"Coletado em {collected_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}" if collected_at else None,
+        f"Canal de compra: {contact.purchase_channel}" if contact.purchase_channel else None,
+        f"Duracao estimada: {contact.duration_estimate}" if contact.duration_estimate else None,
+        f"Interesse: {_delivery_research_interest_label(contact.interest_answer)}" if contact.interest_answer else None,
+        f"Observacoes: {contact.response_notes}" if contact.response_notes else None,
+    ]
+    observacoes_racao = "\n".join(item for item in observacoes if item)
+
+    synced = 0
+    for animal in animais:
+        latest_racao = _latest_racao_for_animal(animal)
+        should_update_latest = (
+            latest_racao is not None
+            and latest_racao.tipo_racao_id == tipo_racao.id
+            and (latest_racao.tamanho_embalagem or None) == bag_size
+            and (latest_racao.preco_pago or None) == preco_pago
+            and latest_racao.created_by == current_user.id
+            and (latest_racao.observacoes_racao or "").startswith("Pesquisa de tutores")
+        )
+
+        if should_update_latest:
+            latest_racao.observacoes_racao = observacoes_racao
+            latest_racao.data_cadastro = collected_at
+            synced += 1
+            continue
+
+        db.session.add(
+            Racao(
+                animal_id=animal.id,
+                tipo_racao_id=tipo_racao.id,
+                observacoes_racao=observacoes_racao,
+                preco_pago=preco_pago,
+                tamanho_embalagem=bag_size,
+                created_by=current_user.id,
+                data_cadastro=collected_at,
+            )
+        )
+        synced += 1
+
+    return synced
+
+
+def _build_delivery_research_contact_map():
+    return {
+        item["tutor"].id: item
+        for item in _build_delivery_research_contacts()
+    }
+
+
+def _get_or_create_delivery_research_contact(tutor_id):
+    status = DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+    if status is not None:
+        return status
+
+    status = DeliveryResearchContact(tutor_id=tutor_id)
+    db.session.add(status)
+    return status
+
+
+def _commit_delivery_research_contact_changes(tutor_id):
+    try:
+        db.session.commit()
+        return DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+    except IntegrityError:
+        db.session.rollback()
+        return DeliveryResearchContact.query.filter_by(tutor_id=tutor_id).first()
+
+
+def _run_whatsapp_batch_selenium(batch_items, warmup_only=False):
+    if not batch_items and not warmup_only:
+        return {"results": []}
+
+    script_path = PROJECT_ROOT / "scripts" / "send_whatsapp_batch_selenium.py"
+    if not script_path.exists():
+        raise RuntimeError("Script de envio em lote nao encontrado.")
+
+    temp_root = PROJECT_ROOT / "instance" / "whatsapp_batch"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    batch_dir = temp_root / uuid.uuid4().hex
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    input_path = batch_dir / "input.json"
+    output_path = batch_dir / "output.json"
+
+    try:
+        input_path.write_text(json.dumps({"items": batch_items}, ensure_ascii=False), encoding="utf-8")
+
+        command = [
+            r"C:\edb\languagepack\v3\Python-3.10\python.exe",
+            str(script_path),
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+        if warmup_only:
+            command.append("--warmup-only")
+
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT_ROOT),
+            timeout=1800,
+        )
+
+        if not output_path.exists():
+            if completed.returncode != 0:
+                raise RuntimeError((completed.stderr or completed.stdout or "Falha no envio em lote.").strip())
+            raise RuntimeError("O script de envio nao gerou arquivo de resultado.")
+
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        if completed.returncode != 0:
+            payload["process_error"] = (completed.stderr or completed.stdout or "Falha no envio em lote.").strip()
+        return payload
+    finally:
+        for temp_file in (input_path, output_path):
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except OSError:
+                pass
+        try:
+            batch_dir.rmdir()
+        except OSError:
+            pass
+
+
+def _build_delivery_research_contacts():
+    status_available = _delivery_research_contact_table_available()
+
+    query = (
+        User.query
+        .join(Animal, Animal.user_id == User.id)
+        .options(
+            selectinload(User.animals)
+            .selectinload(Animal.racoes)
+            .joinedload(Racao.tipo_racao),
+        )
+        .distinct()
+        .order_by(User.name.asc(), User.id.asc())
+    )
+
+    if status_available:
+        query = query.options(joinedload(User.delivery_research_contact))
+
+    tutors = query.all()
+
+    contatos = []
+    for tutor in tutors:
+        animais = sorted(
+            [animal for animal in (tutor.animals or []) if not getattr(animal, "removido_em", None)],
+            key=lambda item: ((item.name or "").lower(), item.id),
+        )
+        nomes_animais = [animal.name for animal in animais if animal.name]
+        mensagem = _build_delivery_research_message(tutor.name, nomes_animais)
+        latest_racoes = []
+        for animal in animais:
+            racao = _latest_racao_for_animal(animal)
+            if racao:
+                latest_racoes.append(
+                    {
+                        "animal_id": animal.id,
+                        "animal_nome": animal.name or "Pet sem nome",
+                        "racao": racao,
+                    }
+                )
+
+        status_envio = getattr(tutor, "delivery_research_contact", None) if status_available else None
+        stage = _delivery_research_stage(status_envio)
+        current_food_option = None
+        current_food_manual = ""
+        if status_envio and status_envio.current_food:
+            current_food_option = _find_tipo_racao_for_delivery_research_label(status_envio.current_food)
+            if current_food_option is None:
+                current_food_manual = status_envio.current_food
+
+        contatos.append(
+            {
+                "tutor": tutor,
+                "animais": animais,
+                "nomes_animais": nomes_animais,
+                "mensagem": mensagem,
+                "whatsapp_url": _build_whatsapp_research_url(getattr(tutor, "phone", None), mensagem),
+                "status_envio": status_envio,
+                "status_disponivel": status_available,
+                "stage": stage,
+                "stage_label": _delivery_research_stage_label(stage),
+                "interest_label": _delivery_research_interest_label(getattr(status_envio, "interest_answer", None)) if status_envio else "Nao informado",
+                "current_food_option_id": current_food_option.id if current_food_option else None,
+                "current_food_manual": current_food_manual,
+                "response_collected_label": (
+                    status_envio.response_collected_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+                    if status_envio and getattr(status_envio, "response_collected_at", None)
+                    else None
+                ),
+                "do_not_send_label": (
+                    status_envio.do_not_send_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+                    if status_envio and getattr(status_envio, "do_not_send_at", None)
+                    else None
+                ),
+                "racoes_recentes": latest_racoes,
+            }
+        )
+
+    return contatos
+
+
+@app.route("/relatorio/racoes/pesquisa")
+@login_required
+def pesquisa_racoes_tutores():
+    if not _is_admin():
+        abort(403)
+
+    contatos = _build_delivery_research_contacts()
+    racao_options = [
+        {
+            "id": tipo.id,
+            "label": _delivery_research_food_label_for_type(tipo),
+        }
+        for tipo in list_rations()
+        if _delivery_research_food_label_for_type(tipo)
+    ]
+    status_disponivel = contatos[0]["status_disponivel"] if contatos else _delivery_research_contact_table_available()
+    stage_counts = {
+        "pending": 0,
+        "sent": 0,
+        "replied": 0,
+        "recorded": 0,
+        "do_not_send": 0,
+    }
+    for item in contatos:
+        stage_counts[item["stage"]] += 1
+    if not status_disponivel:
+        flash(
+            "A pesquisa foi carregada, mas o controle de envio ainda depende da nova migração do banco.",
+            "warning",
+        )
+
+    return render_template(
+        "loja/pesquisa_racoes_tutores.html",
+        contatos=contatos,
+        racao_options=racao_options,
+        status_disponivel=status_disponivel,
+        stage_counts=stage_counts,
+    )
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/toggle", methods=["POST"])
+@login_required
+def toggle_pesquisa_racoes_tutor(tutor_id):
+    if not _is_admin():
+        abort(403)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O controle de envio ainda não está disponível porque a migração do banco não foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    if status.sent:
+        status.sent = False
+        status.sent_at = None
+        status.sent_by_id = None
+        status.do_not_send = False
+        status.do_not_send_at = None
+        status.do_not_send_by_id = None
+        status.replied = False
+        status.replied_at = None
+        status.replied_by_id = None
+        status.recorded = False
+        status.recorded_at = None
+        status.recorded_by_id = None
+        flash(f"Envio para {tutor.name} desmarcado.", "info")
+    else:
+        status.do_not_send = False
+        status.do_not_send_at = None
+        status.do_not_send_by_id = None
+        status.sent = True
+        status.sent_at = utcnow()
+        status.sent_by_id = current_user.id
+        flash(f"Envio para {tutor.name} marcado como realizado.", "success")
+
+    _commit_delivery_research_contact_changes(tutor.id)
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/status/<status_key>", methods=["POST"])
+@login_required
+def update_pesquisa_racoes_tutor_status(tutor_id, status_key):
+    if not _is_admin():
+        abort(403)
+
+    if status_key not in {"sent", "replied", "recorded", "do_not_send"}:
+        abort(400)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O controle de status ainda nÃ£o estÃ¡ disponÃ­vel porque a migraÃ§Ã£o do banco nÃ£o foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    now = utcnow()
+
+    if status_key == "do_not_send":
+        if status.do_not_send:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            flash(f"{tutor.name} voltou para a fila normal da pesquisa.", "info")
+        else:
+            status.do_not_send = True
+            status.do_not_send_at = now
+            status.do_not_send_by_id = current_user.id
+            flash(f"{tutor.name} foi separado na lista de nao enviar agora.", "success")
+
+    elif status_key == "sent":
+        if status.sent:
+            status.sent = False
+            status.sent_at = None
+            status.sent_by_id = None
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            status.replied = False
+            status.replied_at = None
+            status.replied_by_id = None
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Status de envio removido para {tutor.name}.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            status.sent = True
+            status.sent_at = now
+            status.sent_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de enviados.", "success")
+
+    elif status_key == "replied":
+        if status.replied:
+            status.replied = False
+            status.replied_at = None
+            status.replied_by_id = None
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Resposta de {tutor.name} desmarcada.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            if not status.sent:
+                status.sent = True
+                status.sent_at = status.sent_at or now
+                status.sent_by_id = status.sent_by_id or current_user.id
+            status.replied = True
+            status.replied_at = now
+            status.replied_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de respostas recebidas.", "success")
+
+    elif status_key == "recorded":
+        if status.recorded:
+            status.recorded = False
+            status.recorded_at = None
+            status.recorded_by_id = None
+            flash(f"Cadastro das respostas de {tutor.name} desmarcado.", "info")
+        else:
+            status.do_not_send = False
+            status.do_not_send_at = None
+            status.do_not_send_by_id = None
+            if not status.sent:
+                status.sent = True
+                status.sent_at = status.sent_at or now
+                status.sent_by_id = status.sent_by_id or current_user.id
+            if not status.replied:
+                status.replied = True
+                status.replied_at = status.replied_at or now
+                status.replied_by_id = status.replied_by_id or current_user.id
+            status.recorded = True
+            status.recorded_at = now
+            status.recorded_by_id = current_user.id
+            flash(f"{tutor.name} movido para a fila de respostas cadastradas.", "success")
+
+    _commit_delivery_research_contact_changes(tutor.id)
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/<int:tutor_id>/answers", methods=["POST"])
+@login_required
+def save_pesquisa_racoes_tutor_answers(tutor_id):
+    if not _is_admin():
+        abort(403)
+
+    if not _delivery_research_contact_table_available():
+        flash(
+            "O registro estruturado ainda nao esta disponivel porque a migracao do banco nao foi aplicada.",
+            "warning",
+        )
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    tutor = User.query.get_or_404(tutor_id)
+    status = _get_or_create_delivery_research_contact(tutor.id)
+
+    now = utcnow()
+    selected_tipo_racao_id = request.form.get("current_food_tipo_racao_id")
+    selected_tipo_racao = None
+    if str(selected_tipo_racao_id or "").isdigit():
+        selected_tipo_racao = TipoRacao.query.get(int(selected_tipo_racao_id))
+
+    manual_current_food = (request.form.get("current_food") or "").strip()
+    resolved_current_food = manual_current_food or None
+    if selected_tipo_racao is not None:
+        resolved_current_food = _delivery_research_food_label_for_type(selected_tipo_racao)
+
+    status.response_collected_at = now
+    status.do_not_send = False
+    status.do_not_send_at = None
+    status.do_not_send_by_id = None
+    status.interest_answer = (request.form.get("interest_answer") or "").strip() or None
+    status.current_food = resolved_current_food
+    status.bag_size = (request.form.get("bag_size") or "").strip() or None
+    status.price_paid = (request.form.get("price_paid") or "").strip() or None
+    status.purchase_channel = (request.form.get("purchase_channel") or "").strip() or None
+    status.duration_estimate = (request.form.get("duration_estimate") or "").strip() or None
+    status.response_notes = (request.form.get("response_notes") or "").strip() or None
+
+    if not status.sent:
+        status.sent = True
+        status.sent_at = status.sent_at or now
+        status.sent_by_id = status.sent_by_id or current_user.id
+    if not status.replied:
+        status.replied = True
+        status.replied_at = status.replied_at or now
+        status.replied_by_id = status.replied_by_id or current_user.id
+    if not status.recorded:
+        status.recorded = True
+        status.recorded_at = now
+        status.recorded_by_id = current_user.id
+    else:
+        status.recorded_at = now
+        status.recorded_by_id = current_user.id
+
+    synced_count = _sync_delivery_research_answers_to_racoes(
+        tutor,
+        status,
+        request.form.getlist("sync_animal_ids"),
+    )
+
+    db.session.commit()
+    flash(
+        f"Respostas estruturadas de {tutor.name} salvas com sucesso. {synced_count} pet(s) sincronizado(s) com o historico de racoes.",
+        "success",
+    )
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/send-selected", methods=["POST"])
+@login_required
+def send_selected_pesquisa_racoes_tutores():
+    if not _is_admin():
+        abort(403)
+
+    selected_ids = []
+    for raw in request.form.getlist("selected_tutor_ids"):
+        if str(raw).isdigit():
+            selected_ids.append(int(raw))
+
+    if not selected_ids:
+        flash("Selecione ao menos um tutor para envio em lote.", "warning")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    contact_map = _build_delivery_research_contact_map()
+    batch_items = []
+    skipped = 0
+    excluded = 0
+    for tutor_id in selected_ids:
+        item = contact_map.get(tutor_id)
+        if not item or not item.get("whatsapp_url"):
+            skipped += 1
+            continue
+        status_envio = item.get("status_envio")
+        if status_envio and getattr(status_envio, "do_not_send", False):
+            excluded += 1
+            continue
+
+        tutor = item["tutor"]
+        batch_items.append(
+            {
+                "tutor_id": tutor.id,
+                "tutor_name": tutor.name,
+                "phone": digits_only(formatar_telefone(tutor.phone or "")),
+                "message": item["mensagem"],
+            }
+        )
+
+    if not batch_items:
+        if excluded and not skipped:
+            flash("Os tutores selecionados estao marcados como nao enviar agora.", "warning")
+        else:
+            flash("Nenhum dos tutores selecionados possui WhatsApp valido para envio.", "warning")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    whatsapp_runner = getattr(sys.modules.get("app", sys.modules[__name__]), "_run_whatsapp_batch_selenium", _run_whatsapp_batch_selenium)
+
+    try:
+        result_payload = whatsapp_runner(batch_items)
+    except subprocess.TimeoutExpired:
+        flash("O envio em lote demorou mais que o esperado e foi interrompido.", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+    except Exception as exc:
+        current_app.logger.exception("Erro ao executar envio em lote via Selenium")
+        message = str(exc)
+        if "DevToolsActivePort" in message or "session not created" in message.lower():
+            message = (
+                "Nao foi possivel abrir o navegador da automacao. "
+                "Feche janelas abertas do Chrome e do Edge que possam estar usando o perfil do WhatsApp "
+                "e tente novamente."
+            )
+        flash(f"Falha ao executar envio em lote: {message}", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    success_count = 0
+    failed_count = 0
+    failed_examples = []
+    for result in result_payload.get("results", []):
+        tutor_id = result.get("tutor_id")
+        if not tutor_id:
+            continue
+        if result.get("status") == "sent" and _delivery_research_contact_table_available():
+            status = _get_or_create_delivery_research_contact(tutor_id)
+            status.sent = True
+            status.sent_at = utcnow()
+            status.sent_by_id = current_user.id
+            success_count += 1
+        else:
+            failed_count += 1
+            if len(failed_examples) < 3:
+                failed_examples.append(
+                    {
+                        "name": result.get("tutor_name") or f"Tutor {tutor_id}",
+                        "error": (result.get("error") or "Falha nao detalhada.")[:180],
+                    }
+                )
+
+    if success_count:
+        db.session.commit()
+
+    summary = f"Envio em lote concluido: {success_count} enviado(s)"
+    if failed_count:
+        summary += f", {failed_count} com falha"
+    if skipped:
+        summary += f", {skipped} sem WhatsApp valido"
+    if excluded:
+        summary += f", {excluded} em nao enviar agora"
+    flash(summary + ".", "success" if success_count else "warning")
+
+    for failure in failed_examples:
+        flash(f"Falha em {failure['name']}: {failure['error']}", "warning")
+
+    process_error = result_payload.get("process_error")
+    if process_error:
+        flash(
+            "O lote foi interrompido no meio do processo, mas os envios ja confirmados foram preservados. "
+            "Revise os que faltaram antes de reenviar.",
+            "warning",
+        )
+    return redirect(url_for("pesquisa_racoes_tutores"))
+
+
+@app.route("/relatorio/racoes/pesquisa/warmup-whatsapp", methods=["POST"])
+@login_required
+def warmup_pesquisa_racoes_whatsapp():
+    if not _is_admin():
+        abort(403)
+
+    try:
+        result_payload = _run_whatsapp_batch_selenium([], warmup_only=True)
+    except subprocess.TimeoutExpired:
+        flash("O aquecimento do WhatsApp demorou mais que o esperado e foi interrompido.", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+    except Exception as exc:
+        current_app.logger.exception("Erro ao aquecer WhatsApp Web via Selenium")
+        flash(f"Falha ao aquecer WhatsApp Web: {exc}", "danger")
+        return redirect(url_for("pesquisa_racoes_tutores"))
+
+    browser_used = result_payload.get("browser") or "navegador"
+    flash(
+        f"WhatsApp Web aquecido com sucesso no {browser_used}. Se a sessao pedir QR Code, conecte agora antes do envio em lote.",
+        "success",
+    )
+    return redirect(url_for("pesquisa_racoes_tutores"))
 
 
 @app.route("/historico_animal/<int:animal_id>")
@@ -24061,6 +25578,12 @@ def bulario():
 
     total = query.count()
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Agrupamento clínico: 176 classes cruas viram 10 macro-grupos
+    # (Antimicrobiano, Antiparasitário, Vacina, etc.) com drill-down.
+    from services.bulario import construir_macro_grupos
+    macro_grupos, macro_ativo = construir_macro_grupos(classes, classificacao)
+
     return render_template(
         "bulario/lista.html",
         medicamentos=paginacao.items,
@@ -24069,6 +25592,8 @@ def bulario():
         classificacao=classificacao,
         classes=classes,
         total=total,
+        macro_grupos=macro_grupos,
+        macro_ativo=macro_ativo,
     )
 
 
@@ -24115,11 +25640,45 @@ def bulario_novo():
                     medicamento_id=med.id, forma=forma, concentracao=conc
                 ))
 
+        _salvar_doses_do_form(med.id, request.form)
+
         db.session.commit()
         flash("Medicamento criado com sucesso.", "success")
         return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
 
     return render_template("bulario/form.html", med=None, titulo="Novo medicamento")
+
+
+def _salvar_doses_do_form(medicamento_id, form):
+    """Lê os campos `dose_*[]` do form e substitui as doses do medicamento."""
+    from models.base import DoseMedicamento
+    # remove as existentes
+    DoseMedicamento.query.filter_by(medicamento_id=medicamento_id).delete()
+    db.session.flush()
+
+    especies   = form.getlist("dose_especie[]")
+    pesos      = form.getlist("dose_faixa_peso[]")
+    vias       = form.getlist("dose_via[]")
+    valores    = form.getlist("dose_valor[]")
+    freqs      = form.getlist("dose_frequencia[]")
+    duracoes   = form.getlist("dose_duracao[]")
+    obs        = form.getlist("dose_observacao[]")
+
+    linhas = zip(especies, pesos, vias, valores, freqs, duracoes, obs)
+    for esp, peso, via, dose, freq, dur, o in linhas:
+        # Ignora linha totalmente vazia
+        if not any(v.strip() for v in (esp, peso, via, dose, freq, dur, o)):
+            continue
+        db.session.add(DoseMedicamento(
+            medicamento_id = medicamento_id,
+            especie        = (esp.strip()[:80] or None),
+            faixa_peso     = (peso.strip()[:80] or None),
+            via            = (via.strip()[:80] or None),
+            dose           = (dose.strip()[:200] or None),
+            frequencia     = (freq.strip()[:120] or None),
+            duracao        = (dur.strip()[:120] or None),
+            observacao     = (o.strip() or None),
+        ))
 
 
 @login_required
@@ -24155,6 +25714,8 @@ def bulario_editar(medicamento_id):
                 db.session.add(ApresentacaoMedicamento(
                     medicamento_id=med.id, forma=forma, concentracao=conc
                 ))
+
+        _salvar_doses_do_form(med.id, request.form)
 
         db.session.commit()
         flash("Medicamento atualizado com sucesso.", "success")
@@ -24212,6 +25773,114 @@ def bulario_buscar_api():
         }
         for m in resultados
     ])
+
+
+@login_required
+def bulario_sugerir_dose_api():
+    """API JSON: dado um medicamento + animal, devolve uma sugestão de dose
+    pré-calculada (peso × mg/kg) ou indica que não há protocolo aplicável.
+
+    Query params:
+      - medicamento_id (int, obrigatório)
+      - animal_id      (int, obrigatório)
+      - indicacao      (str, opcional) — 'Alergia', 'Imunossupressão', etc.
+        Quando há mais de uma indicação disponível e o cliente não passou
+        nenhuma, a resposta vem em modo "multiplo" com a lista de opções.
+    """
+    from models.base import Medicamento, Animal
+    from services.bulario import sugerir_dose
+
+    med_id = request.args.get("medicamento_id", type=int)
+    animal_id = request.args.get("animal_id", type=int)
+    indicacao = (request.args.get("indicacao") or "").strip() or None
+    if not med_id or not animal_id:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Parâmetros medicamento_id e animal_id são obrigatórios.",
+        }), 400
+
+    med = Medicamento.query.get(med_id)
+    if med is None:
+        return jsonify({"disponivel": False, "motivo": "Medicamento não encontrado."}), 404
+
+    animal = Animal.query.get(animal_id)
+    if animal is None:
+        return jsonify({"disponivel": False, "motivo": "Animal não encontrado."}), 404
+
+    # Diagnóstico antes de delegar para o serviço — para que o front consiga
+    # explicar por que não há sugestão automática.
+    peso = getattr(animal, "peso", None)
+    try:
+        peso_f = float(peso) if peso is not None else None
+    except (TypeError, ValueError):
+        peso_f = None
+    if not peso_f or peso_f <= 0:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Peso do animal não está cadastrado — preencha o peso para usar a dose pré-calculada.",
+        })
+
+    if not (med.doses or []):
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Este medicamento ainda não tem protocolo de dose cadastrado no bulário.",
+        })
+
+    sugestao = sugerir_dose(med, animal, indicacao=indicacao)
+    if not sugestao:
+        return jsonify({
+            "disponivel": False,
+            "motivo": "Não há protocolo aplicável para a espécie/peso deste animal.",
+        })
+
+    # Converte Decimals → float para JSON
+    def _safe(v):
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return v
+
+    sugestao["peso_kg"] = _safe(sugestao.get("peso_kg"))
+    sugestao["dose_min"] = _safe(sugestao.get("dose_min"))
+    sugestao["dose_max"] = _safe(sugestao.get("dose_max"))
+
+    # Modo "múltiplas indicações": front exibe dropdown e recompõe a chamada
+    if sugestao.get("multiplo"):
+        return jsonify({
+            "disponivel": True,
+            "multiplo": True,
+            "medicamento": {
+                "id": med.id,
+                "nome": med.nome,
+                "principio_ativo": med.principio_ativo or "",
+            },
+            "animal": {
+                "id": animal.id,
+                "nome": getattr(animal, "name", None) or getattr(animal, "nome", None) or "",
+                "especie": (getattr(getattr(animal, "species", None), "name", None) or ""),
+                "peso_kg": peso_f,
+            },
+            "indicacoes": sugestao.get("indicacoes", []),
+        })
+
+    return jsonify({
+        "disponivel": True,
+        "multiplo": False,
+        "medicamento": {
+            "id": med.id,
+            "nome": med.nome,
+            "principio_ativo": med.principio_ativo or "",
+        },
+        "animal": {
+            "id": animal.id,
+            "nome": getattr(animal, "name", None) or getattr(animal, "nome", None) or "",
+            "especie": (getattr(getattr(animal, "species", None), "name", None) or ""),
+            "peso_kg": peso_f,
+        },
+        "sugestao": sugestao,
+    })
 
 
 from blueprint_utils import register_domain_blueprints

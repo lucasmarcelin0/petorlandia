@@ -54,6 +54,8 @@ from .sfa import (
 __all__ = [
     "AgendaEvento",
     "Appointment",
+    "AccountingAccount",
+    "BankStatementTransaction",
     "ExamAppointment",
     "PlantonistaEscala",
     "PlantaoModelo",
@@ -61,6 +63,7 @@ __all__ = [
     "PagamentoPlantonista",
     "CoberturaPlantonista",
     "DeliveryRequest",
+    "DeliveryResearchContact",
     "Order",
     "OrderItem",
     "Payment",

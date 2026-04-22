@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import re
+import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -18,6 +22,8 @@ from sqlalchemy.sql.sqltypes import Numeric
 import models
 from extensions import db
 from models import (
+    AccountingAccount,
+    BankStatementTransaction,
     BlocoOrcamento,
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
@@ -25,6 +31,8 @@ from models import (
     ClinicTaxes,
     Clinica,
     Consulta,
+    FiscalDocument,
+    FiscalDocumentStatus,
     Orcamento,
     OrcamentoItem,
     Order,
@@ -303,7 +311,8 @@ def _get_table_columns(table_name: str) -> set[str]:
     if table_name in _TABLE_COLUMN_CACHE:
         return _TABLE_COLUMN_CACHE[table_name]
     try:
-        inspector = sa_inspect(db.engine)
+        bind = db.session.connection() if db.session.is_active else db.engine
+        inspector = sa_inspect(bind)
         names = {column["name"] for column in inspector.get_columns(table_name)}
     except (ProgrammingError, OperationalError, NoSuchTableError):  # pragma: no cover - legacy DBs
         names = set()
@@ -398,7 +407,8 @@ def _upsert_classified_transaction(
     }
     changed = False
     if record is None:
-        record = ClassifiedTransaction(clinic_id=clinic_id, raw_id=raw_id, **attrs)
+        clinic = db.session.get(Clinica, clinic_id)
+        record = ClassifiedTransaction(clinic=clinic, clinic_id=clinic_id, raw_id=raw_id, **attrs)
         db.session.add(record)
         changed = True
     else:
@@ -406,6 +416,10 @@ def _upsert_classified_transaction(
             if getattr(record, key) != new_value:
                 setattr(record, key, new_value)
                 changed = True
+    if record.clinic is None:
+        record.clinic = db.session.get(Clinica, clinic_id)
+    if record.clinic is not None and record not in record.clinic.classified_transactions:
+        record.clinic.classified_transactions.append(record)
     return record, changed
 
 
@@ -770,6 +784,8 @@ def classify_transactions_for_month(
         handler_records, handler_changed = handler(clinic_id, month_start, start_dt, end_dt)
         records.extend(handler_records)
         changed = changed or handler_changed
+        if handler_changed:
+            db.session.flush()
 
     if changed:
         db.session.commit()
@@ -1230,6 +1246,489 @@ def generate_clinic_notifications(
         .order_by(ClinicNotification.created_at.desc())
         .all()
     )
+
+
+def _sum_categories(clinic_id: int, month_start: date, categories: Sequence[str]) -> Decimal:
+    return _classified_sum_for_month(clinic_id, month_start, categories)
+
+
+def build_dre_report(
+    clinic_id: int,
+    month: Optional[date | datetime | str] = None,
+    period: str = "monthly",
+) -> dict:
+    """Return a DRE-style result statement for monthly, quarterly or annual views."""
+
+    month_start = _normalize_month(month)
+    period = (period or "monthly").lower()
+    if period == "quarterly":
+        months = [month_start - relativedelta(months=offset) for offset in range(2, -1, -1)]
+    elif period == "annual":
+        months = [month_start - relativedelta(months=offset) for offset in range(11, -1, -1)]
+    else:
+        months = [month_start]
+
+    rows = []
+    totals = defaultdict(Decimal)
+    for item_month in months:
+        classify_transactions_for_month(clinic_id, item_month)
+        taxes = calculate_clinic_taxes(clinic_id, item_month)
+        receitas_servicos = _sum_categories(clinic_id, item_month, ("receita_servico",))
+        receitas_produtos = _sum_categories(clinic_id, item_month, ("receita_produto",))
+        impostos = _ensure_decimal(taxes.iss_total) + _ensure_decimal(taxes.das_total)
+        custos_produtos = _sum_categories(clinic_id, item_month, ("custo_produto",))
+        despesas_fixas = _sum_categories(
+            clinic_id,
+            item_month,
+            ("despesa_fixa", "despesa_insumo", "folha_pagamento", "pagamento_pj"),
+        )
+        receita_bruta = receitas_servicos + receitas_produtos
+        lucro_bruto = receita_bruta - impostos - custos_produtos
+        resultado = lucro_bruto - despesas_fixas
+        row = {
+            "month": item_month,
+            "receitas_servicos": _quantize_currency(receitas_servicos),
+            "receitas_produtos": _quantize_currency(receitas_produtos),
+            "receita_bruta": _quantize_currency(receita_bruta),
+            "impostos": _quantize_currency(impostos),
+            "custos_produtos": _quantize_currency(custos_produtos),
+            "despesas_fixas": _quantize_currency(despesas_fixas),
+            "lucro_bruto": _quantize_currency(lucro_bruto),
+            "resultado_liquido": _quantize_currency(resultado),
+        }
+        rows.append(row)
+        for key, value in row.items():
+            if key != "month":
+                totals[key] += _ensure_decimal(value)
+
+    return {
+        "clinic_id": clinic_id,
+        "period": period,
+        "start_month": months[0],
+        "end_month": months[-1],
+        "rows": rows,
+        "totals": {key: _quantize_currency(value) for key, value in totals.items()},
+    }
+
+
+def build_cash_flow_report(
+    clinic_id: int,
+    month: Optional[date | datetime | str] = None,
+) -> dict:
+    """Return realized cash flow plus 30/60/90 day receivable/payable projections."""
+
+    month_start = _normalize_month(month)
+    month_end = month_start + relativedelta(months=1)
+    classify_transactions_for_month(clinic_id, month_start)
+    entradas = _sum_categories(clinic_id, month_start, REVENUE_CATEGORIES)
+    saidas = _sum_categories(
+        clinic_id,
+        month_start,
+        ("custo_produto", "despesa_fixa", "despesa_insumo", "folha_pagamento", "pagamento_pj"),
+    )
+
+    today = date.today()
+    buckets = {
+        "30": (today, today + timedelta(days=30)),
+        "60": (today + timedelta(days=31), today + timedelta(days=60)),
+        "90": (today + timedelta(days=61), today + timedelta(days=90)),
+    }
+    projections: dict[str, dict[str, Decimal]] = {}
+    for label, (start, end) in buckets.items():
+        receivables = (
+            db.session.query(func.coalesce(func.sum(AccountingAccount.net_amount), 0))
+            .filter(AccountingAccount.clinic_id == clinic_id)
+            .filter(AccountingAccount.kind == "receivable")
+            .filter(AccountingAccount.status == "open")
+            .filter(AccountingAccount.due_date >= start)
+            .filter(AccountingAccount.due_date <= end)
+            .scalar()
+        )
+        payables = (
+            db.session.query(func.coalesce(func.sum(AccountingAccount.net_amount), 0))
+            .filter(AccountingAccount.clinic_id == clinic_id)
+            .filter(AccountingAccount.kind == "payable")
+            .filter(AccountingAccount.status == "open")
+            .filter(AccountingAccount.due_date >= start)
+            .filter(AccountingAccount.due_date <= end)
+            .scalar()
+        )
+        projections[label] = {
+            "entradas": _quantize_currency(_ensure_decimal(receivables)),
+            "saidas": _quantize_currency(_ensure_decimal(payables)),
+            "saldo": _quantize_currency(_ensure_decimal(receivables) - _ensure_decimal(payables)),
+        }
+
+    return {
+        "clinic_id": clinic_id,
+        "month": month_start,
+        "month_end": month_end,
+        "realizado": {
+            "entradas": _quantize_currency(entradas),
+            "saidas": _quantize_currency(saidas),
+            "saldo": _quantize_currency(entradas - saidas),
+        },
+        "projecoes": projections,
+    }
+
+
+def sync_receivable_from_nfse(document: FiscalDocument, commit: bool = True) -> AccountingAccount | None:
+    """Create/update ContaReceber from an authorized NFS-e document."""
+
+    if not document or document.status != FiscalDocumentStatus.AUTHORIZED:
+        return None
+    gross = _quantize_currency(_ensure_decimal(document.total_amount))
+    if gross <= ZERO:
+        return None
+    clinic = document.clinic or Clinica.query.get(document.clinic_id)
+    iss_rate = _normalize_percentage(getattr(clinic, "aliquota_iss", DEFAULT_ISS_RATE) if clinic else DEFAULT_ISS_RATE)
+    pis_value = getattr(clinic, "aliquota_pis", None) if clinic else None
+    cofins_value = getattr(clinic, "aliquota_cofins", None) if clinic else None
+    pis_rate = _normalize_percentage(pis_value if pis_value is not None else ZERO)
+    cofins_rate = _normalize_percentage(cofins_value if cofins_value is not None else ZERO)
+    tax_total = _quantize_currency(gross * (iss_rate + pis_rate + cofins_rate))
+    reference_dt = document.authorized_at or document.updated_at or document.created_at or utcnow()
+    issue_date = reference_dt.date() if isinstance(reference_dt, datetime) else date.today()
+    due_date = issue_date + timedelta(days=30)
+    account = (
+        AccountingAccount.query.filter_by(
+            clinic_id=document.clinic_id,
+            source_type="fiscal_document",
+            source_id=document.id,
+            kind="receivable",
+        ).one_or_none()
+    )
+    if account is None:
+        account = AccountingAccount(
+            clinic_id=document.clinic_id,
+            kind="receivable",
+            source_type="fiscal_document",
+            source_id=document.id,
+        )
+        db.session.add(account)
+    account.status = account.status or "open"
+    account.description = _prepare_description(
+        f"NFS-e {document.nfse_number or document.number or document.id}",
+        "NFS-e autorizada",
+    )
+    account.counterparty_name = document.tutor_name
+    account.gross_amount = gross
+    account.tax_amount = tax_total
+    account.net_amount = _quantize_currency(gross - tax_total)
+    account.issue_date = issue_date
+    account.due_date = due_date
+    account.source_reference = document.nfse_number or str(document.number or document.id)
+    if commit:
+        db.session.commit()
+    return account
+
+
+def register_account(
+    clinic_id: int,
+    kind: str,
+    description: str,
+    amount,
+    due_date: date,
+    *,
+    counterparty_name: Optional[str] = None,
+    issue_date: Optional[date] = None,
+    source_type: Optional[str] = "manual",
+    source_id: Optional[int] = None,
+) -> AccountingAccount:
+    kind = (kind or "").strip().lower()
+    if kind not in {"receivable", "payable"}:
+        raise ValueError("kind must be receivable or payable")
+    gross = _quantize_currency(_ensure_decimal(amount))
+    account = AccountingAccount(
+        clinic_id=clinic_id,
+        kind=kind,
+        status="open",
+        description=_prepare_description(description, "Conta"),
+        counterparty_name=counterparty_name,
+        gross_amount=gross,
+        tax_amount=ZERO,
+        net_amount=gross,
+        issue_date=issue_date or date.today(),
+        due_date=due_date,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    db.session.add(account)
+    db.session.commit()
+    return account
+
+
+def _parse_ofx_date(value: str) -> date:
+    digits = re.sub(r"[^0-9]", "", value or "")
+    return datetime.strptime(digits[:8], "%Y%m%d").date()
+
+
+def parse_ofx_transactions(ofx_text: str) -> list[dict]:
+    transactions = []
+    for block in re.findall(r"<STMTTRN>(.*?)(?=<STMTTRN>|</BANKTRANLIST>|$)", ofx_text or "", flags=re.I | re.S):
+        def _tag(name: str) -> str:
+            match = re.search(rf"<{name}>([^<\r\n]+)", block, flags=re.I)
+            return (match.group(1).strip() if match else "")
+
+        amount = _ensure_decimal(_tag("TRNAMT"))
+        posted_raw = _tag("DTPOSTED")
+        if not posted_raw:
+            continue
+        transactions.append(
+            {
+                "posted_at": _parse_ofx_date(posted_raw),
+                "amount": _quantize_currency(amount),
+                "memo": _prepare_description(_tag("MEMO") or _tag("NAME"), "LanÃ§amento bancÃ¡rio"),
+                "fit_id": _tag("FITID") or None,
+            }
+        )
+    return transactions
+
+
+def import_bank_statement(clinic_id: int, content: str, file_type: str = "ofx") -> dict:
+    """Import OFX/CNAB-like transactions and match by amount + date within +/- 2 days."""
+
+    if (file_type or "ofx").lower() == "ofx":
+        parsed = parse_ofx_transactions(content)
+    else:
+        parsed = []
+        reader = csv.DictReader(io.StringIO(content), delimiter=";")
+        for row in reader:
+            amount = row.get("valor") or row.get("amount") or "0"
+            posted = row.get("data") or row.get("posted_at")
+            if posted:
+                parsed.append(
+                    {
+                        "posted_at": datetime.strptime(posted[:10], "%Y-%m-%d").date(),
+                        "amount": _quantize_currency(_ensure_decimal(amount.replace(",", "."))),
+                        "memo": _prepare_description(row.get("descricao") or row.get("memo"), "CNAB"),
+                        "fit_id": row.get("id") or row.get("fit_id"),
+                    }
+                )
+
+    imported = 0
+    matched = 0
+    for item in parsed:
+        tx = None
+        if item.get("fit_id"):
+            tx = BankStatementTransaction.query.filter_by(
+                clinic_id=clinic_id,
+                fit_id=item["fit_id"],
+            ).one_or_none()
+        if tx is None:
+            tx = BankStatementTransaction(clinic_id=clinic_id, fit_id=item.get("fit_id"))
+            db.session.add(tx)
+            imported += 1
+        tx.posted_at = item["posted_at"]
+        tx.amount = item["amount"]
+        tx.memo = item["memo"]
+
+        kind = "receivable" if _ensure_decimal(tx.amount) > ZERO else "payable"
+        absolute_amount = abs(_ensure_decimal(tx.amount))
+        window_start = tx.posted_at - timedelta(days=2)
+        window_end = tx.posted_at + timedelta(days=2)
+        account = (
+            AccountingAccount.query
+            .filter(AccountingAccount.clinic_id == clinic_id)
+            .filter(AccountingAccount.kind == kind)
+            .filter(AccountingAccount.status == "open")
+            .filter(AccountingAccount.due_date >= window_start)
+            .filter(AccountingAccount.due_date <= window_end)
+            .filter(AccountingAccount.net_amount == absolute_amount)
+            .order_by(AccountingAccount.due_date.asc())
+            .first()
+        )
+        if account:
+            account.mark_paid(tx.posted_at, tx)
+            tx.matched_account = account
+            tx.match_confidence = Decimal("0.95")
+            matched += 1
+    db.session.commit()
+    return {"imported": imported, "matched": matched, "total": len(parsed)}
+
+
+def build_accounting_dashboard(clinic_id: int, month: Optional[date | datetime | str] = None) -> dict:
+    month_start = _normalize_month(month)
+    month_end = month_start + relativedelta(months=1)
+    classify_transactions_for_month(clinic_id, month_start)
+    taxes = calculate_clinic_taxes(clinic_id, month_start)
+    revenue = _sum_categories(clinic_id, month_start, REVENUE_CATEGORIES)
+    orders = (
+        db.session.query(func.count(ClassifiedTransaction.id))
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month == month_start)
+        .filter(ClassifiedTransaction.category.in_(list(REVENUE_CATEGORIES)))
+        .scalar()
+    ) or 0
+    overdue = (
+        db.session.query(func.coalesce(func.sum(AccountingAccount.net_amount), 0))
+        .filter(AccountingAccount.clinic_id == clinic_id)
+        .filter(AccountingAccount.kind == "receivable")
+        .filter(AccountingAccount.status == "open")
+        .filter(AccountingAccount.due_date < date.today())
+        .scalar()
+    )
+    tax_total = _ensure_decimal(taxes.iss_total) + _ensure_decimal(taxes.das_total) + _ensure_decimal(taxes.retencoes_pj)
+    top_services = (
+        db.session.query(
+            ClassifiedTransaction.subcategory,
+            func.count(ClassifiedTransaction.id),
+            func.coalesce(func.sum(ClassifiedTransaction.value), 0),
+        )
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month == month_start)
+        .filter(ClassifiedTransaction.category == "receita_servico")
+        .group_by(ClassifiedTransaction.subcategory)
+        .order_by(func.coalesce(func.sum(ClassifiedTransaction.value), 0).desc())
+        .limit(10)
+        .all()
+    )
+    return {
+        "month": month_start,
+        "faturamento_mes": _quantize_currency(revenue),
+        "ticket_medio": _quantize_currency(revenue / Decimal(orders)) if orders else ZERO,
+        "inadimplencia": _quantize_currency(_ensure_decimal(overdue)),
+        "carga_tributaria_real": _quantize_factor(tax_total / revenue) if revenue > ZERO else ZERO,
+        "top_servicos": [
+            {"servico": name or "ServiÃ§o", "quantidade": count, "total": _quantize_currency(_ensure_decimal(total))}
+            for name, count, total in top_services
+        ],
+    }
+
+
+def build_veterinarian_revenue_report(clinic_id: int, month: Optional[date | datetime | str] = None) -> list[dict]:
+    month_start = _normalize_month(month)
+    start_dt, end_dt = _month_range(month_start)
+    vet_id_column = getattr(Consulta, "created_by", None)
+    if vet_id_column is None:
+        return []
+    vet_name = func.coalesce(User.name, "VeterinÃ¡rio")
+    rows = (
+        db.session.query(vet_id_column, vet_name, func.coalesce(func.sum(OrcamentoItem.valor), 0))
+        .join(Consulta, Consulta.id == OrcamentoItem.consulta_id)
+        .outerjoin(User, User.id == Consulta.created_by)
+        .filter(OrcamentoItem.clinica_id == clinic_id)
+        .filter(Consulta.created_at >= start_dt)
+        .filter(Consulta.created_at < end_dt)
+        .group_by(vet_id_column, vet_name)
+        .order_by(func.coalesce(func.sum(OrcamentoItem.valor), 0).desc())
+        .all()
+    )
+    return [
+        {"veterinario_id": vet_id, "nome": name, "faturamento": _quantize_currency(_ensure_decimal(total))}
+        for vet_id, name, total in rows
+    ]
+
+
+def _xlsx_escape(value) -> str:
+    text = "" if value is None else str(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _xlsx_cell(col_index: int, row_index: int, value) -> str:
+    col = ""
+    idx = col_index
+    while idx:
+        idx, rem = divmod(idx - 1, 26)
+        col = chr(65 + rem) + col
+    ref = f"{col}{row_index}"
+    if isinstance(value, (int, float, Decimal)):
+        return f'<c r="{ref}"><v>{value}</v></c>'
+    return f'<c r="{ref}" t="inlineStr"><is><t>{_xlsx_escape(value)}</t></is></c>'
+
+
+def _minimal_xlsx(sheets: dict[str, list[list]]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>""" + "".join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1, len(sheets) + 1)) + "</Types>")
+        zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>""")
+        zf.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>""" + "".join(f'<sheet name="{_xlsx_escape(name[:31])}" sheetId="{i}" r:id="rId{i}"/>' for i, name in enumerate(sheets, start=1)) + "</sheets></workbook>")
+        zf.writestr("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">""" + "".join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(sheets) + 1)) + "</Relationships>")
+        for i, rows in enumerate(sheets.values(), start=1):
+            sheet_xml = ['<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>']
+            for row_idx, row in enumerate(rows, start=1):
+                sheet_xml.append(f'<row r="{row_idx}">')
+                for col_idx, value in enumerate(row, start=1):
+                    sheet_xml.append(_xlsx_cell(col_idx, row_idx, value))
+                sheet_xml.append("</row>")
+            sheet_xml.append("</sheetData></worksheet>")
+            zf.writestr(f"xl/worksheets/sheet{i}.xml", "".join(sheet_xml))
+    return buffer.getvalue()
+
+
+def export_accountant_xlsx(clinic_id: int, month: Optional[date | datetime | str] = None) -> bytes:
+    month_start = _normalize_month(month)
+    dre = build_dre_report(clinic_id, month_start, "monthly")
+    cash = build_cash_flow_report(clinic_id, month_start)
+    dashboard = build_accounting_dashboard(clinic_id, month_start)
+    vets = build_veterinarian_revenue_report(clinic_id, month_start)
+    accounts = (
+        AccountingAccount.query
+        .filter(AccountingAccount.clinic_id == clinic_id)
+        .filter(or_(AccountingAccount.issue_date >= month_start, AccountingAccount.due_date >= month_start))
+        .filter(or_(AccountingAccount.issue_date < month_start + relativedelta(months=1), AccountingAccount.due_date < month_start + relativedelta(months=1)))
+        .order_by(AccountingAccount.due_date.asc())
+        .all()
+    )
+    sheets = {
+        "Resumo": [
+            ["Indicador", "Valor"],
+            ["Faturamento mes", dashboard["faturamento_mes"]],
+            ["Ticket medio", dashboard["ticket_medio"]],
+            ["Inadimplencia", dashboard["inadimplencia"]],
+            ["Carga tributaria real", dashboard["carga_tributaria_real"]],
+        ],
+        "DRE": [
+            ["Mes", "Receita servicos", "Receita produtos", "Impostos", "Custos produtos", "Despesas fixas", "Resultado liquido"],
+        ] + [
+            [
+                row["month"].isoformat(),
+                row["receitas_servicos"],
+                row["receitas_produtos"],
+                row["impostos"],
+                row["custos_produtos"],
+                row["despesas_fixas"],
+                row["resultado_liquido"],
+            ]
+            for row in dre["rows"]
+        ],
+        "Fluxo Caixa": [
+            ["Tipo", "Entradas", "Saidas", "Saldo"],
+            ["Realizado", cash["realizado"]["entradas"], cash["realizado"]["saidas"], cash["realizado"]["saldo"]],
+        ] + [
+            [f"Projecao {label} dias", values["entradas"], values["saidas"], values["saldo"]]
+            for label, values in cash["projecoes"].items()
+        ],
+        "Contas": [
+            ["Tipo", "Status", "Descricao", "Contraparte", "Vencimento", "Baixa", "Bruto", "Impostos", "Liquido", "Origem"],
+        ] + [
+            [
+                account.kind,
+                account.status,
+                account.description,
+                account.counterparty_name,
+                account.due_date.isoformat() if account.due_date else "",
+                account.paid_at.isoformat() if account.paid_at else "",
+                account.gross_amount,
+                account.tax_amount,
+                account.net_amount,
+                f"{account.source_type or ''}:{account.source_reference or account.source_id or ''}",
+            ]
+            for account in accounts
+        ],
+        "Top Servicos": [["Servico", "Quantidade", "Total"]] + [
+            [item["servico"], item["quantidade"], item["total"]] for item in dashboard["top_servicos"]
+        ],
+        "Veterinarios": [["Veterinario", "Faturamento"]] + [
+            [row["nome"], row["faturamento"]] for row in vets
+        ],
+    }
+    return _minimal_xlsx(sheets)
 
 
 def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime | str] = None) -> ClinicFinancialSnapshot:

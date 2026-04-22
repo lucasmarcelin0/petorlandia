@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+{% set titulo = "Contas" %}
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">Contas a pagar e receber</h2>
+      <p class="text-muted mb-0">Vencimentos, baixas e conciliacao bancaria.</p>
+    </div>
+  </div>
+
+  {% if selected_clinic %}
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <form class="card border-0 shadow-sm h-100" method="post">
+        <div class="card-body">
+          <h5 class="mb-3">Novo lancamento</h5>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Tipo</label>
+              <select class="form-select" name="kind">
+                <option value="payable">A pagar</option>
+                <option value="receivable">A receber</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Valor</label>
+              <input class="form-control" name="amount" type="number" step="0.01" min="0" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Vencimento</label>
+              <input class="form-control" name="due_date" type="date" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Descricao</label>
+              <input class="form-control" name="description" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Contraparte</label>
+              <input class="form-control" name="counterparty_name">
+            </div>
+          </div>
+          <button class="btn btn-primary mt-3" type="submit"><i class="fas fa-plus me-1"></i>Adicionar</button>
+        </div>
+      </form>
+    </div>
+    <div class="col-lg-5">
+      <form class="card border-0 shadow-sm h-100" method="post" action="{{ url_for('contabilidade_conciliacao_importar', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')) }}" enctype="multipart/form-data">
+        <div class="card-body">
+          <h5 class="mb-3">Importar extrato</h5>
+          <input class="form-control" type="file" name="arquivo" accept=".ofx,.csv,.txt,.ret,.cnab" required>
+          <p class="text-muted small mt-2 mb-3">O match automatico usa valor e vencimento em uma janela de dois dias.</p>
+          <button class="btn btn-outline-primary" type="submit"><i class="fas fa-upload me-1"></i>Conciliar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr><th>Tipo</th><th>Status</th><th>Descricao</th><th>Vencimento</th><th>Baixa</th><th>Valor liquido</th><th>Origem</th></tr>
+        </thead>
+        <tbody>
+          {% for account in accounts %}
+          <tr>
+            <td>{{ 'Receber' if account.kind == 'receivable' else 'Pagar' }}</td>
+            <td><span class="badge {{ 'bg-success' if account.status == 'paid' else 'bg-warning text-dark' }}">{{ 'Baixado' if account.status == 'paid' else 'Aberto' }}</span></td>
+            <td>{{ account.description }}</td>
+            <td>{{ account.due_date.strftime('%d/%m/%Y') if account.due_date else '-' }}</td>
+            <td>{{ account.paid_at.strftime('%d/%m/%Y') if account.paid_at else '-' }}</td>
+            <td>{{ account.net_amount | currency_br }}</td>
+            <td>{{ account.source_reference or account.source_type or 'manual' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma conta no periodo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

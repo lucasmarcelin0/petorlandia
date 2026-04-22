@@ -6,11 +6,16 @@ import re
 from datetime import datetime, timezone
 
 from cryptography import x509
+from cryptography.x509.oid import ObjectIdentifier, NameOID
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 
-_CNPJ_PATTERN = re.compile(r"\d{14}")
+_CNPJ_PATTERN = re.compile(
+    r"(?:CNPJ|Cadastro\s+Nacional\s+de\s+Pessoa\s+Jur[ií]dica|Pessoa\s+Jur[ií]dica)\D{0,20}(\d{14})",
+    re.IGNORECASE,
+)
+_ICP_BRASIL_CNPJ_OID = ObjectIdentifier("2.16.76.1.3.3")
 
 
 def _normalize_cnpj(value: str | None) -> str:
@@ -30,13 +35,18 @@ def _extract_subject_cnpj(certificate: x509.Certificate) -> str | None:
         raw_value = attribute.value
         if not isinstance(raw_value, str):
             continue
-        match = _CNPJ_PATTERN.search(raw_value)
-        if match:
-            return match.group(0)
+        if attribute.oid == _ICP_BRASIL_CNPJ_OID:
+            digits = _normalize_cnpj(raw_value)
+            if len(digits) == 14:
+                return digits
+        if attribute.oid in {NameOID.SERIAL_NUMBER, NameOID.ORGANIZATION_NAME, NameOID.COMMON_NAME}:
+            match = _CNPJ_PATTERN.search(raw_value)
+            if match:
+                return match.group(1)
     subject_text = certificate.subject.rfc4514_string()
     match = _CNPJ_PATTERN.search(subject_text)
     if match:
-        return match.group(0)
+        return match.group(1)
     return None
 
 

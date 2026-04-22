@@ -55,7 +55,7 @@ def fiscal_exports_xmls():
 
     query = FiscalDocument.query.filter_by(clinic_id=clinic_id)
     query = query.filter(FiscalDocument.status == FiscalDocumentStatus.AUTHORIZED)
-    query = query.filter(FiscalDocument.xml_authorized.isnot(None))
+    query = query.filter(FiscalDocument._xml_authorized.isnot(None))
 
     if doc_type_raw:
         try:

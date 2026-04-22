@@ -423,6 +423,158 @@ def test_mcp_clinical_tools_return_structured_payload(app, client):
     assert "Luna" in guidance_result["rascunho"]
 
 
+def test_mcp_freeform_intake_tool_interprets_fragmented_messages(app, client):
+    with app.app_context():
+        user = User(name="Dra. Intake", email="intake@example.com", role="veterinario", worker="veterinario")
+        user.set_password("secret123")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv="CRMV-3030"))
+        db.session.commit()
+
+        token_value = _create_token(user.id, scope="profile")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": {
+                "name": "interpretar_mensagem_livre_atendimento",
+                "arguments": {
+                    "texto": (
+                        "[08:21, 16/04/2026] Lucas Marcelino: https://maps.app.goo.gl/nFF8JyXoX74zhyR6A\n"
+                        "[23:25, 16/04/2026] Lucas Marcelino: Ligia\n"
+                        "[23:40, 16/04/2026] Lucas Marcelino: "
+                    )
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.get_json()["result"]["content"][0]["text"])
+    assert payload["acao_sugerida"] == "cadastrar_tutor_e_pets"
+    assert payload["rascunho_operacional"]["tutor"]["nome"] == "Ligia"
+    assert payload["rascunho_operacional"]["tutor"]["endereco_referencia"]
+    assert "nome_do_pet" in payload["campos_a_confirmar"]
+    assert payload["mensagens_processadas"] == 3
+
+
+def test_mcp_operational_assistant_executes_registration_from_natural_text(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Clinica Assistente Cadastro")
+        db.session.add(clinic)
+        db.session.flush()
+
+        user = User(
+            name="Dra. Assistente",
+            email="assistente-cadastro@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=clinic.id,
+        )
+        user.set_password("secret123")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv="CRMV-4040", clinica_id=clinic.id))
+        db.session.commit()
+
+        token_value = _create_token(user.id, scope="profile tutors:write pets:write")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": "tools/call",
+            "params": {
+                "name": "assistente_operacional_veterinario",
+                "arguments": {
+                    "texto": (
+                        "Cadastrar tutor Ligia. Telefone: 16999990000. "
+                        "Endereço: Rua das Flores, 10. Pet: Mel. Espécie: cão. "
+                        "Observação clínica: tosse leve."
+                    ),
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.get_json()["result"]["content"][0]["text"])
+    assert payload["executado"] is True
+    assert payload["acao_sugerida"] == "cadastrar_tutor_e_pets"
+    assert payload["resultado_execucao"]["acao_executada"] == "cadastrar_tutor_e_pets"
+
+    with app.app_context():
+        tutor = User.query.filter_by(name="Ligia").one()
+        pet = Animal.query.filter_by(name="Mel", user_id=tutor.id).one()
+        assert tutor.phone == "16999990000"
+        assert pet.species and pet.species.name == "Cachorro"
+
+
+def test_mcp_operational_assistant_executes_scheduling_from_natural_text(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Clinica Assistente Agenda")
+        db.session.add(clinic)
+        db.session.flush()
+
+        tutor = User(name="Tutor Agenda", email="tutor-agenda@example.com", role="adotante", clinica_id=clinic.id)
+        tutor.set_password("secret123")
+        user = User(
+            name="Dra. Agenda",
+            email="assistente-agenda@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=clinic.id,
+        )
+        user.set_password("secret123")
+        db.session.add_all([tutor, user])
+        db.session.flush()
+
+        vet = Veterinario(user_id=user.id, crmv="CRMV-5050", clinica_id=clinic.id)
+        db.session.add(vet)
+        db.session.flush()
+
+        pet = Animal(name="Rex", user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add(pet)
+        db.session.commit()
+
+        target_date = (utcnow() + timedelta(days=2)).date().isoformat()
+        token_value = _create_token(user.id, scope="profile appointments:write")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": "tools/call",
+            "params": {
+                "name": "assistente_operacional_veterinario",
+                "arguments": {
+                    "texto": (
+                        f"Agendar consulta para pet Rex em {target_date} às 09:30. "
+                        "Motivo: retorno respiratório."
+                    ),
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(response.get_json()["result"]["content"][0]["text"])
+    assert payload["executado"] is True
+    assert payload["acao_sugerida"] == "agendar_consulta"
+    assert payload["resultado_execucao"]["resultado"]["tipo"] == "retorno"
+
+
 def test_mcp_write_tools_create_records(app, client):
     with app.app_context():
         clinic = Clinica(nome="Clinica Writes")
@@ -596,7 +748,7 @@ def test_mcp_write_tools_create_records(app, client):
         pet = Animal.query.filter_by(id=animal_id).one()
         assert tutor.email.endswith("@cadastro.petorlandia.local")
         assert pet.user_id == tutor.id
-        consulta = Consulta.query.get(consulta_id)
+        consulta = db.session.get(Consulta, consulta_id)
         assert "Diagnóstico" in (consulta.conduta or "")
         assert ExameSolicitado.query.count() == 1
         assert Appointment.query.filter_by(animal_id=animal_id).count() >= 2

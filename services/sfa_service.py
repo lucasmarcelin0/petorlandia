@@ -72,6 +72,8 @@ EMAIL_PESQUISADOR = os.getenv("SFA_EMAIL_PESQUISADOR", "lucas.marcbh.lm@gmail.co
 DDD_PADRAO = os.getenv("SFA_DDD_PADRAO", "16")
 PREFIXO_PAIS = os.getenv("SFA_PREFIXO_PAIS", "55")
 GRUPO_PENDENTE = "PENDENTE_REVISAO"
+SFA_TEST_MARKER = "[SFA_TEST]"
+SFA_TEST_NAME_PREFIX = "[TESTE SFA]"
 
 # Planilha SINAN no Google Sheets
 SHEET_ID_SINAN = os.getenv(
@@ -314,6 +316,25 @@ def normalizar_nome_chave(valor: str) -> str:
     s = unicodedata.normalize("NFD", s)
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
     return re.sub(r"\s+", " ", s)
+
+
+def observacao_teste_sfa(batch_id: str) -> str:
+    batch = str(batch_id or "").strip() or "SEM_LOTE"
+    return f"{SFA_TEST_MARKER} lote={batch}"
+
+
+def paciente_eh_teste_sfa(paciente) -> bool:
+    observacao = str(getattr(paciente, "observacao_operacional", "") or "")
+    nome = str(getattr(paciente, "nome", "") or "")
+    return SFA_TEST_MARKER in observacao or nome.startswith(SFA_TEST_NAME_PREFIX)
+
+
+def filtrar_pacientes_reais_sfa(pacientes):
+    return [paciente for paciente in pacientes if not paciente_eh_teste_sfa(paciente)]
+
+
+def filtrar_pacientes_teste_sfa(pacientes):
+    return [paciente for paciente in pacientes if paciente_eh_teste_sfa(paciente)]
 
 
 def _normalize_form_stage(form_stage: str) -> str:
@@ -1048,10 +1069,18 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
 
 
 def listar_assinaturas_tcle() -> list[dict[str, str]]:
-    from models.sfa import SfaRespostaT0
+    from models.sfa import SfaPaciente, SfaRespostaT0
 
     assinaturas: list[dict[str, str]] = []
-    for resposta in SfaRespostaT0.query.order_by(SfaRespostaT0.timestamp.desc()).all():
+    respostas = (
+        SfaRespostaT0.query
+        .join(SfaPaciente, SfaPaciente.id_estudo == SfaRespostaT0.id_estudo)
+        .order_by(SfaRespostaT0.timestamp.desc())
+        .all()
+    )
+    for resposta in respostas:
+        if paciente_eh_teste_sfa(getattr(resposta, "paciente", None)):
+            continue
         registro = montar_registro_assinatura_tcle(resposta)
         if registro:
             assinaturas.append(registro)
@@ -1394,6 +1423,325 @@ def criar_paciente_manual(dados: dict) -> tuple[bool, str, Optional[object]]:
         id_estudo=paciente.id_estudo,
     )
     return True, paciente.id_estudo, paciente
+
+
+def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
+    from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+
+    total = max(1, min(int(quantidade or 20), 100))
+    hoje = date.today()
+    batch_id = f"teste-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    bairros = [
+        "Centro",
+        "Jardim Boa Vista",
+        "Jardim Teixeira",
+        "Vila Freitas",
+        "Jardim Santa Rita",
+    ]
+    tipos_residencia = ["Casa urbana", "Casa rural", "Apartamento", "Outro"]
+    ocupacoes = [
+        "Agricultura/pecuaria",
+        "Comercio/escritorio",
+        "Estudante",
+        "Profissional da saude",
+        "Domestico(a)",
+    ]
+    sintomas_catalogo = [
+        "Febre alta (>38,5 C)",
+        "Dor forte atras dos olhos",
+        "Dores musculares intensas",
+        "Dores nas articulacoes (juntas)",
+        "Manchas vermelhas na pele",
+        "Cansaco extremo/fadiga",
+        "Dor de cabeca forte",
+        "Nausea/vomitos",
+    ]
+    sinais_alerta_catalogo = [
+        "Nenhum sinal de alerta",
+        "Vomitos persistentes",
+        "Dor abdominal intensa",
+        "Confusao mental/tontura",
+        "Falta de ar",
+    ]
+    melhorias = [
+        "Melhorando - Sintomas leves, em recuperacao",
+        "Melhorando - Ainda com sintomas moderados",
+        "Estavel - Sem piora importante",
+    ]
+    estados_finais = [
+        "100% recuperado - como antes da doenca",
+        "90-99% recuperado - diferencas minimas",
+        "70-89% recuperado - sequelas leves",
+        "50-69% recuperado - sequelas moderadas",
+        "Ainda doente - sem melhora significativa",
+    ]
+    retornos_atividades = [
+        "No mesmo dia ou em 1 dia",
+        "Em 2 a 3 dias",
+        "Em 4 a 7 dias",
+        "Em 8 a 14 dias",
+        "Em 15 a 30 dias",
+        "Depois de 30 dias",
+        "Voltei parcialmente, mas ainda nao totalmente",
+        "Ainda nao voltei",
+    ]
+    percentual_recuperacao = [
+        "100% recuperado - como antes da doenca",
+        "90-99% recuperado - diferencas minimas",
+        "70-89% recuperado - sequelas leves",
+        "50-69% recuperado - sequelas moderadas",
+        "Menos de 50% recuperado - limitacoes importantes",
+    ]
+    ids_estudo: list[str] = []
+
+    for indice in range(total):
+        seq = indice + 1
+        data_notificacao = hoje - timedelta(days=42 - indice)
+        data_inicio = data_notificacao - timedelta(days=(indice % 4) + 1)
+        data_t0 = data_notificacao + timedelta(days=1)
+        data_t10 = data_t0 + timedelta(days=10)
+        data_t30 = data_t0 + timedelta(days=30)
+        grupo = "A" if indice % 2 == 0 else "B"
+        sexo = "Feminino" if indice % 2 == 0 else "Masculino"
+        ocupacao = ocupacoes[indice % len(ocupacoes)]
+        sintomas = [
+            sintomas_catalogo[indice % len(sintomas_catalogo)],
+            sintomas_catalogo[(indice + 2) % len(sintomas_catalogo)],
+        ]
+        sinais_alerta = [sinais_alerta_catalogo[indice % len(sinais_alerta_catalogo)]]
+        dor_score = str(1 + ((indice * 3) % 5))
+        fadiga_score = str(1 + ((indice * 4 + 2) % 5))
+        impacto_atual = [
+            "Nenhum",
+            "Leve - incomoda, mas nao limita",
+            "Moderado - limita algumas atividades",
+            "Importante - impede varias atividades",
+            "Incapacitante - impede atividades basicas",
+        ][indice % 5]
+        id_estudo = proximo_id_estudo()
+        ficha_sinan = f"TESTE-{batch_id[-6:]}-{seq:03d}"
+        nome = f"{SFA_TEST_NAME_PREFIX} Painel {seq:02d}"
+        telefone = f"551699900{seq:04d}"
+        token = f"teste-{batch_id}-{seq:02d}"
+        observacao = observacao_teste_sfa(batch_id)
+
+        paciente = SfaPaciente(
+            id_estudo=id_estudo,
+            ficha_sinan=ficha_sinan,
+            nome=nome,
+            data_nascimento=formatar_data(date(1985 + (indice % 10), (indice % 12) + 1, min((indice % 27) + 1, 28))),
+            telefone=telefone,
+            bairro=bairros[indice % len(bairros)],
+            endereco=f"Rua Teste {100 + seq}",
+            grupo=grupo,
+            status_t0="T0_Completo",
+            status_t10="T10_Completo",
+            status_t30="T30_Completo",
+            status_geral="COMPLETO",
+            data_t0=formatar_data(data_t0),
+            data_t10=formatar_data(data_t10),
+            data_t30=formatar_data(data_t30),
+            observacao_operacional=observacao,
+            token_acesso=token,
+            timestamp_cadastro=datetime.combine(data_notificacao, datetime.min.time()),
+            updated_at=datetime.combine(data_t30, datetime.min.time()),
+        )
+        atualizar_operacional_paciente(paciente)
+        db.session.add(paciente)
+
+        db.session.add(
+            SfaSinanLog(
+                chave_dedup=f"SFA-TESTE-{batch_id}-{seq:03d}",
+                ficha_sinan=ficha_sinan,
+                n_caso=str(5000 + seq),
+                nome=nome,
+                telefone=telefone,
+                bairro=paciente.bairro,
+                data_notificacao=formatar_data(data_notificacao),
+                data_inicio_sintomas=formatar_data(data_inicio),
+                tipo_exame="NS1",
+                resultado="positivo" if grupo == "A" else "nao reagente",
+                grupo=grupo,
+                id_estudo_vinculado=id_estudo,
+                timestamp_importacao=datetime.combine(data_notificacao, datetime.min.time()),
+            )
+        )
+
+        payload_t0 = {
+            "id_estudo": id_estudo,
+            "token_acesso": token,
+            "ficha_sinan": ficha_sinan,
+            "nome": nome,
+            "data_nascimento": paciente.data_nascimento,
+            "data_inicio_sintomas": formatar_data(data_inicio),
+            "tipo_residencia": tipos_residencia[indice % len(tipos_residencia)],
+            "sexo_biologico": sexo,
+            "ocupacao_principal": ocupacao,
+            "condicoes_previas": ["Nenhuma das acima"] if indice % 3 else ["Hipertensao"],
+            "diagnostico_dengue_previo": ["Sim", "Nao", "Nao sei"][indice % 3],
+            "vacinas_12_meses": ["Nenhuma"] if indice % 4 else ["COVID-19 (reforco recente)"],
+            "exposicao_ambiental": ["Nenhuma exposicao ambiental"] if indice % 2 else ["Area rural/chacara"],
+            "exposicao_animal": ["Nenhum contato animal relevante"]
+            if indice % 3
+            else (["Gatos"] if indice % 2 else ["Caes"]),
+            "exposicao_alimentar": ["Nenhuma dessas"] if indice % 4 else ["Agua nao tratada"],
+            "outras_pessoas_com_sintomas": ["Sim", "Nao", "Nao sei"][indice % 3],
+            "teve_febre": "Sim" if indice % 5 != 0 else "Nao",
+            "intensidade_febre": str(1 + ((indice * 2) % 5)),
+            "sintomas_principais": sintomas,
+            "sinais_alerta": sinais_alerta,
+            "dor_articular_intensidade": dor_score,
+            "fadiga_intensidade": fadiga_score,
+            "impacto_atividades": impacto_atual,
+            "dias_incap": str(2 + (indice % 5)),
+            "internacao": "Nao",
+            "custo_remedios": f"{12 + indice * 1.5:.2f}",
+            "custo_consultas": f"{18 + indice * 2:.2f}",
+            "custo_transporte": f"{5 + indice:.2f}",
+            "custo_outros": f"{indice % 4:.2f}",
+            "custo_total": f"{35 + indice * 7:.2f}",
+            "ausencia_familiar": "Nao",
+            "aceite_tcle": [T0_CONSENT_ACCEPTED],
+            "tcle_assinado_por": nome,
+            "consentimento_registrado_em": datetime.combine(data_t0, datetime.min.time()).isoformat() + "Z",
+            "_sfa_test_batch": batch_id,
+        }
+        payload_t10 = {
+            "id_estudo": id_estudo,
+            "nome": nome,
+            "classificacao_melhora": melhorias[indice % len(melhorias)],
+            "percentual_recuperacao": percentual_recuperacao[indice % len(percentual_recuperacao)],
+            "sintomas_persistentes": sintomas[:1] if indice % 4 else ["Nenhum sintoma persistente"],
+            "sinais_alerta": sinais_alerta,
+            "dor_articular_intensidade": str(max(1, int(dor_score) - 1)),
+            "fadiga_intensidade": str(max(1, int(fadiga_score) - 1)),
+            "impacto_atividades": impacto_atual,
+            "retornou_servico_saude": "Sim" if indice % 3 == 0 else "Nao",
+            "quantas_vezes_retornou": str(indice % 3),
+            "internacao_t10": "Sim" if indice % 9 == 0 else "Nao",
+            "diagnostico_definitivo": ["Sim, dengue", "Exames pendentes", "Nao"][indice % 3],
+            "dias_incap_novos": str(1 + (indice % 4)),
+            "custo_remedios": f"{10 + indice * 2:.2f}",
+            "custo_consultas": f"{15 + indice * 3:.2f}",
+            "custo_transporte": f"{5 + indice:.2f}",
+            "custo_internacao": f"{120 + indice * 10:.2f}" if indice % 9 == 0 else "0.00",
+            "custo_outros": f"{3 + indice:.2f}",
+            "perda_renda_estimada": f"{indice * 25:.2f}",
+            "renda_familiar_afetada": ["Nao", "Sim, reducao temporaria", "Sim, uso de economias/reservas"][indice % 3],
+            "retorno_atividades_previsao": ["Ja retomei todas", "Em 1 semana ou menos", "Em 2-4 semanas", "Mais de 1 mes"][indice % 4],
+            "_sfa_test_batch": batch_id,
+        }
+        payload_t30 = {
+            "id_estudo": id_estudo,
+            "nome": nome,
+            "estado_saude_final": estados_finais[indice % len(estados_finais)],
+            "sequelas_atuais": ["Nenhuma sequela atual"] if indice % 4 == 0 else ["Fadiga cronica", "Artralgia persistente"],
+            "sintomas_persistentes": sintomas[:1] if indice % 4 else ["Nenhum sintoma persistente"],
+            "sinais_alerta": ["Nenhum sinal de alerta"],
+            "dor_articular_intensidade": str(max(1, int(dor_score) - 2)),
+            "fadiga_intensidade": str(max(1, int(fadiga_score) - 2)),
+            "impacto_atividades": impacto_atual,
+            "dias_incap_novos": str(indice % 3),
+            "retorno_atividades_normais": retornos_atividades[indice % len(retornos_atividades)],
+            "custo_remedios": f"{2 + indice:.2f}",
+            "custo_consultas": "0.00",
+            "custo_transporte": f"{1 + (indice % 4):.2f}",
+            "custo_internacao": "0.00",
+            "custo_outros": "0.00",
+            "perda_renda_estimada": f"{indice * 35:.2f}",
+            "impacto_emocional_familiar": ["Nenhum impacto duradouro", "Leve estresse familiar", "Problemas financeiros significativos"][indice % 3],
+            "avaliacao_atendimento_saude": ["Excelente", "Bom", "Regular", "Nao utilizei servicos"][indice % 4],
+            "participaria_outro_estudo": ["Sim, com certeza", "Sim, talvez", "Nao tenho certeza"][indice % 3],
+            "_sfa_test_batch": batch_id,
+        }
+
+        db.session.add(
+            SfaRespostaT0(
+                id_estudo=id_estudo,
+                timestamp=datetime.combine(data_t0, datetime.min.time()),
+                nome=nome,
+                data_nascimento=paciente.data_nascimento,
+                tipo_residencia=payload_t0["tipo_residencia"],
+                data_inicio_sintomas=formatar_data(data_inicio),
+                dias_incap=int(payload_t0["dias_incap"]),
+                internacao="Nao",
+                custo_total=Decimal(payload_t0["custo_total"]),
+                ausencia_familiar="Nao",
+                dados_json=json.dumps(payload_t0, ensure_ascii=False),
+            )
+        )
+        db.session.add(
+            SfaRespostaT10(
+                id_estudo=id_estudo,
+                timestamp=datetime.combine(data_t10, datetime.min.time()),
+                dias_incap_novos=int(payload_t10["dias_incap_novos"]),
+                custo_remedios=Decimal(payload_t10["custo_remedios"]),
+                custo_consultas=Decimal(payload_t10["custo_consultas"]),
+                custo_transporte=Decimal(payload_t10["custo_transporte"]),
+                custo_outros=Decimal(payload_t10["custo_outros"]),
+                dados_json=json.dumps(payload_t10, ensure_ascii=False),
+            )
+        )
+        db.session.add(
+            SfaRespostaT30(
+                id_estudo=id_estudo,
+                timestamp=datetime.combine(data_t30, datetime.min.time()),
+                dias_incap_novos=int(payload_t30["dias_incap_novos"]),
+                custo_remedios=Decimal(payload_t30["custo_remedios"]),
+                custo_consultas=Decimal(payload_t30["custo_consultas"]),
+                custo_transporte=Decimal(payload_t30["custo_transporte"]),
+                custo_outros=Decimal(payload_t30["custo_outros"]),
+                dados_json=json.dumps(payload_t30, ensure_ascii=False),
+            )
+        )
+        ids_estudo.append(id_estudo)
+
+    db.session.commit()
+    return {"batch_id": batch_id, "total": total, "ids_estudo": ids_estudo}
+
+
+def apagar_lote_pacientes_teste_sfa(batch_id: str | None = None) -> dict[str, int | str]:
+    from models.sfa import SfaAuditoria, SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
+
+    batch = str(batch_id or "").strip()
+    pacientes = [paciente for paciente in SfaPaciente.query.all() if paciente_eh_teste_sfa(paciente)]
+    if batch:
+        pacientes = [
+            paciente
+            for paciente in pacientes
+            if observacao_teste_sfa(batch) in str(getattr(paciente, "observacao_operacional", "") or "")
+        ]
+
+    ids_estudo = [paciente.id_estudo for paciente in pacientes]
+    fichas = [paciente.ficha_sinan for paciente in pacientes if paciente.ficha_sinan]
+    if not ids_estudo:
+        return {"batch_id": batch, "removidos": 0}
+
+    SfaRespostaT30.query.filter(SfaRespostaT30.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    SfaRespostaT10.query.filter(SfaRespostaT10.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    SfaRespostaT0.query.filter(SfaRespostaT0.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    SfaAuditoria.query.filter(SfaAuditoria.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    if fichas:
+        SfaSinanLog.query.filter(
+            (SfaSinanLog.id_estudo_vinculado.in_(ids_estudo)) | (SfaSinanLog.ficha_sinan.in_(fichas))
+        ).delete(synchronize_session=False)
+    else:
+        SfaSinanLog.query.filter(SfaSinanLog.id_estudo_vinculado.in_(ids_estudo)).delete(synchronize_session=False)
+    SfaPaciente.query.filter(SfaPaciente.id_estudo.in_(ids_estudo)).delete(synchronize_session=False)
+    db.session.commit()
+    return {"batch_id": batch, "removidos": len(ids_estudo)}
+
+
+def resumo_dados_teste_sfa() -> dict[str, int]:
+    from models.sfa import SfaPaciente
+
+    testes = filtrar_pacientes_teste_sfa(_safe_query_all(SfaPaciente))
+    return {
+        "total": len(testes),
+        "com_t0": sum(1 for paciente in testes if getattr(paciente, "status_t0", "") == "T0_Completo"),
+        "com_t10": sum(1 for paciente in testes if getattr(paciente, "status_t10", "") == "T10_Completo"),
+        "com_t30": sum(1 for paciente in testes if getattr(paciente, "status_t30", "") == "T30_Completo"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2555,7 +2903,11 @@ def contatos_do_dia() -> dict:
     hoje = date.today()
 
     try:
-        novos = SfaPaciente.query.filter_by(status_geral="SINAN_Notificado").all()
+        novos = [
+            paciente
+            for paciente in SfaPaciente.query.filter_by(status_geral="SINAN_Notificado").all()
+            if not paciente_eh_teste_sfa(paciente)
+        ]
     except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
         db.session.rollback()
         log.warning("SFA: tabela 'sfa_paciente' não encontrada em contatos_do_dia", exc_info=False)
@@ -2569,7 +2921,7 @@ def contatos_do_dia() -> dict:
             return False
         return 0 <= (dt - hoje).days <= DIAS_LEMBRETE
 
-    todos = _safe_query_all(SfaPaciente)
+    todos = filtrar_pacientes_reais_sfa(_safe_query_all(SfaPaciente))
     pend_t10 = [p for p in todos if vencendo_em(p, "t10", "Aguardando")]
     pend_t30 = [p for p in todos if vencendo_em(p, "t30", "Aguardando")]
 
@@ -2589,7 +2941,7 @@ def stats_painel() -> dict:
     """Retorna KPIs e fila do dia para o dashboard Flask."""
     from models.sfa import SfaAuditoria, SfaPaciente
 
-    todos = _safe_query_all(SfaPaciente)
+    todos = filtrar_pacientes_reais_sfa(_safe_query_all(SfaPaciente))
     total = len(todos)
 
     def cnt(fn):

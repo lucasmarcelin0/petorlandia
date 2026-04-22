@@ -33,12 +33,32 @@ def upgrade():
     if "tutor_name" not in columns:
         op.add_column("fiscal_documents", sa.Column("tutor_name", sa.String(length=120)))
 
+    indexes = {index["name"] for index in inspector.get_indexes("fiscal_documents")}
+    if "ix_fiscal_documents_source" not in indexes:
+        op.create_index(
+            "ix_fiscal_documents_source",
+            "fiscal_documents",
+            ["clinic_id", "source_type", "source_id"],
+        )
+    if "ix_fiscal_documents_related" not in indexes:
+        op.create_index(
+            "ix_fiscal_documents_related",
+            "fiscal_documents",
+            ["clinic_id", "related_type", "related_id"],
+        )
+
 
 
 def downgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     columns = {column["name"] for column in inspector.get_columns("fiscal_documents")}
+    indexes = {index["name"] for index in inspector.get_indexes("fiscal_documents")}
+
+    if "ix_fiscal_documents_related" in indexes:
+        op.drop_index("ix_fiscal_documents_related", table_name="fiscal_documents")
+    if "ix_fiscal_documents_source" in indexes:
+        op.drop_index("ix_fiscal_documents_source", table_name="fiscal_documents")
 
     if "tutor_name" in columns:
         op.drop_column("fiscal_documents", "tutor_name")

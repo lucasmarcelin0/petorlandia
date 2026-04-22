@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
+import json
 import os
+import re
 from typing import Any, Dict, Optional, Protocol
-from xml.etree import ElementTree as ET
+# Parsing de XML externo (resposta de prefeitura): usamos defusedxml.ElementTree
+# como drop-in do stdlib para blindar XXE, billion-laughs, SSRF via DTD.
+# Veja security/xml_safe.py para a justificativa detalhada.
+from xml.etree import ElementTree as _ET_NATIVE  # só para os tipos de exceção
+from security.xml_safe import SafeET as ET
 
 import logging
 
@@ -14,8 +21,22 @@ from flask import current_app, has_app_context
 from cryptography.fernet import InvalidToken
 
 from extensions import db
-from models import Clinica, NfseIssue, NfseXml
+from models import (
+    Clinica,
+    FiscalDocument,
+    FiscalDocumentStatus,
+    FiscalDocumentType,
+    FiscalEmitter,
+    NfseIssue,
+    NfseXml,
+)
 from security.crypto import MissingMasterKeyError, decrypt_text, encrypt_text_for_clinic
+from services.fiscal.nfse_service import (
+    cancel_nfse_document,
+    emit_nfse_sync,
+    poll_nfse,
+)
+from services.fiscal.numbering import reserve_next_number
 from time_utils import utcnow
 
 
@@ -224,176 +245,55 @@ class NfseService:
 class NfseAdapterBase:
     municipio: str = ""
 
-    def _build_envelope(self, action: str, payload: Dict[str, Any]) -> str:
-        raw_xml = payload.get("xml")
-        if raw_xml:
-            return raw_xml
-        return (
-            f"<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">"
-            f"<soap:Body><{action}>{payload}</{action}></soap:Body></soap:Envelope>"
-        )
-
-    def _response_stub(self, action: str, status: str, message: str) -> str:
-        return (
-            f"<Resposta{action}><Status>{status}</Status><Mensagem>{message}</Mensagem>"
-            f"</Resposta{action}>"
-        )
+    def _run_fiscal_document_operation(
+        self,
+        issue: NfseIssue,
+        payload: Dict[str, Any],
+        operation: str,
+    ) -> NfseOperationResult:
+        document = _ensure_fiscal_document_for_issue(issue, payload, self.municipio)
+        if operation == "emitir":
+            document = emit_nfse_sync(document.id, clinic_id=issue.clinica_id)
+        elif operation in {"consultar_nfse", "consultar_lote"}:
+            document = poll_nfse(document.id, clinic_id=issue.clinica_id)
+        elif operation == "cancelar":
+            document = cancel_nfse_document(document.id, payload.get("reason"), clinic_id=issue.clinica_id)
+        else:  # pragma: no cover
+            raise ValueError(f"Operacao NFS-e invalida: {operation}")
+        _sync_issue_from_fiscal_document(issue, document)
+        return _result_from_fiscal_document(document, operation)
 
 
 class BeloHorizonteAdapter(NfseAdapterBase):
     municipio = "belo_horizonte"
 
-    def emitir_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("EnviarLoteRps", payload)
-        response_xml = self._response_stub("EnviarLoteRps", "PROCESSANDO", "Lote enviado para BH")
-        protocolo = payload.get("protocolo") or f"BH-{issue.id}-{utcnow().strftime('%Y%m%d%H%M%S')}"
-        return NfseOperationResult(
-            success=True,
-            status="processando",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=protocolo,
-            rps=payload.get("rps") or issue.rps,
-            serie=payload.get("serie") or issue.serie,
-            mensagem="Envio registrado localmente; aguarde consulta de lote.",
-        )
+    def emitir_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "emitir")
 
-    def consultar_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("ConsultarNfse", payload)
-        response_xml = self._response_stub("ConsultarNfse", "PENDENTE", "Consulta registrada")
-        return NfseOperationResult(
-            success=True,
-            status="pendente",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            numero_nfse=payload.get("numero_nfse") or issue.numero_nfse,
-            mensagem="Consulta registrada para BH.",
-        )
+    def consultar_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "consultar_nfse")
 
-    def cancelar_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("CancelarNfse", payload)
-        response_xml = self._response_stub("CancelarNfse", "PROCESSANDO", "Cancelamento solicitado")
-        return NfseOperationResult(
-            success=True,
-            status="cancelamento_solicitado",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            numero_nfse=payload.get("numero_nfse") or issue.numero_nfse,
-            cancelada_em=None,
-            mensagem="Cancelamento solicitado para BH.",
-        )
+    def cancelar_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "cancelar")
 
-    def consultar_lote(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("ConsultarLoteRps", payload)
-        response_xml = self._response_stub("ConsultarLoteRps", "PENDENTE", "Lote em processamento")
-        return NfseOperationResult(
-            success=True,
-            status="processando",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            mensagem="Lote ainda em processamento em BH.",
-        )
+    def consultar_lote(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "consultar_lote")
 
 
 class OrlandiaAdapter(NfseAdapterBase):
     municipio = "orlandia"
 
-    def emitir_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("GerarNfse", payload)
-        response_xml = self._response_stub("GerarNfse", "PROCESSANDO", "Envio registrado")
-        protocolo = payload.get("protocolo") or f"ORL-{issue.id}-{utcnow().strftime('%Y%m%d%H%M%S')}"
-        return NfseOperationResult(
-            success=True,
-            status="processando",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=protocolo,
-            rps=payload.get("rps") or issue.rps,
-            serie=payload.get("serie") or issue.serie,
-            mensagem="Envio registrado localmente; aguarde consulta.",
-        )
+    def emitir_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "emitir")
 
-    def consultar_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("ConsultarNfse", payload)
-        response_xml = self._response_stub("ConsultarNfse", "PENDENTE", "Consulta registrada")
-        return NfseOperationResult(
-            success=True,
-            status="pendente",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            numero_nfse=payload.get("numero_nfse") or issue.numero_nfse,
-            mensagem="Consulta registrada para Orlândia.",
-        )
+    def consultar_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "consultar_nfse")
 
-    def cancelar_nfse(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("CancelarNfse", payload)
-        response_xml = self._response_stub("CancelarNfse", "PROCESSANDO", "Cancelamento solicitado")
-        return NfseOperationResult(
-            success=True,
-            status="cancelamento_solicitado",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            numero_nfse=payload.get("numero_nfse") or issue.numero_nfse,
-            cancelada_em=None,
-            mensagem="Cancelamento solicitado para Orlândia.",
-        )
+    def cancelar_nfse(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "cancelar")
 
-    def consultar_lote(
-        self,
-        issue: NfseIssue,
-        payload: Dict[str, Any],
-        credentials: NfseCredentials,
-    ) -> NfseOperationResult:
-        request_xml = self._build_envelope("ConsultarLoteRps", payload)
-        response_xml = self._response_stub("ConsultarLoteRps", "PENDENTE", "Lote em processamento")
-        return NfseOperationResult(
-            success=True,
-            status="processando",
-            xml_request=request_xml,
-            xml_response=response_xml,
-            protocolo=payload.get("protocolo") or issue.protocolo,
-            mensagem="Lote ainda em processamento em Orlândia.",
-        )
+    def consultar_lote(self, issue: NfseIssue, payload: Dict[str, Any], credentials: NfseCredentials) -> NfseOperationResult:
+        return self._run_fiscal_document_operation(issue, payload, "consultar_lote")
 
 
 def _normalize_municipio(municipio: str) -> str:
@@ -409,6 +309,187 @@ def _normalize_municipio(municipio: str) -> str:
     if normalized in {"orlandia", "orlandia sp", "orlandia/sp"}:
         return "orlandia"
     return normalized.replace(" ", "_")
+
+
+def _load_json_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        payload = json.loads(value)
+    except (TypeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, Any]:
+    merged = dict(payload or {})
+    tomador = merged.get("tomador") or _load_json_payload(issue.tomador)
+    prestador = merged.get("prestador") or _load_json_payload(issue.prestador)
+    valor_total = merged.get("valor_total")
+    if valor_total is None:
+        valor_total = issue.valor_total or Decimal("0.00")
+    servico = merged.get("servico") or {
+        "descricao": merged.get("descricao") or "Atendimento veterinario",
+        "valor": valor_total,
+        "item_lista": merged.get("codigo_servico") or "0000",
+    }
+    rps_payload = dict(merged.get("rps") or {})
+    rps_payload.setdefault("serie", issue.serie or merged.get("serie") or "1")
+    if issue.data_emissao:
+        rps_payload.setdefault("data_emissao", issue.data_emissao.isoformat())
+    merged.update(
+        {
+            "prestador": {
+                "cnpj": prestador.get("cnpj") or prestador.get("cpf_cnpj"),
+                "im": prestador.get("im") or prestador.get("inscricao_municipal"),
+                **prestador,
+            },
+            "tomador": {
+                "nome": tomador.get("nome") or tomador.get("tomador_nome") or tomador.get("tutor_nome"),
+                "cpf_cnpj": tomador.get("cpf_cnpj") or tomador.get("tutor_documento"),
+                **tomador,
+            },
+            "servico": servico,
+            "valor_total": valor_total,
+            "rps": rps_payload,
+        }
+    )
+    return _json_ready(merged)
+
+
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _ensure_fiscal_document_for_issue(
+    issue: NfseIssue,
+    payload: Dict[str, Any],
+    municipio: str,
+) -> FiscalDocument:
+    emitter = FiscalEmitter.query.filter_by(clinic_id=issue.clinica_id).first()
+    if not emitter:
+        raise ValueError("Emissor fiscal nao configurado para a clinica.")
+    document = (
+        FiscalDocument.query.filter_by(
+            clinic_id=issue.clinica_id,
+            doc_type=FiscalDocumentType.NFSE,
+            source_type="NFSE_ISSUE",
+            source_id=issue.id,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+    normalized_payload = _payload_from_issue(issue, payload)
+    series = str(
+        normalized_payload.get("serie")
+        or (normalized_payload.get("rps") or {}).get("serie")
+        or issue.serie
+        or "1"
+    )
+    if document is None:
+        number = reserve_next_number(emitter.id, FiscalDocumentType.NFSE, series)
+        normalized_payload.setdefault("rps", {})
+        normalized_payload["rps"]["numero"] = number
+        normalized_payload["rps"]["serie"] = series
+        document = FiscalDocument(
+            emitter_id=emitter.id,
+            clinic_id=issue.clinica_id,
+            doc_type=FiscalDocumentType.NFSE,
+            status=FiscalDocumentStatus.DRAFT,
+            series=series,
+            number=number,
+            payload_json=normalized_payload,
+            source_type="NFSE_ISSUE",
+            source_id=issue.id,
+            related_type="nfse_issue",
+            related_id=issue.id,
+            human_reference=issue.internal_identifier or f"NFS-e issue #{issue.id}",
+            animal_name=issue.animal_display_name,
+            tutor_name=issue.tutor_display_name,
+        )
+        db.session.add(document)
+        db.session.flush()
+    else:
+        normalized_payload.setdefault("rps", {})
+        normalized_payload["rps"].setdefault("numero", document.number)
+        normalized_payload["rps"].setdefault("serie", document.series or series)
+        document.payload_json = normalized_payload
+        document.emitter_id = emitter.id
+    issue.rps = str(document.number or issue.rps or "")
+    issue.serie = document.series or issue.serie
+    return document
+
+
+def _legacy_status_from_document(status: FiscalDocumentStatus) -> str:
+    return {
+        FiscalDocumentStatus.DRAFT: "rascunho",
+        FiscalDocumentStatus.QUEUED: "fila",
+        FiscalDocumentStatus.SENDING: "processando",
+        FiscalDocumentStatus.PROCESSING: "processando",
+        FiscalDocumentStatus.AUTHORIZED: "emitida",
+        FiscalDocumentStatus.REJECTED: "erro",
+        FiscalDocumentStatus.FAILED: "erro",
+        FiscalDocumentStatus.CANCELED: "cancelada",
+    }.get(status, "erro")
+
+
+def _last_document_event_xml(document: FiscalDocument) -> tuple[str | None, str | None]:
+    event = (
+        document.events[-1]
+        if getattr(document, "events", None)
+        else None
+    )
+    if event is None:
+        return None, None
+    return event.request_xml, event.response_xml
+
+
+def _sync_issue_from_fiscal_document(issue: NfseIssue, document: FiscalDocument) -> None:
+    issue.status = _legacy_status_from_document(document.status)
+    issue.protocolo = document.protocol or issue.protocolo
+    issue.numero_nfse = document.nfse_number or issue.numero_nfse
+    issue.rps = str(document.number or issue.rps or "")
+    issue.serie = document.series or issue.serie
+    issue.erro_codigo = document.error_code or issue.erro_codigo
+    issue.erro_mensagem = document.error_message or issue.erro_mensagem
+    if document.authorized_at:
+        issue.data_emissao = document.authorized_at
+    if document.canceled_at:
+        issue.cancelada_em = document.canceled_at
+    issue.updated_at = utcnow()
+    db.session.add(issue)
+
+
+def _result_from_fiscal_document(document: FiscalDocument, operation: str) -> NfseOperationResult:
+    request_xml, response_xml = _last_document_event_xml(document)
+    status = _legacy_status_from_document(document.status)
+    success = document.status in {
+        FiscalDocumentStatus.PROCESSING,
+        FiscalDocumentStatus.AUTHORIZED,
+        FiscalDocumentStatus.CANCELED,
+    }
+    return NfseOperationResult(
+        success=success,
+        status=status,
+        xml_request=request_xml,
+        xml_response=response_xml,
+        protocolo=document.protocol,
+        numero_nfse=document.nfse_number,
+        rps=str(document.number or ""),
+        serie=document.series,
+        mensagem=document.error_message or f"Operacao {operation} registrada no documento fiscal.",
+        erro_codigo=document.error_code,
+        erro_detalhes=document.error_message,
+        cancelada_em=document.canceled_at,
+    )
 
 
 def _enrich_nfse_error(result: NfseOperationResult) -> None:
@@ -434,7 +515,14 @@ def _parse_nfse_error_xml(xml_text: str) -> tuple[Optional[str], Optional[str], 
         return None, None, None
     try:
         root = ET.fromstring(xml_text)
-    except ET.ParseError:
+    except _ET_NATIVE.ParseError:
+        # defusedxml re-levanta a ParseError nativa do stdlib; o except precisa
+        # apontar para a classe real, não para o alias SafeET.
+        return None, None, None
+    except Exception:
+        # defusedxml levanta EntitiesForbidden/DTDForbidden/ExternalReferenceForbidden
+        # em caso de ataque — aqui tratamos como "XML inválido" do ponto de vista
+        # da prefeitura, sem vazar o tipo exato pro chamador.
         return None, None, None
 
     def _local(tag: str) -> str:
@@ -472,10 +560,24 @@ def _parse_nfse_error_xml(xml_text: str) -> tuple[Optional[str], Optional[str], 
 
 
 def _compact_xml(xml_text: str, max_length: int = 500) -> str:
-    compact = " ".join(xml_text.split())
+    compact = " ".join(_redact_sensitive_xml_text(xml_text).split())
     if len(compact) <= max_length:
         return compact
     return f"{compact[:max_length].rstrip()}..."
+
+
+def _redact_sensitive_xml_text(xml_text: str) -> str:
+    text = xml_text or ""
+    for tag in ("Cpf", "Cnpj", "InscricaoMunicipal", "Senha", "Password", "Token"):
+        text = re.sub(
+            rf"(<(?:\w+:)?{tag}\b[^>]*>)(.*?)(</(?:\w+:)?{tag}>)",
+            rf"\1***\3",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    text = re.sub(r"\b\d{11}\b", "***", text)
+    text = re.sub(r"\b\d{14}\b", "***", text)
+    return text
 
 
 def _credentials_from_env(clinica: Clinica, municipio_key: str) -> NfseCredentials:

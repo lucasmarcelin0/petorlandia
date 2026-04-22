@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from lxml import etree
+
+# Blindagem: `item` no loop abaixo pode vir de um cache em banco (string RPS
+# serializada) — se um valor adulterado chegar aqui, o fromstring default do
+# lxml resolve entidades. Usamos o parser hardened mesmo em XML "de dentro".
+from security.xml_safe import safe_lxml_fromstring
 
 
 def _text(value: Any) -> str:
@@ -17,9 +22,12 @@ def _format_decimal(value: Any) -> str:
         return "0.00"
     if isinstance(value, Decimal):
         return f"{value:.2f}"
+    # Escopo estreito: só aceitamos falha quando o valor realmente não é
+    # conversível em Decimal (string vazia, letras, NaN). Qualquer outro
+    # tipo de erro deve estourar para não fabricar valor fiscal errado.
     try:
         return f"{Decimal(str(value)):.2f}"
-    except Exception:  # noqa: BLE001 - proteção para valores inválidos
+    except (InvalidOperation, ValueError):
         return "0.00"
 
 
@@ -113,9 +121,9 @@ def build_lote_xml(rps_list: Iterable[str | dict[str, Any]]) -> str:
     lista = etree.SubElement(lote_rps, "ListaRps")
     for item in lote_payloads:
         if isinstance(item, str):
-            rps_el = etree.fromstring(item.encode("utf-8"))
+            rps_el = safe_lxml_fromstring(item)
         else:
-            rps_el = etree.fromstring(build_rps_xml(item).encode("utf-8"))
+            rps_el = safe_lxml_fromstring(build_rps_xml(item))
         lista.append(rps_el)
 
     return etree.tostring(lote, encoding="unicode")
