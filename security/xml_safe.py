@@ -36,6 +36,13 @@ from defusedxml import ElementTree as SafeET  # noqa: F401  (re-export)
 from lxml import etree as _lxml_etree
 
 
+def _reject_forbidden_xml_markup(xml: Union[str, bytes]) -> None:
+    raw = xml if isinstance(xml, bytes) else xml.encode("utf-8")
+    lowered = raw.lower()
+    if b"<!doctype" in lowered or b"<!entity" in lowered:
+        raise ValueError("DOCTYPE/ENTITY declarations are not allowed in external XML.")
+
+
 # Parser lxml hardened — desliga as três portas de ataque conhecidas.
 #   resolve_entities=False → não expande &entity; (billion laughs / LFI / SSRF)
 #   no_network=True        → não busca DTD externo por HTTP
@@ -56,6 +63,7 @@ def _build_safe_parser() -> "_lxml_etree.XMLParser":
 
 def safe_lxml_fromstring(xml: Union[str, bytes]) -> Any:
     """Parse seguro de XML externo com lxml. Retorna Element."""
+    _reject_forbidden_xml_markup(xml)
     if isinstance(xml, str):
         xml = xml.encode("utf-8")
     return _lxml_etree.fromstring(xml, parser=_build_safe_parser())

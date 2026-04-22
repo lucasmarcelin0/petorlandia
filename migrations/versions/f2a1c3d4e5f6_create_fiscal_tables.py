@@ -110,8 +110,13 @@ def upgrade():
             sa.Column("pdf_path", sa.String(length=255), nullable=True),
             sa.Column("error_code", sa.String(length=50), nullable=True),
             sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("source_type", sa.String(length=40), nullable=True),
+            sa.Column("source_id", sa.Integer(), nullable=True),
             sa.Column("related_type", sa.String(length=40), nullable=True),
             sa.Column("related_id", sa.Integer(), nullable=True),
+            sa.Column("human_reference", sa.String(length=255), nullable=True),
+            sa.Column("animal_name", sa.String(length=120), nullable=True),
+            sa.Column("tutor_name", sa.String(length=120), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("authorized_at", sa.DateTime(timezone=True), nullable=True),
@@ -119,6 +124,8 @@ def upgrade():
         )
         op.create_index("ix_fiscal_documents_emitter_id", "fiscal_documents", ["emitter_id"])
         op.create_index("ix_fiscal_documents_clinic_id", "fiscal_documents", ["clinic_id"])
+        op.create_index("ix_fiscal_documents_source", "fiscal_documents", ["clinic_id", "source_type", "source_id"])
+        op.create_index("ix_fiscal_documents_related", "fiscal_documents", ["clinic_id", "related_type", "related_id"])
 
     if "fiscal_events" not in inspector.get_table_names():
         op.create_table(
@@ -157,6 +164,8 @@ def downgrade():
     op.drop_index("ix_fiscal_events_document_id", table_name="fiscal_events")
     op.drop_table("fiscal_events")
 
+    op.drop_index("ix_fiscal_documents_related", table_name="fiscal_documents")
+    op.drop_index("ix_fiscal_documents_source", table_name="fiscal_documents")
     op.drop_index("ix_fiscal_documents_clinic_id", table_name="fiscal_documents")
     op.drop_index("ix_fiscal_documents_emitter_id", table_name="fiscal_documents")
     op.drop_table("fiscal_documents")

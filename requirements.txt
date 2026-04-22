@@ -12,6 +12,7 @@ attrs==25.3.0
 Authlib==1.6.9
 babel==2.17.0
 backports.zstd==1.2.0
+beautifulsoup4==4.14.3
 bidict==0.23.1
 blinker==1.9.0
 boltons==25.0.0
@@ -158,6 +159,7 @@ simple-websocket==1.1.0
 simplejson==3.20.2
 six==1.17.0
 SQLAlchemy==2.0.41
+soupsieve==2.8.3
 sqlparse==0.5.4
 texttable==1.7.0
 twilio==9.5.1

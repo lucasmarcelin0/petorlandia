@@ -83,18 +83,14 @@ def test_lxml_hardened_aceita_xml_normal():
     assert root.tag.endswith("Envelope")
 
 
-def test_lxml_hardened_nao_expande_entidade_externa():
-    """lxml com resolve_entities=False NÃO LEVANTA no XML com DOCTYPE —
-    ele parseia e deixa &entity; não-expandida. O importante é que o
-    conteúdo do arquivo referenciado JAMAIS apareça no texto."""
+def test_lxml_hardened_rejeita_doctype_entidade_externa():
+    """Defesa mais forte: em vez de parsear e deixar &entity; não
+    expandida, `safe_lxml_fromstring` agora REJEITA qualquer XML com
+    DOCTYPE/ENTITY antes mesmo de chamar o parser. Isso elimina a
+    superfície inteira de XXE (inclusive bugs futuros em lxml)."""
     from security.xml_safe import safe_lxml_fromstring
-    root = safe_lxml_fromstring(XXE_FILE_READ)
-    # Se a entidade tivesse expandido, teríamos aqui o conteúdo de
-    # /etc/passwd. Em sistemas *nix o teste roda em qualquer OS, por
-    # isso checamos por marcadores genéricos que nunca podem vazar.
-    all_text = "".join(root.itertext())
-    assert "/etc/passwd" not in all_text
-    assert "root:" not in all_text  # começo típico de /etc/passwd
+    with pytest.raises(ValueError, match="DOCTYPE/ENTITY"):
+        safe_lxml_fromstring(XXE_FILE_READ)
 
 
 def test_lxml_hardened_bloqueia_billion_laughs():

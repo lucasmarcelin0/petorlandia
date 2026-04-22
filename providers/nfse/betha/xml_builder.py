@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from lxml import etree
@@ -22,9 +22,12 @@ def _format_decimal(value: Any) -> str:
         return "0.00"
     if isinstance(value, Decimal):
         return f"{value:.2f}"
+    # Escopo estreito: só aceitamos falha quando o valor realmente não é
+    # conversível em Decimal (string vazia, letras, NaN). Qualquer outro
+    # tipo de erro deve estourar para não fabricar valor fiscal errado.
     try:
         return f"{Decimal(str(value)):.2f}"
-    except Exception:  # noqa: BLE001 - proteção para valores inválidos
+    except (InvalidOperation, ValueError):
         return "0.00"
 
 

@@ -59,7 +59,12 @@ def upgrade():
             sa.Column('bank_transaction_id', sa.Integer(), nullable=True),
             sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
             sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-            sa.ForeignKeyConstraint(['bank_transaction_id'], ['bank_statement_transactions.id']),
+            sa.ForeignKeyConstraint(
+                ['bank_transaction_id'],
+                ['bank_statement_transactions.id'],
+                name='fk_account_bank_transaction',
+                use_alter=True,
+            ),
             sa.ForeignKeyConstraint(['clinic_id'], ['clinica.id']),
             sa.PrimaryKeyConstraint('id'),
             sa.UniqueConstraint('clinic_id', 'source_type', 'source_id', 'kind', name='uq_accounting_account_source'),

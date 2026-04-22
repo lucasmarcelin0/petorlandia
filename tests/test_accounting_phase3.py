@@ -121,7 +121,7 @@ def test_dre_and_cash_flow_include_classified_revenue_and_accounts(app):
         cash = build_cash_flow_report(clinic.id, date(2026, 4, 1))
 
         assert dre["totals"]["receita_bruta"] == Decimal("300.00")
-        assert dre["totals"]["impostos"] == Decimal("15.00")
+        assert dre["totals"]["impostos"] == Decimal("33.00")
         assert cash["realizado"]["entradas"] == Decimal("300.00")
         assert cash["projecoes"]["30"]["entradas"] == Decimal("200.00")
 

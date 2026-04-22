@@ -3,16 +3,20 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import logging
 import os
 import tempfile
 from typing import Any, Optional
 
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption, pkcs12
 from zeep import Client, Settings
-from zeep.exceptions import Fault
+from zeep.exceptions import Fault, TransportError, XMLSyntaxError as ZeepXMLSyntaxError
 from zeep.plugins import HistoryPlugin
 from zeep.transports import Transport
 import requests
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,12 +75,23 @@ class BethaNfseClient:
                 response_xml = _history_xml(history.last_received)
                 return BethaSoapResponse(True, response, request_xml, response_xml)
             except Fault as exc:
+                # Rejeição de negócio (ex: RPS duplicado, CNPJ inválido).
+                # Não é bug — log em WARNING basta.
                 request_xml = _history_xml(history.last_sent)
                 response_xml = _history_xml(history.last_received)
+                logger.warning(
+                    "Betha NFS-e retornou Fault em %s: %s", operation, exc,
+                )
                 return BethaSoapResponse(False, None, request_xml, response_xml, error_message=str(exc))
-            except Exception as exc:  # noqa: BLE001
+            except (requests.RequestException, TransportError, ZeepXMLSyntaxError, OSError) as exc:
+                # Rede/TLS/parsing malformado. Logamos com traceback pra
+                # permitir diagnóstico — silêncio aqui some com falha real.
                 request_xml = _history_xml(history.last_sent)
                 response_xml = _history_xml(history.last_received)
+                logger.exception(
+                    "Erro de transporte/parsing em %s contra Betha NFS-e.",
+                    operation,
+                )
                 return BethaSoapResponse(False, None, request_xml, response_xml, error_message=str(exc))
 
     def recepcionar_lote_rps(self, payload: dict[str, Any]) -> BethaSoapResponse:
@@ -97,15 +112,19 @@ class BethaNfseClient:
 
 
 def _history_xml(history_item) -> str | None:
+    # Ver providers/nfe/sefaz_sp/client.py: mesma lógica. envelope pode
+    # vir como bytes, str ou lxml._Element — tratamos sem catch cego.
     if not history_item:
         return None
-    try:
-        return history_item.envelope.decode("utf-8")
-    except Exception:  # noqa: BLE001
+    envelope = getattr(history_item, "envelope", None)
+    if envelope is None:
+        return None
+    if isinstance(envelope, bytes):
         try:
-            return history_item.envelope
-        except Exception:  # noqa: BLE001
-            return None
+            return envelope.decode("utf-8")
+        except UnicodeDecodeError:
+            return envelope.decode("utf-8", errors="replace")
+    return str(envelope) if not isinstance(envelope, str) else envelope
 
 
 def _pfx_to_temp_pem(pfx_bytes: bytes, password: str | None) -> tuple[str, str]:

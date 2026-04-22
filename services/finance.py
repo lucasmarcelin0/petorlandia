@@ -311,7 +311,8 @@ def _get_table_columns(table_name: str) -> set[str]:
     if table_name in _TABLE_COLUMN_CACHE:
         return _TABLE_COLUMN_CACHE[table_name]
     try:
-        inspector = sa_inspect(db.engine)
+        bind = db.session.connection() if db.session.is_active else db.engine
+        inspector = sa_inspect(bind)
         names = {column["name"] for column in inspector.get_columns(table_name)}
     except (ProgrammingError, OperationalError, NoSuchTableError):  # pragma: no cover - legacy DBs
         names = set()
@@ -406,7 +407,8 @@ def _upsert_classified_transaction(
     }
     changed = False
     if record is None:
-        record = ClassifiedTransaction(clinic_id=clinic_id, raw_id=raw_id, **attrs)
+        clinic = db.session.get(Clinica, clinic_id)
+        record = ClassifiedTransaction(clinic=clinic, clinic_id=clinic_id, raw_id=raw_id, **attrs)
         db.session.add(record)
         changed = True
     else:
@@ -414,6 +416,10 @@ def _upsert_classified_transaction(
             if getattr(record, key) != new_value:
                 setattr(record, key, new_value)
                 changed = True
+    if record.clinic is None:
+        record.clinic = db.session.get(Clinica, clinic_id)
+    if record.clinic is not None and record not in record.clinic.classified_transactions:
+        record.clinic.classified_transactions.append(record)
     return record, changed
 
 
@@ -778,6 +784,8 @@ def classify_transactions_for_month(
         handler_records, handler_changed = handler(clinic_id, month_start, start_dt, end_dt)
         records.extend(handler_records)
         changed = changed or handler_changed
+        if handler_changed:
+            db.session.flush()
 
     if changed:
         db.session.commit()
@@ -1374,8 +1382,10 @@ def sync_receivable_from_nfse(document: FiscalDocument, commit: bool = True) -> 
         return None
     clinic = document.clinic or Clinica.query.get(document.clinic_id)
     iss_rate = _normalize_percentage(getattr(clinic, "aliquota_iss", DEFAULT_ISS_RATE) if clinic else DEFAULT_ISS_RATE)
-    pis_rate = _normalize_percentage(getattr(clinic, "aliquota_pis", ZERO) if clinic else ZERO)
-    cofins_rate = _normalize_percentage(getattr(clinic, "aliquota_cofins", ZERO) if clinic else ZERO)
+    pis_value = getattr(clinic, "aliquota_pis", None) if clinic else None
+    cofins_value = getattr(clinic, "aliquota_cofins", None) if clinic else None
+    pis_rate = _normalize_percentage(pis_value if pis_value is not None else ZERO)
+    cofins_rate = _normalize_percentage(cofins_value if cofins_value is not None else ZERO)
     tax_total = _quantize_currency(gross * (iss_rate + pis_rate + cofins_rate))
     reference_dt = document.authorized_at or document.updated_at or document.created_at or utcnow()
     issue_date = reference_dt.date() if isinstance(reference_dt, datetime) else date.today()

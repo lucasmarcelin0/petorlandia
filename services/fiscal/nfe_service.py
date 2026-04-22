@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 from flask import current_app
@@ -675,9 +675,12 @@ def _crt_from_regime(regime: str | None) -> int:
 
 
 def _format_decimal(value: Decimal | str | float | int) -> str:
+    # Ver comentário em providers/nfe/xml_builder._format_decimal: só os erros
+    # realmente esperados de Decimal() caem aqui; TypeError de tipo absurdo
+    # (dict, list, etc.) estoura para não esconder bug de chamador.
     try:
         decimal_value = Decimal(str(value))
-    except Exception:  # noqa: BLE001
+    except (InvalidOperation, ValueError):
         decimal_value = Decimal("0")
     return f"{decimal_value:.2f}"
 
@@ -728,14 +731,15 @@ def _extract_xml_value(xml: str, tag: str) -> str | None:
 
 
 def _redact_xml(xml: str | None) -> str | None:
-    if not xml:
-        return xml
-    try:
-        root = safe_lxml_fromstring(xml)
-        for tag in ["CPF", "CNPJ", "IE"]:
-            for node in root.findall(f".//{tag}"):
-                if node.text:
-                    node.text = "***"
-        return etree.tostring(root, encoding="unicode")
-    except Exception:  # noqa: BLE001
-        return xml
+    """Delega para security.redact.redact_xml.
+
+    Ganhos vs versão anterior:
+      - Cobre Senha/Token/ChaveAcesso, não só CPF/CNPJ/IE.
+      - Pega CPF mascarado (123.456.789-00) e CNPJ mascarado
+        (12.345.678/0001-90) em texto livre de tags não-sensíveis.
+      - Pega chave NF-e (44 dígitos) vazando em logs de erro.
+      - Fallback textual quando o XML é malformado.
+    """
+    from security.redact import redact_xml as _redact
+
+    return _redact(xml)

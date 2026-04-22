@@ -963,6 +963,29 @@ class ClinicStaff(db.Model):
 
 
 class NfseIssue(db.Model):
+    """⚠️  DEPRECATED — não usar em código novo.
+
+    Este modelo é o registro ORIGINAL de emissão NFS-e (stack legada
+    services/nfse_service.py + app.py routes). Ele foi superado por
+    `models.fiscal.FiscalDocument`, que:
+
+      - Suporta NFS-e E NF-e no mesmo modelo (via `doc_type` enum).
+      - Tem criptografia at-rest de `xml_signed` e `xml_authorized`
+        (Fase 1.3).
+      - Usa `reserve_next_number` com lock concorrente (Fase 1.2).
+      - Expõe `emitter` (FiscalEmitter) — fonte única de CNPJ/IM por
+        clínica, em vez dos campos soltos em Clinica.
+
+    Roadmap:
+      - Fase 1 (atual): FiscalDocument é o canônico para tudo NOVO.
+        NfseIssue permanece read-only para não quebrar telas existentes.
+      - Fase 2 (pós-NFS-e Nacional): data migration para consolidar as
+        linhas legadas em FiscalDocument e dropar esta tabela.
+
+    Se você precisa adicionar um campo aqui, PARE: adicione em
+    FiscalDocument/FiscalEvent/FiscalCounter e migre o caso de uso.
+    """
+
     __tablename__ = 'nfse_issues'
     id = db.Column(db.Integer, primary_key=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
@@ -1223,7 +1246,7 @@ class ClassifiedTransaction(db.Model):
 
     clinic = db.relationship(
         'Clinica',
-        backref=db.backref('classified_transactions', cascade='all, delete-orphan', lazy=True),
+        backref=db.backref('classified_transactions', cascade='all', lazy=True),
     )
 
     def __repr__(self):
@@ -1251,7 +1274,11 @@ class AccountingAccount(db.Model):
     source_type = db.Column(db.String(50), nullable=True)
     source_id = db.Column(db.Integer, nullable=True)
     source_reference = db.Column(db.String(120), nullable=True)
-    bank_transaction_id = db.Column(db.Integer, db.ForeignKey('bank_statement_transactions.id'), nullable=True)
+    bank_transaction_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bank_statement_transactions.id', use_alter=True, name='fk_account_bank_transaction'),
+        nullable=True,
+    )
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
     updated_at = db.Column(
         db.DateTime(timezone=True),
