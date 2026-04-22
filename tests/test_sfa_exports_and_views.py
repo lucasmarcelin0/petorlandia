@@ -9,6 +9,7 @@ from services.sfa_service import (
     gerar_csv_exportacao_analitica,
     gerar_csv_exportacao_cadastro,
     gerar_csv_assinaturas_tcle,
+    montar_analise_respostas,
     montar_visao_resposta_formulario,
     montar_registro_assinatura_tcle,
 )
@@ -116,6 +117,76 @@ def test_gerar_csv_exportacao_analitica_achata_respostas():
     assert rows[0]["t0__cpf"] == "12345678900"
     assert rows[0]["t10__classificacao_melhora"] == "Melhorando - Sintomas leves, em recuperacao"
     assert rows[0]["t10__sintomas_persistentes"] == "Cansaco extremo/fadiga | Dor de cabeca"
+
+
+def _chart_value(chart, label):
+    values = dict(zip(chart["labels"], chart["data"]))
+    return values.get(label, 0)
+
+
+def test_montar_analise_respostas_agrega_riscos_e_dias_da_doenca():
+    paciente_exposto = SimpleNamespace(
+        id_estudo="SFA-201",
+        nome="Paciente Exposto",
+        resposta_t0=_fake_response(
+            {
+                "data_inicio_sintomas": "2026-03-01",
+                "contato_animais": ["Caes ou gatos domesticos", "Gado, porcos ou galinhas"],
+                "consumo_recente": ["Leite cru ou queijo nao pasteurizado"],
+                "contato_agua_suja": "Sim",
+                "contato_carrapato_mata": "Nao",
+                "tipo_residencia": "Casa rural",
+                "ocupacao_principal": "Agricultura/pecuaria",
+                "atividades_recentes": ["Trabalho em area rural/chacara"],
+            },
+            when=datetime(2026, 3, 3, 9, 0, 0),
+        ),
+        respostas_t10=[
+            _fake_response(
+                {"data_entrevista_t10": "2026-03-12"},
+                when=datetime(2026, 3, 12, 9, 0, 0),
+            )
+        ],
+        respostas_t30=[
+            _fake_response({}, when=datetime(2026, 3, 31, 9, 0, 0))
+        ],
+    )
+    paciente_sem_risco = SimpleNamespace(
+        id_estudo="SFA-202",
+        nome="Paciente Sem Risco",
+        resposta_t0=_fake_response(
+            {
+                "data_inicio_sintomas": "01/03/2026",
+                "contato_animais": ["Nenhum contato com animais"],
+                "consumo_recente": ["Nenhum desses"],
+                "contato_agua_suja": "Nao",
+                "contato_carrapato_mata": "Nao",
+                "atividades_recentes": ["Nenhuma dessas atividades"],
+            },
+            when=datetime(2026, 3, 20, 9, 0, 0),
+        ),
+        respostas_t10=[],
+        respostas_t30=[],
+    )
+
+    analise = montar_analise_respostas([paciente_exposto, paciente_sem_risco])
+
+    kpis = {item["label"]: item["value"] for item in analise["kpis"]}
+    assert kpis["Participantes"] == 2
+    assert kpis["Com inicio dos sintomas"] == 2
+    assert kpis["Risco animal"] == 1
+    assert kpis["Risco ambiental"] == 1
+    assert kpis["Risco alimentar"] == 1
+    assert _chart_value(analise["charts"]["animal"], "Caes ou gatos domesticos") == 1
+    assert _chart_value(analise["charts"]["food"], "Leite cru ou queijo nao pasteurizado") == 1
+    assert _chart_value(analise["charts"]["environmental"], "Agua suja/lama/enchente") == 1
+
+    t0_dataset = next(dataset for dataset in analise["charts"]["timing"]["datasets"] if dataset["label"] == "T0")
+    labels = analise["charts"]["timing"]["labels"]
+    assert t0_dataset["data"][labels.index("D0-D2")] == 1
+    assert t0_dataset["data"][labels.index("D15-D30")] == 1
+    assert analise["timeline"][0]["inicio_sintomas"] == "01/03/2026"
+    assert analise["timeline"][0]["t0_dia_doenca"] == "D+2"
 
 
 def test_montar_registro_assinatura_tcle_extrai_nome_e_metadados():

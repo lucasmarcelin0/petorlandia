@@ -77,6 +77,12 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.analise_respostas' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.analise_respostas') }}">
+        <i class="fas fa-chart-column"></i> Analise respostas
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link {% if request.endpoint == 'sfa_routes.pacientes' %}active{% endif %}"
          href="{{ url_for('sfa_routes.pacientes') }}">
         <i class="fas fa-users"></i> Pacientes

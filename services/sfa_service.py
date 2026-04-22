@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import unicodedata
+from collections import Counter
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -744,6 +745,306 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
             row[f"{stage}__{field['key']}"] = _serializar_valor_csv(payload.get(field["key"]))
 
     return row
+
+
+DIAS_DOENCA_BUCKETS = [
+    "Antes do inicio",
+    "D0-D2",
+    "D3-D7",
+    "D8-D14",
+    "D15-D30",
+    "D31+",
+    "Sem data",
+]
+
+
+def _opcoes_campo_formulario(schema: dict, field_key: str) -> list[str]:
+    for field in iterar_campos_form(schema):
+        if field.get("key") == field_key:
+            return [str(option) for option in field.get("options", []) if str(option or "").strip()]
+    return []
+
+
+def _opcao_sem_risco(option: object) -> bool:
+    normalized = normalizar_nome_chave(str(option or ""))
+    return normalized.startswith("nenhum") or normalized.startswith("nenhuma")
+
+
+def _resposta_sim(value: object) -> bool:
+    return normalizar_nome_chave(str(value or "")).startswith("sim")
+
+
+def _itens_resposta_por_opcoes(value: object, options: list[str]) -> list[str]:
+    if value in (None, "", []):
+        return []
+
+    raw_items: list[str]
+    if isinstance(value, list):
+        raw_items = [str(item or "").strip() for item in value]
+    else:
+        text = str(value or "").strip()
+        normalized_text = normalizar_nome_chave(text)
+        selected_from_options = [
+            option
+            for option in options
+            if normalizar_nome_chave(option) in normalized_text
+        ]
+        if selected_from_options:
+            raw_items = selected_from_options
+        elif " | " in text:
+            raw_items = [part.strip() for part in text.split("|")]
+        elif "\n" in text:
+            raw_items = [part.strip() for part in text.splitlines()]
+        elif ";" in text:
+            raw_items = [part.strip() for part in text.split(";")]
+        else:
+            raw_items = [text]
+
+    normalized_options = {normalizar_nome_chave(option): option for option in options}
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not item:
+            continue
+        normalized_item = normalizar_nome_chave(item)
+        canonical = normalized_options.get(normalized_item, item)
+        canonical_key = normalizar_nome_chave(canonical)
+        if canonical_key and canonical_key not in seen:
+            selected.append(canonical)
+            seen.add(canonical_key)
+    return selected
+
+
+def _parse_data_analise(value: object) -> Optional[date]:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    iso_text = text.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(iso_text).date()
+    except ValueError:
+        pass
+
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+
+    if " " in text:
+        return parse_data(text.split()[0])
+    return parse_data(text)
+
+
+def _data_resposta_stage(stage: str, resposta, payload: dict[str, object]) -> Optional[date]:
+    stage = _normalize_form_stage(stage)
+    payload_keys = {
+        "t0": ("data_entrevista_t0",),
+        "t10": ("data_entrevista_t10",),
+        "t30": ("data_entrevista_t30",),
+    }
+    for key in payload_keys[stage]:
+        parsed = _parse_data_analise(payload.get(key))
+        if parsed:
+            return parsed
+    return _parse_data_analise(getattr(resposta, "timestamp", None))
+
+
+def _bucket_dia_doenca(days: Optional[int]) -> str:
+    if days is None:
+        return "Sem data"
+    if days < 0:
+        return "Antes do inicio"
+    if days <= 2:
+        return "D0-D2"
+    if days <= 7:
+        return "D3-D7"
+    if days <= 14:
+        return "D8-D14"
+    if days <= 30:
+        return "D15-D30"
+    return "D31+"
+
+
+def _formatar_dia_doenca(days: Optional[int]) -> str:
+    if days is None:
+        return "-"
+    if days < 0:
+        return f"D{days}"
+    return f"D+{days}"
+
+
+def _chart_from_counter(counter: Counter, limit: int = 8) -> dict[str, object]:
+    top_items = counter.most_common(limit)
+    return {
+        "labels": [label for label, _count in top_items],
+        "data": [count for _label, count in top_items],
+        "total": sum(counter.values()),
+    }
+
+
+def _somar_counter(counter: Counter, label: str, amount: int = 1) -> None:
+    if label:
+        counter[label] += amount
+
+
+def montar_analise_respostas(pacientes) -> dict[str, object]:
+    """Monta uma visao agregada para explorar riscos e tempo de resposta."""
+    pacientes = list(pacientes or [])
+    schema_t0 = carregar_t0_form_schema()
+
+    animal_options = _opcoes_campo_formulario(schema_t0, "contato_animais")
+    food_options = _opcoes_campo_formulario(schema_t0, "consumo_recente")
+    activity_options = _opcoes_campo_formulario(schema_t0, "atividades_recentes")
+
+    animal_counter: Counter = Counter()
+    food_counter: Counter = Counter()
+    environmental_counter: Counter = Counter()
+    domain_counter: Counter = Counter()
+    overlap_counter: Counter = Counter()
+    timing_counter = {stage: Counter() for stage in ("t0", "t10", "t30")}
+
+    respostas_por_stage = {stage: 0 for stage in ("t0", "t10", "t30")}
+    total_com_inicio = 0
+    total_sem_inicio = 0
+    timeline_rows: list[dict[str, object]] = []
+
+    for paciente in pacientes:
+        resposta_t0, payload_t0 = obter_payload_formulario(paciente, "t0")
+        inicio_doenca = _parse_data_analise(
+            payload_t0.get("data_inicio_sintomas")
+            or getattr(resposta_t0, "data_inicio_sintomas", None)
+        )
+        if inicio_doenca:
+            total_com_inicio += 1
+        else:
+            total_sem_inicio += 1
+
+        selected_animals = [
+            item
+            for item in _itens_resposta_por_opcoes(payload_t0.get("contato_animais"), animal_options)
+            if not _opcao_sem_risco(item)
+        ]
+        selected_food = [
+            item
+            for item in _itens_resposta_por_opcoes(payload_t0.get("consumo_recente"), food_options)
+            if not _opcao_sem_risco(item)
+        ]
+        selected_activities = [
+            item
+            for item in _itens_resposta_por_opcoes(payload_t0.get("atividades_recentes"), activity_options)
+            if not _opcao_sem_risco(item)
+        ]
+
+        environmental_risks: list[str] = []
+        if _resposta_sim(payload_t0.get("contato_agua_suja")):
+            environmental_risks.append("Agua suja/lama/enchente")
+        if _resposta_sim(payload_t0.get("contato_carrapato_mata")):
+            environmental_risks.append("Carrapato ou area de mata")
+        if normalizar_nome_chave(payload_t0.get("tipo_residencia")) == "casa rural":
+            environmental_risks.append("Moradia rural")
+        if normalizar_nome_chave(payload_t0.get("ocupacao_principal")) == "agricultura/pecuaria":
+            environmental_risks.append("Ocupacao agropecuaria")
+        environmental_risks.extend(selected_activities)
+
+        for item in selected_animals:
+            _somar_counter(animal_counter, item)
+        for item in selected_food:
+            _somar_counter(food_counter, item)
+        for item in environmental_risks:
+            _somar_counter(environmental_counter, item)
+
+        domains = []
+        if selected_animals:
+            domains.append("Animal")
+            domain_counter["Animal"] += 1
+        if environmental_risks:
+            domains.append("Ambiental")
+            domain_counter["Ambiental"] += 1
+        if selected_food:
+            domains.append("Alimentar")
+            domain_counter["Alimentar"] += 1
+        overlap_counter[" + ".join(domains) if domains else "Sem risco informado"] += 1
+
+        row = {
+            "id_estudo": getattr(paciente, "id_estudo", "") or "-",
+            "nome": getattr(paciente, "nome", "") or "-",
+            "inicio_sintomas": formatar_data(inicio_doenca) or "Sem data",
+            "t0_data": "-",
+            "t0_dia_doenca": "-",
+            "t10_data": "-",
+            "t10_dia_doenca": "-",
+            "t30_data": "-",
+            "t30_dia_doenca": "-",
+        }
+
+        for stage in ("t0", "t10", "t30"):
+            resposta, payload = obter_payload_formulario(paciente, stage)
+            if not resposta:
+                continue
+
+            respostas_por_stage[stage] += 1
+            response_date = _data_resposta_stage(stage, resposta, payload)
+            days_since_onset = (response_date - inicio_doenca).days if response_date and inicio_doenca else None
+            bucket = _bucket_dia_doenca(days_since_onset)
+            timing_counter[stage][bucket] += 1
+            row[f"{stage}_data"] = formatar_data(response_date) or "Sem data"
+            row[f"{stage}_dia_doenca"] = _formatar_dia_doenca(days_since_onset)
+
+        if inicio_doenca or resposta_t0 or getattr(paciente, "respostas_t10", None) or getattr(paciente, "respostas_t30", None):
+            timeline_rows.append(row)
+
+    timing_datasets = []
+    for stage, label in (("t0", "T0"), ("t10", "T10"), ("t30", "T30")):
+        timing_datasets.append(
+            {
+                "label": label,
+                "data": [timing_counter[stage].get(bucket, 0) for bucket in DIAS_DOENCA_BUCKETS],
+            }
+        )
+
+    return {
+        "total_participantes": len(pacientes),
+        "kpis": [
+            {"label": "Participantes", "value": len(pacientes), "icon": "fas fa-users", "tone": "#015F73"},
+            {"label": "Com T0", "value": respostas_por_stage["t0"], "icon": "fas fa-clipboard-list", "tone": "#198754"},
+            {"label": "Com inicio dos sintomas", "value": total_com_inicio, "icon": "fas fa-calendar-day", "tone": "#0d6efd"},
+            {"label": "Risco animal", "value": domain_counter.get("Animal", 0), "icon": "fas fa-paw", "tone": "#e8711c"},
+            {"label": "Risco ambiental", "value": domain_counter.get("Ambiental", 0), "icon": "fas fa-seedling", "tone": "#20c997"},
+            {"label": "Risco alimentar", "value": domain_counter.get("Alimentar", 0), "icon": "fas fa-utensils", "tone": "#dc3545"},
+        ],
+        "missing": {
+            "data_inicio_sintomas": total_sem_inicio,
+            "t10": len(pacientes) - respostas_por_stage["t10"],
+            "t30": len(pacientes) - respostas_por_stage["t30"],
+        },
+        "charts": {
+            "timing": {
+                "labels": DIAS_DOENCA_BUCKETS,
+                "datasets": timing_datasets,
+            },
+            "animal": _chart_from_counter(animal_counter, limit=8),
+            "environmental": _chart_from_counter(environmental_counter, limit=8),
+            "food": _chart_from_counter(food_counter, limit=8),
+            "domains": {
+                "labels": ["Animal", "Ambiental", "Alimentar"],
+                "data": [
+                    domain_counter.get("Animal", 0),
+                    domain_counter.get("Ambiental", 0),
+                    domain_counter.get("Alimentar", 0),
+                ],
+            },
+            "overlap": _chart_from_counter(overlap_counter, limit=8),
+        },
+        "timeline": timeline_rows[:30],
+        "generated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+    }
 
 
 def listar_assinaturas_tcle() -> list[dict[str, str]]:

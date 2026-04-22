@@ -451,3 +451,17 @@ def test_export_routes_retornam_csv(native_t0_app, monkeypatch, url, csv_text, e
     assert response.mimetype == "text/csv"
     assert expected_name in response.headers["Content-Disposition"]
     assert "SFA-910" in response.get_data(as_text=True)
+
+
+def test_analise_respostas_route_renderiza(native_t0_app, monkeypatch):
+    app, _paciente, _schema_holder = native_t0_app
+    client = app.test_client()
+
+    monkeypatch.setattr("blueprints.sfa._consulta_pacientes_filtrada", lambda filtros=None: _FakeExportQuery([]))
+
+    response = client.get("/sfa/analise-respostas")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Analise de respostas" in html
+    assert "Sem respostas registradas" in html

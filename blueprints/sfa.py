@@ -222,6 +222,22 @@ def pacientes():
                            filtros=filtros)
 
 
+@bp.route("/analise-respostas")
+@require_sfa_internal_access
+def analise_respostas():
+    from services.sfa_service import montar_analise_respostas
+
+    filtros = _coletar_filtros_pacientes()
+    pacientes = _consulta_pacientes_filtrada(filtros).all()
+    analise = montar_analise_respostas(pacientes)
+
+    return render_template(
+        "sfa/analise_respostas.html",
+        analise=analise,
+        filtros=filtros,
+    )
+
+
 def _csv_download_response(csv_text: str, filename: str):
     response = current_app.response_class(
         "\ufeff" + csv_text,
