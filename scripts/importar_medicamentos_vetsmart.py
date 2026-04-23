@@ -552,6 +552,12 @@ _RE_DOSE_ANIMAL = re.compile(
     r'(mg|mcg|ml|pipeta|gotas?|comprimidos?|c[aá]psulas?)\s*/\s*animal',
     re.IGNORECASE,
 )
+_RE_DOSE_LOCAL_GOTAS = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'(gotas?)\s*(?:/|\bpor\b|\bem\b|\bno\b|\bnos\b|\bna\b|\bnas\b)?\s*'
+    r'(?:cada\s+)?(olho(?:s)?|conduto(?:\s+auditivo)?|canal\s+auditivo|ouvido(?:s)?|narina(?:s)?)\b',
+    re.IGNORECASE,
+)
 _RE_FAIXA_ATE   = re.compile(r'at[eé]\s*(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
 _RE_FAIXA_ACIMA = re.compile(r'acima\s+de\s+(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
 _RE_FAIXA_ENTRE = re.compile(
@@ -903,6 +909,43 @@ def _extrair_doses_estruturadas(
                     'fonte':         'SCRAPER',
                     'confianca':     'MEDIA',
                 })
+                continue
+
+            # X gotas por olho / conduto auditivo / narina
+            m = _RE_DOSE_LOCAL_GOTAS.search(seg_txt)
+            if m:
+                dose_min, dose_max = _f(m.group(1)), (_f(m.group(2)) if m.group(2) else _f(m.group(1)))
+                local_txt = (m.group(4) or '').lower()
+                if 'olho' in local_txt:
+                    local_legivel = 'olho'
+                elif 'narina' in local_txt:
+                    local_legivel = 'narina'
+                else:
+                    local_legivel = 'conduto auditivo'
+                dose_str = (f"{m.group(1)} - {m.group(2)} gotas/{local_legivel}"
+                            if m.group(2) else f"{m.group(1)} gotas/{local_legivel}")
+                registros.append({
+                    'especie':       _especie_label(esp_ctx),
+                    'especie_code':  esp_ctx,
+                    'faixa_peso':    peso_faixa_str,
+                    'peso_min_kg':   peso_min_ctx,
+                    'peso_max_kg':   peso_max_ctx,
+                    'via':           via,
+                    'dose':          dose_str,
+                    'dose_min':      dose_min,
+                    'dose_max':      dose_max,
+                    'dose_unidade':  'GOTAS_ANIMAL',
+                    'frequencia':    frequencia_texto,
+                    'intervalo_horas': intervalo,
+                    'duracao':       duracao_texto,
+                    'duracao_min_dias': dur_min,
+                    'duracao_max_dias': dur_max,
+                    'indicacao':     indicacao_final,
+                    'observacao':    linha[:500] if len(linha) > 30 else None,
+                    'dose_raw_text': linha,
+                    'fonte':         'SCRAPER',
+                    'confianca':     'MEDIA',
+                })
 
     # Dedup por (especie_code, peso_min, peso_max, dose_min, dose_max, unidade, indicacao)
     vistos = set()
@@ -924,9 +967,33 @@ def _especie_label(code: str) -> str:
 
 # --- Parser numérico de apresentação -----------------------------------------
 _RE_CONC_MGML = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|ui)\s*/\s*ml\b', re.IGNORECASE)
-_RE_CONC_MG   = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui|%)\b', re.IGNORECASE)
+_RE_CONC_MG   = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui)\b', re.IGNORECASE)
+_RE_CONC_PERCENT = re.compile(r'(\d+(?:[,\.]\d+)?)\s*%', re.IGNORECASE)
 _RE_VOL_PAREN = re.compile(r'\((\d+(?:[,\.]\d+)?)\s*(ml|un|g|kg|l)\b', re.IGNORECASE)
 _RE_NOME_NUM_FINAL = re.compile(r'\b(\d+(?:[,\.]\d+)?)\s*$')  # "Rilexine palatável 75"
+
+
+def _norm_ascii_lower(texto: str) -> str:
+    import unicodedata
+
+    nfkd = unicodedata.normalize("NFKD", texto or "")
+    return nfkd.encode("ASCII", "ignore").decode().lower()
+
+
+def _percentual_equivale_mg_ml(forma: str, conc_raw: str) -> bool:
+    """Converte % para mg/mL apenas quando a apresentação é líquida.
+
+    Em soluções, suspensões, colírios e injetáveis, a convenção prática é
+    1% = 10 mg/mL. Em formas não líquidas mantemos '%' para não assumir uma
+    equivalência inadequada.
+    """
+    texto = _norm_ascii_lower(f"{forma} {conc_raw}")
+    hints = (
+        'colirio', 'oftalm', 'conta-gotas', 'gota', 'solucao',
+        'suspens', 'xarope', 'elixir', 'emuls', 'frasco ampola',
+        'frasco-ampola', 'injet', 'oral',
+    )
+    return any(h in texto for h in hints)
 
 
 def _estruturar_apresentacao_campos(forma: str, conc_raw: str, nome_produto: str) -> Dict[str, Any]:
@@ -958,10 +1025,21 @@ def _estruturar_apresentacao_campos(forma: str, conc_raw: str, nome_produto: str
         out['concentracao_valor'] = _f(m.group(1))
         out['concentracao_unidade'] = f"{m.group(2).lower()}/ml"
     else:
-        m = _RE_CONC_MG.search(conc_raw)
+        m = _RE_CONC_PERCENT.search(conc_raw)
         if m:
-            out['concentracao_valor'] = _f(m.group(1))
-            out['concentracao_unidade'] = m.group(2).lower()
+            percentual = _f(m.group(1))
+            if percentual is not None:
+                if _percentual_equivale_mg_ml(forma, conc_raw):
+                    out['concentracao_valor'] = percentual * 10.0
+                    out['concentracao_unidade'] = 'mg/ml'
+                else:
+                    out['concentracao_valor'] = percentual
+                    out['concentracao_unidade'] = '%'
+        else:
+            m = _RE_CONC_MG.search(conc_raw)
+            if m:
+                out['concentracao_valor'] = _f(m.group(1))
+                out['concentracao_unidade'] = m.group(2).lower()
 
     # 3) Nome variante — texto antes da concentração/volume
     nv = conc_raw
@@ -1083,6 +1161,82 @@ def _extrair_descritivo(sobre_txt: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Helpers de links / opções veterinárias
+# ---------------------------------------------------------------------------
+_RE_HREF_PRODUTO = re.compile(r"/(?:cg|CG|index\.php)?/produto/(\d+)", re.IGNORECASE)
+_RE_OPCOES_VETERINARIAS = re.compile(r"opc[oõ]es veterin[aá]rias com", re.IGNORECASE)
+
+
+def _href_produto_para_info(href: str, nome: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    href = (href or "").strip()
+    m = _RE_HREF_PRODUTO.search(href)
+    if not m:
+        return None
+    pid = int(m.group(1))
+    nome_limpo = re.sub(r"^\s*(Avaliar|Ver|Detalhes)\s+", "", (nome or "").strip(), flags=re.IGNORECASE).strip()
+    url = BASE_URL + href if href.startswith("/") else href
+    return {"id": pid, "nome": (nome_limpo or f"Produto #{pid}")[:100], "url": url}
+
+
+def _coletar_links_produto_html(
+    html: str,
+    ids_vistos: Optional[set] = None,
+    excluir_pid: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Extrai links `/produto/` de um HTML arbitrário."""
+    soup = BeautifulSoup(html, "html.parser")
+    vistos = ids_vistos if ids_vistos is not None else set()
+    links: List[Dict[str, Any]] = []
+    for a in soup.select("a[href*='/produto/']"):
+        info = _href_produto_para_info(a.get("href") or "", a.get_text(" ", strip=True))
+        if not info:
+            continue
+        if excluir_pid is not None and info["id"] == excluir_pid:
+            continue
+        if info["id"] in vistos:
+            continue
+        vistos.add(info["id"])
+        links.append(info)
+    return links
+
+
+def _extrair_links_opcoes_veterinarias(
+    html: str,
+    excluir_pid: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Extrai opções veterinárias ligadas a uma página canônica do princípio ativo."""
+    soup = BeautifulSoup(html, "html.parser")
+    vistos: set = set()
+    saida: List[Dict[str, Any]] = []
+
+    marcadores = [
+        no.parent for no in soup.find_all(
+            string=lambda s: bool(s and _RE_OPCOES_VETERINARIAS.search(s))
+        )
+    ]
+    for marcador in marcadores:
+        no = marcador
+        while no is not None:
+            no = no.find_next_sibling()
+            if no is None:
+                break
+            if getattr(no, "name", None) in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                break
+            saida.extend(
+                _coletar_links_produto_html(
+                    str(no),
+                    ids_vistos=vistos,
+                    excluir_pid=excluir_pid,
+                )
+            )
+
+    if saida:
+        return saida
+
+    return _coletar_links_produto_html(html, ids_vistos=vistos, excluir_pid=excluir_pid)
+
+
+# ---------------------------------------------------------------------------
 # Scraping da lista de produtos
 # ---------------------------------------------------------------------------
 def _coletar_links_da_pagina(page, ids_vistos: set) -> List[Dict[str, Any]]:
@@ -1090,16 +1244,15 @@ def _coletar_links_da_pagina(page, ids_vistos: set) -> List[Dict[str, Any]]:
     novos = []
     links = page.query_selector_all("a[href*='/produto/']")
     for link in links:
-        href = link.get_attribute("href") or ""
-        m = re.search(r"/(?:cg|CG)/produto/(\d+)", href, re.IGNORECASE)
-        if not m:
+        nome_raw = (link.inner_text() or "").strip()
+        info = _href_produto_para_info(link.get_attribute("href") or "", nome_raw)
+        if not info:
             continue
-        pid = int(m.group(1))
+        pid = info["id"]
         if pid in ids_vistos:
             continue
         ids_vistos.add(pid)
-        nome_raw = (link.inner_text() or "").strip()
-        nome = re.sub(r"^\s*(Avaliar|Ver|Detalhes)\s+", "", nome_raw, flags=re.IGNORECASE).strip()
+        nome = info["nome"]
         # O <a> do card contém nome + fabricante em linhas separadas
         # (ex: "ACQUA Limp\nBIOFARM"). Pegamos só a primeira linha não vazia
         # para bater com o nome limpo que o detalhe retorna (e evitar duplicatas).
@@ -1108,8 +1261,8 @@ def _coletar_links_da_pagina(page, ids_vistos: set) -> List[Dict[str, Any]]:
             if linha:
                 nome = linha
                 break
-        url = BASE_URL + href if href.startswith("/") else href
-        novos.append({"id": pid, "nome": (nome or f"Produto #{pid}")[:100], "url": url})
+        info["nome"] = (nome or f"Produto #{pid}")[:100]
+        novos.append(info)
     return novos
 
 
@@ -1160,7 +1313,7 @@ def scrape_lista_produtos(page, pagina_max: int = 61) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Scraping de detalhe — usa BS4 no HTML completo
 # ---------------------------------------------------------------------------
-def scrape_detalhe_produto(page, info: Dict) -> ProdutoVetsmart:
+def scrape_detalhe_produto(page, info: Dict, return_html: bool = False):
     pid       = info["id"]
     url       = info["url"]
     nome_base = info["nome"]
@@ -1177,7 +1330,10 @@ def scrape_detalhe_produto(page, info: Dict) -> ProdutoVetsmart:
     time.sleep(1.0)
 
     html = page.content()
-    return extrair_produto_do_html(html, pid, nome_base)
+    prod = extrair_produto_do_html(html, pid, nome_base)
+    if return_html:
+        return prod, html
+    return prod
 
 
 # ---------------------------------------------------------------------------
@@ -1199,6 +1355,28 @@ def _trunc(v, n):
     if not s:
         return None
     return s[:n]
+
+
+def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVetsmart') -> None:
+    """Atualiza apenas lacunas úteis do medicamento canônico."""
+    cur.execute("""
+        UPDATE medicamento SET
+          classificacao       = COALESCE(NULLIF(classificacao,''), %s),
+          principio_ativo     = COALESCE(NULLIF(principio_ativo,''), %s),
+          via_administracao   = COALESCE(NULLIF(via_administracao,''), %s),
+          vetsmart_produto_id = COALESCE(vetsmart_produto_id, %s),
+          bula                = COALESCE(NULLIF(bula,''), %s),
+          observacoes         = COALESCE(NULLIF(observacoes,''), %s)
+         WHERE id = %s
+    """, (
+        _trunc(prod.classificacao, 100),
+        _trunc(prod.principio_ativo, 200),
+        _trunc(prod.via_administracao, 80),
+        prod.vetsmart_id,
+        prod.bula,
+        prod.observacoes,
+        medicamento_id,
+    ))
 
 
 def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
@@ -1264,24 +1442,7 @@ def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
         medicamento_id = cur.fetchone()["id"]
     else:
         # Atualiza campos vazios/faltantes com dados novos do prod (se úteis)
-        cur.execute("""
-            UPDATE medicamento SET
-              classificacao       = COALESCE(NULLIF(classificacao,''), %s),
-              principio_ativo     = COALESCE(NULLIF(principio_ativo,''), %s),
-              via_administracao   = COALESCE(NULLIF(via_administracao,''), %s),
-              vetsmart_produto_id = COALESCE(vetsmart_produto_id, %s),
-              bula                = COALESCE(NULLIF(bula,''), %s),
-              observacoes         = COALESCE(NULLIF(observacoes,''), %s)
-             WHERE id = %s
-        """, (
-            _trunc(prod.classificacao, 100),
-            _trunc(prod.principio_ativo, 200),
-            _trunc(prod.via_administracao, 80),
-            prod.vetsmart_id,
-            prod.bula,
-            prod.observacoes,
-            medicamento_id,
-        ))
+        _atualizar_medicamento_existente(cur, medicamento_id, prod)
 
     return medicamento_id
 

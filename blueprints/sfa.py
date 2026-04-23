@@ -307,6 +307,8 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
     teste_expr = (
         SfaPaciente.observacao_operacional.ilike(f"%{SFA_TEST_MARKER}%")
         | SfaPaciente.nome.ilike(f"{SFA_TEST_NAME_PREFIX}%")
+        | SfaPaciente.ficha_sinan.ilike("TESTE-%")
+        | SfaPaciente.token_acesso.ilike("teste-%")
     )
     if visao == "testes":
         q = q.filter(teste_expr)
@@ -453,12 +455,15 @@ def _dashboard_grouped_distribution(
     data: dict[str, dict[str, int]],
     denominators: dict[str, int] | None = None,
     limit: int | None = None,
+    ordered_labels: list[str] | None = None,
 ) -> dict[str, object]:
     denominators = denominators or {}
     total_denominator = denominators.get("total") or sum(data.get("total", {}).values())
     a_denominator = denominators.get("A") or sum(data.get("A", {}).values())
     b_denominator = denominators.get("B") or sum(data.get("B", {}).values())
-    labels = set(data.get("total", {})) | set(data.get("A", {})) | set(data.get("B", {}))
+    ordered_labels = ordered_labels or []
+    ordered_index = {label: index for index, label in enumerate(ordered_labels)}
+    labels = set(ordered_labels) | set(data.get("total", {})) | set(data.get("A", {})) | set(data.get("B", {}))
     items = []
 
     for label in labels:
@@ -488,7 +493,15 @@ def _dashboard_grouped_distribution(
             }
         )
 
-    items.sort(key=lambda item: (-item["count"], -item["gap"], item["label"]))
+    items.sort(
+        key=lambda item: (
+            0 if item["label"] in ordered_index else 1,
+            ordered_index.get(item["label"], 0),
+            -item["count"],
+            -item["gap"],
+            item["label"],
+        )
+    )
     if limit:
         items = items[:limit]
     return {
@@ -575,7 +588,13 @@ def _retorno_atividades_temporal_sfa(retorno) -> str:
 
 
 def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
-    from services.sfa_service import parse_data
+    from services.sfa_service import (
+        normalizar_itens_exposicao_t0,
+        normalizar_nome_chave,
+        normalizar_payload_t0_exposicoes,
+        opcoes_exposicao_t0,
+        parse_data,
+    )
 
     pacientes = list(pacientes or [])
     total = len(pacientes)
@@ -617,6 +636,50 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         store["total"][label] = store["total"].get(label, 0) + 1
         if grupo in ("A", "B"):
             store[grupo][label] = store[grupo].get(label, 0) + 1
+
+    def _payload_list(value):
+        if value in (None, "", []):
+            return []
+        if isinstance(value, list):
+            return [str(item or "").strip() for item in value if str(item or "").strip()]
+        text = str(value or "").strip()
+        if not text:
+            return []
+        if " | " in text:
+            return [item.strip() for item in text.split("|") if item.strip()]
+        if ";" in text:
+            return [item.strip() for item in text.split(";") if item.strip()]
+        if "\n" in text:
+            return [item.strip() for item in text.splitlines() if item.strip()]
+        return [text]
+
+    def _sem_risco_exposicao(label):
+        normalized = normalizar_nome_chave(label)
+        return (
+            not normalized
+            or normalized.startswith("nenhum")
+            or normalized.startswith("nenhuma")
+            or normalized == "nao informado"
+        )
+
+    def _filtrar_exposicoes(values):
+        filtered = []
+        seen = set()
+        for value in values:
+            label = str(value or "").strip()
+            key = normalizar_nome_chave(label)
+            if _sem_risco_exposicao(label) or key in seen:
+                continue
+            filtered.append(label)
+            seen.add(key)
+        return filtered
+
+    def _resposta_sim(value):
+        return normalizar_nome_chave(value).startswith("sim")
+
+    def _top_label(store):
+        values = store.get("total", {})
+        return max(values, key=values.get) if values else "N/D"
 
     grupo_a = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "A")
     grupo_b = sum(1 for paciente in pacientes if getattr(paciente, "grupo", "") == "B")
@@ -662,6 +725,10 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
     faixa_etaria_dist = {}
     sintomas_dist = {}
     symptom_group_matrix = {}
+    animais_grouped = _new_grouped_counts()
+    ambientais_grouped = _new_grouped_counts()
+    alimentares_grouped = _new_grouped_counts()
+    dominios_exposicao_grouped = _new_grouped_counts()
     melhorias_grouped = _new_grouped_counts()
     estados_finais_grouped = _new_grouped_counts()
     retornos_grouped = _new_grouped_counts()
@@ -706,6 +773,7 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         _increment_grouped(faixa_etaria_grouped, faixa, grupo)
         if paciente.resposta_t0:
             payload_t0 = json.loads(getattr(paciente.resposta_t0, "dados_json", "{}") or "{}")
+            payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
             residencia = payload_t0.get("tipo_residencia") or getattr(paciente.resposta_t0, "tipo_residencia", "") or "Nao informado"
             residencias[residencia] = residencias.get(residencia, 0) + 1
             _increment_grouped(residencias_grouped, residencia, grupo)
@@ -722,6 +790,39 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
                 if grupo in ("A", "B"):
                     symptom_group_matrix[sintoma][grupo] += 1
                 symptom_group_matrix[sintoma]["total"] += 1
+            animais_respostas = normalizar_itens_exposicao_t0("exposicao_animal", payload_t0.get("exposicao_animal"))
+            animais = _filtrar_exposicoes(animais_respostas)
+            alimentares_respostas = normalizar_itens_exposicao_t0(
+                "exposicao_alimentar",
+                payload_t0.get("exposicao_alimentar"),
+            )
+            alimentares = _filtrar_exposicoes(alimentares_respostas)
+            ambientais_base = normalizar_itens_exposicao_t0("exposicao_ambiental", payload_t0.get("exposicao_ambiental"))
+            if _resposta_sim(payload_t0.get("contato_agua_suja")):
+                ambientais_base.append("Agua suja/lama/enchente")
+            if _resposta_sim(payload_t0.get("contato_carrapato_mata")):
+                ambientais_base.append("Mata/trilha/camping")
+            ambientais_base.extend(_payload_list(payload_t0.get("atividades_recentes")))
+            if normalizar_nome_chave(residencia) == "casa rural":
+                ambientais_base.append("Moradia rural")
+            if "agricultura" in normalizar_nome_chave(ocupacao):
+                ambientais_base.append("Ocupacao agropecuaria")
+            ambientais = _filtrar_exposicoes(
+                normalizar_itens_exposicao_t0("exposicao_ambiental", ambientais_base)
+            )
+
+            for animal in animais_respostas:
+                _increment_grouped(animais_grouped, animal, grupo)
+            for ambiental in ambientais:
+                _increment_grouped(ambientais_grouped, ambiental, grupo)
+            for alimentar in alimentares_respostas:
+                _increment_grouped(alimentares_grouped, alimentar, grupo)
+            if animais:
+                _increment_grouped(dominios_exposicao_grouped, "Animal", grupo)
+            if ambientais:
+                _increment_grouped(dominios_exposicao_grouped, "Ambiental", grupo)
+            if alimentares:
+                _increment_grouped(dominios_exposicao_grouped, "Alimentar", grupo)
         resposta_t10 = _resposta_recente(getattr(paciente, "respostas_t10", []))
         if resposta_t10:
             payload_t10 = json.loads(getattr(resposta_t10, "dados_json", "{}") or "{}")
@@ -763,11 +864,39 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
                 if faixa in recovery_segments:
                     recovery_segments[faixa]["alta"] += 1
 
+    exposure_denominators = {
+        "total": total,
+        "A": grupo_metrics["A"]["pacientes"],
+        "B": grupo_metrics["B"]["pacientes"],
+    }
     distributions = [
         _dashboard_grouped_distribution("Evolução percebida no T10", melhorias_grouped),
         _dashboard_grouped_distribution("Estado final no T30", estados_finais_grouped),
         _dashboard_grouped_distribution("Retorno às atividades", retornos_grouped),
         _dashboard_grouped_distribution("Tipo de residência", residencias_grouped),
+        _dashboard_grouped_distribution(
+            "Contato com animais",
+            animais_grouped,
+            denominators=exposure_denominators,
+            ordered_labels=opcoes_exposicao_t0("exposicao_animal"),
+        ),
+        _dashboard_grouped_distribution(
+            "Riscos ambientais",
+            ambientais_grouped,
+            denominators=exposure_denominators,
+            ordered_labels=opcoes_exposicao_t0("exposicao_ambiental"),
+        ),
+        _dashboard_grouped_distribution(
+            "Riscos alimentares",
+            alimentares_grouped,
+            denominators=exposure_denominators,
+            ordered_labels=opcoes_exposicao_t0("exposicao_alimentar"),
+        ),
+        _dashboard_grouped_distribution(
+            "Dominios de exposicao",
+            dominios_exposicao_grouped,
+            denominators=exposure_denominators,
+        ),
         _dashboard_grouped_distribution("Bairros do lote", bairros_grouped),
     ]
 
@@ -811,6 +940,9 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         {"label": "Faixa etária mais frequente", "value": max(faixa_etaria_dist, key=faixa_etaria_dist.get) if faixa_etaria_dist else "N/D"},
         {"label": "Ocupação mais frequente", "value": max(ocupacao_dist, key=ocupacao_dist.get) if ocupacao_dist else "N/D"},
         {"label": "Sintoma mais frequente", "value": max(sintomas_dist, key=sintomas_dist.get) if sintomas_dist else "N/D"},
+        {"label": "Contato animal mais frequente", "value": _top_label(animais_grouped)},
+        {"label": "Risco ambiental mais frequente", "value": _top_label(ambientais_grouped)},
+        {"label": "Risco alimentar mais frequente", "value": _top_label(alimentares_grouped)},
     ]
 
     group_comparison = [
@@ -1064,10 +1196,11 @@ def pacientes():
 @bp.route("/analise-respostas")
 @require_sfa_internal_access
 def analise_respostas():
-    from services.sfa_service import montar_analise_respostas
+    from services.sfa_service import filtrar_pacientes_reais_sfa, montar_analise_respostas
 
     filtros = _coletar_filtros_pacientes()
-    pacientes = _consulta_pacientes_filtrada(filtros).all()
+    filtros["visao"] = "reais"
+    pacientes = filtrar_pacientes_reais_sfa(_consulta_pacientes_filtrada(filtros).all())
     analise = montar_analise_respostas(pacientes)
 
     return render_template(

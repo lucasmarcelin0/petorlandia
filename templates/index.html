@@ -1,131 +1,400 @@
 {% extends "layout.html" %}
 
+{% block head %}
+<meta
+    name="description"
+    content="PetOrlândia conecta tutores, pets e clínicas com uma experiência mais humana, unindo atendimento, organização, loja e gestão em um só lugar.">
+{% endblock %}
+
 {% block main %}
+{% if current_user.is_authenticated %}
 <div class="container text-center">
+    <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
+        <h1 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h1>
+        <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
 
-    {% if current_user.is_authenticated %}
-        <!-- Área pessoal -->
-        <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
-            <h1 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h1>
-            <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
+            <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Abre o formulário para registrar um novo pet.">
+                ➕ Cadastrar novo animal
+            </a>
 
-            <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
-                <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Abre o formulário para registrar um novo pet.">
-                    ➕ Cadastrar novo animal
-                </a>
+            <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
+                📋 Ver todos os animais
+            </a>
 
-                <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
-                    📋 Ver todos os animais
-                </a>
+            <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
+                ❤️ Plano de Saúde Pet
+            </a>
 
-                <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
-                    ❤️ Plano de Saúde Pet
-                </a>
-
-                <a href="{{ url_for('loja') }}"
-                   class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                   data-bs-toggle="tooltip"
-                   title="Abre a loja para comprar produtos e agendar entregas.">
-                   🛍️ Loja Pet
-                </a>
-            </div>
+            <a href="{{ url_for('loja') }}" class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
+                data-bs-toggle="tooltip" title="Abre a loja para comprar produtos e agendar entregas.">
+                🛍️ Loja Pet
+            </a>
         </div>
-    {% else %}
-        <!-- Visitante não autenticado -->
-        <div class="card shadow-lg p-5 rounded-4 mt-5 card-surface-white">
-            <h1 class="visually-hidden">PetOrlandia</h1>
-            <div class="text-center">
-                <img src="{{ url_for('static', filename='logo_pet.png') }}"
-                     alt="Logo PetOrlândia"
-                     class="mb-4 logo-img mx-auto">
-            </div>
+    </div>
 
-            <p class="lead">
-                PetOrlândia é um espaço completo para quem ama e cuida dos animais. Aqui você pode adotar, doar, agendar atendimentos veterinários e encontrar tudo o que seu pet precisa — com carinho, responsabilidade e praticidade.
-            </p>
-            
-            <div class="d-flex justify-content-center gap-3 mt-4">
-                
-                <a href="{{ url_for('register') }}" class="btn btn-outline-success rounded-pill px-4 py-2">🧑 Criar Conta</a>
-               
-                <a href="{{ url_for('login_view') }}" class="btn btn-outline-primary rounded-pill px-4 py-2">🔐 Entrar</a>
-            </div>
+    {% if current_user.worker == 'colaborador' or is_active_veterinarian %}
+    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
+        <h2 class="mb-2 h5">Área profissional</h2>
+        <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Abre a lista de animais para editar vínculos e dados.">
+                🐶 Animais
+            </a>
+
+            <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Visualiza tutores e permite atualizar contatos.">
+                👥 Tutores
+            </a>
+
+            {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
+            <a href="{{ url_for('appointments') }}" class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Abre a agenda para marcar e revisar atendimentos.">
+                🗓️ Agenda
+            </a>
+            {% endif %}
         </div>
+    </div>
     {% endif %}
 
-    {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
-    <!-- Área profissional -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h2 class="mb-2 h5">Área profissional</h2>
-            <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
-            <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Abre a lista de animais para editar vínculos e dados.">
-                    🐶 Animais
-                </a>
-
-                <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Visualiza tutores e permite atualizar contatos.">
-                    👥 Tutores
-                </a>
-
-                {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
-                <a href="{{ url_for('appointments') }}"
-                   class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Abre a agenda para marcar e revisar atendimentos.">
-                    🗓️ Agenda
-                </a>
-                {% endif %}
-            </div>
+    {% set owned_clinics = current_user.clinicas or [] %}
+    {% set has_admin_role = current_user.role in ['admin', 'master'] %}
+    {% set admin_worker_roles = ['gestor', 'administrador', 'admin_clinica', 'master'] %}
+    {% set has_admin_worker = current_user.worker in admin_worker_roles %}
+    {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
+    {% if has_admin_role or has_admin_worker or owner_with_access %}
+    <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card card-surface-white">
+        <h2 class="mb-2 text-center h5">Contabilidade</h2>
+        <p class="text-muted small text-center">Escolha um painel para acompanhar receitas, pagamentos e obrigações.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--finance">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Financeiro</span>
+            </a>
+            <a href="/contabilidade/pagamentos" class="btn accounting-btn accounting-btn--payments">
+                <i class="fa-solid fa-briefcase"></i>
+                <span>Pagamentos / PJs</span>
+            </a>
+            <a href="/contabilidade/obrigacoes" class="btn accounting-btn accounting-btn--obligations">
+                <i class="fa-solid fa-file-invoice-dollar"></i>
+                <span>Obrigações</span>
+            </a>
+            <a href="/contabilidade/nfse" class="btn accounting-btn accounting-btn--obligations">
+                <i class="fa-solid fa-receipt"></i>
+                <span>NFS-e</span>
+            </a>
         </div>
+    </div>
     {% endif %}
 
-    {% if current_user.is_authenticated %}
-        {% set owned_clinics = current_user.clinicas or [] %}
-        {% set has_admin_role = current_user.role in ['admin', 'master'] %}
-        {% set admin_worker_roles = ['gestor', 'administrador', 'admin_clinica', 'master'] %}
-        {% set has_admin_worker = current_user.worker in admin_worker_roles %}
-        {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
-        {% if has_admin_role or has_admin_worker or owner_with_access %}
-        <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card card-surface-white">
-            <h2 class="mb-2 text-center h5">Contabilidade</h2>
-            <p class="text-muted small text-center">Escolha um painel para acompanhar receitas, pagamentos e obrigações.</p>
-            <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--finance">
-                    <i class="fa-solid fa-chart-line"></i>
-                    <span>Financeiro</span>
-                </a>
-                <a href="/contabilidade/pagamentos" class="btn accounting-btn accounting-btn--payments">
-                    <i class="fa-solid fa-briefcase"></i>
-                    <span>Pagamentos / PJs</span>
-                </a>
-                <a href="/contabilidade/obrigacoes" class="btn accounting-btn accounting-btn--obligations">
-                    <i class="fa-solid fa-file-invoice-dollar"></i>
-                    <span>Obrigações</span>
-                </a>
-                <a href="/contabilidade/nfse" class="btn accounting-btn accounting-btn--obligations">
-                    <i class="fa-solid fa-receipt"></i>
-                    <span>NFS-e</span>
-                </a>
-            </div>
+    {% if current_user.worker == 'delivery' %}
+    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
+        <h2 class="mb-2 h5">Área de Entregas</h2>
+        <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
+                🚚 Solicitações
+            </a>
         </div>
-        {% endif %}
-    {% endif %}
-
-    {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
-    <!-- Área de Entregas -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h2 class="mb-2 h5">Área de Entregas</h2>
-            <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
-            <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
-                    🚚 Solicitações
-                </a>
-            </div>
-        </div>
+    </div>
     {% endif %}
 </div>
+{% else %}
+<section class="landing-page" aria-labelledby="landing-title">
+    <div class="landing-hero">
+        <div class="landing-hero__content">
+            <span class="landing-badge">
+                <i class="fa-solid fa-heart-circle-plus" aria-hidden="true"></i>
+                Cuidado animal, tecnologia e rotina clínica no mesmo lugar
+            </span>
+
+            <h1 id="landing-title">
+                PetOrlândia aproxima tutores, pets e clínicas com uma experiência mais humana e organizada.
+            </h1>
+
+            <div class="landing-actions" aria-label="Ações principais">
+                <a href="{{ url_for('login_view') }}" class="landing-btn landing-btn--primary">
+                    Entrar
+                </a>
+                <a href="{{ url_for('register') }}" class="landing-btn landing-btn--secondary">
+                    Criar conta
+                </a>
+                <a href="{{ url_for('loja') }}" class="landing-btn landing-btn--gold">
+                    Conhecer a loja
+                </a>
+            </div>
+
+            <p class="landing-lead">
+                Da primeira conversa ao acompanhamento contínuo, o projeto reúne atendimento, comunicação,
+                produtos e gestão em uma jornada digital pensada para a vida real de quem cuida.
+            </p>
+
+            <div class="landing-anchor-links" aria-label="Explorar a página">
+                <a href="#sobre" class="landing-anchor-link">Sobre o projeto</a>
+                <a href="#proposito" class="landing-anchor-link">Missão e visão</a>
+                <a href="#recursos" class="landing-anchor-link">Funcionalidades</a>
+            </div>
+        </div>
+
+        <aside class="landing-hero__panel" aria-label="Resumo da plataforma">
+            <img src="{{ url_for('static', filename='logo_pet.png') }}" alt="Logo PetOrlândia" class="landing-brandmark">
+
+            <div class="landing-summary-card">
+                <h2>O que você encontra aqui</h2>
+                <ul class="landing-summary-list">
+                    <li>
+                        <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+                        <span>Agenda, histórico e acompanhamento do cuidado em um só fluxo.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-paw" aria-hidden="true"></i>
+                        <span>Espaço para pets, tutores e rotinas que fazem parte do dia a dia.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-store" aria-hidden="true"></i>
+                        <span>Loja, pedidos e conveniência conectados à experiência da plataforma.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-hospital" aria-hidden="true"></i>
+                        <span>Ferramentas para clínicas e equipes veterinárias trabalharem com mais clareza.</span>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+    </div>
+
+    <section id="sobre" class="landing-section" aria-labelledby="about-title">
+        <div class="landing-section__grid landing-section__grid--story">
+            <article class="landing-panel">
+                <span class="landing-section-kicker">Sobre o projeto</span>
+                <h2 id="about-title">Uma plataforma criada para transformar cuidado em experiência.</h2>
+                <p>
+                    PetOrlândia nasce da ideia de que o cuidado animal não precisa ficar dividido entre agendas soltas,
+                    mensagens dispersas e processos manuais. A proposta é reunir em um só ambiente aquilo que realmente
+                    faz diferença para tutores, pets e profissionais.
+                </p>
+                <p>
+                    Em vez de apenas oferecer funcionalidades isoladas, o projeto organiza a jornada completa:
+                    cadastro, acompanhamento, comunicação, serviços, produtos e apoio à gestão de clínicas com mais
+                    clareza e proximidade.
+                </p>
+            </article>
+
+            <article class="landing-panel landing-panel--accent">
+                <span class="landing-section-kicker">Sobre Lucas</span>
+                <h2>Uma plataforma idealizada por quem vive de perto a rotina do cuidado animal.</h2>
+                <div class="landing-founder-intro">
+                    <div class="landing-founder-intro__copy">
+                        <p>
+                            Como médico-veterinário com formação complementar em tecnologia pelo
+                            <strong>CS50x de HarvardX</strong>, Lucas Marcelino Campos Ferreira idealizou a PetOrlândia para
+                            unir acolhimento, responsabilidade e organização em uma experiência digital mais útil para
+                            tutores, profissionais e clínicas.
+                        </p>
+                    </div>
+                    <aside class="landing-founder-profile">
+                        <div class="landing-founder-photo-shell">
+                            <img
+                                src="{{ url_for('static', filename='uploads/founder/lucas-founder-clean.jpeg') }}"
+                                alt="Lucas Marcelino Campos Ferreira sorrindo em frente a um prédio histórico."
+                                class="landing-founder-photo">
+                        </div>
+                        <div class="landing-founder-profile__body">
+                            <strong>Lucas</strong>
+                            <span>Médico-veterinário</span>
+                        </div>
+                    </aside>
+                </div>
+                <p>
+                    A tecnologia entra como ferramenta para simplificar processos, fortalecer a confiança e apoiar um
+                    cuidado mais próximo, mais claro e mais conectado com as necessidades reais do dia a dia.
+                </p>
+                <div class="landing-founder-card">
+                    <span class="landing-founder-card__label">Formação em destaque</span>
+                    <strong>Lucas Marcelino Campos Ferreira</strong>
+                    <span>Médico-veterinário • CS50x de HarvardX</span>
+                    <span>Mestrando em Biotecnologia e Bioprocessos</span>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section id="proposito" class="landing-section" aria-labelledby="purpose-title">
+        <div class="landing-section-heading">
+            <span class="landing-section-kicker">Propósito</span>
+            <h2 id="purpose-title">Missão, visão e valores que orientam a PetOrlândia.</h2>
+            <p>
+                Esses pilares ajudam a comunicar não só o que a plataforma faz, mas também por que ela existe e como
+                pretende crescer.
+            </p>
+        </div>
+
+        <div class="landing-purpose-grid">
+            <article class="landing-purpose-card landing-purpose-card--mission">
+                <div class="landing-purpose-icon">
+                    <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+                </div>
+                <h3>Missão</h3>
+                <p>
+                    Facilitar o cuidado com os animais integrando atendimento, organização, conveniência e gestão em
+                    uma experiência simples, acolhedora e confiável.
+                </p>
+            </article>
+
+            <article class="landing-purpose-card landing-purpose-card--vision">
+                <div class="landing-purpose-icon">
+                    <i class="fa-solid fa-binoculars" aria-hidden="true"></i>
+                </div>
+                <h3>Visão</h3>
+                <p>
+                    Ser uma referência em experiência digital para o universo pet, conectando tutores, clínicas e
+                    serviços com proximidade, eficiência e confiança.
+                </p>
+            </article>
+
+            <article class="landing-purpose-card landing-purpose-card--values">
+                <div class="landing-purpose-icon">
+                    <i class="fa-solid fa-gem" aria-hidden="true"></i>
+                </div>
+                <h3>Valores</h3>
+                <ul class="landing-value-list">
+                    <li>
+                        <i class="fa-solid fa-shield-heart" aria-hidden="true"></i>
+                        <span>Cuidado com responsabilidade em cada etapa.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                        <span>Comunicação clara e próxima com as pessoas.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
+                        <span>Tecnologia útil, pensada para a rotina real.</span>
+                    </li>
+                    <li>
+                        <i class="fa-solid fa-handshake-angle" aria-hidden="true"></i>
+                        <span>Confiança para tutores, profissionais e clínicas.</span>
+                    </li>
+                </ul>
+            </article>
+        </div>
+    </section>
+
+    <section id="recursos" class="landing-section" aria-labelledby="features-title">
+        <div class="landing-section-heading">
+            <span class="landing-section-kicker">Funcionalidades</span>
+            <h2 id="features-title">Tudo o que faz a jornada funcionar melhor.</h2>
+            <p>
+                A proposta da PetOrlândia é integrar cuidado, operação e conveniência sem transformar a experiência em
+                algo complicado.
+            </p>
+        </div>
+
+        <div class="landing-feature-grid">
+            <article class="landing-feature-card">
+                <span class="landing-feature-index">01</span>
+                <h3>Jornada clínica integrada</h3>
+                <p>
+                    Cadastro de tutor e pet, agenda, histórico, exames, prescrições e acompanhamento reunidos em um
+                    fluxo mais claro.
+                </p>
+            </article>
+
+            <article class="landing-feature-card">
+                <span class="landing-feature-index">02</span>
+                <h3>Comunicação e acompanhamento</h3>
+                <p>
+                    Mais proximidade entre quem atende e quem cuida, com informações organizadas para reduzir ruído e
+                    aumentar confiança.
+                </p>
+            </article>
+
+            <article class="landing-feature-card">
+                <span class="landing-feature-index">03</span>
+                <h3>Loja, pedidos e conveniência</h3>
+                <p>
+                    Produtos e serviços conectados à experiência da plataforma para tornar o cuidado mais prático no
+                    dia a dia.
+                </p>
+            </article>
+
+            <article class="landing-feature-card">
+                <span class="landing-feature-index">04</span>
+                <h3>Gestão para clínicas</h3>
+                <p>
+                    Recursos para apoiar operação, organização interna e visão mais completa da rotina profissional em
+                    um só sistema.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <section class="landing-section" aria-labelledby="audience-title">
+        <div class="landing-section-heading">
+            <span class="landing-section-kicker">Para quem</span>
+            <h2 id="audience-title">Uma plataforma que conversa com toda a rede de cuidado.</h2>
+            <p>
+                A PetOrlândia foi pensada para apoiar quem cuida, quem atende e quem organiza a rotina, com valor
+                prático para cada perfil.
+            </p>
+        </div>
+
+        <div class="landing-audience-grid">
+            <article class="landing-audience-card">
+                <div class="landing-audience-icon">
+                    <i class="fa-solid fa-user-heart" aria-hidden="true"></i>
+                </div>
+                <h3>Tutores</h3>
+                <p>
+                    Mais praticidade para acompanhar informações do pet, acessar serviços e manter a rotina organizada.
+                </p>
+            </article>
+
+            <article class="landing-audience-card">
+                <div class="landing-audience-icon">
+                    <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>
+                </div>
+                <h3>Profissionais</h3>
+                <p>
+                    Um ambiente mais consistente para acompanhar atendimentos, registrar informações e manter fluidez
+                    no cuidado.
+                </p>
+            </article>
+
+            <article class="landing-audience-card">
+                <div class="landing-audience-icon">
+                    <i class="fa-solid fa-building-circle-check" aria-hidden="true"></i>
+                </div>
+                <h3>Clínicas</h3>
+                <p>
+                    Organização operacional e visão integrada para crescer com mais segurança, controle e proximidade
+                    com os clientes.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <section class="landing-cta-banner" aria-labelledby="landing-cta-title">
+        <div>
+            <span class="landing-section-kicker">Pronto para começar?</span>
+            <h2 id="landing-cta-title">Entre agora e comece a organizar sua jornada com a PetOrlândia.</h2>
+            <p>
+                Crie sua conta para acessar os recursos da plataforma ou faça login para continuar de onde parou.
+            </p>
+        </div>
+
+        <div class="landing-actions landing-actions--compact" aria-label="Ações finais">
+            <a href="{{ url_for('register') }}" class="landing-btn landing-btn--primary">
+                Criar conta
+            </a>
+            <a href="{{ url_for('login_view') }}" class="landing-btn landing-btn--secondary landing-btn--light">
+                Entrar
+            </a>
+        </div>
+    </section>
+</section>
+{% endif %}
 {% endblock %}

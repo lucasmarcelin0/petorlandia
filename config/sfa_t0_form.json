@@ -146,6 +146,7 @@
           "label": "Contato animal nos 15 dias antes dos sintomas",
           "type": "checkboxes",
           "required": true,
+          "help_text": "Marque Caes e Gatos separadamente quando houver contato com ambos.",
           "options": [
             "Caes",
             "Gatos",

@@ -139,10 +139,28 @@
         </div>
         <!-- Seletor de apresentação para converter a dose em mg em
              "cápsulas", "mL", "gotas" etc. que o tutor vai administrar. -->
+        <div class="d-flex gap-2 align-items-center flex-wrap mt-3 mb-2">
+          <button type="button" id="btn-usar-dose-sugerida" class="btn btn-success btn-sm" onclick="usarDoseSugerida()">
+            <i class="bi bi-check2-circle"></i>
+            <span id="btn-usar-dose-sugerida-label">Usar dose do bulário</span>
+          </button>
+          <button type="button" id="btn-toggle-conversao-apresentacao"
+                  class="btn btn-outline-info btn-sm d-none"
+                  onclick="toggleConversaoApresentacao()">
+            <i class="bi bi-capsule me-1"></i>
+            <span id="btn-toggle-conversao-apresentacao-label">Converter para apresentação</span>
+          </button>
+          <span class="small text-muted" id="sug-dose-hint">
+            A dose acima já pode ser aplicada sem escolher apresentação.
+          </span>
+        </div>
         <div id="sug-apresentacoes-wrap" class="mt-3 d-none">
           <p class="mb-1 small fw-semibold">
             <i class="bi bi-capsule me-1"></i>
-            Escolha a apresentação que será dispensada
+            Opcional: converter para a apresentação dispensada
+          </p>
+          <p class="small text-muted mb-2">
+            Use esta etapa apenas se quiser transformar a dose do bulário em comprimidos, cápsulas, mL ou gotas.
           </p>
           <!-- Apresentações com concentração fixa (industrializadas) — preferência. -->
           <div id="sug-apresentacoes-radios" class="mb-2"></div>
@@ -211,14 +229,9 @@
         </div>
 
         <p id="sug-observacao" class="small text-muted fst-italic mb-2 d-none"></p>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <button type="button" class="btn btn-success btn-sm" onclick="usarDoseSugerida()">
-            <i class="bi bi-check2-circle"></i> Usar esta dose
-          </button>
-          <span class="small text-muted">
-            Você pode editar os campos depois — preenchimento manual continua disponível.
-          </span>
-        </div>
+        <span class="small text-muted">
+          Você pode editar os campos depois — preenchimento manual continua disponível.
+        </span>
       </div>
     </div>
   </div>
@@ -320,6 +333,7 @@
     let _apresentacaoEscolhida = null;
     let _concentracaoEscolhida = null;
     let _dosePraticaCalculada = null;
+    let _conversaoApresentacaoExpandida = false;
 
   function aplicarHistoricoPrescricoes(html) {
     const container = document.getElementById('historico-prescricoes');
@@ -588,6 +602,8 @@
     if (toggleBtn) toggleBtn.classList.add('d-none');
     const apresWrap = document.getElementById('sug-apresentacoes-wrap');
     if (apresWrap) apresWrap.classList.add('d-none');
+    const toggleConversaoBtn = document.getElementById('btn-toggle-conversao-apresentacao');
+    if (toggleConversaoBtn) toggleConversaoBtn.classList.add('d-none');
     const praticaWrap = document.getElementById('sug-dose-pratica-wrap');
     if (praticaWrap) praticaWrap.classList.add('d-none');
     // Esconde TODOS os wrappers de concentração (o "guarda-chuva" + dropdown
@@ -610,9 +626,11 @@
     _apresentacaoEscolhida = null;
     _concentracaoEscolhida = null;
     _dosePraticaCalculada = null;
+    _conversaoApresentacaoExpandida = false;
 
     const obsEl = document.getElementById('sug-observacao');
     if (obsEl) { obsEl.textContent = ''; obsEl.classList.add('d-none'); }
+    _atualizarAcoesDoseSugerida();
   }
 
   function _limparSelectIndicacao() {
@@ -770,9 +788,11 @@
     const radiosDiv = document.getElementById('sug-apresentacoes-radios');
     const extrasDiv = document.getElementById('sug-apresentacoes-extras');
     const toggleBtn = document.getElementById('sug-apresentacoes-toggle');
+    const toggleConversaoBtn = document.getElementById('btn-toggle-conversao-apresentacao');
     _apresentacaoEscolhida = null;
     _concentracaoEscolhida = null;
     _dosePraticaCalculada = null;
+    _conversaoApresentacaoExpandida = false;
     _esconderPrescricaoPratica();
     _esconderConcWrap();
 
@@ -786,6 +806,8 @@
     if (!apresentacoes.length) {
       wrap.classList.add('d-none');
       radiosDiv.innerHTML = '';
+      if (toggleConversaoBtn) toggleConversaoBtn.classList.add('d-none');
+      _atualizarAcoesDoseSugerida();
       return;
     }
 
@@ -808,7 +830,47 @@
       document.getElementById('sug-apresentacoes-toggle-label').textContent =
         `Mostrar outras apresentações (${listaOculta.length})`;
     }
-    wrap.classList.remove('d-none');
+    const expandirPorPadrao = primarias.length > 0;
+    _conversaoApresentacaoExpandida = expandirPorPadrao;
+    wrap.classList.toggle('d-none', !expandirPorPadrao);
+    if (toggleConversaoBtn) toggleConversaoBtn.classList.remove('d-none');
+    _atualizarAcoesDoseSugerida();
+  }
+
+  function toggleConversaoApresentacao() {
+    const wrap = document.getElementById('sug-apresentacoes-wrap');
+    if (!wrap || !sugestaoDoseAtual) return;
+    _conversaoApresentacaoExpandida = !_conversaoApresentacaoExpandida;
+    wrap.classList.toggle('d-none', !_conversaoApresentacaoExpandida);
+    _atualizarAcoesDoseSugerida();
+  }
+
+  function _atualizarAcoesDoseSugerida() {
+    const usarLabel = document.getElementById('btn-usar-dose-sugerida-label');
+    const hint = document.getElementById('sug-dose-hint');
+    const toggleLabel = document.getElementById('btn-toggle-conversao-apresentacao-label');
+    const toggleBtn = document.getElementById('btn-toggle-conversao-apresentacao');
+
+    if (usarLabel) {
+      usarLabel.textContent = _dosePraticaCalculada
+        ? 'Usar dose convertida'
+        : 'Usar dose do bulário';
+    }
+    if (hint) {
+      hint.textContent = _dosePraticaCalculada
+        ? 'A conversão prática será aplicada na prescrição.'
+        : 'A dose acima já pode ser aplicada sem escolher apresentação.';
+    }
+    if (toggleLabel) {
+      toggleLabel.textContent = _conversaoApresentacaoExpandida
+        ? 'Ocultar conversão por apresentação'
+        : 'Converter para apresentação';
+    }
+    if (toggleBtn && !toggleBtn.classList.contains('d-none')) {
+      toggleBtn.classList.toggle('btn-outline-info', !_conversaoApresentacaoExpandida);
+      toggleBtn.classList.toggle('btn-info', _conversaoApresentacaoExpandida);
+      toggleBtn.classList.toggle('text-white', _conversaoApresentacaoExpandida);
+    }
   }
 
   // Agrupa por fabricante + monta HTML dos radios para uma lista de apresentações.
@@ -995,6 +1057,7 @@
   function _esconderPrescricaoPratica() {
     _dosePraticaCalculada = null;
     document.getElementById('sug-dose-pratica-wrap').classList.add('d-none');
+    _atualizarAcoesDoseSugerida();
   }
 
   function _atualizarPrescricaoPratica() {
@@ -1076,6 +1139,7 @@
     document.getElementById('sug-dose-pratica-linha2').textContent = freqTxt;
     document.getElementById('sug-dose-pratica-linha3').textContent = durTxt;
     document.getElementById('sug-dose-pratica-wrap').classList.remove('d-none');
+    _atualizarAcoesDoseSugerida();
   }
 
   function usarDoseSugerida() {

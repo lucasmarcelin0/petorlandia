@@ -155,6 +155,14 @@ def test_apresentacao_numero_no_nome_como_fallback():
     assert out['concentracao_unidade'] == 'mg'
 
 
+def test_apresentacao_percentual_liquida_vira_mg_por_ml():
+    out = scraper._estruturar_apresentacao_campos('Colírio', 'Tobramicina 0,35% (10 mL)', 'Tobramicina')
+    assert out['concentracao_valor'] == 3.5
+    assert out['concentracao_unidade'] == 'mg/ml'
+    assert out['volume_valor'] == 10.0
+    assert out['volume_unidade'] == 'ml'
+
+
 # ── _norm_especie_code ──────────────────────────────────────────────────────
 
 def test_especie_code_caes_e_gatos():
@@ -181,3 +189,47 @@ def test_doses_usam_duracao_da_frequencia_quando_duracao_vazia():
     assert doses, 'parser não gerou doses'
     assert doses[0]['duracao_min_dias'] == 7
     assert doses[0]['duracao_max_dias'] == 7
+
+
+def test_doses_extraem_gotas_por_olho_como_dose_estruturada():
+    doses = scraper._extrair_doses_estruturadas(
+        dose_linhas=['Cães e Gatos: 1 a 2 gotas por olho'],
+        via='Oftálmico',
+        frequencia_texto='8/8 horas',
+        duracao_texto=None,
+        especies_str='Cães e Gatos',
+    )
+    assert doses, 'parser não gerou dose oftálmica'
+    assert doses[0]['dose_unidade'] == 'GOTAS_ANIMAL'
+    assert doses[0]['dose_min'] == 1.0
+    assert doses[0]['dose_max'] == 2.0
+    assert doses[0]['dose'] == '1 - 2 gotas/olho'
+
+
+def test_extrai_links_opcoes_veterinarias_do_bloco_canonico():
+    html = """
+    <html><body>
+      <h2>OPÇÕES VETERINÁRIAS COM Cefalexina</h2>
+      <div><a href="/cg/produto/1698/cefex">Cefex®</a></div>
+      <div><a href="/CG/produto/170/petsporin">PetSporin</a></div>
+      <div><a href="/cg/produto/2004/cefalexina">Cefalexina</a></div>
+      <h2>Monitoramento</h2>
+      <div><a href="/cg/produto/170/petsporin">PetSporin</a></div>
+      <a href="/blog/post">Blog</a>
+    </body></html>
+    """
+    links = scraper._extrair_links_opcoes_veterinarias(html, excluir_pid=2004)
+    assert [l["id"] for l in links] == [1698, 170]
+    assert [l["nome"] for l in links] == ["Cefex®", "PetSporin"]
+
+
+def test_coletar_links_produto_html_dedupa_ids():
+    html = """
+    <html><body>
+      <a href="/cg/produto/1698/cefex">Cefex®</a>
+      <a href="/cg/produto/1698/cefex">Cefex®</a>
+      <a href="/cg/produto/4888/falexyl">Falexyl</a>
+    </body></html>
+    """
+    links = scraper._coletar_links_produto_html(html)
+    assert [l["id"] for l in links] == [1698, 4888]

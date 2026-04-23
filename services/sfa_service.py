@@ -326,7 +326,27 @@ def observacao_teste_sfa(batch_id: str) -> str:
 def paciente_eh_teste_sfa(paciente) -> bool:
     observacao = str(getattr(paciente, "observacao_operacional", "") or "")
     nome = str(getattr(paciente, "nome", "") or "")
-    return SFA_TEST_MARKER in observacao or nome.startswith(SFA_TEST_NAME_PREFIX)
+    ficha_sinan = str(getattr(paciente, "ficha_sinan", "") or "")
+    token_acesso = str(getattr(paciente, "token_acesso", "") or "")
+    if (
+        SFA_TEST_MARKER in observacao
+        or nome.startswith(SFA_TEST_NAME_PREFIX)
+        or ficha_sinan.upper().startswith("TESTE-")
+        or token_acesso.lower().startswith("teste-")
+    ):
+        return True
+
+    respostas = []
+    resposta_t0 = getattr(paciente, "resposta_t0", None)
+    if resposta_t0:
+        respostas.append(resposta_t0)
+    respostas.extend(list(getattr(paciente, "respostas_t10", []) or []))
+    respostas.extend(list(getattr(paciente, "respostas_t30", []) or []))
+    for resposta in respostas:
+        dados_json = str(getattr(resposta, "dados_json", "") or "")
+        if "_sfa_test_batch" in dados_json or SFA_TEST_MARKER in dados_json:
+            return True
+    return False
 
 
 def filtrar_pacientes_reais_sfa(pacientes):
@@ -457,6 +477,19 @@ def validar_t0_form_schema(schema: dict) -> list[str]:
                         f"Secao {section_index}, campo {key or field_index}: "
                         "informe opcoes validas."
                     )
+                elif key in {"exposicao_animal", "contato_animais"}:
+                    redundant_options = {"caes ou gatos", "caes ou gatos domesticos"}
+                    selected_redundant = [
+                        str(option).strip()
+                        for option in options
+                        if normalizar_nome_chave(option) in redundant_options
+                    ]
+                    if selected_redundant:
+                        errors.append(
+                            f"Secao {section_index}, campo {key}: "
+                            "use Caes e Gatos como opcoes separadas; remova "
+                            f"{', '.join(selected_redundant)}."
+                        )
 
     return errors
 
@@ -778,6 +811,96 @@ DIAS_DOENCA_BUCKETS = [
     "Sem data",
 ]
 
+T0_EXPOSURE_ALIASES = {
+    "exposicao_animal": {
+        "caes": ["Caes"],
+        "cao": ["Caes"],
+        "caes domesticos": ["Caes"],
+        "cachorros": ["Caes"],
+        "gatos": ["Gatos"],
+        "gato": ["Gatos"],
+        "gatos domesticos": ["Gatos"],
+        "caes ou gatos": ["Caes", "Gatos"],
+        "caes ou gatos domesticos": ["Caes", "Gatos"],
+        "gatos filhotes ou limpeza de fezes de gato": ["Gatos"],
+        "gado, porcos ou galinhas": ["Gado/porcos/galinhas"],
+        "gado/porcos/galinhas": ["Gado/porcos/galinhas"],
+        "gado": ["Gado/porcos/galinhas"],
+        "porcos": ["Gado/porcos/galinhas"],
+        "galinhas": ["Gado/porcos/galinhas"],
+        "roedores": ["Roedores"],
+        "roedores (ratos, camundongos) vivos/mortos": ["Roedores"],
+        "ratos": ["Roedores"],
+        "camundongos": ["Roedores"],
+        "carrapato": ["Carrapato"],
+        "carrapato ou area de mata": ["Carrapato"],
+    },
+    "exposicao_ambiental": {
+        "agua suja/lama/enchente": ["Agua suja/lama/enchente"],
+        "agua suja": ["Agua suja/lama/enchente"],
+        "lama": ["Agua suja/lama/enchente"],
+        "enchente": ["Agua suja/lama/enchente"],
+        "rio/corrego/pesca/natacao": ["Rio/corrego/pesca/natacao"],
+        "pesca ou natacao em rio/corrego": ["Rio/corrego/pesca/natacao"],
+        "mata/trilha/camping": ["Mata/trilha/camping"],
+        "trilha, camping ou caca": ["Mata/trilha/camping"],
+        "carrapato ou area de mata": ["Mata/trilha/camping"],
+        "area rural/chacara": ["Area rural/chacara"],
+        "trabalho em area rural/chacara": ["Area rural/chacara"],
+        "lazer em area rural/chacara": ["Area rural/chacara"],
+    },
+    "exposicao_alimentar": {
+        "carne malpassada/crua": ["Carne malpassada/crua"],
+        "carne malpassada ou crua": ["Carne malpassada/crua"],
+        "leite cru/queijo nao pasteurizado": ["Leite cru/queijo nao pasteurizado"],
+        "leite cru ou queijo nao pasteurizado": ["Leite cru/queijo nao pasteurizado"],
+        "ovos crus/maionese caseira": ["Ovos crus/maionese caseira"],
+        "ovos crus (gemada, maionese caseira)": ["Ovos crus/maionese caseira"],
+        "agua nao tratada": ["Agua nao tratada"],
+        "agua nao tratada (poco, rio, mina)": ["Agua nao tratada"],
+        "comida de rua/barracas": ["Comida de rua/barracas"],
+        "comida de rua ou barracas": ["Comida de rua/barracas"],
+    },
+}
+
+T0_EXPOSURE_NONE_LABELS = {
+    "exposicao_animal": "Nenhum contato animal relevante",
+    "exposicao_ambiental": "Nenhuma exposicao ambiental",
+    "exposicao_alimentar": "Nenhuma dessas",
+}
+
+T0_EXPOSURE_DISPLAY_OPTIONS = {
+    "exposicao_animal": [
+        "Caes",
+        "Gatos",
+        "Gado/porcos/galinhas",
+        "Roedores",
+        "Carrapato",
+        "Nenhum contato animal relevante",
+    ],
+    "exposicao_ambiental": [
+        "Agua suja/lama/enchente",
+        "Rio/corrego/pesca/natacao",
+        "Mata/trilha/camping",
+        "Area rural/chacara",
+        "Nenhuma exposicao ambiental",
+    ],
+    "exposicao_alimentar": [
+        "Carne malpassada/crua",
+        "Leite cru/queijo nao pasteurizado",
+        "Ovos crus/maionese caseira",
+        "Agua nao tratada",
+        "Comida de rua/barracas",
+        "Nenhuma dessas",
+    ],
+}
+
+T0_EXPOSURE_SOURCE_KEYS = {
+    "exposicao_animal": ("exposicao_animal", "contato_animais"),
+    "exposicao_ambiental": ("exposicao_ambiental", "atividades_recentes"),
+    "exposicao_alimentar": ("exposicao_alimentar", "consumo_recente"),
+}
+
 
 def _opcoes_campo_formulario(schema: dict, field_key: str) -> list[str]:
     for field in iterar_campos_form(schema):
@@ -793,6 +916,99 @@ def _opcao_sem_risco(option: object) -> bool:
 
 def _resposta_sim(value: object) -> bool:
     return normalizar_nome_chave(str(value or "")).startswith("sim")
+
+
+def opcoes_exposicao_t0(field_key: str) -> list[str]:
+    canonical_key = {
+        "contato_animais": "exposicao_animal",
+        "atividades_recentes": "exposicao_ambiental",
+        "consumo_recente": "exposicao_alimentar",
+    }.get(field_key, field_key)
+    return list(T0_EXPOSURE_DISPLAY_OPTIONS.get(canonical_key, []))
+
+
+def _split_resposta_lista(value: object) -> list[str]:
+    if value in (None, "", []):
+        return []
+    if isinstance(value, list):
+        return [str(item or "").strip() for item in value if str(item or "").strip()]
+
+    text = str(value or "").strip()
+    if not text:
+        return []
+    if " | " in text:
+        return [part.strip() for part in text.split("|") if part.strip()]
+    if ";" in text:
+        return [part.strip() for part in text.split(";") if part.strip()]
+    if "\n" in text:
+        return [part.strip() for part in text.splitlines() if part.strip()]
+    return [text]
+
+
+def normalizar_itens_exposicao_t0(field_key: str, value: object) -> list[str]:
+    canonical_key = {
+        "contato_animais": "exposicao_animal",
+        "atividades_recentes": "exposicao_ambiental",
+        "consumo_recente": "exposicao_alimentar",
+    }.get(field_key, field_key)
+
+    aliases = T0_EXPOSURE_ALIASES.get(canonical_key, {})
+    none_label = T0_EXPOSURE_NONE_LABELS.get(canonical_key, "Nenhum")
+    selected: list[str] = []
+    seen: set[str] = set()
+    saw_none = False
+
+    for item in _split_resposta_lista(value):
+        normalized_item = normalizar_nome_chave(item)
+        if not normalized_item:
+            continue
+        if _opcao_sem_risco(normalized_item):
+            saw_none = True
+            continue
+
+        canonical_items = aliases.get(normalized_item, [item])
+        for canonical in canonical_items:
+            canonical_text = str(canonical or "").strip()
+            canonical_norm = normalizar_nome_chave(canonical_text)
+            if not canonical_norm or _opcao_sem_risco(canonical_norm) or canonical_norm in seen:
+                continue
+            selected.append(canonical_text)
+            seen.add(canonical_norm)
+
+    if selected:
+        return selected
+    return [none_label] if saw_none else []
+
+
+def normalizar_payload_t0_exposicoes(payload: dict[str, object]) -> dict[str, object]:
+    normalized = dict(payload or {})
+
+    if _resposta_sim(normalized.get("contato_agua_suja")):
+        base = _split_resposta_lista(normalized.get("exposicao_ambiental"))
+        base.append("Agua suja/lama/enchente")
+        normalized["exposicao_ambiental"] = base
+
+    if _resposta_sim(normalized.get("contato_carrapato_mata")):
+        animal_base = _split_resposta_lista(normalized.get("exposicao_animal"))
+        animal_base.append("Carrapato")
+        normalized["exposicao_animal"] = animal_base
+
+        ambiental_base = _split_resposta_lista(normalized.get("exposicao_ambiental"))
+        ambiental_base.append("Mata/trilha/camping")
+        normalized["exposicao_ambiental"] = ambiental_base
+
+    for canonical_key, source_keys in T0_EXPOSURE_SOURCE_KEYS.items():
+        combined: list[str] = []
+        for source_key in source_keys:
+            combined.extend(_split_resposta_lista(normalized.get(source_key)))
+        canonical_items = normalizar_itens_exposicao_t0(canonical_key, combined)
+        if canonical_items:
+            normalized[canonical_key] = canonical_items
+            for source_key in source_keys:
+                if source_key in normalized:
+                    normalized[source_key] = canonical_items
+
+    return normalized
 
 
 def _itens_resposta_por_opcoes(value: object, options: list[str]) -> list[str]:
@@ -918,11 +1134,6 @@ def _somar_counter(counter: Counter, label: str, amount: int = 1) -> None:
 def montar_analise_respostas(pacientes) -> dict[str, object]:
     """Monta uma visao agregada para explorar riscos e tempo de resposta."""
     pacientes = list(pacientes or [])
-    schema_t0 = carregar_t0_form_schema()
-
-    animal_options = _opcoes_campo_formulario(schema_t0, "contato_animais")
-    food_options = _opcoes_campo_formulario(schema_t0, "consumo_recente")
-    activity_options = _opcoes_campo_formulario(schema_t0, "atividades_recentes")
 
     animal_counter: Counter = Counter()
     food_counter: Counter = Counter()
@@ -938,6 +1149,7 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
 
     for paciente in pacientes:
         resposta_t0, payload_t0 = obter_payload_formulario(paciente, "t0")
+        payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
         inicio_doenca = _parse_data_analise(
             payload_t0.get("data_inicio_sintomas")
             or getattr(resposta_t0, "data_inicio_sintomas", None)
@@ -947,36 +1159,43 @@ def montar_analise_respostas(pacientes) -> dict[str, object]:
         else:
             total_sem_inicio += 1
 
+        answered_animals = normalizar_itens_exposicao_t0("exposicao_animal", payload_t0.get("exposicao_animal"))
         selected_animals = [
             item
-            for item in _itens_resposta_por_opcoes(payload_t0.get("contato_animais"), animal_options)
+            for item in answered_animals
             if not _opcao_sem_risco(item)
         ]
+        answered_food = normalizar_itens_exposicao_t0("exposicao_alimentar", payload_t0.get("exposicao_alimentar"))
         selected_food = [
             item
-            for item in _itens_resposta_por_opcoes(payload_t0.get("consumo_recente"), food_options)
+            for item in answered_food
             if not _opcao_sem_risco(item)
         ]
+        answered_activities = normalizar_itens_exposicao_t0("exposicao_ambiental", payload_t0.get("exposicao_ambiental"))
         selected_activities = [
             item
-            for item in _itens_resposta_por_opcoes(payload_t0.get("atividades_recentes"), activity_options)
+            for item in answered_activities
             if not _opcao_sem_risco(item)
         ]
 
-        environmental_risks: list[str] = []
+        environmental_risks: list[str] = list(selected_activities)
         if _resposta_sim(payload_t0.get("contato_agua_suja")):
             environmental_risks.append("Agua suja/lama/enchente")
         if _resposta_sim(payload_t0.get("contato_carrapato_mata")):
-            environmental_risks.append("Carrapato ou area de mata")
+            environmental_risks.append("Mata/trilha/camping")
         if normalizar_nome_chave(payload_t0.get("tipo_residencia")) == "casa rural":
             environmental_risks.append("Moradia rural")
         if normalizar_nome_chave(payload_t0.get("ocupacao_principal")) == "agricultura/pecuaria":
             environmental_risks.append("Ocupacao agropecuaria")
-        environmental_risks.extend(selected_activities)
+        environmental_risks = [
+            item
+            for item in normalizar_itens_exposicao_t0("exposicao_ambiental", environmental_risks)
+            if not _opcao_sem_risco(item)
+        ]
 
-        for item in selected_animals:
+        for item in answered_animals:
             _somar_counter(animal_counter, item)
-        for item in selected_food:
+        for item in answered_food:
             _somar_counter(food_counter, item)
         for item in environmental_risks:
             _somar_counter(environmental_counter, item)
@@ -1206,6 +1425,8 @@ def coletar_resposta_nativa(
     if not dados.get("data_nascimento"):
         dados["data_nascimento"] = paciente.data_nascimento or ""
     dados["_origem"] = f"native_{stage}_form"
+    if stage == "t0":
+        dados = normalizar_payload_t0_exposicoes(dados)
     return dados, errors
 
 
@@ -1492,6 +1713,31 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
         "50-69% recuperado - sequelas moderadas",
         "Menos de 50% recuperado - limitacoes importantes",
     ]
+    contatos_animais_catalogo = [
+        ["Caes"],
+        ["Gatos"],
+        ["Gado/porcos/galinhas"],
+        ["Roedores"],
+        ["Carrapato"],
+        ["Caes", "Gado/porcos/galinhas"],
+        ["Nenhum contato animal relevante"],
+    ]
+    consumo_recente_catalogo = [
+        ["Carne malpassada/crua"],
+        ["Leite cru/queijo nao pasteurizado"],
+        ["Ovos crus/maionese caseira"],
+        ["Comida de rua/barracas"],
+        ["Agua nao tratada"],
+        ["Nenhum desses"],
+    ]
+    atividades_recentes_catalogo = [
+        ["Rio/corrego/pesca/natacao"],
+        ["Mata/trilha/camping"],
+        ["Area rural/chacara"],
+        ["Rio/corrego/pesca/natacao", "Mata/trilha/camping"],
+        ["Area rural/chacara", "Mata/trilha/camping"],
+        ["Nenhuma exposicao ambiental"],
+    ]
     ids_estudo: list[str] = []
 
     for indice in range(total):
@@ -1511,6 +1757,11 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
         sinais_alerta = [sinais_alerta_catalogo[indice % len(sinais_alerta_catalogo)]]
         dor_score = str(1 + ((indice * 3) % 5))
         fadiga_score = str(1 + ((indice * 4 + 2) % 5))
+        contato_animais = contatos_animais_catalogo[indice % len(contatos_animais_catalogo)]
+        consumo_recente = consumo_recente_catalogo[indice % len(consumo_recente_catalogo)]
+        atividades_recentes = atividades_recentes_catalogo[indice % len(atividades_recentes_catalogo)]
+        contato_agua_suja = "Sim" if indice % 4 in (0, 2) else "Nao"
+        contato_carrapato_mata = "Sim" if indice % 5 in (1, 3) else "Nao"
         impacto_atual = [
             "Nenhum",
             "Leve - incomoda, mas nao limita",
@@ -1580,11 +1831,17 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "condicoes_previas": ["Nenhuma das acima"] if indice % 3 else ["Hipertensao"],
             "diagnostico_dengue_previo": ["Sim", "Nao", "Nao sei"][indice % 3],
             "vacinas_12_meses": ["Nenhuma"] if indice % 4 else ["COVID-19 (reforco recente)"],
-            "exposicao_ambiental": ["Nenhuma exposicao ambiental"] if indice % 2 else ["Area rural/chacara"],
-            "exposicao_animal": ["Nenhum contato animal relevante"]
-            if indice % 3
-            else (["Gatos"] if indice % 2 else ["Caes"]),
-            "exposicao_alimentar": ["Nenhuma dessas"] if indice % 4 else ["Agua nao tratada"],
+            "contato_agua_suja": contato_agua_suja,
+            "contato_carrapato_mata": contato_carrapato_mata,
+            "contato_animais": contato_animais,
+            "consumo_recente": consumo_recente,
+            "atividades_recentes": atividades_recentes,
+            "exposicao_ambiental": atividades_recentes
+            + (["Agua suja/lama/enchente"] if contato_agua_suja == "Sim" else [])
+            + (["Mata/trilha/camping"] if contato_carrapato_mata == "Sim" else []),
+            "exposicao_animal": contato_animais
+            + (["Carrapato"] if contato_carrapato_mata == "Sim" else []),
+            "exposicao_alimentar": consumo_recente,
             "outras_pessoas_com_sintomas": ["Sim", "Nao", "Nao sei"][indice % 3],
             "teve_febre": "Sim" if indice % 5 != 0 else "Nao",
             "intensidade_febre": str(1 + ((indice * 2) % 5)),
@@ -1606,6 +1863,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "consentimento_registrado_em": datetime.combine(data_t0, datetime.min.time()).isoformat() + "Z",
             "_sfa_test_batch": batch_id,
         }
+        payload_t0 = normalizar_payload_t0_exposicoes(payload_t0)
         payload_t10 = {
             "id_estudo": id_estudo,
             "nome": nome,
@@ -2536,6 +2794,7 @@ def on_submit_t0(dados: dict) -> dict:
     from extensions import db
     from models.sfa import SfaPaciente, SfaRespostaT0
 
+    dados = normalizar_payload_t0_exposicoes(dados)
     token_acesso = str(dados.get("token_acesso") or dados.get("token") or "").strip()
     id_estudo = str(dados.get("id_estudo") or "").strip()
     ficha_sinan = str(dados.get("ficha_sinan") or dados.get("numero_ficha_sinan") or "").strip()

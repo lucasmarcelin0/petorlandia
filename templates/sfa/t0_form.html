@@ -458,5 +458,29 @@
       </div>
     </form>
   </div>
+  <script>
+    document.querySelectorAll(".choices").forEach((group) => {
+      const boxes = Array.from(group.querySelectorAll('input[type="checkbox"]'));
+      if (!boxes.length) return;
+
+      const isNoneOption = (value) => {
+        const normalized = String(value || "").trim().toLowerCase();
+        return normalized.startsWith("nenhum") || normalized.startsWith("nenhuma");
+      };
+
+      boxes.forEach((box) => {
+        box.addEventListener("change", () => {
+          if (!box.checked) return;
+          const selectedNone = isNoneOption(box.value);
+          boxes.forEach((other) => {
+            if (other === box) return;
+            if (selectedNone || isNoneOption(other.value)) {
+              other.checked = false;
+            }
+          });
+        });
+      });
+    });
+  </script>
 </body>
 </html>

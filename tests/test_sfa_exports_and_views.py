@@ -177,8 +177,11 @@ def test_montar_analise_respostas_agrega_riscos_e_dias_da_doenca():
     assert kpis["Risco animal"] == 1
     assert kpis["Risco ambiental"] == 1
     assert kpis["Risco alimentar"] == 1
-    assert _chart_value(analise["charts"]["animal"], "Caes ou gatos domesticos") == 1
-    assert _chart_value(analise["charts"]["food"], "Leite cru ou queijo nao pasteurizado") == 1
+    assert _chart_value(analise["charts"]["animal"], "Caes") == 1
+    assert _chart_value(analise["charts"]["animal"], "Gatos") == 1
+    assert _chart_value(analise["charts"]["animal"], "Gado/porcos/galinhas") == 1
+    assert _chart_value(analise["charts"]["animal"], "Caes ou gatos domesticos") == 0
+    assert _chart_value(analise["charts"]["food"], "Leite cru/queijo nao pasteurizado") == 1
     assert _chart_value(analise["charts"]["environmental"], "Agua suja/lama/enchente") == 1
 
     t0_dataset = next(dataset for dataset in analise["charts"]["timing"]["datasets"] if dataset["label"] == "T0")

@@ -248,6 +248,112 @@ def _unidade_pratica_por_forma(forma: Optional[str]) -> str:
     return _UNIDADE_PRATICA_POR_FORMA.get(chave, 'unidade')
 
 
+def _texto_norm(s: Optional[str]) -> str:
+    return _strip_accents(s or '').lower().strip()
+
+
+def _categoria_via_texto(texto: Optional[str]) -> Optional[str]:
+    """Normaliza vias/formas em poucas categorias clínicas comparáveis."""
+    t = _texto_norm(texto)
+    if not t:
+        return None
+    if any(k in t for k in ('colirio', 'oftalm', 'olho')):
+        return 'OFTALMICA'
+    if any(k in t for k in ('otologic', 'otolog', 'auric', 'ouvido', 'conduto auditivo', 'canal auditivo')):
+        return 'OTICA'
+    if any(k in t for k in ('intramus', 'intraven', 'subcut', 'injet', ' parenter')):
+        return 'INJETAVEL'
+    if any(k in t for k in ('oral', 'capsul', 'comprim', 'tablete', 'drage', 'suspens', 'solucao oral', 'xarope', 'petisco')):
+        return 'ORAL'
+    if any(k in t for k in ('topic', 'pomada', 'creme', 'gel', 'spray', 'locao', 'lesao', 'cutan')):
+        return 'TOPICA'
+    if any(k in t for k in ('supositorio', 'retal', 'enema')):
+        return 'RETAL'
+    return None
+
+
+def _categoria_apresentacao(ap) -> Optional[str]:
+    texto = ' '.join(
+        p for p in [
+            getattr(ap, 'forma', None),
+            getattr(ap, 'concentracao', None),
+            getattr(ap, 'nome_variante', None),
+        ] if p
+    )
+    return _categoria_via_texto(texto)
+
+
+def _preferencias_via_do_medicamento(medicamento) -> List[str]:
+    counts: Dict[str, int] = {}
+    for ap in (getattr(medicamento, 'apresentacoes', []) or []):
+        cat = _categoria_apresentacao(ap)
+        if cat:
+            counts[cat] = counts.get(cat, 0) + 1
+
+    via_medicamento = _categoria_via_texto(getattr(medicamento, 'via_administracao', None))
+    if via_medicamento:
+        counts[via_medicamento] = counts.get(via_medicamento, 0) + 1
+
+    if not counts:
+        return []
+
+    maior = max(counts.values())
+    return [cat for cat, n in counts.items() if n == maior]
+
+
+def _preferencia_unidade_do_medicamento(medicamento) -> Optional[str]:
+    """Prefere dose em mg para apresentações sólidas e em mL/gotas para líquidas."""
+    counts = {'SOLIDO': 0, 'LIQUIDO': 0}
+    for ap in (getattr(medicamento, 'apresentacoes', []) or []):
+        forma = _texto_norm(getattr(ap, 'forma', None))
+        if any(k in forma for k in ('capsul', 'comprim', 'tablete', 'drage', 'petisco', 'supositorio')):
+            counts['SOLIDO'] += 1
+        elif any(k in forma for k in ('suspens', 'solucao', 'colirio', 'gota', 'xarope', 'frasco', 'ampola', 'emuls', 'pasta oral')):
+            counts['LIQUIDO'] += 1
+
+    if counts['SOLIDO'] == counts['LIQUIDO'] == 0:
+        return None
+    return 'SOLIDO' if counts['SOLIDO'] >= counts['LIQUIDO'] else 'LIQUIDO'
+
+
+def _score_unidade_protocolo(proto, preferencia_unidade: Optional[str]) -> int:
+    if preferencia_unidade is None:
+        return 0
+    unidade = (getattr(proto, 'dose_unidade', None) or '').upper()
+    eh_liquido = unidade in {'ML_KG', 'ML_ANIMAL', 'GOTAS_ANIMAL'}
+    eh_solido = unidade in {
+        'MG_KG', 'MCG_KG', 'UI_KG',
+        'MG_ANIMAL', 'MCG_ANIMAL', 'UI_ANIMAL',
+        'COMPRIMIDOS_ANIMAL',
+    }
+    if preferencia_unidade == 'LIQUIDO':
+        return 0 if eh_liquido else 1
+    return 0 if eh_solido else 1
+
+
+def _score_protocolo(proto, medicamento) -> Tuple[int, int, float, int]:
+    vias_preferidas = _preferencias_via_do_medicamento(medicamento)
+    via_proto = _categoria_via_texto(getattr(proto, 'via', None))
+    if vias_preferidas:
+        via_score = 0 if via_proto in vias_preferidas else (1 if via_proto is None else 2)
+    else:
+        via_score = 0 if via_proto else 1
+    unidade_score = _score_unidade_protocolo(proto, _preferencia_unidade_do_medicamento(medicamento))
+    indicacao_score = 0 if (getattr(proto, 'indicacao', None) or '').strip() else 1
+    return (via_score, unidade_score, _largura_faixa(proto), indicacao_score)
+
+
+def _contexto_dose_local(proto) -> Optional[str]:
+    texto = _texto_norm(getattr(proto, 'dose', None))
+    if 'olho' in texto:
+        return 'por olho'
+    if any(k in texto for k in ('conduto', 'ouvido', 'canal auditivo')):
+        return 'por conduto auditivo'
+    if 'narina' in texto:
+        return 'por narina'
+    return None
+
+
 def _especie_animal_code(animal) -> str:
     """Mapeia o texto da espécie do animal para o enum interno."""
     if not animal:
@@ -382,6 +488,11 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     # e devolve lista pro frontend pedir escolha do vet.
     if indicacao is None:
         indicacoes = _indicacoes_disponiveis(medicamento, animal)
+        tem_generico_aplicavel = any(
+            _proto_aplica_basico(p, esp_code, peso)
+            and not ((getattr(p, 'indicacao', None) or '').strip())
+            for p in protos
+        )
         # Considera "múltiplo" apenas quando há >=2 indicações diferentes
         # (evita forçar dropdown quando só existe "Alergia" ou quando todos
         # são NULL).
@@ -391,8 +502,11 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
                 'indicacoes': indicacoes,
                 'medicamento_id': getattr(medicamento, 'id', None),
             }
-        # 0 ou 1 indicação → segue adiante com filtro
-        indicacao_filtro = indicacoes[0] if indicacoes else None
+        # Só auto-filtra quando existe exatamente 1 indicação E não há
+        # protocolo genérico aplicável. Se coexistem linhas genéricas com uma
+        # única indicação nomeada (caso comum em AINEs), mantemos tudo no pool
+        # para a heurística de via/apresentação escolher o protocolo mais útil.
+        indicacao_filtro = indicacoes[0] if (len(indicacoes) == 1 and not tem_generico_aplicavel) else None
     else:
         indicacao_filtro = (indicacao or '').strip() or None
 
@@ -414,7 +528,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         if not candidatos:
             return None
 
-    proto = min(candidatos, key=_largura_faixa)
+    proto = min(candidatos, key=lambda p: _score_protocolo(p, medicamento))
 
     dose_min_v = float(proto.dose_min)
     dose_max_v = float(proto.dose_max) if proto.dose_max is not None else dose_min_v
@@ -444,6 +558,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         dose_exibir = f"{_fmt(dose_calc_min)} {dose_unit_out}".strip()
     else:
         dose_exibir = f"{_fmt(dose_calc_min)}–{_fmt(dose_calc_max)} {dose_unit_out}".strip()
+    if dose_unit_out == 'gota(s)':
+        contexto_local = _contexto_dose_local(proto)
+        if contexto_local:
+            dose_exibir = f"{dose_exibir} {contexto_local}"
 
     faixa_unit_label = {
         'MG_KG': 'mg/kg', 'MCG_KG': 'mcg/kg', 'ML_KG': 'mL/kg', 'UI_KG': 'UI/kg',
@@ -492,11 +610,17 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         if dose_unit_out == 'mg' and ap.concentracao_valor and ap.concentracao_unidade:
             cv = float(ap.concentracao_valor)
             un_ap = (ap.concentracao_unidade or '').lower()
-            if un_ap == 'mg':
-                n = dose_media / cv
-                equiv = f"{_fmt(n)} × {ap.forma} de {_fmt(cv)} mg por administração"
+            if un_ap in ('mg', 'g', 'mcg'):
+                cv_mg = cv
+                if un_ap == 'g':
+                    cv_mg = cv * 1000.0
+                elif un_ap == 'mcg':
+                    cv_mg = cv / 1000.0
+                n = dose_media / cv_mg
+                equiv = f"{_fmt(n)} × {ap.forma} de {_fmt(cv)} {un_ap} por administração"
             elif un_ap in ('mg/ml', 'mcg/ml'):
-                ml = dose_media / cv
+                cv_mg_ml = cv / 1000.0 if un_ap == 'mcg/ml' else cv
+                ml = dose_media / cv_mg_ml
                 equiv = f"{_fmt(ml)} mL por administração"
         elif dose_unit_out == 'mL' and ap.concentracao_unidade == 'mg/ml':
             # dose em mL já é direta

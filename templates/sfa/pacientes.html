@@ -115,6 +115,9 @@
         <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
       </div>
       <div class="col-auto ms-auto">
+        <a href="{{ url_for('sfa_routes.analise_respostas', **filtros) }}" class="btn btn-sm btn-outline-success">
+          Analise respostas
+        </a>
         <a href="{{ url_for('sfa_routes.export_cadastro_csv', **filtros) }}" class="btn btn-sm btn-outline-secondary">
           Exportar cadastro
         </a>

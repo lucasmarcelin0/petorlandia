@@ -568,6 +568,11 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
                 "sexo_biologico": "Feminino",
                 "ocupacao_principal": "Estudante",
                 "sintomas_principais": ["Cansaco extremo", "Dores musculares intensas"],
+                "contato_agua_suja": "Sim",
+                "contato_carrapato_mata": "Nao",
+                "contato_animais": ["Caes ou gatos domesticos"],
+                "consumo_recente": ["Agua nao tratada (poco, rio, mina)"],
+                "atividades_recentes": ["Lazer em area rural/chacara"],
             }
         ),
     )
@@ -628,6 +633,15 @@ def test_patient_list_shows_test_dashboards_for_test_view(native_t0_app, monkeyp
     assert "Prevalência de Sintomas no T0" in html
     assert "Evolução percebida no T10" in html
     assert "Estado final no T30" in html
+    assert "Contato com animais" in html
+    assert "Riscos ambientais" in html
+    assert "Riscos alimentares" in html
+    assert "Dominios de exposicao" in html
+    assert "Caes" in html
+    assert "Gatos" in html
+    assert "Caes ou gatos domesticos" not in html
+    assert "Agua nao tratada" in html
+    assert "Agua nao tratada (poco, rio, mina)" not in html
     assert "Retorno às atividades" in html
     assert "Sexo biológico" in html
     assert "Faixa etária" in html

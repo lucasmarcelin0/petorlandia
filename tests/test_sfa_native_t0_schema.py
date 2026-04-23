@@ -47,6 +47,35 @@ def test_carregar_t0_form_schema_tem_campos_esperados():
     assert "Caes ou gatos" not in animal_field["options"]
 
 
+def test_validar_t0_form_schema_bloqueia_opcao_animal_redundante():
+    schema = json.loads(json.dumps(carregar_t0_form_schema()))
+    animal_field = next(field for section in schema["sections"] for field in section["fields"] if field["key"] == "exposicao_animal")
+    animal_field["options"].append("Caes ou gatos domesticos")
+
+    errors = sfa_service.validar_t0_form_schema(schema)
+
+    assert any("use Caes e Gatos como opcoes separadas" in error for error in errors)
+
+
+def test_normalizar_payload_t0_exposicoes_converte_legado_para_categorias_atuais():
+    payload = {
+        "contato_animais": [
+            "Caes ou gatos domesticos",
+            "Gatos filhotes ou limpeza de fezes de gato",
+            "Nenhum contato com animais",
+        ],
+        "consumo_recente": ["Agua nao tratada (poco, rio, mina)"],
+        "atividades_recentes": ["Lazer em area rural/chacara"],
+    }
+
+    normalized = sfa_service.normalizar_payload_t0_exposicoes(payload)
+
+    assert normalized["exposicao_animal"] == ["Caes", "Gatos"]
+    assert normalized["contato_animais"] == ["Caes", "Gatos"]
+    assert normalized["exposicao_alimentar"] == ["Agua nao tratada"]
+    assert normalized["exposicao_ambiental"] == ["Area rural/chacara"]
+
+
 def test_carregar_t10_t30_form_schemas_tem_campos_esperados():
     schema_t10 = carregar_t10_form_schema()
     schema_t30 = carregar_t30_form_schema()
