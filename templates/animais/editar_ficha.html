@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<h2>Editar Ficha de {{ animal.name }}</h2>
+<form method="POST">
+    <div class="mb-3">
+        <label for="vacina" class="form-label">Vacina</label>
+        <input type="text" class="form-control" id="vacina" name="vacina">
+    </div>
+    <div class="mb-3">
+        <label for="consulta" class="form-label">Consulta</label>
+        <input type="text" class="form-control" id="consulta" name="consulta">
+    </div>
+    <div class="mb-3">
+        <label for="medicamento" class="form-label">Medicamento</label>
+        <input type="text" class="form-control" id="medicamento" name="medicamento">
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+</form>
+{% endblock %}
