@@ -1,13 +1,13 @@
 <div class="container py-4">
-  <h2 class="mb-4">📋 Histórico e Edição de Exames</h2>
+  <h2 class="mb-4">Historico de Exames</h2>
 
-{% for bloco in animal.blocos_exames|reverse %}
+  {% for bloco in animal.blocos_exames|reverse %}
   <div class="border p-3 mb-4 bg-light rounded" id="bloco-{{ bloco.id }}">
-    <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
       <div>
         <strong>Exames solicitados em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</strong>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex flex-wrap gap-2">
         <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}"
               class="delete-history-form" data-sync data-target="#historico-exames"
               data-target-endpoint="{{ url_for('historico_exames_partial', animal_id=animal.id) }}"
@@ -18,10 +18,16 @@
           </button>
         </form>
 
-        <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm">🖨️ Imprimir</a>
+        <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-printer"></i> Imprimir
+        </a>
 
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleEdicao({{ bloco.id }})">
-          ✏️ Editar
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="togglePainelExames({{ bloco.id }}, 'pedido')">
+          <i class="bi bi-pencil"></i> Editar solicitacao
+        </button>
+
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="togglePainelExames({{ bloco.id }}, 'realizacao')">
+          <i class="bi bi-check2-circle"></i> Registrar realizacao
         </button>
       </div>
     </div>
@@ -29,15 +35,23 @@
     <div id="exames-view-{{ bloco.id }}">
       <ul class="list-group list-group-flush">
         {% for exame in bloco.exames %}
-        <li class="list-group-item d-flex justify-content-between align-items-start">
-          <div>
-            🧪 <strong>{{ exame.nome }}</strong><br>
-            <em>{{ exame.justificativa }}</em>
-            {% if exame.resultado %}<div><small>Resultado: {{ exame.resultado }}</small></div>{% endif %}
-            {% if exame.performed_at %}<div><small>Realizado em {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</small></div>{% endif %}
+        <li class="list-group-item">
+          <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div>
+              <strong>{{ exame.nome }}</strong>
+              {% if exame.justificativa %}
+              <div><small class="text-muted">{{ exame.justificativa }}</small></div>
+              {% endif %}
+            </div>
+            <span class="badge {% if exame.status == 'concluido' %}bg-success{% elif exame.status == 'cancelado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+              {{ (exame.status or 'pendente')|replace('_', ' ')|capitalize }}
+            </span>
           </div>
-          {% if exame.status == 'concluido' %}
-          <i class="bi bi-check-circle-fill text-success" title="Concluído"></i>
+          {% if exame.resultado or exame.performed_at %}
+          <div class="mt-2 small">
+            {% if exame.resultado %}<div><strong>Resultado:</strong> {{ exame.resultado }}</div>{% endif %}
+            {% if exame.performed_at %}<div><strong>Realizado em:</strong> {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>{% endif %}
+          </div>
           {% endif %}
         </li>
         {% endfor %}
@@ -45,19 +59,23 @@
 
       {% if bloco.observacoes_gerais %}
       <div class="mt-3">
-        <strong>Observações Gerais:</strong><br>
+        <strong>Observacoes gerais:</strong><br>
         <em>{{ bloco.observacoes_gerais }}</em>
       </div>
       {% endif %}
     </div>
 
-    <div id="exames-edit-{{ bloco.id }}" class="d-none">
-      <div id="exames-container-{{ bloco.id }}">
+    <div id="exames-pedido-{{ bloco.id }}" class="d-none mt-3">
+      <div class="alert alert-info py-2">
+        Edite aqui apenas o pedido do exame: nome, justificativa e observacoes. Resultado e data ficam no registro de realizacao.
+      </div>
+
+      <div id="exames-pedido-container-{{ bloco.id }}">
         {% for exame in bloco.exames %}
-        <div class="card mb-3 exame-card" data-id="{{ exame.id }}">
+        <div class="card mb-3 exame-pedido-card" data-id="{{ exame.id }}">
           <div class="card-body">
             <div class="mb-2 position-relative">
-              <label class="form-label">Nome do Exame</label>
+              <label class="form-label">Nome do exame</label>
               <input type="text" class="form-control exame-nome" value="{{ exame.nome or '' }}" oninput="sugerirExames(this)">
               <ul class="autocomplete-sugestoes list-group position-absolute w-100" style="z-index: 10;"></ul>
             </div>
@@ -65,11 +83,48 @@
               <label class="form-label">Justificativa</label>
               <textarea class="form-control exame-justificativa" rows="2">{{ exame.justificativa or '' }}</textarea>
             </div>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removerExamePedido(this)">Remover</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="adicionarExamePedido({{ bloco.id }})">
+        Adicionar exame
+      </button>
+
+      <div class="mb-3">
+        <label class="form-label">Observacoes gerais da solicitacao</label>
+        <textarea id="observacoes_gerais_{{ bloco.id }}" class="form-control" rows="3">{{ bloco.observacoes_gerais or '' }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="salvarSolicitacaoExames({{ bloco.id }})">Salvar solicitacao</button>
+        <button class="btn btn-outline-secondary" onclick="togglePainelExames({{ bloco.id }}, 'pedido')">Cancelar</button>
+      </div>
+    </div>
+
+    <div id="exames-realizacao-{{ bloco.id }}" class="d-none mt-3">
+      <div class="alert alert-success py-2">
+        Registre aqui a execucao do exame. O pedido original nao sera alterado.
+      </div>
+
+      <div id="exames-realizacao-container-{{ bloco.id }}">
+        {% for exame in bloco.exames %}
+        <div class="card mb-3 exame-realizacao-card" data-id="{{ exame.id }}">
+          <div class="card-body">
             <div class="mb-2">
-              <label class="form-label">Status</label>
+              <label class="form-label">Exame solicitado</label>
+              <input type="text" class="form-control" value="{{ exame.nome or '' }}" readonly>
+              {% if exame.justificativa %}
+              <div class="form-text">{{ exame.justificativa }}</div>
+              {% endif %}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Status da realizacao</label>
               <select class="form-select exame-status">
                 <option value="pendente" {% if exame.status == 'pendente' %}selected{% endif %}>Pendente</option>
-                <option value="concluido" {% if exame.status == 'concluido' %}selected{% endif %}>Concluído</option>
+                <option value="concluido" {% if exame.status == 'concluido' %}selected{% endif %}>Concluido</option>
                 <option value="cancelado" {% if exame.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
               </select>
             </div>
@@ -78,60 +133,59 @@
               <textarea class="form-control exame-resultado" rows="2">{{ exame.resultado or '' }}</textarea>
             </div>
             <div class="mb-2">
-              <label class="form-label">Data de Realização</label>
+              <label class="form-label">Data de realizacao</label>
               <input type="date" class="form-control exame-performed_at" value="{{ exame.performed_at.date() if exame.performed_at else '' }}">
             </div>
-            <button type="button" class="btn btn-danger btn-sm btn-remover" onclick="removerExame(this)">🗑️ Remover</button>
           </div>
         </div>
         {% endfor %}
       </div>
 
-      <!-- Aqui NÃO TEM botão adicionar estaticamente -->
-
-      <div class="mb-3">
-        <label class="form-label">Observações Gerais</label>
-        <textarea id="observacoes_gerais_{{ bloco.id }}" class="form-control" rows="3">{{ bloco.observacoes_gerais or '' }}</textarea>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="salvarRealizacaoExames({{ bloco.id }})">Salvar realizacao</button>
+        <button class="btn btn-outline-secondary" onclick="togglePainelExames({{ bloco.id }}, 'realizacao')">Cancelar</button>
       </div>
-
-      <button class="btn btn-success" onclick="salvarBlocoExames({{ bloco.id }}, {{ bloco.consulta_id }})">💾 Salvar alterações</button>
     </div>
   </div>
+  {% else %}
+  <p class="text-muted">Nenhum exame solicitado.</p>
   {% endfor %}
 </div>
 
 <style>
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
 }
 .fade-in {
-  animation: fadeIn 0.5s ease;
+  animation: fadeIn 0.25s ease;
 }
 </style>
 
 <script>
-function toggleEdicao(blocoId) {
+function togglePainelExames(blocoId, painel) {
   const view = document.getElementById(`exames-view-${blocoId}`);
-  const edit = document.getElementById(`exames-edit-${blocoId}`);
-  const container = document.getElementById(`exames-container-${blocoId}`);
+  const pedido = document.getElementById(`exames-pedido-${blocoId}`);
+  const realizacao = document.getElementById(`exames-realizacao-${blocoId}`);
+  const target = painel === 'realizacao' ? realizacao : pedido;
+  const willOpen = target.classList.contains('d-none');
 
-  view.classList.toggle('d-none');
-  edit.classList.toggle('d-none');
-  console.log(`🖊️ Alternando edição para bloco ${blocoId}`);
-
-
+  pedido.classList.add('d-none');
+  realizacao.classList.add('d-none');
+  view.classList.toggle('d-none', willOpen);
+  if (willOpen) {
+    target.classList.remove('d-none');
+  }
 }
 
-function adicionarExame(blocoId) {
-  const container = document.getElementById(`exames-container-${blocoId}`);
-
+function adicionarExamePedido(blocoId) {
+  const container = document.getElementById(`exames-pedido-container-${blocoId}`);
   const card = document.createElement('div');
-  card.className = 'card mb-3 exame-card fade-in';
+  card.className = 'card mb-3 exame-pedido-card fade-in';
   card.innerHTML = `
     <div class="card-body">
       <div class="mb-2 position-relative">
-        <label class="form-label">Nome do Exame</label>
+        <label class="form-label">Nome do exame</label>
         <input type="text" class="form-control exame-nome" oninput="sugerirExames(this)">
         <ul class="autocomplete-sugestoes list-group position-absolute w-100" style="z-index: 10;"></ul>
       </div>
@@ -139,60 +193,20 @@ function adicionarExame(blocoId) {
         <label class="form-label">Justificativa</label>
         <textarea class="form-control exame-justificativa" rows="2"></textarea>
       </div>
-      <div class="mb-2">
-        <label class="form-label">Status</label>
-        <select class="form-select exame-status">
-          <option value="pendente" selected>Pendente</option>
-          <option value="concluido">Concluído</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </div>
-      <div class="mb-2">
-        <label class="form-label">Resultado</label>
-        <textarea class="form-control exame-resultado" rows="2"></textarea>
-      </div>
-      <div class="mb-2">
-        <label class="form-label">Data de Realização</label>
-        <input type="date" class="form-control exame-performed_at">
-      </div>
-      <div class="d-flex gap-2">
-        <button type="button" class="btn btn-danger btn-sm btn-remover" onclick="removerExame(this)">🗑️ Remover</button>
-      </div>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removerExamePedido(this)">Remover</button>
     </div>
   `;
-
   container.appendChild(card);
 }
 
-
-function removerExame(button) {
-  if (!confirm('Deseja remover este exame?')) return;
-  const card = button.closest('.exame-card');
-  const exameId = card.dataset.id;
-  if (exameId) {
-    fetch(`/exame/${exameId}`, { method: 'DELETE' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          card.remove();
-        } else {
-          alert(data.error || 'Erro ao excluir exame.');
-        }
-      })
-      .catch(err => {
-        console.error('Erro ao excluir exame:', err);
-        alert('Erro ao excluir exame.');
-      });
-  } else {
-    card.remove();
-  }
+function removerExamePedido(button) {
+  if (!confirm('Deseja remover este exame da solicitacao?')) return;
+  button.closest('.exame-pedido-card')?.remove();
 }
 
 function sugerirExames(input) {
   const lista = input.nextElementSibling;
   const q = input.value.trim();
-
-  // 🚨 Block any fetch if input is too short
   if (!q || q.length < 2) {
     lista.innerHTML = '';
     return;
@@ -200,9 +214,7 @@ function sugerirExames(input) {
 
   fetch(`/buscar_exames?q=${encodeURIComponent(q)}`)
     .then(r => {
-      if (!r.ok) {
-        throw new Error('Erro ao buscar exames.');
-      }
+      if (!r.ok) throw new Error('Erro ao buscar exames.');
       return r.json();
     })
     .then(data => {
@@ -213,77 +225,94 @@ function sugerirExames(input) {
         li.textContent = item.nome;
         li.onclick = () => {
           input.value = item.nome;
-          const card = input.closest('.exame-card');
+          const card = input.closest('.exame-pedido-card');
           card.querySelector('.exame-justificativa').value = item.justificativa || '';
           lista.innerHTML = '';
         };
         lista.appendChild(li);
       });
     })
-    .catch(err => {
-      console.error('Erro ao buscar exames:', err);
+    .catch(() => {
       lista.innerHTML = '';
     });
 }
 
+function refreshHistoricoExames(data) {
+  if (data && data.html) {
+    const container = document.getElementById('historico-exames');
+    container.innerHTML = data.html;
+    if (typeof bindSyncForms === 'function') {
+      bindSyncForms(container);
+    }
+  }
+}
 
-function salvarBlocoExames(blocoId, consultaId) {
-  console.log("💾 Salvando bloco:", blocoId);
+function salvarSolicitacaoExames(blocoId) {
   const exames = [];
   let valid = true;
 
-  document.querySelectorAll(`#exames-container-${blocoId} .exame-card`).forEach(card => {
+  document.querySelectorAll(`#exames-pedido-container-${blocoId} .exame-pedido-card`).forEach(card => {
+    const id = card.dataset.id ? Number(card.dataset.id) : null;
     const nome = card.querySelector('.exame-nome')?.value.trim();
     const justificativa = card.querySelector('.exame-justificativa')?.value.trim();
-    const status = card.querySelector('.exame-status')?.value || 'pendente';
-    const resultado = card.querySelector('.exame-resultado')?.value.trim();
-    const performed_at = card.querySelector('.exame-performed_at')?.value;
 
     if (!nome || !justificativa) {
       valid = false;
       card.classList.add('border-danger');
-    } else {
-      card.classList.remove('border-danger');
-      exames.push({ nome, justificativa, status, resultado, performed_at });
+      return;
     }
+
+    card.classList.remove('border-danger');
+    exames.push({ id, nome, justificativa });
   });
 
-  const observacoes_gerais = document.getElementById(`observacoes_gerais_${blocoId}`).value;
-
   if (!valid) {
-    alert('Por favor, preencha o nome do exame e a justificativa em todos os exames antes de salvar.');
+    alert('Preencha o nome e a justificativa de todos os exames.');
     return;
   }
-
-  if (exames.length === 0) {
+  if (!exames.length) {
     alert('Adicione ao menos um exame.');
     return;
   }
 
   fetch(`/bloco_exames/${blocoId}/atualizar`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ exames, observacoes_gerais })
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: JSON.stringify({
+      exames,
+      observacoes_gerais: document.getElementById(`observacoes_gerais_${blocoId}`).value
+    })
   })
-  .then(async res => {
-    const data = await res.json();
-    if (res.ok && data.success) {
-      alert('Bloco de exames salvo!');
-      if (data.html) {
-        const container = document.getElementById('historico-exames');
-        container.innerHTML = data.html;
-        if (typeof bindSyncForms === 'function') {
-          bindSyncForms(container);
-        }
-      }
-    } else {
-      const msg = data && data.message ? data.message : 'Erro ao salvar.';
-      alert(msg);
-    }
-  })
-  .catch(err => {
-    console.error('Erro:', err);
-    alert('Erro na requisição.');
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar solicitacao.');
+      refreshHistoricoExames(data);
+    })
+    .catch(err => alert(err.message || 'Erro ao salvar solicitacao.'));
+}
+
+function salvarRealizacaoExames(blocoId) {
+  const exames = [];
+
+  document.querySelectorAll(`#exames-realizacao-container-${blocoId} .exame-realizacao-card`).forEach(card => {
+    exames.push({
+      id: Number(card.dataset.id),
+      status: card.querySelector('.exame-status')?.value || 'pendente',
+      resultado: card.querySelector('.exame-resultado')?.value.trim() || '',
+      performed_at: card.querySelector('.exame-performed_at')?.value || ''
+    });
   });
+
+  fetch(`/bloco_exames/${blocoId}/realizacao`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: JSON.stringify({ exames })
+  })
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar realizacao.');
+      refreshHistoricoExames(data);
+    })
+    .catch(err => alert(err.message || 'Erro ao salvar realizacao.'));
 }
 </script>

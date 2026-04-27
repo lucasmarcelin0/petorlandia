@@ -18623,6 +18623,7 @@ def deletar_bloco_exames(bloco_id):
 @login_required
 def editar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
+    ensure_clinic_access(getattr(bloco.animal, 'clinica_id', None))
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar exames.'}), 403
     return render_template('orcamentos/editar_bloco_exames.html', bloco=bloco)
@@ -18635,6 +18636,7 @@ def editar_bloco_exames(bloco_id):
 @login_required
 def alterar_exame(exame_id):
     exame = ExameSolicitado.query.get_or_404(exame_id)
+    ensure_clinic_access(getattr(exame.bloco.animal, 'clinica_id', None))
 
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
@@ -18678,6 +18680,10 @@ def alterar_exame(exame_id):
 @login_required
 def atualizar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
+    ensure_clinic_access(getattr(bloco.animal, 'clinica_id', None))
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinarios podem editar a solicitacao de exames.'}), 403
+
     dados = request.get_json(silent=True) or {}
 
     bloco.observacoes_gerais = dados.get('observacoes_gerais', '')
@@ -18690,10 +18696,6 @@ def atualizar_bloco_exames(bloco_id):
         ex_id = ex_json.get('id')
         nome  = ex_json.get('nome', '').strip()
         just  = ex_json.get('justificativa', '').strip()
-        status = ex_json.get('status', 'pendente')
-        resultado = ex_json.get('resultado')
-        performed_at_str = ex_json.get('performed_at')
-        performed_at = datetime.fromisoformat(performed_at_str) if performed_at_str else None
 
         if not nome:                 # pulamos entradas vazias
             continue
@@ -18703,9 +18705,6 @@ def atualizar_bloco_exames(bloco_id):
             exame = existentes[ex_id]
             exame.nome = nome
             exame.justificativa = just
-            exame.status = status
-            exame.resultado = resultado
-            exame.performed_at = performed_at
             enviados_ids.add(ex_id)
         else:
             # --- criar exame novo ---
@@ -18713,9 +18712,7 @@ def atualizar_bloco_exames(bloco_id):
                 bloco=bloco,
                 nome=nome,
                 justificativa=just,
-                status=status,
-                resultado=resultado,
-                performed_at=performed_at,
+                status='pendente',
             )
             db.session.add(novo)
 
@@ -18723,6 +18720,50 @@ def atualizar_bloco_exames(bloco_id):
     for ex in bloco.exames:
         if ex.id not in enviados_ids and ex.id in existentes:
             db.session.delete(ex)
+
+    db.session.commit()
+
+    historico_html = render_template(
+        'partials/historico_exames.html',
+        animal=bloco.animal
+    )
+    return jsonify(success=True, html=historico_html)
+
+
+@app.route('/bloco_exames/<int:bloco_id>/realizacao', methods=['POST'])
+@login_required
+def atualizar_realizacao_exames(bloco_id):
+    bloco = BlocoExames.query.get_or_404(bloco_id)
+    ensure_clinic_access(getattr(bloco.animal, 'clinica_id', None))
+
+    worker = (getattr(current_user, 'worker', None) or '').lower()
+    if not (is_veterinarian(current_user) or worker == 'colaborador' or current_user.role == 'admin'):
+        return jsonify({'success': False, 'message': 'Apenas profissionais da clinica podem registrar realizacao de exames.'}), 403
+
+    dados = request.get_json(silent=True) or {}
+    existentes = {e.id: e for e in bloco.exames}
+    allowed_statuses = {'pendente', 'concluido', 'cancelado'}
+
+    for ex_json in dados.get('exames', []):
+        ex_id = ex_json.get('id')
+        exame = existentes.get(ex_id)
+        if not exame:
+            continue
+
+        status = (ex_json.get('status') or 'pendente').strip().lower()
+        if status not in allowed_statuses:
+            status = 'pendente'
+        exame.status = status
+        exame.resultado = (ex_json.get('resultado') or '').strip() or None
+
+        performed_at_str = (ex_json.get('performed_at') or '').strip()
+        if performed_at_str:
+            try:
+                exame.performed_at = datetime.fromisoformat(performed_at_str)
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Data de realizacao invalida.'}), 400
+        else:
+            exame.performed_at = None
 
     db.session.commit()
 
