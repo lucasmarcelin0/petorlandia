@@ -39,6 +39,8 @@ def test_carregar_t0_form_schema_tem_campos_esperados():
 
     assert schema["title"] == "T0 Atualizacao Forms Codex - SFA Orlandia"
     assert any(field["key"] == "nome" for section in schema["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico" for section in schema["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico_qual" for section in schema["sections"] for field in section["fields"])
     assert any(field["key"] == "custo_total" for section in schema["sections"] for field in section["fields"])
     assert any(field["key"] == "aceite_tcle" for section in schema["sections"] for field in section["fields"])
     animal_field = next(field for section in schema["sections"] for field in section["fields"] if field["key"] == "exposicao_animal")
@@ -83,9 +85,75 @@ def test_carregar_t10_t30_form_schemas_tem_campos_esperados():
     assert schema_t10["title"] == "T10 Atualizacao Forms Codex - SFA Orlandia"
     assert schema_t30["title"] == "T30 Atualizacao Forms Codex - SFA Orlandia"
     assert any(field["key"] == "classificacao_melhora" for section in schema_t10["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico" for section in schema_t10["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico_qual" for section in schema_t10["sections"] for field in section["fields"])
     assert any(field["key"] == "dias_incap_novos" for section in schema_t10["sections"] for field in section["fields"])
     assert any(field["key"] == "estado_saude_final" for section in schema_t30["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico" for section in schema_t30["sections"] for field in section["fields"])
+    assert any(field["key"] == "diagnostico_medico_qual" for section in schema_t30["sections"] for field in section["fields"])
     assert any(field["key"] == "custo_transporte" for section in schema_t30["sections"] for field in section["fields"])
+
+
+def test_diagnostico_medico_some_dos_followups_apos_resposta_positiva():
+    paciente = _paciente_fake()
+    paciente.resposta_t0 = SimpleNamespace(
+        dados_json=json.dumps({"diagnostico_medico": "Sim, dengue"})
+    )
+
+    schema_t10 = sfa_service.filtrar_form_schema_condicional(
+        carregar_t10_form_schema(),
+        paciente,
+        "t10",
+    )
+    schema_t30 = sfa_service.filtrar_form_schema_condicional(
+        carregar_t30_form_schema(),
+        paciente,
+        "t30",
+    )
+
+    hidden_keys_t10 = {field["key"] for section in schema_t10["sections"] for field in section["fields"]}
+    hidden_keys_t30 = {field["key"] for section in schema_t30["sections"] for field in section["fields"]}
+    assert "diagnostico_medico" not in hidden_keys_t10
+    assert "diagnostico_medico_qual" not in hidden_keys_t10
+    assert "diagnostico_medico" not in hidden_keys_t30
+    assert "diagnostico_medico_qual" not in hidden_keys_t30
+
+
+def test_diagnostico_medico_continua_no_t30_se_t0_e_t10_nao_foram_positivos():
+    paciente = _paciente_fake()
+    paciente.resposta_t0 = SimpleNamespace(
+        dados_json=json.dumps({"diagnostico_medico": "Exames pendentes"})
+    )
+    paciente.respostas_t10 = [
+        SimpleNamespace(dados_json=json.dumps({"diagnostico_medico": "Nao"}))
+    ]
+
+    schema_t30 = sfa_service.filtrar_form_schema_condicional(
+        carregar_t30_form_schema(),
+        paciente,
+        "t30",
+    )
+
+    visible_keys = {field["key"] for section in schema_t30["sections"] for field in section["fields"]}
+    assert "diagnostico_medico" in visible_keys
+    assert "diagnostico_medico_qual" in visible_keys
+
+
+def test_diagnostico_medico_t30_respeita_chave_legada_do_t10():
+    paciente = _paciente_fake()
+    paciente.respostas_t10 = [
+        SimpleNamespace(dados_json=json.dumps({"diagnostico_definitivo": "Sim, dengue"}))
+    ]
+
+    schema_t30 = sfa_service.filtrar_form_schema_condicional(
+        carregar_t30_form_schema(),
+        paciente,
+        "t30",
+    )
+
+    hidden_keys = {field["key"] for section in schema_t30["sections"] for field in section["fields"]}
+    assert "diagnostico_medico" not in hidden_keys
+    assert "diagnostico_medico_qual" not in hidden_keys
 
 
 def test_construir_valores_iniciais_t0_prefill_paciente():
@@ -146,6 +214,7 @@ def test_coletar_resposta_t0_nativa_normaliza_payload():
             ("outras_pessoas_com_sintomas", "Nao sei"),
             ("dias_incap", "2"),
             ("internacao", "Nao"),
+            ("diagnostico_medico", "Nao"),
             ("custo_remedios", "8.50"),
             ("custo_consultas", "0"),
             ("custo_transporte", "7.25"),
@@ -200,6 +269,7 @@ def test_coletar_resposta_t0_nativa_exige_aceite_do_tcle():
             ("outras_pessoas_com_sintomas", "Nao sei"),
             ("dias_incap", "2"),
             ("internacao", "Nao"),
+            ("diagnostico_medico", "Nao"),
             ("custo_remedios", "8.50"),
             ("custo_consultas", "0"),
             ("custo_transporte", "7.25"),

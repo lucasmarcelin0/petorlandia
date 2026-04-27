@@ -315,6 +315,37 @@
           ]
         },
         {
+          "key": "diagnostico_medico",
+          "label": "O medico chegou a algum diagnostico?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual foi o diagnostico informado pelo medico?",
+          "type": "select",
+          "required": true,
+          "visible_if": {
+            "current_positive": {
+              "key": "diagnostico_medico"
+            }
+          },
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
+          ]
+        },
+        {
           "key": "custo_remedios",
           "label": "Medicamentos ate hoje (R$)",
           "type": "number",

@@ -363,7 +363,7 @@
         <div class="field-grid">
           {% for field in section.fields %}
           {% set current = values.get(field.key, [] if field.type == "checkboxes" else "") %}
-          <div class="field {% if field.type in ['textarea', 'checkboxes', 'radio'] %}full{% endif %}">
+          <div class="field {% if field.type in ['textarea', 'checkboxes', 'radio'] %}full{% endif %}"{% if field.visible_if %} data-visible-if='{{ field.visible_if | tojson }}'{% endif %}>
             <label class="field-label" for="{{ field.key }}">
               {{ field.label }}
               {% if field.required %}<span class="required">*</span>{% endif %}
@@ -459,6 +459,54 @@
     </form>
   </div>
   <script>
+    const isPositiveAnswer = (value) => String(value || "").trim().toLowerCase().startsWith("sim");
+    const fieldSelector = (name) => '[name="' + String(name || "").replace(/"/g, '\\"') + '"]';
+
+    const currentFieldValue = (name) => {
+      const checked = document.querySelector('input' + fieldSelector(name) + ':checked');
+      if (checked) return checked.value;
+      const field = document.querySelector(fieldSelector(name));
+      return field ? field.value : "";
+    };
+
+    const updateConditionalFields = () => {
+      document.querySelectorAll("[data-visible-if]").forEach((container) => {
+        let rule = {};
+        try {
+          rule = JSON.parse(container.dataset.visibleIf || "{}");
+        } catch (_error) {
+          rule = {};
+        }
+
+        const currentPositive = rule.current_positive;
+        if (!currentPositive || !currentPositive.key) return;
+
+        const visible = isPositiveAnswer(currentFieldValue(currentPositive.key));
+        container.hidden = !visible;
+        container.querySelectorAll("input, select, textarea").forEach((field) => {
+          if (!visible) {
+            if (field.type === "checkbox" || field.type === "radio") {
+              field.checked = false;
+            } else {
+              field.value = "";
+            }
+          }
+          if (field.dataset.conditionalRequired === "true") {
+            field.required = visible;
+          }
+        });
+      });
+    };
+
+    document.querySelectorAll("[data-visible-if]").forEach((container) => {
+      container.querySelectorAll("input[required], select[required], textarea[required]").forEach((field) => {
+        field.dataset.conditionalRequired = "true";
+      });
+    });
+
+    document.addEventListener("change", updateConditionalFields);
+    updateConditionalFields();
+
     document.querySelectorAll(".choices").forEach((group) => {
       const boxes = Array.from(group.querySelectorAll('input[type="checkbox"]'));
       if (!boxes.length) return;

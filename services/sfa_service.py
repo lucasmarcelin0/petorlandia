@@ -20,6 +20,7 @@ Funções públicas principais (equivalentes ao GAS):
 from __future__ import annotations
 
 import csv
+import copy
 import io
 import json
 import logging
@@ -582,6 +583,84 @@ def _buscar_valor_respostas_anteriores(paciente, key: str) -> object:
             return value
 
     return ""
+
+
+def _resposta_positiva(value: object) -> bool:
+    if isinstance(value, list):
+        return any(_resposta_positiva(item) for item in value)
+    return normalizar_nome_chave(value).startswith("sim")
+
+
+def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, object]]:
+    if not paciente:
+        return []
+
+    stage = _normalize_form_stage(form_stage)
+    payloads: list[dict[str, object]] = []
+
+    if stage in {"t10", "t30"}:
+        resposta_t0 = getattr(paciente, "resposta_t0", None)
+        if resposta_t0:
+            payloads.append(_carregar_payload_resposta(resposta_t0))
+
+    if stage == "t30":
+        respostas_t10 = list(getattr(paciente, "respostas_t10", []) or [])
+        payloads.extend(_carregar_payload_resposta(resposta) for resposta in respostas_t10)
+
+    return [payload for payload in payloads if payload]
+
+
+def _campo_visivel_para_stage(field: dict, paciente, form_stage: str) -> bool:
+    rule = field.get("visible_if")
+    if not isinstance(rule, dict):
+        return True
+
+    no_prior_positive = rule.get("no_prior_positive")
+    if isinstance(no_prior_positive, dict):
+        keys = no_prior_positive.get("keys") or no_prior_positive.get("key")
+        if isinstance(keys, str):
+            keys = [keys]
+        if isinstance(keys, list) and keys:
+            normalized_keys = [str(key or "").strip() for key in keys if str(key or "").strip()]
+            for payload in _payloads_anteriores_por_stage(paciente, form_stage):
+                for key in normalized_keys:
+                    if _resposta_positiva(payload.get(key)):
+                        return False
+    return True
+
+
+def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> dict:
+    filtered = copy.deepcopy(schema or {})
+    sections = []
+
+    for section in filtered.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        fields = [
+            field
+            for field in section.get("fields", [])
+            if isinstance(field, dict) and _campo_visivel_para_stage(field, paciente, form_stage)
+        ]
+        section["fields"] = fields
+        sections.append(section)
+
+    filtered["sections"] = sections
+    return filtered
+
+
+def _campo_visivel_por_resposta_atual(field: dict, dados: dict[str, object]) -> bool:
+    rule = field.get("visible_if")
+    if not isinstance(rule, dict):
+        return True
+
+    current_positive = rule.get("current_positive")
+    if not isinstance(current_positive, dict):
+        return True
+
+    key = str(current_positive.get("key") or "").strip()
+    if not key:
+        return True
+    return _resposta_positiva(dados.get(key))
 
 
 def obter_resposta_formulario(paciente, form_stage: str):
@@ -1411,10 +1490,13 @@ def coletar_resposta_nativa(
             if field_type == "date" and value:
                 value = formatar_data(parse_data(value))
 
+        dados[key] = value
+        if not _campo_visivel_por_resposta_atual(field, dados):
+            dados[key] = [] if field_type == "checkboxes" else ""
+            continue
+
         if field.get("required") and not value:
             errors[key] = "Campo obrigatorio."
-
-        dados[key] = value
 
     dados["token_acesso"] = paciente.token_acesso or ""
     dados["id_estudo"] = paciente.id_estudo or ""

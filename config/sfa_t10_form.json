@@ -162,17 +162,48 @@
           ]
         },
         {
-          "key": "diagnostico_definitivo",
-          "label": "Recebeu diagnostico definitivo?",
+          "key": "diagnostico_medico",
+          "label": "O medico chegou a algum diagnostico?",
           "type": "radio",
           "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            }
+          },
           "options": [
             "Nao",
-            "Sim, dengue",
-            "Sim, outra arbovirose",
-            "Sim, outra sindrome febril",
+            "Sim",
             "Exames pendentes",
             "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual foi o diagnostico informado pelo medico?",
+          "type": "select",
+          "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            },
+            "current_positive": {
+              "key": "diagnostico_medico"
+            }
+          },
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
           ]
         }
       ]

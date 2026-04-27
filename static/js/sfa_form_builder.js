@@ -101,6 +101,9 @@
     if (defaultValue !== "") field.default = type === "number" ? parseMaybeNumber(defaultValue) : defaultValue;
     if (min !== "") field.min = parseMaybeNumber(min);
     if (step !== "") field.step = parseMaybeNumber(step);
+    if (rawField?.visible_if && typeof rawField.visible_if === "object" && !Array.isArray(rawField.visible_if)) {
+      field.visible_if = JSON.parse(JSON.stringify(rawField.visible_if));
+    }
 
     if (CHOICE_TYPES.has(type)) {
       const options = Array.isArray(rawField?.options)
@@ -171,6 +174,9 @@
           if (defaultValue !== "") normalized.default = field.type === "number" ? parseMaybeNumber(defaultValue) : defaultValue;
           if (min !== "") normalized.min = parseMaybeNumber(min);
           if (step !== "") normalized.step = parseMaybeNumber(step);
+          if (field.visible_if && typeof field.visible_if === "object" && !Array.isArray(field.visible_if)) {
+            normalized.visible_if = JSON.parse(JSON.stringify(field.visible_if));
+          }
 
           if (CHOICE_TYPES.has(field.type)) {
             normalized.options = (field.options || [])

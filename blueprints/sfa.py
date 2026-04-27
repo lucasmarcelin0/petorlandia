@@ -1499,7 +1499,11 @@ def _render_public_native_form(
     collector,
     submitter,
 ):
-    from services.sfa_service import iterar_campos_form, registrar_auditoria
+    from services.sfa_service import (
+        filtrar_form_schema_condicional,
+        iterar_campos_form,
+        registrar_auditoria,
+    )
 
     debug = request.args.get("debug") == "1"
     paciente = _buscar_paciente_publico_t0(token)
@@ -1519,7 +1523,7 @@ def _render_public_native_form(
             ),
         ), 404
 
-    schema = schema_loader()
+    schema = filtrar_form_schema_condicional(schema_loader(), paciente, form_stage)
     values = initial_builder(paciente, schema)
     errors: dict[str, str] = {}
 
