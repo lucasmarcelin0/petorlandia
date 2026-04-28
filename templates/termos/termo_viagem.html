@@ -129,14 +129,31 @@
 {% from 'components/logo.html' import clinic_logo %}
 <div class="document atv-doc">
 
-  {# Cabeçalho conforme Resolução CFMV nº 844/2006 #}
+  {# Cabeçalho visual da clínica (logo + nome + contato) #}
+  {% if clinica %}
+    <div class="header">
+      <div class="header-logo">
+        {{ clinic_logo(clinica) }}
+      </div>
+      <div class="header-info">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-contato">
+          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+          {% if veterinario %}<span>CRMV {{ veterinario.crmv }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="header-logo header-logo--right">
+        {{ clinic_logo(clinica) }}
+      </div>
+    </div>
+  {% endif %}
+
+  {# Linha legal conforme Resolução CFMV nº 844/2006 #}
   <div class="atv-header-info">
-    {% if clinica %}
-      <strong>{{ clinica.nome }}</strong>{% if clinica.endereco %} / {{ clinica.endereco }}{% endif %}{% if clinica.telefone %} / Tel: {{ clinica.telefone }}{% endif %}{% if clinica.cnpj %} / CNPJ: {{ clinica.cnpj }}{% endif %}{% if veterinario %} / CRMV: {{ veterinario.crmv }}{% endif %}
-    {% elif veterinario %}
-      <strong>{{ printing_user.name }}</strong> / CRMV: {{ veterinario.crmv }}
-    {% endif %}
-    <br><small>(conforme Resolução CFMV nº 844, de 20 de setembro de 2006)</small>
+    <small>(conforme Resolução CFMV nº 844, de 20 de setembro de 2006)</small>
   </div>
 
   <div class="atv-title">Atestado de Saúde para Viagens de Cães e Gatos</div>
