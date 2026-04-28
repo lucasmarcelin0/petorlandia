@@ -11815,7 +11815,9 @@ def termo_animal(animal_id, tipo):
     template = templates.get(tipo)
     if not template:
         abort(404)
-    return render_template(template, animal=animal, tutor=tutor, clinica=clinica, data_atual=data_atual)
+    veterinario = current_user.veterinario if current_user.veterinario else None
+    return render_template(template, animal=animal, tutor=tutor, clinica=clinica,
+                           data_atual=data_atual, veterinario=veterinario, printing_user=current_user)
 
 
 
