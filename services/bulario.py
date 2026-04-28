@@ -546,6 +546,9 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'MG_ANIMAL': 'mg', 'MCG_ANIMAL': 'mcg', 'ML_ANIMAL': 'mL',
         'PIPETA_ANIMAL': 'pipeta(s)', 'COMPRIMIDOS_ANIMAL': 'comprimido(s)',
         'GOTAS_ANIMAL': 'gota(s)', 'UI_ANIMAL': 'UI',
+        # Unidades por peso (dose normalizada por kg)
+        'COMPRIMIDOS_KG': 'comprimido(s)',
+        'PIPETA_KG': 'pipeta(s)',
     }
     dose_unit_out = unit_out_map.get(un, '')
 
@@ -568,6 +571,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'MG_ANIMAL': 'mg/animal', 'ML_ANIMAL': 'mL/animal',
         'PIPETA_ANIMAL': 'pipeta/animal', 'COMPRIMIDOS_ANIMAL': 'cp/animal',
         'GOTAS_ANIMAL': 'gotas/animal',
+        'COMPRIMIDOS_KG': 'cp/kg', 'PIPETA_KG': 'pipeta/kg',
     }.get(un, un.lower())
     if dose_min_v == dose_max_v:
         faixa_texto = f"{_fmt(dose_min_v)} {faixa_unit_label}"
@@ -582,15 +586,27 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     else:
         freq_texto = '—'
 
-    # Duração textual
-    if proto.duracao_min_dias and proto.duracao_max_dias and proto.duracao_min_dias != proto.duracao_max_dias:
-        dur_texto = f"por {proto.duracao_min_dias}–{proto.duracao_max_dias} dias"
-    elif proto.duracao_max_dias and not proto.duracao_min_dias:
-        dur_texto = f"por até {proto.duracao_max_dias} dias"
-    elif proto.duracao_min_dias:
-        dur_texto = f"por {proto.duracao_min_dias} dias"
+    # Duração textual — mínima, padrão e máxima quando há faixa real
+    dur_min_d = proto.duracao_min_dias
+    dur_max_d = proto.duracao_max_dias
+    tem_faixa_dur = bool(dur_min_d and dur_max_d and dur_min_d != dur_max_d)
+
+    if tem_faixa_dur:
+        dur_texto = f"por {dur_min_d}–{dur_max_d} dias"
+        dur_texto_min = f"por {dur_min_d} dias"
+        dur_texto_max = f"por {dur_max_d} dias"
+        dur_media_d = (dur_min_d + dur_max_d) // 2
+        dur_texto_media = f"por {dur_media_d} dias"
+    elif dur_max_d and not dur_min_d:
+        dur_texto = f"por até {dur_max_d} dias"
+        dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
+    elif dur_min_d:
+        dur_texto = f"por {dur_min_d} dias"
+        dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
     else:
         dur_texto = proto.duracao or '—'
+        dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
+    tem_faixa_dur = tem_faixa_dur  # reusado abaixo
 
     # Equivalências por apresentação
     dose_media = (dose_calc_min + dose_calc_max) / 2.0
@@ -685,12 +701,15 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         key=lambda c: (c['unidade'], c['valor']),
     )
 
+    dose_calc_media = (dose_calc_min + dose_calc_max) / 2.0
+
     return {
         'multiplo':                False,
         'protocolo_id':            proto.id,
         'especie':                 proto.especie,
         'peso_kg':                 peso,
         'dose_min':                dose_calc_min,
+        'dose_media':              dose_calc_media,
         'dose_max':                dose_calc_max,
         'dose_unit_out':           dose_unit_out,
         'dose_exibir':             dose_exibir,
@@ -701,6 +720,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'duracao_min_dias':        proto.duracao_min_dias,
         'duracao_max_dias':        proto.duracao_max_dias,
         'duracao_texto':           dur_texto,
+        'duracao_texto_min':       dur_texto_min,
+        'duracao_texto_media':     dur_texto_media,
+        'duracao_texto_max':       dur_texto_max,
+        'tem_faixa_duracao':       tem_faixa_dur,
         'indicacao':               proto_ind,
         'indicacoes_alternativas': indicacoes_alt,
         'apresentacoes':           apres_info,

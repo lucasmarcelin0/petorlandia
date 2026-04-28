@@ -130,11 +130,32 @@
             <p class="mb-1"><strong>Animal:</strong> <span id="sug-animal" class="text-muted">–</span></p>
             <p class="mb-1"><strong>Dose sugerida:</strong> <span id="sug-dose" class="fs-5 text-primary fw-bold">–</span></p>
             <p class="mb-1 small text-muted"><span id="sug-faixa"></span></p>
+            <!-- Seletor mínima / média / máxima -->
+            <div id="sug-dose-modo-wrap" class="d-none mb-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Modo de dose">
+                <button type="button" id="btn-dose-min"   class="btn btn-outline-secondary" onclick="selecionarDoseModo('min')">Mínima</button>
+                <button type="button" id="btn-dose-media" class="btn btn-outline-secondary active" onclick="selecionarDoseModo('media')">Média</button>
+                <button type="button" id="btn-dose-max"   class="btn btn-outline-secondary" onclick="selecionarDoseModo('max')">Máxima</button>
+              </div>
+            </div>
           </div>
           <div class="col-md-6">
             <p class="mb-1"><strong>Via:</strong> <span id="sug-via" class="text-muted">–</span></p>
             <p class="mb-1"><strong>Frequência:</strong> <span id="sug-frequencia" class="text-muted">–</span></p>
-            <p class="mb-1"><strong>Duração:</strong> <span id="sug-duracao" class="text-muted">–</span></p>
+            <p class="mb-1">
+              <strong>Duração:</strong> <span id="sug-duracao" class="text-muted">–</span>
+            </p>
+            <!-- Slider de duração: visível apenas quando há faixa min–max -->
+            <div id="sug-duracao-slider-wrap" class="d-none mb-2 px-1">
+              <div class="d-flex align-items-center gap-2">
+                <span class="small text-muted" id="sug-dur-label-min">–</span>
+                <input type="range" id="sug-dur-slider" class="form-range flex-grow-1"
+                       min="1" max="30" value="7"
+                       oninput="onDuracaoSliderInput(this.value)">
+                <span class="small text-muted" id="sug-dur-label-max">–</span>
+              </div>
+              <div class="text-center small text-primary fw-semibold mt-1" id="sug-dur-slider-valor">7 dias</div>
+            </div>
           </div>
         </div>
         <!-- Seletor de apresentação para converter a dose em mg em
@@ -334,6 +355,10 @@
     let _concentracaoEscolhida = null;
     let _dosePraticaCalculada = null;
     let _conversaoApresentacaoExpandida = false;
+    // Modo de dose: 'min' | 'media' | 'max'. Padrão = 'media'.
+    let _doseModo = 'media';
+    // Dias selecionados no slider de duração (inteiro). null = sem faixa.
+    let _duracaoDias = null;
 
   function aplicarHistoricoPrescricoes(html) {
     const container = document.getElementById('historico-prescricoes');
@@ -581,6 +606,136 @@
     _medicamentoIdSugestao = null;
   }
 
+  // ======================================================================
+  // Seletor de modo de dose: mínima / média / máxima
+  // ======================================================================
+
+  function _doseParaModo(s, modo) {
+    /**
+     * Retorna o valor de dose (em dose_unit_out) para o modo escolhido.
+     * s = sugestaoDoseAtual; modo = 'min' | 'media' | 'max'
+     */
+    if (!s) return null;
+    const dMin = (s.dose_min !== null && s.dose_min !== undefined) ? Number(s.dose_min) : null;
+    const dMax = (s.dose_max !== null && s.dose_max !== undefined) ? Number(s.dose_max) : null;
+    const dMedia = (s.dose_media !== null && s.dose_media !== undefined)
+      ? Number(s.dose_media)
+      : (dMin !== null && dMax !== null ? (dMin + dMax) / 2 : dMin);
+    if (modo === 'min')   return dMin;
+    if (modo === 'max')   return dMax;
+    return dMedia;
+  }
+
+  function _formatarDoseModo(s, modo) {
+    /**
+     * Formata o valor de dose para exibição, dado o modo.
+     * Ex: "187,5 mg" para modo media de um protocolo 125–250 mg.
+     */
+    const v = _doseParaModo(s, modo);
+    if (v === null || !isFinite(v)) return s.dose_exibir || '–';
+    const unit = s.dose_unit_out || '';
+    const str = Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
+    return `${str} ${unit}`.trim();
+  }
+
+  function _atualizarBotoesDoseModo() {
+    ['min', 'media', 'max'].forEach(m => {
+      const btn = document.getElementById(`btn-dose-${m}`);
+      if (!btn) return;
+      btn.classList.toggle('active', m === _doseModo);
+      btn.classList.toggle('btn-outline-secondary', m !== _doseModo);
+      btn.classList.toggle('btn-info', m === _doseModo);
+    });
+  }
+
+  function _atualizarDisplayDose(s) {
+    const el = document.getElementById('sug-dose');
+    if (!el) return;
+    const temIntervalo = s && s.dose_min !== null && s.dose_max !== null && s.dose_min !== s.dose_max;
+    if (!temIntervalo) {
+      el.textContent = (s && s.dose_exibir) || '–';
+    } else {
+      el.textContent = _formatarDoseModo(s, _doseModo);
+    }
+  }
+
+  function selecionarDoseModo(modo) {
+    _doseModo = modo;
+    _atualizarBotoesDoseModo();
+    if (sugestaoDoseAtual) _atualizarDisplayDose(sugestaoDoseAtual);
+    // Atualiza preview de dose prática se apresentação já estiver escolhida
+    _atualizarPrescricaoPratica();
+  }
+
+  // ======================================================================
+  // Slider de duração em dias
+  // ======================================================================
+
+  function _duracaoTextoParaDias(dias) {
+    return dias === 1 ? 'por 1 dia' : `por ${dias} dias`;
+  }
+
+  function _atualizarDisplayDuracao(s) {
+    const el = document.getElementById('sug-duracao');
+    const sliderWrap = document.getElementById('sug-duracao-slider-wrap');
+    const slider = document.getElementById('sug-dur-slider');
+    const valorLabel = document.getElementById('sug-dur-slider-valor');
+    const labelMin = document.getElementById('sug-dur-label-min');
+    const labelMax = document.getElementById('sug-dur-label-max');
+
+    const temFaixa = !!(s && s.tem_faixa_duracao
+      && s.duracao_min_dias != null && s.duracao_max_dias != null
+      && s.duracao_min_dias !== s.duracao_max_dias);
+
+    if (!temFaixa) {
+      // Sem faixa: mostra texto fixo, esconde slider
+      if (el) el.textContent = (s && s.duracao_texto) || '—';
+      if (sliderWrap) sliderWrap.classList.add('d-none');
+      _duracaoDias = s ? (s.duracao_min_dias || s.duracao_max_dias || null) : null;
+      return;
+    }
+
+    const dMin = s.duracao_min_dias;
+    const dMax = s.duracao_max_dias;
+    const dMedio = Math.round((dMin + dMax) / 2);
+
+    // Inicializa slider
+    if (slider) {
+      slider.min = dMin;
+      slider.max = dMax;
+      slider.value = dMedio;  // padrão: valor do meio
+    }
+    _duracaoDias = dMedio;
+
+    // Labels dos extremos
+    if (labelMin) labelMin.textContent = `${dMin}d`;
+    if (labelMax) labelMax.textContent = `${dMax}d`;
+
+    // Valor central
+    const txtDias = _duracaoTextoParaDias(_duracaoDias);
+    if (el) el.textContent = txtDias;
+    if (valorLabel) valorLabel.textContent = `${_duracaoDias} dias`;
+
+    if (sliderWrap) sliderWrap.classList.remove('d-none');
+  }
+
+  function onDuracaoSliderInput(valor) {
+    _duracaoDias = parseInt(valor, 10);
+    const txt = _duracaoTextoParaDias(_duracaoDias);
+    const el = document.getElementById('sug-duracao');
+    if (el) el.textContent = txt;
+    const valorLabel = document.getElementById('sug-dur-slider-valor');
+    if (valorLabel) valorLabel.textContent = `${_duracaoDias} dias`;
+    // Atualiza preview de dose prática se houver apresentação selecionada
+    _atualizarPrescricaoPratica();
+  }
+
+  // Mantida por retrocompatibilidade (usada em _duracaoParaModo nas chamadas existentes)
+  function _duracaoParaModo(s, _ignorado) {
+    if (_duracaoDias != null) return _duracaoTextoParaDias(_duracaoDias);
+    return (s && s.duracao_texto) || '—';
+  }
+
   function _limparValoresCardSugestao() {
     // Zera valores residuais para evitar que um estado anterior (ex: um
     // medicamento com sugestão válida) deixe dados colados quando o próximo
@@ -622,11 +777,18 @@
     }
     const concValor = document.getElementById('sug-conc-manual-valor');
     if (concValor) concValor.value = '';
+    // Esconde slider de duração e seletor de modo de dose.
+    const durSliderWrap = document.getElementById('sug-duracao-slider-wrap');
+    if (durSliderWrap) durSliderWrap.classList.add('d-none');
+    const doseModoWrap = document.getElementById('sug-dose-modo-wrap');
+    if (doseModoWrap) doseModoWrap.classList.add('d-none');
     // Estado JS.
     _apresentacaoEscolhida = null;
     _concentracaoEscolhida = null;
     _dosePraticaCalculada = null;
     _conversaoApresentacaoExpandida = false;
+    _duracaoDias = null;
+    _doseModo = 'media';
 
     const obsEl = document.getElementById('sug-observacao');
     if (obsEl) { obsEl.textContent = ''; obsEl.classList.add('d-none'); }
@@ -748,11 +910,18 @@
       const a = data.animal || {};
       document.getElementById('sug-animal').textContent =
         `${a.nome || '–'} (${a.especie || '–'}, ${a.peso_kg ?? '?'} kg)`;
-      document.getElementById('sug-dose').textContent = s.dose_exibir || '–';
+      // Mostra seletor min/média/max somente quando há intervalo real de dose
+      const temIntervalo = (s.dose_min !== null && s.dose_max !== null && s.dose_min !== s.dose_max);
+      const modoWrap = document.getElementById('sug-dose-modo-wrap');
+      if (modoWrap) modoWrap.classList.toggle('d-none', !temIntervalo);
+      _doseModo = 'media';  // reinicia para média ao carregar novo medicamento
+      _atualizarBotoesDoseModo();
+      _atualizarDisplayDose(s);
       document.getElementById('sug-faixa').textContent = s.faixa_texto ? `(${s.faixa_texto})` : '';
       document.getElementById('sug-via').textContent = s.via || '–';
       document.getElementById('sug-frequencia').textContent = s.frequencia_texto || '–';
-      document.getElementById('sug-duracao').textContent = s.duracao_texto || '–';
+      _duracaoDias = null;  // reinicia slider ao carregar novo medicamento
+      _atualizarDisplayDuracao(s);
       const fonteTxt = [];
       if (s.indicacao) fonteTxt.push(`indicação: ${s.indicacao.toLowerCase()}`);
       if (s.fonte) fonteTxt.push(`fonte: ${s.fonte.toLowerCase()}`);
@@ -1077,6 +1246,12 @@
       return;
     }
 
+    // Usa o modo selecionado (mínima / média / máxima).
+    // Quando não há intervalo real (min == max), usa o valor único.
+    const temIntervalo = doseMin !== doseMax;
+    const doseModoVal = temIntervalo ? _doseParaModo(s, _doseModo) : doseMin;
+    const doseUsar = isFinite(doseModoVal) ? doseModoVal : doseMin;
+
     // Converte a dose total para a unidade prática.
     // Cenário 1: dose em mg + apresentação sólida com concentração em mg/unid.
     // Cenário 2: dose em mg + apresentação líquida com conc em mg/mL → mL.
@@ -1091,18 +1266,32 @@
       if (concUnid === 'mcg') concMg = conc.valor / 1000;
       if (concUnid === 'g')   concMg = conc.valor * 1000;
       if (concUnid === 'ui')  concMg = conc.valor; // não converte — casos assumem match
-      qtdMin = doseMin / concMg;
-      qtdMax = doseMax / concMg;
+      // Quando há modo escolhido, usa valor único (não intervalo)
+      qtdMin = doseUsar / concMg;
+      qtdMax = qtdMin;  // modo já define um valor único (min, média ou max)
     } else if (doseUnit === 'mg' && (concUnid === 'mg/ml' || concUnid === 'mcg/ml')) {
       let concMgMl = conc.valor;
       if (concUnid === 'mcg/ml') concMgMl = conc.valor / 1000;
-      qtdMin = doseMin / concMgMl;
-      qtdMax = doseMax / concMgMl;
+      qtdMin = doseUsar / concMgMl;
+      qtdMax = qtdMin;
       unidadePratica = 'mL';
     } else if (doseUnit === 'ml') {
-      qtdMin = doseMin;
-      qtdMax = doseMax;
+      qtdMin = doseUsar;
+      qtdMax = doseUsar;
       unidadePratica = 'mL';
+    } else if (doseUnit === 'comprimido(s)' || doseUnit === 'cp') {
+      // Dose já é em comprimidos (ex: COMPRIMIDOS_KG → dose_calc já multiplicou por peso)
+      qtdMin = doseUsar;
+      qtdMax = doseUsar;
+      unidadePratica = 'comprimido';
+    } else if (doseUnit === 'pipeta(s)') {
+      qtdMin = doseUsar;
+      qtdMax = doseUsar;
+      unidadePratica = 'pipeta';
+    } else if (doseUnit === 'gota(s)') {
+      qtdMin = doseUsar;
+      qtdMax = doseUsar;
+      unidadePratica = 'gota';
     } else {
       // Não soubemos converter — esconde preview mas mantém dose em mg.
       _esconderPrescricaoPratica();
@@ -1119,9 +1308,9 @@
     const freqTxt = s.intervalo_horas
       ? NumeroExtenso.frequenciaFormatada(s.intervalo_horas)
       : (s.frequencia_texto || '');
-    const durTxt = NumeroExtenso.duracaoFormatada(
-      s.duracao_min_dias, s.duracao_max_dias, s.duracao_texto
-    );
+    const durTxt = s.tem_faixa_duracao
+      ? _duracaoParaModo(s)
+      : NumeroExtenso.duracaoFormatada(s.duracao_min_dias, s.duracao_max_dias, s.duracao_texto);
 
     // Salva pra usar no preenchimento do form.
     _dosePraticaCalculada = {
@@ -1177,14 +1366,16 @@
       freqStr = p.freqTxt;
       durStr = p.durTxt;
     } else {
-      // Fallback: dose em mg/mL/etc mesmo sem apresentação escolhida.
-      doseStr = s.dose_exibir || '';
+      // Fallback: dose no modo escolhido (mínima/média/máxima) ou dose_exibir como fallback.
+      const temIntervalo = s.dose_min !== null && s.dose_max !== null && s.dose_min !== s.dose_max;
+      doseStr = temIntervalo ? _formatarDoseModo(s, _doseModo) : (s.dose_exibir || '');
       freqStr = s.intervalo_horas
         ? NumeroExtenso.frequenciaFormatada(s.intervalo_horas)
         : (s.frequencia_texto && s.frequencia_texto !== '—' ? s.frequencia_texto : '');
-      durStr = NumeroExtenso.duracaoFormatada(
-        s.duracao_min_dias, s.duracao_max_dias, s.duracao_texto
-      );
+      // Usa o modo de duração escolhido (mínima/recomendada/máxima)
+      durStr = s.tem_faixa_duracao
+        ? _duracaoParaModo(s)
+        : NumeroExtenso.duracaoFormatada(s.duracao_min_dias, s.duracao_max_dias, s.duracao_texto);
     }
 
     // Melhora a duração: se não tem nada, sugere "Conforme protocolo clínico"
@@ -1220,10 +1411,14 @@
     document.getElementById('med-observacoes').textContent = m.observacoes || '–';
     
     const bulaLink = document.getElementById('med-bula');
-    bulaLink.textContent = m.bula ? 'Ver bula' : '–';
-    bulaLink.href = m.bula || '#';
-    bulaLink.classList.toggle('text-decoration-none', !m.bula);
-    bulaLink.classList.toggle('text-primary', m.bula);
+    // Usa bula_url (URL do VetSmart baseada no vetsmart_produto_id) como link principal.
+    // Fallback: se bula_url não existir mas bula for uma URL válida, usa bula.
+    const bulaHref = m.bula_url || (m.bula && m.bula.startsWith('http') ? m.bula : null);
+    bulaLink.textContent = bulaHref ? 'Ver bula' : '–';
+    bulaLink.href = bulaHref || '#';
+    if (bulaHref) bulaLink.target = '_blank';
+    bulaLink.classList.toggle('text-decoration-none', !bulaHref);
+    bulaLink.classList.toggle('text-primary', !!bulaHref);
 
     document.getElementById('info-medicamento').classList.remove('d-none');
   }

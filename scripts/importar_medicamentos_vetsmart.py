@@ -252,6 +252,20 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
     principios = _itemprops(soup, 'activeIngredient')
     principio_ativo = ' + '.join(principios) if principios else None
 
+    # Fallback: tenta extrair princípio ativo de tags <p><b>Princípio Ativo:</b></p>
+    if not principio_ativo:
+        for p in soup.find_all('p'):
+            b = p.find('b')
+            if not b:
+                continue
+            b_txt = b.get_text(strip=True)
+            if re.search(r'princ[ií]pio\s+ativ', b_txt, re.IGNORECASE):
+                p_txt = p.get_text(separator=' ', strip=True)
+                val = re.sub(r'princ[ií]pio\s+ativo\s*:\s*', '', p_txt, flags=re.IGNORECASE).strip()
+                if val and not _eh_vazio(val):
+                    principio_ativo = val[:200]
+                break
+
     # Fallback: fabricante via side-nav-subtitle (caso schema.org falhe)
     if not fabricante:
         fab_el = soup.find(class_='side-nav-subtitle')
@@ -502,6 +516,10 @@ def _parsear_admin_doses(texto: str) -> dict:
         'dosagem para gatos',
         'dosagem para cao',
         'dosagem para gato',
+        'dosagem para felinos',
+        'dosagem para caninos',
+        'dosagem para felino',
+        'dosagem para canino',
     ]
 
     import unicodedata
@@ -520,8 +538,24 @@ def _parsear_admin_doses(texto: str) -> dict:
         if ln in TITULOS:
             atual = TITULOS[ln]
             continue
-        if ln in RUIDO or any(ln.startswith(r) for r in PREFIXOS_RUIDO):
+        if ln in RUIDO:
             continue
+        # Prefixos de espécie como "Dosagem para Cães 1 comprimido / 10 kg":
+        # em vez de descartar a linha inteira, passamos a linha COMPLETA adiante
+        # para que _extrair_doses_estruturadas possa detectar a espécie via
+        # _norm_especie_code E extrair o valor de dose via regex.
+        # Somente descartamos se a linha for APENAS o prefixo (sem conteúdo).
+        prefixo_matched = None
+        for pr in PREFIXOS_RUIDO:
+            if ln.startswith(pr):
+                prefixo_matched = pr
+                break
+        if prefixo_matched:
+            resto_norm = ln[len(prefixo_matched):].strip().lstrip('-–: ')
+            if not resto_norm:
+                continue  # linha era só o prefixo de espécie, descarta
+            # Tem conteúdo após o prefixo: mantém a linha completa
+            # (o parser de doses já ignora texto de espécie e extrai o valor)
         if atual and atual in coleta:
             coleta[atual].append(linha)
 
@@ -550,6 +584,26 @@ _RE_DOSE_MGKG = re.compile(
 _RE_DOSE_ANIMAL = re.compile(
     r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
     r'(mg|mcg|ml|pipeta|gotas?|comprimidos?|c[aá]psulas?)\s*/\s*animal',
+    re.IGNORECASE,
+)
+# Formato "1 comprimido / 10 kg" → dose normalizada por peso (COMPRIMIDOS_KG)
+# Ex: "1 comprimido / 10 kg", "0,5 cp / 5 kg", "1 cápsula por 10 kg"
+_RE_DOSE_CP_POR_PESO = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'(comprimidos?|c[aá]psulas?|cp)\s*(?:/|por)\s*(\d+(?:[,\.]\d+)?)\s*kg',
+    re.IGNORECASE,
+)
+# Formato "0.5 comprimido / dia" ou "1 comprimido ao dia" → dose plana diária
+# Ex: "0,5 comprimido / dia", "1 cp ao dia", "2 comprimidos por dia"
+_RE_DOSE_CP_PLANO = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'(comprimidos?|c[aá]psulas?|cp)\s*(?:/|por|ao)\s*dia',
+    re.IGNORECASE,
+)
+# Formato "1 pipeta / 10 kg" → PIPETA_KG
+_RE_DOSE_PIPETA_POR_PESO = re.compile(
+    r'(\d+(?:[,\.]\d+)?)\s*(?:[-–a]\s*(\d+(?:[,\.]\d+)?)\s*)?'
+    r'pipetas?\s*(?:/|por)\s*(\d+(?:[,\.]\d+)?)\s*kg',
     re.IGNORECASE,
 )
 _RE_DOSE_LOCAL_GOTAS = re.compile(
@@ -789,7 +843,10 @@ def _extrair_doses_estruturadas(
 
     # Linhas — usa o split existente + quebra adicional por "." e ";"
     texto_join = '\n'.join(dose_linhas)
-    linhas = [l.strip() for l in re.split(r'[\n.;]+', texto_join) if l.strip()]
+    # Divide em linhas por quebras de linha e ponto-e-vírgula.
+    # IMPORTANTE: não dividir por "." pois isso quebra decimais como "0.5 mg/kg"
+    # e "1,5 comprimido". Divide por ponto SOMENTE quando não está entre dígitos.
+    linhas = [l.strip() for l in re.split(r'[\n;]|(?<!\d)\.(?!\d)', texto_join) if l.strip()]
 
     registros: List[Dict[str, Any]] = []
     esp_ctx = esp_default
@@ -946,6 +1003,106 @@ def _extrair_doses_estruturadas(
                     'fonte':         'SCRAPER',
                     'confianca':     'MEDIA',
                 })
+
+            # "1 comprimido / 10 kg" → COMPRIMIDOS_KG (dose normalizada por peso)
+            m = _RE_DOSE_CP_POR_PESO.search(seg_txt)
+            if m:
+                qtd_min = _f(m.group(1))
+                qtd_max = _f(m.group(2)) if m.group(2) else qtd_min
+                kg_base = _f(m.group(4))
+                if kg_base and kg_base > 0:
+                    dose_min = round(qtd_min / kg_base, 6)
+                    dose_max = round(qtd_max / kg_base, 6)
+                    cp_label = m.group(1) + (f' - {m.group(2)}' if m.group(2) else '')
+                    dose_str = f"{cp_label} comprimido(s) / {int(kg_base) if kg_base == int(kg_base) else kg_base} kg"
+                    registros.append({
+                        'especie':       _especie_label(esp_ctx),
+                        'especie_code':  esp_ctx,
+                        'faixa_peso':    peso_faixa_str,
+                        'peso_min_kg':   peso_min_ctx,
+                        'peso_max_kg':   peso_max_ctx,
+                        'via':           via,
+                        'dose':          dose_str,
+                        'dose_min':      dose_min,
+                        'dose_max':      dose_max,
+                        'dose_unidade':  'COMPRIMIDOS_KG',
+                        'frequencia':    frequencia_texto,
+                        'intervalo_horas': intervalo,
+                        'duracao':       duracao_texto,
+                        'duracao_min_dias': dur_min,
+                        'duracao_max_dias': dur_max,
+                        'indicacao':     indicacao_final,
+                        'observacao':    linha[:500] if len(linha) > 30 else None,
+                        'dose_raw_text': linha,
+                        'fonte':         'SCRAPER',
+                        'confianca':     'MEDIA',
+                    })
+                    continue
+
+            # "0.5 comprimido / dia" → COMPRIMIDOS_ANIMAL (dose plana diária)
+            m = _RE_DOSE_CP_PLANO.search(seg_txt)
+            if m:
+                dose_min = _f(m.group(1))
+                dose_max = _f(m.group(2)) if m.group(2) else dose_min
+                cp_label = m.group(1) + (f' - {m.group(2)}' if m.group(2) else '')
+                dose_str = f"{cp_label} comprimido(s)/dia"
+                registros.append({
+                    'especie':       _especie_label(esp_ctx),
+                    'especie_code':  esp_ctx,
+                    'faixa_peso':    peso_faixa_str,
+                    'peso_min_kg':   peso_min_ctx,
+                    'peso_max_kg':   peso_max_ctx,
+                    'via':           via,
+                    'dose':          dose_str,
+                    'dose_min':      dose_min,
+                    'dose_max':      dose_max,
+                    'dose_unidade':  'COMPRIMIDOS_ANIMAL',
+                    'frequencia':    frequencia_texto,
+                    'intervalo_horas': intervalo,
+                    'duracao':       duracao_texto,
+                    'duracao_min_dias': dur_min,
+                    'duracao_max_dias': dur_max,
+                    'indicacao':     indicacao_final,
+                    'observacao':    linha[:500] if len(linha) > 30 else None,
+                    'dose_raw_text': linha,
+                    'fonte':         'SCRAPER',
+                    'confianca':     'MEDIA',
+                })
+                continue
+
+            # "1 pipeta / 10 kg" → PIPETA_KG
+            m = _RE_DOSE_PIPETA_POR_PESO.search(seg_txt)
+            if m:
+                qtd_min = _f(m.group(1))
+                qtd_max = _f(m.group(2)) if m.group(2) else qtd_min
+                kg_base = _f(m.group(3))
+                if kg_base and kg_base > 0:
+                    dose_min = round(qtd_min / kg_base, 6)
+                    dose_max = round(qtd_max / kg_base, 6)
+                    dose_str = f"{m.group(1)} pipeta(s) / {int(kg_base) if kg_base == int(kg_base) else kg_base} kg"
+                    registros.append({
+                        'especie':       _especie_label(esp_ctx),
+                        'especie_code':  esp_ctx,
+                        'faixa_peso':    peso_faixa_str,
+                        'peso_min_kg':   peso_min_ctx,
+                        'peso_max_kg':   peso_max_ctx,
+                        'via':           via,
+                        'dose':          dose_str,
+                        'dose_min':      dose_min,
+                        'dose_max':      dose_max,
+                        'dose_unidade':  'PIPETA_KG',
+                        'frequencia':    frequencia_texto,
+                        'intervalo_horas': intervalo,
+                        'duracao':       duracao_texto,
+                        'duracao_min_dias': dur_min,
+                        'duracao_max_dias': dur_max,
+                        'indicacao':     indicacao_final,
+                        'observacao':    linha[:500] if len(linha) > 30 else None,
+                        'dose_raw_text': linha,
+                        'fonte':         'SCRAPER',
+                        'confianca':     'MEDIA',
+                    })
+                    continue
 
     # Dedup por (especie_code, peso_min, peso_max, dose_min, dose_max, unidade, indicacao)
     vistos = set()

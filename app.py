@@ -18156,6 +18156,12 @@ def buscar_medicamentos():
         .all()
     )
 
+    def _bula_url(m):
+        """Constrói a URL do bulário VetSmart a partir do vetsmart_produto_id."""
+        if m.vetsmart_produto_id:
+            return f"https://vetsmart.com.br/cg/produto/{m.vetsmart_produto_id}"
+        return None
+
     return jsonify([
         {
             "id": m.id,  # ✅ ESSENCIAL PARA O FUNCIONAMENTO
@@ -18168,6 +18174,8 @@ def buscar_medicamentos():
             "duracao_tratamento": m.duracao_tratamento,
             "observacoes": m.observacoes,
             "bula": m.bula,
+            # URL direta para a página do produto no VetSmart (bulário oficial)
+            "bula_url": _bula_url(m),
         }
         for m in resultados
     ])
@@ -25883,9 +25891,10 @@ def bulario_sugerir_dose_api():
         except (TypeError, ValueError):
             return v
 
-    sugestao["peso_kg"] = _safe(sugestao.get("peso_kg"))
-    sugestao["dose_min"] = _safe(sugestao.get("dose_min"))
-    sugestao["dose_max"] = _safe(sugestao.get("dose_max"))
+    sugestao["peso_kg"]    = _safe(sugestao.get("peso_kg"))
+    sugestao["dose_min"]   = _safe(sugestao.get("dose_min"))
+    sugestao["dose_media"] = _safe(sugestao.get("dose_media"))
+    sugestao["dose_max"]   = _safe(sugestao.get("dose_max"))
 
     # Modo "múltiplas indicações": front exibe dropdown e recompõe a chamada
     if sugestao.get("multiplo"):
