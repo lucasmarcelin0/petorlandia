@@ -19,6 +19,7 @@
 
     <form method="GET" action="{{ url_for('bulario') }}" id="bulario-form">
       <input type="hidden" name="classe" value="{{ classificacao }}">
+      <input type="hidden" name="especie" value="{{ especie }}">
       <div class="bulario-search mx-auto">
         <i class="fas fa-search bulario-search__icon"></i>
         <input
@@ -32,7 +33,7 @@
           autofocus
         >
         {% if q %}
-        <a href="{{ url_for('bulario', classe=classificacao) }}" class="bulario-search__clear" title="Limpar">
+        <a href="{{ url_for('bulario', classe=classificacao, especie=especie) }}" class="bulario-search__clear" title="Limpar">
           <i class="fas fa-times"></i>
         </a>
         {% endif %}
@@ -60,10 +61,28 @@
 <!-- ═══════════════════════  FILTROS  ═══════════════════════ -->
 {% if macro_grupos %}
 <div class="bulario-filters-block">
-  <div class="container-fluid px-3 px-lg-4 py-2">
+  <div class="container-fluid px-3 px-lg-4 pt-2 pb-1">
+
+    <!-- Filtro rápido por espécie -->
+    <div class="bulario-especie-row mb-2">
+      <span class="bulario-especie-label">Espécie:</span>
+      <a href="{{ url_for('bulario', q=q, classe=classificacao) }}"
+         class="bulario-especie-chip {% if not especie %}active{% endif %}">
+        <i class="fas fa-layer-group"></i> Todos
+      </a>
+      <a href="{{ url_for('bulario', q=q, classe=classificacao, especie='caes') }}"
+         class="bulario-especie-chip {% if especie == 'caes' %}active{% endif %}">
+        <i class="fas fa-dog"></i> Cão
+      </a>
+      <a href="{{ url_for('bulario', q=q, classe=classificacao, especie='gatos') }}"
+         class="bulario-especie-chip {% if especie == 'gatos' %}active{% endif %}">
+        <i class="fas fa-cat"></i> Gato
+      </a>
+    </div>
+
     <!-- Nível 1: macro-grupos clínicos (máx 10) -->
     <div class="bulario-macro-row" id="bulario-macro-row">
-      <a href="{{ url_for('bulario', q=q) }}"
+      <a href="{{ url_for('bulario', q=q, especie=especie) }}"
          class="bulario-macro-chip {% if not classificacao %}active{% endif %}"
          data-macro="__todos__">
         <i class="fas fa-layer-group"></i>
@@ -88,7 +107,7 @@
          id="drawer-{{ grupo.key }}"
          data-macro="{{ grupo.key }}">
       {% for cls in grupo.subclasses %}
-      <a href="{{ url_for('bulario', q=q, classe=cls) }}"
+      <a href="{{ url_for('bulario', q=q, classe=cls, especie=especie) }}"
          class="bulario-filter-chip {% if classificacao == cls %}active{% endif %}">
         {{ cls }}
       </a>
@@ -176,6 +195,13 @@
                 <i class="fas fa-route me-1" style="font-size:.65em"></i>{{ med.via_administracao }}
               </span>
               {% endif %}
+              {% set esp = especies_por_med.get(med.id, set()) %}
+              {% if 'CAES' in esp or 'AMBOS' in esp %}
+              <span class="bulario-badge bd-esp-badge" title="Para cães"><i class="fas fa-dog"></i></span>
+              {% endif %}
+              {% if 'GATOS' in esp or 'AMBOS' in esp %}
+              <span class="bulario-badge bd-esp-badge" title="Para gatos"><i class="fas fa-cat"></i></span>
+              {% endif %}
             </div>
           </div>
           <div class="bulario-card__footer">
@@ -231,7 +257,7 @@
   <nav class="mt-5 d-flex justify-content-center gap-2 flex-wrap" aria-label="Paginação">
     {% if paginacao.has_prev %}
     <a class="btn btn-outline-primary btn-sm"
-       href="{{ url_for('bulario', page=paginacao.prev_num, q=q, classe=classificacao) }}">
+       href="{{ url_for('bulario', page=paginacao.prev_num, q=q, classe=classificacao, especie=especie) }}">
       <i class="fas fa-chevron-left me-1"></i>Anterior
     </a>
     {% endif %}
@@ -242,7 +268,7 @@
 
     {% if paginacao.has_next %}
     <a class="btn btn-outline-primary btn-sm"
-       href="{{ url_for('bulario', page=paginacao.next_num, q=q, classe=classificacao) }}">
+       href="{{ url_for('bulario', page=paginacao.next_num, q=q, classe=classificacao, especie=especie) }}">
       Próxima<i class="fas fa-chevron-right ms-1"></i>
     </a>
     {% endif %}
@@ -586,6 +612,50 @@
 .bulario-empty {
   text-align: center;
   padding: 4rem 1rem;
+}
+
+/* ── Filtro de espécie ────────────────────────────── */
+.bulario-especie-row {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.bulario-especie-label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-right: .2rem;
+}
+.bulario-especie-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .85rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  font-size: .82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all .15s;
+}
+.bulario-especie-chip:hover { border-color: #1976d2; color: #1976d2; }
+.bulario-especie-chip.active {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
+}
+
+/* ── Badge de espécie no card ─────────────────────── */
+.bd-esp-badge {
+  background: #f0fdf4;
+  color: #16a34a;
+  padding: .15rem .45rem;
+  font-size: .68rem;
 }
 </style>
 

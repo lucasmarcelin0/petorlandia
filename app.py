@@ -25600,6 +25600,7 @@ def bulario():
 
     q = request.args.get("q", "").strip()
     classificacao = request.args.get("classe", "").strip()
+    especie = request.args.get("especie", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 24
 
@@ -25617,6 +25618,14 @@ def bulario():
 
     if classificacao:
         query = query.filter(Medicamento.classificacao.ilike(f"%{classificacao}%"))
+
+    if especie in ("caes", "gatos"):
+        from models.base import DoseMedicamento
+        codes = ["CAES", "AMBOS"] if especie == "caes" else ["GATOS", "AMBOS"]
+        sub = db.session.query(DoseMedicamento.medicamento_id).filter(
+            DoseMedicamento.especie_code.in_(codes)
+        ).subquery()
+        query = query.filter(Medicamento.id.in_(sub))
 
     classes = [
         r[0] for r in
@@ -25636,16 +25645,32 @@ def bulario():
     from services.bulario import construir_macro_grupos
     macro_grupos, macro_ativo = construir_macro_grupos(classes, classificacao)
 
+    # Batch-load de espécies por med para evitar N+1 nos cards
+    from models.base import DoseMedicamento
+    med_ids = [m.id for m in paginacao.items]
+    especies_por_med = {}
+    if med_ids:
+        rows = db.session.query(
+            DoseMedicamento.medicamento_id,
+            DoseMedicamento.especie_code,
+        ).filter(
+            DoseMedicamento.medicamento_id.in_(med_ids)
+        ).distinct().all()
+        for mid, code in rows:
+            especies_por_med.setdefault(mid, set()).add(code)
+
     return render_template(
         "bulario/lista.html",
         medicamentos=paginacao.items,
         paginacao=paginacao,
         q=q,
         classificacao=classificacao,
+        especie=especie,
         classes=classes,
         total=total,
         macro_grupos=macro_grupos,
         macro_ativo=macro_ativo,
+        especies_por_med=especies_por_med,
     )
 
 

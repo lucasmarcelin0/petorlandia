@@ -156,6 +156,46 @@
       </div>
       {% endif %}
 
+      <!-- Calculadora de dose -->
+      {% if med.doses %}
+      <div class="bd-calc-card mb-4">
+        <div class="bd-calc-header">
+          <div class="bd-calc-icon"><i class="fas fa-calculator"></i></div>
+          <div>
+            <h6 class="mb-0 fw-bold">Calculadora de dose</h6>
+            <small class="text-muted">Informe o peso para calcular a dose ideal</small>
+          </div>
+        </div>
+        <div class="bd-calc-body">
+          <div class="d-flex flex-wrap gap-3 align-items-end">
+            <div>
+              <label class="form-label form-label-sm mb-1 text-muted small fw-semibold">Peso do animal</label>
+              <div class="input-group input-group-sm" style="width:160px">
+                <input type="number" id="calc-peso" class="form-control"
+                       placeholder="Ex: 12,5" min="0.1" max="120" step="0.1"
+                       oninput="calcDose()">
+                <span class="input-group-text">kg</span>
+              </div>
+            </div>
+            <div>
+              <label class="form-label form-label-sm mb-1 text-muted small fw-semibold">Espécie</label>
+              <div class="d-flex gap-2">
+                <label class="bd-radio-chip">
+                  <input type="radio" name="calc-especie" value="CAES" checked onchange="calcDose()">
+                  <span><i class="fas fa-dog me-1"></i>Cão</span>
+                </label>
+                <label class="bd-radio-chip">
+                  <input type="radio" name="calc-especie" value="GATOS" onchange="calcDose()">
+                  <span><i class="fas fa-cat me-1"></i>Gato</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div id="calc-resultado" class="mt-3 d-none"></div>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Tabela de doses estruturadas -->
       {% if med.doses %}
       <div class="bd-section mb-4">
@@ -170,6 +210,7 @@
                 <th>Faixa de peso</th>
                 <th>Via</th>
                 <th>Dose</th>
+                <th>Indicação</th>
                 <th>Frequência</th>
                 <th>Duração</th>
               </tr>
@@ -180,13 +221,25 @@
                 <td>{{ d.especie or '—' }}</td>
                 <td>{{ d.faixa_peso or '—' }}</td>
                 <td>{{ d.via or '—' }}</td>
-                <td><strong>{{ d.dose or '—' }}</strong></td>
+                <td>
+                  <strong>{{ d.dose or '—' }}</strong>
+                  {% if d.confianca == 'ALTA' %}
+                  <span class="bd-conf-badge alta" title="Alta confiança">✓</span>
+                  {% elif d.confianca == 'MEDIA' %}
+                  <span class="bd-conf-badge media" title="Confiança média">~</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if d.indicacao %}
+                  <span class="bd-indic-badge">{{ d.indicacao }}</span>
+                  {% else %}—{% endif %}
+                </td>
                 <td>{{ d.frequencia or '—' }}</td>
                 <td>{{ d.duracao or '—' }}</td>
               </tr>
               {% if d.observacao %}
               <tr class="bd-dose-obs">
-                <td colspan="6" class="text-muted small ps-4">
+                <td colspan="7" class="text-muted small ps-4">
                   <i class="fas fa-circle-info me-1"></i>{{ d.observacao }}
                 </td>
               </tr>
@@ -452,9 +505,211 @@
   border-radius: 14px;
   border: 1px dashed #cbd5e1;
 }
+
+/* ── Badge confiança na tabela ──────────────────── */
+.bd-conf-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  font-size: .65rem;
+  font-weight: 700;
+  margin-left: .3rem;
+  vertical-align: middle;
+  cursor: default;
+}
+.bd-conf-badge.alta  { background: #dcfce7; color: #15803d; }
+.bd-conf-badge.media { background: #fef3c7; color: #92400e; }
+
+/* ── Badge de indicação na tabela ───────────────── */
+.bd-indic-badge {
+  display: inline-block;
+  padding: .15rem .55rem;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Calculadora de dose ────────────────────────── */
+.bd-calc-card {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.bd-calc-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.5rem .75rem;
+  border-bottom: 1px solid #bbf7d0;
+}
+.bd-calc-icon {
+  width: 36px; height: 36px;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.bd-calc-body { padding: 1rem 1.5rem 1.25rem; }
+.bd-radio-chip input { display: none; }
+.bd-radio-chip span {
+  display: inline-flex;
+  align-items: center;
+  padding: .35rem .9rem;
+  border: 1px solid #d1fae5;
+  background: #fff;
+  border-radius: 8px;
+  font-size: .85rem;
+  color: #374151;
+  cursor: pointer;
+  transition: all .15s;
+}
+.bd-radio-chip input:checked + span {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+.bd-calc-results { display: flex; flex-direction: column; gap: .6rem; }
+.bd-calc-result-item {
+  background: #fff;
+  border: 1px solid #d1fae5;
+  border-radius: 10px;
+  padding: .75rem 1rem;
+}
+.bd-calc-dose-val { font-size: 1.1rem; font-weight: 700; color: #15803d; }
+.bd-calc-eqs { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+.bd-calc-equiv {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: .2rem .6rem;
+  font-size: .78rem;
+  color: #166534;
+}
+.bd-calc-indic {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 6px;
+  padding: .15rem .55rem;
+  font-size: .75rem;
+  font-weight: 600;
+}
+.bd-calc-conf { border-radius: 6px; padding: .15rem .5rem; font-size: .72rem; font-weight: 600; }
+.bd-calc-conf.alta  { background: #dcfce7; color: #15803d; }
+.bd-calc-conf.media { background: #fef3c7; color: #92400e; }
+.bd-calc-meta { font-size: .8rem; color: #6b7280; margin-top: .3rem; }
 </style>
 
 <script>
+/* ── Dados para a calculadora ── */
+const DOSES_MED = [
+  {% for d in med.doses %}
+  {
+    especie_code: {{ d.especie_code | tojson }},
+    peso_min: {{ d.peso_min_kg | tojson }},
+    peso_max: {{ d.peso_max_kg | tojson }},
+    dose_min: {{ d.dose_min | tojson }},
+    dose_max: {{ d.dose_max | tojson }},
+    dose_unidade: {{ d.dose_unidade | tojson }},
+    via: {{ d.via | tojson }},
+    frequencia: {{ d.frequencia | tojson }},
+    duracao: {{ d.duracao | tojson }},
+    indicacao: {{ d.indicacao | tojson }},
+    dose_texto: {{ d.dose | tojson }},
+    confianca: {{ d.confianca | tojson }},
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+const APRES_MED = [
+  {% for ap in med.apresentacoes %}
+  {
+    forma: {{ ap.forma | tojson }},
+    concentracao: {{ ap.concentracao | tojson }},
+    conc_valor: {{ ap.concentracao_valor | tojson }},
+    conc_unidade: {{ ap.concentracao_unidade | tojson }},
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+const UNIDADE_LABEL = { MG_KG: 'mg', MCG_KG: 'mcg', ML_KG: 'mL', COMPRIMIDOS_KG: 'comp.' };
+
+function fmtN(n) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+}
+
+function calcDose() {
+  const peso = parseFloat(document.getElementById('calc-peso').value);
+  const espSel = document.querySelector('[name="calc-especie"]:checked').value;
+  const out = document.getElementById('calc-resultado');
+  if (!peso || peso <= 0) { out.classList.add('d-none'); return; }
+
+  const candidatos = DOSES_MED.filter(d => {
+    const spOk = d.especie_code === espSel || d.especie_code === 'AMBOS';
+    const pMin = d.peso_min === null || peso >= d.peso_min;
+    const pMax = d.peso_max === null || peso <= d.peso_max;
+    return spOk && pMin && pMax;
+  });
+
+  if (!candidatos.length) {
+    out.innerHTML = '<p class="text-muted small mb-0"><i class="fas fa-circle-info me-1"></i>Sem protocolos disponíveis para este peso e espécie.</p>';
+    out.classList.remove('d-none');
+    return;
+  }
+
+  const html = candidatos.map(d => {
+    let doseVal = d.dose_texto || '—';
+    let equivHtml = '';
+
+    if (d.dose_min !== null && d.dose_unidade in UNIDADE_LABEL) {
+      const un = UNIDADE_LABEL[d.dose_unidade];
+      const vMin = d.dose_min * peso;
+      const vMax = d.dose_max !== null ? d.dose_max * peso : null;
+      doseVal = vMax ? `${fmtN(vMin)}–${fmtN(vMax)} ${un}` : `${fmtN(vMin)} ${un}`;
+
+      if (d.dose_unidade === 'MG_KG') {
+        const eqs = APRES_MED
+          .filter(a => a.conc_valor && a.conc_unidade === 'mg')
+          .map(a => {
+            const qMin = vMin / a.conc_valor;
+            const qMax = vMax !== null ? vMax / a.conc_valor : null;
+            const qtd = qMax ? `${fmtN(qMin)}–${fmtN(qMax)}` : fmtN(qMin);
+            return `<span class="bd-calc-equiv">${qtd} ${a.forma.toLowerCase()} de ${a.concentracao}</span>`;
+          });
+        if (eqs.length) equivHtml = `<div class="bd-calc-eqs">${eqs.join('')}</div>`;
+      }
+    }
+
+    const indicBadge = d.indicacao
+      ? `<span class="bd-calc-indic">${d.indicacao}</span>` : '';
+    const confBadge = d.confianca === 'ALTA'
+      ? `<span class="bd-calc-conf alta">✓ Alta confiança</span>`
+      : d.confianca === 'MEDIA'
+        ? `<span class="bd-calc-conf media">~ Conf. média</span>` : '';
+    const meta = [d.via, d.frequencia, d.duracao].filter(Boolean).join(' · ');
+
+    return `
+      <div class="bd-calc-result-item">
+        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+          <div class="bd-calc-dose-val">${doseVal}</div>
+          <div class="d-flex gap-1 flex-wrap">${indicBadge}${confBadge}</div>
+        </div>
+        ${equivHtml}
+        ${meta ? `<div class="bd-calc-meta">${meta}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  out.innerHTML = `<div class="bd-calc-results">${html}</div>`;
+  out.classList.remove('d-none');
+}
+
 function copiarParaPrescricao() {
   const dados = {
     nome: "{{ med.nome | e }}",
