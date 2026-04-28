@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,9 +28,9 @@
 
   <h2>Contrato de Planos de Saúde / Pacotes</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, declaro aderir ao plano ou pacote de serviços veterinários oferecido pela clínica {{ clinica.nome }} para o animal {{ animal.name }}.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, declaro aderir ao plano ou pacote de serviços veterinários oferecido pela clínica {{ clinica.nome }} para o animal {{ animal.name }}.</p>
 
-  <p>Estou ciente da mensalidade, das coberturas e exclusões, bem como das condições de cancelamento e demais cláusulas apresentadas pela clínica.</p>
+  <p contenteditable="true">Estou ciente da mensalidade, das coberturas e exclusões, bem como das condições de cancelamento e demais cláusulas apresentadas pela clínica.</p>
 
   <div class="assinatura">
     ___________________________________________<br>

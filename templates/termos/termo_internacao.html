@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,11 +28,11 @@
 
   <h2>Termo de Internação</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a internação do animal {{ animal.name }} na clínica {{ clinica.nome }} a partir de {{ data_atual }}.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a internação do animal {{ animal.name }} na clínica {{ clinica.nome }} a partir de {{ data_atual }}.</p>
 
-  <p>Estou ciente das condições de tratamento, responsabilidades e custos decorrentes do procedimento, comprometendo-me a seguir todas as orientações fornecidas pela equipe veterinária.</p>
+  <p contenteditable="true">Estou ciente das condições de tratamento, responsabilidades e custos decorrentes do procedimento, comprometendo-me a seguir todas as orientações fornecidas pela equipe veterinária.</p>
 
-  <p>Declaro ainda estar ciente de que, apesar de todos os esforços, não há garantia de cura do paciente.</p>
+  <p contenteditable="true">Declaro ainda estar ciente de que, apesar de todos os esforços, não há garantia de cura do paciente.</p>
 
   <div class="assinatura">
     ___________________________________________<br>

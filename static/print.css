@@ -39,6 +39,48 @@ body {
   border-radius: 10px;
 }
 
+[contenteditable="true"] {
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s, outline 0.15s;
+  cursor: text;
+}
+
+[contenteditable="true"]:hover {
+  background: #f0f7ff;
+  outline: 1px dashed #93c5fd;
+}
+
+[contenteditable="true"]:focus {
+  outline: 2px solid #2563eb;
+  background: #eff6ff;
+}
+
+.editable-hint {
+  font-size: 0.82em;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin-left: 8px;
+  display: inline-block;
+}
+
+@media print {
+  [contenteditable="true"] {
+    outline: none !important;
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    cursor: default !important;
+  }
+  .editable-hint {
+    display: none !important;
+  }
+}
+
 .header {
   display: flex;
   align-items: center;

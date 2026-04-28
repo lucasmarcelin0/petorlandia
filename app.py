@@ -11810,6 +11810,7 @@ def termo_animal(animal_id, tipo):
         'medicacao': 'termos/termo_medicacao.html',
         'planos': 'termos/termo_planos.html',
         'adocao': 'termos/termo_adocao.html',
+        'viagem': 'termos/termo_viagem.html',
     }
     template = templates.get(tipo)
     if not template:

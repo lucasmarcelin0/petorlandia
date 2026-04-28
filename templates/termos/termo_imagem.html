@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,9 +28,9 @@
 
   <h2>Termo de Uso de Imagem</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a utilização de fotos e vídeos do animal {{ animal.name }} pela clínica {{ clinica.nome }} para fins de divulgação, como registros de procedimentos, campanhas de adoção e publicações em redes sociais.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a utilização de fotos e vídeos do animal {{ animal.name }} pela clínica {{ clinica.nome }} para fins de divulgação, como registros de procedimentos, campanhas de adoção e publicações em redes sociais.</p>
 
-  <p>Esta autorização é concedida sem ônus e poderá ser revogada a qualquer momento mediante solicitação por escrito.</p>
+  <p contenteditable="true">Esta autorização é concedida sem ônus e poderá ser revogada a qualquer momento mediante solicitação por escrito.</p>
 
   <div class="assinatura">
     ___________________________________________<br>

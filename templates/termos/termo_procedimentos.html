@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,13 +28,13 @@
 
   <h2>Termo de Consentimento para Procedimentos</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização de procedimentos veterinários no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização de procedimentos veterinários no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
 
-  <p>Fui informado sobre os riscos, benefícios e alternativas aos procedimentos propostos, incluindo cirurgias como castração, intervenções ortopédicas e remoção de tumores.</p>
+  <p contenteditable="true">Fui informado sobre os riscos, benefícios e alternativas aos procedimentos propostos, incluindo cirurgias como castração, intervenções ortopédicas e remoção de tumores.</p>
 
-  <p>Estou ciente de que podem ocorrer complicações ou óbito mesmo com todos os cuidados adotados.</p>
+  <p contenteditable="true">Estou ciente de que podem ocorrer complicações ou óbito mesmo com todos os cuidados adotados.</p>
 
-  <p>Autorizo o uso de anestesia, medicações e exames necessários à execução do procedimento.</p>
+  <p contenteditable="true">Autorizo o uso de anestesia, medicações e exames necessários à execução do procedimento.</p>
 
   <div class="assinatura">
     ___________________________________________<br>

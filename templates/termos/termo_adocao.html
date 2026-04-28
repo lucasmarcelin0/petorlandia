@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,11 +28,11 @@
 
   <h2>Termo de Adoção Responsável</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, assumo a guarda do animal {{ animal.name }} de forma responsável.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, assumo a guarda do animal {{ animal.name }} de forma responsável.</p>
 
-  <p>Comprometo-me a fornecer alimentação adequada, vacinação, cuidados veterinários e um ambiente seguro para o animal.</p>
+  <p contenteditable="true">Comprometo-me a fornecer alimentação adequada, vacinação, cuidados veterinários e um ambiente seguro para o animal.</p>
 
-  <p>Estou ciente de que, em caso de maus-tratos ou abandono, o animal poderá ser recolhido e a adoção cancelada.</p>
+  <p contenteditable="true">Estou ciente de que, em caso de maus-tratos ou abandono, o animal poderá ser recolhido e a adoção cancelada.</p>
 
   <div class="assinatura">
     ___________________________________________<br>

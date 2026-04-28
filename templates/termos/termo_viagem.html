@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atestado de Saúde para Viagem | {{ clinica.nome }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
+</div>
+
+{% from 'components/logo.html' import clinic_logo %}
+<div class="document">
+  {% if clinica %}
+    <div class="header">
+      {{ clinic_logo(clinica) }}
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      {{ clinic_logo(clinica) }}
+    </div>
+  {% endif %}
+
+  <h2>Atestado de Saúde Animal para Viagem</h2>
+
+  <p contenteditable="true">Eu, Médico(a) Veterinário(a) abaixo assinado(a), atesto para os devidos fins que o animal identificado neste documento encontra-se em boas condições de saúde, apto(a) para viagem na data de emissão deste atestado.</p>
+
+  <div class="info-grid" style="margin: 18px 0;">
+    <section class="info-card">
+      <h3>Identificação do Animal</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span contenteditable="true">{{ animal.name }}</span></li>
+        <li><span>Espécie</span><span contenteditable="true">{{ animal.especie or '—' }}</span></li>
+        <li><span>Raça</span><span contenteditable="true">{{ animal.raca or '—' }}</span></li>
+        <li><span>Sexo</span><span contenteditable="true">{{ animal.sexo or '—' }}</span></li>
+        <li><span>Pelagem / Cor</span><span contenteditable="true">{{ animal.cor or '—' }}</span></li>
+        <li><span>Data de Nascimento</span><span contenteditable="true">{{ animal.data_nascimento.strftime('%d/%m/%Y') if animal.data_nascimento else '—' }}</span></li>
+        <li><span>Microchip</span><span contenteditable="true">{{ animal.microchip or 'Não identificado' }}</span></li>
+      </ul>
+    </section>
+    <section class="info-card">
+      <h3>Responsável</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span contenteditable="true">{{ tutor.name }}</span></li>
+        <li><span>CPF</span><span contenteditable="true">{{ tutor.cpf or '—' }}</span></li>
+        <li><span>Telefone</span><span contenteditable="true">{{ tutor.phone or '—' }}</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <p contenteditable="true">O animal está com as vacinas em dia, não apresenta sinais de doenças infectocontagiosas e está em condições clínicas adequadas para o transporte.</p>
+
+  <p contenteditable="true">Destino da viagem: ____________________________________________</p>
+
+  <p contenteditable="true">Meio de transporte: ( ) Aéreo &nbsp;&nbsp; ( ) Terrestre &nbsp;&nbsp; ( ) Marítimo</p>
+
+  <p contenteditable="true">Este atestado é válido por 10 (dez) dias a partir da data de emissão.</p>
+
+  <p style="margin-top: 24px;">{{ clinica.nome if clinica else '' }}, {{ data_atual }}</p>
+
+  <div class="assinatura" style="margin-top: 32px;">
+    ___________________________________________<br>
+    <span contenteditable="true">Médico(a) Veterinário(a) Responsável</span><br>
+    <span contenteditable="true">CRMV: ___________</span>
+  </div>
+
+  {% if clinica %}
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+  {% endif %}
+</div>
+
+<script>
+  const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
+  const btnWhats = document.getElementById('btn-whatsapp');
+  if (!numeroWhatsApp && btnWhats) {
+    btnWhats.style.display = 'none';
+  }
+
+  function abrirAssinatura() {
+    if (confirm('Abrir página de assinatura digital?')) {
+      window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
+    }
+  }
+
+  function enviarWhatsApp() {
+    if (!numeroWhatsApp) {
+      alert('Número de telefone do responsável não informado.');
+      return;
+    }
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o atestado de saúde para viagem de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
+    try {
+      const wpp = window.open(url, '_blank');
+      if (!wpp) {
+        alert('Não foi possível abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
+      }
+    } catch (err) {
+      console.error('Erro ao abrir WhatsApp:', err);
+      alert('Ocorreu um erro ao abrir o WhatsApp. Tente novamente.');
+    }
+  }
+</script>
+</body>
+</html>

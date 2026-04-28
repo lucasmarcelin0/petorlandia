@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,13 +28,13 @@
 
   <h2>Termo de Eutanásia</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização do procedimento de eutanásia no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização do procedimento de eutanásia no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
 
-  <p>Estou ciente de que a eutanásia é um procedimento irreversível, indicado com o objetivo de evitar sofrimento ao paciente, e que todas as outras alternativas terapêuticas foram discutidas com a equipe veterinária.</p>
+  <p contenteditable="true">Estou ciente de que a eutanásia é um procedimento irreversível, indicado com o objetivo de evitar sofrimento ao paciente, e que todas as outras alternativas terapêuticas foram discutidas com a equipe veterinária.</p>
 
-  <p>Declaro que recebi todas as informações necessárias e assumo a responsabilidade pela decisão tomada.</p>
+  <p contenteditable="true">Declaro que recebi todas as informações necessárias e assumo a responsabilidade pela decisão tomada.</p>
 
-  <p>Fica definido que o destino do corpo será: ____________________________________________ (sepultamento, cremação ou descarte adequado).</p>
+  <p contenteditable="true">Fica definido que o destino do corpo será: ____________________________________________ (sepultamento, cremação ou descarte adequado).</p>
 
   <div class="assinatura">
     ___________________________________________<br>

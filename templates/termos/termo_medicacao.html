@@ -13,6 +13,7 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+  <span class="editable-hint">✏️ Clique no texto para editar antes de imprimir</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -27,9 +28,9 @@
 
   <h2>Termo de Responsabilidade de Medicação</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a aplicação de medicações no animal {{ animal.name }} durante o tratamento prestado pela clínica {{ clinica.nome }}.</p>
+  <p contenteditable="true">Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a aplicação de medicações no animal {{ animal.name }} durante o tratamento prestado pela clínica {{ clinica.nome }}.</p>
 
-  <p>Estou ciente de que, após a alta hospitalar, é minha responsabilidade administrar corretamente os medicamentos prescritos e seguir todas as orientações fornecidas pela equipe veterinária.</p>
+  <p contenteditable="true">Estou ciente de que, após a alta hospitalar, é minha responsabilidade administrar corretamente os medicamentos prescritos e seguir todas as orientações fornecidas pela equipe veterinária.</p>
 
   <div class="assinatura">
     ___________________________________________<br>
