@@ -6,113 +6,67 @@
   <title>Atestado de Saúde para Viagem | {{ clinica.nome if clinica else '' }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
   <style>
-    .atv-doc {
-      font-family: Arial, sans-serif;
-      font-size: 10pt;
-      color: #000;
-    }
-    .atv-header-info {
-      text-align: center;
-      font-size: 9pt;
-      margin-bottom: 10px;
-      border-bottom: 1px solid #000;
-      padding-bottom: 6px;
-    }
-    .atv-title {
-      text-align: center;
-      font-size: 15pt;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 14px 0 16px;
-    }
-    .atv-section {
-      border: 1px solid #000;
-      margin-bottom: 8px;
-    }
-    .atv-section-title {
-      font-weight: bold;
-      text-decoration: underline;
-      padding: 4px 6px;
-      background: #f0f0f0;
-      border-bottom: 1px solid #000;
-      font-size: 9.5pt;
-    }
-    .atv-table {
+    /* Sobrescreve margin negativa do contenteditable dentro de células de tabela */
+    td[contenteditable="true"],
+    span[contenteditable="true"] {
+      margin: 0;
+      display: block;
       width: 100%;
-      border-collapse: collapse;
+      min-height: 18px;
     }
-    .atv-table td {
-      border: 1px solid #000;
-      padding: 4px 6px;
-      vertical-align: middle;
+    td[contenteditable="true"]:empty::before,
+    span[contenteditable="true"]:empty::before {
+      content: attr(data-ph);
+      color: #b0bec5;
+      font-style: italic;
+      pointer-events: none;
     }
-    .atv-table td.label {
-      font-weight: bold;
-      white-space: nowrap;
-      width: 1%;
-      background: #fafafa;
-    }
-    .atv-table td[contenteditable="true"]:empty::before {
-      content: attr(data-placeholder);
-      color: #aaa;
+    .atv-legal-note {
+      font-size: 8.5pt;
+      color: var(--muted-text);
+      text-align: center;
+      margin: -14px 0 20px;
       font-style: italic;
     }
-    .atv-fixed-text {
-      padding: 8px 6px;
-      font-size: 9.5pt;
-      text-align: justify;
-    }
-    .atv-fixed-text[contenteditable="true"]:empty::before {
-      content: attr(data-placeholder);
-      color: #aaa;
-      font-style: italic;
+    .atv-section-label {
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent-color);
+      margin-bottom: 4px;
     }
     .atv-footnote {
-      font-size: 8pt;
+      font-size: 8.5pt;
+      color: var(--muted-text);
       font-style: italic;
-      color: #333;
-      padding: 3px 6px;
-      border-top: 1px solid #ccc;
+      margin: -18px 0 24px;
     }
-    .atv-subsection-title {
-      font-weight: bold;
-      padding: 3px 6px;
-      border-bottom: 1px solid #ccc;
-      background: #f8f8f8;
-      font-size: 9pt;
+    .atv-subsection {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--secondary-color);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin: 16px 0 4px;
     }
-    .atv-footer {
-      margin-top: 16px;
-      padding-top: 8px;
+    .info-list li span:last-child[contenteditable="true"] {
+      flex: 1;
+      margin: 0;
+      padding: 1px 3px;
     }
-    .atv-footer-line {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      margin-bottom: 8px;
-    }
-    .atv-signature-block {
-      text-align: center;
-      margin-top: 40px;
-    }
-    .atv-signature-block .sig-line {
-      border-top: 1px solid #000;
-      width: 280px;
-      margin: 0 auto 6px;
-    }
-    .inline-edit {
-      display: inline-block;
-      min-width: 80px;
-      border-bottom: 1px solid #000;
+    .signature-meta {
+      display: block;
+      margin-top: 3px;
+      font-size: 9.5pt;
     }
     @media print {
-      [contenteditable="true"] {
+      td[contenteditable="true"],
+      span[contenteditable="true"] {
         outline: none !important;
         background: none !important;
         cursor: default !important;
       }
-      .editable-hint { display: none !important; }
     }
   </style>
 </head>
@@ -123,18 +77,16 @@
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
   <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
-  <span class="editable-hint">✏️ Clique nas células para editar antes de imprimir</span>
+  <span class="editable-hint">✏️ Clique nos campos para editar</span>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
-<div class="document atv-doc">
+<div class="document">
 
-  {# Cabeçalho visual da clínica (logo + nome + contato) #}
+  {# ── Cabeçalho da clínica ── #}
   {% if clinica %}
     <div class="header">
-      <div class="header-logo">
-        {{ clinic_logo(clinica) }}
-      </div>
+      <div class="header-logo">{{ clinic_logo(clinica) }}</div>
       <div class="header-info">
         <div class="clinica-nome">{{ clinica.nome }}</div>
         <div class="clinica-contato">
@@ -145,186 +97,161 @@
           {% if veterinario %}<span>CRMV {{ veterinario.crmv }}</span>{% endif %}
         </div>
       </div>
-      <div class="header-logo header-logo--right">
-        {{ clinic_logo(clinica) }}
-      </div>
+      <div class="header-logo header-logo--right">{{ clinic_logo(clinica) }}</div>
     </div>
   {% endif %}
 
-  {# Linha legal conforme Resolução CFMV nº 844/2006 #}
-  <div class="atv-header-info">
-    <small>(conforme Resolução CFMV nº 844, de 20 de setembro de 2006)</small>
+  {# ── Título ── #}
+  <div class="document-title-group">
+    <h1 class="document-title">Atestado de Saúde para Viagem</h1>
+    <span class="document-tag">Cães e Gatos · Res. CFMV nº 844/2006</span>
   </div>
 
-  <div class="atv-title">Atestado de Saúde para Viagens de Cães e Gatos</div>
-
-  {# ─── 1. IDENTIFICAÇÃO DO PROPRIETÁRIO ─── #}
-  <div class="atv-section">
-    <div class="atv-section-title">1. IDENTIFICAÇÃO DO PROPRIETÁRIO</div>
-    <table class="atv-table">
-      <tr>
-        <td class="label">Nome completo:</td>
-        <td contenteditable="true" colspan="3">{{ tutor.name or '' }}</td>
-      </tr>
-      <tr>
-        <td class="label">CPF/Passaporte:</td>
-        <td contenteditable="true">{{ tutor.cpf or '' }}</td>
-        <td class="label">Telefone:</td>
-        <td contenteditable="true">{{ tutor.phone or '' }}</td>
-      </tr>
-      <tr>
-        <td class="label">Endereço:</td>
-        <td contenteditable="true" colspan="3">{{ tutor.address or '' }}</td>
-      </tr>
-      <tr>
-        <td class="label">Cidade:</td>
-        <td contenteditable="true">{{ (tutor.endereco.cidade if tutor.endereco and tutor.endereco.cidade) or '' }}</td>
-        <td class="label">UF:</td>
-        <td contenteditable="true" style="max-width:60px;">{{ (tutor.endereco.estado if tutor.endereco and tutor.endereco.estado) or '' }}</td>
-      </tr>
-    </table>
+  <div class="document-meta">
+    <span>Emitido em {{ data_atual }}</span>
+    <span>Paciente: {{ animal.name }}</span>
+    <span>Responsável: {{ tutor.name }}</span>
   </div>
 
-  {# ─── 2. IDENTIFICAÇÃO DO ANIMAL ─── #}
-  <div class="atv-section">
-    <div class="atv-section-title">2. IDENTIFICAÇÃO DO ANIMAL</div>
-    <table class="atv-table">
-      <tr>
-        <td class="label">Nome:</td>
-        <td contenteditable="true">{{ animal.name or '' }}</td>
-        <td class="label">Data de nascimento:</td>
-        <td contenteditable="true">{{ animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' }}</td>
-      </tr>
-      <tr>
-        <td class="label">Espécie:</td>
-        <td contenteditable="true">{{ animal.species.name if animal.species else '' }}</td>
-        <td class="label">Sexo:</td>
-        <td contenteditable="true">{{ animal.sex or '' }}</td>
-      </tr>
-      <tr>
-        <td class="label">Raça:</td>
-        <td contenteditable="true">{{ animal.breed.name if animal.breed else '' }}</td>
-        <td class="label">Porte:</td>
-        <td contenteditable="true" data-placeholder="Pequeno / Médio / Grande"></td>
-      </tr>
-      <tr>
-        <td class="label">Pelagem:</td>
-        <td contenteditable="true" colspan="3" data-placeholder="Ex: Marrom, pelos curtos"></td>
-      </tr>
-      <tr>
-        <td class="label">Microchip:</td>
-        <td contenteditable="true">{{ animal.microchip_number or '' }}</td>
-        <td class="label">Data de aplicação:</td>
-        <td contenteditable="true" data-placeholder="__/__/____"></td>
-      </tr>
-    </table>
+  {# ── Seções 1 e 2: cards de identificação ── #}
+  <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
+
+    <section class="info-card">
+      <div class="atv-section-label">1. Identificação do Proprietário</div>
+      <ul class="info-list">
+        <li><span>Nome</span><span contenteditable="true">{{ tutor.name or '' }}</span></li>
+        <li><span>CPF / Passaporte</span><span contenteditable="true">{{ tutor.cpf or '' }}</span></li>
+        <li><span>Telefone</span><span contenteditable="true">{{ tutor.phone or '' }}</span></li>
+        <li><span>Endereço</span><span contenteditable="true">{{ tutor.address or '' }}</span></li>
+        <li>
+          <span>Cidade / UF</span>
+          <span contenteditable="true">{{ ((tutor.endereco.cidade ~ ' / ' ~ tutor.endereco.estado) if tutor.endereco and tutor.endereco.cidade) or '' }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="info-card">
+      <div class="atv-section-label">2. Identificação do Animal</div>
+      <ul class="info-list">
+        <li><span>Nome</span><span contenteditable="true">{{ animal.name or '' }}</span></li>
+        <li><span>Nascimento</span><span contenteditable="true">{{ animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' }}</span></li>
+        <li><span>Espécie</span><span contenteditable="true">{{ animal.species.name if animal.species else '' }}</span></li>
+        <li><span>Raça</span><span contenteditable="true">{{ animal.breed.name if animal.breed else '' }}</span></li>
+        <li><span>Sexo</span><span contenteditable="true">{{ animal.sex or '' }}</span></li>
+        <li><span>Porte</span><span contenteditable="true" data-ph="Pequeno / Médio / Grande"></span></li>
+        <li><span>Pelagem</span><span contenteditable="true" data-ph="Ex: Marrom, curto"></span></li>
+        <li><span>Microchip</span><span contenteditable="true">{{ animal.microchip_number or '' }}</span></li>
+        <li><span>Data microchip</span><span contenteditable="true" data-ph="__/__/____"></span></li>
+      </ul>
+    </section>
+
   </div>
 
-  {# ─── 3. VACINA ANTI-RÁBICA ─── #}
+  {# ── Seção 3: Vacina Anti-Rábica ── #}
   {% set rabies_ns = namespace(vacina=None) %}
   {% for v in animal.vacinas_ordenadas %}
     {% if rabies_ns.vacina is none and 'rabi' in v.nome|lower %}
       {% set rabies_ns.vacina = v %}
     {% endif %}
   {% endfor %}
-  {% set vacina_rabica = rabies_ns.vacina %}
+  {% set vr = rabies_ns.vacina %}
 
-  <div class="atv-section">
-    <div class="atv-section-title">3. VACINA ANTI-RÁBICA</div>
-    <table class="atv-table">
+  <div class="section-title">3. Vacina Anti-Rábica</div>
+  <table>
+    <thead>
       <tr>
-        <td class="label" style="text-align:center;">Laboratório</td>
-        <td class="label" style="text-align:center;">Nome comercial</td>
-        <td class="label" style="text-align:center;">Data da aplicação</td>
-        <td class="label" style="text-align:center;">Validade da vacinação</td>
-        <td class="label" style="text-align:center;">Nº do lote</td>
+        <th>Laboratório</th>
+        <th>Nome comercial</th>
+        <th>Data da aplicação</th>
+        <th>Validade</th>
+        <th>Nº do lote</th>
       </tr>
+    </thead>
+    <tbody>
       <tr>
-        <td contenteditable="true">{{ vacina_rabica.fabricante if vacina_rabica and vacina_rabica.fabricante else '' }}</td>
-        <td contenteditable="true">{{ vacina_rabica.nome if vacina_rabica else '' }}</td>
-        <td contenteditable="true">{{ vacina_rabica.aplicada_em.strftime('%d/%m/%Y') if vacina_rabica and vacina_rabica.aplicada_em else '' }}</td>
-        <td contenteditable="true" data-placeholder="__/__/____"></td>
-        <td contenteditable="true" data-placeholder="Nº lote"></td>
+        <td contenteditable="true">{{ vr.fabricante if vr and vr.fabricante else '' }}</td>
+        <td contenteditable="true">{{ vr.nome if vr else '' }}</td>
+        <td contenteditable="true">{{ vr.aplicada_em.strftime('%d/%m/%Y') if vr and vr.aplicada_em else '' }}</td>
+        <td contenteditable="true" data-ph="__/__/____"></td>
+        <td contenteditable="true" data-ph="Nº lote"></td>
       </tr>
-    </table>
-    <div class="atv-footnote">*para viagens à União Europeia é necessário anexar laudo sorológico conforme Regulamento (UE) 576/2013.</div>
-  </div>
+    </tbody>
+  </table>
+  <p class="atv-footnote">* Para viagens à União Europeia é necessário anexar laudo sorológico conforme Regulamento (UE) 576/2013.</p>
 
-  {# ─── 4. INFORMAÇÕES SANITÁRIAS ─── #}
-  <div class="atv-section">
-    <div class="atv-section-title">4. INFORMAÇÕES SANITÁRIAS</div>
-    <div class="atv-fixed-text" contenteditable="true">Atesto para os devidos fins que o animal acima identificado, foi por mim examinado, está clinicamente sadio, não apresenta sinais de doenças infectocontagiosas e parasitárias, inclusive livre da presença de miíases, e até onde alcança meu conhecimento não foi diagnosticado positivamente para leishmaniose, portanto está apto para o transporte.</div>
-  </div>
+  {# ── Seção 4: Informações Sanitárias ── #}
+  <div class="section-title">4. Informações Sanitárias</div>
+  <div class="note-block" contenteditable="true">Atesto para os devidos fins que o animal acima identificado foi por mim examinado, está clinicamente sadio, não apresenta sinais de doenças infectocontagiosas e parasitárias, inclusive livre da presença de miíases, e até onde alcança meu conhecimento não foi diagnosticado positivamente para leishmaniose, portanto está apto para o transporte.</div>
 
-  {# ─── 5. TRATAMENTO ANTIPARASITÁRIO ─── #}
-  <div class="atv-section">
-    <div class="atv-section-title">5. TRATAMENTO ANTIPARASITÁRIO</div>
+  {# ── Seção 5: Tratamento Antiparasitário ── #}
+  <div class="section-title">5. Tratamento Antiparasitário</div>
 
-    <div class="atv-subsection-title">ANTIPARASITÁRIO INTERNO</div>
-    <table class="atv-table">
+  <div class="atv-subsection">Antiparasitário Interno</div>
+  <table>
+    <thead>
       <tr>
-        <td class="label" style="text-align:center;">Data de aplicação</td>
-        <td class="label" style="text-align:center;">Laboratório</td>
-        <td class="label" style="text-align:center;">Nome comercial</td>
-        <td class="label" style="text-align:center;">Princípio(s) ativo(s)</td>
+        <th>Data de aplicação</th>
+        <th>Laboratório</th>
+        <th>Nome comercial</th>
+        <th>Princípio(s) ativo(s)</th>
       </tr>
+    </thead>
+    <tbody>
       <tr>
-        <td contenteditable="true" data-placeholder="__/__/____" style="min-width:90px;"></td>
+        <td contenteditable="true" data-ph="__/__/____"></td>
         <td contenteditable="true"></td>
         <td contenteditable="true"></td>
         <td contenteditable="true"></td>
       </tr>
-    </table>
+    </tbody>
+  </table>
 
-    <div class="atv-subsection-title" style="margin-top:4px;">ANTIPARASITÁRIO EXTERNO</div>
-    <table class="atv-table">
+  <div class="atv-subsection">Antiparasitário Externo</div>
+  <table>
+    <thead>
       <tr>
-        <td class="label" style="text-align:center;">Data de aplicação</td>
-        <td class="label" style="text-align:center;">Laboratório</td>
-        <td class="label" style="text-align:center;">Nome comercial</td>
-        <td class="label" style="text-align:center;">Princípio(s) ativo(s)</td>
+        <th>Data de aplicação</th>
+        <th>Laboratório</th>
+        <th>Nome comercial</th>
+        <th>Princípio(s) ativo(s)</th>
       </tr>
+    </thead>
+    <tbody>
       <tr>
-        <td contenteditable="true" data-placeholder="__/__/____" style="min-width:90px;"></td>
+        <td contenteditable="true" data-ph="__/__/____"></td>
         <td contenteditable="true"></td>
         <td contenteditable="true"></td>
         <td contenteditable="true"></td>
       </tr>
-    </table>
-    <div class="atv-footnote">*aplicados dentro dos 15 (quinze) dias anteriores à emissão do CVI no caso de viagens ao Mercosul.</div>
-  </div>
+    </tbody>
+  </table>
+  <p class="atv-footnote">* Aplicados dentro dos 15 (quinze) dias anteriores à emissão do CVI no caso de viagens ao Mercosul.</p>
 
-  {# ─── 6. INFORMAÇÕES ADICIONAIS ─── #}
-  <div class="atv-section">
-    <div class="atv-section-title">6. INFORMAÇÕES ADICIONAIS</div>
-    <div class="atv-fixed-text" contenteditable="true" style="min-height:60px;" data-placeholder="Inutilizar este campo caso não seja necessário"></div>
-  </div>
+  {# ── Seção 6: Informações Adicionais ── #}
+  <div class="section-title">6. Informações Adicionais</div>
+  <div class="note-block" contenteditable="true" style="min-height: 60px;" data-ph="Inutilizar este campo caso não seja necessário"></div>
 
-  {# ─── RODAPÉ COM ASSINATURA ─── #}
-  <div class="atv-footer">
-    <div class="atv-footer-line">
-      <span>
-        <strong>Município/UF:</strong>&nbsp;
-        <span contenteditable="true" class="inline-edit" style="min-width:240px;">{{ (clinica.nome if clinica) or '' }}</span>
-      </span>
-      <span style="margin-left:auto;">
-        <strong>Data:</strong>&nbsp;
-        <span contenteditable="true" class="inline-edit" style="min-width:90px;">{{ data_atual }}</span>
-      </span>
-    </div>
-
-    <div class="atv-signature-block">
-      <div class="sig-line"></div>
-      <div>Nome: <span contenteditable="true" class="inline-edit" style="min-width:200px;">{{ printing_user.name if printing_user else '' }}</span></div>
-      <div style="margin-top:4px;">CRMV nº: <span contenteditable="true" class="inline-edit" style="min-width:120px;">{{ veterinario.crmv if veterinario else '' }}</span></div>
-      <div style="margin-top:6px; font-style:italic; font-size:9.5pt;">Médico Veterinário</div>
+  {# ── Assinatura ── #}
+  <div class="signature-block">
+    <div class="signature">
+      <div class="signature-line"></div>
+      <span contenteditable="true">{{ printing_user.name if printing_user else '' }}</span>
+      <span class="signature-meta" contenteditable="true">CRMV {{ veterinario.crmv if veterinario else '' }}</span>
+      <span class="muted">Médico(a) Veterinário(a)</span>
     </div>
   </div>
 
-  <footer style="margin-top:20px; font-size:8.5pt; text-align:center;">
-    Informações sobre o trânsito internacional de cães e gatos:<br>
-    http://www.agricultura.gov.br/assuntos/vigilancia-agropecuaria/animais-estimacao
+  {# ── Rodapé ── #}
+  {% if clinica %}
+  <footer>
+    <span>{{ clinica.nome }}</span>
+    {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+    {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+    {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+    {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    <br><span style="font-size:8pt;">Informações sobre trânsito internacional: agricultura.gov.br/assuntos/vigilancia-agropecuaria/animais-estimacao</span>
   </footer>
+  {% endif %}
 
 </div>
 
@@ -341,9 +268,8 @@
 
   function enviarWhatsApp() {
     if (!numeroWhatsApp) { alert('Número de telefone do responsável não informado.'); return; }
-    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o atestado de saúde para viagem de {{ animal.name }}:\n\n${window.location.href}\n\nAtenciosamente,\nEquipe {{ clinica.nome if clinica else '' }}`);
-    const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
-    const wpp = window.open(url, '_blank');
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o atestado de saúde para viagem de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome if clinica else '' }}`);
+    const wpp = window.open(`https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`, '_blank');
     if (!wpp) alert('Não foi possível abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
   }
 </script>
