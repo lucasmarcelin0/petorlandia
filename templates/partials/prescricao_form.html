@@ -1446,9 +1446,25 @@
       `
       : '';
 
-    const posologia = tabs.length ? `
-      <div class="mb-3">
-        <div class="fw-semibold mb-2">Posologia estruturada</div>
+    let _collapseIdx = 0;
+    const collapseSection = (label, content, alertClass = null) => {
+      const id = `mono-collapse-${_collapseIdx++}`;
+      const headerClass = alertClass ? `alert alert-${alertClass} py-2 mb-0` : 'fw-semibold';
+      return `
+        <div class="mb-2">
+          <button class="btn btn-sm btn-link text-start text-decoration-none p-0 d-flex align-items-center gap-1 ${alertClass ? 'text-dark' : 'text-body'} w-100"
+                  type="button" data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false" aria-controls="${id}">
+            <i class="bi bi-chevron-right mono-chevron" style="transition:transform .2s;font-size:.75rem;"></i>
+            <span class="${headerClass}">${label}</span>
+          </button>
+          <div class="collapse" id="${id}">
+            <div class="mt-1">${content}</div>
+          </div>
+        </div>
+      `;
+    };
+
+    const posologia = tabs.length ? collapseSection('Posologia estruturada', `
         ${tabs.map(tab => `
           <div class="border rounded p-2 mb-2 bg-light">
             <div class="fw-semibold text-primary mb-2">${tab.label}</div>
@@ -1466,8 +1482,7 @@
             `).join('')}
           </div>
         `).join('')}
-      </div>
-    ` : '';
+    `) : '';
 
     const temConteudo = !!(
       tabs.length ||
@@ -1487,12 +1502,19 @@
     container.classList.remove('d-none');
     container.innerHTML = `
       ${posologia}
-      ${contra.resumo?.length ? `<div class="alert alert-warning py-2"><strong>Contraindicações críticas:</strong> ${contra.resumo.join(' • ')}</div>` : ''}
-      ${indic.itens?.length ? `<div class="fw-semibold mb-2">Indicações</div>${lista(indic.itens)}` : ''}
-      ${efeitos.itens?.length ? `<div class="fw-semibold mb-2">Efeitos adversos</div>${lista(efeitos.itens)}` : ''}
-      ${advert.itens?.length ? `<div class="fw-semibold mb-2">Advertências</div>${lista(advert.itens, 'warning')}` : ''}
-      ${interacoes}
+      ${contra.resumo?.length ? collapseSection('<strong>Contraindicações críticas:</strong> ' + contra.resumo.join(' • '), '', 'warning') : ''}
+      ${indic.itens?.length ? collapseSection('Indicações', lista(indic.itens)) : ''}
+      ${efeitos.itens?.length ? collapseSection('Efeitos adversos', lista(efeitos.itens)) : ''}
+      ${advert.itens?.length ? collapseSection('Advertências', lista(advert.itens, 'warning')) : ''}
+      ${interacoes ? collapseSection('Interações medicamentosas', interacoes) : ''}
     `;
+
+    container.querySelectorAll('[data-bs-toggle="collapse"]').forEach(btn => {
+      const target = document.querySelector(btn.getAttribute('data-bs-target'));
+      if (!target) return;
+      target.addEventListener('show.bs.collapse', () => btn.querySelector('.mono-chevron').style.transform = 'rotate(90deg)');
+      target.addEventListener('hide.bs.collapse', () => btn.querySelector('.mono-chevron').style.transform = 'rotate(0deg)');
+    });
   }
 
   function preencherCardMedicamento(m) {
