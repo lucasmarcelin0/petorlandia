@@ -282,6 +282,27 @@ def _normalizar_rotulo_secao(rotulo: Optional[str]) -> Optional[str]:
     return None
 
 
+def _classificar_item_clinico(item: str, categoria_padrao: str = 'indicacoes') -> str:
+    alvo = (item or '').casefold()
+    if any(token in alvo for token in [
+        'contraind', 'não usar', 'nao usar', 'não administrar', 'nao administrar',
+        'hipersens', 'evitar o uso', 'não indicado', 'nao indicado',
+    ]):
+        return 'contraindicacoes'
+    if any(token in alvo for token in [
+        'efeito advers', 'reação advers', 'reacao advers', 'vômit', 'vomit',
+        'diarre', 'letarg', 'ataxia', 'sedaç', 'sedac', 'saliva', 'anorex',
+    ]):
+        return 'efeitos_adversos'
+    if any(token in alvo for token in [
+        'usar com cautela', 'monitor', 'gestant', 'lactant', 'prenhe',
+        'filhote', 'idoso', 'nefropat', 'hepatopat', 'desidrat', 'doença renal',
+        'doenca renal', 'insuficiência renal', 'insuficiencia renal',
+    ]):
+        return 'advertencias'
+    return categoria_padrao
+
+
 def _coletar_blocos_por_subtitulo(content_div) -> List[Dict[str, Any]]:
     blocos: List[Dict[str, Any]] = []
     atual = {'titulo': None, 'partes': []}
@@ -358,6 +379,23 @@ def _parsear_linhas_com_rotulo(texto: Optional[str]) -> Dict[str, List[str]]:
     return saida
 
 
+def _redistribuir_itens_clinicos(secoes: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    reorganizado: Dict[str, List[str]] = {
+        'indicacoes': [],
+        'contraindicacoes': [],
+        'advertencias': [],
+        'efeitos_adversos': [],
+    }
+    for categoria, itens in secoes.items():
+        for item in itens:
+            if categoria != 'indicacoes':
+                destino = categoria
+            else:
+                destino = _classificar_item_clinico(item, categoria)
+            reorganizado[destino].append(item)
+    return reorganizado
+
+
 def _inferir_grau_interacao(texto: str) -> str:
     alvo = texto.casefold()
     if any(token in alvo for token in ['contraindicado', 'evitar associação', 'evitar associacao', 'não associar', 'nao associar', 'grave', 'severa']):
@@ -397,6 +435,53 @@ def _parsear_item_interacao(texto: str) -> Dict[str, str]:
         'conduta': _inferir_conduta_interacao(texto),
         'descricao': texto,
     }
+
+
+def _eh_item_interacao_ruido(texto: str) -> bool:
+    alvo = (texto or '').casefold().strip()
+    if not alvo:
+        return True
+    if 'o aplicativo vetsmart contém informações' in alvo:
+        return True
+    prefixos = [
+        'tipo de interação',
+        'tipo de interacao',
+        'grau de interação',
+        'grau de interacao',
+        'efeito clínico',
+        'efeito clinico',
+        'mecanismo de ação',
+        'mecanismo de acao',
+        'conduta',
+    ]
+    return any(alvo.startswith(prefixo) for prefixo in prefixos)
+
+
+def _consolidar_itens_interacao(itens_brutos: List[str]) -> List[str]:
+    itens_limpos = [_texto_multilinha_limpo(item) for item in itens_brutos]
+    itens_limpos = [item for item in itens_limpos if item and not _eh_item_interacao_ruido(item)]
+    if not itens_limpos:
+        return []
+
+    consolidados: List[str] = []
+    pendentes: Dict[str, str] = {}
+    for item in itens_limpos:
+        if ':' in item:
+            agente, resto = item.split(':', 1)
+            agente = agente.strip(" -:")
+            resto = resto.strip()
+            if agente and resto:
+                pendentes[agente.casefold()] = agente
+                consolidados.append(f"{agente}: {resto}")
+                continue
+        if re.match(r'^[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][\wÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇçãõéíóúêôâîûü\- ]{2,80}$', item):
+            pendentes[item.casefold()] = item
+            continue
+        if consolidados and len(item) > 12:
+            consolidados[-1] = f"{consolidados[-1]} {item}".strip()
+        else:
+            consolidados.append(item)
+    return consolidados
 
 
 def _extrair_secao_indicacoes_contraindicacoes(content_div) -> Dict[str, Any]:
@@ -446,6 +531,8 @@ def _extrair_secao_indicacoes_contraindicacoes(content_div) -> Dict[str, Any]:
             for parte in partes:
                 secoes[chave].extend(_split_lista_textual(parte))
 
+    secoes = _redistribuir_itens_clinicos(secoes)
+
     return {
         'indicacoes': _montar_secao_padrao(secoes['indicacoes'], '\n\n'.join(textos_brutos['indicacoes']) or None),
         'contraindicacoes': _montar_secao_padrao(
@@ -479,7 +566,7 @@ def _extrair_secao_interacoes(content_div) -> Dict[str, Any]:
 
     vistos: set[str] = set()
     itens: List[Dict[str, str]] = []
-    for texto in itens_brutos:
+    for texto in _consolidar_itens_interacao(itens_brutos):
         for item in _split_lista_textual(texto) or [texto]:
             chave = item.casefold()
             if chave in vistos:

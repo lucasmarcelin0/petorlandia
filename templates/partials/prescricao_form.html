@@ -1413,77 +1413,94 @@
     const advert = secoes.advertencias || {};
     const inter = secoes.interacoes || {};
 
-    const lista = (items, tone = 'light') => {
-      if (!Array.isArray(items) || !items.length) return '';
-      return `<ul class="list-group list-group-flush border rounded mb-3">${items.map(item => `<li class="list-group-item list-group-item-${tone}">${item}</li>`).join('')}</ul>`;
-    };
-
-    const interacoes = Array.isArray(inter.itens) && inter.itens.length
-      ? `
-        <div class="table-responsive mb-3">
-          <table class="table table-sm align-middle">
-            <thead>
-              <tr>
-                <th>Interação</th>
-                <th>Grau</th>
-                <th>Conduta</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${inter.itens.map(item => `
-                <tr>
-                  <td>
-                    <strong>${item.agente || 'Associação clínica'}</strong>
-                    <div class="small text-muted">${item.descricao || ''}</div>
-                  </td>
-                  <td><span class="badge text-bg-warning">${item.grau || 'Atenção'}</span></td>
-                  <td>${item.conduta || 'Avaliar clinicamente'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `
-      : '';
-
-    let _collapseIdx = 0;
-    const collapseSection = (label, content, alertClass = null) => {
-      const id = `mono-collapse-${_collapseIdx++}`;
-      const headerClass = alertClass ? `alert alert-${alertClass} py-2 mb-0` : 'fw-semibold';
+    // ── helpers ──────────────────────────────────────────────────────────────
+    let _ci = 0;
+    const _section = (icon, label, content, accent, count) => {
+      const id = `mc-${_ci++}`;
+      const cnt = count != null ? `<span style="font-size:.65rem;background:#e9ecef;color:#6c757d;border-radius:10px;padding:1px 7px;font-weight:600;flex-shrink:0;">${count}</span>` : '';
       return `
-        <div class="mb-2">
-          <button class="btn btn-sm btn-link text-start text-decoration-none p-0 d-flex align-items-center gap-1 ${alertClass ? 'text-dark' : 'text-body'} w-100"
-                  type="button" data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false" aria-controls="${id}">
-            <i class="bi bi-chevron-right mono-chevron" style="transition:transform .2s;font-size:.75rem;"></i>
-            <span class="${headerClass}">${label}</span>
+        <div class="mono-sec" style="border:1px solid #e9ecef;border-left:3px solid ${accent};border-radius:7px;margin-bottom:5px;background:#fff;overflow:hidden;">
+          <button type="button" class="mono-sec-btn w-100 d-flex align-items-center gap-2 border-0 bg-transparent text-start"
+                  style="padding:9px 12px;cursor:pointer;transition:background .15s;"
+                  onmouseenter="this.style.background='#f8f9fa'" onmouseleave="this.style.background='transparent'"
+                  data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false">
+            <i class="bi ${icon}" style="color:${accent};font-size:.85rem;flex-shrink:0;"></i>
+            <span style="font-size:.82rem;font-weight:600;color:#343a40;flex-grow:1;">${label}</span>
+            ${cnt}
+            <i class="bi bi-chevron-down mono-chevron" style="transition:transform .2s;font-size:.7rem;color:#adb5bd;flex-shrink:0;"></i>
           </button>
           <div class="collapse" id="${id}">
-            <div class="mt-1">${content}</div>
+            <div style="padding:4px 12px 12px;">${content}</div>
           </div>
-        </div>
-      `;
+        </div>`;
     };
 
-    const posologia = tabs.length ? collapseSection('Posologia estruturada', `
-        ${tabs.map(tab => `
-          <div class="border rounded p-2 mb-2 bg-light">
-            <div class="fw-semibold text-primary mb-2">${tab.label}</div>
-            ${tab.protocolos.map(protocolo => `
-              <div class="border rounded bg-white p-2 mb-2">
-                <div class="badge text-bg-primary mb-2">${protocolo.indicacao}</div>
-                ${protocolo.linhas.map(linha => `
-                  <div class="small mb-2">
-                    <strong>${linha.dose}</strong> • ${linha.via} • ${linha.frequencia} • ${linha.duracao}
-                    <div class="text-muted">${linha.faixa_peso}</div>
-                    ${linha.observacao ? `<div class="text-muted fst-italic">${linha.observacao}</div>` : ''}
-                  </div>
-                `).join('')}
-              </div>
-            `).join('')}
-          </div>
-        `).join('')}
-    `) : '';
+    const _grauStyle = g => {
+      const s = (g || '').toLowerCase();
+      if (s.includes('grave') || s.includes('séri') || s.includes('seri')) return 'background:#dc3545;color:#fff';
+      if (s.includes('moder')) return 'background:#fd7e14;color:#fff';
+      return 'background:#0dcaf0;color:#000';
+    };
 
+    // ── species colours ───────────────────────────────────────────────────────
+    const spColors = ['#0d6efd','#6f42c1','#198754','#fd7e14','#20c997'];
+
+    // ── section contents ──────────────────────────────────────────────────────
+    const posologiaHtml = tabs.length ? tabs.map((tab, ti) => {
+      const c = spColors[ti % spColors.length];
+      return `
+        <div style="margin-bottom:${ti < tabs.length-1 ? '14px' : '0'};${ti < tabs.length-1 ? 'padding-bottom:12px;border-bottom:1px solid #f0f0f0;' : ''}">
+          <div class="d-flex align-items-center gap-2 mb-2" style="padding-top:2px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0;"></span>
+            <span style="font-size:.72rem;font-weight:700;color:${c};text-transform:uppercase;letter-spacing:.06em;">${tab.label}</span>
+          </div>
+          ${tab.protocolos.map(p => `
+            <div style="background:#f8f9fb;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+              <span style="display:inline-block;font-size:.68rem;font-weight:700;color:${c};background:${c}18;border:1px solid ${c}33;border-radius:20px;padding:2px 9px;margin-bottom:6px;">${p.indicacao}</span>
+              ${p.linhas.map((l, li) => `
+                <div class="d-flex flex-wrap align-items-center gap-2" style="padding:4px 0;${li < p.linhas.length-1 ? 'border-bottom:1px solid #edeef0;' : ''}">
+                  <span style="font-size:.82rem;font-weight:700;color:#212529;">${l.dose}</span>
+                  <span style="font-size:.68rem;background:#e2e8f0;color:#475569;border-radius:10px;padding:1px 8px;font-weight:600;">${l.via}</span>
+                  <span style="font-size:.75rem;color:#6c757d;">${l.frequencia}</span>
+                  ${l.faixa_peso && l.faixa_peso !== 'Sem faixa definida' ? `<span style="font-size:.68rem;color:#adb5bd;">${l.faixa_peso}</span>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>`;
+    }).join('') : '';
+
+    const contraindicacoesHtml = contra.resumo?.length ? `
+      <div class="d-flex gap-2 align-items-start" style="padding-top:4px;">
+        <i class="bi bi-exclamation-triangle-fill mt-1" style="color:#dc3545;flex-shrink:0;font-size:.8rem;"></i>
+        <p style="font-size:.79rem;color:#212529;line-height:1.55;margin:0;">${contra.resumo.join(' ')}</p>
+      </div>` : '';
+
+    const efeitosHtml = efeitos.itens?.length ? efeitos.itens.map((item, i) => `
+      <div class="d-flex gap-2" style="padding:5px 0;${i < efeitos.itens.length-1 ? 'border-bottom:1px solid #f5f5f5;' : ''}">
+        <span style="color:#ced4da;flex-shrink:0;font-size:.5rem;margin-top:5px;">●</span>
+        <span style="font-size:.79rem;color:#495057;line-height:1.45;">${item}</span>
+      </div>`).join('') : '';
+
+    const advertenciasHtml = advert.itens?.length ? advert.itens.map((item, i) => `
+      <div class="d-flex gap-2" style="padding:5px 0;${i < advert.itens.length-1 ? 'border-bottom:1px solid #fff3cd44;' : ''}">
+        <i class="bi bi-exclamation-circle-fill" style="color:#ffc107;font-size:.7rem;flex-shrink:0;margin-top:3px;"></i>
+        <span style="font-size:.79rem;color:#495057;line-height:1.45;">${item}</span>
+      </div>`).join('') : '';
+
+    const interacoesHtml = Array.isArray(inter.itens) && inter.itens.length ? inter.itens.map((item, i) => `
+      <div style="padding:7px 0;${i < inter.itens.length-1 ? 'border-bottom:1px solid #f0f0f0;' : ''}">
+        <div class="d-flex align-items-start gap-2">
+          <div class="flex-grow-1">
+            <span style="font-size:.8rem;font-weight:600;color:#212529;">${item.agente || 'Associação clínica'}</span>
+            ${item.conduta ? `<span style="font-size:.72rem;color:#6c757d;margin-left:6px;">→ ${item.conduta}</span>` : ''}
+          </div>
+          <span class="badge rounded-pill flex-shrink-0" style="${_grauStyle(item.grau)};font-size:.65rem;">${item.grau || 'Atenção'}</span>
+        </div>
+        ${item.descricao ? `<p style="font-size:.71rem;color:#adb5bd;margin:3px 0 0;line-height:1.4;">${item.descricao}</p>` : ''}
+      </div>`).join('') : '';
+
+    // ── guard ─────────────────────────────────────────────────────────────────
     const temConteudo = !!(
       tabs.length ||
       (contra.resumo && contra.resumo.length) ||
@@ -1499,20 +1516,23 @@
       return;
     }
 
+    // ── render ────────────────────────────────────────────────────────────────
     container.classList.remove('d-none');
     container.innerHTML = `
-      ${posologia}
-      ${contra.resumo?.length ? collapseSection('<strong>Contraindicações críticas:</strong> ' + contra.resumo.join(' • '), '', 'warning') : ''}
-      ${indic.itens?.length ? collapseSection('Indicações', lista(indic.itens)) : ''}
-      ${efeitos.itens?.length ? collapseSection('Efeitos adversos', lista(efeitos.itens)) : ''}
-      ${advert.itens?.length ? collapseSection('Advertências', lista(advert.itens, 'warning')) : ''}
-      ${interacoes ? collapseSection('Interações medicamentosas', interacoes) : ''}
+      <div style="padding-top:4px;">
+        ${tabs.length ? _section('bi-list-check', 'Posologia estruturada', posologiaHtml, '#0d6efd', tabs.reduce((s,t)=>s+t.protocolos.length,0)+' protocolos') : ''}
+        ${contra.resumo?.length ? _section('bi-shield-exclamation', 'Contraindicações', contraindicacoesHtml, '#dc3545') : ''}
+        ${indic.itens?.length ? _section('bi-check2-circle', 'Indicações', indic.itens.map((item,i)=>`<div class="d-flex gap-2" style="padding:5px 0;${i<indic.itens.length-1?'border-bottom:1px solid #f5f5f5;':''}"><span style="color:#198754;flex-shrink:0;font-size:.7rem;margin-top:3px;">●</span><span style="font-size:.79rem;color:#495057;">${item}</span></div>`).join(''), '#198754', indic.itens.length) : ''}
+        ${efeitos.itens?.length ? _section('bi-activity', 'Efeitos adversos', efeitosHtml, '#6c757d', efeitos.itens.length) : ''}
+        ${advert.itens?.length ? _section('bi-exclamation-circle', 'Advertências', advertenciasHtml, '#ffc107', advert.itens.length) : ''}
+        ${interacoesHtml ? _section('bi-arrow-left-right', 'Interações medicamentosas', interacoesHtml, '#e03e3e', inter.itens.length) : ''}
+      </div>
     `;
 
     container.querySelectorAll('[data-bs-toggle="collapse"]').forEach(btn => {
       const target = document.querySelector(btn.getAttribute('data-bs-target'));
       if (!target) return;
-      target.addEventListener('show.bs.collapse', () => btn.querySelector('.mono-chevron').style.transform = 'rotate(90deg)');
+      target.addEventListener('show.bs.collapse', () => btn.querySelector('.mono-chevron').style.transform = 'rotate(180deg)');
       target.addEventListener('hide.bs.collapse', () => btn.querySelector('.mono-chevron').style.transform = 'rotate(0deg)');
     });
   }

@@ -275,6 +275,23 @@ def test_extrair_secao_indicacoes_contraindicacoes_com_texto_corrido():
     assert "nefropatas" in " ".join(secao["advertencias"]["itens"]).lower()
 
 
+def test_extrair_secao_indicacoes_reclassifica_frases_misturadas():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info">
+          <p>Indicações: Controle da dor. Não usar em gestantes. Pode causar vômito transitório.
+          Usar com cautela em nefropatas.</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_indicacoes_contraindicacoes(soup.div)
+    assert "Controle da dor" in " ".join(secao["indicacoes"]["itens"])
+    assert "gestantes" in " ".join(secao["contraindicacoes"]["itens"]).lower()
+    assert "vômito" in " ".join(secao["efeitos_adversos"]["itens"]).lower()
+    assert "nefropatas" in " ".join(secao["advertencias"]["itens"]).lower()
+
+
 def test_extrair_secao_interacoes_em_lista():
     soup = scraper.BeautifulSoup(
         """
@@ -291,6 +308,24 @@ def test_extrair_secao_interacoes_em_lista():
     assert [item["agente"] for item in secao["itens"]] == ["Fenobarbital", "Diuréticos"]
     assert secao["itens"][0]["conduta"] == "Ajustar dose"
     assert secao["itens"][1]["grau"] == "Moderada"
+
+
+def test_extrair_secao_interacoes_descarta_metadados_soltos():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info interaction">
+          <p>Tipo de interação - Sinergismo</p>
+          <p>Grau de interação - Moderado</p>
+          <p>Conduta - monitorar</p>
+          <p>Fenobarbital: monitorar resposta clínica e ajustar dose.</p>
+          <p>O Aplicativo Vetsmart contém informações de interação medicamentosas em geral.</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_interacoes(soup.div)
+    assert len(secao["itens"]) == 1
+    assert secao["itens"][0]["agente"] == "Fenobarbital"
 
 
 def test_extrair_secao_interacoes_disabled_retorna_vazio():
