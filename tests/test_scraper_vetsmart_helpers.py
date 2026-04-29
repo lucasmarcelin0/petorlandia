@@ -233,3 +233,75 @@ def test_coletar_links_produto_html_dedupa_ids():
     """
     links = scraper._coletar_links_produto_html(html)
     assert [l["id"] for l in links] == [1698, 4888]
+
+
+def test_extrair_secao_indicacoes_contraindicacoes_com_subtitulos():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info">
+          <h2>Indicações</h2>
+          <p>Controle da dor aguda; controle da febre.</p>
+          <h3>Contraindicações</h3>
+          <ul><li>Não usar em gestantes.</li><li>Evitar em nefropatas.</li></ul>
+          <h3>Advertências</h3>
+          <p>Monitorar hidratação.</p>
+          <h3>Efeitos adversos</h3>
+          <p>Vômito, diarreia.</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_indicacoes_contraindicacoes(soup.div)
+    assert "Controle da dor aguda" in secao["indicacoes"]["itens"][0]
+    assert "gestantes" in " ".join(secao["contraindicacoes"]["itens"]).lower()
+    assert secao["contraindicacoes"]["resumo"]
+    assert secao["advertencias"]["itens"] == ["Monitorar hidratação"]
+    assert secao["efeitos_adversos"]["itens"] == ["Vômito, diarreia"]
+
+
+def test_extrair_secao_indicacoes_contraindicacoes_com_texto_corrido():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info">
+          <p>Indicações: Otites e dermatites. Contraindicações: Não usar em felinos.
+          Advertências: Usar com cautela em nefropatas.</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_indicacoes_contraindicacoes(soup.div)
+    assert "Otites e dermatites" in " ".join(secao["indicacoes"]["itens"])
+    assert "felinos" in " ".join(secao["contraindicacoes"]["itens"]).lower()
+    assert "nefropatas" in " ".join(secao["advertencias"]["itens"]).lower()
+
+
+def test_extrair_secao_interacoes_em_lista():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info interaction">
+          <ul>
+            <li>Fenobarbital: monitorar resposta clínica e ajustar dose.</li>
+            <li>Diuréticos - usar com cautela.</li>
+          </ul>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_interacoes(soup.div)
+    assert [item["agente"] for item in secao["itens"]] == ["Fenobarbital", "Diuréticos"]
+    assert secao["itens"][0]["conduta"] == "Ajustar dose"
+    assert secao["itens"][1]["grau"] == "Moderada"
+
+
+def test_extrair_secao_interacoes_disabled_retorna_vazio():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info interaction">
+          <p class="disabled">Este produto não contém interações medicamentosas.</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_interacoes(soup.div)
+    assert secao["itens"] == []
+    assert secao["texto"] is None

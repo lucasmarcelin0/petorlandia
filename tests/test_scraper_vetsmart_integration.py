@@ -71,6 +71,56 @@ HTML_PREDNISONA = """
 """
 
 
+HTML_DIPIRONA = """
+<html>
+<body>
+  <h2 class="side-nav-title">Dipirona Vet</h2>
+  <div class="side-nav-subtitle">POR Vet Farma</div>
+  <meta itemprop="manufacturer" content="Vet Farma"/>
+  <meta itemprop="drugClass" content="Analgésico"/>
+  <meta itemprop="administrationRoute" content="VO, IM"/>
+  <meta itemprop="activeIngredient" content="Dipirona"/>
+  <meta itemprop="warning" content="Usar com cautela em pacientes desidratados."/>
+  <p><b>Espécies:</b> Cães e Gatos</p>
+
+  <section class="container-content">
+    <div class="title-content">Administração e doses</div>
+    <div class="content-comercial-info">
+      <p><b>Via:</b> VO, IM</p>
+      <ul>
+        <li>Cães: Alergia VO 0,5 - 1 mg/kg Imunossupressão IM 2 mg/kg</li>
+        <li>Gatos: 1 mg/kg</li>
+      </ul>
+      <p><b>Frequência:</b> 12/12 horas</p>
+    </div>
+  </section>
+
+  <section class="container-content">
+    <div class="title-content">Indicações e contraindicações</div>
+    <div class="content-comercial-info">
+      <h2>Indicações</h2>
+      <p>Controle da dor aguda; controle da febre.</p>
+      <h2>Contraindicações</h2>
+      <p>Não usar em gestantes.</p>
+      <h2>Efeitos adversos</h2>
+      <p>Vômito transitório.</p>
+    </div>
+  </section>
+
+  <section class="container-content">
+    <div class="title-content">Interações medicamentosas</div>
+    <div class="content-comercial-info interaction">
+      <ul>
+        <li>Fenobarbital: monitorar resposta clínica e ajustar dose.</li>
+        <li>Diuréticos: usar com cautela.</li>
+      </ul>
+    </div>
+  </section>
+</body>
+</html>
+"""
+
+
 def test_prednisona_integration_parse():
     prod = scraper.extrair_produto_do_html(HTML_PREDNISONA, pid=9999, nome_fallback='?')
 
@@ -122,3 +172,24 @@ def test_prednisona_indicacoes_extraidas():
     assert scraper._extrair_indicacao('doenças osteoarticulares') == 'Osteoarticular'
     assert scraper._extrair_indicacao('endocrinopatias') == 'Endocrinopatia'
     assert scraper._extrair_indicacao('neoplasias') == 'Neoplasia'
+
+
+def test_dipirona_gera_conteudo_estruturado_v2():
+    prod = scraper.extrair_produto_do_html(HTML_DIPIRONA, pid=10001, nome_fallback='?')
+    conteudo = prod.conteudo_estruturado
+
+    assert conteudo["metadata"]["parser_version"] == "v2"
+    assert conteudo["metadata"]["fonte"] == "vetsmart"
+    assert conteudo["indicacoes"]["itens"] == ["Controle da dor aguda", "controle da febre"]
+    assert "gestantes" in " ".join(conteudo["contraindicacoes"]["itens"]).lower()
+    assert conteudo["interacoes"]["itens"][0]["agente"] == "Fenobarbital"
+    assert conteudo["interacoes"]["itens"][0]["conduta"] == "Ajustar dose"
+    assert "desidratados" in " ".join(conteudo["advertencias"]["itens"]).lower()
+
+
+def test_dipirona_doses_multiplas_indicacoes_na_mesma_linha():
+    prod = scraper.extrair_produto_do_html(HTML_DIPIRONA, pid=10001, nome_fallback='?')
+    doses_caes = [dose for dose in prod.doses if dose["especie_code"] in {"CAES", "AMBOS"}]
+    indicacoes = [dose["indicacao"] for dose in doses_caes]
+    assert "Alergia" in indicacoes
+    assert "Imunossupressão" in indicacoes

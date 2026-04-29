@@ -228,6 +228,376 @@ def _itemprop(soup, prop: str) -> Optional[str]:
     return vals[0] if vals else None
 
 
+def _texto_multilinha_limpo(texto: Optional[str]) -> Optional[str]:
+    if not texto:
+        return None
+    texto = str(texto).replace('\r\n', '\n').replace('\r', '\n')
+    texto = re.sub(r'[ \t]+', ' ', texto)
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+    texto = texto.strip()
+    return texto or None
+
+
+def _split_lista_textual(texto: Optional[str]) -> List[str]:
+    bruto = _texto_multilinha_limpo(texto)
+    if not bruto:
+        return []
+    candidato = re.sub(r'\s*[•·●▪◦]\s*', '\n', bruto)
+    candidato = re.sub(r'\s*;\s*', '\n', candidato)
+    candidato = re.sub(r'\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ])', '.\n', candidato)
+    itens: List[str] = []
+    vistos: set[str] = set()
+    for linha in candidato.split('\n'):
+        linha = re.sub(r'^\s*[-–—]\s*', '', linha).strip(' .;:-')
+        if len(linha) < 3:
+            continue
+        chave = re.sub(r'\s+', ' ', linha).casefold()
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        itens.append(linha)
+    return itens
+
+
+def _montar_secao_padrao(itens: Optional[List[str]] = None, texto: Optional[str] = None, resumo: Optional[List[str]] = None) -> Dict[str, Any]:
+    return {
+        'itens': itens or [],
+        'texto': _texto_multilinha_limpo(texto),
+        'resumo': resumo or [],
+    }
+
+
+def _normalizar_rotulo_secao(rotulo: Optional[str]) -> Optional[str]:
+    if not rotulo:
+        return None
+    alvo = re.sub(r'\s+', ' ', rotulo).strip(' :').casefold()
+    if 'contraindica' in alvo:
+        return 'contraindicacoes'
+    if any(token in alvo for token in ['advert', 'precau', 'cuidado']):
+        return 'advertencias'
+    if any(token in alvo for token in ['efeitos adversos', 'reacoes adversas', 'reações adversas', 'efeito colateral']):
+        return 'efeitos_adversos'
+    if 'indica' in alvo:
+        return 'indicacoes'
+    return None
+
+
+def _coletar_blocos_por_subtitulo(content_div) -> List[Dict[str, Any]]:
+    blocos: List[Dict[str, Any]] = []
+    atual = {'titulo': None, 'partes': []}
+
+    def flush():
+        nonlocal atual
+        if atual['titulo'] or atual['partes']:
+            blocos.append(atual)
+        atual = {'titulo': None, 'partes': []}
+
+    for child in getattr(content_div, 'children', []):
+        if getattr(child, 'name', None) is None:
+            continue
+        nome_tag = child.name.lower()
+        if nome_tag in {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}:
+            flush()
+            atual['titulo'] = child.get_text(' ', strip=True)
+            continue
+
+        if nome_tag in {'p', 'li'}:
+            bold = child.find(['b', 'strong'])
+            if bold:
+                rotulo = bold.get_text(' ', strip=True).strip(' :')
+                categoria = _normalizar_rotulo_secao(rotulo)
+                texto_total = child.get_text(' ', strip=True)
+                texto_sem_rotulo = re.sub(
+                    rf'^\s*{re.escape(bold.get_text(" ", strip=True))}\s*:?\s*',
+                    '',
+                    texto_total,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if categoria and (texto_sem_rotulo or not atual['partes']):
+                    flush()
+                    atual['titulo'] = rotulo
+                    if texto_sem_rotulo:
+                        atual['partes'].append(texto_sem_rotulo)
+                    continue
+
+        texto = child.get_text(' ', strip=True)
+        if texto:
+            atual['partes'].append(texto)
+
+    flush()
+    return [bloco for bloco in blocos if bloco.get('titulo') or bloco.get('partes')]
+
+
+def _parsear_linhas_com_rotulo(texto: Optional[str]) -> Dict[str, List[str]]:
+    saida: Dict[str, List[str]] = {
+        'indicacoes': [],
+        'contraindicacoes': [],
+        'advertencias': [],
+        'efeitos_adversos': [],
+    }
+    bruto = _texto_multilinha_limpo(texto)
+    if not bruto:
+        return saida
+    padrao = re.compile(
+        r'(Indica(?:ç|c)ões?|Contraindica(?:ç|c)ões?|Advert(?:ê|e)ncias?|Precau(?:ç|c)ões?|'
+        r'Efeitos adversos?|Rea(?:ç|c)ões adversas?)\s*:\s*',
+        re.IGNORECASE,
+    )
+    matches = list(padrao.finditer(bruto))
+    if not matches:
+        saida['indicacoes'].append(bruto)
+        return saida
+
+    for idx, match in enumerate(matches):
+        categoria = _normalizar_rotulo_secao(match.group(1)) or 'indicacoes'
+        inicio = match.end()
+        fim = matches[idx + 1].start() if idx + 1 < len(matches) else len(bruto)
+        trecho = bruto[inicio:fim].strip(' \n\r\t:;.-')
+        if trecho:
+            saida[categoria].append(trecho)
+    return saida
+
+
+def _inferir_grau_interacao(texto: str) -> str:
+    alvo = texto.casefold()
+    if any(token in alvo for token in ['contraindicado', 'evitar associação', 'evitar associacao', 'não associar', 'nao associar', 'grave', 'severa']):
+        return 'Alta'
+    if any(token in alvo for token in ['cautela', 'monitor', 'moderad', 'ajustar dose', 'ajuste de dose']):
+        return 'Moderada'
+    if any(token in alvo for token in ['leve', 'discreta', 'pouco relevante']):
+        return 'Baixa'
+    return 'Atenção'
+
+
+def _inferir_conduta_interacao(texto: str) -> str:
+    alvo = texto.casefold()
+    if any(token in alvo for token in ['contraindicado', 'não associar', 'nao associar', 'evitar associação', 'evitar associacao']):
+        return 'Evitar associação'
+    if 'ajust' in alvo:
+        return 'Ajustar dose'
+    if any(token in alvo for token in ['monitor', 'acompanhar', 'vigiar']):
+        return 'Monitorar de perto'
+    if 'cautela' in alvo:
+        return 'Usar com cautela'
+    return 'Avaliar clinicamente'
+
+
+def _parsear_item_interacao(texto: str) -> Dict[str, str]:
+    agente = texto
+    match = re.match(r"^(.*?)(?:\s*[-:]\s*|\s+)(aumenta|reduz|potencializa|pode|deve|evitar|contraindicado|usar|monitorar)", texto, re.IGNORECASE)
+    if match:
+        agente = match.group(1).strip(" -:")
+    elif ':' in texto:
+        agente = texto.split(':', 1)[0].strip(" -:")
+    elif ' com ' in texto.casefold():
+        agente = texto.split(' com ', 1)[0].strip(" -:")
+    return {
+        'agente': agente[:120],
+        'grau': _inferir_grau_interacao(texto),
+        'conduta': _inferir_conduta_interacao(texto),
+        'descricao': texto,
+    }
+
+
+def _extrair_secao_indicacoes_contraindicacoes(content_div) -> Dict[str, Any]:
+    bruto = _texto_multilinha_limpo(content_div.get_text('\n', strip=True) if content_div else None)
+    secoes: Dict[str, List[str]] = {
+        'indicacoes': [],
+        'contraindicacoes': [],
+        'advertencias': [],
+        'efeitos_adversos': [],
+    }
+    textos_brutos: Dict[str, List[str]] = {chave: [] for chave in secoes}
+
+    for bloco in _coletar_blocos_por_subtitulo(content_div):
+        categoria = _normalizar_rotulo_secao(bloco.get('titulo')) or 'indicacoes'
+        bloco_texto = _texto_multilinha_limpo('\n'.join(bloco.get('partes') or []))
+        if not bloco_texto:
+            continue
+        partes_rotuladas = _parsear_linhas_com_rotulo(bloco_texto)
+        sem_rotulos_explicitos = (
+            partes_rotuladas['indicacoes'] == [bloco_texto]
+            and not partes_rotuladas['contraindicacoes']
+            and not partes_rotuladas['advertencias']
+            and not partes_rotuladas['efeitos_adversos']
+        )
+        if sem_rotulos_explicitos and categoria != 'indicacoes':
+            partes_rotuladas = {
+                'indicacoes': [],
+                'contraindicacoes': [],
+                'advertencias': [],
+                'efeitos_adversos': [],
+            }
+            partes_rotuladas[categoria] = [bloco_texto]
+        for chave, partes in partes_rotuladas.items():
+            if not partes:
+                continue
+            textos_brutos[chave].extend(partes)
+            for parte in partes:
+                secoes[chave].extend(_split_lista_textual(parte))
+        if not any(partes_rotuladas.values()):
+            textos_brutos[categoria].append(bloco_texto)
+            secoes[categoria].extend(_split_lista_textual(bloco_texto))
+
+    if not any(secoes.values()) and bruto:
+        partes_rotuladas = _parsear_linhas_com_rotulo(bruto)
+        for chave, partes in partes_rotuladas.items():
+            textos_brutos[chave].extend(partes)
+            for parte in partes:
+                secoes[chave].extend(_split_lista_textual(parte))
+
+    return {
+        'indicacoes': _montar_secao_padrao(secoes['indicacoes'], '\n\n'.join(textos_brutos['indicacoes']) or None),
+        'contraindicacoes': _montar_secao_padrao(
+            secoes['contraindicacoes'],
+            '\n\n'.join(textos_brutos['contraindicacoes']) or None,
+            resumo=secoes['contraindicacoes'][:3],
+        ),
+        'advertencias': _montar_secao_padrao(secoes['advertencias'], '\n\n'.join(textos_brutos['advertencias']) or None),
+        'efeitos_adversos': _montar_secao_padrao(secoes['efeitos_adversos'], '\n\n'.join(textos_brutos['efeitos_adversos']) or None),
+        'texto_bruto': bruto,
+    }
+
+
+def _extrair_secao_interacoes(content_div) -> Dict[str, Any]:
+    bruto = _texto_multilinha_limpo(content_div.get_text('\n', strip=True) if content_div else None)
+    if not bruto or _eh_vazio(bruto):
+        return {'itens': [], 'texto': None, 'texto_bruto': bruto}
+
+    itens_brutos: List[str] = []
+    for seletor in ['li', 'p', 'div']:
+        for tag in content_div.find_all(seletor):
+            texto = _texto_multilinha_limpo(tag.get_text(' ', strip=True))
+            if not texto or _eh_vazio(texto):
+                continue
+            itens_brutos.append(texto)
+        if itens_brutos:
+            break
+
+    if not itens_brutos:
+        itens_brutos = _split_lista_textual(bruto)
+
+    vistos: set[str] = set()
+    itens: List[Dict[str, str]] = []
+    for texto in itens_brutos:
+        for item in _split_lista_textual(texto) or [texto]:
+            chave = item.casefold()
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            itens.append(_parsear_item_interacao(item))
+
+    return {
+        'itens': itens,
+        'texto': bruto,
+        'texto_bruto': bruto,
+    }
+
+
+def _extrair_secao_farmacologia(content_div) -> Dict[str, Any]:
+    bruto = _texto_multilinha_limpo(content_div.get_text('\n', strip=True) if content_div else None)
+    return {
+        'texto': bruto,
+        'texto_bruto': bruto,
+    }
+
+
+def _limpar_prefixos_apresentacao(texto: str, nome: Optional[str], principios: List[str]) -> str:
+    saida = (texto or '').strip()
+    candidatos = [nome or ''] + list(principios or [])
+    for candidato in candidatos:
+        candidato = candidato.strip()
+        if not candidato:
+            continue
+        padrao = rf'^\s*{re.escape(candidato)}\s*[-,|:]?\s*'
+        nova = re.sub(padrao, '', saida, flags=re.IGNORECASE).strip()
+        if nova and re.search(r'\d', nova):
+            saida = nova
+    return saida
+
+
+def _extrair_apresentacoes_estruturadas(ul_apres, principios: List[str], nome: str) -> List[Dict[str, Any]]:
+    apresentacoes: List[Dict[str, Any]] = []
+    if not ul_apres:
+        return apresentacoes
+
+    for li in ul_apres.find_all('li'):
+        li_txt = li.get_text(' ', strip=True)
+        tem_dosage_form = bool(li.find('span', attrs={'itemprop': 'dosageForm'}))
+        eh_produto_relacionado = (
+            not tem_dosage_form
+            and re.search(r'empresa\s*:', li_txt, re.IGNORECASE)
+            and re.search(r'princ[ií]pio', li_txt, re.IGNORECASE)
+        )
+        if eh_produto_relacionado:
+            continue
+
+        forma_el = li.find('span', attrs={'itemprop': 'dosageForm'}) or li.find('span')
+        forma = forma_el.get_text(strip=True) if forma_el else ''
+
+        li_clone = BeautifulSoup(str(li), 'html.parser').find('li')
+        for s in li_clone.find_all('span'):
+            s.decompose()
+        txt_resto = li_clone.get_text(' ', strip=True)
+        txt_resto = re.sub(r'^[-–]\s*', '', txt_resto).strip()
+        txt_resto = re.sub(r',\s*$', '', txt_resto).strip()
+        txt_resto = re.sub(r',\s*\(', ' (', txt_resto).strip()
+        txt_resto = _limpar_prefixos_apresentacao(txt_resto, nome, principios)
+
+        def _sem_numero(s: str) -> bool:
+            return bool(s) and not re.search(r'\d', s)
+
+        if _sem_numero(txt_resto):
+            alvo = txt_resto.lower().strip()
+            pa = (principios[0] if principios else '').lower().strip()
+            nom = (nome or '').lower().strip()
+            if (
+                (pa and (alvo == pa or pa in alvo or alvo in pa))
+                or (nom and (alvo == nom or alvo in nom or nom in alvo))
+            ):
+                txt_resto = ''
+            elif len(alvo.split()) >= 2:
+                txt_resto = ''
+
+        if forma or txt_resto:
+            ap = {
+                'forma': (forma or 'N/A')[:50],
+                'concentracao': txt_resto[:100],
+            }
+            ap.update(_estruturar_apresentacao_campos(forma or '', txt_resto or '', nome))
+            apresentacoes.append(ap)
+    return apresentacoes
+
+
+def _montar_conteudo_estruturado_v2(
+    secoes_clinicas: Dict[str, Any],
+    interacoes_struct: Dict[str, Any],
+    advertencias_extras: Optional[str] = None,
+) -> Dict[str, Any]:
+    advertencias = dict(secoes_clinicas.get('advertencias') or _montar_secao_padrao())
+    if advertencias_extras:
+        extras = _split_lista_textual(advertencias_extras)
+        advertencias['itens'] = list(dict.fromkeys((advertencias.get('itens') or []) + extras))
+        advertencias['texto'] = _texto_multilinha_limpo('\n\n'.join(filter(None, [advertencias.get('texto'), advertencias_extras])))
+
+    return {
+        'indicacoes': secoes_clinicas.get('indicacoes') or _montar_secao_padrao(),
+        'contraindicacoes': secoes_clinicas.get('contraindicacoes') or _montar_secao_padrao(),
+        'advertencias': advertencias,
+        'efeitos_adversos': secoes_clinicas.get('efeitos_adversos') or _montar_secao_padrao(),
+        'interacoes': {
+            'itens': interacoes_struct.get('itens') or [],
+            'texto': interacoes_struct.get('texto'),
+        },
+        'metadata': {
+            'parser_version': 'v2',
+            'fonte': 'vetsmart',
+            'secao_indicacoes_bruta': secoes_clinicas.get('texto_bruto'),
+            'secao_interacoes_bruta': interacoes_struct.get('texto_bruto'),
+        },
+    }
+
+
 def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoVetsmart:
     """Extrai todos os dados do produto a partir do HTML completo da página.
 
@@ -301,6 +671,7 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
     # ── Coleta todas as seções textuais ──────────────────────────────────
     secoes: Dict[str, Optional[str]] = {}
     secoes_uls: Dict[str, Any] = {}
+    secoes_content: Dict[str, Any] = {}
 
     for sec in soup.find_all('section', class_='container-content'):
         title_el = sec.find(class_='title-content')
@@ -318,6 +689,7 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         if not content_div:
             secoes[titulo] = None
             continue
+        secoes_content[titulo] = content_div
 
         for el in content_div.find_all(class_='title-content'):
             el.decompose()
@@ -331,73 +703,8 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
 
     # ── Apresentações (Schema.org availableStrength + dosageForm) ────────
     # Cada <li> tem o nome da apresentação + <span itemprop="dosageForm"> + (volume opcional)
-    apresentacoes = []
     ul_apres = secoes_uls.get('Apresentações e concentrações')
-    if ul_apres:
-        for li in ul_apres.find_all('li'):
-            # Em páginas de *princípio ativo* (ex: /produto/1970 "Prednisona"),
-            # a seção "Apresentações" lista PRODUTOS COMERCIAIS que contêm a PA,
-            # não apresentações reais. Esses <li> têm o padrão:
-            #   "Meticorten Veterinário 20 mg | Princípio(s) Ativo(s): | X | Empresa: | MSD"
-            # e NÃO possuem span itemprop=dosageForm. Quando detectamos esse padrão
-            # pulamos o <li> — os produtos comerciais serão raspados separadamente
-            # pelo próprio loop da lista.
-            li_txt = li.get_text(' ', strip=True)
-            tem_dosage_form = bool(li.find('span', attrs={'itemprop': 'dosageForm'}))
-            eh_produto_relacionado = (
-                not tem_dosage_form
-                and re.search(r'empresa\s*:', li_txt, re.IGNORECASE)
-                and re.search(r'princ[ií]pio', li_txt, re.IGNORECASE)
-            )
-            if eh_produto_relacionado:
-                continue
-
-            forma_el = li.find('span', attrs={'itemprop': 'dosageForm'}) or li.find('span')
-            forma = forma_el.get_text(strip=True) if forma_el else ''
-
-            # Texto do <li> sem o span
-            li_clone = BeautifulSoup(str(li), 'html.parser').find('li')
-            for s in li_clone.find_all('span'):
-                s.decompose()
-            txt_resto = li_clone.get_text(' ', strip=True)
-            # Limpa traço inicial e formata: "- Cefalexina, (250mg)" → "Cefalexina (250mg)"
-            txt_resto = re.sub(r'^[-–]\s*', '', txt_resto).strip()
-            txt_resto = re.sub(r',\s*$', '', txt_resto).strip()
-            # Remove vírgula órfã antes do parêntese: "Cefalexina, (250mg)" → "Cefalexina (250mg)"
-            txt_resto = re.sub(r',\s*\(', ' (', txt_resto).strip()
-
-            # Se a "concentração" é só um nome (princípio ativo, nome do produto,
-            # ou variação do fabricante) SEM número — não é concentração, zera.
-            # Isso evita que o campo venha como "Prednisona Animalia" quando não
-            # há número e nem unidade no li — o scraper estava pegando o texto
-            # de fallback como se fosse concentração.
-            def _sem_numero(s: str) -> bool:
-                return bool(s) and not re.search(r'\d', s)
-
-            if _sem_numero(txt_resto):
-                alvo = txt_resto.lower().strip()
-                pa = (principios[0] if principios else '').lower().strip()
-                nom = (nome or '').lower().strip()
-                # Match exato OU substring (contém PA / contido no nome do produto).
-                if (
-                    (pa and (alvo == pa or pa in alvo or alvo in pa))
-                    or (nom and (alvo == nom or alvo in nom or nom in alvo))
-                ):
-                    txt_resto = ''
-                else:
-                    # Também zera se for claramente "só um nome próprio"
-                    # (3+ palavras sem dígito nenhum → não é concentração).
-                    if len(alvo.split()) >= 2:
-                        txt_resto = ''
-
-            if forma or txt_resto:
-                ap = {
-                    'forma': (forma or 'N/A')[:50],
-                    'concentracao': txt_resto[:100],
-                }
-                # Campos numéricos para cálculo de dose
-                ap.update(_estruturar_apresentacao_campos(forma or '', txt_resto or '', nome))
-                apresentacoes.append(ap)
+    apresentacoes = _extrair_apresentacoes_estruturadas(ul_apres, principios, nome)
 
     # ── Administração e doses (texto, com cleanup) ───────────────────────
     admin_txt = secoes.get('Administração e doses') or ''
@@ -420,28 +727,33 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
     )
 
     # ── Indicações / Interações / Farmacologia ───────────────────────────
-    indicacoes  = _limpar(secoes.get('Indicações e contraindicações'), 800)
-    interacoes  = _limpar(secoes.get('Interações medicamentosas'), 500)
+    indicacoes_struct = _extrair_secao_indicacoes_contraindicacoes(secoes_content.get('Indicações e contraindicações'))
+    interacoes_struct = _extrair_secao_interacoes(secoes_content.get('Interações medicamentosas'))
+    indicacoes = _limpar(
+        indicacoes_struct['indicacoes'].get('texto')
+        or secoes.get('Indicações e contraindicações'),
+        1500,
+    )
+    interacoes = _limpar(interacoes_struct.get('texto') or secoes.get('Interações medicamentosas'), 1500)
 
     # Farmacologia: prefere schema.org (mais limpo), fallback para seção
-    farmacologia = _limpar(farmacologia_meta or secoes.get('Farmacologia'), 2000)
+    farmacologia_struct = _extrair_secao_farmacologia(secoes_content.get('Farmacologia'))
+    farmacologia = _limpar(farmacologia_meta or farmacologia_struct.get('texto') or secoes.get('Farmacologia'), 5000)
 
     # Observações: indicações + interações + warnings
     obs_partes = []
-    if indicacoes:
-        obs_partes.append(f"Indicações/Contraindicações:\n{indicacoes}")
+    if indicacoes_struct['texto_bruto']:
+        obs_partes.append(f"Indicações/Contraindicações:\n{indicacoes_struct['texto_bruto']}")
     if interacoes:
         obs_partes.append(f"Interações medicamentosas:\n{interacoes}")
     if warning_meta:
         obs_partes.append(f"Advertências:\n{_limpar(warning_meta, 600)}")
     observacoes = '\n\n'.join(obs_partes) or None
 
-    from services.bulario import construir_conteudo_estruturado
-    conteudo_estruturado = construir_conteudo_estruturado(
-        indicacoes=indicacoes,
-        interacoes=interacoes,
-        advertencias=_limpar(warning_meta, 600),
-        observacoes=observacoes,
+    conteudo_estruturado = _montar_conteudo_estruturado_v2(
+        indicacoes_struct,
+        interacoes_struct,
+        advertencias_extras=_limpar(warning_meta, 1200),
     )
 
     # Bula: farmacologia (rica) → description schema.org → descritivo da seção Sobre
@@ -568,6 +880,24 @@ def _parsear_admin_doses(texto: str) -> dict:
             # (o parser de doses já ignora texto de espécie e extrai o valor)
         if atual and atual in coleta:
             coleta[atual].append(linha)
+
+    if not coleta['dose']:
+        for linha in texto.split('\n'):
+            linha = linha.strip()
+            if not linha:
+                continue
+            if any(regex.search(linha) for regex in [
+                _RE_DOSE_MGKG,
+                _RE_DOSE_ANIMAL,
+                _RE_DOSE_CP_POR_PESO,
+                _RE_DOSE_CP_PLANO,
+                _RE_DOSE_PIPETA_POR_PESO,
+                _RE_DOSE_LOCAL_GOTAS,
+            ]):
+                coleta['dose'].append(linha)
+                continue
+            if not coleta['frequencia'] and _intervalo_horas(linha):
+                coleta['frequencia'].append(linha)
 
     def _juntar(linhas, max_len=300):
         if not linhas:
@@ -1534,7 +1864,12 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
           vetsmart_produto_id = COALESCE(vetsmart_produto_id, %s),
           bula                = COALESCE(NULLIF(bula,''), %s),
           observacoes         = COALESCE(NULLIF(observacoes,''), %s),
-          conteudo_estruturado = COALESCE(conteudo_estruturado, %s)
+          conteudo_estruturado = CASE
+            WHEN %s::jsonb IS NULL OR %s::jsonb = '{}'::jsonb THEN conteudo_estruturado
+            WHEN conteudo_estruturado IS NULL OR conteudo_estruturado = '{}'::jsonb THEN %s
+            WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') = '' THEN %s
+            ELSE conteudo_estruturado
+          END
          WHERE id = %s
     """, (
         _trunc(prod.classificacao, 100),
@@ -1543,6 +1878,9 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
         prod.vetsmart_id,
         prod.bula,
         prod.observacoes,
+        Json(prod.conteudo_estruturado or {}),
+        Json(prod.conteudo_estruturado or {}),
+        Json(prod.conteudo_estruturado or {}),
         Json(prod.conteudo_estruturado or {}),
         medicamento_id,
     ))

@@ -350,11 +350,89 @@ def _montar_secao_textual(itens: List[str], texto: Optional[str], resumo: Option
     }
 
 
-def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
-    observacoes = _texto_multilinha_limpo(getattr(medicamento, "observacoes", None))
+def _itens_legados_de_conteudo(valor: Any) -> List[Any]:
+    if isinstance(valor, dict):
+        itens = valor.get("itens")
+        return itens if isinstance(itens, list) else []
+    if isinstance(valor, list):
+        return valor
+    return []
+
+
+def _conteudo_carregado_sem_lazyload(medicamento) -> Dict[str, Any]:
     conteudo = getattr(medicamento, "__dict__", {}).get("conteudo_estruturado") or {}
     if not isinstance(conteudo, dict):
-        conteudo = {}
+        return {}
+    return conteudo
+
+
+def _normalizar_secao_estruturada(secao: Any, *, permitir_resumo: bool = True) -> Dict[str, Any]:
+    if not isinstance(secao, dict):
+        secao = {}
+    itens = secao.get("itens")
+    if not isinstance(itens, list):
+        itens = []
+    resumo = secao.get("resumo") if permitir_resumo else []
+    if not isinstance(resumo, list):
+        resumo = []
+    return {
+        "itens": _dedupe_itens([str(item) for item in itens if _texto_limpo(str(item))]),
+        "texto": _texto_multilinha_limpo(secao.get("texto")),
+        "resumo": _dedupe_itens([str(item) for item in resumo if _texto_limpo(str(item))]),
+    }
+
+
+def _normalizar_interacoes_estruturadas(secao: Any) -> Dict[str, Any]:
+    if not isinstance(secao, dict):
+        secao = {}
+    itens_brutos = secao.get("itens")
+    if not isinstance(itens_brutos, list):
+        itens_brutos = []
+    itens: List[Dict[str, str]] = []
+    for item in itens_brutos:
+        if not isinstance(item, dict):
+            continue
+        descricao = _texto_limpo(item.get("descricao"))
+        agente = _texto_limpo(item.get("agente")) or descricao
+        if not descricao or not agente:
+            continue
+        itens.append({
+            "agente": agente[:120],
+            "grau": _texto_limpo(item.get("grau")) or _inferir_grau_interacao(descricao),
+            "conduta": _texto_limpo(item.get("conduta")) or _inferir_conduta_interacao(descricao),
+            "descricao": descricao,
+        })
+    return {
+        "itens": itens,
+        "texto": _texto_multilinha_limpo(secao.get("texto")),
+    }
+
+
+def _conteudo_estruturado_do_scraper(medicamento) -> Optional[Dict[str, Any]]:
+    conteudo = _conteudo_carregado_sem_lazyload(medicamento)
+    metadata = conteudo.get("metadata") if isinstance(conteudo, dict) else None
+    parser_version = metadata.get("parser_version") if isinstance(metadata, dict) else None
+    if not parser_version:
+        return None
+    contra = _normalizar_secao_estruturada(conteudo.get("contraindicacoes"))
+    if not contra["resumo"]:
+        contra["resumo"] = contra["itens"][:3]
+    return {
+        "indicacoes": _normalizar_secao_estruturada(conteudo.get("indicacoes")),
+        "contraindicacoes": contra,
+        "efeitos_adversos": _normalizar_secao_estruturada(conteudo.get("efeitos_adversos")),
+        "advertencias": _normalizar_secao_estruturada(conteudo.get("advertencias")),
+        "interacoes": _normalizar_interacoes_estruturadas(conteudo.get("interacoes")),
+        "metadata": {
+            "parser_version": parser_version,
+            "fonte": metadata.get("fonte") if isinstance(metadata, dict) else None,
+        },
+    }
+
+
+def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
+    observacoes = _texto_multilinha_limpo(getattr(medicamento, "observacoes", None))
+    conteudo = _conteudo_carregado_sem_lazyload(medicamento)
 
     indicacoes_texto = (
         _extrair_bloco_rotulado(observacoes, ["Indicações/Contraindicações", "Indicações e contraindicações", "Indicações"])
@@ -377,16 +455,21 @@ def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
         or conteudo.get("interacoes_texto")
     )
 
-    indicacoes_itens = conteudo.get("indicacoes", []) or _quebrar_em_itens(indicacoes_texto)
-    contra_items = conteudo.get("contraindicacoes", []) or _quebrar_em_itens(contra_texto)
+    indicacoes_itens = _itens_legados_de_conteudo(conteudo.get("indicacoes")) or _quebrar_em_itens(indicacoes_texto)
+    contra_items = _itens_legados_de_conteudo(conteudo.get("contraindicacoes")) or _quebrar_em_itens(contra_texto)
     if not contra_items:
         contra_items = _extrair_frases_por_palavra_chave(
             " ".join(filter(None, [contra_texto, indicacoes_texto, advertencias_texto])),
             ["contraindic", "nao usar", "nao administrar", "evitar", "hipersens", "gesta", "lacta"],
         )
-    efeitos_itens = conteudo.get("efeitos_adversos", []) or _quebrar_em_itens(efeitos_texto)
-    advertencias_itens = conteudo.get("advertencias", []) or _quebrar_em_itens(advertencias_texto)
-    interacoes_itens = conteudo.get("interacoes", []) or _parsear_interacoes_estruturadas(interacoes_texto)
+    efeitos_itens = _itens_legados_de_conteudo(conteudo.get("efeitos_adversos")) or _quebrar_em_itens(efeitos_texto)
+    advertencias_itens = _itens_legados_de_conteudo(conteudo.get("advertencias")) or _quebrar_em_itens(advertencias_texto)
+    interacoes_brutas = conteudo.get("interacoes")
+    interacoes_itens = (
+        interacoes_brutas.get("itens") if isinstance(interacoes_brutas, dict)
+        else interacoes_brutas if isinstance(interacoes_brutas, list)
+        else None
+    ) or _parsear_interacoes_estruturadas(interacoes_texto)
 
     destaques = conteudo.get("contraindicacoes_destaque", []) or contra_items[:3]
 
@@ -398,6 +481,10 @@ def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
         "interacoes": {
             "itens": interacoes_itens,
             "texto": _texto_multilinha_limpo(interacoes_texto),
+        },
+        "metadata": {
+            "parser_version": "legacy-fallback-v1",
+            "fonte": "observacoes",
         },
     }
 
@@ -499,7 +586,7 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
 
 
 def montar_monografia_medicamento(medicamento) -> Dict[str, Any]:
-    secoes = _fallback_conteudo_estruturado(medicamento)
+    secoes = _conteudo_estruturado_do_scraper(medicamento) or _fallback_conteudo_estruturado(medicamento)
     posologia_tabs = construir_posologia_por_especie(medicamento)
     return {
         "resumo_posologia": {
