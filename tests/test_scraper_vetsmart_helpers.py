@@ -328,6 +328,31 @@ def test_extrair_secao_interacoes_descarta_metadados_soltos():
     assert secao["itens"][0]["agente"] == "Fenobarbital"
 
 
+def test_extrair_secao_interacoes_interaction_wrap():
+    soup = scraper.BeautifulSoup(
+        """
+        <div class="content-comercial-info interaction">
+          <div class="interaction-wrap">
+            <h2>Anticoagulantes</h2>
+            <p><b>Tipo de interação</b> - Sinergismo/Antagonismo</p>
+            <p><b>Grau de interação</b> - Moderado</p>
+            <p><b>Efeito Clínico</b> - Efeito terapêutico aumentado.</p>
+            <p><b>Conduta</b> - Ajustar dose</p>
+          </div>
+          <h2 class="interactions-warning">Aviso Legal - Interações Medicamentosas</h2>
+          <p>O Aplicativo Vetsmart contém informações...</p>
+        </div>
+        """,
+        "html.parser",
+    )
+    secao = scraper._extrair_secao_interacoes(soup.div)
+    assert len(secao["itens"]) == 1
+    assert secao["itens"][0]["agente"] == "Anticoagulantes"
+    assert secao["itens"][0]["grau"] == "Moderado"
+    assert secao["itens"][0]["conduta"] == "Ajustar dose"
+    assert "Efeito clínico" in secao["itens"][0]["descricao"]
+
+
 def test_extrair_secao_interacoes_disabled_retorna_vazio():
     soup = scraper.BeautifulSoup(
         """

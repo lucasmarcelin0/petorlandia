@@ -86,8 +86,32 @@
       </div>
       <hr>
       <div id="med-monografia-estruturada" class="d-none"></div>
-      <p><strong>Observações:</strong> <span id="med-observacoes" class="text-muted">–</span></p>
-      <p><strong>Bula:</strong> <a id="med-bula" href="#" target="_blank" class="text-decoration-none">–</a></p>
+
+      <div id="med-obs-section" class="d-none" style="border:1px solid #e9ecef;border-left:3px solid #6f42c1;border-radius:7px;margin-bottom:5px;background:#fff;overflow:hidden;">
+        <button type="button" class="w-100 d-flex align-items-center gap-2 border-0 bg-transparent text-start"
+                style="padding:9px 12px;cursor:pointer;transition:background .15s;"
+                onmouseenter="this.style.background='#f8f9fa'" onmouseleave="this.style.background='transparent'"
+                data-bs-toggle="collapse" data-bs-target="#med-obs-body" aria-expanded="false">
+          <i class="bi bi-card-text" style="color:#6f42c1;font-size:.85rem;flex-shrink:0;"></i>
+          <span style="font-size:.82rem;font-weight:600;color:#343a40;flex-grow:1;">Observações</span>
+          <i class="bi bi-chevron-down" style="transition:transform .2s;font-size:.7rem;color:#adb5bd;" id="med-obs-chevron"></i>
+        </button>
+        <div class="collapse" id="med-obs-body">
+          <div style="padding:4px 12px 12px;">
+            <p id="med-observacoes" style="font-size:.8rem;color:#495057;line-height:1.55;margin:0;"></p>
+          </div>
+        </div>
+      </div>
+
+      <div id="med-bula-section" class="d-none" style="border:1px solid #e9ecef;border-left:3px solid #0d6efd;border-radius:7px;margin-bottom:5px;background:#fff;overflow:hidden;">
+        <a id="med-bula" href="#" target="_blank" class="w-100 d-flex align-items-center gap-2 text-decoration-none"
+           style="padding:9px 12px;transition:background .15s;"
+           onmouseenter="this.style.background='#f8f9fa'" onmouseleave="this.style.background='transparent'">
+          <i class="bi bi-file-earmark-text" style="color:#0d6efd;font-size:.85rem;flex-shrink:0;"></i>
+          <span style="font-size:.82rem;font-weight:600;color:#343a40;flex-grow:1;">Bula do medicamento</span>
+          <i class="bi bi-box-arrow-up-right" style="font-size:.7rem;color:#adb5bd;"></i>
+        </a>
+      </div>
     </div>
     <div class="text-end mt-2">
       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="editarMedicamentoSelecionado()">Editar medicamento</button>
@@ -1545,17 +1569,27 @@
     document.getElementById('med-dosagem').textContent = m.dosagem_recomendada || '–';
     document.getElementById('med-frequencia').textContent = m.frequencia || '–';
     document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
-    document.getElementById('med-observacoes').textContent = m.observacoes || '–';
-    
-    const bulaLink = document.getElementById('med-bula');
-    // Usa bula_url (URL do VetSmart baseada no vetsmart_produto_id) como link principal.
-    // Fallback: se bula_url não existir mas bula for uma URL válida, usa bula.
+    const obsSection = document.getElementById('med-obs-section');
+    const obsText = document.getElementById('med-observacoes');
+    if (m.observacoes) {
+      obsText.textContent = m.observacoes;
+      obsSection.classList.remove('d-none');
+      const obsCollapse = document.getElementById('med-obs-body');
+      obsCollapse.addEventListener('show.bs.collapse', () => document.getElementById('med-obs-chevron').style.transform = 'rotate(180deg)');
+      obsCollapse.addEventListener('hide.bs.collapse', () => document.getElementById('med-obs-chevron').style.transform = 'rotate(0deg)');
+    } else {
+      obsSection.classList.add('d-none');
+    }
+
     const bulaHref = m.bula_url || (m.bula && m.bula.startsWith('http') ? m.bula : null);
-    bulaLink.textContent = bulaHref ? 'Ver bula' : '–';
-    bulaLink.href = bulaHref || '#';
-    if (bulaHref) bulaLink.target = '_blank';
-    bulaLink.classList.toggle('text-decoration-none', !bulaHref);
-    bulaLink.classList.toggle('text-primary', !!bulaHref);
+    const bulaSection = document.getElementById('med-bula-section');
+    const bulaLink = document.getElementById('med-bula');
+    if (bulaHref) {
+      bulaLink.href = bulaHref;
+      bulaSection.classList.remove('d-none');
+    } else {
+      bulaSection.classList.add('d-none');
+    }
 
     _renderMonografiaEstruturada(m.monografia_estruturada || null);
     document.getElementById('info-medicamento').classList.remove('d-none');

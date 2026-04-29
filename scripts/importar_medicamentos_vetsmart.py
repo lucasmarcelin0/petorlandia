@@ -457,6 +457,52 @@ def _eh_item_interacao_ruido(texto: str) -> bool:
     return any(alvo.startswith(prefixo) for prefixo in prefixos)
 
 
+def _parsear_interaction_wraps(content_div) -> List[Dict[str, str]]:
+    itens: List[Dict[str, str]] = []
+    for bloco in content_div.find_all('div', class_='interaction-wrap'):
+        agente_tag = bloco.find(['h1', 'h2', 'h3', 'h4'])
+        agente = _texto_multilinha_limpo(agente_tag.get_text(' ', strip=True) if agente_tag else None)
+        if not agente or 'aviso legal' in agente.casefold():
+            continue
+
+        campos: Dict[str, str] = {}
+        for p in bloco.find_all('p'):
+            texto = _texto_multilinha_limpo(p.get_text(' ', strip=True))
+            if not texto:
+                continue
+            bold = p.find(['b', 'strong'])
+            if bold:
+                rotulo = _texto_multilinha_limpo(bold.get_text(' ', strip=True))
+                valor = re.sub(
+                    rf'^\s*{re.escape(bold.get_text(" ", strip=True))}\s*[-:]\s*',
+                    '',
+                    texto,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if rotulo and valor:
+                    campos[rotulo.casefold()] = valor
+
+        descricao_partes = []
+        if campos.get('tipo de interação') or campos.get('tipo de interacao'):
+            descricao_partes.append(f"Tipo: {campos.get('tipo de interação') or campos.get('tipo de interacao')}")
+        if campos.get('efeito clínico') or campos.get('efeito clinico'):
+            descricao_partes.append(f"Efeito clínico: {campos.get('efeito clínico') or campos.get('efeito clinico')}")
+        if campos.get('mecanismo de ação') or campos.get('mecanismo de acao'):
+            descricao_partes.append(f"Mecanismo: {campos.get('mecanismo de ação') or campos.get('mecanismo de acao')}")
+
+        descricao = '; '.join(descricao_partes) or agente
+        grau = campos.get('grau de interação') or campos.get('grau de interacao') or _inferir_grau_interacao(descricao)
+        conduta = campos.get('conduta') or _inferir_conduta_interacao(descricao)
+
+        itens.append({
+            'agente': agente[:120],
+            'grau': grau,
+            'conduta': conduta,
+            'descricao': descricao,
+        })
+    return itens
+
+
 def _consolidar_itens_interacao(itens_brutos: List[str]) -> List[str]:
     itens_limpos = [_texto_multilinha_limpo(item) for item in itens_brutos]
     itens_limpos = [item for item in itens_limpos if item and not _eh_item_interacao_ruido(item)]
@@ -550,6 +596,14 @@ def _extrair_secao_interacoes(content_div) -> Dict[str, Any]:
     bruto = _texto_multilinha_limpo(content_div.get_text('\n', strip=True) if content_div else None)
     if not bruto or _eh_vazio(bruto):
         return {'itens': [], 'texto': None, 'texto_bruto': bruto}
+
+    itens_wrap = _parsear_interaction_wraps(content_div)
+    if itens_wrap:
+        return {
+            'itens': itens_wrap,
+            'texto': bruto,
+            'texto_bruto': bruto,
+        }
 
     itens_brutos: List[str] = []
     for seletor in ['li', 'p', 'div']:
