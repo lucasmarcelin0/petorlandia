@@ -196,6 +196,350 @@ def construir_macro_grupos(
     return resultado, key_ativa
 
 
+def _texto_limpo(valor: Optional[str]) -> Optional[str]:
+    if valor is None:
+        return None
+    texto = re.sub(r"\s+", " ", str(valor)).strip()
+    return texto or None
+
+
+def _texto_multilinha_limpo(valor: Optional[str]) -> Optional[str]:
+    if valor is None:
+        return None
+    texto = str(valor).replace("\r\n", "\n").replace("\r", "\n")
+    texto = re.sub(r"[ \t]+", " ", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    texto = texto.strip()
+    return texto or None
+
+
+def _dedupe_itens(itens: List[str]) -> List[str]:
+    vistos: set[str] = set()
+    resultado: List[str] = []
+    for item in itens:
+        limpo = _texto_limpo(item)
+        if not limpo:
+            continue
+        chave = _strip_accents(limpo).lower()
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        resultado.append(limpo)
+    return resultado
+
+
+def _quebrar_em_itens(texto: Optional[str]) -> List[str]:
+    bruto = _texto_multilinha_limpo(texto)
+    if not bruto:
+        return []
+    candidato = bruto
+    candidato = re.sub(r"\s*[•·●▪◦]\s*", "\n", candidato)
+    candidato = re.sub(r"\s*;\s*", "\n", candidato)
+    candidato = re.sub(r"\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ])", ".\n", candidato)
+    partes = []
+    for linha in candidato.split("\n"):
+        linha = re.sub(r"^\s*[-–—]\s*", "", linha).strip(" .;-:")
+        if len(linha) < 3:
+            continue
+        partes.append(linha)
+    return _dedupe_itens(partes)
+
+
+def _extrair_bloco_rotulado(texto: Optional[str], rotulos: List[str]) -> Optional[str]:
+    bruto = _texto_multilinha_limpo(texto)
+    if not bruto:
+        return None
+
+    marcadores = [
+        "indicações/contraindicações",
+        "indicações e contraindicações",
+        "indicações",
+        "contraindicações",
+        "advertências",
+        "precauções",
+        "efeitos adversos",
+        "reações adversas",
+        "interações medicamentosas",
+    ]
+    norm = _strip_accents(bruto).lower()
+    encontrados: List[Tuple[int, int, str]] = []
+    for rotulo in rotulos:
+        idx = norm.find(_strip_accents(rotulo).lower())
+        if idx >= 0:
+            encontrados.append((idx, idx + len(rotulo), rotulo))
+    if not encontrados:
+        return None
+
+    encontrados.sort(key=lambda item: item[0])
+    inicio = encontrados[0][1]
+    fim = len(bruto)
+    for marcador in marcadores:
+        idx = norm.find(_strip_accents(marcador).lower(), inicio)
+        if idx >= 0:
+            fim = min(fim, idx)
+    trecho = bruto[inicio:fim].strip(" \n\r\t:-")
+    return trecho or None
+
+
+def _extrair_frases_por_palavra_chave(texto: Optional[str], palavras: List[str]) -> List[str]:
+    bruto = _texto_multilinha_limpo(texto)
+    if not bruto:
+        return []
+    frases = re.split(r"(?<=[\.;])\s+|\n+", bruto)
+    saida = []
+    for frase in frases:
+        frase_limpa = _texto_limpo(frase)
+        if not frase_limpa:
+            continue
+        alvo = _strip_accents(frase_limpa).lower()
+        if any(p in alvo for p in palavras):
+            saida.append(frase_limpa.strip(" .;"))
+    return _dedupe_itens(saida)
+
+
+def _inferir_grau_interacao(texto: str) -> str:
+    alvo = _strip_accents(texto).lower()
+    if any(token in alvo for token in ["contraindicado", "evitar associacao", "nao associar", "grave", "severa"]):
+        return "Alta"
+    if any(token in alvo for token in ["cautela", "monitorar", "ajustar dose", "moderad"]):
+        return "Moderada"
+    if any(token in alvo for token in ["leve", "discreta", "pouco relevante"]):
+        return "Baixa"
+    return "Atenção"
+
+
+def _inferir_conduta_interacao(texto: str) -> str:
+    alvo = _strip_accents(texto).lower()
+    if any(token in alvo for token in ["contraindicado", "nao associar", "evitar associacao"]):
+        return "Evitar associação"
+    if "ajust" in alvo:
+        return "Ajustar dose"
+    if any(token in alvo for token in ["monitor", "acompanhar", "vigiar"]):
+        return "Monitorar de perto"
+    if "cautela" in alvo:
+        return "Usar com cautela"
+    return "Avaliar clinicamente"
+
+
+def _parsear_interacoes_estruturadas(texto: Optional[str]) -> List[Dict[str, str]]:
+    itens = _quebrar_em_itens(texto)
+    resultado: List[Dict[str, str]] = []
+    for item in itens:
+        agente = item
+        match = re.match(r"^(.*?)(?:\s*[-:]\s*|\s+)(aumenta|reduz|potencializa|pode|deve|evitar|contraindicado)", item, re.IGNORECASE)
+        if match:
+            agente = match.group(1).strip(" -:")
+        elif ":" in item:
+            agente = item.split(":", 1)[0].strip(" -:")
+        elif " com " in item.lower():
+            agente = item.split(" com ", 1)[0].strip(" -:")
+        resultado.append({
+            "agente": agente[:120],
+            "grau": _inferir_grau_interacao(item),
+            "conduta": _inferir_conduta_interacao(item),
+            "descricao": item,
+        })
+    return resultado
+
+
+def _montar_secao_textual(itens: List[str], texto: Optional[str], resumo: Optional[List[str]] = None) -> Dict[str, Any]:
+    return {
+        "itens": _dedupe_itens(itens),
+        "texto": _texto_multilinha_limpo(texto),
+        "resumo": _dedupe_itens(resumo or []),
+    }
+
+
+def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
+    observacoes = _texto_multilinha_limpo(getattr(medicamento, "observacoes", None))
+    conteudo = getattr(medicamento, "conteudo_estruturado", None) or {}
+    if not isinstance(conteudo, dict):
+        conteudo = {}
+
+    indicacoes_texto = (
+        _extrair_bloco_rotulado(observacoes, ["Indicações/Contraindicações", "Indicações e contraindicações", "Indicações"])
+        or conteudo.get("indicacoes_texto")
+    )
+    contra_texto = (
+        _extrair_bloco_rotulado(observacoes, ["Contraindicações"])
+        or conteudo.get("contraindicacoes_texto")
+    )
+    advertencias_texto = (
+        _extrair_bloco_rotulado(observacoes, ["Advertências", "Precauções"])
+        or conteudo.get("advertencias_texto")
+    )
+    efeitos_texto = (
+        _extrair_bloco_rotulado(observacoes, ["Efeitos adversos", "Reações adversas"])
+        or conteudo.get("efeitos_adversos_texto")
+    )
+    interacoes_texto = (
+        _extrair_bloco_rotulado(observacoes, ["Interações medicamentosas"])
+        or conteudo.get("interacoes_texto")
+    )
+
+    indicacoes_itens = conteudo.get("indicacoes", []) or _quebrar_em_itens(indicacoes_texto)
+    contra_items = conteudo.get("contraindicacoes", []) or _quebrar_em_itens(contra_texto)
+    if not contra_items:
+        contra_items = _extrair_frases_por_palavra_chave(
+            " ".join(filter(None, [contra_texto, indicacoes_texto, advertencias_texto])),
+            ["contraindic", "nao usar", "nao administrar", "evitar", "hipersens", "gesta", "lacta"],
+        )
+    efeitos_itens = conteudo.get("efeitos_adversos", []) or _quebrar_em_itens(efeitos_texto)
+    advertencias_itens = conteudo.get("advertencias", []) or _quebrar_em_itens(advertencias_texto)
+    interacoes_itens = conteudo.get("interacoes", []) or _parsear_interacoes_estruturadas(interacoes_texto)
+
+    destaques = conteudo.get("contraindicacoes_destaque", []) or contra_items[:3]
+
+    return {
+        "indicacoes": _montar_secao_textual(indicacoes_itens, indicacoes_texto),
+        "contraindicacoes": _montar_secao_textual(contra_items, contra_texto, resumo=destaques),
+        "efeitos_adversos": _montar_secao_textual(efeitos_itens, efeitos_texto),
+        "advertencias": _montar_secao_textual(advertencias_itens, advertencias_texto),
+        "interacoes": {
+            "itens": interacoes_itens,
+            "texto": _texto_multilinha_limpo(interacoes_texto),
+        },
+    }
+
+
+def construir_conteudo_estruturado(
+    *,
+    indicacoes: Optional[str] = None,
+    interacoes: Optional[str] = None,
+    advertencias: Optional[str] = None,
+    observacoes: Optional[str] = None,
+) -> Dict[str, Any]:
+    class _Fake:
+        conteudo_estruturado = {}
+
+        def __init__(self):
+            self.observacoes = observacoes
+
+    fake = _Fake()
+    base = _fallback_conteudo_estruturado(fake)
+    if indicacoes:
+        base["indicacoes"] = _montar_secao_textual(
+            _quebrar_em_itens(indicacoes),
+            indicacoes,
+        )
+    if interacoes:
+        base["interacoes"] = {
+            "itens": _parsear_interacoes_estruturadas(interacoes),
+            "texto": _texto_multilinha_limpo(interacoes),
+        }
+    if advertencias:
+        base["advertencias"] = _montar_secao_textual(
+            _quebrar_em_itens(advertencias),
+            advertencias,
+        )
+        if not base["contraindicacoes"]["itens"]:
+            inferidas = _extrair_frases_por_palavra_chave(
+                advertencias,
+                ["contraindic", "nao usar", "nao administrar", "evitar", "hipersens"],
+            )
+            base["contraindicacoes"] = _montar_secao_textual(inferidas, None, resumo=inferidas[:3])
+    return base
+
+
+def _dose_combina_com_especie(dose, alvo: str) -> bool:
+    especie_code = getattr(dose, "especie_code", None)
+    especie = _strip_accents(getattr(dose, "especie", "") or "").lower()
+    if alvo == "caes":
+        if especie_code in {"CAES", "AMBOS"}:
+            return True
+        if especie_code == "GATOS":
+            return False
+        return ("cao" in especie) or ("caes" in especie) or ("can" in especie) or ("ambos" in especie)
+    if alvo == "gatos":
+        if especie_code in {"GATOS", "AMBOS"}:
+            return True
+        if especie_code == "CAES":
+            return False
+        return ("gato" in especie) or ("gatos" in especie) or ("felin" in especie) or ("ambos" in especie)
+    return True
+
+
+def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
+    doses = list(getattr(medicamento, "doses", []) or [])
+    tabs: List[Dict[str, Any]] = []
+    for slug, label, icon in [
+        ("caes", "Cães", "fa-dog"),
+        ("gatos", "Gatos", "fa-cat"),
+    ]:
+        linhas = [d for d in doses if _dose_combina_com_especie(d, slug)]
+        if not linhas:
+            continue
+        grupos: Dict[str, List[Any]] = {}
+        for dose in linhas:
+            chave = _texto_limpo(getattr(dose, "indicacao", None)) or "Uso geral"
+            grupos.setdefault(chave, []).append(dose)
+        protocolos = []
+        for indicacao, itens in grupos.items():
+            protocolos.append({
+                "indicacao": indicacao,
+                "linhas": [
+                    {
+                        "faixa_peso": _texto_limpo(getattr(d, "faixa_peso", None)) or "Sem faixa definida",
+                        "via": _texto_limpo(getattr(d, "via", None)) or _texto_limpo(getattr(medicamento, "via_administracao", None)) or "—",
+                        "dose": _texto_limpo(getattr(d, "dose", None)) or "—",
+                        "frequencia": _texto_limpo(getattr(d, "frequencia", None)) or _texto_limpo(getattr(medicamento, "frequencia", None)) or "—",
+                        "duracao": _texto_limpo(getattr(d, "duracao", None)) or _texto_limpo(getattr(medicamento, "duracao_tratamento", None)) or "—",
+                        "observacao": _texto_limpo(getattr(d, "observacao", None)),
+                    }
+                    for d in itens
+                ],
+            })
+        tabs.append({
+            "slug": slug,
+            "label": label,
+            "icon": icon,
+            "protocolos": protocolos,
+        })
+    return tabs
+
+
+def montar_monografia_medicamento(medicamento) -> Dict[str, Any]:
+    secoes = _fallback_conteudo_estruturado(medicamento)
+    posologia_tabs = construir_posologia_por_especie(medicamento)
+    return {
+        "resumo_posologia": {
+            "dose": _texto_limpo(getattr(medicamento, "dosagem_recomendada", None)),
+            "frequencia": _texto_limpo(getattr(medicamento, "frequencia", None)),
+            "duracao": _texto_limpo(getattr(medicamento, "duracao_tratamento", None)),
+            "tabs": posologia_tabs,
+        },
+        "secoes": secoes,
+        "tem_conteudo_clinico": any([
+            secoes["indicacoes"]["itens"],
+            secoes["contraindicacoes"]["itens"],
+            secoes["efeitos_adversos"]["itens"],
+            secoes["advertencias"]["itens"],
+            secoes["interacoes"]["itens"],
+        ]),
+    }
+
+
+def serializar_medicamento_busca(medicamento) -> Dict[str, Any]:
+    estrutura = montar_monografia_medicamento(medicamento)
+    bula_url = None
+    if getattr(medicamento, "vetsmart_produto_id", None):
+        bula_url = f"https://vetsmart.com.br/cg/produto/{medicamento.vetsmart_produto_id}"
+    return {
+        "id": medicamento.id,
+        "nome": medicamento.nome,
+        "classificacao": getattr(medicamento, "classificacao", None),
+        "principio_ativo": getattr(medicamento, "principio_ativo", None),
+        "via_administracao": getattr(medicamento, "via_administracao", None),
+        "dosagem_recomendada": getattr(medicamento, "dosagem_recomendada", None),
+        "frequencia": getattr(medicamento, "frequencia", None),
+        "duracao_tratamento": getattr(medicamento, "duracao_tratamento", None),
+        "observacoes": getattr(medicamento, "observacoes", None),
+        "bula": getattr(medicamento, "bula", None),
+        "bula_url": bula_url,
+        "monografia_estruturada": estrutura,
+    }
+
+
 _UNIDADE_PRATICA_POR_FORMA = {
     # Orais sólidas
     'capsula': 'cápsula', 'capsulas': 'cápsula',

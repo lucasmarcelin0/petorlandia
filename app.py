@@ -18159,6 +18159,9 @@ def buscar_medicamentos():
         .all()
     )
 
+    from services.bulario import serializar_medicamento_busca
+    return jsonify([serializar_medicamento_busca(m) for m in resultados])
+
     def _bula_url(m):
         """Constrói a URL do bulário VetSmart a partir do vetsmart_produto_id."""
         if m.vetsmart_produto_id:
@@ -25680,8 +25683,9 @@ def bulario_detalhe(medicamento_id):
     if not _is_admin():
         abort(403)
     from models.base import Medicamento
+    from services.bulario import montar_monografia_medicamento
     med = Medicamento.query.get_or_404(medicamento_id)
-    return render_template("bulario/detalhe.html", med=med)
+    return render_template("bulario/detalhe.html", med=med, monografia=montar_monografia_medicamento(med))
 
 
 @login_required
@@ -25839,15 +25843,9 @@ def bulario_buscar_api():
         .all()
     )
 
+    from services.bulario import serializar_medicamento_busca
     return jsonify([
-        {
-            "id": m.id,
-            "nome": m.nome,
-            "principio_ativo": m.principio_ativo or "",
-            "via_administracao": m.via_administracao or "",
-            "dosagem_recomendada": m.dosagem_recomendada or "",
-            "frequencia": m.frequencia or "",
-        }
+        serializar_medicamento_busca(m)
         for m in resultados
     ])
 

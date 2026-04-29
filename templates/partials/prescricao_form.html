@@ -85,6 +85,7 @@
         </div>
       </div>
       <hr>
+      <div id="med-monografia-estruturada" class="d-none"></div>
       <p><strong>Observações:</strong> <span id="med-observacoes" class="text-muted">–</span></p>
       <p><strong>Bula:</strong> <a id="med-bula" href="#" target="_blank" class="text-decoration-none">–</a></p>
     </div>
@@ -1400,6 +1401,100 @@
   }
 
   // Preencher card de informações do medicamento
+  function _renderMonografiaEstruturada(monografia) {
+    const container = document.getElementById('med-monografia-estruturada');
+    if (!container) return;
+
+    const secoes = monografia?.secoes || {};
+    const tabs = monografia?.resumo_posologia?.tabs || [];
+    const contra = secoes.contraindicacoes || {};
+    const indic = secoes.indicacoes || {};
+    const efeitos = secoes.efeitos_adversos || {};
+    const advert = secoes.advertencias || {};
+    const inter = secoes.interacoes || {};
+
+    const lista = (items, tone = 'light') => {
+      if (!Array.isArray(items) || !items.length) return '';
+      return `<ul class="list-group list-group-flush border rounded mb-3">${items.map(item => `<li class="list-group-item list-group-item-${tone}">${item}</li>`).join('')}</ul>`;
+    };
+
+    const interacoes = Array.isArray(inter.itens) && inter.itens.length
+      ? `
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Interação</th>
+                <th>Grau</th>
+                <th>Conduta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inter.itens.map(item => `
+                <tr>
+                  <td>
+                    <strong>${item.agente || 'Associação clínica'}</strong>
+                    <div class="small text-muted">${item.descricao || ''}</div>
+                  </td>
+                  <td><span class="badge text-bg-warning">${item.grau || 'Atenção'}</span></td>
+                  <td>${item.conduta || 'Avaliar clinicamente'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+      : '';
+
+    const posologia = tabs.length ? `
+      <div class="mb-3">
+        <div class="fw-semibold mb-2">Posologia estruturada</div>
+        ${tabs.map(tab => `
+          <div class="border rounded p-2 mb-2 bg-light">
+            <div class="fw-semibold text-primary mb-2">${tab.label}</div>
+            ${tab.protocolos.map(protocolo => `
+              <div class="border rounded bg-white p-2 mb-2">
+                <div class="badge text-bg-primary mb-2">${protocolo.indicacao}</div>
+                ${protocolo.linhas.map(linha => `
+                  <div class="small mb-2">
+                    <strong>${linha.dose}</strong> • ${linha.via} • ${linha.frequencia} • ${linha.duracao}
+                    <div class="text-muted">${linha.faixa_peso}</div>
+                    ${linha.observacao ? `<div class="text-muted fst-italic">${linha.observacao}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    const temConteudo = !!(
+      tabs.length ||
+      (contra.resumo && contra.resumo.length) ||
+      (indic.itens && indic.itens.length) ||
+      (efeitos.itens && efeitos.itens.length) ||
+      (advert.itens && advert.itens.length) ||
+      (inter.itens && inter.itens.length)
+    );
+
+    if (!temConteudo) {
+      container.classList.add('d-none');
+      container.innerHTML = '';
+      return;
+    }
+
+    container.classList.remove('d-none');
+    container.innerHTML = `
+      ${posologia}
+      ${contra.resumo?.length ? `<div class="alert alert-warning py-2"><strong>Contraindicações críticas:</strong> ${contra.resumo.join(' • ')}</div>` : ''}
+      ${indic.itens?.length ? `<div class="fw-semibold mb-2">Indicações</div>${lista(indic.itens)}` : ''}
+      ${efeitos.itens?.length ? `<div class="fw-semibold mb-2">Efeitos adversos</div>${lista(efeitos.itens)}` : ''}
+      ${advert.itens?.length ? `<div class="fw-semibold mb-2">Advertências</div>${lista(advert.itens, 'warning')}` : ''}
+      ${interacoes}
+    `;
+  }
+
   function preencherCardMedicamento(m) {
     document.getElementById('med-nome-card').textContent = m.nome;
     document.getElementById('med-classificacao').textContent = m.classificacao || '–';
@@ -1420,6 +1515,7 @@
     bulaLink.classList.toggle('text-decoration-none', !bulaHref);
     bulaLink.classList.toggle('text-primary', !!bulaHref);
 
+    _renderMonografiaEstruturada(m.monografia_estruturada || null);
     document.getElementById('info-medicamento').classList.remove('d-none');
   }
 

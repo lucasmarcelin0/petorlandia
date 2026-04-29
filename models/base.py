@@ -1929,6 +1929,7 @@ class Medicamento(db.Model):
     duracao_tratamento = db.Column(db.Text)  # Ex: 7 dias
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
+    conteudo_estruturado = db.Column(db.JSON)  # seções clínicas separadas para UI
 
     # Produto "canônico" no VetSmart que representa este PA
     # (ex.: "Prednisona" PA genérico, id=1970)

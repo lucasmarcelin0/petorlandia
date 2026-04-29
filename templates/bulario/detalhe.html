@@ -84,9 +84,9 @@
         </button>
       </li>
       {% endif %}
-      {% if med.observacoes %}
+      {% if monografia.tem_conteudo_clinico or med.observacoes %}
       <li class="nav-item" role="presentation">
-        <button class="bd-tab" data-bs-toggle="tab" data-bs-target="#tab-obs" type="button">
+        <button class="bd-tab" data-bs-toggle="tab" data-bs-target="{% if monografia.tem_conteudo_clinico %}#tab-clinico{% else %}#tab-obs{% endif %}" type="button">
           <i class="fas fa-exclamation-triangle me-2"></i>Contraindicações
         </button>
       </li>
@@ -196,8 +196,61 @@
       </div>
       {% endif %}
 
+      {% if monografia.resumo_posologia.tabs %}
+      <div class="bd-section mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+          <h6 class="bd-section__title mb-0">
+            <i class="fas fa-table me-2 text-primary"></i>Protocolos por espécie e indicação
+          </h6>
+          <span class="bd-inline-hint">As doses ficam agrupadas por espécie e contexto clínico.</span>
+        </div>
+
+        <ul class="nav nav-pills bd-species-tabs mb-3" role="tablist">
+          {% for aba in monografia.resumo_posologia.tabs %}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {% if loop.first %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#bd-dose-{{ aba.slug }}" type="button">
+              <i class="fas {{ aba.icon }} me-2"></i>{{ aba.label }}
+            </button>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <div class="tab-content">
+          {% for aba in monografia.resumo_posologia.tabs %}
+          <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="bd-dose-{{ aba.slug }}" role="tabpanel">
+            <div class="bd-dose-protocols">
+              {% for protocolo in aba.protocolos %}
+              <section class="bd-dose-protocol">
+                <div class="bd-dose-protocol__header">
+                  <span class="bd-dose-protocol__title">{{ protocolo.indicacao }}</span>
+                </div>
+                <div class="bd-dose-protocol__rows">
+                  {% for linha in protocolo.linhas %}
+                  <article class="bd-dose-line">
+                    <div class="bd-dose-line__main">
+                      <strong>{{ linha.dose }}</strong>
+                      <span>{{ linha.via }}</span>
+                      <span>{{ linha.frequencia }}</span>
+                      <span>{{ linha.duracao }}</span>
+                    </div>
+                    <div class="bd-dose-line__meta">{{ linha.faixa_peso }}</div>
+                    {% if linha.observacao %}
+                    <div class="bd-dose-line__obs"><i class="fas fa-circle-info me-1"></i>{{ linha.observacao }}</div>
+                    {% endif %}
+                  </article>
+                  {% endfor %}
+                </div>
+              </section>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Tabela de doses estruturadas -->
-      {% if med.doses %}
+      {% if med.doses and not monografia.resumo_posologia.tabs %}
       <div class="bd-section mb-4">
         <h6 class="bd-section__title">
           <i class="fas fa-table me-2 text-primary"></i>Tabela de dosagem
@@ -288,7 +341,98 @@
     {% endif %}
 
     <!-- ── Contraindicações ── -->
-    {% if med.observacoes %}
+    {% if monografia.tem_conteudo_clinico %}
+    <div class="tab-pane fade" id="tab-clinico" role="tabpanel">
+      <div class="bd-clinical-grid">
+        {% if monografia.secoes.contraindicacoes.resumo %}
+        <section class="bd-clinical-card bd-clinical-card--warning">
+          <div class="bd-clinical-card__head">
+            <i class="fas fa-triangle-exclamation"></i>
+            <div>
+              <h6 class="mb-1">Contraindicações em destaque</h6>
+              <p class="mb-0">Pontos críticos que merecem checagem antes da prescrição.</p>
+            </div>
+          </div>
+          <div class="bd-clinical-alerts">
+            {% for item in monografia.secoes.contraindicacoes.resumo %}
+            <div class="bd-clinical-alert">{{ item }}</div>
+            {% endfor %}
+          </div>
+          {% if monografia.secoes.contraindicacoes.itens %}
+          <ul class="bd-clinical-list">
+            {% for item in monografia.secoes.contraindicacoes.itens %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% if monografia.secoes.indicacoes.itens %}
+        <section class="bd-clinical-card">
+          <h6 class="bd-clinical-card__title"><i class="fas fa-stethoscope me-2"></i>Indicações</h6>
+          <ul class="bd-clinical-list">
+            {% for item in monografia.secoes.indicacoes.itens %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
+        {% if monografia.secoes.efeitos_adversos.itens %}
+        <section class="bd-clinical-card">
+          <h6 class="bd-clinical-card__title"><i class="fas fa-heart-crack me-2"></i>Efeitos adversos</h6>
+          <ul class="bd-clinical-list">
+            {% for item in monografia.secoes.efeitos_adversos.itens %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
+        {% if monografia.secoes.advertencias.itens %}
+        <section class="bd-clinical-card">
+          <h6 class="bd-clinical-card__title"><i class="fas fa-shield-heart me-2"></i>Advertências e precauções</h6>
+          <ul class="bd-clinical-list">
+            {% for item in monografia.secoes.advertencias.itens %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
+        {% if monografia.secoes.interacoes.itens %}
+        <section class="bd-clinical-card bd-clinical-card--full">
+          <h6 class="bd-clinical-card__title"><i class="fas fa-shuffle me-2"></i>Interações medicamentosas</h6>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle bd-interactions-table">
+              <thead>
+                <tr>
+                  <th>Fármaco / classe</th>
+                  <th>Grau</th>
+                  <th>Conduta</th>
+                  <th>Resumo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for interacao in monografia.secoes.interacoes.itens %}
+                <tr>
+                  <td>{{ interacao.agente }}</td>
+                  <td><span class="bd-interaction-grade">{{ interacao.grau }}</span></td>
+                  <td>{{ interacao.conduta }}</td>
+                  <td>{{ interacao.descricao }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if med.observacoes and not monografia.tem_conteudo_clinico %}
     <div class="tab-pane fade" id="tab-obs" role="tabpanel">
       <div class="bd-section bd-section--warning">
         <div class="d-flex align-items-start gap-3 mb-3">
@@ -605,6 +749,111 @@
 .bd-calc-conf.alta  { background: #dcfce7; color: #15803d; }
 .bd-calc-conf.media { background: #fef3c7; color: #92400e; }
 .bd-calc-meta { font-size: .8rem; color: #6b7280; margin-top: .3rem; }
+.bd-inline-hint { font-size: .82rem; color: #64748b; }
+.bd-species-tabs .nav-link {
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.bd-species-tabs .nav-link.active {
+  background: #1d4ed8;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+.bd-dose-protocols { display: grid; gap: 1rem; }
+.bd-dose-protocol {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+.bd-dose-protocol__header { margin-bottom: .85rem; }
+.bd-dose-protocol__title {
+  display: inline-flex;
+  align-items: center;
+  padding: .35rem .8rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.bd-dose-protocol__rows { display: grid; gap: .75rem; }
+.bd-dose-line {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: .85rem .9rem;
+  background: #fff;
+}
+.bd-dose-line__main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  align-items: center;
+  color: #334155;
+}
+.bd-dose-line__main strong { color: #0f172a; font-size: .98rem; }
+.bd-dose-line__meta { margin-top: .35rem; color: #64748b; font-size: .82rem; }
+.bd-dose-line__obs { margin-top: .45rem; color: #475569; font-size: .82rem; }
+.bd-clinical-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.bd-clinical-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 1.1rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .05);
+}
+.bd-clinical-card--warning {
+  background: linear-gradient(180deg, #fffdf3 0%, #fff7d6 100%);
+  border-color: #facc15;
+}
+.bd-clinical-card--full { grid-column: 1 / -1; }
+.bd-clinical-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  margin-bottom: .9rem;
+}
+.bd-clinical-card__head i { color: #b45309; font-size: 1.1rem; margin-top: .2rem; }
+.bd-clinical-card__head p { color: #92400e; font-size: .84rem; }
+.bd-clinical-card__title {
+  margin-bottom: .8rem;
+  font-size: .98rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.bd-clinical-alerts { display: grid; gap: .55rem; margin-bottom: .9rem; }
+.bd-clinical-alert {
+  border-left: 4px solid #f59e0b;
+  background: rgba(255,255,255,.75);
+  border-radius: 12px;
+  padding: .75rem .85rem;
+  color: #78350f;
+  font-weight: 600;
+}
+.bd-clinical-list { margin: 0; padding-left: 1.1rem; color: #334155; }
+.bd-clinical-list li + li { margin-top: .45rem; }
+.bd-interactions-table th { white-space: nowrap; }
+.bd-interaction-grade {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: .2rem .55rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: .78rem;
+  font-weight: 700;
+}
+@media (max-width: 767px) {
+  .bd-dose-line__main { flex-direction: column; align-items: flex-start; }
+  .bd-clinical-card--full { grid-column: auto; }
+}
 </style>
 
 <script>

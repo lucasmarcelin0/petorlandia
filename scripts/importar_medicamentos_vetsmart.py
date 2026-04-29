@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import Json, RealDictCursor
 
 try:
     from bs4 import BeautifulSoup
@@ -107,6 +107,7 @@ class ProdutoVetsmart:
     interacoes:           Optional[str] = None
     farmacologia:         Optional[str] = None
     bula:                 Optional[str] = None
+    conteudo_estruturado: Dict[str, Any] = field(default_factory=dict)
     apresentacoes: List[Dict[str, str]] = field(default_factory=list)
     doses: List[Dict[str, Optional[str]]] = field(default_factory=list)
 
@@ -435,6 +436,14 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         obs_partes.append(f"Advertências:\n{_limpar(warning_meta, 600)}")
     observacoes = '\n\n'.join(obs_partes) or None
 
+    from services.bulario import construir_conteudo_estruturado
+    conteudo_estruturado = construir_conteudo_estruturado(
+        indicacoes=indicacoes,
+        interacoes=interacoes,
+        advertencias=_limpar(warning_meta, 600),
+        observacoes=observacoes,
+    )
+
     # Bula: farmacologia (rica) → description schema.org → descritivo da seção Sobre
     sobre_txt = secoes.get('Sobre') or ''
     bula = _limpar(
@@ -458,6 +467,7 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         interacoes          = interacoes,
         farmacologia        = farmacologia,
         bula                = bula,
+        conteudo_estruturado = conteudo_estruturado,
         apresentacoes       = apresentacoes,
         doses               = doses_estruturadas,
     )
@@ -1523,7 +1533,8 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
           via_administracao   = COALESCE(NULLIF(via_administracao,''), %s),
           vetsmart_produto_id = COALESCE(vetsmart_produto_id, %s),
           bula                = COALESCE(NULLIF(bula,''), %s),
-          observacoes         = COALESCE(NULLIF(observacoes,''), %s)
+          observacoes         = COALESCE(NULLIF(observacoes,''), %s),
+          conteudo_estruturado = COALESCE(conteudo_estruturado, %s)
          WHERE id = %s
     """, (
         _trunc(prod.classificacao, 100),
@@ -1532,6 +1543,7 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
         prod.vetsmart_id,
         prod.bula,
         prod.observacoes,
+        Json(prod.conteudo_estruturado or {}),
         medicamento_id,
     ))
 
@@ -1581,8 +1593,8 @@ def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
             INSERT INTO medicamento
               (nome, classificacao, principio_ativo, via_administracao,
                dosagem_recomendada, frequencia, duracao_tratamento,
-               observacoes, bula, vetsmart_produto_id, created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+               observacoes, bula, conteudo_estruturado, vetsmart_produto_id, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             nome_final[:100],
             _trunc(prod.classificacao, 100),
@@ -1593,6 +1605,7 @@ def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
             prod.duracao_tratamento,
             prod.observacoes,
             prod.bula,
+            Json(prod.conteudo_estruturado or {}),
             prod.vetsmart_id,
             CREATED_BY_USER_ID,
         ))
@@ -2003,7 +2016,7 @@ def main():
             raw = json.load(f)
         for d in raw:
             # Compatibilidade com caches antigos
-            for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia']:
+            for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia', 'conteudo_estruturado']:
                 d.setdefault(campo_novo, None)
             d.setdefault('doses', [])
             d.setdefault('apresentacoes', [])
@@ -2050,7 +2063,7 @@ def main():
                     for d in cache_prev:
                         d.setdefault('doses', [])
                         d.setdefault('apresentacoes', [])
-                        for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia']:
+                        for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia', 'conteudo_estruturado']:
                             d.setdefault(campo_novo, None)
                         produtos.append(ProdutoVetsmart(**d))
                         ja_scrapeados_ids.add(d.get('vetsmart_id'))
@@ -2078,6 +2091,7 @@ def main():
                         "interacoes":          pp.interacoes,
                         "farmacologia":        pp.farmacologia,
                         "bula":                pp.bula,
+                        "conteudo_estruturado": pp.conteudo_estruturado,
                         "apresentacoes":       pp.apresentacoes,
                         "doses":               pp.doses,
                     } for pp in produtos], f, ensure_ascii=False, indent=2)
