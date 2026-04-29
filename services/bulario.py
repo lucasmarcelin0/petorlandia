@@ -352,7 +352,7 @@ def _montar_secao_textual(itens: List[str], texto: Optional[str], resumo: Option
 
 def _fallback_conteudo_estruturado(medicamento) -> Dict[str, Any]:
     observacoes = _texto_multilinha_limpo(getattr(medicamento, "observacoes", None))
-    conteudo = getattr(medicamento, "conteudo_estruturado", None) or {}
+    conteudo = getattr(medicamento, "__dict__", {}).get("conteudo_estruturado") or {}
     if not isinstance(conteudo, dict):
         conteudo = {}
 

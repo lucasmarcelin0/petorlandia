@@ -54,7 +54,7 @@ import csv
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
-from sqlalchemy.orm import joinedload, selectinload, aliased
+from sqlalchemy.orm import joinedload, selectinload, aliased, defer
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -18150,6 +18150,7 @@ def buscar_medicamentos():
     # busca por nome OU princípio ativo
     resultados = (
         Medicamento.query
+        .options(defer(Medicamento.conteudo_estruturado))
         .filter(
             (Medicamento.nome.ilike(f"%{q}%")) |
             (Medicamento.principio_ativo.ilike(f"%{q}%"))
@@ -25684,7 +25685,7 @@ def bulario_detalhe(medicamento_id):
         abort(403)
     from models.base import Medicamento
     from services.bulario import montar_monografia_medicamento
-    med = Medicamento.query.get_or_404(medicamento_id)
+    med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get_or_404(medicamento_id)
     return render_template("bulario/detalhe.html", med=med, monografia=montar_monografia_medicamento(med))
 
 
@@ -25832,6 +25833,7 @@ def bulario_buscar_api():
     like = f"%{q}%"
     resultados = (
         Medicamento.query
+        .options(defer(Medicamento.conteudo_estruturado))
         .filter(
             or_(
                 Medicamento.nome.ilike(like),
