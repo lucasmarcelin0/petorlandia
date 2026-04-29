@@ -1994,7 +1994,9 @@ class DoseMedicamento(db.Model):
     dose_min           = db.Column(db.Numeric(12, 3))
     dose_max           = db.Column(db.Numeric(12, 3))
     dose_unidade       = db.Column(db.String(30))              # 'MG_KG'|'ML_KG'|'UI_KG'|'MG_ANIMAL'|...
-    intervalo_horas    = db.Column(db.Integer)                 # 12 (null se dose única)
+    intervalo_horas    = db.Column(db.Integer)                 # valor único (retrocompat)
+    intervalo_min_horas = db.Column(db.Integer)               # null se não há faixa
+    intervalo_max_horas = db.Column(db.Integer)               # null se não há faixa
     duracao_min_dias   = db.Column(db.Integer)
     duracao_max_dias   = db.Column(db.Integer)
     dose_raw_text      = db.Column(db.Text)                    # trecho original do VetSmart

@@ -44,7 +44,10 @@
       "Bash(node -e ' *)",
       "Bash(find /c/Users/lucas/petorlandia/petorlandia -type f -name \"*.py\" -exec grep -l \"TODO\\\\|FIXME\" {} \\\\;)",
       "WebFetch(domain:prefeitura.pbh.gov.br)",
-      "WebFetch(domain:www.gov.br)"
+      "WebFetch(domain:www.gov.br)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(timeout 10 python app.py)",
+      "Read(//tmp/**)"
     ]
   }
 }

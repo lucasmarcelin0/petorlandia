@@ -1229,62 +1229,142 @@ def _norm_especie_code(txt: str) -> str:
 
 
 def _intervalo_horas(freq_texto: str) -> Optional[int]:
-    """Converte texto de frequência em intervalo em horas.
-    Cobre:
-      - Formais: '12/12 horas', '12 em 12 horas', 'a cada 8h', '2 vezes ao dia'
-      - Liberal (fallback): pega o primeiro 'Nh' ou 'N horas' isolado, como
-        em 'Alergia: 12 horas. Imunossupressão: 48 horas' (VetSmart costuma
-        colar dois protocolos nesse formato)."""
+    """Converte texto de frequência em intervalo em horas (valor único).
+    Mantida para retrocompatibilidade — prefira _intervalo_horas_faixa."""
+    mn, _ = _intervalo_horas_faixa(freq_texto)
+    return mn
+
+
+def _intervalo_horas_faixa(freq_texto: str) -> tuple:
+    """Retorna (min_horas, max_horas) a partir do texto de frequência.
+
+    Detecta faixas explícitas como 'a cada 8–12h', 'a cada 8 a 12 horas',
+    'a cada 8h ou 12h'.  Quando há valor único, devolve (v, v).
+    Devolve (None, None) quando não detecta nada.
+    """
     if not freq_texto:
-        return None
+        return (None, None)
     t = freq_texto.lower()
     if 'dose unica' in t.replace('ú', 'u') or 'dose única' in t:
-        return None
+        return (None, None)
+
+    # ── faixa explícita ──────────────────────────────────────────────────────
+    _h = r'(?:h|horas?|hrs?)'
+    range_pats = [
+        # "a cada 8 a 12 horas" / "a cada 8-12h" / "a cada 8–12h"
+        rf'a\s+cada\s+(\d+)\s*(?:{_h})?\s*(?:a|–|-|ou)\s*(\d+)\s*{_h}',
+        # "8/8 a 12/12 horas"
+        rf'(\d+)\s*/\s*\d+\s*(?:a|–|-)\s*(\d+)\s*/\s*\d+\s*horas?',
+        # "de 8 a 12 horas" / "entre 8 e 12 horas"
+        rf'(?:de|entre)\s+(\d+)\s*(?:{_h})?\s*(?:a|e)\s+(\d+)\s*{_h}',
+    ]
+    for pat in range_pats:
+        m = re.search(pat, t)
+        if m:
+            v1, v2 = int(m.group(1)), int(m.group(2))
+            return (min(v1, v2), max(v1, v2))
+
+    # ── valor único ──────────────────────────────────────────────────────────
     for pat in [
         r'(\d+)\s*/\s*\d+\s*horas?',
-        r'(\d+)\s*em\s*\d+\s*horas?',          # "12 em 12 horas"
-        r'a\s+cada\s+(\d+)\s*(?:h|horas?|hrs?)\b',
-        r'a\s+cada\s+(\d+)\s*dias?',           # vira *24
+        r'(\d+)\s*em\s*\d+\s*horas?',
+        rf'a\s+cada\s+(\d+)\s*{_h}\b',
+        r'a\s+cada\s+(\d+)\s*dias?',
     ]:
         m = re.search(pat, t)
         if m:
             v = int(m.group(1))
-            return v * 24 if 'dia' in pat else v
+            v = v * 24 if 'dia' in pat else v
+            return (v, v)
     m = re.search(r'(\d+)\s*(?:x|vezes?)\s*(?:ao|por)?\s*dia', t)
     if m:
         n = int(m.group(1))
-        return 24 // n if n > 0 else None
-    # Fallback liberal: primeiro 'Nh' / 'N horas' / 'N hrs' isolado.
-    # Exige que o token logo antes não seja dígito (evita casar com '0,5mg/kg/48hs'
-    # onde o 48 é intervalo real mas já cobrimos em outro protocolo).
-    # Só aceita valores plausíveis (2–72h) para não confundir com dose numérica.
+        v = 24 // n if n > 0 else None
+        return (v, v) if v else (None, None)
+    # Fallback liberal
     m = re.search(r'(?<!\d)(?<![\.,])\b(\d{1,2})\s*(?:h|horas?|hrs?)\b', t)
     if m:
         v = int(m.group(1))
         if 2 <= v <= 72:
-            return v
-    return None
+            return (v, v)
+    return (None, None)
 
 
 def _duracao_dias(dur_texto: str):
-    """Retorna (min, max) em dias. (None, None) se não detectou."""
+    """Retorna (min_dias, max_dias). (None, None) se não detectou.
+
+    Cobre:
+      Faixas em dias  : "7 a 14 dias", "7-14 dias", "7–14 dias"
+      Faixas em semanas: "1 a 2 semanas", "2-3 semanas"
+      Faixas em meses : "1 a 2 meses"
+      Máximo em dias  : "até 14 dias", "no máximo 10 dias"
+      Máximo em semanas: "até 3 semanas"
+      Máximo em meses : "até 2 meses"
+      Mínimo em dias  : "mínimo 7 dias", "pelo menos 5 dias", "no mínimo 10 dias"
+      Valor único dias: "7 dias", "durante 14 dias", "por 10 dias"
+      Valor único semanas: "2 semanas", "durante 3 semanas"
+      Valor único meses: "1 mês", "2 meses"
+    """
     if not dur_texto:
         return (None, None)
-    t = dur_texto.lower()
-    m = re.search(r'(\d+)\s*(?:a|-|–|até)\s*(\d+)\s*dias?', t)
+    t = dur_texto.lower().replace(',', '.')
+
+    _sep = r'\s*(?:a|–|-|até|ate)\s*'
+
+    # ── faixas ──────────────────────────────────────────────────────────────
+    # dias
+    m = re.search(rf'(\d+){_sep}(\d+)\s*dias?', t)
     if m:
         return (int(m.group(1)), int(m.group(2)))
-    m = re.search(r'(?:até|ate)\s*(\d+)\s*dias?', t)
+
+    # semanas
+    m = re.search(rf'(\d+){_sep}(\d+)\s*semanas?', t)
+    if m:
+        return (int(m.group(1)) * 7, int(m.group(2)) * 7)
+
+    # meses
+    m = re.search(rf'(\d+){_sep}(\d+)\s*m[eê]s(?:es)?', t)
+    if m:
+        return (int(m.group(1)) * 30, int(m.group(2)) * 30)
+
+    # ── máximos ─────────────────────────────────────────────────────────────
+    m = re.search(r'(?:até|ate|no\s+m[aá]ximo)\s*(\d+)\s*dias?', t)
     if m:
         return (None, int(m.group(1)))
+
+    m = re.search(r'(?:até|ate|no\s+m[aá]ximo)\s*(\d+)\s*semanas?', t)
+    if m:
+        return (None, int(m.group(1)) * 7)
+
+    m = re.search(r'(?:até|ate|no\s+m[aá]ximo)\s*(\d+)\s*m[eê]s(?:es)?', t)
+    if m:
+        return (None, int(m.group(1)) * 30)
+
+    # ── mínimos ─────────────────────────────────────────────────────────────
+    m = re.search(r'(?:m[ií]nimo|pelo\s+menos|no\s+m[ií]nimo)\s*(?:de\s*)?(\d+)\s*dias?', t)
+    if m:
+        return (int(m.group(1)), None)
+
+    m = re.search(r'(?:m[ií]nimo|pelo\s+menos|no\s+m[ií]nimo)\s*(?:de\s*)?(\d+)\s*semanas?', t)
+    if m:
+        return (int(m.group(1)) * 7, None)
+
+    # ── valores únicos ───────────────────────────────────────────────────────
     m = re.search(r'(\d+)\s*dias?', t)
     if m:
         n = int(m.group(1))
         return (n, n)
+
     m = re.search(r'(\d+)\s*semanas?', t)
     if m:
         d = int(m.group(1)) * 7
         return (d, d)
+
+    m = re.search(r'(\d+)\s*m[eê]s(?:es)?', t)
+    if m:
+        d = int(m.group(1)) * 30
+        return (d, d)
+
     return (None, None)
 
 
@@ -1311,7 +1391,8 @@ def _extrair_doses_estruturadas(
     if not dose_linhas:
         return []
 
-    intervalo = _intervalo_horas(frequencia_texto or '')
+    freq_min_h, freq_max_h = _intervalo_horas_faixa(frequencia_texto or '')
+    intervalo = freq_min_h  # backward-compat: menor intervalo = mais frequente
     dur_min, dur_max = _duracao_dias(duracao_texto or '')
     # VetSmart costuma colar duração dentro do próprio texto de frequência:
     # "Dermatite atópica: 24hrs por 7 dias". Se a duração ficou vazia,
@@ -1398,6 +1479,8 @@ def _extrair_doses_estruturadas(
                     'dose_unidade':  unidade,
                     'frequencia':    frequencia_texto,
                     'intervalo_horas': intervalo,
+                    'intervalo_min_horas': freq_min_h,
+                    'intervalo_max_horas': freq_max_h,
                     'duracao':       duracao_texto,
                     'duracao_min_dias': dur_min,
                     'duracao_max_dias': dur_max,
@@ -1438,6 +1521,8 @@ def _extrair_doses_estruturadas(
                     'dose_unidade':  unidade,
                     'frequencia':    frequencia_texto,
                     'intervalo_horas': intervalo,
+                    'intervalo_min_horas': freq_min_h,
+                    'intervalo_max_horas': freq_max_h,
                     'duracao':       duracao_texto,
                     'duracao_min_dias': dur_min,
                     'duracao_max_dias': dur_max,
@@ -1475,6 +1560,8 @@ def _extrair_doses_estruturadas(
                     'dose_unidade':  'GOTAS_ANIMAL',
                     'frequencia':    frequencia_texto,
                     'intervalo_horas': intervalo,
+                    'intervalo_min_horas': freq_min_h,
+                    'intervalo_max_horas': freq_max_h,
                     'duracao':       duracao_texto,
                     'duracao_min_dias': dur_min,
                     'duracao_max_dias': dur_max,
@@ -1540,6 +1627,8 @@ def _extrair_doses_estruturadas(
                     'dose_unidade':  'COMPRIMIDOS_ANIMAL',
                     'frequencia':    frequencia_texto,
                     'intervalo_horas': intervalo,
+                    'intervalo_min_horas': freq_min_h,
+                    'intervalo_max_horas': freq_max_h,
                     'duracao':       duracao_texto,
                     'duracao_min_dias': dur_min,
                     'duracao_max_dias': dur_max,
@@ -2006,8 +2095,8 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
           bula                = COALESCE(NULLIF(bula,''), %s),
           observacoes         = COALESCE(NULLIF(observacoes,''), %s),
           conteudo_estruturado = CASE
-            WHEN %s::jsonb IS NULL OR %s::jsonb = '{}'::jsonb THEN conteudo_estruturado
-            WHEN conteudo_estruturado IS NULL OR conteudo_estruturado = '{}'::jsonb THEN %s
+            WHEN %s::json IS NULL OR %s::json::jsonb = '{}'::jsonb THEN conteudo_estruturado
+            WHEN conteudo_estruturado IS NULL OR conteudo_estruturado::jsonb = '{}'::jsonb THEN %s
             WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') = '' THEN %s
             ELSE conteudo_estruturado
           END
@@ -2215,12 +2304,14 @@ def _inserir_doses_consolidado(
               (medicamento_id, especie, faixa_peso, via, dose, frequencia, duracao, observacao,
                especie_code, peso_min_kg, peso_max_kg,
                dose_min, dose_max, dose_unidade,
-               intervalo_horas, duracao_min_dias, duracao_max_dias,
+               intervalo_horas, intervalo_min_horas, intervalo_max_horas,
+               duracao_min_dias, duracao_max_dias,
                dose_raw_text, fonte, confianca, indicacao)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,
                     %s,%s,%s,
                     %s,%s,%s,
+                    %s,%s,
                     %s,%s,%s,%s)
         """, (
             medicamento_id,
@@ -2230,7 +2321,7 @@ def _inserir_doses_consolidado(
             _trunc(d.get("dose"),         200),
             _trunc(d.get("frequencia"),   120),
             _trunc(d.get("duracao"),      120),
-            (d.get("observacao") or None),  # TEXT — sem limite
+            (d.get("observacao") or None),
             _trunc(d.get("especie_code"),  10),
             d.get("peso_min_kg"),
             d.get("peso_max_kg"),
@@ -2238,9 +2329,11 @@ def _inserir_doses_consolidado(
             d.get("dose_max"),
             _trunc(d.get("dose_unidade"),  30),
             d.get("intervalo_horas"),
+            d.get("intervalo_min_horas"),
+            d.get("intervalo_max_horas"),
             d.get("duracao_min_dias"),
             d.get("duracao_max_dias"),
-            (d.get("dose_raw_text") or None),  # TEXT — sem limite
+            (d.get("dose_raw_text") or None),
             _trunc(d.get("fonte") or 'SCRAPER',     15),
             _trunc(d.get("confianca") or 'MEDIA',   10),
             _trunc(d.get("indicacao"),    120),

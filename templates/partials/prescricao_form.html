@@ -167,19 +167,28 @@
           <div class="col-md-6">
             <p class="mb-1"><strong>Via:</strong> <span id="sug-via" class="text-muted">–</span></p>
             <p class="mb-1"><strong>Frequência:</strong> <span id="sug-frequencia" class="text-muted">–</span></p>
-            <p class="mb-1">
-              <strong>Duração:</strong> <span id="sug-duracao" class="text-muted">–</span>
-            </p>
-            <!-- Slider de duração: visível apenas quando há faixa min–max -->
-            <div id="sug-duracao-slider-wrap" class="d-none mb-2 px-1">
-              <div class="d-flex align-items-center gap-2">
-                <span class="small text-muted" id="sug-dur-label-min">–</span>
-                <input type="range" id="sug-dur-slider" class="form-range flex-grow-1"
-                       min="1" max="30" value="7"
-                       oninput="onDuracaoSliderInput(this.value)">
-                <span class="small text-muted" id="sug-dur-label-max">–</span>
+            <!-- Seletor menos/padrão/mais frequente -->
+            <div id="sug-freq-modo-wrap" class="d-none mb-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Modo de frequência">
+                <button type="button" id="btn-freq-min"   class="btn btn-outline-secondary" onclick="selecionarFreqModo('min')">Menos freq.</button>
+                <button type="button" id="btn-freq-media" class="btn btn-outline-secondary active" onclick="selecionarFreqModo('media')">Padrão</button>
+                <button type="button" id="btn-freq-max"   class="btn btn-outline-secondary" onclick="selecionarFreqModo('max')">Mais freq.</button>
               </div>
-              <div class="text-center small text-primary fw-semibold mt-1" id="sug-dur-slider-valor">7 dias</div>
+            </div>
+            <p class="mb-1">
+              <strong>Duração:</strong>
+              <span id="sug-duracao" class="text-muted">–</span>
+              <span id="sug-duracao-padrao-badge" class="d-none badge text-bg-secondary ms-1"
+                    style="font-size:.65rem;font-weight:500;vertical-align:middle;"
+                    data-bs-toggle="tooltip" title="">ref.</span>
+            </p>
+            <!-- Seletor mínima / média / máxima para duração -->
+            <div id="sug-dur-modo-wrap" class="d-none mb-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Modo de duração">
+                <button type="button" id="btn-dur-min"   class="btn btn-outline-secondary" onclick="selecionarDurModo('min')">Mínima</button>
+                <button type="button" id="btn-dur-media" class="btn btn-outline-secondary active" onclick="selecionarDurModo('media')">Recomendada</button>
+                <button type="button" id="btn-dur-max"   class="btn btn-outline-secondary" onclick="selecionarDurModo('max')">Máxima</button>
+              </div>
             </div>
           </div>
         </div>
@@ -382,7 +391,12 @@
     let _conversaoApresentacaoExpandida = false;
     // Modo de dose: 'min' | 'media' | 'max'. Padrão = 'media'.
     let _doseModo = 'media';
-    // Dias selecionados no slider de duração (inteiro). null = sem faixa.
+    // Modo de frequência: 'min' | 'media' | 'max'. Padrão = 'media'.
+    // 'min' = menos frequente (intervalo maior), 'max' = mais frequente (intervalo menor).
+    let _freqModo = 'media';
+    // Modo de duração: 'min' | 'media' | 'max'. Padrão = 'media'.
+    let _durModo = 'media';
+    // Dias calculados da sugestão atual (para passagem ao form). null = sem faixa.
     let _duracaoDias = null;
 
   function aplicarHistoricoPrescricoes(html) {
@@ -700,65 +714,138 @@
     return dias === 1 ? 'por 1 dia' : `por ${dias} dias`;
   }
 
+  function _calcDuracaoDias(s, modo) {
+    if (!s) return null;
+    const dMin = s.duracao_min_dias;
+    const dMax = s.duracao_max_dias;
+    if (dMin == null && dMax == null) return null;
+    const dMedio = (dMin != null && dMax != null) ? Math.round((dMin + dMax) / 2) : (dMin ?? dMax);
+    if (modo === 'min') return dMin ?? dMedio;
+    if (modo === 'max') return dMax ?? dMedio;
+    return dMedio;
+  }
+
+  function _atualizarBadgePadrao(s) {
+    const badge = document.getElementById('sug-duracao-padrao-badge');
+    if (!badge) return;
+    const ePadrao = s && s.duracao_e_padrao;
+    badge.classList.toggle('d-none', !ePadrao);
+    if (ePadrao) {
+      const desc = s.duracao_padrao_desc ? `Referência para ${s.duracao_padrao_desc}. Ajuste conforme o caso clínico.` : 'Duração de referência para esta classe. Ajuste conforme o caso clínico.';
+      badge.setAttribute('title', desc);
+      // reinicializa tooltip do Bootstrap se disponível
+      if (window.bootstrap?.Tooltip) {
+        const tip = bootstrap.Tooltip.getInstance(badge);
+        if (tip) tip.dispose();
+        new bootstrap.Tooltip(badge);
+      }
+    }
+  }
+
   function _atualizarDisplayDuracao(s) {
     const el = document.getElementById('sug-duracao');
-    const sliderWrap = document.getElementById('sug-duracao-slider-wrap');
-    const slider = document.getElementById('sug-dur-slider');
-    const valorLabel = document.getElementById('sug-dur-slider-valor');
-    const labelMin = document.getElementById('sug-dur-label-min');
-    const labelMax = document.getElementById('sug-dur-label-max');
+    const modoWrap = document.getElementById('sug-dur-modo-wrap');
+
+    _atualizarBadgePadrao(s);
 
     const temFaixa = !!(s && s.tem_faixa_duracao
       && s.duracao_min_dias != null && s.duracao_max_dias != null
       && s.duracao_min_dias !== s.duracao_max_dias);
 
     if (!temFaixa) {
-      // Sem faixa: mostra texto fixo, esconde slider
       if (el) el.textContent = (s && s.duracao_texto) || '—';
-      if (sliderWrap) sliderWrap.classList.add('d-none');
-      _duracaoDias = s ? (s.duracao_min_dias || s.duracao_max_dias || null) : null;
+      if (modoWrap) modoWrap.classList.add('d-none');
+      _duracaoDias = s ? (s.duracao_min_dias ?? s.duracao_max_dias ?? null) : null;
+      _durModo = 'media';
       return;
     }
 
-    const dMin = s.duracao_min_dias;
-    const dMax = s.duracao_max_dias;
-    const dMedio = Math.round((dMin + dMax) / 2);
-
-    // Inicializa slider
-    if (slider) {
-      slider.min = dMin;
-      slider.max = dMax;
-      slider.value = dMedio;  // padrão: valor do meio
-    }
-    _duracaoDias = dMedio;
-
-    // Labels dos extremos
-    if (labelMin) labelMin.textContent = `${dMin}d`;
-    if (labelMax) labelMax.textContent = `${dMax}d`;
-
-    // Valor central
-    const txtDias = _duracaoTextoParaDias(_duracaoDias);
-    if (el) el.textContent = txtDias;
-    if (valorLabel) valorLabel.textContent = `${_duracaoDias} dias`;
-
-    if (sliderWrap) sliderWrap.classList.remove('d-none');
+    _durModo = 'media';
+    _duracaoDias = _calcDuracaoDias(s, _durModo);
+    if (el) el.textContent = _duracaoTextoParaDias(_duracaoDias);
+    _sincronizarBotoesDurModo();
+    if (modoWrap) modoWrap.classList.remove('d-none');
   }
 
-  function onDuracaoSliderInput(valor) {
-    _duracaoDias = parseInt(valor, 10);
-    const txt = _duracaoTextoParaDias(_duracaoDias);
+  function _sincronizarBotoesDurModo() {
+    ['min', 'media', 'max'].forEach(m => {
+      const btn = document.getElementById(`btn-dur-${m}`);
+      if (btn) btn.classList.toggle('active', m === _durModo);
+    });
+  }
+
+  function selecionarDurModo(modo) {
+    _durModo = modo;
+    _sincronizarBotoesDurModo();
+    const s = sugestaoDoseAtual;
+    _duracaoDias = _calcDuracaoDias(s, _durModo);
     const el = document.getElementById('sug-duracao');
-    if (el) el.textContent = txt;
-    const valorLabel = document.getElementById('sug-dur-slider-valor');
-    if (valorLabel) valorLabel.textContent = `${_duracaoDias} dias`;
-    // Atualiza preview de dose prática se houver apresentação selecionada
+    if (el && _duracaoDias != null) el.textContent = _duracaoTextoParaDias(_duracaoDias);
     _atualizarPrescricaoPratica();
   }
 
-  // Mantida por retrocompatibilidade (usada em _duracaoParaModo nas chamadas existentes)
-  function _duracaoParaModo(s, _ignorado) {
+  function _duracaoParaModo(s) {
     if (_duracaoDias != null) return _duracaoTextoParaDias(_duracaoDias);
     return (s && s.duracao_texto) || '—';
+  }
+
+  function _calcFreqHoras(s, modo) {
+    if (!s) return null;
+    const mn = s.intervalo_min_horas;
+    const mx = s.intervalo_max_horas;
+    if (!mn || !mx) return s.intervalo_horas || null;
+    const mid = Math.round((mn + mx) / 2);
+    // 'min' = menos frequente = intervalo maior; 'max' = mais frequente = intervalo menor
+    if (modo === 'min') return mx;
+    if (modo === 'max') return mn;
+    return mid;
+  }
+
+  function _freqTextoParaHoras(h) {
+    if (!h) return '—';
+    return `a cada ${h}h`;
+  }
+
+  function _sincronizarBotoesFreqModo() {
+    ['min', 'media', 'max'].forEach(m => {
+      const btn = document.getElementById(`btn-freq-${m}`);
+      if (btn) btn.classList.toggle('active', m === _freqModo);
+    });
+  }
+
+  function _atualizarDisplayFrequencia(s) {
+    const el = document.getElementById('sug-frequencia');
+    const modoWrap = document.getElementById('sug-freq-modo-wrap');
+    const temFaixa = !!(s && s.tem_faixa_frequencia
+      && s.intervalo_min_horas && s.intervalo_max_horas
+      && s.intervalo_min_horas !== s.intervalo_max_horas);
+    if (el) el.textContent = s ? (s.frequencia_texto || '—') : '—';
+    if (modoWrap) modoWrap.classList.toggle('d-none', !temFaixa);
+    if (temFaixa) {
+      _freqModo = 'media';
+      _sincronizarBotoesFreqModo();
+    }
+  }
+
+  function selecionarFreqModo(modo) {
+    _freqModo = modo;
+    _sincronizarBotoesFreqModo();
+    const s = sugestaoDoseAtual;
+    const h = _calcFreqHoras(s, _freqModo);
+    const el = document.getElementById('sug-frequencia');
+    if (el && h) el.textContent = _freqTextoParaHoras(h);
+    _atualizarPrescricaoPratica();
+  }
+
+  function _frequenciaParaModo(s) {
+    if (!s) return '';
+    if (s.tem_faixa_frequencia && s.intervalo_min_horas && s.intervalo_max_horas) {
+      const h = _calcFreqHoras(s, _freqModo);
+      return h ? _freqTextoParaHoras(h) : (s.frequencia_texto || '');
+    }
+    return s.intervalo_horas
+      ? `a cada ${s.intervalo_horas}h`
+      : (s.frequencia_texto || '');
   }
 
   function _limparValoresCardSugestao() {
@@ -802,9 +889,9 @@
     }
     const concValor = document.getElementById('sug-conc-manual-valor');
     if (concValor) concValor.value = '';
-    // Esconde slider de duração e seletor de modo de dose.
-    const durSliderWrap = document.getElementById('sug-duracao-slider-wrap');
-    if (durSliderWrap) durSliderWrap.classList.add('d-none');
+    // Esconde seletores de modo de dose e duração.
+    const durModoWrap = document.getElementById('sug-dur-modo-wrap');
+    if (durModoWrap) durModoWrap.classList.add('d-none');
     const doseModoWrap = document.getElementById('sug-dose-modo-wrap');
     if (doseModoWrap) doseModoWrap.classList.add('d-none');
     // Estado JS.
@@ -813,7 +900,11 @@
     _dosePraticaCalculada = null;
     _conversaoApresentacaoExpandida = false;
     _duracaoDias = null;
+    _durModo = 'media';
+    _freqModo = 'media';
     _doseModo = 'media';
+    const freqModoWrap = document.getElementById('sug-freq-modo-wrap');
+    if (freqModoWrap) freqModoWrap.classList.add('d-none');
 
     const obsEl = document.getElementById('sug-observacao');
     if (obsEl) { obsEl.textContent = ''; obsEl.classList.add('d-none'); }
@@ -944,8 +1035,8 @@
       _atualizarDisplayDose(s);
       document.getElementById('sug-faixa').textContent = s.faixa_texto ? `(${s.faixa_texto})` : '';
       document.getElementById('sug-via').textContent = s.via || '–';
-      document.getElementById('sug-frequencia').textContent = s.frequencia_texto || '–';
-      _duracaoDias = null;  // reinicia slider ao carregar novo medicamento
+      _atualizarDisplayFrequencia(s);
+      _duracaoDias = null;
       _atualizarDisplayDuracao(s);
       const fonteTxt = [];
       if (s.indicacao) fonteTxt.push(`indicação: ${s.indicacao.toLowerCase()}`);
@@ -1394,9 +1485,7 @@
       // Fallback: dose no modo escolhido (mínima/média/máxima) ou dose_exibir como fallback.
       const temIntervalo = s.dose_min !== null && s.dose_max !== null && s.dose_min !== s.dose_max;
       doseStr = temIntervalo ? _formatarDoseModo(s, _doseModo) : (s.dose_exibir || '');
-      freqStr = s.intervalo_horas
-        ? NumeroExtenso.frequenciaFormatada(s.intervalo_horas)
-        : (s.frequencia_texto && s.frequencia_texto !== '—' ? s.frequencia_texto : '');
+      freqStr = _frequenciaParaModo(s);
       // Usa o modo de duração escolhido (mínima/recomendada/máxima)
       durStr = s.tem_faixa_duracao
         ? _duracaoParaModo(s)

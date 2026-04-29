@@ -155,6 +155,73 @@ def classificar_em_macro_grupo(classificacao: Optional[str]) -> str:
     return "outros"
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Durações padrão por classe farmacológica
+# ──────────────────────────────────────────────────────────────────────────
+# Ordem importa: padrões mais específicos primeiro.
+# Cada tupla: (regex_na_classificacao, min_dias, max_dias, descricao_curta)
+# Regex testado contra a classificação sem acentos e em minúscula.
+_DURACAO_PADRAO: List[Tuple[str, int, int, str]] = [
+    # Antiparasitários — maioria dose única ou curtíssimo
+    (r'vermifug|anti[- ]?helmint',                   1,   1, 'dose única'),
+    (r'ectoparas|endoparas|endectoc|carrapatic|acaricid|pulguicid', 1, 3, 'dose única a curto prazo'),
+    # Antifúngicos — curso mais longo que antibacterianos
+    (r'antifung',                                    14,  30, 'curso antifúngico'),
+    # Antibacterianos / Antimicrobianos
+    (r'antibi|antibact|antimicrobia|antissep|antisep', 7, 14, 'curso antibiótico padrão'),
+    # Anti-inflamatórios — distingue AINE de esteroides
+    (r'nao.*ester|n.o.*ester|aine',                   3,   7, 'anti-inflamatório agudo'),
+    (r'esteroid|corticoster|glicocortic',              5,  14, 'corticosteroide'),
+    (r'analg|opioid',                                  3,   7, 'analgesia'),
+    (r'anti[- ]?inflamat',                             3,   7, 'anti-inflamatório'),
+    # SNC / Anestesia / Comportamento
+    (r'anest[eé]s|sedat',                              1,   1, 'dose única — procedimento'),
+    (r'relaxant.*muscul',                              3,   5, 'relaxamento muscular'),
+    (r'anticonvul|antiepil',                          30,  90, 'controle epiléptico contínuo'),
+    (r'antidepress|ansiol|tranquiliz|comportament',   30,  90, 'tratamento comportamental'),
+    (r'neurolep|psicotr',                             30,  90, 'tratamento neurológico'),
+    # Cardiovascular / Renal
+    (r'inotr[oó]p|cardiot[oô]n|antiarr',             30,  90, 'tratamento cardíaco crônico'),
+    (r'diur[eé]t',                                    14,  30, 'diurético'),
+    (r'vasodil|vasopress',                            30,  90, 'suporte vascular'),
+    # Endócrino
+    (r'insulin|antidiab|hipoglic',                    30,  90, 'controle glicêmico contínuo'),
+    (r'horm[oô]n|tireoid|tiroxin',                   30,  90, 'terapia hormonal contínua'),
+    (r'anticoncep|contracep',                          30,  90, 'contracepção'),
+    # Gastrointestinal / Hepático
+    (r'antiem[eé]t|antinaus',                          3,   5, 'controle de êmese'),
+    (r'antidiarr',                                     3,   7, 'controle de diarreia'),
+    (r'hepatoprot|hepat',                             14,  30, 'hepatoproteção'),
+    (r'antiulc|antiac|proteto.*gastric|g[aá]stric',  14,  28, 'proteção gástrica'),
+    (r'probiot|prebi[oó]t',                           14,  30, 'probiótico'),
+    (r'laxat|procin[eé]t',                             3,   7, 'motilidade gastrointestinal'),
+    # Respiratório
+    (r'broncodil|broncop',                             7,  14, 'broncodilatação'),
+    (r'mucol[ií]t|expector|antituss',                  5,  10, 'manejo respiratório'),
+    # Tópicos locais
+    (r'otol[oó]g',                                     7,  14, 'tratamento otológico'),
+    (r'oftalm|optalmol',                               7,  14, 'tratamento oftálmico'),
+    (r'dermatol',                                      7,  21, 'tratamento dermatológico'),
+    (r'cicatriz',                                      7,  14, 'cicatrização'),
+    # Imunomoduladores
+    (r'imunoestim|imunomodul',                        14,  30, 'imunoestimulação'),
+    (r'antineoplas',                                   14,  30, 'oncológico — avaliar protocolo'),
+    # Suplementos / Nutraceuticos (uso crônico)
+    (r'suplem|nutrac|vitamin|regenerad|articular',    30,  90, 'suplementação contínua'),
+]
+
+
+def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    """Retorna (min_dias, max_dias, descricao) de referência para a classe
+    do medicamento. Retorna (None, None, None) quando não há padrão aplicável."""
+    cls = getattr(medicamento, 'classificacao', None) or ''
+    alvo = _strip_accents(cls).lower()
+    for pat, mn, mx, desc in _DURACAO_PADRAO:
+        if re.search(pat, alvo):
+            return (mn, mx, desc)
+    return (None, None, None)
+
+
 def construir_macro_grupos(
     classes_db: List[str],
     classe_ativa: Optional[str] = None,
@@ -1009,17 +1076,32 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     else:
         faixa_texto = f"{_fmt(dose_min_v)}–{_fmt(dose_max_v)} {faixa_unit_label}"
 
-    # Frequência textual
-    if proto.intervalo_horas:
+    # Frequência — usa faixa quando disponível
+    freq_min_h = proto.intervalo_min_horas
+    freq_max_h = proto.intervalo_max_horas
+    tem_faixa_freq = bool(freq_min_h and freq_max_h and freq_min_h != freq_max_h)
+    if tem_faixa_freq:
+        freq_texto = f"a cada {freq_min_h}–{freq_max_h}h"
+    elif proto.intervalo_horas:
         freq_texto = f"a cada {proto.intervalo_horas}h"
     elif proto.frequencia:
         freq_texto = proto.frequencia
     else:
         freq_texto = '—'
 
-    # Duração textual — mínima, padrão e máxima quando há faixa real
+    # Duração textual — específica do produto ou padrão da classe
     dur_min_d = proto.duracao_min_dias
     dur_max_d = proto.duracao_max_dias
+    duracao_e_padrao = False
+    duracao_padrao_desc: Optional[str] = None
+
+    if dur_min_d is None and dur_max_d is None:
+        pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
+        if pd_min is not None:
+            dur_min_d, dur_max_d = pd_min, pd_max
+            duracao_e_padrao = True
+            duracao_padrao_desc = pd_desc
+
     tem_faixa_dur = bool(dur_min_d and dur_max_d and dur_min_d != dur_max_d)
 
     if tem_faixa_dur:
@@ -1037,7 +1119,6 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     else:
         dur_texto = proto.duracao or '—'
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
-    tem_faixa_dur = tem_faixa_dur  # reusado abaixo
 
     # Equivalências por apresentação
     dose_media = (dose_calc_min + dose_calc_max) / 2.0
@@ -1147,14 +1228,19 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'faixa_texto':             faixa_texto,
         'via':                     proto.via or medicamento.via_administracao or '',
         'intervalo_horas':         proto.intervalo_horas,
+        'intervalo_min_horas':     freq_min_h,
+        'intervalo_max_horas':     freq_max_h,
+        'tem_faixa_frequencia':    tem_faixa_freq,
         'frequencia_texto':        freq_texto,
-        'duracao_min_dias':        proto.duracao_min_dias,
-        'duracao_max_dias':        proto.duracao_max_dias,
+        'duracao_min_dias':        dur_min_d,
+        'duracao_max_dias':        dur_max_d,
         'duracao_texto':           dur_texto,
         'duracao_texto_min':       dur_texto_min,
         'duracao_texto_media':     dur_texto_media,
         'duracao_texto_max':       dur_texto_max,
         'tem_faixa_duracao':       tem_faixa_dur,
+        'duracao_e_padrao':        duracao_e_padrao,
+        'duracao_padrao_desc':     duracao_padrao_desc,
         'indicacao':               proto_ind,
         'indicacoes_alternativas': indicacoes_alt,
         'apresentacoes':           apres_info,

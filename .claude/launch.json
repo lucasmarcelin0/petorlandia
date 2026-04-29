@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Flask dev server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app.py"],
+      "port": 5000
+    },
+    {
+      "name": "Scheduler",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["scheduler.py"],
+      "port": null
+    }
+  ]
+}
