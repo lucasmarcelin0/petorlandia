@@ -1,0 +1,292 @@
+<div
+  id="clinical-suggestions-panel"
+  class="card border-0 bg-light mt-4"
+  data-fetch-url="{{ url_for('obter_sugestoes_clinicas', consulta_id=consulta.id) }}"
+  data-apply-url="{{ url_for('aplicar_sugestao_clinica', consulta_id=consulta.id) }}"
+  data-feedback-url="{{ url_for('registrar_feedback_sugestao_clinica', consulta_id=consulta.id) }}"
+>
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <h5 class="mb-1">
+          <i class="bi bi-shield-check me-1 text-success"></i>
+          Sugestoes Clinicas Assistidas
+        </h5>
+        <p class="text-muted small mb-0">
+          Sugestoes explicitas e justificadas. Nada e gravado sem aprovacao do veterinario.
+        </p>
+      </div>
+      <button type="button" class="btn btn-outline-success btn-sm" id="load-clinical-suggestions">
+        <i class="bi bi-magic me-1"></i>Buscar sugestoes
+      </button>
+    </div>
+
+    <div id="clinical-suggestions-status" class="alert alert-secondary small py-2 mb-3">
+      Informe a suspeita clinica e clique em buscar sugestoes para carregar protocolos compativeis.
+    </div>
+    <div id="clinical-suggestions-results" class="d-grid gap-3"></div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const panel = document.getElementById('clinical-suggestions-panel');
+    if (!panel || panel.dataset.bound === '1') return;
+    panel.dataset.bound = '1';
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const statusEl = document.getElementById('clinical-suggestions-status');
+    const resultsEl = document.getElementById('clinical-suggestions-results');
+    const loadButton = document.getElementById('load-clinical-suggestions');
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(message, type = 'secondary') {
+      statusEl.className = `alert alert-${type} small py-2 mb-3`;
+      statusEl.textContent = message;
+    }
+
+    function currentPayload() {
+      return {
+        suspeita_clinica: document.getElementById('suspeita-clinica')?.value || '',
+        queixa_principal: document.getElementById('queixa-principal')?.value || '',
+        historico_clinico: document.getElementById('historico-clinico')?.value || '',
+        exame_fisico: document.getElementById('exame-fisico')?.value || ''
+      };
+    }
+
+    function renderEmpty(message) {
+      resultsEl.innerHTML = `<div class="alert alert-warning mb-0">${escapeHtml(message)}</div>`;
+    }
+
+    function buildItemActions(itemType, protocolId, itemId, title) {
+      return `
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button type="button" class="btn btn-sm btn-success js-apply-suggestion"
+            data-item-type="${escapeHtml(itemType)}"
+            data-protocol-id="${protocolId}"
+            data-item-id="${itemId || ''}"
+            data-title="${escapeHtml(title || '')}">
+            Aplicar
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
+            data-item-type="${escapeHtml(itemType)}"
+            data-protocol-id="${protocolId}"
+            data-item-id="${itemId || ''}"
+            data-title="${escapeHtml(title || '')}">
+            Dispensar
+          </button>
+        </div>
+      `;
+    }
+
+    function renderSuggestionCard(protocol) {
+      const reasons = (protocol.motivos || []).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
+      const exames = (protocol.exames || []).map(item => `
+        <div class="border rounded p-3 bg-white">
+          <div class="fw-semibold">${escapeHtml(item.nome)}</div>
+          <div class="small text-muted">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
+          ${buildItemActions('exame', protocol.id, item.id, item.nome)}
+        </div>
+      `).join('');
+      const medicamentos = (protocol.medicamentos || []).map(item => `
+        <div class="border rounded p-3 bg-white">
+          <div class="fw-semibold">${escapeHtml(item.nome)}</div>
+          <div class="small text-muted">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
+          <div class="small mt-2">
+            ${item.dosagem ? `<div><strong>Dosagem:</strong> ${escapeHtml(item.dosagem)}</div>` : ''}
+            ${item.frequencia ? `<div><strong>Frequencia:</strong> ${escapeHtml(item.frequencia)}</div>` : ''}
+            ${item.duracao ? `<div><strong>Duracao:</strong> ${escapeHtml(item.duracao)}</div>` : ''}
+          </div>
+          ${buildItemActions('medicamento', protocol.id, item.id, item.nome)}
+        </div>
+      `).join('');
+      const retornos = (protocol.retornos || []).map(item => `
+        <div class="border rounded p-3 bg-white">
+          <div class="fw-semibold">${escapeHtml(item.label)}</div>
+          <div class="small text-muted">${escapeHtml(item.reason || 'Reavaliacao sugerida pelo protocolo.')}</div>
+          ${buildItemActions('retorno', protocol.id, item.id, item.label)}
+        </div>
+      `).join('');
+      const conduta = protocol.conduta_sugerida ? `
+        <div class="border rounded p-3 bg-white">
+          <div class="small">${escapeHtml(protocol.conduta_sugerida)}</div>
+          ${buildItemActions('conduta', protocol.id, '', protocol.nome)}
+        </div>
+      ` : '';
+
+      return `
+        <div class="card shadow-sm border-0">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+              <div>
+                <h6 class="mb-1">${escapeHtml(protocol.nome)}</h6>
+                <div class="small text-muted">
+                  Hipotese principal: ${escapeHtml(protocol.suspeita_principal || '-')}
+                  ${protocol.especie ? ` | Especie: ${escapeHtml(protocol.especie)}` : ''}
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <span class="badge text-bg-success">Score ${escapeHtml(protocol.score || 0)}</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
+                  data-item-type="protocolo"
+                  data-protocol-id="${protocol.id}"
+                  data-title="${escapeHtml(protocol.nome)}">
+                  Dispensar protocolo
+                </button>
+              </div>
+            </div>
+
+            ${reasons ? `<ul class="small text-muted ps-3 mb-3">${reasons}</ul>` : ''}
+            ${protocol.alertas ? `<div class="alert alert-warning py-2 small">${escapeHtml(protocol.alertas)}</div>` : ''}
+            ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientacoes ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
+
+            ${exames ? `<div class="mb-3"><div class="fw-semibold mb-2">Exames sugeridos</div><div class="d-grid gap-2">${exames}</div></div>` : ''}
+            ${medicamentos ? `<div class="mb-3"><div class="fw-semibold mb-2">Medicamentos sugeridos</div><div class="d-grid gap-2">${medicamentos}</div></div>` : ''}
+            ${conduta ? `<div class="mb-3"><div class="fw-semibold mb-2">Conduta sugerida</div>${conduta}</div>` : ''}
+            ${retornos ? `<div><div class="fw-semibold mb-2">Retorno sugerido</div><div class="d-grid gap-2">${retornos}</div></div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload || {})
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        throw new Error(data.message || 'Nao foi possivel concluir a operacao.');
+      }
+      return data;
+    }
+
+    async function loadSuggestions() {
+      loadButton.disabled = true;
+      setStatus('Buscando protocolos clinicos compativeis...', 'info');
+      resultsEl.innerHTML = '';
+      try {
+        const data = await postJson(panel.dataset.fetchUrl, currentPayload());
+        if (!data.suggestions || data.suggestions.length === 0) {
+          renderEmpty(data.message || 'Nenhum protocolo clinico compativel encontrado.');
+          setStatus('Nenhum protocolo compativel encontrado. Revise a suspeita ou cadastre novos protocolos.', 'warning');
+          return;
+        }
+        resultsEl.innerHTML = data.suggestions.map(renderSuggestionCard).join('');
+        setStatus('Sugestoes carregadas. Revise cada item antes de aplicar.', 'success');
+      } catch (error) {
+        renderEmpty(error.message || 'Erro ao buscar sugestoes clinicas.');
+        setStatus(error.message || 'Erro ao buscar sugestoes clinicas.', 'danger');
+      } finally {
+        loadButton.disabled = false;
+      }
+    }
+
+    function prefillReturn(prefill, protocolId) {
+      const form = document.getElementById('agendar-retorno-form');
+      const toggleButton = document.getElementById('toggle-retorno-form');
+      if (!form) {
+        setStatus('Ja existe um retorno agendado ou o formulario de retorno nao esta disponivel.', 'warning');
+        return;
+      }
+      form.classList.remove('d-none');
+      if (toggleButton) toggleButton.classList.add('d-none');
+      const dateField = form.querySelector('[name="date"]');
+      const timeField = form.querySelector('[name="time"]');
+      const reasonField = form.querySelector('[name="reason"]');
+      const kindField = form.querySelector('[name="kind"]');
+      const protocolField = form.querySelector('[name="suggested_protocol_id"]');
+      const returnField = form.querySelector('[name="suggested_return_id"]');
+      if (dateField) dateField.value = prefill.suggested_date || '';
+      if (timeField && !timeField.value) timeField.value = '09:00';
+      if (reasonField) reasonField.value = prefill.reason || '';
+      if (kindField) kindField.value = prefill.tipo_retorno || 'retorno';
+      if (protocolField) protocolField.value = protocolId || '';
+      if (returnField) returnField.value = prefill.id || '';
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setStatus('Retorno sugerido preenchido. Revise data, horario e motivo antes de agendar.', 'success');
+    }
+
+    async function handleApply(button) {
+      const payload = {
+        item_type: button.dataset.itemType,
+        protocol_id: button.dataset.protocolId,
+        item_id: button.dataset.itemId || null
+      };
+      button.disabled = true;
+      try {
+        const data = await postJson(panel.dataset.applyUrl, payload);
+        if (payload.item_type === 'exame' && data.html) {
+          const container = document.getElementById('historico-exames');
+          if (container) container.innerHTML = data.html;
+        } else if (payload.item_type === 'medicamento' && data.html) {
+          const container = document.getElementById('historico-prescricoes');
+          if (container) container.innerHTML = data.html;
+        } else if (payload.item_type === 'conduta' && data.conduta !== undefined) {
+          const condutaField = document.getElementById('conduta');
+          if (condutaField) condutaField.value = data.conduta || '';
+        } else if (payload.item_type === 'retorno' && data.prefill) {
+          prefillReturn(data.prefill, payload.protocol_id);
+        }
+        setStatus(data.message || 'Sugestao aplicada com sucesso.', 'success');
+      } catch (error) {
+        setStatus(error.message || 'Erro ao aplicar sugestao.', 'danger');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function handleDismiss(button) {
+      button.disabled = true;
+      try {
+        await postJson(panel.dataset.feedbackUrl, {
+          action: 'dismissed',
+          item_type: button.dataset.itemType || 'protocolo',
+          protocol_id: button.dataset.protocolId || null,
+          title: button.dataset.title || null,
+          payload: {
+            item_id: button.dataset.itemId || null
+          }
+        });
+        setStatus('Feedback registrado. A sugestao foi marcada como dispensada.', 'secondary');
+        const wrapper = button.closest('.border, .card');
+        if (wrapper && wrapper !== panel) {
+          wrapper.classList.add('opacity-50');
+        }
+      } catch (error) {
+        setStatus(error.message || 'Erro ao registrar feedback.', 'danger');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    loadButton.addEventListener('click', loadSuggestions);
+
+    resultsEl.addEventListener('click', function (event) {
+      const applyButton = event.target.closest('.js-apply-suggestion');
+      if (applyButton) {
+        event.preventDefault();
+        handleApply(applyButton);
+        return;
+      }
+      const dismissButton = event.target.closest('.js-dismiss-suggestion');
+      if (dismissButton) {
+        event.preventDefault();
+        handleDismiss(dismissButton);
+      }
+    });
+  });
+</script>

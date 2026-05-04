@@ -141,6 +141,11 @@ from services.appointments import (
     finalize_consulta_flow,
     schedule_return_appointment,
 )
+from services.clinical_suggestions import (
+    build_followup_prefill,
+    log_suggestion_event,
+    recommend_protocols,
+)
 from services.payments import (
     PaymentItemDTO,
     PaymentPreferenceDTO,
@@ -9109,6 +9114,12 @@ def _integration_upsert_consulta(user: User, animal: Animal, payload: dict):
     consulta.queixa_principal = (payload.get('queixa_principal') or consulta.queixa_principal or '').strip() or None
     consulta.historico_clinico = (payload.get('historico_clinico') or consulta.historico_clinico or '').strip() or None
     consulta.exame_fisico = (payload.get('exame_fisico') or consulta.exame_fisico or '').strip() or None
+    consulta.suspeita_clinica = (
+        payload.get('suspeita_clinica')
+        or diagnostico
+        or consulta.suspeita_clinica
+        or ''
+    ).strip() or None
     consulta.conduta = conduta or consulta.conduta
     consulta.exames_solicitados = (payload.get('exames_solicitados') or consulta.exames_solicitados or '').strip() or None
     consulta.prescricao = (payload.get('prescricao') or consulta.prescricao or '').strip() or None
@@ -9938,6 +9949,7 @@ def mcp_server():
                         'historico_clinico': {'type': 'string'},
                         'exame_fisico': {'type': 'string'},
                         'diagnostico': {'type': 'string'},
+                        'suspeita_clinica': {'type': 'string'},
                         'conduta': {'type': 'string'},
                         'exames_solicitados': {'type': 'string'},
                         'prescricao': {'type': 'string'},
@@ -12512,6 +12524,237 @@ def consulta_qr():
     )
 
 
+def _animal_species_name(animal) -> str | None:
+    if getattr(animal, 'species', None) and getattr(animal.species, 'name', None):
+        return animal.species.name
+    if getattr(animal, 'breed', None) and getattr(animal.breed, 'species', None):
+        return getattr(animal.breed.species, 'name', None)
+    return None
+
+
+def _append_consulta_text(existing_text: str | None, new_text: str | None) -> str:
+    current = (existing_text or '').strip()
+    incoming = (new_text or '').strip()
+    if not incoming:
+        return current
+    if not current:
+        return incoming
+    if incoming in current:
+        return current
+    return f"{current}\n\n{incoming}".strip()
+
+
+def _build_clinical_suggestion_context(consulta, payload: dict | None = None) -> dict:
+    payload = payload or {}
+    animal = consulta.animal
+    return {
+        'suspeita_clinica': (payload.get('suspeita_clinica') or consulta.suspeita_clinica or '').strip() or None,
+        'queixa_principal': (payload.get('queixa_principal') or consulta.queixa_principal or '').strip() or None,
+        'historico_clinico': (payload.get('historico_clinico') or consulta.historico_clinico or '').strip() or None,
+        'exame_fisico': (payload.get('exame_fisico') or consulta.exame_fisico or '').strip() or None,
+        'especie': _animal_species_name(animal),
+        'peso': getattr(animal, 'peso', None),
+        'sexo': getattr(animal, 'sex', None),
+        'data_base': date.today(),
+    }
+
+
+def _find_protocol_item(protocol, item_type: str, item_id: int | None):
+    mapping = {
+        'exame': getattr(protocol, 'exames_sugeridos', []) or [],
+        'medicamento': getattr(protocol, 'medicamentos_sugeridos', []) or [],
+        'retorno': getattr(protocol, 'retornos_sugeridos', []) or [],
+    }
+    if item_type == 'conduta':
+        return protocol if getattr(protocol, 'conduta_sugerida', None) else None
+    items = mapping.get(item_type, [])
+    if not item_id:
+        return None
+    return next((item for item in items if item.id == item_id), None)
+
+
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas', methods=['POST'])
+@login_required
+def obter_sugestoes_clinicas(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem solicitar sugestões clínicas.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    context = _build_clinical_suggestion_context(consulta, payload)
+    suggestions = recommend_protocols(context, clinic_id=consulta.clinica_id)
+
+    for suggestion in suggestions:
+        log_suggestion_event(
+            consulta_id=consulta.id,
+            protocolo_id=suggestion['id'],
+            actor_user_id=current_user.id,
+            tipo_item='protocolo',
+            acao='shown',
+            titulo_item=suggestion['nome'],
+            justificativa=' | '.join(suggestion.get('motivos') or []),
+            payload={
+                'suspeita_clinica': context.get('suspeita_clinica'),
+                'score': suggestion.get('score'),
+            },
+        )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'suggestions': suggestions,
+        'context': context,
+        'message': 'Sugestões carregadas com sucesso.' if suggestions else 'Nenhum protocolo compatível encontrado ainda.',
+    })
+
+
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/feedback', methods=['POST'])
+@login_required
+def registrar_feedback_sugestao_clinica(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem registrar feedback clínico.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    protocol_id = payload.get('protocol_id')
+    action = (payload.get('action') or '').strip().lower()
+    item_type = (payload.get('item_type') or 'protocolo').strip().lower()
+    title = (payload.get('title') or '').strip() or None
+
+    if action not in {'dismissed', 'shown', 'accepted', 'scheduled'}:
+        return jsonify({'success': False, 'message': 'Ação de feedback inválida.'}), 400
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=protocol_id,
+        actor_user_id=current_user.id,
+        tipo_item=item_type,
+        acao=action,
+        titulo_item=title,
+        justificativa=payload.get('justificativa'),
+        payload=payload.get('payload') or None,
+    )
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/aplicar', methods=['POST'])
+@login_required
+def aplicar_sugestao_clinica(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem aplicar sugestões clínicas.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        protocol_id = int(payload.get('protocol_id')) if payload.get('protocol_id') is not None else None
+    except (TypeError, ValueError):
+        protocol_id = None
+    try:
+        item_id = int(payload.get('item_id')) if payload.get('item_id') is not None else None
+    except (TypeError, ValueError):
+        item_id = None
+    item_type = (payload.get('item_type') or '').strip().lower()
+    if not protocol_id or item_type not in {'exame', 'medicamento', 'conduta', 'retorno'}:
+        return jsonify({'success': False, 'message': 'Parâmetros inválidos para aplicar sugestão.'}), 400
+
+    protocol = (
+        ProtocoloClinico.query
+        .options(
+            selectinload(ProtocoloClinico.exames_sugeridos),
+            selectinload(ProtocoloClinico.medicamentos_sugeridos),
+            selectinload(ProtocoloClinico.retornos_sugeridos),
+        )
+        .get_or_404(protocol_id)
+    )
+    item = _find_protocol_item(protocol, item_type, item_id)
+    if not item:
+        return jsonify({'success': False, 'message': 'Sugestão não encontrada no protocolo selecionado.'}), 404
+
+    clinic_id = (
+        consulta.clinica_id
+        or current_user_clinic_id()
+        or getattr(consulta.animal, 'clinica_id', None)
+    )
+    if item_type == 'exame':
+        bloco = BlocoExames(
+            animal_id=consulta.animal_id,
+            observacoes_gerais=f"Sugestão aprovada do protocolo {protocol.nome}.",
+        )
+        db.session.add(bloco)
+        db.session.flush()
+        db.session.add(
+            ExameSolicitado(
+                bloco_id=bloco.id,
+                nome=item.nome,
+                justificativa=item.justificativa,
+                status='pendente',
+            )
+        )
+        response_payload = {'message': 'Exame sugerido adicionado ao histórico.'}
+        title = item.nome
+    elif item_type == 'medicamento':
+        if not clinic_id:
+            return jsonify({'success': False, 'message': 'Consulta sem clínica definida para registrar prescrição.'}), 400
+        bloco = BlocoPrescricao(
+            animal_id=consulta.animal_id,
+            clinica_id=clinic_id,
+            instrucoes_gerais=(protocol.orientacoes_tutor or '').strip() or None,
+        )
+        bloco.saved_by_id = current_user.id
+        db.session.add(bloco)
+        db.session.flush()
+        db.session.add(
+            Prescricao(
+                animal_id=consulta.animal_id,
+                bloco_id=bloco.id,
+                medicamento=item.nome_exibicao,
+                dosagem=item.dosagem_texto,
+                frequencia=item.frequencia_texto,
+                duracao=item.duracao_texto,
+                observacoes=item.observacoes,
+            )
+        )
+        response_payload = {'message': 'Medicamento sugerido adicionado à prescrição.'}
+        title = item.nome_exibicao
+    elif item_type == 'conduta':
+        consulta.conduta = _append_consulta_text(consulta.conduta, protocol.conduta_sugerida)
+        response_payload = {
+            'conduta': consulta.conduta,
+            'message': 'Conduta sugerida adicionada ao rascunho da consulta.',
+        }
+        title = protocol.nome
+    else:
+        prefill = build_followup_prefill(item, reference_date=date.today())
+        response_payload = {
+            'prefill': prefill,
+            'message': 'Sugestão de retorno preparada para revisão antes do agendamento.',
+        }
+        title = prefill['label']
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=protocol.id,
+        actor_user_id=current_user.id,
+        tipo_item=item_type,
+        acao='accepted',
+        titulo_item=title,
+        justificativa=getattr(item, 'justificativa', None) or getattr(protocol, 'conduta_sugerida', None),
+        payload={'item_id': item_id, 'protocol_name': protocol.nome},
+    )
+    db.session.commit()
+    if item_type == 'exame':
+        animal_atualizado = Animal.query.get(consulta.animal_id)
+        response_payload['html'] = render_template('partials/historico_exames.html', animal=animal_atualizado)
+    elif item_type == 'medicamento':
+        animal_atualizado = Animal.query.get(consulta.animal_id)
+        response_payload['html'] = _render_prescricao_history(animal_atualizado, clinic_id)
+    return jsonify({'success': True, **response_payload})
+
+
 
 
 
@@ -12732,6 +12975,12 @@ def finalizar_consulta(consulta_id):
     if outcome.status == "blocked":
         flash(outcome.message, outcome.category)
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if consulta.status != "finalizada":
+        consulta.status = "finalizada"
+        consulta.finalizada_em = utcnow()
+        if consulta.appointment and consulta.appointment.status != "completed":
+            consulta.appointment.status = "completed"
+        db.session.commit()
     if outcome.status == "completed":
         flash(outcome.message, outcome.category)
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -12761,6 +13010,12 @@ def finalizar_consulta_e_fechar(consulta_id):
     if outcome.status == "blocked":
         flash(outcome.message, outcome.category)
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if consulta.status != "finalizada":
+        consulta.status = "finalizada"
+        consulta.finalizada_em = utcnow()
+        if consulta.appointment and consulta.appointment.status != "completed":
+            consulta.appointment.status = "completed"
+        db.session.commit()
     if outcome.status == "completed":
         flash(outcome.message, outcome.category)
         if consulta.appointment:
@@ -12809,6 +13064,25 @@ def agendar_retorno(consulta_id):
             actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
             payload=payload,
         )
+        if result.success:
+            protocol_id = request.form.get('suggested_protocol_id', type=int)
+            return_id = request.form.get('suggested_return_id', type=int)
+            if protocol_id or return_id:
+                log_suggestion_event(
+                    consulta_id=consulta.id,
+                    protocolo_id=protocol_id,
+                    actor_user_id=current_user.id,
+                    tipo_item='retorno',
+                    acao='scheduled',
+                    titulo_item='Retorno sugerido agendado',
+                    justificativa=form.reason.data,
+                    payload={
+                        'return_id': return_id,
+                        'date': form.date.data.isoformat() if form.date.data else None,
+                        'time': form.time.data.isoformat() if form.time.data else None,
+                    },
+                )
+                db.session.commit()
         flash(result.message, result.category)
     else:
         flash('Erro ao agendar retorno.', 'danger')
@@ -16459,6 +16733,7 @@ def update_consulta(consulta_id):
     consulta.queixa_principal = request.form.get('queixa_principal')
     consulta.historico_clinico = request.form.get('historico_clinico')
     consulta.exame_fisico = request.form.get('exame_fisico')
+    consulta.suspeita_clinica = request.form.get('suspeita_clinica')
     consulta.conduta = request.form.get('conduta')
 
     # Se estiver editando uma consulta antiga
@@ -18276,64 +18551,58 @@ def toggle_medicamento_favorito(med_id):
 def medicamentos_frequentes():
     """Retorna os medicamentos mais prescritos pelo veterinário logado.
 
-    Tenta cruzar o nome da prescrição com o banco de medicamentos para devolver
-    o objeto completo (com doses e apresentações). Quando não há match exato,
-    devolve apenas o nome para que o vet possa usá-lo como ponto de partida.
+    Usa prescricao_alias_medicamento como cache. Nomes não resolvidos passam por
+    5 estratégias de matching (exato → normalizado → prefixo → variante → substring)
+    e o resultado é persistido para requisições futuras.
     """
     try:
-        # Histórico de prescrições do usuário atual (via blocos de prescrição)
         from sqlalchemy import text as sql_text
-        result = db.session.execute(sql_text("""
+        from services.prescricao_alias import resolver_e_persistir
+        from services.bulario import serializar_medicamento_busca
+
+        rows = db.session.execute(sql_text("""
             SELECT p.medicamento, COUNT(*) AS total
             FROM prescricao p
             JOIN bloco_prescricao bp ON bp.id = p.bloco_id
             WHERE bp.saved_by_id = :uid
             GROUP BY p.medicamento
             ORDER BY total DESC
-            LIMIT 30
-        """), {"uid": current_user.id})
-        frequentes_raw = result.fetchall()
+            LIMIT 40
+        """), {"uid": current_user.id}).fetchall()
 
-        # Para cada nome, tenta encontrar o medicamento no banco
         saida = []
+        ids_incluidos = set()
         nomes_vistos = set()
-        for row in frequentes_raw:
-            nome_prescrito = row[0]
-            total = row[1]
 
-            # Evitar duplicatas por nome normalizado
-            nome_norm = nome_prescrito.strip().lower()
-            if nome_norm in nomes_vistos:
+        for nome_prescrito, total in rows:
+            nome_key = nome_prescrito.strip().lower()
+            if nome_key in nomes_vistos:
                 continue
-            nomes_vistos.add(nome_norm)
 
-            # Tenta match exato, depois insensível a maiúsculas
-            med = (
-                Medicamento.query
-                .options(defer(Medicamento.conteudo_estruturado))
-                .filter(Medicamento.nome.ilike(nome_prescrito))
-                .first()
-            )
+            med_id = resolver_e_persistir(nome_prescrito, db.session, db)
 
-            if med:
-                from services.bulario import serializar_medicamento_busca
-                entry = serializar_medicamento_busca(med)
-                entry["total_prescricoes"] = total
-                saida.append(entry)
+            if med_id:
+                if med_id in ids_incluidos:
+                    nomes_vistos.add(nome_key)
+                    continue
+                med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get(med_id)
+                if med:
+                    entry = serializar_medicamento_busca(med)
+                    entry["total_prescricoes"] = total
+                    entry["nome_prescrito_original"] = nome_prescrito
+                    saida.append(entry)
+                    ids_incluidos.add(med_id)
             else:
-                # Sem match no banco — devolve o nome para facilitar busca manual
-                saida.append({
-                    "id": None,
-                    "nome": nome_prescrito,
-                    "total_prescricoes": total,
-                })
+                saida.append({"id": None, "nome": nome_prescrito, "total_prescricoes": total})
 
+            nomes_vistos.add(nome_key)
             if len(saida) >= 12:
                 break
 
         return jsonify(saida)
     except Exception as e:
         print(f"[ERROR] /medicamentos_frequentes: {e}")
+        import traceback; traceback.print_exc()
         return jsonify([])
 
 

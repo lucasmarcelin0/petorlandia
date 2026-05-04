@@ -607,6 +607,7 @@ class Consulta(db.Model):
     queixa_principal = db.Column(db.Text)
     historico_clinico = db.Column(db.Text)
     exame_fisico = db.Column(db.Text)
+    suspeita_clinica = db.Column(db.String(160), index=True)
     conduta = db.Column(db.Text)
     prescricao = db.Column(db.Text)
     exames_solicitados = db.Column(db.Text)
@@ -2013,6 +2014,26 @@ class DoseMedicamento(db.Model):
         return " · ".join(partes) or f"Dose #{self.id}"
 
 
+class PrescricaoAliasMedicamento(db.Model):
+    """Mapeia texto exato de prescrição histórica ao medicamento canônico.
+
+    Permite que nomes como 'Dipirona – 500 mg/mL, gotas' (formato VetSmart com em-dash)
+    sejam resolvidos ao ID correto sem match exato no nome do Medicamento.
+    confianca: 'exato' | 'normalizado' | 'prefixo' | 'variante' | 'substring' | 'manual' | 'sem_match'
+    """
+    __tablename__ = 'prescricao_alias_medicamento'
+    id = db.Column(db.Integer, primary_key=True)
+    nome_prescrito = db.Column(db.Text, nullable=False, unique=True)
+    medicamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('medicamento.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    confianca = db.Column(db.String(20), nullable=False, default='auto')
+    criado_em = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+
+
 class MedicamentoFavorito(db.Model):
     """Medicamentos marcados como favoritos por um veterinário."""
     __tablename__ = 'medicamento_favorito'
@@ -2065,6 +2086,167 @@ class ExameSolicitado(db.Model):
     status = db.Column(db.String(20), default='pendente')
     resultado = db.Column(db.Text, nullable=True)
     performed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+
+class ProtocoloClinico(db.Model):
+    __tablename__ = 'protocolo_clinico'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    suspeita_principal = db.Column(db.String(160), nullable=False, index=True)
+    especie = db.Column(db.String(40), nullable=True, index=True)
+    sinais_gatilho = db.Column(db.Text)
+    conduta_sugerida = db.Column(db.Text)
+    orientacoes_tutor = db.Column(db.Text)
+    alertas = db.Column(db.Text)
+    prioridade = db.Column(db.Integer, nullable=False, default=100)
+    versao = db.Column(db.Integer, nullable=False, default=1)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+        nullable=False,
+    )
+
+    clinica = db.relationship('Clinica', backref=db.backref('protocolos_clinicos', cascade='all, delete-orphan'))
+    criador = db.relationship('User', foreign_keys=[created_by])
+    exames_sugeridos = db.relationship(
+        'ProtocoloClinicoExame',
+        backref='protocolo',
+        cascade='all, delete-orphan',
+        order_by='ProtocoloClinicoExame.prioridade, ProtocoloClinicoExame.id',
+    )
+    medicamentos_sugeridos = db.relationship(
+        'ProtocoloClinicoMedicamento',
+        backref='protocolo',
+        cascade='all, delete-orphan',
+        order_by='ProtocoloClinicoMedicamento.prioridade, ProtocoloClinicoMedicamento.id',
+    )
+    retornos_sugeridos = db.relationship(
+        'ProtocoloClinicoRetorno',
+        backref='protocolo',
+        cascade='all, delete-orphan',
+        order_by='ProtocoloClinicoRetorno.prioridade, ProtocoloClinicoRetorno.id',
+    )
+
+    @property
+    def taxa_aceitacao(self):
+        auditorias = getattr(self, 'auditorias_sugestao', None) or []
+        mostradas = sum(1 for item in auditorias if item.acao == 'shown')
+        aceitas = sum(1 for item in auditorias if item.acao == 'accepted')
+        if mostradas <= 0:
+            return None
+        return round((aceitas / mostradas) * 100, 1)
+
+
+class ProtocoloClinicoExame(db.Model):
+    __tablename__ = 'protocolo_clinico_exame'
+
+    id = db.Column(db.Integer, primary_key=True)
+    protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('protocolo_clinico.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    nome = db.Column(db.String(120), nullable=False)
+    justificativa = db.Column(db.Text)
+    prioridade = db.Column(db.Integer, nullable=False, default=0)
+
+
+class ProtocoloClinicoMedicamento(db.Model):
+    __tablename__ = 'protocolo_clinico_medicamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('protocolo_clinico.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    medicamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('medicamento.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    nome_medicamento = db.Column(db.String(120), nullable=True)
+    justificativa = db.Column(db.Text)
+    dosagem_texto = db.Column(db.Text)
+    frequencia_texto = db.Column(db.Text)
+    duracao_texto = db.Column(db.Text)
+    observacoes = db.Column(db.Text)
+    indicacao = db.Column(db.String(120))
+    prioridade = db.Column(db.Integer, nullable=False, default=0)
+
+    medicamento = db.relationship('Medicamento')
+
+    @property
+    def nome_exibicao(self):
+        if self.nome_medicamento:
+            return self.nome_medicamento
+        if self.medicamento:
+            return self.medicamento.nome
+        return ''
+
+
+class ProtocoloClinicoRetorno(db.Model):
+    __tablename__ = 'protocolo_clinico_retorno'
+
+    id = db.Column(db.Integer, primary_key=True)
+    protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('protocolo_clinico.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    prazo_min_dias = db.Column(db.Integer, nullable=True)
+    prazo_max_dias = db.Column(db.Integer, nullable=True)
+    tipo_retorno = db.Column(db.String(40), nullable=False, default='retorno')
+    objetivo = db.Column(db.Text)
+    gatilhos_antecipacao = db.Column(db.Text)
+    prioridade = db.Column(db.Integer, nullable=False, default=0)
+
+
+class AuditoriaSugestaoClinica(db.Model):
+    __tablename__ = 'auditoria_sugestao_clinica'
+
+    id = db.Column(db.Integer, primary_key=True)
+    consulta_id = db.Column(
+        db.Integer,
+        db.ForeignKey('consulta.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('protocolo_clinico.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    actor_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    tipo_item = db.Column(db.String(30), nullable=False, index=True)
+    acao = db.Column(db.String(30), nullable=False, index=True)
+    titulo_item = db.Column(db.String(200), nullable=True)
+    justificativa = db.Column(db.Text)
+    payload = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+
+    consulta = db.relationship('Consulta', backref=db.backref('auditorias_sugestao_clinica', cascade='all, delete-orphan'))
+    protocolo = db.relationship('ProtocoloClinico', backref=db.backref('auditorias_sugestao', lazy=True))
+    actor = db.relationship('User', foreign_keys=[actor_user_id])
 
 
 class VacinaModelo(db.Model):

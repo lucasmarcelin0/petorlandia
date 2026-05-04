@@ -10,8 +10,13 @@ from flask import current_app
 
 from extensions import db
 from forms import AppointmentForm
-from helpers import get_appointment_duration, has_conflict_for_slot, is_slot_available
-from models import Appointment, HealthSubscription, Message, Veterinario, get_clinica_field
+from helpers import (
+    _local_start_candidates,
+    get_appointment_duration,
+    has_conflict_for_slot,
+    is_slot_available,
+)
+from models import Appointment, ExamAppointment, HealthSubscription, Message, Veterinario, get_clinica_field
 from services.health_plan import evaluate_consulta_coverages
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
@@ -19,7 +24,7 @@ from services.nfse_queue import (
     queue_nfse_issue,
     should_emit_async,
 )
-from time_utils import BR_TZ, normalize_to_utc, utcnow
+from time_utils import normalize_to_utc, utcnow
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,14 @@ class FinalizeConsultaOutcome:
     form: Optional[AppointmentForm] = None
 
 
+def _has_overlap_with_local_slot(existing_start, slot_start, slot_end, duration):
+    for candidate_start in _local_start_candidates(existing_start):
+        candidate_end = candidate_start + duration
+        if slot_start < candidate_end and candidate_start < slot_end:
+            return True
+    return False
+
+
 def schedule_return_appointment(
     *,
     consulta,
@@ -53,24 +66,70 @@ def schedule_return_appointment(
     payload: ReturnAppointmentDTO,
 ) -> ReturnAppointmentResult:
     scheduled_at_local = datetime.combine(payload.date, payload.time)
-    vet_id = payload.veterinarian_id
+    vet_id = int(payload.veterinarian_id)
+    conflict_message = "Horário indisponível para o veterinário selecionado."
+
     if not is_slot_available(vet_id, scheduled_at_local, kind="retorno"):
         return ReturnAppointmentResult(
             success=False,
-            message="Horário indisponível para o veterinário selecionado.",
+            message=conflict_message,
             category="danger",
         )
 
     duration = get_appointment_duration("retorno")
-    if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
+    preloaded_appointments = {
+        appt.id: appt
+        for appt in Appointment.query.filter_by(veterinario_id=vet_id).all()
+    }
+    preloaded_exams = {
+        exam.id: exam
+        for exam in ExamAppointment.query.filter_by(specialist_id=vet_id).all()
+    }
+
+    if has_conflict_for_slot(
+        vet_id,
+        scheduled_at_local,
+        duration,
+        preloaded_appointments=preloaded_appointments,
+        preloaded_exams=preloaded_exams,
+    ):
         return ReturnAppointmentResult(
             success=False,
-            message="Horário indisponível para o veterinário selecionado.",
+            message=conflict_message,
             category="danger",
         )
 
+    end_local = scheduled_at_local + duration
+    for appt in preloaded_appointments.values():
+        appt_duration = get_appointment_duration(appt.kind or "consulta")
+        if _has_overlap_with_local_slot(
+            appt.scheduled_at,
+            scheduled_at_local,
+            end_local,
+            appt_duration,
+        ):
+            return ReturnAppointmentResult(
+                success=False,
+                message=conflict_message,
+                category="danger",
+            )
+
+    exam_duration = get_appointment_duration("exame")
+    for exam in preloaded_exams.values():
+        if _has_overlap_with_local_slot(
+            exam.scheduled_at,
+            scheduled_at_local,
+            end_local,
+            exam_duration,
+        ):
+            return ReturnAppointmentResult(
+                success=False,
+                message=conflict_message,
+                category="danger",
+            )
+
     scheduled_at = normalize_to_utc(scheduled_at_local)
-    same_user = actor_vet_id and actor_vet_id == vet_id
+    same_user = bool(actor_vet_id) and int(actor_vet_id) == vet_id
     appt = Appointment(
         consulta_id=consulta.id,
         animal_id=consulta.animal_id,
@@ -222,8 +281,4 @@ def _build_return_form(consulta, clinic_id: Optional[int]) -> AppointmentForm:
     if vet_id:
         form.veterinario_id.data = vet_id
 
-    dias_retorno = current_app.config.get("DEFAULT_RETURN_DAYS", 7)
-    data_recomendada = (datetime.now(BR_TZ) + timedelta(days=dias_retorno)).date()
-    form.date.data = data_recomendada
-    form.time.data = time(10, 0)
     return form

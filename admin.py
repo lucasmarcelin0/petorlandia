@@ -60,6 +60,11 @@ try:
         AnimalPhoto,
         UserRole,
         ExameModelo,
+        ProtocoloClinico,
+        ProtocoloClinicoExame,
+        ProtocoloClinicoMedicamento,
+        ProtocoloClinicoRetorno,
+        AuditoriaSugestaoClinica,
         Product,
         Order,
         OrderItem,
@@ -102,6 +107,11 @@ except ImportError:
         AnimalPhoto,
         UserRole,
         ExameModelo,
+        ProtocoloClinico,
+        ProtocoloClinicoExame,
+        ProtocoloClinicoMedicamento,
+        ProtocoloClinicoRetorno,
+        AuditoriaSugestaoClinica,
         Product,
         Order,
         OrderItem,
@@ -940,6 +950,49 @@ class ExameModeloAdminView(MyModelView):
     form_columns = ('nome', 'justificativa')
 
 
+class ProtocoloClinicoAdminView(MyModelView):
+    column_list = (
+        'nome',
+        'suspeita_principal',
+        'especie',
+        'clinica',
+        'ativo',
+        'prioridade',
+        'versao',
+        'taxa_aceitacao',
+    )
+    column_searchable_list = ('nome', 'suspeita_principal', 'sinais_gatilho')
+    form_columns = (
+        'nome',
+        'suspeita_principal',
+        'especie',
+        'sinais_gatilho',
+        'conduta_sugerida',
+        'orientacoes_tutor',
+        'alertas',
+        'prioridade',
+        'versao',
+        'ativo',
+        'clinica',
+        'criador',
+    )
+
+
+class AuditoriaSugestaoClinicaAdminView(MyModelView):
+    can_create = False
+    can_edit = False
+    column_list = (
+        'created_at',
+        'consulta_id',
+        'protocolo',
+        'actor',
+        'tipo_item',
+        'acao',
+        'titulo_item',
+    )
+    column_searchable_list = ('tipo_item', 'acao', 'titulo_item')
+
+
 # --------------------------------------------------------------------------
 # Função de inicialização do painel
 # --------------------------------------------------------------------------
@@ -1049,6 +1102,31 @@ def init_admin(app):
         ExameModelo, db.session,
         name='Exames', category='Atendimento',
         menu_icon_type='fa', menu_icon_value='fa-vials'
+    ))
+    admin.add_view(ProtocoloClinicoAdminView(
+        ProtocoloClinico, db.session,
+        name='Protocolos Clínicos', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-notes-medical'
+    ))
+    admin.add_view(MyModelView(
+        ProtocoloClinicoExame, db.session,
+        name='Protocolos • Exames', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-flask'
+    ))
+    admin.add_view(MyModelView(
+        ProtocoloClinicoMedicamento, db.session,
+        name='Protocolos • Medicamentos', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-capsules'
+    ))
+    admin.add_view(MyModelView(
+        ProtocoloClinicoRetorno, db.session,
+        name='Protocolos • Retornos', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-calendar-check'
+    ))
+    admin.add_view(AuditoriaSugestaoClinicaAdminView(
+        AuditoriaSugestaoClinica, db.session,
+        name='Auditoria de Sugestões', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-chart-line'
     ))
     admin.add_view(MyModelView(
         Consulta, db.session,

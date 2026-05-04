@@ -10,6 +10,7 @@ from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 from sqlalchemy.orm import object_session
+from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from extensions import db
 from time_utils import BR_TZ, normalize_to_utc, utcnow
@@ -186,11 +187,20 @@ def has_veterinarian_profile(user) -> bool:
     if not user:
         return False
 
-    user_session = object_session(user)
+    resolved_user = (
+        user._get_current_object()
+        if hasattr(user, '_get_current_object')
+        else user
+    )
+    try:
+        user_session = object_session(resolved_user)
+    except UnmappedInstanceError:
+        user_session = None
+
     if user_session is not None and not user_session.is_active:
         return False
 
-    return bool(getattr(user, 'veterinario', None))
+    return bool(getattr(resolved_user, 'veterinario', None))
 
 
 def has_professional_access(user=None) -> bool:
@@ -340,6 +350,9 @@ def _local_start_candidates(dt):
         candidates.append(converted)
     else:
         candidates.append(dt.astimezone(BR_TZ).replace(tzinfo=None))
+        # Some records were persisted with a timezone but using the original
+        # local wall-clock value, so we keep that interpretation as a fallback.
+        candidates.append(dt.replace(tzinfo=None))
     unique = []
     seen = set()
     for value in candidates:
@@ -415,6 +428,13 @@ def has_conflict_for_slot(
                 )
                 for exam in exams_conflicts:
                     exams.setdefault(exam.id, exam)
+
+    if not cached_appts and not appointments:
+        for appt in Appointment.query.filter_by(veterinario_id=veterinario_id).all():
+            appointments.setdefault(appt.id, appt)
+    if not cached_exams and not exams:
+        for exam in ExamAppointment.query.filter_by(specialist_id=veterinario_id).all():
+            exams.setdefault(exam.id, exam)
 
     for appt in appointments.values():
         if exclude_appointment_id and appt.id == exclude_appointment_id:
@@ -589,7 +609,7 @@ def clinicas_do_usuario():
         default_id = None
         if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
             default_id = current_user.veterinario.clinica_id
-        elif current_user.clinica_id:
+        elif getattr(current_user, 'clinica_id', None):
             default_id = current_user.clinica_id
         elif getattr(current_user, "clinicas", []):
             default_id = current_user.clinicas[0].id
@@ -606,7 +626,7 @@ def clinicas_do_usuario():
         default_id = current_user.veterinario.clinica_id
         clinic_ids.append(default_id)
 
-    if current_user.clinica_id:
+    if getattr(current_user, 'clinica_id', None):
         if default_id is None:
             default_id = current_user.clinica_id
         clinic_ids.append(current_user.clinica_id)

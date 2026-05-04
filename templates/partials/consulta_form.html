@@ -65,12 +65,26 @@
 
   <!-- Seção de Conduta -->
   <div class="mb-3">
+    <label for="suspeita-clinica" class="form-label fw-bold">
+      <i class="bi bi-search-heart"></i> Suspeita ClÃ­nica / HipÃ³tese DiagnÃ³stica
+    </label>
+    <input id="suspeita-clinica" name="suspeita_clinica" class="form-control"
+      placeholder="Ex: gastroenterite, dermatite alÃ©rgica, suspeita respiratÃ³ria..."
+      value="{{ consulta.suspeita_clinica or '' }}">
+    <div class="form-text">
+      Este campo aciona protocolos curados com exames, medicamentos, conduta e retorno sugeridos para revisÃ£o do veterinÃ¡rio.
+    </div>
+  </div>
+
+  <div class="mb-3">
     <label for="conduta" class="form-label fw-bold">
       <i class="bi bi-prescription2"></i> Conduta
     </label>
     <textarea id="conduta" name="conduta" class="form-control auto-expand" rows="3"
       placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
   </div>
+
+  {% include 'partials/clinical_suggestions_panel.html' %}
 
   <div class="d-flex justify-content-between mt-4">
     <button type="submit" class="btn btn-primary">
@@ -155,6 +169,8 @@
     <h5 class="mb-3">Agendar Retorno</h5>
     {{ appointment_form.hidden_tag() }}
     <input type="hidden" name="animal_id" value="{{ animal.id }}">
+    <input type="hidden" name="suggested_protocol_id" value="">
+    <input type="hidden" name="suggested_return_id" value="">
     <div class="col-md-6">
       {{ appointment_form.veterinario_id.label(class='form-label') }}
       {{ appointment_form.veterinario_id(class='form-select') }}

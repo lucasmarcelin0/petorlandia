@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from datetime import time, datetime
+from sqlalchemy.pool import StaticPool
 from flask import render_template
 from app import app as flask_app, db
 from models import (
@@ -26,6 +27,10 @@ def client():
         TESTING=True,
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+        SQLALCHEMY_ENGINE_OPTIONS={
+            "poolclass": StaticPool,
+            "connect_args": {"check_same_thread": False},
+        },
     )
     with flask_app.test_client() as client:
         with flask_app.app_context():
@@ -150,6 +155,12 @@ def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):
     assert resp.status_code == 302
     with client.session_transaction() as sess:
         flashes = sess.get('_flashes', [])
+    with flask_app.app_context():
+        debug_appointments = [
+            (appt.id, appt.veterinario_id, appt.scheduled_at, appt.consulta_id, appt.kind)
+            for appt in Appointment.query.order_by(Appointment.id).all()
+        ]
+    print("DEBUG_APPOINTMENTS", debug_appointments)
     assert ('danger', 'Horário indisponível para o veterinário selecionado.') in flashes
     with flask_app.app_context():
         assert Appointment.query.count() == 1
