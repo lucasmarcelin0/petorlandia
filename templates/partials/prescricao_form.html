@@ -170,7 +170,7 @@
         <span class="spinner-border spinner-border-sm me-2"></span>
         Calculando sugestão de dose para este animal...
       </div>
-      <div id="sugestao-dose-indisponivel" class="text-muted small d-none"></div>
+      <div id="sugestao-dose-indisponivel" class="small d-none"></div>
 
       <!-- Seletor de indicação clínica (aparece quando o medicamento tem
            doses registradas para múltiplas indicações) -->
@@ -837,6 +837,8 @@
   function fecharSugestaoDose() {
     const card = document.getElementById('sugestao-dose-card');
     if (card) card.classList.add('d-none');
+    const indispEl = document.getElementById('sugestao-dose-indisponivel');
+    if (indispEl) { indispEl.innerHTML = ''; indispEl.classList.add('d-none'); }
     sugestaoDoseAtual = null;
     _medicamentoIdSugestao = null;
   }
@@ -1143,7 +1145,13 @@
     document.getElementById('sugestao-dose-loading').classList.toggle('d-none', !loading);
     const indispEl = document.getElementById('sugestao-dose-indisponivel');
     if (indisponivel) {
-      indispEl.textContent = indisponivel;
+      // indisponivel pode ser string (texto simples) ou HTML (objeto {html:...})
+      if (typeof indisponivel === 'object' && indisponivel.html) {
+        indispEl.innerHTML = indisponivel.html;
+      } else {
+        indispEl.textContent = indisponivel;
+        indispEl.style.color = '';
+      }
       indispEl.classList.remove('d-none');
     } else {
       indispEl.classList.add('d-none');
@@ -1184,7 +1192,28 @@
 
       if (!data || data.disponivel === false) {
         const motivo = data?.motivo || 'Sem sugestão de dose para este caso.';
-        _mostrarEstadoSugestao({indisponivel: motivo});
+        // Caso especial: peso não cadastrado — destaque visual com link para editar animal
+        const semPeso = motivo.toLowerCase().includes('peso') && motivo.toLowerCase().includes('cadastrad');
+        if (semPeso) {
+          const animalUrl = ANIMAL_ID_CONSULTA ? `/animal/${ANIMAL_ID_CONSULTA}/editar` : '#';
+          const html = `
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#fff8e1;border:1px solid #ffe082;border-left:4px solid #f59e0b;border-radius:7px;">
+              <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b;font-size:1.1rem;flex-shrink:0;margin-top:1px;"></i>
+              <div>
+                <div style="font-weight:600;color:#92400e;font-size:.85rem;margin-bottom:3px;">Peso não cadastrado</div>
+                <div style="color:#78350f;font-size:.8rem;line-height:1.45;">
+                  Para exibir a dose sugerida, cadastre o peso do animal.
+                </div>
+                <a href="${animalUrl}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:.78rem;font-weight:600;color:#b45309;text-decoration:none;border:1px solid #f59e0b;border-radius:5px;padding:3px 10px;background:#fffbeb;">
+                  <i class="bi bi-pencil-square"></i> Cadastrar peso do animal
+                </a>
+              </div>
+            </div>`;
+          _mostrarEstadoSugestao({indisponivel: {html}});
+        } else {
+          _mostrarEstadoSugestao({indisponivel: motivo});
+        }
         return;
       }
 
