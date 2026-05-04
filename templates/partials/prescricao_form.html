@@ -54,6 +54,17 @@
      </div>
    </div>
 
+  <!-- Atalhos de medicamentos frequentes -->
+  <div id="frequentes-container" class="mb-3">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <small class="text-muted fw-semibold text-uppercase" style="font-size:.72rem;letter-spacing:.05em;">
+        <i class="bi bi-clock-history me-1"></i>Seus mais prescritos
+      </small>
+      <div id="frequentes-loading" class="spinner-border spinner-border-sm text-secondary" role="status" style="width:12px;height:12px;"></div>
+    </div>
+    <div id="frequentes-chips" class="d-flex flex-wrap gap-2"></div>
+  </div>
+
    <!-- Campo com autocomplete -->
    <div class="mb-3 position-relative">
     <label for="nome-medicamento" class="form-label">Nome do Medicamento</label>
@@ -210,22 +221,18 @@
           </span>
         </div>
         <div id="sug-apresentacoes-wrap" class="mt-3 d-none">
-          <p class="mb-1 small fw-semibold">
-            <i class="bi bi-capsule me-1"></i>
-            Opcional: converter para a apresentação dispensada
+          <p class="mb-1 small fw-semibold text-secondary">
+            <i class="bi bi-capsule me-1"></i>Apresentação dispensada
+            <span class="fw-normal text-muted ms-1" style="font-size:.78rem;">— opcional: converte a dose em comprimidos / mL</span>
           </p>
-          <p class="small text-muted mb-2">
-            Use esta etapa apenas se quiser transformar a dose do bulário em comprimidos, cápsulas, mL ou gotas.
-          </p>
-          <!-- Apresentações com concentração fixa (industrializadas) — preferência. -->
+          <!-- Chips de concentração agrupados — substituem os radio buttons -->
           <div id="sug-apresentacoes-radios" class="mb-2"></div>
-          <!-- Apresentações sem concentração cadastrada (manipulados) —
-               escondidas por padrão atrás de um toggle pra não poluir a UI. -->
+          <!-- Apresentações manipuladas (sem concentração fixa) -->
           <button type="button" id="sug-apresentacoes-toggle"
                   class="btn btn-sm btn-link text-decoration-none p-0 mb-2 d-none"
-                  onclick="_toggleApresentacoesExtras()">
+                  onclick="_toggleExtrasApres()">
             <i class="bi bi-chevron-down me-1" id="sug-apresentacoes-toggle-icon"></i>
-            <span id="sug-apresentacoes-toggle-label">Mostrar outras apresentações</span>
+            <span id="sug-apresentacoes-toggle-label">Mostrar apresentações manipuladas</span>
           </button>
           <div id="sug-apresentacoes-extras" class="mb-2 d-none"></div>
 
@@ -378,6 +385,52 @@
     let medicamentoSelecionado = null;
     let prescricoes = [];
     let prescricaoArrastando = null;
+
+  // === MEDICAMENTOS FREQUENTES (atalhos rápidos) ===
+  (function carregarFrequentes() {
+    fetch('/medicamentos_frequentes')
+      .then(r => r.json())
+      .then(lista => {
+        const loading = document.getElementById('frequentes-loading');
+        const chips   = document.getElementById('frequentes-chips');
+        if (loading) loading.remove();
+        if (!chips || !lista.length) {
+          const c = document.getElementById('frequentes-container');
+          if (c) c.remove();
+          return;
+        }
+        lista.forEach(med => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-sm btn-outline-secondary rounded-pill';
+          btn.style.cssText = 'font-size:.78rem;padding:2px 10px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;';
+          btn.title = med.nome;
+          btn.textContent = med.nome;
+          btn.addEventListener('click', () => selecionarMedicamentoFrequente(med));
+          chips.appendChild(btn);
+        });
+      })
+      .catch(() => {
+        const c = document.getElementById('frequentes-container');
+        if (c) c.remove();
+      });
+  })();
+
+  function selecionarMedicamentoFrequente(med) {
+    const inputNome = document.getElementById('nome-medicamento');
+    if (!inputNome) return;
+    inputNome.value = med.nome;
+    if (med.id) {
+      // Tem dados no banco — carrega card e sugestão de dose
+      medicamentoSelecionado = med;
+      preencherCardMedicamento(med);
+      carregarSugestaoDose(med.id);
+    } else {
+      // Só nome — preenche campo e dispara busca para o vet confirmar
+      medicamentoSelecionado = null;
+      inputNome.dispatchEvent(new Event('input'));
+    }
+  }
     // ID do animal da consulta (vindo do contexto do template). Usado para
     // pedir a sugestão de dose pré-calculada ao bulário.
     const ANIMAL_ID_CONSULTA = {{ animal.id|tojson if animal else 'null' }};
@@ -1068,67 +1121,6 @@
   // ======================================================================
   // Estado (_apresentacaoEscolhida / _concentracaoEscolhida /
   // _dosePraticaCalculada) declarado no topo do script.
-  function _renderSeletorApresentacoes(apresentacoes) {
-    const wrap = document.getElementById('sug-apresentacoes-wrap');
-    const radiosDiv = document.getElementById('sug-apresentacoes-radios');
-    const extrasDiv = document.getElementById('sug-apresentacoes-extras');
-    const toggleBtn = document.getElementById('sug-apresentacoes-toggle');
-    const toggleConversaoBtn = document.getElementById('btn-toggle-conversao-apresentacao');
-    _apresentacaoEscolhida = null;
-    _concentracaoEscolhida = null;
-    _dosePraticaCalculada = null;
-    _conversaoApresentacaoExpandida = false;
-    _esconderPrescricaoPratica();
-    _esconderConcWrap();
-
-    // Sempre que re-renderizamos, os extras voltam para o estado "fechado".
-    if (extrasDiv) {
-      extrasDiv.classList.add('d-none');
-      extrasDiv.innerHTML = '';
-    }
-    if (toggleBtn) toggleBtn.classList.add('d-none');
-
-    if (!apresentacoes.length) {
-      wrap.classList.add('d-none');
-      radiosDiv.innerHTML = '';
-      if (toggleConversaoBtn) toggleConversaoBtn.classList.add('d-none');
-      _atualizarAcoesDoseSugerida();
-      return;
-    }
-
-    // Separa apresentações em duas listas:
-    //   - "primárias" = têm concentração cadastrada (calculam direto)
-    //   - "extras"    = manipulados (exigem o vet informar concentração)
-    // Se TODAS forem extras (ex.: só manipulados cadastrados), mostra todas
-    // de uma vez — não tem o que esconder.
-    const primarias = apresentacoes.filter(a => a.permite_calculo_automatico);
-    const extras    = apresentacoes.filter(a => !a.permite_calculo_automatico);
-    const mostrarTudo = primarias.length === 0;
-
-    const listaPrincipal = mostrarTudo ? extras : primarias;
-    const listaOculta    = mostrarTudo ? []     : extras;
-
-    radiosDiv.innerHTML = _montarBlocosApresentacoes(listaPrincipal);
-    if (listaOculta.length) {
-      extrasDiv.innerHTML = _montarBlocosApresentacoes(listaOculta);
-      toggleBtn.classList.remove('d-none');
-      document.getElementById('sug-apresentacoes-toggle-label').textContent =
-        `Mostrar outras apresentações (${listaOculta.length})`;
-    }
-    const expandirPorPadrao = primarias.length > 0;
-    _conversaoApresentacaoExpandida = expandirPorPadrao;
-    wrap.classList.toggle('d-none', !expandirPorPadrao);
-    if (toggleConversaoBtn) toggleConversaoBtn.classList.remove('d-none');
-    _atualizarAcoesDoseSugerida();
-  }
-
-  function toggleConversaoApresentacao() {
-    const wrap = document.getElementById('sug-apresentacoes-wrap');
-    if (!wrap || !sugestaoDoseAtual) return;
-    _conversaoApresentacaoExpandida = !_conversaoApresentacaoExpandida;
-    wrap.classList.toggle('d-none', !_conversaoApresentacaoExpandida);
-    _atualizarAcoesDoseSugerida();
-  }
 
   function _atualizarAcoesDoseSugerida() {
     const usarLabel = document.getElementById('btn-usar-dose-sugerida-label');
@@ -1158,68 +1150,156 @@
     }
   }
 
-  // Agrupa por fabricante + monta HTML dos radios para uma lista de apresentações.
+  // Agrupa apresentações manipuladas (sem concentração) em radios — fallback
   function _montarBlocosApresentacoes(apresentacoes) {
     if (!apresentacoes.length) return '';
-    const porFab = {};
-    apresentacoes.forEach((ap, idx) => {
-      const fab = ap.fabricante || '—';
-      if (!porFab[fab]) porFab[fab] = [];
-      porFab[fab].push({ ...ap, _idx: idx });
-    });
-
-    const blocos = [];
-    Object.keys(porFab).forEach(fab => {
-      const items = porFab[fab];
-      const opts = items.map(ap => {
-        const concHint = ap.permite_calculo_automatico
-          ? `<span class="badge bg-light text-success ms-1" title="Concentração no banco">auto</span>`
-          : `<span class="badge bg-light text-muted ms-1" title="Você vai digitar a concentração">informar</span>`;
-        return `
-          <div class="form-check form-check-sm">
-            <input class="form-check-input" type="radio" name="sug-apres"
-                   id="sug-apres-${ap.id}" value="${ap.id}"
-                   onchange="onApresentacaoEscolhida(${ap.id})">
-            <label class="form-check-label" for="sug-apres-${ap.id}">
-              <strong>${ap.forma || '—'}</strong>
-              ${ap.concentracao_valor
-                ? `<span class="text-muted">— ${NumeroExtenso.formatarPtBR(ap.concentracao_valor)} ${ap.concentracao_unidade}</span>`
-                : ''}
-              ${concHint}
-            </label>
-          </div>
-        `;
-      }).join('');
-      blocos.push(`
-        <div class="mb-2">
-          <div class="small text-muted fw-semibold mb-1">${fab}</div>
-          ${opts}
-        </div>
-      `);
-    });
-    return blocos.join('');
+    return apresentacoes.map(ap => `
+      <div class="form-check form-check-sm mb-1">
+        <input class="form-check-input" type="radio" name="sug-apres-extra"
+               id="sug-apres-${ap.id}" value="${ap.id}"
+               onchange="onApresentacaoEscolhida(${ap.id})">
+        <label class="form-check-label small" for="sug-apres-${ap.id}">
+          ${ap.forma || '—'}${ap.fabricante ? ` <span class="text-muted">— ${ap.fabricante}</span>` : ''}
+        </label>
+      </div>
+    `).join('');
   }
 
-  function _toggleApresentacoesExtras() {
-    const extrasDiv = document.getElementById('sug-apresentacoes-extras');
-    const iconEl = document.getElementById('sug-apresentacoes-toggle-icon');
-    const labelEl = document.getElementById('sug-apresentacoes-toggle-label');
-    const aberto = !extrasDiv.classList.contains('d-none');
-    if (aberto) {
-      extrasDiv.classList.add('d-none');
-      iconEl.classList.remove('bi-chevron-up');
-      iconEl.classList.add('bi-chevron-down');
-      // Extrai o número entre parênteses do label atual, se houver.
-      const m = labelEl.textContent.match(/\((\d+)\)/);
-      const n = m ? m[1] : '';
-      labelEl.textContent = n ? `Mostrar outras apresentações (${n})` : 'Mostrar outras apresentações';
-    } else {
-      extrasDiv.classList.remove('d-none');
-      iconEl.classList.remove('bi-chevron-down');
-      iconEl.classList.add('bi-chevron-up');
-      labelEl.textContent = 'Ocultar outras apresentações';
+  // ── novo: renderiza chips de concentração agrupados ──────────────────
+  function _renderSeletorApresentacoes(apresentacoes) {
+    const wrap       = document.getElementById('sug-apresentacoes-wrap');
+    const radiosDiv  = document.getElementById('sug-apresentacoes-radios');
+    const extrasDiv  = document.getElementById('sug-apresentacoes-extras');
+    const toggleBtn  = document.getElementById('sug-apresentacoes-toggle');
+    const convBtn    = document.getElementById('btn-toggle-conversao-apresentacao');
+
+    _apresentacaoEscolhida   = null;
+    _concentracaoEscolhida   = null;
+    _dosePraticaCalculada    = null;
+    _conversaoApresentacaoExpandida = false;
+    _esconderPrescricaoPratica();
+    _esconderConcWrap();
+
+    if (extrasDiv) { extrasDiv.innerHTML = ''; extrasDiv.classList.add('d-none'); }
+    if (toggleBtn) toggleBtn.classList.add('d-none');
+    if (convBtn)   convBtn.classList.add('d-none');   // chips tornam o toggle desnecessário
+
+    if (!apresentacoes.length) {
+      wrap.classList.add('d-none');
+      radiosDiv.innerHTML = '';
+      _atualizarAcoesDoseSugerida();
+      return;
     }
+
+    const primarias = apresentacoes.filter(a => a.permite_calculo_automatico);
+    const extras    = apresentacoes.filter(a => !a.permite_calculo_automatico);
+
+    // Agrupa primárias por (concentracao_valor | concentracao_unidade | forma-base)
+    // Usa unidade_pratica (comprimido/mL/gota) para agrupar, ignorando
+    // nomes de embalagem como "Cartucho contendo 1 blíster" / "Display…"
+    const grupos = {};
+    for (const ap of primarias) {
+      // "unidade" é fallback para formas de embalagem (cartucho, display, caixa)
+      // que contêm comprimidos — agrupa junto com comprimido quando a unidade
+      // de concentração é mg/mcg/g (sólido), não mg/mL (líquido).
+      const cuLower = (ap.concentracao_unidade || '').toLowerCase();
+      const ehLiquido = cuLower.includes('/ml') || cuLower.includes('/l');
+      const unidRaw = ap.unidade_pratica || 'unidade';
+      const unid = (unidRaw === 'unidade' && !ehLiquido) ? 'comprimido' : unidRaw;
+      const key = `${ap.concentracao_valor ?? ''}|${ap.concentracao_unidade ?? ''}|${unid}`;
+      if (!grupos[key]) {
+        grupos[key] = {
+          key,
+          concentracao_valor:   ap.concentracao_valor,
+          concentracao_unidade: ap.concentracao_unidade,
+          forma: unid,
+          unidade_pratica: unid,
+          apresentacoes: [],
+        };
+      }
+      grupos[key].apresentacoes.push(ap);
+    }
+
+    window._concGrupos = Object.values(grupos).sort((a, b) => {
+      const va = a.concentracao_valor ?? 0;
+      const vb = b.concentracao_valor ?? 0;
+      return va !== vb ? va - vb : (a.forma < b.forma ? -1 : 1);
+    });
+    window._concExtras = extras;
+
+    // Monta chips
+    const chipHtml = window._concGrupos.map((g, i) => {
+      const cv = g.concentracao_valor;
+      const cu = g.concentracao_unidade || '';
+      const cvFmt = cv ? (cv % 1 === 0 ? Math.round(cv) : cv) : null;
+      const label = cvFmt != null
+        ? `${cvFmt}${cu} <span class="fw-normal opacity-75" style="font-size:.8em;">${g.forma}</span>`
+        : g.forma || '—';
+      const nBrands = g.apresentacoes.length;
+      const brandTip = nBrands > 1
+        ? ` title="${g.apresentacoes.map(a => a.fabricante || a.descricao).filter(Boolean).slice(0,6).join(', ')}"`
+        : '';
+      return `<button type="button"
+                class="btn btn-sm btn-outline-secondary sug-chip-conc"
+                id="sug-chip-${i}"
+                onclick="_onChipConc(${i})"
+                ${brandTip}>${label}${nBrands > 1 ? `<span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:.65rem;">${nBrands}</span>` : ''}</button>`;
+    }).join('');
+
+    const extrasChip = extras.length
+      ? `<button type="button" class="btn btn-sm btn-outline-secondary sug-chip-conc text-muted"
+                 id="sug-chip-extras" onclick="_toggleExtrasApres()">
+           <i class="bi bi-capsule me-1"></i>Manipulado (${extras.length})
+         </button>`
+      : '';
+
+    radiosDiv.innerHTML = `<div class="d-flex flex-wrap gap-1 mb-1">${chipHtml}${extrasChip}</div>`;
+
+    if (extras.length && extrasDiv) {
+      extrasDiv.innerHTML = _montarBlocosApresentacoes(extras);
+      if (toggleBtn) {
+        document.getElementById('sug-apresentacoes-toggle-label').textContent =
+          `Apresentações manipuladas (${extras.length})`;
+        toggleBtn.classList.remove('d-none');
+      }
+    }
+
+    // Se houver apenas um grupo, seleciona automaticamente
+    if (window._concGrupos.length === 1) {
+      setTimeout(() => _onChipConc(0), 80);
+    }
+
+    wrap.classList.remove('d-none');
+    _conversaoApresentacaoExpandida = true;
+    _atualizarAcoesDoseSugerida();
   }
+
+  function _onChipConc(idx) {
+    const g = (window._concGrupos || [])[idx];
+    if (!g) return;
+
+    // Visual: marca o chip selecionado
+    document.querySelectorAll('.sug-chip-conc').forEach(c => {
+      c.classList.remove('btn-primary');
+      c.classList.add('btn-outline-secondary');
+    });
+    const chip = document.getElementById(`sug-chip-${idx}`);
+    if (chip) { chip.classList.remove('btn-outline-secondary'); chip.classList.add('btn-primary'); }
+
+    // Escolhe a apresentação com mais informação do grupo
+    const ap = g.apresentacoes.find(a => a.fabricante) || g.apresentacoes[0];
+    if (ap) onApresentacaoEscolhida(ap.id);
+  }
+
+  function _toggleExtrasApres() {
+    const extrasDiv = document.getElementById('sug-apresentacoes-extras');
+    const chip = document.getElementById('sug-chip-extras');
+    if (!extrasDiv) return;
+    const aberto = !extrasDiv.classList.contains('d-none');
+    extrasDiv.classList.toggle('d-none', aberto);
+    if (chip) chip.classList.toggle('btn-primary', !aberto);
+  }
+
 
   function onApresentacaoEscolhida(apresentacaoId) {
     if (!sugestaoDoseAtual) return;

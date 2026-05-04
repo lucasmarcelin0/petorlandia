@@ -1251,10 +1251,14 @@ def _intervalo_horas_faixa(freq_texto: str) -> tuple:
     # ── faixa explícita ──────────────────────────────────────────────────────
     _h = r'(?:h|horas?|hrs?)'
     range_pats = [
+        # "8/8 horas 12/12 horas" — dois valores VetSmart colados com espaço
+        rf'(\d+)\s*/\s*\d+\s*{_h}\s+(\d+)\s*/\s*\d+\s*{_h}',
         # "a cada 8 a 12 horas" / "a cada 8-12h" / "a cada 8–12h"
         rf'a\s+cada\s+(\d+)\s*(?:{_h})?\s*(?:a|–|-|ou)\s*(\d+)\s*{_h}',
-        # "8/8 a 12/12 horas"
+        # "8/8 a 12/12 horas" — com separador explícito
         rf'(\d+)\s*/\s*\d+\s*(?:a|–|-)\s*(\d+)\s*/\s*\d+\s*horas?',
+        # "8-12h" / "8–12h" standalone (sem "a cada")
+        rf'(\d+)\s*(?:–|-)\s*(\d+)\s*{_h}\b',
         # "de 8 a 12 horas" / "entre 8 e 12 horas"
         rf'(?:de|entre)\s+(\d+)\s*(?:{_h})?\s*(?:a|e)\s+(\d+)\s*{_h}',
     ]
@@ -1693,10 +1697,12 @@ def _especie_label(code: str) -> str:
 
 
 # --- Parser numérico de apresentação -----------------------------------------
-_RE_CONC_MGML = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|ui)\s*/\s*ml\b', re.IGNORECASE)
-_RE_CONC_MG   = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui)\b', re.IGNORECASE)
-_RE_CONC_PERCENT = re.compile(r'(\d+(?:[,\.]\d+)?)\s*%', re.IGNORECASE)
-_RE_VOL_PAREN = re.compile(r'\((\d+(?:[,\.]\d+)?)\s*(ml|un|g|kg|l)\b', re.IGNORECASE)
+_RE_CONC_MGML     = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|ui)\s*/\s*ml\b', re.IGNORECASE)
+# "250 mg / 5 mL"  →  50 mg/mL  (numerador/denominador)
+_RE_CONC_MG_VOL   = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui)\s*/\s*(\d+(?:[,\.]\d+)?)\s*ml\b', re.IGNORECASE)
+_RE_CONC_MG       = re.compile(r'(\d+(?:[,\.]\d+)?)\s*(mg|mcg|g|ui)\b', re.IGNORECASE)
+_RE_CONC_PERCENT  = re.compile(r'(\d+(?:[,\.]\d+)?)\s*%', re.IGNORECASE)
+_RE_VOL_PAREN     = re.compile(r'\((\d+(?:[,\.]\d+)?)\s*(ml|un|g|kg|l)\b', re.IGNORECASE)
 _RE_NOME_NUM_FINAL = re.compile(r'\b(\d+(?:[,\.]\d+)?)\s*$')  # "Rilexine palatável 75"
 
 
@@ -1746,27 +1752,41 @@ def _estruturar_apresentacao_campos(forma: str, conc_raw: str, nome_produto: str
         out['volume_valor'] = _f(m.group(1))
         out['volume_unidade'] = m.group(2).lower()
 
-    # 2) Concentração mg/ml (checa antes de mg só)
-    m = _RE_CONC_MGML.search(conc_raw)
+    # 2) Concentração — ordem: "X mg/Y mL" > "X mg/mL" > "X%" > "X mg"
+    # Tenta "250 mg / 5 mL" → 50 mg/mL antes das outras formas
+    m = _RE_CONC_MG_VOL.search(conc_raw)
+    if not m:
+        # Também busca no nome do produto (ex: "Cefalexina 250 mg / 5 ml, solução")
+        m = _RE_CONC_MG_VOL.search(nome_produto or '')
     if m:
-        out['concentracao_valor'] = _f(m.group(1))
-        out['concentracao_unidade'] = f"{m.group(2).lower()}/ml"
+        num   = _f(m.group(1))
+        unit  = m.group(2).lower()
+        denom = _f(m.group(3))
+        if num is not None and denom and denom > 0:
+            factor = 1000.0 if unit == 'g' else (0.001 if unit == 'mcg' else 1.0)
+            out['concentracao_valor']   = round((num * factor) / denom, 4)
+            out['concentracao_unidade'] = 'mg/ml'
     else:
-        m = _RE_CONC_PERCENT.search(conc_raw)
+        m = _RE_CONC_MGML.search(conc_raw)
         if m:
-            percentual = _f(m.group(1))
-            if percentual is not None:
-                if _percentual_equivale_mg_ml(forma, conc_raw):
-                    out['concentracao_valor'] = percentual * 10.0
-                    out['concentracao_unidade'] = 'mg/ml'
-                else:
-                    out['concentracao_valor'] = percentual
-                    out['concentracao_unidade'] = '%'
+            out['concentracao_valor'] = _f(m.group(1))
+            out['concentracao_unidade'] = f"{m.group(2).lower()}/ml"
         else:
-            m = _RE_CONC_MG.search(conc_raw)
+            m = _RE_CONC_PERCENT.search(conc_raw)
             if m:
-                out['concentracao_valor'] = _f(m.group(1))
-                out['concentracao_unidade'] = m.group(2).lower()
+                percentual = _f(m.group(1))
+                if percentual is not None:
+                    if _percentual_equivale_mg_ml(forma, conc_raw):
+                        out['concentracao_valor'] = percentual * 10.0
+                        out['concentracao_unidade'] = 'mg/ml'
+                    else:
+                        out['concentracao_valor'] = percentual
+                        out['concentracao_unidade'] = '%'
+            else:
+                m = _RE_CONC_MG.search(conc_raw)
+                if m:
+                    out['concentracao_valor'] = _f(m.group(1))
+                    out['concentracao_unidade'] = m.group(2).lower()
 
     # 3) Nome variante — texto antes da concentração/volume
     nv = conc_raw

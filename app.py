@@ -18143,11 +18143,10 @@ def criar_apresentacao_medicamento():
 def buscar_medicamentos():
     q = (request.args.get("q") or "").strip()
 
-    # evita erro de None.lower()
     if len(q) < 2:
         return jsonify([])
 
-    # busca por nome OU princípio ativo
+    # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
     resultados = (
         Medicamento.query
         .options(defer(Medicamento.conteudo_estruturado))
@@ -18156,36 +18155,39 @@ def buscar_medicamentos():
             (Medicamento.principio_ativo.ilike(f"%{q}%"))
         )
         .order_by(Medicamento.nome)
-        .limit(15)                     # devolve no máximo 15
+        .limit(40)
         .all()
     )
 
-    from services.bulario import serializar_medicamento_busca
-    return jsonify([serializar_medicamento_busca(m) for m in resultados])
-
-    def _bula_url(m):
-        """Constrói a URL do bulário VetSmart a partir do vetsmart_produto_id."""
-        if m.vetsmart_produto_id:
-            return f"https://vetsmart.com.br/cg/produto/{m.vetsmart_produto_id}"
-        return None
-
-    return jsonify([
-        {
-            "id": m.id,  # ✅ ESSENCIAL PARA O FUNCIONAMENTO
-            "nome": m.nome,
-            "classificacao": m.classificacao,
-            "principio_ativo": m.principio_ativo,
-            "via_administracao": m.via_administracao,
-            "dosagem_recomendada": m.dosagem_recomendada,
-            "frequencia": m.frequencia,
-            "duracao_tratamento": m.duracao_tratamento,
-            "observacoes": m.observacoes,
-            "bula": m.bula,
-            # URL direta para a página do produto no VetSmart (bulário oficial)
-            "bula_url": _bula_url(m),
-        }
+    # Filtrar entradas "orphan": sem principio_ativo E sem doses, quando já existe
+    # uma entrada canônica melhor no pool de resultados.
+    principios_com_doses = {
+        m.principio_ativo.lower()
         for m in resultados
-    ])
+        if m.principio_ativo and m.doses
+    }
+    filtrados = []
+    for m in resultados:
+        if not m.principio_ativo and not m.doses and principios_com_doses:
+            if any(pa in m.nome.lower() for pa in principios_com_doses):
+                continue
+        filtrados.append(m)
+
+    q_lower = q.lower()
+
+    def _score(m):
+        # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
+        # (3) princípio ativo coincide exatamente, (4) tem dados básicos preenchidos
+        tem_doses = 1 if m.doses else 0
+        prefixo = 1 if m.nome.lower().startswith(q_lower) else 0
+        pa_exato = 1 if (m.principio_ativo or "").lower() == q_lower else 0
+        tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
+        return (tem_doses, prefixo, pa_exato, tem_dados)
+
+    filtrados.sort(key=_score, reverse=True)
+
+    from services.bulario import serializar_medicamento_busca
+    return jsonify([serializar_medicamento_busca(m) for m in filtrados[:15]])
 
 
 
@@ -18219,6 +18221,72 @@ def buscar_apresentacoes():
     except Exception as e:
         print(f"[ERROR] /buscar_apresentacoes: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/medicamentos_frequentes")
+@login_required
+def medicamentos_frequentes():
+    """Retorna os medicamentos mais prescritos pelo veterinário logado.
+
+    Tenta cruzar o nome da prescrição com o banco de medicamentos para devolver
+    o objeto completo (com doses e apresentações). Quando não há match exato,
+    devolve apenas o nome para que o vet possa usá-lo como ponto de partida.
+    """
+    try:
+        # Histórico de prescrições do usuário atual (via blocos de prescrição)
+        from sqlalchemy import text as sql_text
+        result = db.session.execute(sql_text("""
+            SELECT p.medicamento, COUNT(*) AS total
+            FROM prescricao p
+            JOIN bloco_prescricao bp ON bp.id = p.bloco_id
+            WHERE bp.saved_by_id = :uid
+            GROUP BY p.medicamento
+            ORDER BY total DESC
+            LIMIT 30
+        """), {"uid": current_user.id})
+        frequentes_raw = result.fetchall()
+
+        # Para cada nome, tenta encontrar o medicamento no banco
+        saida = []
+        nomes_vistos = set()
+        for row in frequentes_raw:
+            nome_prescrito = row[0]
+            total = row[1]
+
+            # Evitar duplicatas por nome normalizado
+            nome_norm = nome_prescrito.strip().lower()
+            if nome_norm in nomes_vistos:
+                continue
+            nomes_vistos.add(nome_norm)
+
+            # Tenta match exato, depois insensível a maiúsculas
+            med = (
+                Medicamento.query
+                .options(defer(Medicamento.conteudo_estruturado))
+                .filter(Medicamento.nome.ilike(nome_prescrito))
+                .first()
+            )
+
+            if med:
+                from services.bulario import serializar_medicamento_busca
+                entry = serializar_medicamento_busca(med)
+                entry["total_prescricoes"] = total
+                saida.append(entry)
+            else:
+                # Sem match no banco — devolve o nome para facilitar busca manual
+                saida.append({
+                    "id": None,
+                    "nome": nome_prescrito,
+                    "total_prescricoes": total,
+                })
+
+            if len(saida) >= 12:
+                break
+
+        return jsonify(saida)
+    except Exception as e:
+        print(f"[ERROR] /medicamentos_frequentes: {e}")
+        return jsonify([])
 
 
 @app.route('/consulta/<int:consulta_id>/historico_prescricoes', methods=['GET'])

@@ -731,6 +731,10 @@ _UNIDADE_PRATICA_POR_FORMA = {
 }
 
 
+_FORMAS_EMBALAGEM_COMPRIMIDO = (
+    'cartucho', 'blister', 'blíster', 'display', 'caixa', 'cartela',
+)
+
 def _unidade_pratica_por_forma(forma: Optional[str]) -> str:
     """Mapeia a forma farmacêutica ('Cápsulas', 'Suspensão', ...) para a
     unidade que o tutor vai usar na administração ('cápsula', 'mL', 'gota').
@@ -743,7 +747,15 @@ def _unidade_pratica_por_forma(forma: Optional[str]) -> str:
     chave = chave.replace('ç', 'c').replace('ã', 'a').replace('á', 'a') \
                  .replace('é', 'e').replace('í', 'i').replace('ó', 'o') \
                  .replace('ú', 'u').replace('ô', 'o').replace('ê', 'e')
-    return _UNIDADE_PRATICA_POR_FORMA.get(chave, 'unidade')
+    resultado = _UNIDADE_PRATICA_POR_FORMA.get(chave)
+    if resultado:
+        return resultado
+    # Embalagens de comprimido (cartucho, blíster, display, caixa) — o tutor
+    # administra comprimidos, não a embalagem inteira.
+    chave_norm = chave.replace('i', 'i').replace('e', 'e')  # já normalizado
+    if any(emb in chave for emb in ('cartucho', 'blister', 'blister', 'display', 'caixa', 'cartela')):
+        return 'comprimido'
+    return 'unidade'
 
 
 def _texto_norm(s: Optional[str]) -> str:
