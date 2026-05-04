@@ -155,12 +155,6 @@ def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):
     assert resp.status_code == 302
     with client.session_transaction() as sess:
         flashes = sess.get('_flashes', [])
-    with flask_app.app_context():
-        debug_appointments = [
-            (appt.id, appt.veterinario_id, appt.scheduled_at, appt.consulta_id, appt.kind)
-            for appt in Appointment.query.order_by(Appointment.id).all()
-        ]
-    print("DEBUG_APPOINTMENTS", debug_appointments)
     assert ('danger', 'Horário indisponível para o veterinário selecionado.') in flashes
     with flask_app.app_context():
         assert Appointment.query.count() == 1
