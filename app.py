@@ -18223,6 +18223,54 @@ def buscar_apresentacoes():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/medicamentos_favoritos", methods=["GET"])
+@login_required
+def listar_medicamentos_favoritos():
+    """Retorna os medicamentos favoritados pelo veterinário logado."""
+    from models.base import MedicamentoFavorito
+    favs = (
+        MedicamentoFavorito.query
+        .filter_by(user_id=current_user.id)
+        .order_by(MedicamentoFavorito.criado_em.desc())
+        .all()
+    )
+    from services.bulario import serializar_medicamento_busca
+    resultado = []
+    for f in favs:
+        med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get(f.medicamento_id)
+        if med:
+            entry = serializar_medicamento_busca(med)
+            entry["favorito"] = True
+            resultado.append(entry)
+    return jsonify(resultado)
+
+
+@app.route("/medicamentos_favoritos/<int:med_id>", methods=["POST", "DELETE"])
+@login_required
+def toggle_medicamento_favorito(med_id):
+    """Adiciona (POST) ou remove (DELETE) um medicamento dos favoritos."""
+    from models.base import MedicamentoFavorito
+    from sqlalchemy.exc import IntegrityError
+
+    med = Medicamento.query.get_or_404(med_id)
+
+    if request.method == "POST":
+        try:
+            fav = MedicamentoFavorito(user_id=current_user.id, medicamento_id=med_id)
+            db.session.add(fav)
+            db.session.commit()
+            return jsonify({"favorito": True, "id": med_id})
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"favorito": True, "id": med_id})  # já era favorito
+    else:  # DELETE
+        MedicamentoFavorito.query.filter_by(
+            user_id=current_user.id, medicamento_id=med_id
+        ).delete()
+        db.session.commit()
+        return jsonify({"favorito": False, "id": med_id})
+
+
 @app.route("/medicamentos_frequentes")
 @login_required
 def medicamentos_frequentes():

@@ -2013,6 +2013,31 @@ class DoseMedicamento(db.Model):
         return " · ".join(partes) or f"Dose #{self.id}"
 
 
+class MedicamentoFavorito(db.Model):
+    """Medicamentos marcados como favoritos por um veterinário."""
+    __tablename__ = 'medicamento_favorito'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    medicamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('medicamento.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    criado_em = db.Column(
+        db.DateTime(timezone=True),
+        server_default=db.func.now(),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'medicamento_id', name='uq_fav_user_med'),
+    )
+
+
 class ExameModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)  # ex: Hemograma, Raio-X...
