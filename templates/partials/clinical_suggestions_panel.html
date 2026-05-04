@@ -21,6 +21,16 @@
       </button>
     </div>
 
+    <div class="mb-3">
+      <label for="suspeita-clinica" class="form-label fw-bold">
+        <i class="bi bi-search-heart"></i> Suspeita Cl&iacute;nica / Hip&oacute;tese Diagn&oacute;stica
+      </label>
+      <div id="clinical-suspicion-input-slot"></div>
+      <div class="form-text">
+        Este campo aciona protocolos curados com exames, medicamentos, conduta e retorno sugeridos para revis&atilde;o do veterin&aacute;rio.
+      </div>
+    </div>
+
     <div id="clinical-suggestions-status" class="alert alert-secondary small py-2 mb-3">
       Informe a suspeita clinica e clique em buscar sugestoes para carregar protocolos compativeis.
     </div>
@@ -38,6 +48,26 @@
     const statusEl = document.getElementById('clinical-suggestions-status');
     const resultsEl = document.getElementById('clinical-suggestions-results');
     const loadButton = document.getElementById('load-clinical-suggestions');
+    const suspicionSlot = document.getElementById('clinical-suspicion-input-slot');
+
+    const suspicionField = document.getElementById('suspeita-clinica');
+    const legacySuspicionGroup = suspicionField?.closest('.mb-3');
+    if (suspicionSlot) {
+      if (suspicionField) {
+        suspicionField.classList.add('form-control');
+        suspicionField.setAttribute(
+          'placeholder',
+          'Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...'
+        );
+        suspicionSlot.appendChild(suspicionField);
+      } else {
+        suspicionSlot.innerHTML = `
+          <input id="suspeita-clinica" name="suspeita_clinica" class="form-control"
+            placeholder="Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...">
+        `;
+      }
+    }
+    if (legacySuspicionGroup) legacySuspicionGroup.remove();
 
     function escapeHtml(value) {
       return String(value || '')
