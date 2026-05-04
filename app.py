@@ -12697,28 +12697,18 @@ def aplicar_sugestao_clinica(consulta_id):
         response_payload = {'message': 'Exame sugerido adicionado ao histórico.'}
         title = item.nome
     elif item_type == 'medicamento':
-        if not clinic_id:
-            return jsonify({'success': False, 'message': 'Consulta sem clínica definida para registrar prescrição.'}), 400
-        bloco = BlocoPrescricao(
-            animal_id=consulta.animal_id,
-            clinica_id=clinic_id,
-            instrucoes_gerais=(protocol.orientacoes_tutor or '').strip() or None,
-        )
-        bloco.saved_by_id = current_user.id
-        db.session.add(bloco)
-        db.session.flush()
-        db.session.add(
-            Prescricao(
-                animal_id=consulta.animal_id,
-                bloco_id=bloco.id,
-                medicamento=item.nome_exibicao,
-                dosagem=item.dosagem_texto,
-                frequencia=item.frequencia_texto,
-                duracao=item.duracao_texto,
-                observacoes=item.observacoes,
-            )
-        )
-        response_payload = {'message': 'Medicamento sugerido adicionado à prescrição.'}
+        response_payload = {
+            'message': 'Sugestão aceita. Prescrição preparada como rascunho na aba de medicamentos.',
+            'draft_prescription': {
+                'medicamento': item.nome_exibicao,
+                'dosagem': item.dosagem_texto or '',
+                'frequencia': item.frequencia_texto or '',
+                'duracao': item.duracao_texto or '',
+                'observacoes': item.observacoes or '',
+                'texto': item.observacoes or '',
+            },
+            'draft_instructions': (protocol.orientacoes_tutor or '').strip() or '',
+        }
         title = item.nome_exibicao
     elif item_type == 'conduta':
         consulta.conduta = _append_consulta_text(consulta.conduta, protocol.conduta_sugerida)
@@ -12749,9 +12739,6 @@ def aplicar_sugestao_clinica(consulta_id):
     if item_type == 'exame':
         animal_atualizado = Animal.query.get(consulta.animal_id)
         response_payload['html'] = render_template('partials/historico_exames.html', animal=animal_atualizado)
-    elif item_type == 'medicamento':
-        animal_atualizado = Animal.query.get(consulta.animal_id)
-        response_payload['html'] = _render_prescricao_history(animal_atualizado, clinic_id)
     return jsonify({'success': True, **response_payload})
 
 

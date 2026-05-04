@@ -820,6 +820,82 @@
     setTimeout(() => feedback.classList.add('d-none'), 3000);
   }
 
+  function _mostrarAbaMedicamentos() {
+    const tabButton = document.getElementById('medicamentos-tab');
+    if (!tabButton || typeof bootstrap === 'undefined' || !bootstrap.Tab) return;
+    bootstrap.Tab.getOrCreateInstance(tabButton).show();
+  }
+
+  function _mesclarInstrucoesGeraisSugestao(novasInstrucoes) {
+    const campo = document.getElementById('instrucoes-medicamentos');
+    const instrucoes = String(novasInstrucoes || '').trim();
+    if (!campo || !instrucoes) return;
+
+    const atual = String(campo.value || '').trim();
+    if (!atual) {
+      campo.value = instrucoes;
+      return;
+    }
+    if (atual.includes(instrucoes)) return;
+    campo.value = `${atual}\n${instrucoes}`;
+  }
+
+  function adicionarPrescricaoSugeridaAoRascunho(draft, instructions = '') {
+    const medicamento = String(draft?.medicamento || '').trim();
+    if (!medicamento) {
+      mostrarFeedback('Não foi possível preparar a sugestão na aba de medicamentos.', 'danger');
+      return false;
+    }
+
+    _mostrarAbaMedicamentos();
+
+    const dosagem = String(draft?.dosagem || '').trim();
+    const frequencia = String(draft?.frequencia || '').trim();
+    const duracao = String(draft?.duracao || '').trim();
+    const observacoes = String(draft?.observacoes || '').trim();
+    const texto = String(draft?.texto || '').trim();
+
+    let resumo = '';
+    if (dosagem || frequencia || duracao) {
+      resumo = [dosagem, frequencia, duracao ? `por ${duracao}` : '']
+        .filter(Boolean)
+        .join(', ');
+    } else {
+      resumo = texto || observacoes || 'Prescrição sugerida pronta para revisão.';
+    }
+
+    prescricoes.push({
+      medicamento,
+      texto: resumo,
+      dosagem,
+      frequencia,
+      duracao,
+      observacoes,
+    });
+
+    renderPrescricoesTemp();
+    _mesclarInstrucoesGeraisSugestao(instructions);
+
+    document.getElementById('nome-medicamento').value = medicamento;
+    document.getElementById('dose').value = dosagem;
+    document.getElementById('frequencia').value = frequencia;
+    document.getElementById('duracao').value = duracao;
+    document.getElementById('instrucao-unica').value = texto || observacoes;
+
+    const personalizado = document.getElementById('modo-personalizado');
+    if (personalizado) {
+      const usarTextoLivre = !dosagem && !frequencia && !duracao && Boolean(texto || observacoes);
+      personalizado.checked = usarTextoLivre;
+      alternarModo();
+    }
+
+    document.getElementById('medicamentos-lista')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    mostrarFeedback('Sugestão aceita e adicionada ao rascunho da prescrição.');
+    return true;
+  }
+
+  window.adicionarPrescricaoSugeridaAoRascunho = adicionarPrescricaoSugeridaAoRascunho;
+
   // Debounce para evitar múltiplas requisições
   function debounce(func, wait) {
     let timeout;

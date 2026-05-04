@@ -128,7 +128,10 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
         json={'item_type': 'medicamento', 'protocol_id': 1, 'item_id': 1},
     )
     assert med_apply.status_code == 200
-    assert med_apply.get_json()['success'] is True
+    med_payload = med_apply.get_json()
+    assert med_payload['success'] is True
+    assert med_payload['draft_prescription']['medicamento'] == 'Doxiciclina'
+    assert med_payload['draft_instructions'] == 'Observar frequencia da tosse e piora respiratoria.'
 
     conduct_apply = client.post(
         f'/consulta/{consulta_id}/sugestoes_clinicas/aplicar',
@@ -149,10 +152,8 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
 
     with flask_app.app_context():
         assert ExameSolicitado.query.filter_by(nome='Radiografia toracica').count() == 1
-        bloco = BlocoPrescricao.query.one()
-        assert bloco.instrucoes_gerais == 'Observar frequencia da tosse e piora respiratoria.'
-        prescricao = Prescricao.query.one()
-        assert prescricao.medicamento == 'Doxiciclina'
+        assert BlocoPrescricao.query.count() == 0
+        assert Prescricao.query.count() == 0
         consulta = Consulta.query.get(consulta_id)
         assert 'Nebulizacao e repouso' in (consulta.conduta or '')
         assert AuditoriaSugestaoClinica.query.filter_by(consulta_id=consulta_id, acao='shown').count() == 1
@@ -213,3 +214,84 @@ def test_agendar_retorno_registra_auditoria_de_sugestao(client, monkeypatch):
             acao='scheduled',
             tipo_item='retorno',
         ).count() == 1
+
+
+def test_bicheira_protocol_returns_requested_conduct_and_medications(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Bicheira')
+        tutor = User(id=1, name='Tutor', email='tutor-bicheira@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-bicheira@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+            queixa_principal='Ferida com larvas e odor forte.',
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome='Protocolo Inicial para Bicheira',
+            suspeita_principal='bicheira',
+            sinais_gatilho='Miíase cutânea, presença de larvas, ferida contaminada, odor fétido.',
+            conduta_sugerida='Realizar retirada manual das larvas de moscas e limpeza criteriosa da lesão antes de definir a conduta complementar.',
+            clinica_id=None,
+            prioridade=2,
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo])
+        db.session.flush()
+        db.session.add_all([
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Cefalexina',
+                justificativa='Antibioticoterapia de suporte para ferida infestada, conforme avaliação clínica.',
+                prioridade=1,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Capstar',
+                justificativa='Controle complementar de ectoparasitas quando clinicamente indicado.',
+                prioridade=2,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Meloxicam',
+                justificativa='Controle de dor e inflamação conforme avaliação clínica.',
+                prioridade=3,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Pomada de sulfadiazina de prata',
+                justificativa='Cuidado tópico complementar da lesão após limpeza e manejo inicial.',
+                prioridade=4,
+            ),
+        ])
+        db.session.commit()
+        consulta_id = consulta.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    response = client.post(
+        f'/consulta/{consulta_id}/sugestoes_clinicas',
+        json={'suspeita_clinica': 'bicheira'},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert len(payload['suggestions']) == 1
+
+    suggestion = payload['suggestions'][0]
+    assert 'retirada manual das larvas' in suggestion['conduta_sugerida'].lower()
+    assert [item['nome'] for item in suggestion['medicamentos']] == [
+        'Cefalexina',
+        'Capstar',
+        'Meloxicam',
+        'Pomada de sulfadiazina de prata',
+    ]

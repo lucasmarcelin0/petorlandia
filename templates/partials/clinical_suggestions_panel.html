@@ -262,20 +262,30 @@
         if (payload.item_type === 'exame' && data.html) {
           const container = document.getElementById('historico-exames');
           if (container) container.innerHTML = data.html;
-        } else if (payload.item_type === 'medicamento' && data.html) {
-          const container = document.getElementById('historico-prescricoes');
-          if (container) container.innerHTML = data.html;
+        } else if (payload.item_type === 'medicamento') {
+          const added = window.adicionarPrescricaoSugeridaAoRascunho?.(
+            data.draft_prescription,
+            data.draft_instructions || ''
+          );
+          if (!added) {
+            throw new Error('Nao foi possivel preparar a prescricao sugerida no rascunho.');
+          }
         } else if (payload.item_type === 'conduta' && data.conduta !== undefined) {
           const condutaField = document.getElementById('conduta');
           if (condutaField) condutaField.value = data.conduta || '';
         } else if (payload.item_type === 'retorno' && data.prefill) {
           prefillReturn(data.prefill, payload.protocol_id);
         }
+        button.textContent = 'Aceito';
+        button.classList.remove('btn-success');
+        button.classList.add('btn-outline-success');
         setStatus(data.message || 'Sugestao aplicada com sucesso.', 'success');
       } catch (error) {
         setStatus(error.message || 'Erro ao aplicar sugestao.', 'danger');
       } finally {
-        button.disabled = false;
+        if (button.textContent !== 'Aceito') {
+          button.disabled = false;
+        }
       }
     }
 
