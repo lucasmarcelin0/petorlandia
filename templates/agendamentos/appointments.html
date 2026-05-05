@@ -6,24 +6,70 @@
 {% endblock %}
 
 {% block main %}
-<section class="container py-4" aria-labelledby="appointments-calendar-title">
+<section class="container py-4 consultation-workspace appointments-workspace" aria-labelledby="appointments-calendar-title">
 
-  <!-- Cabeçalho -->
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
-      <h2 id="appointments-calendar-title" class="fw-bold text-gradient mb-0">
-      <i class="bi bi-calendar4-week me-2"></i> Agenda de Consultas
-    </h2>
+  <!-- Cabeçalho estilo prontuário -->
+  <div class="consultation-hero appointments-hero mb-4">
+    <div class="consultation-hero__content">
+      <p class="consultation-eyebrow mb-2">Agenda</p>
+      <h2 id="appointments-calendar-title" class="consultation-title mb-1">
+        <i class="bi bi-calendar4-week text-primary me-2"></i>Agenda de Consultas
+      </h2>
+      <small class="consultation-subtitle text-muted">
+        Calendário, novos agendamentos, exames e horários em um só lugar.
+      </small>
+    </div>
     {% if current_user.role == 'admin' %}
-    <div class="w-100 ms-lg-auto">
+    <div class="appointments-hero__aside">
       {% set switcher_select_id = 'admin-agenda-user-picker' %}
-      {% set switcher_label_text = 'Selecionar usuário' %}
-      {% set switcher_select_classes = 'form-select w-100' %}
-      {% set switcher_form_classes = 'd-flex align-items-center gap-2 w-100' %}
+      {% set switcher_label_text = 'Pesquisar agenda' %}
+      {% set switcher_select_classes = 'form-select form-select-sm' %}
+      {% set switcher_form_classes = 'd-flex flex-column flex-sm-row align-items-sm-center gap-2' %}
       {% set switcher_default_option_label = 'Minha agenda' %}
       {% include 'partials/admin_agenda_switcher.html' %}
     </div>
     {% endif %}
   </div>
+
+  <!-- Navegação principal entre seções -->
+  <ul class="nav nav-tabs consultation-tabs pet-nav appointments-section-tabs mb-4" id="appointmentsSectionTabs" role="tablist" aria-label="Seções da agenda">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active d-flex align-items-center gap-2" id="section-overview-tab" data-bs-toggle="tab" data-bs-target="#section-overview" type="button" role="tab" aria-controls="section-overview" aria-selected="true">
+        <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-calendar-week"></i></span>
+        <span class="fw-semibold">Visão Geral</span>
+      </button>
+    </li>
+    {% if form %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-new-tab" data-bs-toggle="tab" data-bs-target="#section-new" type="button" role="tab" aria-controls="section-new" aria-selected="false">
+        <span class="icon-circle bg-success text-white"><i class="fa-solid fa-plus"></i></span>
+        <span class="fw-semibold">Nova Consulta</span>
+      </button>
+    </li>
+    {% endif %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-list-tab" data-bs-toggle="tab" data-bs-target="#section-list" type="button" role="tab" aria-controls="section-list" aria-selected="false">
+        <span class="icon-circle bg-info text-white"><i class="fa-solid fa-list-check"></i></span>
+        <span class="fw-semibold">Consultas</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-exames-tab" data-bs-toggle="tab" data-bs-target="#section-exames" type="button" role="tab" aria-controls="section-exames" aria-selected="false">
+        <span class="icon-circle" style="background-color: #7c3aed; color: #fff;"><i class="fa-solid fa-clipboard-pulse"></i></span>
+        <span class="fw-semibold">Exames</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-horarios-tab" data-bs-toggle="tab" data-bs-target="#section-horarios" type="button" role="tab" aria-controls="section-horarios" aria-selected="false">
+        <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-clock"></i></span>
+        <span class="fw-semibold">Horários</span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="appointmentsSectionContent">
+  <!-- ===== Tab: Visão Geral ===== -->
+  <div class="tab-pane fade show active" id="section-overview" role="tabpanel" aria-labelledby="section-overview-tab" tabindex="0">
 
   {% set calendar_redirect_url = none %}
   {% if not form %}
@@ -51,37 +97,24 @@
   {% set schedule_toggle_calendar_redirect_url = calendar_redirect_url %}
   {% include 'partials/calendar_layout.html' %}
 
-  <!-- Gerenciar horários (novo + editar) -->
-  <div class="card border-0 shadow-lg rounded-4 mb-5">
-    <div class="card-header border-0 p-0">
-      <nav class="schedule-toolbar rounded-top-4" aria-label="Ações rápidas da agenda">
-        <div class="schedule-toolbar-buttons">
-          <button
-            id="openScheduleModal"
-            class="schedule-toolbar-btn schedule-toolbar-btn--neutral"
-            type="button"
-          >
-            <i class="bi bi-pencil"></i>
-            <span>Editar Horário</span>
-          </button>
-          {% if form %}
-            <button
-              class="schedule-toolbar-btn schedule-toolbar-btn--success"
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#newAppointmentForm"
-            >
-              <i class="bi bi-plus-circle"></i>
-              <span>Nova Consulta</span>
-            </button>
-          {% endif %}
-        </div>
-      </nav>
-    </div>
+  </div><!-- /tab-pane section-overview -->
 
-    <div class="collapse" id="newAppointmentForm">
+  {% if form %}
+  <!-- ===== Tab: Nova Consulta ===== -->
+  <div class="tab-pane fade" id="section-new" role="tabpanel" aria-labelledby="section-new-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
       <div class="card-body p-4">
-        {% if form %}
+        <div class="consultation-section-heading consultation-section-heading--consulta mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-calendar-plus"></i></span>
+          <div>
+            <h5 class="mb-0">Agendar Nova Consulta</h5>
+            <p class="mb-0 text-muted">Selecione tutor, animal, profissional e o melhor horário disponível.</p>
+          </div>
+        </div>
+
+        <div class="collapse show" id="newAppointmentForm">
+          <div class="appointments-form-wrapper">
+            {% if form %}
         <form method="POST" data-appointment-form>
           {{ form.hidden_tag() }}
           <div class="row g-3">
@@ -277,38 +310,103 @@
           </div>
         </div>
         {% endif %}
+          </div><!-- /appointments-form-wrapper -->
+        </div><!-- /#newAppointmentForm collapse -->
+      </div><!-- /card-body section-new -->
+    </div><!-- /card section-new -->
+  </div><!-- /tab-pane section-new -->
+  {% endif %}
+
+  <!-- ===== Tab: Consultas ===== -->
+  <div class="tab-pane fade" id="section-list" role="tabpanel" aria-labelledby="section-list-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--medicamentos mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-list-check"></i></span>
+          <div>
+            <h5 class="mb-0">Consultas Agendadas</h5>
+            <p class="mb-0 text-muted">Acompanhe os atendimentos agrupados por dia.</p>
+          </div>
+        </div>
+        <div id="appointmentsList" data-appointments-container data-refresh-url="{{ request.url }}">
+          {% include 'partials/appointments_table.html' %}
+        </div>
       </div>
     </div>
-  </div>
+  </div><!-- /tab-pane section-list -->
 
-  <div class="card border-0 shadow-lg rounded-4 mb-5">
-    <div class="card-header bg-info text-white rounded-top-4 d-flex align-items-center">
-      <h5 class="mb-0"><i class="bi bi-clipboard-pulse me-2"></i> Agenda de Exames</h5>
-    </div>
-    <div class="card-body">
-      {% if exam_appointments %}
-      <ul class="list-group list-group-flush">
-        {% for exam in exam_appointments %}
-        <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+  <!-- ===== Tab: Exames ===== -->
+  <div class="tab-pane fade" id="section-exames" role="tabpanel" aria-labelledby="section-exames-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--exames mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-clipboard-pulse"></i></span>
           <div>
-            <div class="fw-semibold">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</div>
-            <div class="small text-muted">Animal: {{ exam.animal.name if exam.animal else '—' }}</div>
-            <div class="small text-muted">Especialista: {{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '—' }}</div>
+            <h5 class="mb-0">Agenda de Exames</h5>
+            <p class="mb-0 text-muted">Exames aguardando confirmação ou execução pelo especialista.</p>
           </div>
-          <span class="badge align-self-center {% if exam.status_display == 'Aceito' %}bg-success{% elif exam.status_display == 'Cancelado' %}bg-danger{% elif exam.status_display == 'Prazo expirado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ exam.status_display }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-muted mb-0">Nenhum exame agendado no momento.</p>
-      {% endif %}
+        </div>
+        {% if exam_appointments %}
+        <ul class="list-group list-group-flush appointments-exam-list">
+          {% for exam in exam_appointments %}
+          <li class="list-group-item d-flex justify-content-between align-items-start gap-3 px-0">
+            <div class="d-flex align-items-start gap-3">
+              <span class="icon-circle bg-light text-primary"><i class="fa-solid fa-calendar-day"></i></span>
+              <div>
+                <div class="fw-semibold">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</div>
+                <div class="small text-muted">
+                  <i class="fa-solid fa-paw me-1"></i>{{ exam.animal.name if exam.animal else '—' }}
+                </div>
+                <div class="small text-muted">
+                  <i class="fa-solid fa-user-doctor me-1"></i>{{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '—' }}
+                </div>
+              </div>
+            </div>
+            <span class="badge rounded-pill align-self-center {% if exam.status_display == 'Aceito' %}bg-success-subtle text-success{% elif exam.status_display == 'Cancelado' %}bg-danger-subtle text-danger{% elif exam.status_display == 'Prazo expirado' %}bg-secondary-subtle text-secondary{% else %}bg-warning-subtle text-warning-emphasis{% endif %}">{{ exam.status_display }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="appointments-empty-state text-center py-4">
+          <span class="icon-circle bg-light text-secondary mb-3 mx-auto"><i class="fa-regular fa-calendar-xmark fs-4"></i></span>
+          <h6 class="fw-semibold mb-1">Nenhum exame agendado</h6>
+          <p class="text-muted small mb-0">Quando exames forem agendados, eles aparecerão aqui.</p>
+        </div>
+        {% endif %}
+      </div>
     </div>
-  </div>
+  </div><!-- /tab-pane section-exames -->
 
-  <div id="appointmentsList" data-appointments-container data-refresh-url="{{ request.url }}">
-    {% include 'partials/appointments_table.html' %}
-  </div>
+  <!-- ===== Tab: Horários ===== -->
+  <div class="tab-pane fade" id="section-horarios" role="tabpanel" aria-labelledby="section-horarios-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--vacinas mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-clock"></i></span>
+          <div>
+            <h5 class="mb-0">Gerenciar Horários de Atendimento</h5>
+            <p class="mb-0 text-muted">Defina e edite a disponibilidade semanal dos colaboradores.</p>
+          </div>
+        </div>
+        <div class="appointments-horarios-actions d-flex flex-wrap align-items-center gap-3">
+          <button
+            id="openScheduleModal"
+            class="btn btn-primary rounded-pill px-4 d-inline-flex align-items-center gap-2"
+            type="button"
+          >
+            <i class="bi bi-pencil-square"></i>
+            <span>Editar Horário</span>
+          </button>
+          <p class="text-muted small mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            As alterações refletem imediatamente nos horários disponíveis para novos agendamentos.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div><!-- /tab-pane section-horarios -->
 
+  </div><!-- /tab-content -->
 
 </section>
 
@@ -470,12 +568,15 @@
 <!-- Modal Editar Consulta -->
 <div class="modal fade" id="appointmentEditModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content rounded-4 shadow-lg">
-      <div class="modal-header bg-light">
-        <h5 class="modal-title fw-bold">
-          <i class="bi bi-pencil-square me-2"></i> Editar Consulta
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+    <div class="modal-content rounded-4 shadow-lg border-0 overflow-hidden">
+      <div class="modal-header bg-primary text-white border-0 align-items-start">
+        <div>
+          <h5 class="modal-title fw-semibold d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-pencil-square"></i> Editar Consulta
+          </h5>
+          <p class="mb-0 small text-white-50">Atualize os dados da consulta sem perder o histórico.</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
         <div class="text-center text-muted">
@@ -756,11 +857,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   }
 
+  function activateNewAppointmentSectionTab() {
+    const tabBtn = document.getElementById('section-new-tab');
+    if (!tabBtn) {
+      return false;
+    }
+    if (tabBtn.classList.contains('active')) {
+      return true;
+    }
+    const namespace = getBootstrapTabNamespace();
+    if (namespace) {
+      try {
+        const tabInstance = namespace.Tab.getOrCreateInstance(tabBtn);
+        if (tabInstance && typeof tabInstance.show === 'function') {
+          tabInstance.show();
+          return true;
+        }
+      } catch (error) {
+        /* fallback below */
+      }
+    }
+    if (typeof tabBtn.click === 'function') {
+      tabBtn.click();
+      return true;
+    }
+    return false;
+  }
+
   function openNewAppointmentWithDetail(detail) {
     if (!detail || typeof detail !== 'object') {
       detail = {};
     }
 
+    activateNewAppointmentSectionTab();
     ensureNewAppointmentVisible();
 
     if (dateField && detail.date) {
@@ -1771,6 +1900,74 @@ document.addEventListener('DOMContentLoaded', () => {
   if (newAppointmentForm) {
     ensureNewAppointmentVisible();
   }
+
+  /* ============================================================
+   * Persistência da seção ativa (Visão Geral, Nova Consulta, etc.)
+   * Mantém a aba aberta ao recarregar e suporta deep-link via #hash
+   * ============================================================ */
+  (function setupSectionTabsPersistence() {
+    const sectionTabsEl = document.getElementById('appointmentsSectionTabs');
+    if (!sectionTabsEl) {
+      return;
+    }
+    const STORAGE_KEY = 'appointmentsActiveSection';
+    const validIds = Array.from(sectionTabsEl.querySelectorAll('[data-bs-target]'))
+      .map((btn) => btn.getAttribute('data-bs-target'))
+      .filter(Boolean);
+
+    function showSection(targetId) {
+      if (!targetId || !validIds.includes(targetId)) {
+        return false;
+      }
+      const btn = sectionTabsEl.querySelector(`[data-bs-target="${targetId}"]`);
+      if (!btn) {
+        return false;
+      }
+      const namespace = getBootstrapTabNamespace();
+      if (namespace) {
+        try {
+          namespace.Tab.getOrCreateInstance(btn).show();
+          return true;
+        } catch (error) {
+          /* ignore */
+        }
+      }
+      btn.click();
+      return true;
+    }
+
+    /* Aplicar deep-link ou seção salva ao carregar */
+    const hash = window.location.hash;
+    let initialised = false;
+    if (hash && validIds.includes(hash)) {
+      initialised = showSection(hash);
+    }
+    if (!initialised) {
+      try {
+        const saved = window.localStorage && window.localStorage.getItem(STORAGE_KEY);
+        if (saved && validIds.includes(saved)) {
+          showSection(saved);
+        }
+      } catch (error) {
+        /* localStorage indisponível */
+      }
+    }
+
+    /* Persistir aba ativa quando muda */
+    sectionTabsEl.addEventListener('shown.bs.tab', (event) => {
+      const target = event.target && event.target.getAttribute('data-bs-target');
+      if (!target) {
+        return;
+      }
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(STORAGE_KEY, target);
+        }
+      } catch (error) {
+        /* ignore */
+      }
+    });
+  })();
 });
 </script>
 {% endblock %}

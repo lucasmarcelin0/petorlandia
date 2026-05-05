@@ -1,3 +1,210 @@
+/* ============================================================
+ * Appointments workspace — alinhado ao padrão consultation-workspace
+ * Mantém todas as funcionalidades existentes e harmoniza o visual
+ * ============================================================ */
+.appointments-workspace {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(45, 212, 191, 0.07), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, #ffffff 60%);
+  border-radius: 1.5rem;
+  padding-block: clamp(1rem, 2vw, 1.5rem);
+}
+
+.appointments-hero {
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.appointments-hero__aside {
+  margin-left: auto;
+  min-width: clamp(220px, 28vw, 320px);
+}
+
+.appointments-hero__aside form {
+  margin-bottom: 0;
+}
+
+.appointments-hero__aside .form-label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.appointments-section-tabs {
+  --section-tab-active-bg: linear-gradient(135deg, rgba(45, 212, 191, 0.24), rgba(187, 247, 208, 0.48));
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 38px -34px rgba(15, 23, 42, 0.55);
+}
+
+.appointments-section-tabs .nav-item {
+  flex: 0 0 auto;
+}
+
+.appointments-section-tabs .nav-link {
+  min-height: 2.85rem;
+  padding: 0.5rem 1rem;
+  border: 0 !important;
+  border-radius: 999px;
+  color: #475569;
+  background: transparent;
+  white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.appointments-section-tabs .nav-link:hover,
+.appointments-section-tabs .nav-link:focus-visible {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.appointments-section-tabs .nav-link.active {
+  color: #073b3a;
+  background: var(--section-tab-active-bg);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18), 0 12px 28px -24px rgba(15, 118, 110, 0.8);
+}
+
+.appointments-section-tabs .icon-circle {
+  width: 1.95rem;
+  height: 1.95rem;
+  flex: 0 0 1.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px !important;
+  font-size: 0.85rem;
+  box-shadow: 0 12px 22px -18px rgba(15, 23, 42, 0.75);
+}
+
+.appointments-section-tabs .nav-link.active .icon-circle {
+  box-shadow: 0 14px 26px -18px rgba(15, 118, 110, 0.85);
+}
+
+.appointments-workspace .tab-pane > .card {
+  border: 0;
+  border-radius: 1.35rem;
+  box-shadow: 0 24px 50px -38px rgba(15, 23, 42, 0.45);
+  overflow: hidden;
+}
+
+.appointments-workspace .tab-pane > .card > .card-body {
+  padding: clamp(1.1rem, 2vw, 1.6rem);
+}
+
+.appointments-form-wrapper .form-label {
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+}
+
+.appointments-form-wrapper .form-control,
+.appointments-form-wrapper .form-select {
+  border-color: rgba(100, 116, 139, 0.24);
+  border-radius: 0.85rem;
+  min-height: 2.75rem;
+}
+
+.appointments-form-wrapper .form-control:focus,
+.appointments-form-wrapper .form-select:focus {
+  border-color: rgba(15, 118, 110, 0.65);
+  box-shadow: 0 0 0 0.22rem rgba(15, 118, 110, 0.12);
+}
+
+.appointments-form-wrapper .btn-success.btn-lg {
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  border: none;
+  box-shadow: 0 18px 32px -20px rgba(15, 118, 110, 0.55);
+  font-weight: 700;
+}
+
+.appointments-form-wrapper .btn-success.btn-lg:hover,
+.appointments-form-wrapper .btn-success.btn-lg:focus-visible {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  transform: translateY(-1px);
+}
+
+.appointments-exam-list .list-group-item {
+  border-color: rgba(15, 23, 42, 0.08);
+  border-left: 0;
+  border-right: 0;
+  padding-block: 0.95rem;
+}
+
+.appointments-exam-list .icon-circle {
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 1rem;
+  background-color: rgba(13, 110, 253, 0.1);
+  color: #1d4ed8;
+}
+
+.appointments-empty-state .icon-circle {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background-color: rgba(15, 23, 42, 0.05);
+  color: #64748b;
+}
+
+.appointments-horarios-actions .btn.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 16px 30px -18px rgba(29, 78, 216, 0.55);
+}
+
+.appointments-horarios-actions .btn.btn-primary:hover,
+.appointments-horarios-actions .btn.btn-primary:focus-visible {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .appointments-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .appointments-hero__aside {
+    margin-left: 0;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .appointments-section-tabs {
+    border-radius: 1rem;
+    padding: 0.45rem;
+  }
+
+  .appointments-section-tabs .nav-link {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.92rem;
+  }
+
+  .appointments-section-tabs .nav-link span:not(.icon-circle) {
+    display: none;
+  }
+
+  .appointments-section-tabs .nav-link.active span:not(.icon-circle) {
+    display: inline;
+  }
+}
+
 .appointment-card {
   background-color: #ffffff;
   border: 1px solid rgba(17, 24, 39, 0.08);

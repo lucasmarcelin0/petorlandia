@@ -1,3 +1,3 @@
-{% with fetch_url=url_for('tutores') %}
+{% with compact=True, fetch_url=url_for('tutores'), viewer_clinic_id=clinica.id %}
   {% include 'partials/tutores_adicionados.html' %}
 {% endwith %}

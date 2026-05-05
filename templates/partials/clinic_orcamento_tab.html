@@ -1,6 +1,20 @@
-      <div class="d-flex justify-content-between align-items-center mb-3 mt-3 flex-wrap gap-2">
-        <h3 class="mb-0">Orçamentos</h3>
-        <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-sm btn-primary">Novo Orçamento</a>
+      {% set budget_count = orcamentos_pagination.total if orcamentos_pagination else orcamentos|length %}
+      <section class="clinic-panel clinic-panel--budget">
+      <div class="clinic-section-heading">
+        <div class="clinic-section-heading__icon is-budget" aria-hidden="true">
+          <i class="fa-solid fa-file-invoice-dollar"></i>
+        </div>
+        <div>
+          <span class="clinic-section-heading__kicker">Orçamentos</span>
+          <h2>Orçamentos</h2>
+          <p>{{ budget_count }} registro{{ 's' if budget_count != 1 else '' }}</p>
+        </div>
+        <div class="clinic-section-heading__actions">
+          <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-primary">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            Novo orçamento
+          </a>
+        </div>
       </div>
 
       <style>
@@ -717,3 +731,4 @@
         </ul>
       </nav>
       {% endif %}
+      </section>

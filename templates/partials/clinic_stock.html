@@ -27,7 +27,17 @@
   }
 </style>
 
-<h3>Estoque da Clínica {{ clinica.nome }}</h3>
+<section class="clinic-panel clinic-panel--stock">
+  <div class="clinic-section-heading">
+    <div class="clinic-section-heading__icon is-stock" aria-hidden="true">
+      <i class="fa-solid fa-boxes-stacked"></i>
+    </div>
+    <div>
+      <span class="clinic-section-heading__kicker">Estoque</span>
+      <h2>Insumos da clínica</h2>
+      <p>{{ inventory_items|length }} item{{ 's' if inventory_items|length != 1 else '' }} cadastrado{{ 's' if inventory_items|length != 1 else '' }}</p>
+    </div>
+  </div>
 
 <div class="row g-3 inventory-summary mt-2">
   <div class="col-md-4">
@@ -179,18 +189,23 @@
   <p class="text-muted mt-4">Ainda não há movimentações registradas.</p>
 {% endif %}
 
-<hr>
-<h4>Adicionar Item</h4>
-<form method="post" action="{{ url_for('clinic_stock', clinica_id=clinica.id) }}">
-  {{ inventory_form.hidden_tag() }}
-  <div class="row g-2">
-    <div class="col-md-4">{{ inventory_form.name(class="form-control", placeholder="Nome") }}</div>
-    <div class="col-md-2">{{ inventory_form.quantity(class="form-control", placeholder="Quantidade") }}</div>
-    <div class="col-md-2">{{ inventory_form.unit(class="form-control", placeholder="Unidade") }}</div>
-    <div class="col-md-2">{{ inventory_form.min_quantity(class="form-control", placeholder="Qtd. mínima") }}</div>
-    <div class="col-md-2">{{ inventory_form.max_quantity(class="form-control", placeholder="Qtd. máxima") }}</div>
+<div class="clinic-form-card mt-4">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <span class="clinic-form-card__icon"><i class="fa-solid fa-plus" aria-hidden="true"></i></span>
+    <h3 class="mb-0">Adicionar item</h3>
   </div>
-  <div class="text-end mt-2">
-    {{ inventory_form.submit(class="btn btn-success") }}
-  </div>
-</form>
+  <form method="post" action="{{ url_for('clinic_stock', clinica_id=clinica.id) }}">
+    {{ inventory_form.hidden_tag() }}
+    <div class="row g-2">
+      <div class="col-md-4">{{ inventory_form.name(class="form-control", placeholder="Nome") }}</div>
+      <div class="col-md-2">{{ inventory_form.quantity(class="form-control", placeholder="Quantidade") }}</div>
+      <div class="col-md-2">{{ inventory_form.unit(class="form-control", placeholder="Unidade") }}</div>
+      <div class="col-md-2">{{ inventory_form.min_quantity(class="form-control", placeholder="Qtd. mínima") }}</div>
+      <div class="col-md-2">{{ inventory_form.max_quantity(class="form-control", placeholder="Qtd. máxima") }}</div>
+    </div>
+    <div class="text-end mt-2">
+      {{ inventory_form.submit(class="btn btn-success") }}
+    </div>
+  </form>
+</div>
+</section>

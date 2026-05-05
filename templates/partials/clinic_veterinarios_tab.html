@@ -14,24 +14,27 @@
   </div>
 {% endmacro %}
 
-<div class="clinic-team-container">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
-    <div>
-      <h3 class="mb-1 d-flex align-items-center gap-2">
-        <i class="bi bi-people-fill text-primary"></i>
-        Gestão de profissionais
-      </h3>
-      <p class="text-muted small mb-0">Organize a equipe interna, especialistas e convites enviados.</p>
+<div class="clinic-team-container clinic-panel">
+  <div class="clinic-section-heading">
+    <div class="clinic-section-heading__icon is-team" aria-hidden="true">
+      <i class="fa-solid fa-user-doctor"></i>
     </div>
+    <div>
+      <span class="clinic-section-heading__kicker">Equipe</span>
+      <h2>Gestão de profissionais</h2>
+      <p>{{ staff_members|length }} interno{{ 's' if staff_members|length != 1 else '' }}, {{ veterinarios|length }} veterinário{{ 's' if veterinarios|length != 1 else '' }} e {{ specialists|length }} especialista{{ 's' if specialists|length != 1 else '' }}</p>
+    </div>
+    <div class="clinic-section-heading__actions">
     {% if pode_editar %}
-    <button class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#addVetOffcanvas">
-      <i class="bi bi-person-plus"></i>
+    <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#addVetOffcanvas">
+      <i class="fa-solid fa-user-plus"></i>
       <span class="ms-1">Adicionar profissional</span>
     </button>
     {% endif %}
+    </div>
   </div>
 
-  <div class="accordion mt-4" id="clinicTeamAccordion">
+  <div class="accordion clinic-accordion mt-4" id="clinicTeamAccordion">
     <div class="accordion-item shadow-sm">
       <h2 class="accordion-header" id="accordion-staff">
         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-staff" aria-expanded="true" aria-controls="collapse-staff">

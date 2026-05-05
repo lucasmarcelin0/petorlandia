@@ -1,78 +1,117 @@
 {% extends "layout.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
+{% from 'components/logo.html' import clinic_logo %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/appointments.css') }}">
+{% endblock %}
+
+{% macro clinic_tab(tab_id, label, icon_class, tone_class, meta='', active=False) -%}
+  <li class="nav-item clinic-tabs__item" role="presentation">
+    <button
+      class="nav-link clinic-tabs__link {{ tone_class }}{% if active %} active{% endif %}"
+      id="{{ tab_id }}-tab"
+      data-bs-toggle="tab"
+      data-bs-target="#{{ tab_id }}"
+      type="button"
+      role="tab"
+      aria-controls="{{ tab_id }}"
+      aria-selected="{{ 'true' if active else 'false' }}"
+    >
+      <span class="clinic-tabs__icon" aria-hidden="true"><i class="{{ icon_class }}"></i></span>
+      <span class="clinic-tabs__copy">
+        <span class="clinic-tabs__label">{{ label }}</span>
+        {% if meta %}<span class="clinic-tabs__meta">{{ meta }}</span>{% endif %}
+      </span>
+    </button>
+  </li>
+{%- endmacro %}
 
 {% block main %}
-<div class="container mt-4">
-  <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="clinicTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active d-flex align-items-center gap-2" id="clinica-tab" data-bs-toggle="tab" data-bs-target="#clinica" type="button" role="tab">
-        <span class="icon-circle bg-secondary text-white"><i class="fa-solid fa-building"></i></span>
-        <span class="fw-semibold">Clínica</span>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="veterinarios-tab" data-bs-toggle="tab" data-bs-target="#veterinarios" type="button" role="tab">
-        <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-users"></i></span>
-        <span class="fw-semibold">Funcionários</span>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="agendamentos-tab" data-bs-toggle="tab" data-bs-target="#agendamentos" type="button" role="tab">
-        <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
-        <span class="fw-semibold">Agenda</span>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais" type="button" role="tab">
-        <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw"></i></span>
-        <span class="fw-semibold">Animais</span>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="tutores-tab" data-bs-toggle="tab" data-bs-target="#tutores" type="button" role="tab">
-        <span class="icon-circle bg-info text-white"><i class="fa-solid fa-user"></i></span>
-        <span class="fw-semibold">Tutores</span>
-      </button>
-    </li>
-    {% if show_inventory %}
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="estoque-tab" data-bs-toggle="tab" data-bs-target="#estoque" type="button" role="tab">
-        <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-boxes"></i></span>
-        <span class="fw-semibold">Estoque</span>
-      </button>
-    </li>
-    {% endif %}
-    <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="orcamento-tab" data-bs-toggle="tab" data-bs-target="#orcamento" type="button" role="tab">
-        <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-file-invoice-dollar"></i></span>
-        <span class="fw-semibold">Orçamento</span>
-      </button>
-    </li>
-  </ul>
+{% set team_total = (staff_members|length) + (veterinarios|length) + (specialists|length) %}
+{% set budget_total = orcamentos_pagination.total if orcamentos_pagination else (orcamentos|length) %}
+<div class="clinic-page-shell" data-clinic-workspace>
+  <section class="clinic-context-card" aria-labelledby="clinic-context-title">
+    <div class="clinic-context-card__identity">
+      <div class="clinic-context-card__logo" aria-hidden="true">
+        {% if clinica.logotipo %}
+          {{ clinic_logo(clinica, alt_text='Logotipo da clínica') }}
+        {% else %}
+          <span>{{ clinic_initials }}</span>
+        {% endif %}
+      </div>
+      <div class="clinic-context-card__title">
+        <span class="clinic-context-card__eyebrow">Clínica</span>
+        <h1 id="clinic-context-title">{{ clinica.nome }}</h1>
+        <div class="clinic-context-card__contacts">
+          {% if clinica.endereco %}
+            <span><i class="fa-solid fa-location-dot" aria-hidden="true"></i>{{ clinica.endereco }}</span>
+          {% endif %}
+          {% if clinica.telefone %}
+            <span><i class="fa-solid fa-phone" aria-hidden="true"></i>{{ clinica.telefone }}</span>
+          {% endif %}
+          {% if clinica.email %}
+            <span><i class="fa-solid fa-envelope" aria-hidden="true"></i>{{ clinica.email }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="clinic-context-card__actions">
+      {% if pode_editar %}
+        <a href="#clinica" class="btn btn-primary" data-clinic-open-panel="#edit-info">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          Editar dados
+        </a>
+        <a href="{{ clinic_new_animal_url }}" class="btn btn-outline-primary">
+          <i class="fa-solid fa-paw" aria-hidden="true"></i>
+          Novo animal
+        </a>
+      {% endif %}
+      <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-outline-dark">
+        <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+        Novo orçamento
+      </a>
+    </div>
+  </section>
 
-    <div class="tab-content">
-      <div class="tab-pane fade show active" id="clinica" role="tabpanel">
+  <nav class="clinic-tabs-shell" aria-label="Seções da clínica">
+    <ul class="nav clinic-tabs pet-nav" id="clinicTabs" role="tablist">
+      {{ clinic_tab('clinica', 'Clínica', 'fa-solid fa-building', 'is-clinic', 'Dados e horários', True) }}
+      {{ clinic_tab('veterinarios', 'Equipe', 'fa-solid fa-user-doctor', 'is-team', team_total ~ ' pessoas') }}
+      {{ clinic_tab('agendamentos', 'Agenda', 'fa-solid fa-calendar-days', 'is-agenda', (appointments|length) ~ ' itens') }}
+      {{ clinic_tab('animais', 'Animais', 'fa-solid fa-paw', 'is-animals', (clinic_metrics.animals or 0) ~ ' cadastrados') }}
+      {{ clinic_tab('tutores', 'Tutores', 'fa-solid fa-user-group', 'is-tutors', (clinic_metrics.tutors or 0) ~ ' ativos') }}
+      {% if show_inventory %}
+        {{ clinic_tab('estoque', 'Estoque', 'fa-solid fa-boxes-stacked', 'is-stock', total_stock_quantity ~ ' unidades') }}
+      {% endif %}
+      {{ clinic_tab('orcamento', 'Orçamentos', 'fa-solid fa-file-invoice-dollar', 'is-budget', budget_total ~ ' registros') }}
+    </ul>
+  </nav>
+
+    <div class="tab-content clinic-tab-content">
+      <div class="tab-pane clinic-tab-pane fade show active" id="clinica" role="tabpanel" aria-labelledby="clinica-tab">
         {% include 'partials/clinic_info.html' %}
       </div>
-      <div class="tab-pane fade" id="veterinarios" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="veterinarios" role="tabpanel" aria-labelledby="veterinarios-tab">
         {% include 'partials/clinic_veterinarios_tab.html' %}
       </div>
 
-      <div class="tab-pane fade" id="agendamentos" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="agendamentos" role="tabpanel" aria-labelledby="agendamentos-tab">
         {% include 'partials/clinic_agendamentos_tab.html' %}
       </div>
-      <div class="tab-pane fade" id="animais" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="animais" role="tabpanel" aria-labelledby="animais-tab">
         {% include 'partials/clinic_animais_tab.html' %}
       </div>
-      <div class="tab-pane fade" id="tutores" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="tutores" role="tabpanel" aria-labelledby="tutores-tab">
         {% include 'partials/clinic_tutores_tab.html' %}
       </div>
     {% if show_inventory %}
-      <div class="tab-pane fade" id="estoque" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="estoque" role="tabpanel" aria-labelledby="estoque-tab">
         {% include 'partials/clinic_estoque_tab.html' %}
       </div>
     {% endif %}
-      <div class="tab-pane fade" id="orcamento" role="tabpanel">
+      <div class="tab-pane clinic-tab-pane fade" id="orcamento" role="tabpanel" aria-labelledby="orcamento-tab">
         {% include 'partials/clinic_orcamento_tab.html' %}
       </div>
   </div>
@@ -162,6 +201,16 @@ document.addEventListener('DOMContentLoaded', function() {
     return query ? `${form.action}?${query}` : form.action;
   }
 
+  function displayUrlWithAgendaHash(url) {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      parsed.hash = '#agendamentos';
+      return parsed.toString();
+    } catch (error) {
+      return `${url}#agendamentos`;
+    }
+  }
+
   function updateQuickLinkStatesFromParams(params) {
     quickLinks.forEach((link) => {
       const datasetParams = new URLSearchParams(link.dataset.filterParams || '');
@@ -214,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
           bindAppointmentRowClicks();
         }
         if (pushState) {
-          window.history.replaceState({}, '', url);
+          window.history.replaceState({}, '', displayUrlWithAgendaHash(url));
         }
         container.dataset.refreshUrl = url;
         updateQuickLinkStatesFromUrl(url);
@@ -258,28 +307,96 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const storageKey = 'clinicActiveTab_{{ clinica.id }}';
-    const hash = window.location.hash;
-    if (hash) {
-      const hashTab = document.querySelector(`#clinicTabs button[data-bs-target="${hash}"]`);
-      if (hashTab) {
-        const tab = new bootstrap.Tab(hashTab);
-        tab.show();
+    const tabsRoot = document.getElementById('clinicTabs');
+    if (!tabsRoot) return;
+
+    function normalizeHash(hash) {
+      if (!hash) return '';
+      return hash.startsWith('#') ? hash : `#${hash}`;
+    }
+
+    function findTabForHash(hash) {
+      const normalized = normalizeHash(hash);
+      if (!normalized) return null;
+      return tabsRoot.querySelector(`button[data-bs-target="${normalized}"]`);
+    }
+
+    function openHiddenPanel(selector) {
+      if (!selector) return;
+      const panel = document.querySelector(selector);
+      if (!panel) return;
+      panel.style.display = 'block';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function replaceHash(hash) {
+      window.history.replaceState(
+        {},
+        '',
+        `${window.location.pathname}${window.location.search}${normalizeHash(hash)}`
+      );
+    }
+
+    function showClinicTab(hash, options = {}) {
+      const tabEl = findTabForHash(hash);
+      if (!tabEl) return false;
+      bootstrap.Tab.getOrCreateInstance(tabEl).show();
+      if (options.updateHash !== false) {
+        replaceHash(hash);
       }
-    } else {
+      if (options.scrollTop) {
+        window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 80);
+      }
+      if (options.scrollTabs) {
+        const tabsShell = tabsRoot.closest('.clinic-tabs-shell');
+        window.setTimeout(() => tabsShell?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      }
+      if (options.openPanel) {
+        window.setTimeout(() => openHiddenPanel(options.openPanel), 120);
+      }
+      return true;
+    }
+
+    const initialHash = window.location.hash;
+    if (initialHash) {
+      if (showClinicTab(initialHash, { updateHash: false, scrollTop: true })) {
+        window.history.scrollRestoration = 'manual';
+      } else {
+        window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}`);
+      }
+    } else if (!initialHash) {
       const activeTab = localStorage.getItem(storageKey);
       if (activeTab) {
-        const tabEl = document.querySelector(`#clinicTabs button[data-bs-target="${activeTab}"]`);
-        if (tabEl) {
-          const tab = new bootstrap.Tab(tabEl);
-          tab.show();
-        }
+        showClinicTab(activeTab, { updateHash: false });
       }
     }
+
     const tabs = document.querySelectorAll('#clinicTabs button[data-bs-toggle="tab"]');
     tabs.forEach(tabEl => {
       tabEl.addEventListener('shown.bs.tab', event => {
-        localStorage.setItem(storageKey, event.target.getAttribute('data-bs-target'));
+        const target = event.target.getAttribute('data-bs-target');
+        localStorage.setItem(storageKey, target);
+        replaceHash(target);
       });
+    });
+
+    document.addEventListener('click', event => {
+      const trigger = event.target.closest('a[href*="#"], [data-clinic-open-panel]');
+      if (!trigger) return;
+      const rawHref = trigger.getAttribute('href') || '';
+      const parsed = rawHref ? new URL(rawHref, window.location.href) : null;
+      const hash = parsed ? parsed.hash : '';
+      const samePage = !parsed || (
+        parsed.origin === window.location.origin &&
+        parsed.pathname === window.location.pathname
+      );
+      if (!samePage || !hash || !findTabForHash(hash)) return;
+      event.preventDefault();
+      showClinicTab(hash, { openPanel: trigger.dataset.clinicOpenPanel, scrollTabs: true });
+    });
+
+    window.addEventListener('hashchange', () => {
+      showClinicTab(window.location.hash, { updateHash: false, scrollTabs: true });
     });
   });
 </script>
