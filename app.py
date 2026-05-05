@@ -12924,6 +12924,7 @@ def consulta_direct(animal_id):
         )
 
     worker_role = 'veterinario' if is_veterinarian(current_user) else current_user.worker
+    clinical_suspicion_options = _clinical_suspicion_options(clinica_id)
 
     return render_template(
         'consulta_qr.html',
@@ -12947,6 +12948,7 @@ def consulta_direct(animal_id):
         blocos_orcamento=blocos_orcamento,
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
+        clinical_suspicion_options=clinical_suspicion_options,
     )
 
 
@@ -15224,6 +15226,23 @@ def _consulta_activity_timestamp(consulta):
     if appointment and getattr(appointment, 'scheduled_at', None):
         return appointment.scheduled_at
     return None
+
+
+def _clinical_suspicion_options(clinic_id: int | None = None) -> list[str]:
+    query = (
+        db.session.query(ProtocoloClinico.suspeita_principal)
+        .filter(ProtocoloClinico.ativo.is_(True))
+        .filter(ProtocoloClinico.suspeita_principal.isnot(None))
+    )
+    if clinic_id:
+        query = query.filter(
+            or_(ProtocoloClinico.clinica_id.is_(None), ProtocoloClinico.clinica_id == clinic_id)
+        )
+    else:
+        query = query.filter(ProtocoloClinico.clinica_id.is_(None))
+
+    rows = query.distinct().order_by(ProtocoloClinico.suspeita_principal.asc()).all()
+    return [value.strip() for (value,) in rows if (value or '').strip()]
 
 
 def _can_view_veterinarian_activity_report(veterinario):

@@ -26,8 +26,13 @@
         <i class="bi bi-search-heart"></i> Suspeita Cl&iacute;nica / Hip&oacute;tese Diagn&oacute;stica
       </label>
       <div id="clinical-suspicion-input-slot"></div>
+      <datalist id="clinical-suspicion-options">
+        {% for item in clinical_suspicion_options or [] %}
+        <option value="{{ item }}">
+        {% endfor %}
+      </datalist>
       <div class="form-text">
-        Este campo aciona protocolos curados com exames, medicamentos, conduta e retorno sugeridos para revis&atilde;o do veterin&aacute;rio.
+        Este campo aciona protocolos curados com exames, medicamentos, conduta e retorno sugeridos para revis&atilde;o do veterin&aacute;rio. As suspeitas j&aacute; cadastradas aparecem para sele&ccedil;&atilde;o.
       </div>
     </div>
 
@@ -55,6 +60,8 @@
     if (suspicionSlot) {
       if (suspicionField) {
         suspicionField.classList.add('form-control');
+        suspicionField.setAttribute('list', 'clinical-suspicion-options');
+        suspicionField.setAttribute('autocomplete', 'off');
         suspicionField.setAttribute(
           'placeholder',
           'Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...'
@@ -63,6 +70,7 @@
       } else {
         suspicionSlot.innerHTML = `
           <input id="suspeita-clinica" name="suspeita_clinica" class="form-control"
+            list="clinical-suspicion-options" autocomplete="off"
             placeholder="Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...">
         `;
       }
