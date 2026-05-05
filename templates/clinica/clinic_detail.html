@@ -341,6 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const tabEl = findTabForHash(hash);
       if (!tabEl) return false;
       bootstrap.Tab.getOrCreateInstance(tabEl).show();
+      window.setTimeout(() => tabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 40);
       if (options.updateHash !== false) {
         replaceHash(hash);
       }
@@ -392,11 +393,11 @@ document.addEventListener('DOMContentLoaded', function() {
       );
       if (!samePage || !hash || !findTabForHash(hash)) return;
       event.preventDefault();
-      showClinicTab(hash, { openPanel: trigger.dataset.clinicOpenPanel, scrollTabs: true });
+      showClinicTab(hash, { openPanel: trigger.dataset.clinicOpenPanel, scrollTop: true });
     });
 
     window.addEventListener('hashchange', () => {
-      showClinicTab(window.location.hash, { updateHash: false, scrollTabs: true });
+      showClinicTab(window.location.hash, { updateHash: false, scrollTop: true });
     });
   });
 </script>

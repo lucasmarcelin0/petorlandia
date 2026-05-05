@@ -122,7 +122,9 @@
             <span>Mín/Máx: {{ min_qty if min_qty is not none else '—' }} / {{ max_qty if max_qty is not none else '—' }}</span>
           </div>
           <form method="post" action="{{ url_for('update_inventory_item', item_id=item.id) }}">
-            {% if csrf_token %}{{ csrf_token() }}{% endif %}
+            {% if csrf_token is defined %}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% endif %}
             <div class="row g-2 align-items-end">
               <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">Quantidade</label>
