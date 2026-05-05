@@ -252,8 +252,8 @@ def test_sugerir_dose_resolve_indicacao_aproximada_por_semantica():
 
 def test_sugerir_dose_capstar_por_faixa_de_peso():
     medicamento = SimpleNamespace(
-        id=36,
-        nome='Capstar',
+        id=2185,
+        nome='Nitenpiram',
         classificacao='Ectoparasiticida',
         via_administracao='Oral',
         doses=[
