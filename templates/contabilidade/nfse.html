@@ -45,6 +45,20 @@
 
   {# --- Proactive Fiscal Config Validation --- #}
   {% if selected_clinic %}
+    {% if not fiscal_master_key_configured %}
+    <div class="nfse-config-check nfse-config-check--error d-flex align-items-start gap-3 mb-3">
+      <div class="nfse-config-check__icon">
+        <i class="fas fa-key fa-sm"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">Criptografia fiscal ainda não habilitada</div>
+        <div class="text-muted small">
+          O sistema precisa da variável <strong>FISCAL_MASTER_KEY</strong> para guardar com segurança usuário, senha,
+          token e certificado da NFS-e. Sem ela, o cadastro fiscal não pode ser salvo.
+        </div>
+      </div>
+    </div>
+    {% endif %}
     {% if nfse_missing_fields %}
     <div class="nfse-config-check nfse-config-check--error d-flex align-items-start gap-3 mb-3">
       <div class="nfse-config-check__icon">
@@ -79,6 +93,69 @@
 
   {# --- Collapsible Config Section --- #}
   {% if selected_clinic %}
+  <div class="card shadow-sm p-4 mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+      <div>
+        <h5 class="mb-1">Primeira habilitação fiscal</h5>
+        <p class="text-muted mb-0">
+          Use este bloco para fazer a sua própria inscrição primeiro, validar o fluxo inteiro e depois replicar para as demais clínicas.
+        </p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{{ nfse_setup_resources.wizard_url }}">
+          <i class="fas fa-magic me-1"></i>Abrir wizard fiscal
+        </a>
+        <a class="btn btn-outline-secondary" href="https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica" target="_blank" rel="noopener">
+          <i class="fas fa-arrow-up-right-from-square me-1"></i>Portal da prefeitura
+        </a>
+      </div>
+    </div>
+
+    {% if nfse_setup_resources.links %}
+    <div class="row g-3 mt-1">
+      {% for resource in nfse_setup_resources.links %}
+      <div class="col-12 col-md-6 col-xl-4">
+        <a class="text-decoration-none" href="{{ resource.url }}" target="_blank" rel="noopener">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold text-dark">{{ resource.title }}</div>
+            <div class="text-muted small mt-1">{{ resource.description }}</div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row g-3 mt-2">
+      <div class="col-12 col-lg-4">
+        <div class="border rounded p-3 h-100">
+          <div class="fw-semibold mb-2">1. Prefeitura</div>
+          <div class="text-muted small">
+            Em Orlândia, a página oficial lista o <strong>Termo de Opção</strong> e o <strong>Requerimento para Solicitação de Senha</strong>.
+            Para o Cidadão Web, a prefeitura informa a entrega do <strong>Anexo IV</strong> na Divisão de Tributação.
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="border rounded p-3 h-100">
+          <div class="fw-semibold mb-2">2. Sistema</div>
+          <div class="text-muted small">
+            Depois da liberação, preencha aqui a inscrição municipal, regime, CNAE, código do serviço, alíquota ISS, usuário/senha da NFS-e
+            e, se usar integração por certificado, o `.pfx` e a senha do certificado.
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="border rounded p-3 h-100">
+          <div class="fw-semibold mb-2">3. Validação</div>
+          <div class="text-muted small">
+            Faça a primeira emissão com a sua própria clínica. Se passar, esse mesmo roteiro vira o padrão operacional para os próximos usuários.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="collapse {% if nfse_missing_fields %}show{% endif %}" id="nfse-config-section">
     <div class="card shadow-sm p-4 mb-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
@@ -105,6 +182,7 @@
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="inscricao_municipal">Inscrição municipal</label>
             <input id="inscricao_municipal" name="inscricao_municipal" type="text" class="form-control" value="{{ nfse_settings.inscricao_municipal }}">
+            <div class="form-text">Número municipal liberado pela prefeitura para o emissor.</div>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="regime_tributario">Regime tributário</label>
@@ -118,18 +196,24 @@
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="cnae">CNAE</label>
             <input id="cnae" name="cnae" type="text" class="form-control" value="{{ nfse_settings.cnae }}" placeholder="0000-0/00">
+            {% if nfse_setup_resources.field_hints is defined and nfse_setup_resources.field_hints.municipio_ibge %}
+            <div class="form-text">Para o wizard fiscal de Orlândia, o código IBGE usado é <strong>{{ nfse_setup_resources.field_hints.municipio_ibge }}</strong>.</div>
+            {% endif %}
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="codigo_servico">Código de serviço</label>
             <input id="codigo_servico" name="codigo_servico" type="text" class="form-control" value="{{ nfse_settings.codigo_servico }}">
+            <div class="form-text">Use o código tributário do serviço conforme cadastro/liberação municipal.</div>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="aliquota_iss">Alíquota ISS (%)</label>
             <input id="aliquota_iss" name="aliquota_iss" type="number" class="form-control" step="0.01" min="0" value="{{ nfse_settings.aliquota_iss }}">
+            <div class="form-text">A alíquota deve refletir o enquadramento municipal da clínica.</div>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="nfse_username">Usuário NFS-e</label>
             <input id="nfse_username" name="nfse_username" type="text" class="form-control" value="{{ nfse_settings.nfse_username }}">
+            <div class="form-text">Normalmente é o usuário liberado no portal Betha/NFS-e após deferimento da prefeitura.</div>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="nfse_password">Senha NFS-e</label>
@@ -138,10 +222,12 @@
           <div class="col-12 col-md-4">
             <label class="form-label small text-muted" for="nfse_token">Token/Chave NFS-e</label>
             <input id="nfse_token" name="nfse_token" type="text" class="form-control" value="{{ nfse_settings.nfse_token }}">
+            <div class="form-text">Preencha somente se o município ou middleware fornecer token separado do login/senha.</div>
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small text-muted" for="nfse_cert_path">Caminho do certificado</label>
             <input id="nfse_cert_path" name="nfse_cert_path" type="text" class="form-control" value="{{ nfse_settings.nfse_cert_path }}" placeholder="/caminho/arquivo.pfx">
+            <div class="form-text">Para emissão automatizada por certificado A1, informe o caminho local do `.pfx`.</div>
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small text-muted" for="nfse_cert_password">Senha do certificado</label>

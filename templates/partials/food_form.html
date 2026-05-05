@@ -249,7 +249,7 @@ buscaRacaoInput.addEventListener('input', () => {
     return;
   }
 
-  fetch(`/buscar_racoes?q=${encodeURIComponent(q)}`)
+  fetch(`/buscar_racoes?q=${encodeURIComponent(q)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
     .then(resp => resp.json())
     .then(data => {
       sugestoesBuscaRacao.innerHTML = '';

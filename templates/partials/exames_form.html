@@ -217,7 +217,7 @@
           return;
         }
 
-      fetch(`/buscar_exames?q=${encodeURIComponent(query)}`)
+      fetch(`/buscar_exames?q=${encodeURIComponent(query)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
         .then(res => res.json())
         .then(data => {
           sugestoes.innerHTML = '';
@@ -257,7 +257,7 @@
           }
           sugestoesNovo.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
           sugestoesNovo.style.display = 'block';
-          fetch(`/buscar_exames?q=${encodeURIComponent(q)}`)
+          fetch(`/buscar_exames?q=${encodeURIComponent(q)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
             .then(res => res.json())
             .then(data => {
               sugestoesNovo.innerHTML = '';

@@ -1932,6 +1932,12 @@ class Medicamento(db.Model):
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
     conteudo_estruturado = db.Column(db.JSON)  # seções clínicas separadas para UI
 
+    # Sinaliza para quais espécies este item é mais relevante.
+    # Valores: 'CG' (cães/gatos), 'BE' (bovinos/equinos), 'AMBOS', 'OUTRO'.
+    # NULL = não classificado. Usado APENAS para re-ranquear a busca; nenhum item
+    # é escondido ou filtrado por causa deste campo.
+    species_scope = db.Column(db.String(20), index=True, nullable=True)
+
     # Produto "canônico" no VetSmart que representa este PA
     # (ex.: "Prednisona" PA genérico, id=1970)
     vetsmart_produto_id = db.Column(db.Integer, index=True)
@@ -2063,6 +2069,8 @@ class ExameModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)  # ex: Hemograma, Raio-X...
     justificativa = db.Column(db.Text)
+    # Ver Medicamento.species_scope (CG/BE/AMBOS/OUTRO) — usado p/ re-ranquear busca.
+    species_scope = db.Column(db.String(20), index=True, nullable=True)
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -2259,6 +2267,8 @@ class VacinaModelo(db.Model):
     doses_totais = db.Column(db.Integer)
     intervalo_dias = db.Column(db.Integer)
     frequencia = db.Column(db.String(50))
+    # Ver Medicamento.species_scope (CG/BE/AMBOS/OUTRO) — usado p/ re-ranquear busca.
+    species_scope = db.Column(db.String(20), index=True, nullable=True)
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -2366,6 +2376,8 @@ class TipoRacao(db.Model):
     recomendacao = db.Column(db.Float)  # g/kg/dia
     observacoes = db.Column(db.Text)
     peso_pacote_kg = db.Column(db.Float, default=15.0)  # Peso do pacote (kg)
+    # Ver Medicamento.species_scope (CG/BE/AMBOS/OUTRO) — usado p/ re-ranquear busca.
+    species_scope = db.Column(db.String(20), index=True, nullable=True)
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),

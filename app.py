@@ -6229,8 +6229,51 @@ def contabilidade_nfse():
         {"value": "belo_horizonte", "label": "Belo Horizonte (MG)"},
     ]
 
+    def _nfse_setup_resources(municipio_key: str):
+        default_resources = {
+            "wizard_url": url_for("fiscal_onboarding_step", step=1),
+            "links": [],
+        }
+        if municipio_key != "orlandia":
+            return default_resources
+        return {
+            "wizard_url": url_for("fiscal_onboarding_step", step=1),
+            "links": [
+                {
+                    "title": "Portal oficial da NFS-e",
+                    "description": "Acesso principal da prefeitura para emissão e escrituração eletrônica.",
+                    "url": "https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica",
+                },
+                {
+                    "title": "Termo de opção para emissão",
+                    "description": "Pedido de autorização para começar a emitir NFS-e quando a prefeitura exigir deferimento prévio.",
+                    "url": "https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica",
+                },
+                {
+                    "title": "Requerimento para solicitação de senha",
+                    "description": "Formulário citado pela prefeitura para liberação da senha de segurança do emissor.",
+                    "url": "https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica",
+                },
+                {
+                    "title": "Liberação do Cidadão Web",
+                    "description": "A prefeitura informa que o Anexo IV deve ser entregue à Divisão de Tributação para liberar o acesso web.",
+                    "url": "https://www.orlandia.sp.gov.br/novo/cidadao-web",
+                },
+                {
+                    "title": "Acesso Betha / e-gov",
+                    "description": "Entrada do sistema web usado pelo município para operação diária após a liberação.",
+                    "url": "https://e-gov.betha.com.br/",
+                },
+            ],
+            "field_hints": {
+                "municipio_ibge": "3534302",
+                "uf": "SP",
+            },
+        }
+
     nfse_settings = {}
     nfse_missing_fields = []
+    nfse_setup_resources = {"wizard_url": url_for("fiscal_onboarding_step", step=1), "links": []}
     if selected_clinic:
         nfse_settings = {
             "municipio_nfse": get_clinica_field(selected_clinic, "municipio_nfse", "") or "",
@@ -6245,6 +6288,7 @@ def contabilidade_nfse():
             "nfse_token": get_clinica_field(selected_clinic, "nfse_token", "") or "",
         }
         nfse_missing_fields, _municipio_key = _nfse_missing_fields(selected_clinic)
+        nfse_setup_resources = _nfse_setup_resources(_municipio_key)
 
     return render_template(
         'contabilidade/nfse.html',
@@ -6260,6 +6304,8 @@ def contabilidade_nfse():
         municipio_options=municipio_options,
         nfse_settings=nfse_settings,
         nfse_missing_fields=nfse_missing_fields,
+        fiscal_master_key_configured=bool((os.getenv("FISCAL_MASTER_KEY") or "").strip()),
+        nfse_setup_resources=nfse_setup_resources,
         cancel_rules=(
             get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
             if selected_clinic
@@ -17432,6 +17478,7 @@ def buscar_racoes():
     if len(q) < 2:
         return jsonify([])
 
+    # Pool maior para o re-ranqueamento por espécie ter material para reorganizar
     resultados = (
         TipoRacao.query
         .filter(
@@ -17439,9 +17486,17 @@ def buscar_racoes():
             (TipoRacao.linha.ilike(f'%{q}%'))
         )
         .order_by(TipoRacao.marca)
-        .limit(15)
+        .limit(40)
         .all()
     )
+
+    from services.species_ranking import (
+        resolver_species_scope_do_animal,
+        ordenar_por_species_scope,
+    )
+    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+    if scope_alvo:
+        resultados = ordenar_por_species_scope(resultados, scope_alvo)
 
     return jsonify([
         {
@@ -17451,8 +17506,9 @@ def buscar_racoes():
             'recomendacao': r.recomendacao,
             'peso_pacote_kg': r.peso_pacote_kg,
             'observacoes': r.observacoes,
+            'species_scope': r.species_scope,
         }
-        for r in resultados
+        for r in resultados[:15]
     ])
 
 
@@ -18390,7 +18446,15 @@ def buscar_vacinas():
     try:
         resultados = VacinaModelo.query.filter(
             VacinaModelo.nome.ilike(f"%{termo}%")
-        ).all()
+        ).order_by(VacinaModelo.nome).limit(40).all()
+
+        from services.species_ranking import (
+            resolver_species_scope_do_animal,
+            ordenar_por_species_scope,
+        )
+        scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+        if scope_alvo:
+            resultados = ordenar_por_species_scope(resultados, scope_alvo)
 
         return jsonify([
             {
@@ -18401,8 +18465,9 @@ def buscar_vacinas():
                 'doses_totais': v.doses_totais,
                 'intervalo_dias': v.intervalo_dias,
                 'frequencia': v.frequencia or '',
+                'species_scope': v.species_scope,
             }
-            for v in resultados
+            for v in resultados[:15]
         ])
     except Exception as e:
         print(f"Erro ao buscar vacinas: {e}")
@@ -18897,6 +18962,17 @@ def buscar_medicamentos():
 
     filtrados.sort(key=_score, reverse=True)
 
+    # Re-ranqueamento opcional pela espécie do animal sob consulta. Não filtra
+    # nada — apenas eleva itens compatíveis. Sem animal_id, comportamento idêntico
+    # ao histórico (compatibilidade total com chamadas pré-existentes).
+    from services.species_ranking import (
+        resolver_species_scope_do_animal,
+        ordenar_por_species_scope,
+    )
+    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+    if scope_alvo:
+        filtrados = ordenar_por_species_scope(filtrados, scope_alvo)
+
     from services.bulario import serializar_medicamento_busca
     return jsonify([serializar_medicamento_busca(m) for m in filtrados[:15]])
 
@@ -19360,10 +19436,30 @@ def salvar_bloco_exames(animal_id):
 @login_required
 def buscar_exames():
     q = request.args.get('q', '').lower()
-    exames = ExameModelo.query.filter(ExameModelo.nome.ilike(f'%{q}%')).all()
+    exames = (
+        ExameModelo.query
+        .filter(ExameModelo.nome.ilike(f'%{q}%'))
+        .order_by(ExameModelo.nome)
+        .limit(40)
+        .all()
+    )
+
+    from services.species_ranking import (
+        resolver_species_scope_do_animal,
+        ordenar_por_species_scope,
+    )
+    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+    if scope_alvo:
+        exames = ordenar_por_species_scope(exames, scope_alvo)
+
     return jsonify([
-        {'id': e.id, 'nome': e.nome, 'justificativa': e.justificativa}
-        for e in exames
+        {
+            'id': e.id,
+            'nome': e.nome,
+            'justificativa': e.justificativa,
+            'species_scope': e.species_scope,
+        }
+        for e in exames[:15]
     ])
 
 

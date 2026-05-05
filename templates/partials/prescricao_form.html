@@ -868,7 +868,11 @@
     if (nome.length < 2) return null;
 
     try {
-      const resp = await fetch(`/buscar_medicamentos?q=${encodeURIComponent(nome)}`);
+      const _params = new URLSearchParams({ q: nome });
+      if (typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) {
+        _params.set('animal_id', String(ANIMAL_ID_CONSULTA));
+      }
+      const resp = await fetch(`/buscar_medicamentos?${_params.toString()}`);
       const data = await resp.json().catch(() => []);
       if (!resp.ok || !Array.isArray(data)) return null;
 
@@ -2563,7 +2567,7 @@
       sugestoes.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoes.style.display = 'block';
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
         .then(res => {
           if (!res.ok) throw new Error('Erro na busca');
           return res.json();
@@ -2631,7 +2635,7 @@
       sugestoesNova.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoesNova.style.display = 'block';
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
         .then(res => {
           if (!res.ok) throw new Error('Erro na busca');
           return res.json();

@@ -158,7 +158,7 @@
           return;
         }
 
-        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
+        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
           .then(res => res.json())
           .then(data => {
             console.log("🟢 Resultados:", data);
@@ -216,7 +216,7 @@
           sugestoesBuscaVacina.style.display = 'none';
           return;
         }
-        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
+        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}{% if animal %}&animal_id={{ animal.id }}{% endif %}`)
           .then(r => r.json())
           .then(data => {
             sugestoesBuscaVacina.innerHTML = '';
