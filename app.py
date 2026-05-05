@@ -26359,6 +26359,7 @@ def bulario_sugerir_dose_api():
 
 
 @app.route("/api/animal/<int:animal_id>/peso", methods=["PATCH"])
+@csrf.exempt
 @login_required
 def api_atualizar_peso_animal(animal_id):
     """Atualiza apenas o peso de um animal. Usado no inline-input da prescrição."""
