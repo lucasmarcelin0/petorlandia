@@ -959,6 +959,41 @@
     _medicamentoIdSugestao = null;
   }
 
+  async function salvarPesoInline(animalId, inputId, errId, medicamentoId) {
+    const input  = document.getElementById(inputId);
+    const errEl  = document.getElementById(errId);
+    const btn    = document.getElementById('inline-peso-btn');
+    const peso   = parseFloat((input?.value || '').replace(',', '.'));
+
+    if (!input || isNaN(peso) || peso <= 0) {
+      if (errEl) { errEl.textContent = 'Informe um peso válido (ex: 5,4).'; errEl.style.display = 'block'; }
+      input?.focus();
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+    if (errEl) errEl.style.display = 'none';
+
+    try {
+      const resp = await fetch(`/api/animal/${animalId}/peso`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peso_kg: peso }),
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || !data.ok) {
+        throw new Error(data.erro || 'Erro ao salvar.');
+      }
+
+      // Peso salvo — recarrega a sugestão de dose automaticamente
+      await carregarSugestaoDose(medicamentoId);
+    } catch (err) {
+      if (errEl) { errEl.textContent = err.message || 'Erro ao salvar o peso.'; errEl.style.display = 'block'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Salvar e calcular'; }
+    }
+  }
+
   // ======================================================================
   // Seletor de modo de dose: mínima / média / máxima
   // ======================================================================
@@ -1372,25 +1407,37 @@
 
       if (!data || data.disponivel === false) {
         const motivo = data?.motivo || 'Sem sugestão de dose para este caso.';
-        // Caso especial: peso não cadastrado — destaque visual com link para editar animal
+        // Caso especial: peso não cadastrado — input inline para salvar o peso sem sair da tela
         const semPeso = motivo.toLowerCase().includes('peso') && motivo.toLowerCase().includes('cadastrad');
         if (semPeso) {
-          const animalUrl = ANIMAL_ID_CONSULTA ? `/animal/${ANIMAL_ID_CONSULTA}/editar` : '#';
+          const inputId = 'inline-peso-input';
+          const btnId   = 'inline-peso-btn';
+          const errId   = 'inline-peso-erro';
           const html = `
             <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#fff8e1;border:1px solid #ffe082;border-left:4px solid #f59e0b;border-radius:7px;">
-              <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b;font-size:1.1rem;flex-shrink:0;margin-top:1px;"></i>
-              <div>
+              <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b;font-size:1.1rem;flex-shrink:0;margin-top:2px;"></i>
+              <div style="flex:1;">
                 <div style="font-weight:600;color:#92400e;font-size:.85rem;margin-bottom:3px;">Peso não cadastrado</div>
-                <div style="color:#78350f;font-size:.8rem;line-height:1.45;">
-                  Para exibir a dose sugerida, cadastre o peso do animal.
+                <div style="color:#78350f;font-size:.8rem;margin-bottom:8px;">Informe o peso para calcular a dose sugerida:</div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <div style="display:flex;align-items:center;border:1px solid #f59e0b;border-radius:6px;overflow:hidden;background:#fff;">
+                    <input id="${inputId}" type="number" min="0.1" max="500" step="0.1"
+                           placeholder="0,0"
+                           style="width:80px;border:none;padding:5px 8px;font-size:.85rem;outline:none;"
+                           onkeydown="if(event.key==='Enter'){document.getElementById('${btnId}').click();}">
+                    <span style="padding:0 8px;font-size:.8rem;color:#92400e;background:#fff8e1;border-left:1px solid #f59e0b;align-self:stretch;display:flex;align-items:center;">kg</span>
+                  </div>
+                  <button id="${btnId}" type="button"
+                          style="padding:5px 14px;font-size:.8rem;font-weight:600;color:#fff;background:#f59e0b;border:none;border-radius:6px;cursor:pointer;"
+                          onclick="salvarPesoInline(${ANIMAL_ID_CONSULTA}, '${inputId}', '${errId}', ${medicamentoId})">
+                    Salvar e calcular
+                  </button>
                 </div>
-                <a href="${animalUrl}" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:.78rem;font-weight:600;color:#b45309;text-decoration:none;border:1px solid #f59e0b;border-radius:5px;padding:3px 10px;background:#fffbeb;">
-                  <i class="bi bi-pencil-square"></i> Cadastrar peso do animal
-                </a>
+                <div id="${errId}" style="display:none;color:#dc2626;font-size:.75rem;margin-top:5px;"></div>
               </div>
             </div>`;
           _mostrarEstadoSugestao({indisponivel: {html}});
+          setTimeout(() => document.getElementById(inputId)?.focus(), 80);
         } else {
           _mostrarEstadoSugestao({indisponivel: motivo});
         }

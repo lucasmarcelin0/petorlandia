@@ -26358,6 +26358,31 @@ def bulario_sugerir_dose_api():
     })
 
 
+@app.route("/api/animal/<int:animal_id>/peso", methods=["PATCH"])
+@login_required
+def api_atualizar_peso_animal(animal_id):
+    """Atualiza apenas o peso de um animal. Usado no inline-input da prescrição."""
+    animal = get_animal_or_404(animal_id)
+    # Permite ao veterinário da clínica ou ao dono do animal alterar o peso.
+    from flask_login import current_user as cu
+    is_owner  = (animal.user_id == cu.id)
+    is_clinic = bool(getattr(animal, "clinica_id", None) and cu.clinica_id == animal.clinica_id)
+    if not is_owner and not is_clinic:
+        return jsonify({"ok": False, "erro": "Sem permissão."}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        novo_peso = float(data.get("peso_kg", ""))
+        if novo_peso <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "erro": "Peso inválido."}), 400
+
+    animal.peso = novo_peso
+    db.session.commit()
+    return jsonify({"ok": True, "peso_kg": novo_peso})
+
+
 from blueprint_utils import register_domain_blueprints
 
 _fiscal_onboarding_path = pathlib.Path(__file__).resolve().parent / "app" / "routes" / "fiscal_onboarding.py"
