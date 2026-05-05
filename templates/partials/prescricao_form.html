@@ -899,6 +899,7 @@
         String(draft?.indicacao || '').trim() || null
       );
       if (calculou && sugestaoDoseAtual) {
+        _selecionarApresentacaoPadraoSugestao();
         sugestaoDoseAtual.nome_exibicao_override = medicamento;
         usarDoseSugerida();
         _mesclarInstrucoesGeraisSugestao(instructions);
@@ -1154,6 +1155,10 @@
 
   function _frequenciaParaModo(s) {
     if (!s) return '';
+    const freqBruta = String(s.frequencia_bruta || '').trim();
+    if (/dose\s+u[nn]ica/i.test(_normalizarTextoSugestaoClinica(freqBruta))) {
+      return 'Dose unica';
+    }
     if (s.tem_faixa_frequencia && s.intervalo_min_horas && s.intervalo_max_horas) {
       const h = _calcFreqHoras(s, _freqModo);
       return h ? _freqTextoParaHoras(h) : (s.frequencia_texto || '');
@@ -1782,6 +1787,20 @@
     _atualizarAcoesDoseSugerida();
   }
 
+  function _selecionarApresentacaoPadraoSugestao() {
+    const grupos = window._concGrupos || [];
+    if (!grupos.length) return false;
+
+    const grupoSolido = grupos.find(g => ['comprimido', 'capsula', 'cápsula', 'tablete', 'dragea', 'drágea'].includes((g.unidade_pratica || '').toLowerCase()));
+    const grupoPadrao = grupoSolido || grupos[0];
+    if (!grupoPadrao) return false;
+
+    const idx = grupos.indexOf(grupoPadrao);
+    if (idx < 0) return false;
+    _onChipConc(idx);
+    return true;
+  }
+
   function _atualizarPrescricaoPratica() {
     const ap = _apresentacaoEscolhida;
     const conc = _concentracaoEscolhida;
@@ -2267,7 +2286,8 @@
       frequencia = document.getElementById('frequencia').value.trim();
       dose = document.getElementById('dose').value.trim();
       duracao = document.getElementById('duracao').value.trim();
-      texto = `${dose}, ${frequencia}, por ${duracao}`;
+      const duracaoNormalizada = duracao.toLowerCase().startsWith('por ') ? duracao : `por ${duracao}`;
+      texto = `${dose}, ${frequencia}, ${duracaoNormalizada}`;
     }
 
     prescricoes.push({
