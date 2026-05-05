@@ -12,6 +12,14 @@
   data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=consulta.clinica_id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+  <div class="consultation-section-heading consultation-section-heading--consulta mb-4">
+    <span class="consultation-section-heading__icon"><i class="fa-solid fa-stethoscope"></i></span>
+    <div>
+      <h5 class="mb-0">Consulta Cl&iacute;nica</h5>
+      <p class="mb-0 text-muted">Queixa, hist&oacute;rico, exame f&iacute;sico e conduta em um fluxo organizado.</p>
+    </div>
+  </div>
+
   <!-- Seção de Queixa Principal -->
   <div class="mb-3">
     <label for="queixa-principal" class="form-label fw-bold">

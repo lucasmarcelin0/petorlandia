@@ -35,13 +35,26 @@
     </div>
 
     {% if animal %}
+      {% set hero_photo_url = animal.image %}
+      {% if not hero_photo_url and animal.photos %}
+        {% set hero_photo_url = animal.photos[0].image_url %}
+      {% endif %}
       <div class="animal-photo consultation-hero__avatar">
-        {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}">
+        {% if hero_photo_url %}
+          <img
+            src="{{ hero_photo_url }}"
+            alt="Foto de {{ animal.name }}"
+            loading="lazy"
+            style="--photo-offset-x: {{ animal.photo_offset_x or 0 }}px; --photo-offset-y: {{ animal.photo_offset_y or 0 }}px; --photo-rotation: {{ animal.photo_rotation or 0 }}deg; --photo-zoom: {{ animal.photo_zoom or 1 }};"
+          >
         {% else %}
-          <div class="no-photo-placeholder consultation-hero__avatar-placeholder">
-            <i class="fa-solid fa-camera text-muted"></i>
-          </div>
+          <img
+            src="{{ url_for('static', filename='default_animal.png') }}"
+            alt="Foto ainda nao cadastrada de {{ animal.name }}"
+            class="consultation-hero__avatar-fallback"
+            loading="lazy"
+            data-photo-placeholder="true"
+          >
         {% endif %}
       </div>
     {% endif %}
@@ -571,7 +584,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  const selectors = ['.animal-photo img', '#profile_photo-preview img', '#animal-image-preview img', '#profile_photo-img', '#animal-image-img'];
+  const selectors = ['.animal-photo img:not([data-photo-placeholder])', '#profile_photo-preview img', '#animal-image-preview img', '#profile_photo-img', '#animal-image-img'];
   selectors.forEach(function (sel) {
     document.querySelectorAll(sel).forEach(function (image) {
       image.style.cursor = 'pointer';

@@ -2328,10 +2328,12 @@ body {
   width: 88px;
   height: 88px;
   flex: 0 0 88px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0.25rem;
+  overflow: hidden;
   border: 1px solid rgba(37, 99, 235, 0.22);
   border-radius: 999px;
   background: #ffffff;
@@ -2347,6 +2349,14 @@ body {
 
 .consultation-hero__avatar img {
   object-fit: cover;
+  transform: translate(var(--photo-offset-x, 0), var(--photo-offset-y, 0)) rotate(var(--photo-rotation, 0deg)) scale(var(--photo-zoom, 1));
+  transform-origin: center;
+}
+
+.consultation-hero__avatar-fallback {
+  object-position: center;
+  transform: none !important;
+  opacity: 0.92;
 }
 
 .consultation-hero__avatar-placeholder {
@@ -2357,16 +2367,14 @@ body {
 }
 
 .consultation-tabs {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.45rem;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding: 0.55rem;
   border: 1px solid var(--consultation-line);
   border-radius: 1.2rem;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 38px -34px rgba(15, 23, 42, 0.55);
-  scrollbar-width: thin;
 }
 
 .consultation-tabs .nav-item {
@@ -2380,6 +2388,7 @@ body {
   color: #475569;
   background: transparent;
   padding: 0.45rem 0.8rem;
+  white-space: nowrap;
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -2396,15 +2405,20 @@ body {
 }
 
 .consultation-tabs .icon-circle {
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: 0 0 1.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px !important;
   font-size: 0.82rem;
-  box-shadow: none;
+  overflow: hidden;
+  box-shadow: 0 12px 22px -18px rgba(15, 23, 42, 0.75);
 }
 
 .consultation-tabs .nav-link.active .icon-circle {
-  color: var(--consultation-primary) !important;
-  background: #ffffff !important;
+  box-shadow: 0 14px 26px -18px rgba(15, 118, 110, 0.85);
 }
 
 .consultation-workspace .tab-pane > .card {
@@ -2429,7 +2443,8 @@ body {
   color: #132238;
 }
 
-.tutor-section-heading {
+.tutor-section-heading,
+.consultation-section-heading {
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
@@ -2437,25 +2452,176 @@ body {
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-.tutor-section-heading__icon {
+.tutor-section-heading__icon,
+.consultation-section-heading__icon {
   width: 2.35rem;
   height: 2.35rem;
   flex: 0 0 2.35rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.85rem;
-  color: var(--consultation-primary);
-  background: var(--consultation-primary-soft);
+  border-radius: 999px;
+  color: var(--section-color, var(--consultation-primary));
+  background: var(--section-soft, var(--consultation-primary-soft));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
 
-.tutor-section-heading h5 {
+.tutor-section-heading h5,
+.consultation-section-heading h5 {
   color: #0f172a;
   font-weight: 800;
 }
 
-.tutor-section-heading p {
+.tutor-section-heading p,
+.consultation-section-heading p {
   font-size: 0.88rem;
+}
+
+.consultation-section-heading + h5.mb-3 {
+  display: none;
+}
+
+.consultation-section-heading--animal {
+  --section-color: #dc2626;
+  --section-soft: rgba(220, 38, 38, 0.1);
+}
+
+.consultation-section-heading--racao {
+  --section-color: #15803d;
+  --section-soft: rgba(22, 163, 74, 0.11);
+}
+
+.consultation-section-heading--consulta {
+  --section-color: #0284c7;
+  --section-soft: rgba(14, 165, 233, 0.12);
+}
+
+.consultation-section-heading--medicamentos {
+  --section-color: #ca8a04;
+  --section-soft: rgba(234, 179, 8, 0.15);
+}
+
+.consultation-section-heading--exames {
+  --section-color: #7c3aed;
+  --section-soft: rgba(124, 58, 237, 0.12);
+}
+
+.consultation-section-heading--vacinas {
+  --section-color: #059669;
+  --section-soft: rgba(16, 185, 129, 0.12);
+}
+
+.consultation-section-heading--documentos {
+  --section-color: #db2777;
+  --section-soft: rgba(219, 39, 119, 0.11);
+}
+
+.consultation-section-heading--orcamento {
+  --section-color: #ea580c;
+  --section-soft: rgba(249, 115, 22, 0.12);
+}
+
+.consultation-workspace .tab-pane > .card > .card-body > form,
+.consultation-workspace .tab-pane > .card > .card-body > div {
+  color: #132238;
+}
+
+.consultation-workspace .tab-pane .form-label {
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.015em;
+  margin-bottom: 0.35rem;
+}
+
+.consultation-workspace .tab-pane .form-control,
+.consultation-workspace .tab-pane .form-select {
+  min-height: 2.75rem;
+  border-color: rgba(100, 116, 139, 0.24);
+  border-radius: 0.85rem;
+  background-color: #ffffff;
+  box-shadow: none;
+}
+
+.consultation-workspace .tab-pane textarea.form-control {
+  min-height: auto;
+}
+
+.consultation-workspace .tab-pane .form-control-sm,
+.consultation-workspace .tab-pane .form-select-sm {
+  min-height: 2.35rem;
+  border-radius: 0.7rem;
+}
+
+.consultation-workspace .tab-pane .form-control:focus,
+.consultation-workspace .tab-pane .form-select:focus {
+  border-color: rgba(15, 118, 110, 0.65);
+  box-shadow: 0 0 0 0.22rem rgba(15, 118, 110, 0.12);
+}
+
+.consultation-workspace .tab-pane .btn {
+  border-radius: 0.82rem;
+  font-weight: 700;
+}
+
+.consultation-workspace .tab-pane .btn-sm {
+  border-radius: 0.65rem;
+}
+
+.consultation-workspace .tab-pane .btn-group > .btn:not(:first-child) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.consultation-workspace .tab-pane .btn-group > .btn:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.consultation-workspace .tab-pane .border.rounded.bg-light,
+.consultation-workspace .tab-pane form.border.rounded.bg-light,
+.consultation-workspace .tab-pane div.border.rounded.bg-white {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  border-radius: 1.15rem !important;
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 30%),
+    linear-gradient(135deg, #f8fafc, #ffffff) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.consultation-workspace .tab-pane .card:not(.shadow-sm) {
+  border-color: rgba(15, 23, 42, 0.08);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.consultation-workspace .tab-pane .list-group {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.consultation-workspace .tab-pane .list-group-item {
+  border-color: rgba(15, 23, 42, 0.08);
+  padding: 0.85rem 1rem;
+}
+
+.consultation-workspace .tab-pane .table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: rgba(15, 23, 42, 0.08);
+  margin-bottom: 0;
+}
+
+.consultation-workspace .tab-pane .table thead th {
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.consultation-workspace .tab-pane hr {
+  border-color: rgba(15, 23, 42, 0.08);
+  opacity: 1;
 }
 
 .tutor-profile-form .form-label,

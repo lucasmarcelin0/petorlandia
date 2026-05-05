@@ -1,5 +1,13 @@
 {% set default_payer_type = 'plan' if consulta.health_subscription_id else 'particular' %}
 
+<div class="consultation-section-heading consultation-section-heading--orcamento mb-4">
+  <span class="consultation-section-heading__icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+  <div>
+    <h5 class="mb-0">Or&ccedil;amento da Consulta</h5>
+    <p class="mb-0 text-muted">Resumo financeiro, cobertura e itens do atendimento.</p>
+  </div>
+</div>
+
 <h5 class="mb-3">Orçamento da Consulta</h5>
 
 {% set resumo_items = consulta.orcamento_items[:3] %}
