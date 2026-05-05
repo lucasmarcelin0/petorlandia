@@ -250,6 +250,9 @@
       width: auto;
       min-height: 0;
       vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     td[contenteditable="true"]:empty::before {
@@ -297,17 +300,27 @@
       margin: 0;
       border: none;
       border-radius: 0;
+      table-layout: fixed;
     }
 
     .travel-table-card th {
       background: linear-gradient(180deg, rgba(31, 58, 86, 0.08), rgba(31, 58, 86, 0.03));
       font-size: 9.8pt;
+      line-height: 1.35;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .travel-table-card td {
       min-height: 42px;
       vertical-align: top;
       background: #fff;
+      padding: 8px 10px;
+      line-height: 1.35;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .travel-note {
@@ -352,17 +365,33 @@
       min-height: 86px;
     }
 
-    .travel-subsection-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-
     .travel-subsection {
       padding: 16px;
       border: 1px solid rgba(230, 237, 243, 0.95);
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.88);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .travel-subsection .travel-table-card th:nth-child(1),
+    .travel-subsection .travel-table-card td:nth-child(1) {
+      width: 18%;
+    }
+
+    .travel-subsection .travel-table-card th:nth-child(2),
+    .travel-subsection .travel-table-card td:nth-child(2) {
+      width: 20%;
+    }
+
+    .travel-subsection .travel-table-card th:nth-child(3),
+    .travel-subsection .travel-table-card td:nth-child(3) {
+      width: 24%;
+    }
+
+    .travel-subsection .travel-table-card th:nth-child(4),
+    .travel-subsection .travel-table-card td:nth-child(4) {
+      width: 38%;
     }
 
     .travel-subsection .atv-subsection {
@@ -422,7 +451,6 @@
       .travel-hero,
       .travel-signature,
       .travel-grid,
-      .travel-subsection-grid,
       .travel-checklist,
       .travel-summary {
         grid-template-columns: 1fr;
@@ -714,53 +742,51 @@
     <p class="travel-section__intro">
       Preencha somente os tratamentos efetivamente realizados no periodo exigido pela autoridade de destino.
     </p>
-    <div class="travel-subsection-grid">
-      <div class="travel-subsection">
-        <div class="atv-subsection">Antiparasitario interno</div>
-        <div class="travel-table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>Data de aplicacao</th>
-                <th>Laboratorio</th>
-                <th>Nome comercial</th>
-                <th>Principio(s) ativo(s)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td contenteditable="true" data-ph="__/__/____"></td>
-                <td contenteditable="true"></td>
-                <td contenteditable="true"></td>
-                <td contenteditable="true"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="travel-subsection">
+      <div class="atv-subsection">Antiparasitario interno</div>
+      <div class="travel-table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Data de aplicacao</th>
+              <th>Laboratorio</th>
+              <th>Nome comercial</th>
+              <th>Principio(s) ativo(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td contenteditable="true" data-ph="__/__/____"></td>
+              <td contenteditable="true"></td>
+              <td contenteditable="true"></td>
+              <td contenteditable="true"></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+    </div>
 
-      <div class="travel-subsection">
-        <div class="atv-subsection">Antiparasitario externo</div>
-        <div class="travel-table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>Data de aplicacao</th>
-                <th>Laboratorio</th>
-                <th>Nome comercial</th>
-                <th>Principio(s) ativo(s)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td contenteditable="true" data-ph="__/__/____"></td>
-                <td contenteditable="true"></td>
-                <td contenteditable="true"></td>
-                <td contenteditable="true"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="travel-subsection">
+      <div class="atv-subsection">Antiparasitario externo</div>
+      <div class="travel-table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Data de aplicacao</th>
+              <th>Laboratorio</th>
+              <th>Nome comercial</th>
+              <th>Principio(s) ativo(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td contenteditable="true" data-ph="__/__/____"></td>
+              <td contenteditable="true"></td>
+              <td contenteditable="true"></td>
+              <td contenteditable="true"></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
     <p class="travel-note">

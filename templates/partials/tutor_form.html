@@ -2,7 +2,7 @@
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 <!-- 🔍 Busca de Tutor - Melhorado com acessibilidade e feedback visual -->
-<div class="mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
+<div class="tutor-search-panel mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
   <label for="autocomplete-tutor" class="form-label">
     <i class="bi bi-search me-1"></i> Buscar Tutor Existente
   </label>
@@ -44,48 +44,69 @@
 <!-- 👤 Formulário de Tutor - Aprimorado com validação e organização -->
 <form id="tutor-form" method="POST" enctype="multipart/form-data"
       {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}
-      class="needs-validation" novalidate data-sync>
+      class="needs-validation tutor-profile-form" novalidate data-sync>
   {{ tutor_form.hidden_tag() if tutor_form else '' }}
   
-  <h5 class="mb-4 d-flex align-items-center gap-2">
-    <i class="bi bi-person-fill"></i> Cadastro do Tutor
-  </h5>
+  <div class="tutor-section-heading mb-4">
+    <span class="tutor-section-heading__icon"><i class="bi bi-person-fill"></i></span>
+    <div>
+      <h5 class="mb-0">Cadastro do Tutor</h5>
+      <p class="mb-0 text-muted">Dados de contato, identificacao e endereco do responsavel.</p>
+    </div>
+  </div>
 
-  <div class="row g-3">
-    <!-- Foto + Nome -->
-    <div class="col-md-6">
-      <label class="form-label">Foto e Nome</label>
-      <div class="d-flex align-items-center gap-3">
-        {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
-                         tutor_form.photo_offset_x, tutor_form.photo_offset_y,
-                         tutor.profile_photo if has_tutor else '', 120, 'profile_photo') }}
-        <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
-               value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
-        <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
+  <div class="row g-4">
+    <!-- Foto + contato principal -->
+    <div class="col-12">
+      <div class="tutor-identity-card">
+        <div class="tutor-photo-panel">
+          <label class="form-label">Foto do tutor</label>
+          {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
+                           tutor_form.photo_offset_x, tutor_form.photo_offset_y,
+                           tutor.profile_photo if has_tutor else '', 112, 'profile_photo') }}
+        </div>
+
+        <div class="tutor-identity-fields">
+          <div class="row g-3">
+            <div class="col-lg-7">
+              <label class="form-label">Nome completo</label>
+              <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
+                     value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
+              <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
+            </div>
+
+            <div class="col-lg-5">
+              <label for="tutor-phone" class="form-label">Telefone</label>
+              <input type="tel" id="tutor-phone" name="phone" class="form-control"
+                     placeholder="Apenas numeros"
+                     pattern="[0-9]{10,11}"
+                     value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
+              <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
+            </div>
+
+            <div class="col-12">
+              <label for="tutor-email" class="form-label">E-mail</label>
+              <input type="email" id="tutor-email" name="email" class="form-control"
+                     placeholder="exemplo@email.com" required
+                     value="{{ tutor.email|default('', true) if has_tutor else '' }}">
+              <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Telefone - Aceita apenas números -->
-    <div class="col-md-6">
-      <label for="tutor-phone" class="form-label">Telefone</label>
-      <input type="tel" id="tutor-phone" name="phone" class="form-control" 
-             placeholder="Apenas números (ex: 99999999999)" 
-             pattern="[0-9]{10,11}"
-             value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
-      <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
-    </div>
-
     <!-- CPF - Aceita apenas números -->
-    <div class="col-md-6">
+    <div class="col-sm-6 col-xl-3">
       <label for="tutor-cpf" class="form-label">CPF</label>
       <input type="text" id="tutor-cpf" name="cpf" class="form-control" 
-             placeholder="Apenas números (ex: 12345678901)" 
+             placeholder="Apenas numeros"
              pattern="[0-9]{11}"
              value="{{ tutor.cpf|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um CPF válido (11 dígitos)</div>
     </div>
 
-        <div class="col-md-6">
+    <div class="col-sm-6 col-xl-3">
       <label for="tutor-rg" class="form-label">RG</label>
       <input type="text" id="tutor-rg" name="rg" class="form-control"
              placeholder="Documento de identidade" pattern="[A-Za-z0-9]+"
@@ -94,7 +115,7 @@
     </div>
     
     <!-- Data de nascimento + Idade - Com cálculo automático -->
-    <div class="col-md-6">
+    <div class="col-sm-6 col-xl-3">
       <label for="tutor-date-of-birth" class="form-label">Data de Nascimento</label>
       <input type="date" id="tutor-date-of-birth" name="date_of_birth" 
             class="form-control" max="{{ '%Y-%m-%d' | date_now }}"
@@ -103,22 +124,13 @@
       <div class="invalid-feedback">Por favor, insira uma data válida</div>
     </div>
 
-    <div class="col-md-6">
+    <div class="col-sm-6 col-xl-3">
       <label for="tutor-age" class="form-label">Idade</label>
       <input type="text" id="tutor-age" class="form-control bg-light" disabled>
     </div>
 
-    <!-- Email - Com validação robusta -->
-    <div class="col-md-12">
-      <label for="tutor-email" class="form-label">E-mail</label>
-      <input type="email" id="tutor-email" name="email" class="form-control" 
-             placeholder="exemplo@email.com" required
-             value="{{ tutor.email|default('', true) if has_tutor else '' }}">
-      <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
-    </div>
-
     <!-- Endereço completo via CEP - Melhorado -->
-    <div class="col-md-12">
+    <div class="col-12">
       {% if has_tutor %}
         {% set endereco = tutor.endereco %}
       {% else %}
@@ -129,7 +141,7 @@
 
     <!-- Adicionado por e data - Melhorado -->
     {% if has_tutor and tutor.added_by %}
-      <div class="col-md-12">
+      <div class="col-12">
         <label for="created-info" class="form-label">
           <i class="bi bi-person-plus"></i> Adicionado por
         </label>
@@ -141,10 +153,12 @@
     {% endif %}
 
     <!-- Botão - Melhorado com feedback -->
-    <div class="col-12 mt-3">
-      <button type="submit" class="btn btn-primary w-100 py-2">
-        <i class="bi bi-save me-2"></i> Salvar Tutor
-      </button>
+    <div class="col-12">
+      <div class="tutor-form-actions">
+        <button type="submit" class="btn btn-primary tutor-save-btn">
+          <i class="bi bi-save me-2"></i> Salvar Tutor
+        </button>
+      </div>
     </div>
   </div>
 </form>

@@ -10,33 +10,36 @@
 {% endblock %}
 
 {% block main %}
-<div class="container py-4">
-  <!-- Cabeçalho minimalista -->
-  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-    <div>
+<div class="container py-4 consultation-workspace">
+  <!-- Cabecalho da consulta -->
+  <div class="consultation-hero mb-4">
+    <div class="consultation-hero__content">
       {% if animal %}
-        <h2 class="h4 mb-0 text-dark fw-bold" id="animal-name">
+        <p class="consultation-eyebrow mb-2">Prontuário veterinário</p>
+        <h2 class="consultation-title mb-1" id="animal-name">
           <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name }}
         </h2>
-        <small class="text-muted">Prontuário</small>
+        <small class="consultation-subtitle">Tutor: {{ tutor.name if tutor else 'não informado' }}</small>
       {% elif tutor %}
-        <h2 class="h4 mb-0 text-dark fw-bold">
+        <p class="consultation-eyebrow mb-2">Atendimento</p>
+        <h2 class="consultation-title mb-1">
           <i class="fa-solid fa-user text-primary me-2"></i>Novo Atendimento
         </h2>
-        <small class="text-muted" id="tutor-name">{{ tutor.name }}</small>
+        <small class="consultation-subtitle" id="tutor-name">{{ tutor.name }}</small>
       {% else %}
-        <h2 class="h4 mb-0 text-dark fw-bold">
+        <p class="consultation-eyebrow mb-2">Atendimento</p>
+        <h2 class="consultation-title mb-0">
           <i class="fa-solid fa-hospital-user text-primary me-2"></i>Novo Atendimento Veterinário
         </h2>
       {% endif %}
     </div>
 
     {% if animal %}
-      <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary" style="width: 120px; height: 120px;">
+      <div class="animal-photo consultation-hero__avatar">
         {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="120" height="120">
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}">
         {% else %}
-          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
+          <div class="no-photo-placeholder consultation-hero__avatar-placeholder">
             <i class="fa-solid fa-camera text-muted"></i>
           </div>
         {% endif %}
@@ -93,7 +96,7 @@
   </div>
   {% endif %}
 
-<ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="consultaTabs" role="tablist">
+<ul class="nav nav-tabs consultation-tabs pet-nav mb-4" id="consultaTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active d-flex align-items-center gap-2" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button" role="tab">
       <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-user"></i></span>
@@ -257,66 +260,6 @@
     </div>
   </div>
 {% endif %}
-
-<style>
-  .icon-circle {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .nav-link:hover .icon-circle {
-    transform: scale(1.15);
-    box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-  }
-
-  .pet-nav .nav-link {
-    border-radius: 8px 8px 0 0;
-    padding: 0.6rem 1rem;
-    background-color: #fff;
-    border: none;
-    transition: background-color 0.25s ease, color 0.25s ease;
-  }
-
-  .pet-nav .nav-link.active {
-    background: linear-gradient(90deg, #ffecd2, #fcb69f);
-    border-bottom: 3px solid #ff9800;
-    font-weight: 600;
-    color: #000;
-  }
-
-  .pet-nav .nav-link:not(.active):hover {
-    background-color: #f8f9fa;
-  }
-
-  .card.shadow-sm {
-    border-radius: 12px;
-    border: none;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
-  }
-
-  .card-body {
-    padding: 1.25rem;
-  }
-
-  .alert {
-    border-radius: 10px;
-    padding: 0.85rem 1.1rem;
-  }
-
-  .alert i {
-    font-size: 1.3rem;
-  }
-</style>
-
-
-
 
 <script>
 function bindSyncForms(root) {

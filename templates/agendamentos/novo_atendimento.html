@@ -1,10 +1,15 @@
 {% extends 'base_consulta.html' %}
 {% block main %}
 
-<div class="container py-4">
-  <h2 class="mb-4">🩺 Novo Atendimento Veterinário</h2>
+<div class="container py-4 consultation-workspace">
+  <div class="consultation-hero mb-4">
+    <div class="consultation-hero__content">
+      <p class="consultation-eyebrow mb-2">Atendimento</p>
+      <h2 class="consultation-title mb-0">🩺 Novo Atendimento Veterinário</h2>
+    </div>
+  </div>
 
-  <div class="card">
+  <div class="card shadow-sm border-0 rounded-4">
     <div class="card-body">
       {% include 'partials/tutor_form.html' with context %}
     </div>

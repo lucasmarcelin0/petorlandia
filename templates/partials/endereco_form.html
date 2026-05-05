@@ -1,23 +1,30 @@
-<div class="card shadow-sm rounded-4 p-4 mb-4 border-0 bg-light" data-address-card>
-  <h5 class="mb-1 text-primary d-flex align-items-center">
-    <i class="bi bi-geo-alt-fill me-2"></i> Endereço
-    <button type="button" class="btn btn-sm btn-primary ms-3" onclick="preencherComLocalizacao(this)"
-      title="Atualizar o endereço com a sua localização atual" aria-label="Atualizar com localização atual">
-      <i class="bi bi-crosshair"></i>
-      Usar localização atual
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="preencherComLocalizacaoDoMapa(this)"
-      title="Buscar o endereço a partir do ponto selecionado no mapa" aria-label="Buscar endereço pelo mapa">
-      <i class="bi bi-map"></i>
-      Usar localização do mapa
-    </button>
-  </h5>
-  <p class="text-muted mb-3">Use o mapa ou preencha manualmente. Exemplo: "Av. Paulista, 1000".</p>
+<div class="address-card mb-4" data-address-card>
+  <div class="address-card__header">
+    <div>
+      <h5 class="address-card__title">
+        <i class="bi bi-geo-alt-fill"></i>
+        Endereço
+      </h5>
+      <p class="address-card__subtitle">Use o mapa ou preencha manualmente. Exemplo: "Av. Paulista, 1000".</p>
+    </div>
+    <div class="address-card__actions">
+      <button type="button" class="btn btn-sm btn-primary" onclick="preencherComLocalizacao(this)"
+        title="Atualizar o endereço com a sua localização atual" aria-label="Atualizar com localização atual">
+        <i class="bi bi-crosshair"></i>
+        Usar localização atual
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-success" onclick="preencherComLocalizacaoDoMapa(this)"
+        title="Buscar o endereço a partir do ponto selecionado no mapa" aria-label="Buscar endereço pelo mapa">
+        <i class="bi bi-map"></i>
+        Usar localização do mapa
+      </button>
+    </div>
+  </div>
   <div class="text-muted small mb-2" data-geo-status></div>
   <input type="hidden" name="latitude" id="latitude" value="{{ endereco.latitude|default('', true) if endereco else '' }}">
   <input type="hidden" name="longitude" id="longitude" value="{{ endereco.longitude|default('', true) if endereco else '' }}">
 
-  <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+  <div class="address-card__tools">
     <div class="form-check form-switch m-0" title="Quando desligado, recalcula as coordenadas ao editar o endereço.">
       <input class="form-check-input" type="checkbox" id="keepCoordinates" checked>
       <label class="form-check-label d-flex align-items-center gap-1" for="keepCoordinates">
@@ -31,15 +38,15 @@
       Remover localização
     </button>
   </div>
-  <div class="small text-muted mb-3" data-coordinates-display>Coordenadas não definidas.</div>
-  <div class="border rounded-3 mb-3 d-none" style="height: 220px; min-height: 180px;" data-map-preview></div>
+  <div class="address-card__coordinates" data-coordinates-display>Coordenadas não definidas.</div>
+  <div class="address-card__map d-none" data-map-preview></div>
 
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
     <!-- CEP com máscara e busca automática -->
-    <div class="col-md-3">
+    <div class="col-md-4 col-xl-3">
       <label for="cep" class="form-label fw-semibold">
-        CEP (somente números)
+        CEP
         <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
           title="Digite o CEP para autopreencher o endereço"></i>
       </label>
@@ -71,8 +78,8 @@
     </div>
 
     <!-- Rua -->
-    <div class="col-md-7">
-      <label for="rua" class="form-label fw-semibold">Logradouro (ex.: Av. Paulista) <span class="text-danger">*</span></label>
+    <div class="col-md-8 col-xl-6">
+      <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
       {% if addr_form %}
       {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.", required=True) }}
       {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
@@ -85,8 +92,8 @@
     </div>
 
     <!-- Número -->
-    <div class="col-md-2">
-      <label for="numero" class="form-label fw-semibold">Número (somente números)</label>
+    <div class="col-md-4 col-xl-3">
+      <label for="numero" class="form-label fw-semibold">Número</label>
       {% if addr_form %}
       {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº", pattern="\\d*", inputmode="numeric") }}
       {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
@@ -97,7 +104,7 @@
     </div>
 
     <!-- Complemento -->
-    <div class="col-md-4">
+    <div class="col-md-6 col-xl-4">
       <label for="complemento" class="form-label fw-semibold">Complemento</label>
       {% if addr_form %}
       {{ addr_form.complemento(class="form-control", id="complemento", placeholder="Apto, bloco, etc.") }}
@@ -109,7 +116,7 @@
     </div>
 
     <!-- Bairro -->
-    <div class="col-md-4">
+    <div class="col-md-6 col-xl-3">
       <label for="bairro" class="form-label fw-semibold">Bairro</label>
       {% if addr_form %}
       {{ addr_form.bairro(class="form-control", id="bairro", placeholder="Nome do bairro") }}
@@ -121,8 +128,8 @@
     </div>
 
     <!-- Cidade -->
-    <div class="col-md-3">
-      <label for="cidade" class="form-label fw-semibold">Cidade (ex.: São Paulo) <span class="text-danger">*</span></label>
+    <div class="col-md-8 col-xl-3">
+      <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
       {% if addr_form %}
       {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade", required=True) }}
       {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
@@ -134,7 +141,7 @@
     </div>
 
     <!-- Estado com select -->
-    <div class="col-md-2">
+    <div class="col-md-4 col-xl-2">
       <label for="estado" class="form-label fw-semibold">UF <span class="text-danger">*</span></label>
       {% if addr_form %}
       {{ addr_form.estado(class="form-select", id="estado") }}
