@@ -1143,6 +1143,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'MG_ANIMAL': 'mg', 'MCG_ANIMAL': 'mcg', 'ML_ANIMAL': 'mL',
         'PIPETA_ANIMAL': 'pipeta(s)', 'COMPRIMIDOS_ANIMAL': 'comprimido(s)',
         'GOTAS_ANIMAL': 'gota(s)', 'UI_ANIMAL': 'UI',
+        'CAMADA_TOPICA': 'camada fina',
         # Unidades por peso (dose normalizada por kg)
         'COMPRIMIDOS_KG': 'comprimido(s)',
         'PIPETA_KG': 'pipeta(s)',
@@ -1168,6 +1169,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'MG_ANIMAL': 'mg/animal', 'ML_ANIMAL': 'mL/animal',
         'PIPETA_ANIMAL': 'pipeta/animal', 'COMPRIMIDOS_ANIMAL': 'cp/animal',
         'GOTAS_ANIMAL': 'gotas/animal',
+        'CAMADA_TOPICA': 'aplicacao topica',
         'COMPRIMIDOS_KG': 'cp/kg', 'PIPETA_KG': 'pipeta/kg',
     }.get(un, un.lower())
     if dose_min_v == dose_max_v:

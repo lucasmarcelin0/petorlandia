@@ -250,6 +250,128 @@ def test_sugerir_dose_resolve_indicacao_aproximada_por_semantica():
     assert sugestao['indicacao'] == 'Controle da dor'
 
 
+def test_sugerir_dose_capstar_por_faixa_de_peso():
+    medicamento = SimpleNamespace(
+        id=36,
+        nome='Capstar',
+        classificacao='Ectoparasiticida',
+        via_administracao='Oral',
+        doses=[
+            SimpleNamespace(
+                id=1,
+                especie='Caes e Gatos',
+                especie_code='AMBOS',
+                via='Oral',
+                dose='1 comprimido / animal (11,4 mg)',
+                dose_min=1,
+                dose_max=1,
+                dose_unidade='COMPRIMIDOS_ANIMAL',
+                peso_min_kg=None,
+                peso_max_kg=11.4,
+                intervalo_horas=24,
+                intervalo_min_horas=24,
+                intervalo_max_horas=24,
+                duracao_min_dias=1,
+                duracao_max_dias=1,
+                indicacao='Controle de pulgas e miiase',
+                observacao='Pode repetir a cada 24 horas.',
+                frequencia='Dose unica',
+                duracao='Dose unica',
+                fonte='HUMANO',
+                confianca='ALTA',
+            ),
+            SimpleNamespace(
+                id=2,
+                especie='Caes',
+                especie_code='CAES',
+                via='Oral',
+                dose='1 comprimido / animal (57 mg)',
+                dose_min=1,
+                dose_max=1,
+                dose_unidade='COMPRIMIDOS_ANIMAL',
+                peso_min_kg=11.41,
+                peso_max_kg=57.0,
+                intervalo_horas=24,
+                intervalo_min_horas=24,
+                intervalo_max_horas=24,
+                duracao_min_dias=1,
+                duracao_max_dias=1,
+                indicacao='Controle de pulgas e miiase',
+                observacao='Pode repetir a cada 24 horas.',
+                frequencia='Dose unica',
+                duracao='Dose unica',
+                fonte='HUMANO',
+                confianca='ALTA',
+            ),
+        ],
+        apresentacoes=[],
+    )
+    gato = SimpleNamespace(
+        peso=4.5,
+        species=SimpleNamespace(name='Gato'),
+    )
+    cao = SimpleNamespace(
+        peso=22,
+        species=SimpleNamespace(name='Cachorro'),
+    )
+
+    sugestao_gato = sugerir_dose(medicamento, gato, indicacao='Controle parasitario')
+    sugestao_cao = sugerir_dose(medicamento, cao, indicacao='Controle parasitario')
+
+    assert sugestao_gato is not None
+    assert sugestao_gato['dose_exibir'] == '1 comprimido(s)'
+    assert sugestao_gato['faixa_texto'] == '1 cp/animal'
+    assert sugestao_cao is not None
+    assert sugestao_cao['dose_exibir'] == '1 comprimido(s)'
+    assert sugestao_cao['protocolo_id'] == 2
+
+
+def test_sugerir_dose_sulfadiazina_topica_exibe_frequencia_correta():
+    medicamento = SimpleNamespace(
+        id=5928,
+        nome='Sulfadiazina de Prata',
+        classificacao='Dermatologico',
+        via_administracao='Topica',
+        doses=[
+            SimpleNamespace(
+                id=1,
+                especie='Caes e Gatos',
+                especie_code='AMBOS',
+                via='Topica',
+                dose='Aplicar fina camada sobre a regiao acometida',
+                dose_min=1,
+                dose_max=1,
+                dose_unidade='CAMADA_TOPICA',
+                peso_min_kg=None,
+                peso_max_kg=None,
+                intervalo_horas=12,
+                intervalo_min_horas=8,
+                intervalo_max_horas=12,
+                duracao_min_dias=None,
+                duracao_max_dias=None,
+                indicacao='Uso topico em lesao',
+                observacao='Aplicar fina camada na lesao.',
+                frequencia='A cada 12 horas',
+                duracao='Conforme evolucao da lesao',
+                fonte='HUMANO',
+                confianca='ALTA',
+            ),
+        ],
+        apresentacoes=[],
+    )
+    animal = SimpleNamespace(
+        peso=18,
+        species=SimpleNamespace(name='Cachorro'),
+    )
+
+    sugestao = sugerir_dose(medicamento, animal, indicacao='Uso topico')
+
+    assert sugestao is not None
+    assert sugestao['dose_exibir'] == '1 camada fina'
+    assert sugestao['frequencia_texto'] == 'a cada 8–12h'
+    assert sugestao['via'] == 'Topica'
+
+
 def test_agendar_retorno_registra_auditoria_de_sugestao(client, monkeypatch):
     with flask_app.app_context():
         clinic = Clinica(id=1, nome='Clinica Retorno')
