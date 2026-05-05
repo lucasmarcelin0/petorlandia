@@ -2652,6 +2652,130 @@ body {
   box-shadow: 0 0 0 0.22rem rgba(15, 118, 110, 0.12);
 }
 
+.animal-profile-form {
+  color: #132238;
+}
+
+.animal-identity-card {
+  display: grid;
+  grid-template-columns: minmax(170px, 210px) minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(248, 113, 113, 0.12), transparent 34%),
+    linear-gradient(135deg, #ffffff, #f8fafc);
+}
+
+.animal-photo-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.85rem;
+  border: 1px dashed rgba(220, 38, 38, 0.24);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: center;
+}
+
+.animal-photo-panel .form-label {
+  align-self: stretch;
+  text-align: left;
+}
+
+.animal-photo-panel .photo-cropper-wrapper {
+  width: 100%;
+}
+
+.animal-photo-panel .img-thumbnail {
+  border: 0 !important;
+  box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.55) !important;
+}
+
+.animal-photo-panel .btn {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.animal-photo-panel p {
+  margin-bottom: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.animal-identity-fields {
+  align-self: center;
+  min-width: 0;
+}
+
+.animal-health-card {
+  padding: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.1), transparent 30%),
+    linear-gradient(135deg, #f8fafc, #ffffff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.animal-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.animal-card-heading > span {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.animal-card-heading h6 {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.animal-date-group .data-idade {
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.animal-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.animal-save-btn {
+  min-height: 2.85rem;
+  min-width: 180px;
+  padding-inline: 1.5rem;
+  border-radius: 0.95rem;
+  font-weight: 800;
+  box-shadow: 0 16px 28px -22px rgba(22, 163, 74, 0.75);
+}
+
+.animal-delete-form {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(220, 38, 38, 0.12);
+  border-radius: 1.1rem;
+  background: linear-gradient(135deg, rgba(254, 242, 242, 0.9), rgba(255, 255, 255, 0.92));
+}
+
 .tutor-identity-card {
   display: grid;
   grid-template-columns: minmax(150px, 180px) minmax(0, 1fr);
@@ -2820,15 +2944,18 @@ body {
     margin-inline: -0.2rem;
   }
 
-  .tutor-identity-card {
+  .tutor-identity-card,
+  .animal-identity-card {
     grid-template-columns: 1fr;
   }
 
-  .tutor-photo-panel {
+  .tutor-photo-panel,
+  .animal-photo-panel {
     align-items: flex-start;
   }
 
-  .tutor-photo-panel .photo-cropper-wrapper {
+  .tutor-photo-panel .photo-cropper-wrapper,
+  .animal-photo-panel .photo-cropper-wrapper {
     align-items: flex-start;
   }
 
@@ -2870,15 +2997,25 @@ body {
   }
 
   .tutor-form-actions,
+  .animal-form-actions,
+  .animal-delete-form,
   .address-card__tools {
     align-items: stretch;
     flex-direction: column;
   }
 
   .tutor-save-btn,
+  .animal-save-btn,
+  .animal-delete-form .btn,
   .address-card__actions .btn,
   .address-card__tools .btn {
     width: 100%;
+  }
+
+  .animal-identity-card,
+  .animal-health-card {
+    padding: 1rem;
+    border-radius: 1rem;
   }
 
   .address-card {

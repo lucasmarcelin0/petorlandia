@@ -1,7 +1,7 @@
 {% from 'components/photo_cropper.html' import photo_cropper %}
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
       enctype="multipart/form-data"
-      class="needs-validation" novalidate data-sync data-validate="validarCadastroAnimal">
+      class="needs-validation animal-profile-form" novalidate data-sync data-validate="validarCadastroAnimal">
   {{ form.hidden_tag() if form else '' }}
 
   <div class="consultation-section-heading consultation-section-heading--animal mb-4">
@@ -12,121 +12,132 @@
     </div>
   </div>
 
-  <h5 class="mb-3">🐾 Cadastro do Animal</h5>
+  <h5 class="mb-3">Cadastro do Animal</h5>
 
-  <div class="row g-4">
-    <!-- Foto e Nome -->
-    <div class="col-md-6">
-      <label for="animal-name" class="form-label">Foto e Nome do Animal</label>
-        <div class="d-flex align-items-center gap-3">
-          {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 120, 'animal-image', 'animal') }}
+  <div class="animal-identity-card mb-4">
+    <div class="animal-photo-panel">
+      <label for="animal-image" class="form-label">Foto do Animal</label>
+      {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 132, 'animal-image', 'animal') }}
+      <p class="text-muted">Use uma foto frontal para facilitar a identifica&ccedil;&atilde;o no prontu&aacute;rio.</p>
+    </div>
+
+    <div class="animal-identity-fields">
+      <div class="row g-3">
+        <div class="col-12">
+          <label for="animal-name" class="form-label">Nome do Animal</label>
           <input id="animal-name" type="text" name="name" class="form-control"
                  placeholder="Nome do animal" value="{{ animal.name or '' }}" required
                  minlength="2" maxlength="50">
-          <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
+          <div class="invalid-feedback">Por favor, insira um nome v&aacute;lido (2-50 caracteres).</div>
         </div>
-    </div>
 
-    <!-- Espécie -->
-    <div class="col-md-6">
-      <label for="animal-species" class="form-label">Espécie</label>
-      <select id="animal-species" name="species_id" class="form-select" required>
-        <option value="">Selecionar</option>
-        {% for s in species_list %}
-          <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
-        {% endfor %}
-      </select>
-      <div class="invalid-feedback">Por favor, selecione uma espécie.</div>
-    </div>
+        <div class="col-md-6">
+          <label for="animal-species" class="form-label">Esp&eacute;cie</label>
+          <select id="animal-species" name="species_id" class="form-select" required>
+            <option value="">Selecionar</option>
+            {% for s in species_list %}
+              <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="invalid-feedback">Por favor, selecione uma esp&eacute;cie.</div>
+        </div>
 
-    <!-- Raça -->
-    <div class="col-md-6">
-      <label for="animal-breed" class="form-label">Raça</label>
-      <select id="animal-breed" name="breed_id" class="form-select">
-        <option value="">Selecionar</option>
-        {% for b in breed_list %}
-          <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
+        <div class="col-md-6">
+          <label for="animal-breed" class="form-label">Ra&ccedil;a</label>
+          <select id="animal-breed" name="breed_id" class="form-select">
+            <option value="">Selecionar</option>
+            {% for b in breed_list %}
+              <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <!-- Sexo -->
-    <div class="col-md-6">
-      <label for="animal-sex" class="form-label">Sexo</label>
-      <select id="animal-sex" name="sex" class="form-select" required>
-        <option value="">Selecionar</option>
-        <option value="-" {% if animal.sex == '-' %}selected{% endif %}>-</option>
-        <option value="Macho" {% if animal.sex == 'Macho' %}selected{% endif %}>Macho</option>
-        <option value="Fêmea" {% if animal.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
-      </select>
-      <div class="invalid-feedback">Por favor, selecione o sexo.</div>
-    </div>
+        <div class="col-md-6">
+          <label for="animal-sex" class="form-label">Sexo</label>
+          <select id="animal-sex" name="sex" class="form-select" required>
+            <option value="">Selecionar</option>
+            <option value="-" {% if animal.sex == '-' %}selected{% endif %}>-</option>
+            <option value="Macho" {% if animal.sex == 'Macho' %}selected{% endif %}>Macho</option>
+            <option value="F&ecirc;mea" {% if animal.sex == 'FÃªmea' %}selected{% endif %}>F&ecirc;mea</option>
+          </select>
+          <div class="invalid-feedback">Por favor, selecione o sexo.</div>
+        </div>
 
-    <!-- Data de nascimento / idade -->
-    {% set prefixo = 'animal' %}
-    {% set nome_data = 'date_of_birth' %}
-    {% set nome_idade = 'age' %}
-    {% set nome_unidade = 'age_unit' %}
-    {% set valor_data = animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' %}
-    {% set valor_data_iso = animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '' %}
-    {% set valor_idade = animal_idade if animal_idade else '' %}
-    {% set valor_unidade = animal_idade_unidade if animal_idade_unidade else '' %}
-    {% include 'components/campo_data_idade.html' %}
-
-    <!-- Microchip -->
-    <div class="col-md-6">
-      <label for="animal-microchip" class="form-label">Microchip</label>
-      <input id="animal-microchip" type="text" name="microchip_number" class="form-control" 
-             value="{{ animal.microchip_number or '' }}" pattern="[0-9]{15}" 
-             title="Número do microchip deve conter 15 dígitos">
-      <div class="invalid-feedback">Por favor, insira um número de microchip válido (15 dígitos).</div>
-    </div>
-
-    <!-- Peso -->
-    <div class="col-md-6">
-      <label for="animal-peso" class="form-label">Peso (kg)</label>
-      <input id="animal-peso" type="number" name="peso" class="form-control" 
-             step="0.01" min="0.1" max="200" value="{{ '' if animal.peso is none else animal.peso }}">
-      <div class="invalid-feedback">Por favor, insira um peso válido (0.1-200 kg).</div>
-    </div>
-
-    <!-- Plano de Saúde -->
-    <div class="col-md-6">
-      <label for="animal-health-plan" class="form-label">Plano de Saúde</label>
-      <input id="animal-health-plan" type="text" name="health_plan" class="form-control" 
-             value="{{ animal.health_plan or '' }}" maxlength="100">
-    </div>
-
-    <!-- Descrição -->
-    <div class="col-md-12">
-      <label for="animal-description" class="form-label">Descrição</label>
-      <textarea id="animal-description" name="description" class="form-control" 
-                rows="2" maxlength="500">{{ animal.description or '' }}</textarea>
-    </div>
-
-    <!-- Castrado -->
-    <div class="col-md-6">
-      <label for="animal-neutered" class="form-label">Castrado?</label>
-      <select id="animal-neutered" name="neutered" class="form-select" required>
-        <option value="">Selecionar</option>
-        <option value="1" {% if animal.neutered %}selected{% endif %}>Sim</option>
-        <option value="0" {% if animal.neutered == False %}selected{% endif %}>Não</option>
-      </select>
-      <div class="invalid-feedback">Por favor, informe se o animal é castrado.</div>
+        <div class="col-md-6">
+          <label for="animal-neutered" class="form-label">Castrado?</label>
+          <select id="animal-neutered" name="neutered" class="form-select" required>
+            <option value="">Selecionar</option>
+            <option value="1" {% if animal.neutered %}selected{% endif %}>Sim</option>
+            <option value="0" {% if animal.neutered == False %}selected{% endif %}>N&atilde;o</option>
+          </select>
+          <div class="invalid-feedback">Por favor, informe se o animal &eacute; castrado.</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="mt-4 d-flex justify-content-between">
-    <button type="submit" class="btn btn-success">
+  <div class="animal-health-card">
+    <div class="animal-card-heading mb-3">
+      <span><i class="fa-solid fa-heart-pulse"></i></span>
+      <div>
+        <h6 class="mb-0">Dados de sa&uacute;de e identifica&ccedil;&atilde;o</h6>
+        <small class="text-muted">Nascimento, peso, microchip, plano e observa&ccedil;&otilde;es gerais.</small>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 animal-date-group">
+        {% set prefixo = 'animal' %}
+        {% set nome_data = 'date_of_birth' %}
+        {% set nome_idade = 'age' %}
+        {% set nome_unidade = 'age_unit' %}
+        {% set valor_data = animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' %}
+        {% set valor_data_iso = animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '' %}
+        {% set valor_idade = animal_idade if animal_idade else '' %}
+        {% set valor_unidade = animal_idade_unidade if animal_idade_unidade else '' %}
+        {% include 'components/campo_data_idade.html' %}
+      </div>
+
+      <div class="col-md-6">
+        <label for="animal-microchip" class="form-label">Microchip</label>
+        <input id="animal-microchip" type="text" name="microchip_number" class="form-control"
+               value="{{ animal.microchip_number or '' }}" pattern="[0-9]{15}"
+               title="N&uacute;mero do microchip deve conter 15 d&iacute;gitos">
+        <div class="invalid-feedback">Por favor, insira um n&uacute;mero de microchip v&aacute;lido (15 d&iacute;gitos).</div>
+      </div>
+
+      <div class="col-md-6">
+        <label for="animal-peso" class="form-label">Peso (kg)</label>
+        <input id="animal-peso" type="number" name="peso" class="form-control"
+               step="0.01" min="0.1" max="200" value="{{ '' if animal.peso is none else animal.peso }}">
+        <div class="invalid-feedback">Por favor, insira um peso v&aacute;lido (0.1-200 kg).</div>
+      </div>
+
+      <div class="col-md-6">
+        <label for="animal-health-plan" class="form-label">Plano de Sa&uacute;de</label>
+        <input id="animal-health-plan" type="text" name="health_plan" class="form-control"
+               value="{{ animal.health_plan or '' }}" maxlength="100">
+      </div>
+
+      <div class="col-12">
+        <label for="animal-description" class="form-label">Descri&ccedil;&atilde;o</label>
+        <textarea id="animal-description" name="description" class="form-control"
+                  rows="2" maxlength="500">{{ animal.description or '' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="animal-form-actions mt-4">
+    <button type="submit" class="btn btn-success animal-save-btn">
       <i class="bi bi-save me-1"></i> Salvar
     </button>
   </div>
 </form>
 
-<!-- Botão de deletar -->
+<!-- Botao de deletar -->
 <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta ação não pode ser desfeita.');" 
-      class="mt-2">
+      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta acao nao pode ser desfeita.');"
+      class="animal-delete-form mt-3">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button type="submit" class="btn btn-outline-danger">
     <i class="bi bi-trash me-1"></i> Remover Animal
@@ -137,9 +148,9 @@
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // Validação do formulário
+    // Valida os formularios desta aba sem interferir no restante da consulta.
     const forms = document.querySelectorAll('.needs-validation');
-    
+
     Array.from(forms).forEach(form => {
       form.addEventListener('submit', event => {
         if (!form.checkValidity()) {
@@ -150,8 +161,6 @@
       }, false);
     });
 
-
-    // Validação customizada
     window.validarCadastroAnimal = function () {
       const tutorIdField = document.getElementById('tutor_id');
       if (tutorIdField && !tutorIdField.value) {
