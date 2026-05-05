@@ -11,7 +11,9 @@ from models import (
     Clinica,
     Consulta,
     ExameSolicitado,
+    Medicamento,
     Prescricao,
+    PrescricaoAliasMedicamento,
     ProtocoloClinico,
     ProtocoloClinicoExame,
     ProtocoloClinicoMedicamento,
@@ -19,6 +21,8 @@ from models import (
     User,
     Veterinario,
 )
+from services.bulario import sugerir_dose
+from types import SimpleNamespace
 
 
 def _login(monkeypatch, user):
@@ -97,7 +101,25 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
             gatilhos_antecipacao='Piora da tosse ou prostracao.',
             prioridade=1,
         )
-        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo, exame, medicamento, retorno])
+        medicamento_canonico = Medicamento(
+            id=10,
+            nome='Doxiciclina',
+            classificacao='Antibacteriano',
+            created_by=vet_user.id,
+        )
+        db.session.add_all([
+            clinic,
+            tutor,
+            vet_user,
+            vet,
+            animal,
+            consulta,
+            protocolo,
+            exame,
+            medicamento,
+            retorno,
+            medicamento_canonico,
+        ])
         db.session.commit()
         consulta_id = consulta.id
         vet_user_id = vet_user.id
@@ -130,6 +152,7 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
     assert med_apply.status_code == 200
     med_payload = med_apply.get_json()
     assert med_payload['success'] is True
+    assert med_payload['draft_prescription']['medicamento_id'] == 10
     assert med_payload['draft_prescription']['medicamento'] == 'Doxiciclina'
     assert med_payload['draft_instructions'] == 'Observar frequencia da tosse e piora respiratoria.'
 
@@ -154,10 +177,77 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
         assert ExameSolicitado.query.filter_by(nome='Radiografia toracica').count() == 1
         assert BlocoPrescricao.query.count() == 0
         assert Prescricao.query.count() == 0
+        assert PrescricaoAliasMedicamento.query.filter_by(
+            nome_prescrito='Doxiciclina',
+            medicamento_id=10,
+        ).count() == 1
         consulta = Consulta.query.get(consulta_id)
         assert 'Nebulizacao e repouso' in (consulta.conduta or '')
         assert AuditoriaSugestaoClinica.query.filter_by(consulta_id=consulta_id, acao='shown').count() == 1
         assert AuditoriaSugestaoClinica.query.filter_by(consulta_id=consulta_id, acao='accepted').count() == 4
+
+
+def test_sugerir_dose_resolve_indicacao_aproximada_por_semantica():
+    medicamento = SimpleNamespace(
+        id=1,
+        nome='Meloxicam',
+        classificacao='Anti-inflamatorio',
+        doses=[
+            SimpleNamespace(
+                id=1,
+                especie='Caes',
+                especie_code='CAES',
+                via='Oral',
+                dose='0,1 mg/kg',
+                dose_min=0.1,
+                dose_max=0.1,
+                dose_unidade='MG_KG',
+                peso_min_kg=None,
+                peso_max_kg=None,
+                intervalo_horas=24,
+                intervalo_min_horas=None,
+                intervalo_max_horas=None,
+                duracao_min_dias=3,
+                duracao_max_dias=5,
+                indicacao='Controle da dor',
+                observacao=None,
+                fonte='HUMANO',
+                confianca='ALTA',
+            ),
+            SimpleNamespace(
+                id=2,
+                especie='Caes',
+                especie_code='CAES',
+                via='Oral',
+                dose='0,2 mg/kg',
+                dose_min=0.2,
+                dose_max=0.2,
+                dose_unidade='MG_KG',
+                peso_min_kg=None,
+                peso_max_kg=None,
+                intervalo_horas=24,
+                intervalo_min_horas=None,
+                intervalo_max_horas=None,
+                duracao_min_dias=7,
+                duracao_max_dias=10,
+                indicacao='Inflamacao articular',
+                observacao=None,
+                fonte='HUMANO',
+                confianca='ALTA',
+            ),
+        ],
+        apresentacoes=[],
+    )
+    animal = SimpleNamespace(
+        peso=12,
+        species=SimpleNamespace(name='Cachorro'),
+    )
+
+    sugestao = sugerir_dose(medicamento, animal, indicacao='Analgesia')
+
+    assert sugestao is not None
+    assert sugestao['multiplo'] is False
+    assert sugestao['indicacao'] == 'Controle da dor'
 
 
 def test_agendar_retorno_registra_auditoria_de_sugestao(client, monkeypatch):

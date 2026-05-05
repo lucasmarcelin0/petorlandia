@@ -762,6 +762,78 @@ def _texto_norm(s: Optional[str]) -> str:
     return _strip_accents(s or '').lower().strip()
 
 
+_INDICACAO_STOPWORDS = {
+    'a', 'ao', 'aos', 'as', 'com', 'contra', 'da', 'das', 'de', 'do', 'dos',
+    'e', 'em', 'na', 'nas', 'no', 'nos', 'o', 'os', 'ou', 'para', 'por',
+    'uso',
+}
+
+_INDICACAO_SINONIMOS = (
+    ('analges', {'analges', 'dor', 'pain'}),
+    ('dor', {'analges', 'dor', 'pain'}),
+    ('inflam', {'inflam', 'antiinflam'}),
+    ('infect', {'infect', 'bacter', 'microb', 'antibiot'}),
+    ('bacter', {'infect', 'bacter', 'microb', 'antibiot'}),
+    ('parasit', {'paras', 'parasit', 'pulga', 'ecto', 'verme'}),
+    ('pulga', {'paras', 'parasit', 'pulga', 'ecto'}),
+    ('ecto', {'paras', 'parasit', 'pulga', 'ecto'}),
+    ('topic', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+    ('topico', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+    ('dermat', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+    ('cutan', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+    ('ferida', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+    ('lesa', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
+)
+
+
+def _tokens_indicacao(texto: Optional[str]) -> set[str]:
+    norm = _texto_norm(texto)
+    if not norm:
+        return set()
+    tokens = {
+        token for token in re.findall(r'[a-z0-9]+', norm)
+        if len(token) >= 3 and token not in _INDICACAO_STOPWORDS
+    }
+    expandidos = set(tokens)
+    for token in list(tokens):
+        for gatilho, sinonimos in _INDICACAO_SINONIMOS:
+            if gatilho in token:
+                expandidos.update(sinonimos)
+    return expandidos
+
+
+def _resolver_indicacao_compativel(disponiveis: List[str], preferida: Optional[str]) -> Optional[str]:
+    preferida_norm = _texto_norm(preferida)
+    if not preferida_norm:
+        return None
+
+    for candidata in disponiveis:
+        if _texto_norm(candidata) == preferida_norm:
+            return candidata
+
+    for candidata in disponiveis:
+        candidata_norm = _texto_norm(candidata)
+        if preferida_norm in candidata_norm or candidata_norm in preferida_norm:
+            return candidata
+
+    preferida_tokens = _tokens_indicacao(preferida)
+    if not preferida_tokens:
+        return None
+
+    melhor = None
+    melhor_score = 0
+    for candidata in disponiveis:
+        candidata_tokens = _tokens_indicacao(candidata)
+        if not candidata_tokens:
+            continue
+        score = len(preferida_tokens & candidata_tokens)
+        if score > melhor_score:
+            melhor = candidata
+            melhor_score = score
+
+    return melhor if melhor_score > 0 else None
+
+
 def _categoria_via_texto(texto: Optional[str]) -> Optional[str]:
     """Normaliza vias/formas em poucas categorias clínicas comparáveis."""
     t = _texto_norm(texto)
@@ -1019,6 +1091,21 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         indicacao_filtro = indicacoes[0] if (len(indicacoes) == 1 and not tem_generico_aplicavel) else None
     else:
         indicacao_filtro = (indicacao or '').strip() or None
+        if indicacao_filtro is not None:
+            indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
+            indicacao_resolvida = _resolver_indicacao_compativel(indicacoes_disp, indicacao_filtro)
+            if indicacao_resolvida is not None:
+                indicacao_filtro = indicacao_resolvida
+            elif len(indicacoes_disp) >= 2:
+                return {
+                    'multiplo': True,
+                    'indicacoes': indicacoes_disp,
+                    'medicamento_id': getattr(medicamento, 'id', None),
+                }
+            elif len(indicacoes_disp) == 1:
+                indicacao_filtro = indicacoes_disp[0]
+            else:
+                indicacao_filtro = None
 
     # Filtra por espécie + faixa de peso + indicação
     def _aplica(p):

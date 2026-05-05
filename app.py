@@ -12697,15 +12697,21 @@ def aplicar_sugestao_clinica(consulta_id):
         response_payload = {'message': 'Exame sugerido adicionado ao histórico.'}
         title = item.nome
     elif item_type == 'medicamento':
+        resolved_medicamento_id = item.medicamento_id
+        if not resolved_medicamento_id and item.nome_exibicao:
+            from services.prescricao_alias import resolver_e_persistir
+            resolved_medicamento_id = resolver_e_persistir(item.nome_exibicao, db.session, db)
         response_payload = {
             'message': 'Sugestão aceita. Prescrição preparada como rascunho na aba de medicamentos.',
             'draft_prescription': {
+                'medicamento_id': resolved_medicamento_id,
                 'medicamento': item.nome_exibicao,
                 'dosagem': item.dosagem_texto or '',
                 'frequencia': item.frequencia_texto or '',
                 'duracao': item.duracao_texto or '',
                 'observacoes': item.observacoes or '',
                 'texto': item.observacoes or '',
+                'indicacao': item.indicacao or '',
             },
             'draft_instructions': (protocol.orientacoes_tutor or '').strip() or '',
         }

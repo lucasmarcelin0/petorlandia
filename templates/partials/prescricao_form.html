@@ -840,7 +840,39 @@
     campo.value = `${atual}\n${instrucoes}`;
   }
 
-  function adicionarPrescricaoSugeridaAoRascunho(draft, instructions = '') {
+  function _normalizarTextoSugestaoClinica(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
+  async function _resolverMedicamentoParaSugestao(draft) {
+    if (draft?.medicamento_id) {
+      return {
+        id: Number(draft.medicamento_id),
+        nome: String(draft.medicamento || '').trim(),
+      };
+    }
+
+    const nome = String(draft?.medicamento || '').trim();
+    if (nome.length < 2) return null;
+
+    try {
+      const resp = await fetch(`/buscar_medicamentos?q=${encodeURIComponent(nome)}`);
+      const data = await resp.json().catch(() => []);
+      if (!resp.ok || !Array.isArray(data)) return null;
+
+      const alvo = _normalizarTextoSugestaoClinica(nome);
+      const exato = data.find(item => _normalizarTextoSugestaoClinica(item?.nome) === alvo);
+      return exato || data[0] || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function adicionarPrescricaoSugeridaAoRascunho(draft, instructions = '') {
     const medicamento = String(draft?.medicamento || '').trim();
     if (!medicamento) {
       mostrarFeedback('Não foi possível preparar a sugestão na aba de medicamentos.', 'danger');
@@ -849,48 +881,56 @@
 
     _mostrarAbaMedicamentos();
 
+    const inputNome = document.getElementById('nome-medicamento');
+    const doseField = document.getElementById('dose');
+    const freqField = document.getElementById('frequencia');
+    const durField = document.getElementById('duracao');
+    const textoLivreField = document.getElementById('instrucao-unica');
+    const personalizado = document.getElementById('modo-personalizado');
+
+    if (inputNome) inputNome.value = medicamento;
+
+    const medResolvido = await _resolverMedicamentoParaSugestao(draft);
+    if (medResolvido?.id) {
+      medicamentoSelecionado = medResolvido;
+      if (inputNome) inputNome.value = medResolvido.nome || medicamento;
+      const calculou = await carregarSugestaoDose(
+        medResolvido.id,
+        String(draft?.indicacao || '').trim() || null
+      );
+      if (calculou && sugestaoDoseAtual) {
+        usarDoseSugerida();
+        _mesclarInstrucoesGeraisSugestao(instructions);
+        adicionarMedicamento();
+        mostrarFeedback('Sugestão aceita com dose calculada pelo peso do animal.');
+        return true;
+      }
+    }
+
     const dosagem = String(draft?.dosagem || '').trim();
     const frequencia = String(draft?.frequencia || '').trim();
     const duracao = String(draft?.duracao || '').trim();
     const observacoes = String(draft?.observacoes || '').trim();
     const texto = String(draft?.texto || '').trim();
 
-    let resumo = '';
-    if (dosagem || frequencia || duracao) {
-      resumo = [dosagem, frequencia, duracao ? `por ${duracao}` : '']
-        .filter(Boolean)
-        .join(', ');
-    } else {
-      resumo = texto || observacoes || 'Prescrição sugerida pronta para revisão.';
+    if (!dosagem && !frequencia && !duracao && !texto && !observacoes) {
+      mostrarFeedback('A sugestão foi aceita, mas este medicamento ainda não tem dose calculável nem posologia estruturada no protocolo.', 'warning');
+      return false;
     }
 
-    prescricoes.push({
-      medicamento,
-      texto: resumo,
-      dosagem,
-      frequencia,
-      duracao,
-      observacoes,
-    });
-
-    renderPrescricoesTemp();
-    _mesclarInstrucoesGeraisSugestao(instructions);
-
-    document.getElementById('nome-medicamento').value = medicamento;
-    document.getElementById('dose').value = dosagem;
-    document.getElementById('frequencia').value = frequencia;
-    document.getElementById('duracao').value = duracao;
-    document.getElementById('instrucao-unica').value = texto || observacoes;
-
-    const personalizado = document.getElementById('modo-personalizado');
     if (personalizado) {
       const usarTextoLivre = !dosagem && !frequencia && !duracao && Boolean(texto || observacoes);
       personalizado.checked = usarTextoLivre;
       alternarModo();
     }
 
-    document.getElementById('medicamentos-lista')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    mostrarFeedback('Sugestão aceita e adicionada ao rascunho da prescrição.');
+    if (doseField) doseField.value = dosagem;
+    if (freqField) freqField.value = frequencia;
+    if (durField) durField.value = duracao;
+    if (textoLivreField) textoLivreField.value = texto || observacoes;
+    _mesclarInstrucoesGeraisSugestao(instructions);
+    adicionarMedicamento();
+    mostrarFeedback('Sugestão aceita e adicionada ao rascunho com a posologia do protocolo.');
     return true;
   }
 
@@ -1213,6 +1253,66 @@
     carregarSugestaoDose(_medicamentoIdSugestao, ind);
   }
 
+  function _tokensIndicacaoSugestao(texto) {
+    const norm = _normalizarTextoSugestaoClinica(texto);
+    if (!norm) return [];
+    const base = norm
+      .split(/[^a-z0-9]+/i)
+      .map(token => token.trim())
+      .filter(token => token.length >= 3 && !['com', 'contra', 'das', 'dos', 'para', 'por', 'uso'].includes(token));
+    const expandidos = new Set(base);
+    const sinonimos = [
+      ['analges', ['analges', 'dor', 'pain']],
+      ['dor', ['analges', 'dor', 'pain']],
+      ['inflam', ['inflam', 'antiinflam']],
+      ['infect', ['infect', 'bacter', 'microb', 'antibiot']],
+      ['bacter', ['infect', 'bacter', 'microb', 'antibiot']],
+      ['parasit', ['paras', 'parasit', 'pulga', 'ecto', 'verme']],
+      ['pulga', ['paras', 'parasit', 'pulga', 'ecto']],
+      ['ecto', ['paras', 'parasit', 'pulga', 'ecto']],
+      ['topic', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+      ['topico', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+      ['dermat', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+      ['cutan', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+      ['ferida', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+      ['lesa', ['topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz']],
+    ];
+    base.forEach(token => {
+      sinonimos.forEach(([gatilho, valores]) => {
+        if (token.includes(gatilho)) valores.forEach(valor => expandidos.add(valor));
+      });
+    });
+    return Array.from(expandidos);
+  }
+
+  function _escolherIndicacaoClinica(indicacoes, preferida) {
+    const preferidaNorm = _normalizarTextoSugestaoClinica(preferida);
+    if (!preferidaNorm) return null;
+
+    for (const indicacao of (indicacoes || [])) {
+      const norm = _normalizarTextoSugestaoClinica(indicacao);
+      if (norm === preferidaNorm) return indicacao;
+    }
+
+    for (const indicacao of (indicacoes || [])) {
+      const norm = _normalizarTextoSugestaoClinica(indicacao);
+      if (preferidaNorm.includes(norm) || norm.includes(preferidaNorm)) return indicacao;
+    }
+
+    const preferidaTokens = new Set(_tokensIndicacaoSugestao(preferida));
+    let melhor = null;
+    let melhorScore = 0;
+    for (const indicacao of (indicacoes || [])) {
+      const tokens = _tokensIndicacaoSugestao(indicacao);
+      const score = tokens.filter(token => preferidaTokens.has(token)).length;
+      if (score > melhorScore) {
+        melhor = indicacao;
+        melhorScore = score;
+      }
+    }
+    return melhorScore > 0 ? melhor : null;
+  }
+
   function _mostrarEstadoSugestao({loading=false, indisponivel=null, conteudo=false, escolherIndicacao=false}) {
     const card = document.getElementById('sugestao-dose-card');
     if (!card) return;
@@ -1244,12 +1344,12 @@
     }
   }
 
-  async function carregarSugestaoDose(medicamentoId, indicacao = null) {
-    if (!medicamentoId) return;
+  async function carregarSugestaoDose(medicamentoId, indicacao = null, autoResolvida = false) {
+    if (!medicamentoId) return false;
     if (!ANIMAL_ID_CONSULTA) {
       // Sem animal na consulta — silenciosamente não exibe sugestão.
       fecharSugestaoDose();
-      return;
+      return false;
     }
     _medicamentoIdSugestao = medicamentoId;
     sugestaoDoseAtual = null;
@@ -1290,17 +1390,23 @@
         } else {
           _mostrarEstadoSugestao({indisponivel: motivo});
         }
-        return;
+        return false;
       }
 
       // Modo "múltiplas indicações": pede ao vet que escolha uma.
       if (data.multiplo) {
+        const indicacaoAuto = !autoResolvida
+          ? _escolherIndicacaoClinica(data.indicacoes || [], indicacao)
+          : null;
+        if (indicacaoAuto) {
+          return await carregarSugestaoDose(medicamentoId, indicacaoAuto, true);
+        }
         _popularSelectIndicacao(data.indicacoes || [], null);
         _mostrarEstadoSugestao({
           indisponivel: 'Este medicamento tem doses diferentes por indicação clínica — escolha acima a indicação para ver a sugestão.',
           escolherIndicacao: true,
         });
-        return;
+        return false;
       }
 
       const s = data.sugestao || {};
@@ -1358,9 +1464,11 @@
       }
 
       _mostrarEstadoSugestao({conteudo: true, escolherIndicacao: true});
+      return true;
     } catch (err) {
       console.error('Erro ao buscar sugestão de dose:', err);
       _mostrarEstadoSugestao({indisponivel: 'Não foi possível calcular a sugestão de dose agora.'});
+      return false;
     }
   }
 
