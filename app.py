@@ -6164,6 +6164,164 @@ def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     return False, "Teste de comunicação pendente."
 
 
+def _build_orcamento_nfse_snapshot(
+    orcamento: Orcamento,
+    clinic: Clinica,
+    issue: NfseIssue | None = None,
+    pdf_available: bool = False,
+) -> dict:
+    consulta = orcamento.consulta
+    particular_items = [
+        item for item in (orcamento.items or [])
+        if getattr(item, "effective_payer_type", "particular") == "particular"
+    ]
+    particular_total = sum((item.valor or Decimal("0.00") for item in particular_items), Decimal("0.00"))
+    config_url = url_for("contabilidade_nfse", clinica_id=orcamento.clinica_id, orcamento_id=orcamento.id)
+    preview_url = url_for("contabilidade_nfse_preview", orcamento_id=orcamento.id)
+    wizard_url = url_for("fiscal_onboarding_step", step=1)
+    issue_list_url = url_for("contabilidade_nfse", clinica_id=orcamento.clinica_id, orcamento_id=orcamento.id)
+    key_configured = bool((os.getenv("FISCAL_MASTER_KEY") or "").strip())
+
+    base_snapshot = {
+        "applicable": False,
+        "kind": "unavailable",
+        "label": "Não disponível",
+        "detail": "A NFS-e fica disponível para orçamentos ligados a uma consulta.",
+        "badge": "secondary",
+        "icon": "fa-file-circle-minus",
+        "preview_url": preview_url,
+        "config_url": config_url,
+        "wizard_url": wizard_url,
+        "issue_list_url": issue_list_url,
+        "download_pdf_url": None,
+        "issue_id": getattr(issue, "id", None),
+        "numero_nfse": getattr(issue, "numero_nfse", None),
+        "particular_total": particular_total,
+        "has_particular_items": bool(particular_items),
+        "can_emit": False,
+    }
+
+    if not consulta:
+        return base_snapshot
+
+    if not particular_items:
+        base_snapshot.update(
+            {
+                "kind": "not_applicable",
+                "label": "Sem itens particulares",
+                "detail": "A nota fiscal só é necessária quando há cobrança particular neste orçamento.",
+                "icon": "fa-circle-info",
+            }
+        )
+        return base_snapshot
+
+    missing_fields, municipio_key = _nfse_missing_fields(clinic)
+    certificate_ok, certificate_msg = _nfse_certificate_status(clinic, municipio_key)
+    betha_ok, betha_msg = _nfse_betha_status(clinic, municipio_key)
+    blocking_messages = []
+    if not key_configured:
+        blocking_messages.append("Configure a chave fiscal do ambiente.")
+    if missing_fields:
+        blocking_messages.append("Preencha o cadastro fiscal obrigatório.")
+    if not certificate_ok:
+        blocking_messages.append(certificate_msg)
+    if not betha_ok:
+        blocking_messages.append(betha_msg)
+
+    base_snapshot["applicable"] = True
+    base_snapshot["can_emit"] = key_configured and not missing_fields and certificate_ok and betha_ok
+
+    issue_status_labels = {
+        "fila": ("Na fila", "warning", "fa-clock"),
+        "processando": ("Processando", "info", "fa-arrows-rotate"),
+        "pendente": ("Pendente", "warning", "fa-hourglass-half"),
+        "autorizado": ("Emitida", "success", "fa-file-circle-check"),
+        "erro": ("Com erro", "danger", "fa-triangle-exclamation"),
+        "cancelada": ("Cancelada", "dark", "fa-ban"),
+        "cancelamento_solicitado": ("Cancelamento solicitado", "secondary", "fa-rotate-left"),
+        "substituicao_solicitada": ("Substituição solicitada", "secondary", "fa-file-pen"),
+    }
+
+    if issue:
+        raw_status = (issue.status or "").strip().lower()
+        label, badge, icon = issue_status_labels.get(
+            raw_status,
+            ((raw_status or "Em acompanhamento").replace("_", " ").title(), "secondary", "fa-file-lines"),
+        )
+        detail = label
+        kind = "processing"
+        if raw_status == "autorizado":
+            kind = "emitted"
+            detail = (
+                f"NFS-e {issue.numero_nfse} autorizada."
+                if issue.numero_nfse
+                else "NFS-e autorizada e pronta para consulta."
+            )
+        elif raw_status in {"erro", "cancelada"}:
+            kind = "issue"
+            detail = issue.erro_mensagem or detail
+        elif raw_status in {"cancelamento_solicitado", "substituicao_solicitada"}:
+            kind = "processing"
+            detail = "A nota está em tratamento fiscal."
+        elif raw_status in {"fila", "processando", "pendente"}:
+            detail = "A emissão foi iniciada e segue em acompanhamento."
+
+        base_snapshot.update(
+            {
+                "kind": kind,
+                "label": label,
+                "detail": detail,
+                "badge": badge,
+                "icon": icon,
+                "issue_id": issue.id,
+                "numero_nfse": issue.numero_nfse,
+                "download_pdf_url": (
+                    url_for("contabilidade_nfse_download", issue_id=issue.id, kind="pdf")
+                    if pdf_available
+                    else None
+                ),
+            }
+        )
+        return base_snapshot
+
+    if not key_configured:
+        base_snapshot.update(
+            {
+                "kind": "config",
+                "label": "Chave fiscal pendente",
+                "detail": "O ambiente ainda não está pronto para armazenar credenciais fiscais.",
+                "badge": "danger",
+                "icon": "fa-key",
+            }
+        )
+        return base_snapshot
+
+    if missing_fields or not certificate_ok or not betha_ok:
+        detail = blocking_messages[0] if blocking_messages else "Revise a configuração fiscal."
+        base_snapshot.update(
+            {
+                "kind": "config",
+                "label": "Configuração pendente",
+                "detail": detail,
+                "badge": "warning",
+                "icon": "fa-gear",
+            }
+        )
+        return base_snapshot
+
+    base_snapshot.update(
+        {
+            "kind": "ready",
+            "label": "Pronta para emitir",
+            "detail": "Cadastro, certificado e comunicação fiscal estão em dia.",
+            "badge": "success",
+            "icon": "fa-file-circle-check",
+            "can_emit": True,
+        }
+    )
+    return base_snapshot
+
+
 @login_required
 def contabilidade_nfse():
     _ensure_accounting_access()
@@ -14228,7 +14386,8 @@ def clinic_detail(clinica_id):
         Orcamento.query.options(
             joinedload(Orcamento.consulta)
             .joinedload(Consulta.animal)
-            .joinedload(Animal.owner)
+            .joinedload(Animal.owner),
+            selectinload(Orcamento.items),
         )
         .filter(Orcamento.clinica_id == clinica_id)
     )
@@ -14298,6 +14457,55 @@ def clinic_detail(clinica_id):
         'paid_count': sum(1 for budget in summary_orcamentos if budget.payment_status == 'paid'),
         'payment_pending_count': sum(1 for budget in summary_orcamentos if budget.payment_status == 'pending'),
         'without_items_count': sum(1 for budget in summary_orcamentos if not budget.items),
+    }
+
+    budget_issue_identifiers = [
+        f"consulta:{budget.consulta_id}"
+        for budget in summary_orcamentos
+        if budget.consulta_id
+    ]
+    latest_nfse_issue_by_identifier = {}
+    pdf_issue_ids = set()
+    if budget_issue_identifiers:
+        nfse_issues = (
+            NfseIssue.query
+            .filter(NfseIssue.clinica_id == clinica_id)
+            .filter(NfseIssue.internal_identifier.in_(budget_issue_identifiers))
+            .order_by(NfseIssue.created_at.desc())
+            .all()
+        )
+        for issue in nfse_issues:
+            if issue.internal_identifier and issue.internal_identifier not in latest_nfse_issue_by_identifier:
+                latest_nfse_issue_by_identifier[issue.internal_identifier] = issue
+        issue_ids = [issue.id for issue in latest_nfse_issue_by_identifier.values()]
+        if issue_ids:
+            pdf_issue_ids = {
+                row.nfse_issue_id
+                for row in (
+                    NfseXml.query
+                    .filter(NfseXml.nfse_issue_id.in_(issue_ids))
+                    .filter(NfseXml.tipo.ilike("%pdf%"))
+                    .all()
+                )
+            }
+
+    orcamento_nfse_snapshots = {}
+    for budget in summary_orcamentos:
+        issue = latest_nfse_issue_by_identifier.get(f"consulta:{budget.consulta_id}") if budget.consulta_id else None
+        orcamento_nfse_snapshots[budget.id] = _build_orcamento_nfse_snapshot(
+            budget,
+            clinica,
+            issue=issue,
+            pdf_available=bool(issue and issue.id in pdf_issue_ids),
+        )
+
+    fiscal_applicable = [snapshot for snapshot in orcamento_nfse_snapshots.values() if snapshot["applicable"]]
+    orcamento_fiscal_summary = {
+        "applicable_count": len(fiscal_applicable),
+        "ready_count": sum(1 for snapshot in fiscal_applicable if snapshot["kind"] == "ready"),
+        "emitted_count": sum(1 for snapshot in fiscal_applicable if snapshot["kind"] == "emitted"),
+        "processing_count": sum(1 for snapshot in fiscal_applicable if snapshot["kind"] == "processing"),
+        "attention_count": sum(1 for snapshot in fiscal_applicable if snapshot["kind"] in {"config", "issue"}),
     }
 
     per_page = current_app.config.get('ORCAMENTOS_PER_PAGE', 10)
@@ -14454,6 +14662,8 @@ def clinic_detail(clinica_id):
         orcamento_payment_status_styles=ORCAMENTO_PAYMENT_STATUS_STYLES,
         orcamento_status_counts=orcamento_status_counts,
         orcamento_summary=orcamento_summary,
+        orcamento_nfse_snapshots=orcamento_nfse_snapshots,
+        orcamento_fiscal_summary=orcamento_fiscal_summary,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,

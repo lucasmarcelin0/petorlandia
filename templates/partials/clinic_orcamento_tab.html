@@ -1,6 +1,7 @@
       {% set budget_count = orcamentos_pagination.total if orcamentos_pagination else orcamentos|length %}
       {% set summary = orcamento_summary if orcamento_summary is defined else {} %}
       {% set status_counts = orcamento_status_counts if orcamento_status_counts is defined else {} %}
+      {% set fiscal_summary = orcamento_fiscal_summary if orcamento_fiscal_summary is defined else {} %}
       {% set status_icons = {
         'draft': 'fa-pen-to-square',
         'sent': 'fa-paper-plane',
@@ -30,7 +31,7 @@
       <style>
         .budget-dashboard {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(5, minmax(0, 1fr));
           gap: 0.75rem;
           margin-bottom: 1rem;
         }
@@ -71,6 +72,74 @@
           background: #fff;
           padding: 1rem;
           margin-bottom: 0.85rem;
+        }
+
+        .budget-unified-shell {
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          border-radius: 8px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+          padding: 1rem;
+          margin-bottom: 1rem;
+        }
+
+        .budget-unified-shell__grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+          gap: 1rem;
+          align-items: start;
+        }
+
+        .budget-unified-shell__steps {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.75rem;
+        }
+
+        .budget-unified-step {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 8px;
+          background: #fff;
+          padding: 0.9rem;
+          min-width: 0;
+        }
+
+        .budget-unified-step__eyebrow {
+          color: #64748b;
+          display: block;
+          font-size: 0.74rem;
+          font-weight: 800;
+          margin-bottom: 0.3rem;
+          text-transform: uppercase;
+        }
+
+        .budget-unified-step strong {
+          color: #0f172a;
+          display: block;
+          font-size: 0.95rem;
+          line-height: 1.35;
+          margin-bottom: 0.3rem;
+        }
+
+        .budget-unified-step p,
+        .budget-unified-aside p {
+          color: #64748b;
+          font-size: 0.84rem;
+          line-height: 1.5;
+          margin: 0;
+        }
+
+        .budget-unified-aside {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 8px;
+          background: #fff;
+          padding: 0.95rem;
+        }
+
+        .budget-unified-aside__actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.55rem;
+          margin-top: 0.85rem;
         }
 
         .budget-toolbar .form-label {
@@ -119,7 +188,7 @@
           border-radius: 8px;
           background: #fff;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) auto;
+          grid-template-columns: minmax(0, 1fr) minmax(320px, 420px) auto;
           gap: 1rem;
           padding: 1rem;
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
@@ -192,7 +261,7 @@
 
         .budget-record__workflow {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 0.75rem;
         }
 
@@ -213,6 +282,7 @@
         }
 
         .budget-payment-actions,
+        .budget-fiscal-actions,
         .budget-record__actions {
           display: flex;
           flex-wrap: wrap;
@@ -321,7 +391,13 @@
 
         @media (max-width: 1200px) {
           .budget-dashboard {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .budget-unified-shell__grid,
+          .budget-unified-shell__steps,
+          .budget-record__workflow {
+            grid-template-columns: 1fr;
           }
 
           .budget-record {
@@ -335,7 +411,7 @@
 
         @media (max-width: 720px) {
           .budget-dashboard {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .budget-toolbar {
@@ -351,11 +427,67 @@
           }
 
           .budget-payment-actions .btn,
+          .budget-fiscal-actions .btn,
           .budget-record__actions .btn {
             flex: 1 1 calc(50% - 0.45rem);
           }
         }
+
+        @media (max-width: 560px) {
+          .budget-dashboard {
+            grid-template-columns: 1fr;
+          }
+        }
       </style>
+
+      <div class="budget-unified-shell">
+        <div class="budget-unified-shell__grid">
+          <div class="budget-unified-shell__steps" aria-label="Fluxo unificado de orçamento e nota fiscal">
+            <div class="budget-unified-step">
+              <span class="budget-unified-step__eyebrow">1. Orçamento</span>
+              <strong>Monte os itens no contexto da consulta</strong>
+              <p>A consulta segue sendo o melhor ponto para compor serviços, cobertura de plano e observações do tutor.</p>
+            </div>
+            <div class="budget-unified-step">
+              <span class="budget-unified-step__eyebrow">2. Cobrança</span>
+              <strong>Gere o link e acompanhe o pagamento</strong>
+              <p>Daqui você cria o link, copia, envia ao tutor e enxerga rapidamente se já foi pago.</p>
+            </div>
+            <div class="budget-unified-step">
+              <span class="budget-unified-step__eyebrow">3. Fiscal</span>
+              <strong>Valide o tomador e a prontidão da clínica</strong>
+              <p>O status fiscal do orçamento aparece junto do financeiro para ninguém descobrir pendência só no fim.</p>
+            </div>
+            <div class="budget-unified-step">
+              <span class="budget-unified-step__eyebrow">4. Emissão</span>
+              <strong>Pré-visualize, emita e acompanhe a NFS-e</strong>
+              <p>Quando tudo estiver pronto, a emissão e o acompanhamento ficam conectados ao mesmo orçamento.</p>
+            </div>
+          </div>
+
+          <aside class="budget-unified-aside">
+            <span class="budget-unified-step__eyebrow">Central fiscal</span>
+            <strong class="d-block mb-2">Aba de orçamento, cobrança e NFS-e no mesmo fluxo</strong>
+            <p>
+              {{ fiscal_summary.applicable_count|default(0) }} orçamento{{ 's' if fiscal_summary.applicable_count|default(0) != 1 else '' }}
+              com potencial de emissão nesta visão.
+              {{ fiscal_summary.ready_count|default(0) }} pronto{{ 's' if fiscal_summary.ready_count|default(0) != 1 else '' }},
+              {{ fiscal_summary.processing_count|default(0) }} em andamento e
+              {{ fiscal_summary.attention_count|default(0) }} exigindo atenção.
+            </p>
+            <div class="budget-unified-aside__actions">
+              <a href="{{ url_for('fiscal_onboarding_step', step=1) }}" class="btn btn-sm btn-outline-primary">
+                <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                Wizard fiscal
+              </a>
+              <a href="{{ url_for('contabilidade_nfse', clinica_id=clinica.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
+                Configurações NFS-e
+              </a>
+            </div>
+          </aside>
+        </div>
+      </div>
 
       <div class="budget-dashboard" aria-label="Resumo de orçamentos">
         <div class="budget-metric">
@@ -377,6 +509,11 @@
           <span>Sem itens</span>
           <strong>{{ summary.without_items_count|default(0) }}</strong>
           <small>Não geram pagamento</small>
+        </div>
+        <div class="budget-metric">
+          <span>NFS-e</span>
+          <strong>{{ fiscal_summary.emitted_count|default(0) }}</strong>
+          <small>{{ fiscal_summary.ready_count|default(0) }} pronta{{ 's' if fiscal_summary.ready_count|default(0) != 1 else '' }} para emitir</small>
         </div>
       </div>
 
@@ -453,6 +590,7 @@
             {% set payment_status = o.payment_status or 'not_generated' %}
             {% set payment_badge = orcamento_payment_status_styles.get(payment_status, 'secondary') %}
             {% set can_share = consulta is not none %}
+            {% set fiscal = orcamento_nfse_snapshots.get(o.id) if orcamento_nfse_snapshots is defined else None %}
             <article class="budget-record" role="listitem" data-orcamento-row="{{ o.id }}">
               <div class="budget-record__main">
                 <div class="budget-record__title-row">
@@ -532,6 +670,56 @@
                     </button>
                   </div>
                 </div>
+
+                <div class="budget-flow-block">
+                  <span class="budget-flow-block__label">NFS-e</span>
+                  {% if fiscal %}
+                    <div class="mb-2">
+                      <span class="badge bg-{{ fiscal.badge }} d-inline-flex align-items-center gap-2 px-3 py-2">
+                        <i class="fas {{ fiscal.icon }}" aria-hidden="true"></i>
+                        <span>{{ fiscal.label }}</span>
+                      </span>
+                    </div>
+                    <p class="small text-muted mb-2">{{ fiscal.detail }}</p>
+                    {% if fiscal.has_particular_items %}
+                      <div class="small text-muted mb-2">
+                        Base particular: <strong>{{ fiscal.particular_total | currency_br }}</strong>
+                      </div>
+                    {% endif %}
+                    <div class="budget-fiscal-actions">
+                      {% if fiscal.kind in ['ready', 'processing', 'emitted', 'issue'] %}
+                        <a class="btn btn-sm btn-outline-dark budget-action-button" href="{{ fiscal.preview_url }}">
+                          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                          Prévia fiscal
+                        </a>
+                      {% endif %}
+                      {% if fiscal.download_pdf_url %}
+                        <a class="btn btn-sm btn-outline-secondary budget-action-button" href="{{ fiscal.download_pdf_url }}" target="_blank">
+                          <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+                          PDF
+                        </a>
+                      {% endif %}
+                      {% if fiscal.kind in ['config', 'unavailable'] %}
+                        <a class="btn btn-sm btn-outline-primary budget-action-button" href="{{ fiscal.config_url }}">
+                          <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                          Configurar
+                        </a>
+                      {% elif fiscal.kind == 'not_applicable' %}
+                        <a class="btn btn-sm btn-outline-secondary budget-action-button" href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento">
+                          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                          Ajustar itens
+                        </a>
+                      {% elif fiscal.kind in ['processing', 'issue', 'emitted'] %}
+                        <a class="btn btn-sm btn-outline-secondary budget-action-button" href="{{ fiscal.issue_list_url }}">
+                          <i class="fa-solid fa-bars-progress" aria-hidden="true"></i>
+                          Acompanhar
+                        </a>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <p class="small text-muted mb-0">Sem dados fiscais disponíveis.</p>
+                  {% endif %}
+                </div>
               </div>
 
               <div class="budget-record__actions">
@@ -539,7 +727,7 @@
                   {% if current_user.worker in ['veterinario', 'colaborador'] %}
                     <a href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary budget-action-button">
                       <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-                      Editar
+                      Abrir na consulta
                     </a>
                   {% else %}
                     <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary budget-action-button">
@@ -555,7 +743,7 @@
                   {% if has_particular %}
                     <a href="{{ url_for('contabilidade_nfse_preview', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-dark budget-action-button" title="Emitir NFS-e">
                       <i class="fas fa-file-invoice" aria-hidden="true"></i>
-                      NFS-e
+                      Prévia NFS-e
                     </a>
                   {% endif %}
                 {% else %}
