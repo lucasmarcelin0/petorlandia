@@ -899,6 +899,7 @@
         String(draft?.indicacao || '').trim() || null
       );
       if (calculou && sugestaoDoseAtual) {
+        sugestaoDoseAtual.nome_exibicao_override = medicamento;
         usarDoseSugerida();
         _mesclarInstrucoesGeraisSugestao(instructions);
         adicionarMedicamento();
@@ -1896,7 +1897,8 @@
     // Nome do medicamento: se o vet escolheu uma apresentação, monta
     // "Prednisona - Comprimido 5 mg" pra ficar claro na receita do tutor.
     // Sem apresentação escolhida, mantém o nome atual (só o medicamento).
-    const nomeBase = (s.medicamento && s.medicamento.nome)
+    const nomeBase = s.nome_exibicao_override
+      || (s.medicamento && s.medicamento.nome)
       || document.getElementById('nome-medicamento').value.trim()
       || '';
     let nomeStr = nomeBase;
