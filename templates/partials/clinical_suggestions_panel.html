@@ -1,46 +1,549 @@
 <div
   id="clinical-suggestions-panel"
-  class="card border-0 bg-light mt-4"
+  class="clinical-panel mt-4"
   data-fetch-url="{{ url_for('obter_sugestoes_clinicas', consulta_id=consulta.id) }}"
   data-apply-url="{{ url_for('aplicar_sugestao_clinica', consulta_id=consulta.id) }}"
   data-feedback-url="{{ url_for('registrar_feedback_sugestao_clinica', consulta_id=consulta.id) }}"
+  data-create-url="{{ url_for('criar_protocolo_clinico_inline', consulta_id=consulta.id) }}"
 >
-  <div class="card-body">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-      <div>
-        <h5 class="mb-1">
-          <i class="bi bi-shield-check me-1 text-success"></i>
-          Sugestoes Clinicas Assistidas
+  <style>
+    #clinical-suggestions-panel .clinical-shell {
+      background: linear-gradient(180deg, #fbfcfc 0%, #f5f7f8 100%);
+      border: 1px solid #e4eaee;
+      border-radius: 22px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+      overflow: hidden;
+    }
+    #clinical-suggestions-panel .clinical-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 22px;
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(8px);
+    }
+    #clinical-suggestions-panel .clinical-heading {
+      min-width: 220px;
+    }
+    #clinical-suggestions-panel .clinical-heading-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #15313a;
+    }
+    #clinical-suggestions-panel .clinical-heading-copy {
+      margin: 4px 0 0;
+      font-size: .93rem;
+      color: #60717b;
+    }
+    #clinical-suggestions-panel .clinical-toolbar-actions,
+    #clinical-suggestions-panel .clinical-mode-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    #clinical-suggestions-panel .clinical-btn {
+      border-radius: 999px;
+      border: 1px solid #cfe0d8;
+      background: #ffffff;
+      color: #1f6f54;
+      font-weight: 600;
+      padding: .72rem 1.05rem;
+      line-height: 1;
+      transition: all .2s ease;
+      box-shadow: 0 6px 14px rgba(31, 111, 84, 0.08);
+    }
+    #clinical-suggestions-panel .clinical-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(31, 111, 84, 0.12);
+    }
+    #clinical-suggestions-panel .clinical-btn-primary {
+      background: linear-gradient(135deg, #ffffff 0%, #f3fbf7 100%);
+    }
+    #clinical-suggestions-panel .clinical-btn-secondary {
+      border-color: #d8dee5;
+      color: #31434c;
+      box-shadow: 0 6px 14px rgba(49, 67, 76, 0.08);
+    }
+    #clinical-suggestions-panel .clinical-btn.active {
+      background: #1f6f54;
+      border-color: #1f6f54;
+      color: #ffffff;
+      box-shadow: 0 12px 24px rgba(31, 111, 84, 0.18);
+    }
+    #clinical-suggestions-panel .clinical-panel-body {
+      padding: 0 22px 22px;
+      border-top: 1px solid #edf2f4;
+      background: rgba(255, 255, 255, 0.64);
+    }
+    #clinical-suggestions-panel .clinical-pane {
+      padding-top: 18px;
+    }
+    #clinical-suggestions-panel .clinical-pane.d-none {
+      display: none !important;
+    }
+    #clinical-suggestions-panel .clinical-search-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+    #clinical-suggestions-panel .clinical-field-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: .92rem;
+      font-weight: 700;
+      color: #21353d;
+    }
+    #clinical-suggestions-panel .clinical-search-input,
+    #clinical-suggestions-panel .clinical-form input,
+    #clinical-suggestions-panel .clinical-form textarea,
+    #clinical-suggestions-panel .clinical-form select {
+      border-radius: 16px;
+      border: 1px solid #d9e1e6;
+      background: #ffffff;
+      min-height: 52px;
+      padding: .88rem 1rem;
+      font-size: 1rem;
+      color: #18313a;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    #clinical-suggestions-panel .clinical-form textarea {
+      min-height: 112px;
+      resize: vertical;
+    }
+    #clinical-suggestions-panel .clinical-search-input::placeholder,
+    #clinical-suggestions-panel .clinical-form input::placeholder,
+    #clinical-suggestions-panel .clinical-form textarea::placeholder {
+      color: #92a2ab;
+    }
+    #clinical-suggestions-panel .clinical-search-input:focus,
+    #clinical-suggestions-panel .clinical-form input:focus,
+    #clinical-suggestions-panel .clinical-form textarea:focus,
+    #clinical-suggestions-panel .clinical-form select:focus {
+      border-color: #67a488;
+      box-shadow: 0 0 0 4px rgba(103, 164, 136, 0.14);
+      outline: 0;
+    }
+    #clinical-suggestions-panel .clinical-search-trigger {
+      min-height: 52px;
+      padding-inline: 1.15rem;
+    }
+    #clinical-suggestions-panel .clinical-subtle-copy {
+      margin-top: 10px;
+      color: #667982;
+      font-size: .92rem;
+    }
+    #clinical-suggestions-panel .clinical-status {
+      border-radius: 16px;
+      border: 1px solid #e1e8ec;
+      background: #f8fafb;
+      color: #576973;
+      padding: 12px 14px;
+      font-size: .92rem;
+    }
+    #clinical-suggestions-panel .clinical-results {
+      display: grid;
+      gap: 14px;
+      margin-top: 16px;
+    }
+    #clinical-suggestions-panel .clinical-protocol-card {
+      border: 1px solid #e2e8ec;
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+    }
+    #clinical-suggestions-panel .clinical-protocol-card .card-body {
+      padding: 18px;
+    }
+    #clinical-suggestions-panel .clinical-card-block {
+      border: 1px solid #e8eef2;
+      border-radius: 16px;
+      background: #fbfcfd;
+      padding: 14px;
+    }
+    #clinical-suggestions-panel .clinical-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    #clinical-suggestions-panel .clinical-pill {
+      border-radius: 999px;
+      background: #eef6f1;
+      color: #1f6f54;
+      font-size: .82rem;
+      font-weight: 700;
+      padding: .35rem .65rem;
+    }
+    #clinical-suggestions-panel .clinical-form {
+      display: grid;
+      gap: 16px;
+    }
+    #clinical-suggestions-panel .clinical-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    #clinical-suggestions-panel .clinical-form-section {
+      border: 1px solid #e5ebef;
+      border-radius: 18px;
+      background: #ffffff;
+      padding: 16px;
+    }
+    #clinical-suggestions-panel .clinical-form-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    #clinical-suggestions-panel .clinical-form-section-title h6 {
+      margin: 0;
+      font-size: .98rem;
+      font-weight: 700;
+      color: #20363f;
+    }
+    #clinical-suggestions-panel .clinical-form-section-copy {
+      margin: 0 0 12px;
+      font-size: .88rem;
+      color: #70818a;
+    }
+    #clinical-suggestions-panel .clinical-segmented {
+      display: inline-flex;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid #e2e8ec;
+      border-radius: 999px;
+      background: #f7f9fa;
+    }
+    #clinical-suggestions-panel .clinical-segmented button {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #5c707a;
+      font-size: .86rem;
+      font-weight: 700;
+      padding: .5rem .85rem;
+    }
+    #clinical-suggestions-panel .clinical-segmented button.active {
+      background: #ffffff;
+      color: #16343d;
+      box-shadow: 0 6px 12px rgba(15, 23, 42, 0.07);
+    }
+    #clinical-suggestions-panel .clinical-repeater {
+      display: grid;
+      gap: 12px;
+    }
+    #clinical-suggestions-panel .clinical-repeater-item {
+      border: 1px solid #e8edf1;
+      border-radius: 16px;
+      background: #fbfcfc;
+      padding: 14px;
+    }
+    #clinical-suggestions-panel .clinical-repeater-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    #clinical-suggestions-panel .clinical-repeater-title {
+      font-size: .88rem;
+      font-weight: 700;
+      color: #51636d;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    #clinical-suggestions-panel .clinical-link-btn {
+      border: 0;
+      background: transparent;
+      color: #1f6f54;
+      font-weight: 700;
+      padding: 0;
+    }
+    #clinical-suggestions-panel .clinical-remove-btn {
+      border: 0;
+      background: transparent;
+      color: #b54848;
+      font-weight: 700;
+      padding: 0;
+    }
+    #clinical-suggestions-panel .clinical-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    #clinical-suggestions-panel .clinical-soft-note {
+      color: #6f8189;
+      font-size: .88rem;
+      margin: 0;
+    }
+    @media (max-width: 991.98px) {
+      #clinical-suggestions-panel .clinical-search-grid,
+      #clinical-suggestions-panel .clinical-form-grid {
+        grid-template-columns: 1fr;
+      }
+      #clinical-suggestions-panel .clinical-toolbar {
+        padding: 16px;
+      }
+      #clinical-suggestions-panel .clinical-panel-body {
+        padding: 0 16px 16px;
+      }
+    }
+  </style>
+
+  <div class="clinical-shell">
+    <div class="clinical-toolbar">
+      <div class="clinical-heading">
+        <h5 class="clinical-heading-title">
+          <i class="bi bi-shield-check text-success"></i>
+          <span>Apoio clínico</span>
         </h5>
-        <p class="text-muted small mb-0">
-          Sugestoes explicitas e justificadas. Nada e gravado sem aprovacao do veterinario.
-        </p>
+        <p class="clinical-heading-copy">Protocolos revisáveis, discretos e opcionais durante a consulta.</p>
       </div>
-      <button type="button" class="btn btn-outline-success btn-sm" id="load-clinical-suggestions">
-        <i class="bi bi-magic me-1"></i>Buscar sugestoes
-      </button>
-    </div>
 
-    <div class="mb-3">
-      <label for="suspeita-clinica" class="form-label fw-bold">
-        <i class="bi bi-search-heart"></i> Suspeita Cl&iacute;nica / Hip&oacute;tese Diagn&oacute;stica
-      </label>
-      <div id="clinical-suspicion-input-slot"></div>
-      <datalist id="clinical-suspicion-options">
-        {% for item in clinical_suspicion_options or [] %}
-        <option value="{{ item }}">
-        {% endfor %}
-      </datalist>
-      <div class="form-text">
-        Este campo aciona protocolos curados com exames, medicamentos, conduta e retorno sugeridos para revis&atilde;o do veterin&aacute;rio. As suspeitas j&aacute; cadastradas aparecem para sele&ccedil;&atilde;o.
+      <div class="clinical-toolbar-actions">
+        <button type="button" class="clinical-btn clinical-btn-primary" id="toggle-clinical-panel">
+          <i class="bi bi-stars me-1"></i>
+          <span data-open-label="Abrir apoio clínico" data-close-label="Ocultar apoio clínico">Abrir apoio clínico</span>
+        </button>
       </div>
     </div>
 
-    <div id="clinical-suggestions-status" class="alert alert-secondary small py-2 mb-3">
-      Informe a suspeita clinica e clique em buscar sugestoes para carregar protocolos compativeis.
+    <div class="clinical-panel-body d-none" id="clinical-panel-body">
+      <div class="clinical-pane">
+        <div class="clinical-mode-switch mb-3">
+          <button type="button" class="clinical-btn active" data-clinical-mode="suggestions">
+            Sugestões clínicas
+          </button>
+          <button type="button" class="clinical-btn clinical-btn-secondary" data-clinical-mode="protocol">
+            Novo protocolo
+          </button>
+        </div>
+
+        <div class="clinical-pane-mode" data-clinical-pane="suggestions">
+          <div class="clinical-search-grid">
+            <div>
+              <label for="suspeita-clinica" class="clinical-field-label">Suspeita clínica / hipótese diagnóstica</label>
+              <div id="clinical-suspicion-input-slot"></div>
+              <datalist id="clinical-suspicion-options">
+                {% for item in clinical_suspicion_options or [] %}
+                <option value="{{ item }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            <button type="button" class="clinical-btn clinical-search-trigger" id="load-clinical-suggestions">
+              <i class="bi bi-search me-1"></i>Buscar
+            </button>
+          </div>
+          <div class="clinical-subtle-copy">
+            Sugestões explícitas e justificadas. Nada é gravado sem aprovação do veterinário.
+          </div>
+          <div id="clinical-suggestions-status" class="clinical-status mt-3">
+            Abra o apoio clínico apenas quando fizer sentido para o caso e pesquise pela hipótese diagnóstica desejada.
+          </div>
+          <div id="clinical-suggestions-results" class="clinical-results"></div>
+        </div>
+
+        <div class="clinical-pane-mode d-none" data-clinical-pane="protocol">
+          <div class="clinical-form-section mb-3">
+            <div class="clinical-form-section-title">
+              <div>
+                <h6>Novo protocolo clínico</h6>
+                <p class="clinical-form-section-copy mb-0">Cadastre um protocolo da clínica sem sair da consulta.</p>
+              </div>
+              <div class="clinical-segmented" role="tablist" aria-label="Nível do formulário">
+                <button type="button" class="active" data-protocol-level="v1">Essencial</button>
+                <button type="button" data-protocol-level="v2">Completo</button>
+              </div>
+            </div>
+          </div>
+
+          <form id="clinical-protocol-form" class="clinical-form" novalidate>
+            <div class="clinical-form-grid">
+              <div>
+                <label class="clinical-field-label" for="protocol-name">Nome do protocolo</label>
+                <input id="protocol-name" name="nome" type="text" placeholder="Ex: Protocolo inicial para miíase">
+              </div>
+              <div>
+                <label class="clinical-field-label" for="protocol-suspicion">Suspeita principal</label>
+                <input id="protocol-suspicion" name="suspeita_principal" type="text" placeholder="Ex: miíase / bicheira">
+              </div>
+              <div>
+                <label class="clinical-field-label" for="protocol-species">Espécie</label>
+                <select id="protocol-species" name="especie">
+                  <option value="">Todas</option>
+                  <option value="cao">Cão</option>
+                  <option value="gato">Gato</option>
+                </select>
+              </div>
+              <div>
+                <label class="clinical-field-label" for="protocol-priority">Prioridade</label>
+                <input id="protocol-priority" name="prioridade" type="number" min="0" max="999" value="100" placeholder="100">
+              </div>
+            </div>
+
+            <div class="clinical-form-section">
+              <div class="clinical-form-section-title">
+                <h6>Conduta e contexto</h6>
+              </div>
+              <div class="clinical-form-grid">
+                <div>
+                  <label class="clinical-field-label" for="protocol-conduct">Conduta sugerida</label>
+                  <textarea id="protocol-conduct" name="conduta_sugerida" placeholder="Descreva a conduta principal sugerida para o caso."></textarea>
+                </div>
+                <div>
+                  <label class="clinical-field-label" for="protocol-trigger-signs">Sinais gatilho</label>
+                  <textarea id="protocol-trigger-signs" name="sinais_gatilho" placeholder="Sinais, achados e termos que ajudam a identificar esse protocolo."></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="clinical-form-section">
+              <div class="clinical-form-section-title">
+                <h6>Exames sugeridos</h6>
+                <button type="button" class="clinical-link-btn" data-add-row="exam">Adicionar exame</button>
+              </div>
+              <div id="clinical-exam-rows" class="clinical-repeater"></div>
+            </div>
+
+            <div class="clinical-form-section">
+              <div class="clinical-form-section-title">
+                <h6>Medicamentos sugeridos</h6>
+                <button type="button" class="clinical-link-btn" data-add-row="medication">Adicionar medicamento</button>
+              </div>
+              <div id="clinical-medication-rows" class="clinical-repeater"></div>
+            </div>
+
+            <div class="clinical-form-section d-none" data-protocol-v2>
+              <div class="clinical-form-section-title">
+                <h6>Retorno sugerido</h6>
+              </div>
+              <div class="clinical-form-grid">
+                <div>
+                  <label class="clinical-field-label" for="protocol-return-min">Prazo mínimo (dias)</label>
+                  <input id="protocol-return-min" name="prazo_min_dias" type="number" min="0" placeholder="Ex: 5">
+                </div>
+                <div>
+                  <label class="clinical-field-label" for="protocol-return-max">Prazo máximo (dias)</label>
+                  <input id="protocol-return-max" name="prazo_max_dias" type="number" min="0" placeholder="Ex: 7">
+                </div>
+                <div>
+                  <label class="clinical-field-label" for="protocol-return-kind">Tipo de retorno</label>
+                  <select id="protocol-return-kind" name="tipo_retorno">
+                    <option value="retorno">Retorno</option>
+                    <option value="reavaliacao">Reavaliação</option>
+                    <option value="controle">Controle</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="clinical-field-label" for="protocol-return-goal">Objetivo clínico</label>
+                  <input id="protocol-return-goal" name="objetivo" type="text" placeholder="Ex: reavaliar cicatrização e dor">
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="clinical-field-label" for="protocol-return-triggers">Gatilhos de antecipação</label>
+                <textarea id="protocol-return-triggers" name="gatilhos_antecipacao" placeholder="Ex: apatia, secreção, piora da lesão."></textarea>
+              </div>
+            </div>
+
+            <div class="clinical-form-section d-none" data-protocol-v2>
+              <div class="clinical-form-section-title">
+                <h6>Complementos</h6>
+              </div>
+              <div class="clinical-form-grid">
+                <div>
+                  <label class="clinical-field-label" for="protocol-tutor-guidance">Orientações ao tutor</label>
+                  <textarea id="protocol-tutor-guidance" name="orientacoes_tutor" placeholder="Instruções adicionais para acompanhamento em casa."></textarea>
+                </div>
+                <div>
+                  <label class="clinical-field-label" for="protocol-alerts">Alertas e cautelas</label>
+                  <textarea id="protocol-alerts" name="alertas" placeholder="Riscos, contraindicações ou pontos que exigem cautela."></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="clinical-form-actions">
+              <p class="clinical-soft-note">Os protocolos criados aqui ficam vinculados à clínica e entram nas próximas buscas.</p>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="clinical-btn clinical-btn-secondary" id="reset-protocol-form">Limpar</button>
+                <button type="submit" class="clinical-btn active" id="submit-clinical-protocol">
+                  <i class="bi bi-plus-circle me-1"></i>Salvar protocolo
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
-    <div id="clinical-suggestions-results" class="d-grid gap-3"></div>
   </div>
+
+  <template id="clinical-exam-row-template">
+    <div class="clinical-repeater-item" data-row-kind="exam">
+      <div class="clinical-repeater-head">
+        <span class="clinical-repeater-title">Exame</span>
+        <button type="button" class="clinical-remove-btn" data-remove-row>Remover</button>
+      </div>
+      <div class="clinical-form-grid">
+        <div>
+          <label class="clinical-field-label">Nome</label>
+          <input type="text" data-field="nome" placeholder="Ex: hemograma completo">
+        </div>
+        <div>
+          <label class="clinical-field-label">Justificativa</label>
+          <input type="text" data-field="justificativa" placeholder="Ex: avaliar repercussão sistêmica">
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="clinical-medication-row-template">
+    <div class="clinical-repeater-item" data-row-kind="medication">
+      <div class="clinical-repeater-head">
+        <span class="clinical-repeater-title">Medicamento</span>
+        <button type="button" class="clinical-remove-btn" data-remove-row>Remover</button>
+      </div>
+      <div class="clinical-form-grid">
+        <div>
+          <label class="clinical-field-label">Nome</label>
+          <input type="text" data-field="nome_medicamento" placeholder="Ex: cefalexina">
+        </div>
+        <div>
+          <label class="clinical-field-label">Indicação</label>
+          <input type="text" data-field="indicacao" placeholder="Ex: suporte infeccioso">
+        </div>
+        <div>
+          <label class="clinical-field-label">Posologia / dose</label>
+          <input type="text" data-field="dosagem_texto" placeholder="Ex: 30 mg/kg">
+        </div>
+        <div>
+          <label class="clinical-field-label">Frequência</label>
+          <input type="text" data-field="frequencia_texto" placeholder="Ex: a cada 12 horas">
+        </div>
+        <div>
+          <label class="clinical-field-label">Duração</label>
+          <input type="text" data-field="duracao_texto" placeholder="Ex: por 10 dias">
+        </div>
+        <div>
+          <label class="clinical-field-label">Justificativa</label>
+          <input type="text" data-field="justificativa" placeholder="Ex: cobertura inicial para o caso">
+        </div>
+      </div>
+      <div class="mt-3 d-none" data-protocol-v2>
+        <label class="clinical-field-label">Observações</label>
+        <textarea data-field="observacoes" placeholder="Observações de uso, ressalvas ou contexto clínico."></textarea>
+      </div>
+    </div>
+  </template>
 </div>
 
 <script>
@@ -50,28 +553,39 @@
     panel.dataset.bound = '1';
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const bodyEl = document.getElementById('clinical-panel-body');
+    const togglePanelButton = document.getElementById('toggle-clinical-panel');
+    const togglePanelLabel = togglePanelButton?.querySelector('span');
     const statusEl = document.getElementById('clinical-suggestions-status');
     const resultsEl = document.getElementById('clinical-suggestions-results');
     const loadButton = document.getElementById('load-clinical-suggestions');
     const suspicionSlot = document.getElementById('clinical-suspicion-input-slot');
+    const modeButtons = Array.from(panel.querySelectorAll('[data-clinical-mode]'));
+    const paneEls = Array.from(panel.querySelectorAll('[data-clinical-pane]'));
+    const levelButtons = Array.from(panel.querySelectorAll('[data-protocol-level]'));
+    const v2Els = Array.from(panel.querySelectorAll('[data-protocol-v2]'));
+    const protocolForm = document.getElementById('clinical-protocol-form');
+    const protocolSubmitButton = document.getElementById('submit-clinical-protocol');
+    const resetProtocolButton = document.getElementById('reset-protocol-form');
+    const examRows = document.getElementById('clinical-exam-rows');
+    const medicationRows = document.getElementById('clinical-medication-rows');
+
+    let currentMode = 'suggestions';
+    let currentProtocolLevel = 'v1';
 
     const suspicionField = document.getElementById('suspeita-clinica');
     const legacySuspicionGroup = suspicionField?.closest('.mb-3');
     if (suspicionSlot) {
       if (suspicionField) {
-        suspicionField.classList.add('form-control');
+        suspicionField.classList.add('clinical-search-input');
         suspicionField.setAttribute('list', 'clinical-suspicion-options');
         suspicionField.setAttribute('autocomplete', 'off');
-        suspicionField.setAttribute(
-          'placeholder',
-          'Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...'
-        );
+        suspicionField.setAttribute('placeholder', 'Pesquisar suspeita clínica');
         suspicionSlot.appendChild(suspicionField);
       } else {
         suspicionSlot.innerHTML = `
-          <input id="suspeita-clinica" name="suspeita_clinica" class="form-control"
-            list="clinical-suspicion-options" autocomplete="off"
-            placeholder="Ex: gastroenterite, dermatite al\u00e9rgica, suspeita respirat\u00f3ria...">
+          <input id="suspeita-clinica" name="suspeita_clinica" class="clinical-search-input"
+            list="clinical-suspicion-options" autocomplete="off" placeholder="Pesquisar suspeita clínica">
         `;
       }
     }
@@ -86,9 +600,50 @@
         .replace(/'/g, '&#39;');
     }
 
-    function setStatus(message, type = 'secondary') {
-      statusEl.className = `alert alert-${type} small py-2 mb-3`;
+    function setStatus(message, tone = 'neutral') {
+      const tones = {
+        neutral: { bg: '#f8fafb', border: '#e1e8ec', color: '#576973' },
+        success: { bg: '#eef8f2', border: '#cfe6d7', color: '#1f6f54' },
+        warning: { bg: '#fff7ea', border: '#f0d7a5', color: '#8b6216' },
+        danger: { bg: '#fff0f0', border: '#f2cbcb', color: '#9f3434' },
+        info: { bg: '#eef6fb', border: '#cfe2ef', color: '#255d7d' },
+      };
+      const theme = tones[tone] || tones.neutral;
+      statusEl.style.background = theme.bg;
+      statusEl.style.borderColor = theme.border;
+      statusEl.style.color = theme.color;
       statusEl.textContent = message;
+    }
+
+    function updatePanelToggleLabel(open) {
+      if (!togglePanelLabel) return;
+      togglePanelLabel.textContent = open
+        ? (togglePanelLabel.dataset.closeLabel || 'Ocultar apoio clínico')
+        : (togglePanelLabel.dataset.openLabel || 'Abrir apoio clínico');
+    }
+
+    function setPanelOpen(open) {
+      bodyEl.classList.toggle('d-none', !open);
+      togglePanelButton.classList.toggle('active', open);
+      updatePanelToggleLabel(open);
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      modeButtons.forEach(button => {
+        const isActive = button.dataset.clinicalMode === mode;
+        button.classList.toggle('active', isActive);
+        button.classList.toggle('clinical-btn-secondary', !isActive && button.dataset.clinicalMode === 'protocol');
+      });
+      paneEls.forEach(pane => {
+        pane.classList.toggle('d-none', pane.dataset.clinicalPane !== mode);
+      });
+    }
+
+    function setProtocolLevel(level) {
+      currentProtocolLevel = level;
+      levelButtons.forEach(button => button.classList.toggle('active', button.dataset.protocolLevel === level));
+      v2Els.forEach(element => element.classList.toggle('d-none', level !== 'v2'));
     }
 
     function currentPayload() {
@@ -101,12 +656,12 @@
     }
 
     function renderEmpty(message) {
-      resultsEl.innerHTML = `<div class="alert alert-warning mb-0">${escapeHtml(message)}</div>`;
+      resultsEl.innerHTML = `<div class="clinical-card-block">${escapeHtml(message)}</div>`;
     }
 
     function buildItemActions(itemType, protocolId, itemId, title) {
       return `
-        <div class="d-flex flex-wrap gap-2 mt-2">
+        <div class="clinical-inline-actions">
           <button type="button" class="btn btn-sm btn-success js-apply-suggestion"
             data-item-type="${escapeHtml(itemType)}"
             data-protocol-id="${protocolId}"
@@ -128,51 +683,51 @@
     function renderSuggestionCard(protocol) {
       const reasons = (protocol.motivos || []).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
       const exames = (protocol.exames || []).map(item => `
-        <div class="border rounded p-3 bg-white">
+        <div class="clinical-card-block">
           <div class="fw-semibold">${escapeHtml(item.nome)}</div>
-          <div class="small text-muted">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
+          <div class="small text-muted mt-1">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
           ${buildItemActions('exame', protocol.id, item.id, item.nome)}
         </div>
       `).join('');
       const medicamentos = (protocol.medicamentos || []).map(item => `
-        <div class="border rounded p-3 bg-white">
+        <div class="clinical-card-block">
           <div class="fw-semibold">${escapeHtml(item.nome)}</div>
-          <div class="small text-muted">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
+          <div class="small text-muted mt-1">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
           <div class="small mt-2">
             ${item.dosagem ? `<div><strong>Dosagem:</strong> ${escapeHtml(item.dosagem)}</div>` : ''}
-            ${item.frequencia ? `<div><strong>Frequencia:</strong> ${escapeHtml(item.frequencia)}</div>` : ''}
-            ${item.duracao ? `<div><strong>Duracao:</strong> ${escapeHtml(item.duracao)}</div>` : ''}
+            ${item.frequencia ? `<div><strong>Frequência:</strong> ${escapeHtml(item.frequencia)}</div>` : ''}
+            ${item.duracao ? `<div><strong>Duração:</strong> ${escapeHtml(item.duracao)}</div>` : ''}
           </div>
           ${buildItemActions('medicamento', protocol.id, item.id, item.nome)}
         </div>
       `).join('');
       const retornos = (protocol.retornos || []).map(item => `
-        <div class="border rounded p-3 bg-white">
+        <div class="clinical-card-block">
           <div class="fw-semibold">${escapeHtml(item.label)}</div>
-          <div class="small text-muted">${escapeHtml(item.reason || 'Reavaliacao sugerida pelo protocolo.')}</div>
+          <div class="small text-muted mt-1">${escapeHtml(item.reason || 'Reavaliação sugerida pelo protocolo.')}</div>
           ${buildItemActions('retorno', protocol.id, item.id, item.label)}
         </div>
       `).join('');
       const conduta = protocol.conduta_sugerida ? `
-        <div class="border rounded p-3 bg-white">
+        <div class="clinical-card-block">
           <div class="small">${escapeHtml(protocol.conduta_sugerida)}</div>
           ${buildItemActions('conduta', protocol.id, '', protocol.nome)}
         </div>
       ` : '';
 
       return `
-        <div class="card shadow-sm border-0">
+        <div class="clinical-protocol-card">
           <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
               <div>
                 <h6 class="mb-1">${escapeHtml(protocol.nome)}</h6>
                 <div class="small text-muted">
-                  Hipotese principal: ${escapeHtml(protocol.suspeita_principal || '-')}
-                  ${protocol.especie ? ` | Especie: ${escapeHtml(protocol.especie)}` : ''}
+                  Hipótese principal: ${escapeHtml(protocol.suspeita_principal || '-')}
+                  ${protocol.especie ? ` · Espécie: ${escapeHtml(protocol.especie)}` : ''}
                 </div>
               </div>
-              <div class="d-flex gap-2 align-items-center">
-                <span class="badge text-bg-success">Score ${escapeHtml(protocol.score || 0)}</span>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="clinical-pill">Score ${escapeHtml(protocol.score || 0)}</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
                   data-item-type="protocolo"
                   data-protocol-id="${protocol.id}"
@@ -184,7 +739,7 @@
 
             ${reasons ? `<ul class="small text-muted ps-3 mb-3">${reasons}</ul>` : ''}
             ${protocol.alertas ? `<div class="alert alert-warning py-2 small">${escapeHtml(protocol.alertas)}</div>` : ''}
-            ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientacoes ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
+            ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientações ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
 
             ${exames ? `<div class="mb-3"><div class="fw-semibold mb-2">Exames sugeridos</div><div class="d-grid gap-2">${exames}</div></div>` : ''}
             ${medicamentos ? `<div class="mb-3"><div class="fw-semibold mb-2">Medicamentos sugeridos</div><div class="d-grid gap-2">${medicamentos}</div></div>` : ''}
@@ -207,27 +762,27 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success === false) {
-        throw new Error(data.message || 'Nao foi possivel concluir a operacao.');
+        throw new Error(data.message || 'Não foi possível concluir a operação.');
       }
       return data;
     }
 
     async function loadSuggestions() {
       loadButton.disabled = true;
-      setStatus('Buscando protocolos clinicos compativeis...', 'info');
+      setStatus('Buscando protocolos clínicos compatíveis...', 'info');
       resultsEl.innerHTML = '';
       try {
         const data = await postJson(panel.dataset.fetchUrl, currentPayload());
         if (!data.suggestions || data.suggestions.length === 0) {
-          renderEmpty(data.message || 'Nenhum protocolo clinico compativel encontrado.');
-          setStatus('Nenhum protocolo compativel encontrado. Revise a suspeita ou cadastre novos protocolos.', 'warning');
+          renderEmpty(data.message || 'Nenhum protocolo clínico compatível encontrado.');
+          setStatus('Nenhum protocolo compatível encontrado. Ajuste a busca ou cadastre um novo protocolo.', 'warning');
           return;
         }
         resultsEl.innerHTML = data.suggestions.map(renderSuggestionCard).join('');
-        setStatus('Sugestoes carregadas. Revise cada item antes de aplicar.', 'success');
+        setStatus('Sugestões carregadas. Revise cada item antes de aplicar.', 'success');
       } catch (error) {
-        renderEmpty(error.message || 'Erro ao buscar sugestoes clinicas.');
-        setStatus(error.message || 'Erro ao buscar sugestoes clinicas.', 'danger');
+        renderEmpty(error.message || 'Erro ao buscar sugestões clínicas.');
+        setStatus(error.message || 'Erro ao buscar sugestões clínicas.', 'danger');
       } finally {
         loadButton.disabled = false;
       }
@@ -237,7 +792,7 @@
       const form = document.getElementById('agendar-retorno-form');
       const toggleButton = document.getElementById('toggle-retorno-form');
       if (!form) {
-        setStatus('Ja existe um retorno agendado ou o formulario de retorno nao esta disponivel.', 'warning');
+        setStatus('Já existe um retorno agendado ou o formulário de retorno não está disponível.', 'warning');
         return;
       }
       form.classList.remove('d-none');
@@ -255,7 +810,7 @@
       if (protocolField) protocolField.value = protocolId || '';
       if (returnField) returnField.value = prefill.id || '';
       form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setStatus('Retorno sugerido preenchido. Revise data, horario e motivo antes de agendar.', 'success');
+      setStatus('Retorno sugerido preenchido. Revise data, horário e motivo antes de agendar.', 'success');
     }
 
     async function handleApply(button) {
@@ -271,13 +826,11 @@
           const container = document.getElementById('historico-exames');
           if (container) container.innerHTML = data.html;
         } else if (payload.item_type === 'medicamento') {
-          const added = window.adicionarPrescricaoSugeridaAoRascunho?.(
+          const added = await window.adicionarPrescricaoSugeridaAoRascunho?.(
             data.draft_prescription,
             data.draft_instructions || ''
           );
-          if (!added) {
-            throw new Error('Nao foi possivel preparar a prescricao sugerida no rascunho.');
-          }
+          if (!added) throw new Error('Não foi possível preparar a prescrição sugerida no rascunho.');
         } else if (payload.item_type === 'conduta' && data.conduta !== undefined) {
           const condutaField = document.getElementById('conduta');
           if (condutaField) condutaField.value = data.conduta || '';
@@ -287,13 +840,11 @@
         button.textContent = 'Aceito';
         button.classList.remove('btn-success');
         button.classList.add('btn-outline-success');
-        setStatus(data.message || 'Sugestao aplicada com sucesso.', 'success');
+        setStatus(data.message || 'Sugestão aplicada com sucesso.', 'success');
       } catch (error) {
-        setStatus(error.message || 'Erro ao aplicar sugestao.', 'danger');
+        setStatus(error.message || 'Erro ao aplicar sugestão.', 'danger');
       } finally {
-        if (button.textContent !== 'Aceito') {
-          button.disabled = false;
-        }
+        if (button.textContent !== 'Aceito') button.disabled = false;
       }
     }
 
@@ -305,15 +856,11 @@
           item_type: button.dataset.itemType || 'protocolo',
           protocol_id: button.dataset.protocolId || null,
           title: button.dataset.title || null,
-          payload: {
-            item_id: button.dataset.itemId || null
-          }
+          payload: { item_id: button.dataset.itemId || null }
         });
-        setStatus('Feedback registrado. A sugestao foi marcada como dispensada.', 'secondary');
-        const wrapper = button.closest('.border, .card');
-        if (wrapper && wrapper !== panel) {
-          wrapper.classList.add('opacity-50');
-        }
+        setStatus('Feedback registrado. A sugestão foi marcada como dispensada.', 'neutral');
+        const wrapper = button.closest('.clinical-card-block, .clinical-protocol-card');
+        if (wrapper) wrapper.classList.add('opacity-50');
       } catch (error) {
         setStatus(error.message || 'Erro ao registrar feedback.', 'danger');
       } finally {
@@ -321,9 +868,130 @@
       }
     }
 
-    loadButton.addEventListener('click', loadSuggestions);
+    function addRepeaterRow(kind, values = {}) {
+      const templateId = kind === 'exam' ? 'clinical-exam-row-template' : 'clinical-medication-row-template';
+      const container = kind === 'exam' ? examRows : medicationRows;
+      const template = document.getElementById(templateId);
+      if (!template || !container) return;
+      const fragment = template.content.cloneNode(true);
+      fragment.querySelectorAll('[data-field]').forEach(field => {
+        const key = field.dataset.field;
+        field.value = values[key] || '';
+      });
+      container.appendChild(fragment);
+      setProtocolLevel(currentProtocolLevel);
+    }
 
-    resultsEl.addEventListener('click', function (event) {
+    function collectRepeaterData(containerSelector) {
+      return Array.from(panel.querySelectorAll(containerSelector)).map(row => {
+        const payload = {};
+        row.querySelectorAll('[data-field]').forEach(field => {
+          const value = String(field.value || '').trim();
+          if (value) payload[field.dataset.field] = value;
+        });
+        return payload;
+      }).filter(item => Object.keys(item).length);
+    }
+
+    function resetProtocolFormState() {
+      protocolForm.reset();
+      examRows.innerHTML = '';
+      medicationRows.innerHTML = '';
+      addRepeaterRow('exam');
+      addRepeaterRow('medication');
+      setProtocolLevel('v1');
+      const suspicionInput = document.getElementById('suspeita-clinica');
+      const consultationSuspicion = String(suspicionInput?.value || '').trim();
+      if (consultationSuspicion) {
+        const protocolSuspicion = document.getElementById('protocol-suspicion');
+        if (protocolSuspicion && !protocolSuspicion.value) protocolSuspicion.value = consultationSuspicion;
+      }
+    }
+
+    function buildProtocolPayload() {
+      return {
+        nome: document.getElementById('protocol-name')?.value || '',
+        suspeita_principal: document.getElementById('protocol-suspicion')?.value || '',
+        especie: document.getElementById('protocol-species')?.value || '',
+        prioridade: document.getElementById('protocol-priority')?.value || '',
+        sinais_gatilho: document.getElementById('protocol-trigger-signs')?.value || '',
+        conduta_sugerida: document.getElementById('protocol-conduct')?.value || '',
+        orientacoes_tutor: document.getElementById('protocol-tutor-guidance')?.value || '',
+        alertas: document.getElementById('protocol-alerts')?.value || '',
+        exames: collectRepeaterData('#clinical-exam-rows [data-row-kind="exam"]'),
+        medicamentos: collectRepeaterData('#clinical-medication-rows [data-row-kind="medication"]'),
+        retorno: {
+          prazo_min_dias: document.getElementById('protocol-return-min')?.value || '',
+          prazo_max_dias: document.getElementById('protocol-return-max')?.value || '',
+          tipo_retorno: document.getElementById('protocol-return-kind')?.value || '',
+          objetivo: document.getElementById('protocol-return-goal')?.value || '',
+          gatilhos_antecipacao: document.getElementById('protocol-return-triggers')?.value || '',
+        }
+      };
+    }
+
+    function updateSuspicionOptions(options) {
+      const datalist = document.getElementById('clinical-suspicion-options');
+      if (!datalist || !Array.isArray(options)) return;
+      datalist.innerHTML = options
+        .filter(Boolean)
+        .map(item => `<option value="${escapeHtml(item)}">`)
+        .join('');
+    }
+
+    async function submitProtocolForm(event) {
+      event.preventDefault();
+      if (!protocolForm) return;
+      protocolSubmitButton.disabled = true;
+      setStatus('Salvando novo protocolo clínico...', 'info');
+      try {
+        const payload = buildProtocolPayload();
+        const data = await postJson(panel.dataset.createUrl, payload);
+        updateSuspicionOptions(data.clinical_suspicion_options || []);
+        const suspicionInput = document.getElementById('suspeita-clinica');
+        if (suspicionInput && data.protocol?.suspeita_principal) {
+          suspicionInput.value = data.protocol.suspeita_principal;
+        }
+        resetProtocolFormState();
+        setMode('suggestions');
+        setStatus(data.message || 'Novo protocolo criado com sucesso.', 'success');
+      } catch (error) {
+        setStatus(error.message || 'Erro ao criar protocolo clínico.', 'danger');
+      } finally {
+        protocolSubmitButton.disabled = false;
+      }
+    }
+
+    togglePanelButton?.addEventListener('click', function () {
+      const open = bodyEl.classList.contains('d-none');
+      setPanelOpen(open);
+    });
+
+    modeButtons.forEach(button => {
+      button.addEventListener('click', function () {
+        setMode(button.dataset.clinicalMode);
+      });
+    });
+
+    levelButtons.forEach(button => {
+      button.addEventListener('click', function () {
+        setProtocolLevel(button.dataset.protocolLevel);
+      });
+    });
+
+    panel.addEventListener('click', function (event) {
+      const addButton = event.target.closest('[data-add-row]');
+      if (addButton) {
+        event.preventDefault();
+        addRepeaterRow(addButton.dataset.addRow);
+        return;
+      }
+      const removeButton = event.target.closest('[data-remove-row]');
+      if (removeButton) {
+        event.preventDefault();
+        removeButton.closest('.clinical-repeater-item')?.remove();
+        return;
+      }
       const applyButton = event.target.closest('.js-apply-suggestion');
       if (applyButton) {
         event.preventDefault();
@@ -336,5 +1004,16 @@
         handleDismiss(dismissButton);
       }
     });
+
+    loadButton?.addEventListener('click', loadSuggestions);
+    protocolForm?.addEventListener('submit', submitProtocolForm);
+    resetProtocolButton?.addEventListener('click', function () {
+      resetProtocolFormState();
+      setStatus('Formulário de protocolo limpo.', 'neutral');
+    });
+
+    resetProtocolFormState();
+    setMode('suggestions');
+    setPanelOpen(false);
   });
 </script>

@@ -521,3 +521,73 @@ def test_bicheira_protocol_returns_requested_conduct_and_medications(client, mon
         ('a cada 24 horas', 'por 5 dias'),
         ('a cada 12 horas', 'por 10 dias'),
     ]
+
+
+def test_inline_protocol_creation_creates_clinic_protocol_and_updates_suspicion_options(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Protocolos')
+        tutor = User(id=1, name='Tutor', email='tutor-protocolos@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-protocolos@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Luna', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta])
+        db.session.commit()
+        consulta_id = consulta.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    response = client.post(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/protocolos',
+        json={
+            'nome': 'Protocolo Dermatologico Essencial',
+            'suspeita_principal': 'dermatite',
+            'especie': 'cao',
+            'prioridade': 20,
+            'conduta_sugerida': 'Inspecionar pele, remover irritantes e reavaliar resposta clínica.',
+            'sinais_gatilho': 'prurido, eritema, descamação',
+            'exames': [
+                {'nome': 'Citologia cutânea', 'justificativa': 'Pesquisar infecção secundária.'},
+            ],
+            'medicamentos': [
+                {
+                    'nome_medicamento': 'Cefalexina',
+                    'indicacao': 'Suporte infeccioso',
+                    'frequencia_texto': 'a cada 12 horas',
+                    'duracao_texto': 'por 10 dias',
+                },
+            ],
+            'retorno': {
+                'prazo_min_dias': 7,
+                'tipo_retorno': 'retorno',
+                'objetivo': 'Reavaliar resposta cutânea.',
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert 'dermatite' in payload['clinical_suspicion_options']
+
+    with flask_app.app_context():
+        protocolo = ProtocoloClinico.query.filter_by(
+            nome='Protocolo Dermatologico Essencial',
+            clinica_id=clinic_id,
+        ).first()
+        assert protocolo is not None
+        assert protocolo.suspeita_principal == 'dermatite'
+        assert len(protocolo.exames_sugeridos) == 1
+        assert len(protocolo.medicamentos_sugeridos) == 1
+        assert len(protocolo.retornos_sugeridos) == 1
