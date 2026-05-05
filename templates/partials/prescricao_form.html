@@ -900,6 +900,10 @@
         _selecionarApresentacaoPadraoSugestao();
         sugestaoDoseAtual.nome_exibicao_override = medicamento;
         usarDoseSugerida();
+        const frequenciaProtocolo = String(draft?.frequencia || '').trim();
+        const duracaoProtocolo = String(draft?.duracao || '').trim();
+        if (freqField && frequenciaProtocolo) freqField.value = frequenciaProtocolo;
+        if (durField && duracaoProtocolo) durField.value = duracaoProtocolo;
         _mesclarInstrucoesGeraisSugestao(instructions);
         adicionarMedicamento();
         mostrarFeedback('Sugestão aceita com dose calculada pelo peso do animal.');

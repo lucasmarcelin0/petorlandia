@@ -461,24 +461,32 @@ def test_bicheira_protocol_returns_requested_conduct_and_medications(client, mon
                 protocolo=protocolo,
                 nome_medicamento='Cefalexina',
                 justificativa='Antibioticoterapia de suporte para ferida infestada, conforme avaliação clínica.',
+                frequencia_texto='a cada 12 horas',
+                duracao_texto='por 10 dias',
                 prioridade=1,
             ),
             ProtocoloClinicoMedicamento(
                 protocolo=protocolo,
                 nome_medicamento='Capstar',
                 justificativa='Controle complementar de ectoparasitas quando clinicamente indicado.',
+                frequencia_texto='Dose unica',
+                duracao_texto='Dose unica',
                 prioridade=2,
             ),
             ProtocoloClinicoMedicamento(
                 protocolo=protocolo,
                 nome_medicamento='Meloxicam',
                 justificativa='Controle de dor e inflamação conforme avaliação clínica.',
+                frequencia_texto='a cada 24 horas',
+                duracao_texto='por 5 dias',
                 prioridade=3,
             ),
             ProtocoloClinicoMedicamento(
                 protocolo=protocolo,
                 nome_medicamento='Pomada de sulfadiazina de prata',
                 justificativa='Cuidado tópico complementar da lesão após limpeza e manejo inicial.',
+                frequencia_texto='a cada 12 horas',
+                duracao_texto='por 10 dias',
                 prioridade=4,
             ),
         ])
@@ -506,4 +514,10 @@ def test_bicheira_protocol_returns_requested_conduct_and_medications(client, mon
         'Capstar',
         'Meloxicam',
         'Pomada de sulfadiazina de prata',
+    ]
+    assert [(item['frequencia'], item['duracao']) for item in suggestion['medicamentos']] == [
+        ('a cada 12 horas', 'por 10 dias'),
+        ('Dose unica', 'Dose unica'),
+        ('a cada 24 horas', 'por 5 dias'),
+        ('a cada 12 horas', 'por 10 dias'),
     ]
