@@ -1,0 +1,3329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perguntas T0 T10 T30 - Impressao A4</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    :root {
+      --teal: #015f73;
+      --orange: #e8711c;
+      --border: #d8e0e6;
+      --muted: #5d6a75;
+      --bg: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #1f2933;
+      font-size: 10pt;
+      line-height: 1.35;
+      background: white;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .cover, .form-sheet {
+      page-break-after: always;
+    }
+    .form-sheet:last-child { page-break-after: auto; }
+    .cover {
+      min-height: 270mm;
+      padding: 12mm 8mm;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(135deg, rgba(1,95,115,.1), transparent 30%),
+        linear-gradient(330deg, rgba(232,113,28,.12), transparent 35%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .eyebrow {
+      color: var(--teal);
+      font-size: 11pt;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .cover h1 {
+      margin-top: 8mm;
+      font-size: 24pt;
+      line-height: 1.05;
+    }
+    .cover .subtitle {
+      margin-top: 5mm;
+      max-width: 155mm;
+      color: var(--muted);
+      font-size: 11.5pt;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4mm;
+      margin-top: 10mm;
+    }
+    .toc-item {
+      padding: 4mm;
+      border: 1px solid var(--border);
+      border-radius: 4mm;
+      background: rgba(255,255,255,.9);
+    }
+    .toc-item strong {
+      display: block;
+      font-size: 16pt;
+      color: var(--teal);
+    }
+    .toc-item span {
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .form-sheet {
+      min-height: 270mm;
+    }
+    .sheet-header {
+      padding-bottom: 3mm;
+      border-bottom: 2px solid var(--teal);
+      margin-bottom: 4mm;
+    }
+    .sheet-header h2 {
+      font-size: 18pt;
+    }
+    .sheet-header p {
+      margin-top: 1.5mm;
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .section {
+      margin-bottom: 5mm;
+      break-inside: avoid;
+    }
+    .section-head {
+      padding: 3mm 3.2mm;
+      border-left: 4px solid var(--orange);
+      background: var(--bg);
+      border-radius: 2mm;
+      margin-bottom: 2.5mm;
+    }
+    .section-head h3 {
+      font-size: 11pt;
+    }
+    .section-head p {
+      margin-top: 1mm;
+      color: var(--muted);
+      font-size: 8.8pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.8pt;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 2mm 2.2mm;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--bg);
+      font-weight: 700;
+    }
+    .pill {
+      display: inline-block;
+      padding: .6mm 1.8mm;
+      margin: 0 1mm 1mm 0;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: white;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: 8pt; }
+    .required {
+      color: #b42318;
+      font-weight: 700;
+    }
+    .type {
+      font-weight: 700;
+      color: var(--teal);
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div>
+      <div class="eyebrow">SFA Orlandia</div>
+      <h1>Perguntas dos Formularios<br>T0, T10 e T30</h1>
+      <p class="subtitle">
+        Caderno A4 com as perguntas atuais dos tres formularios, organizado por secao para
+        revisao com a equipe, alinhamento de fluxo e apoio em entrevistas.
+      </p>
+      <div class="toc">
+        
+        <div class="toc-item">
+          <strong>T0</strong>
+          <span>35 perguntas em 5 secoes</span>
+        </div>
+        
+        <div class="toc-item">
+          <strong>T10</strong>
+          <span>25 perguntas em 3 secoes</span>
+        </div>
+        
+        <div class="toc-item">
+          <strong>T30</strong>
+          <span>24 perguntas em 4 secoes</span>
+        </div>
+        
+      </div>
+    </div>
+    <p class="muted small">Gerado em 29/04/2026 09:52 a partir dos schemas configurados no modulo SFA.</p>
+  </section>
+
+  
+  <section class="form-sheet">
+    <div class="sheet-header">
+      <h2>T0 - T0 Atualizacao Forms Codex - SFA Orlandia</h2>
+      <p>Formulario inicial padronizado para sindromes febris agudas. Mantem as informacoes essenciais com escalas comparaveis.</p>
+    </div>
+
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 1: Identificacao e contexto</h3>
+        
+        <p>Dados minimos para vinculo e perfil epidemiologico.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>cpf</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              CPF
+              
+              <div class="small muted">Placeholder: Somente numeros</div>
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>ficha_sinan</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Numero da Ficha SINAN
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              <div class="small muted">somente leitura</div>
+              
+              
+              <div class="small muted">prefill: ficha_sinan</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>nome</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Nome completo
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+              <div class="small muted">prefill: nome</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>data_nascimento</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Data de nascimento
+              
+              
+            </td>
+            <td>
+              <span class="type">date</span>
+              
+              
+              <div class="small muted">prefill: data_nascimento</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>endereco</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Endereco completo
+              
+              
+              <div class="small muted">Usado para contato e eventual georreferencia segura; dashboards usam bairro/faixa territorial.</div>
+              
+            </td>
+            <td>
+              <span class="type">textarea</span>
+              
+              
+              <div class="small muted">prefill: endereco</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>tipo_residencia</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Tipo de moradia
+              
+              
+            </td>
+            <td>
+              <span class="type">select</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Casa urbana</span>
+                
+                <span class="pill">Casa rural</span>
+                
+                <span class="pill">Apartamento</span>
+                
+                <span class="pill">Outro</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 2: Perfil de saude e exposicao</h3>
+        
+        <p>Perfil individual e exposicoes agrupadas para reduzir redundancia.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>sexo_biologico</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sexo biologico
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Masculino</span>
+                
+                <span class="pill">Feminino</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>ocupacao_principal</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Ocupacao principal
+              
+              
+            </td>
+            <td>
+              <span class="type">select</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Agricultura/pecuaria</span>
+                
+                <span class="pill">Construcao/limpeza urbana</span>
+                
+                <span class="pill">Profissional da saude</span>
+                
+                <span class="pill">Profissional da educacao</span>
+                
+                <span class="pill">Comercio/escritorio</span>
+                
+                <span class="pill">Estudante</span>
+                
+                <span class="pill">Domestico(a)</span>
+                
+                <span class="pill">Aposentado(a)</span>
+                
+                <span class="pill">Desempregado(a)</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>condicoes_previas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Condicoes previas relevantes (marque todas)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Diabetes</span>
+                
+                <span class="pill">Hipertensao</span>
+                
+                <span class="pill">Problemas nos rins</span>
+                
+                <span class="pill">Problemas no figado</span>
+                
+                <span class="pill">Gestante</span>
+                
+                <span class="pill">Imunossupressao</span>
+                
+                <span class="pill">Nenhuma das acima</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_dengue_previo</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Ja teve dengue confirmada antes?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Nao sei</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>vacinas_12_meses</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Vacinas nos ultimos 12 meses (marque todas)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Dengue (Qdenga)</span>
+                
+                <span class="pill">Febre amarela</span>
+                
+                <span class="pill">Gripe (influenza)</span>
+                
+                <span class="pill">COVID-19 (reforco recente)</span>
+                
+                <span class="pill">Nenhuma</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>exposicao_ambiental</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Exposicao ambiental nos 15 dias antes dos sintomas
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Agua suja/lama/enchente</span>
+                
+                <span class="pill">Rio/corrego/pesca/natacao</span>
+                
+                <span class="pill">Mata/trilha/camping</span>
+                
+                <span class="pill">Area rural/chacara</span>
+                
+                <span class="pill">Nenhuma exposicao ambiental</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>exposicao_animal</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Contato animal nos 15 dias antes dos sintomas
+              
+              
+              <div class="small muted">Marque Caes e Gatos separadamente quando houver contato com ambos.</div>
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Caes</span>
+                
+                <span class="pill">Gatos</span>
+                
+                <span class="pill">Gado/porcos/galinhas</span>
+                
+                <span class="pill">Roedores</span>
+                
+                <span class="pill">Carrapato</span>
+                
+                <span class="pill">Nenhum contato animal relevante</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>exposicao_alimentar</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Exposicao alimentar/hidrica nos 7 dias antes dos sintomas
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Carne malpassada/crua</span>
+                
+                <span class="pill">Leite cru/queijo nao pasteurizado</span>
+                
+                <span class="pill">Ovos crus/maionese caseira</span>
+                
+                <span class="pill">Agua nao tratada</span>
+                
+                <span class="pill">Comida de rua/barracas</span>
+                
+                <span class="pill">Nenhuma dessas</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>outras_pessoas_com_sintomas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Na casa ou vizinhanca ha pessoas com sintomas parecidos?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Nao sei</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 3: Quadro clinico inicial</h3>
+        
+        <p>Sintomas e intensidade no inicio da doenca.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>data_inicio_sintomas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Data de inicio dos primeiros sintomas
+              
+              
+            </td>
+            <td>
+              <span class="type">date</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>teve_febre</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Teve febre?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Nao</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>intensidade_febre</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Intensidade da febre percebida (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sintomas_principais</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sintomas principais no inicio (marque todos)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Febre alta (&gt;38,5 C)</span>
+                
+                <span class="pill">Dor forte atras dos olhos</span>
+                
+                <span class="pill">Dores musculares intensas</span>
+                
+                <span class="pill">Dores nas articulacoes (juntas)</span>
+                
+                <span class="pill">Manchas vermelhas na pele</span>
+                
+                <span class="pill">Coceira no corpo</span>
+                
+                <span class="pill">Cansaco extremo/fadiga</span>
+                
+                <span class="pill">Dor de cabeca forte</span>
+                
+                <span class="pill">Nausea/vomitos</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sinais_alerta</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sinais de alerta no inicio (marque todos)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sangramento (nariz, gengiva, pele)</span>
+                
+                <span class="pill">Urina muito escura</span>
+                
+                <span class="pill">Olhos ou pele amarelados</span>
+                
+                <span class="pill">Vomitos persistentes</span>
+                
+                <span class="pill">Dor abdominal intensa</span>
+                
+                <span class="pill">Confusao mental/tontura</span>
+                
+                <span class="pill">Falta de ar</span>
+                
+                <span class="pill">Nenhum sinal de alerta</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>dor_articular_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Dor articular hoje/inicio (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>fadiga_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Fadiga/cansaco hoje/inicio (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>impacto_atividades</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Impacto nas atividades no inicio
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nenhum</span>
+                
+                <span class="pill">Leve - incomoda, mas nao limita</span>
+                
+                <span class="pill">Moderado - limita algumas atividades</span>
+                
+                <span class="pill">Importante - impede varias atividades</span>
+                
+                <span class="pill">Incapacitante - impede atividades basicas</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 4: Impacto funcional e economico inicial</h3>
+        
+        <p>Use valores acumulados desde o inicio dos sintomas ate hoje.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>dias_incap</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Dias completamente incapacitado(a) desde o inicio
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 1
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>internacao</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Foi internado(a) ou hospitalizado(a)?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim, hospital publico</span>
+                
+                <span class="pill">Sim, hospital particular</span>
+                
+                <span class="pill">Sim, ambos</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              O medico chegou a algum diagnostico?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Exames pendentes</span>
+                
+                <span class="pill">Nao entendi o resultado</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico_qual</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Qual foi o diagnostico informado pelo medico?
+              
+              
+            </td>
+            <td>
+              <span class="type">select</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Dengue</span>
+                
+                <span class="pill">Chikungunya</span>
+                
+                <span class="pill">Zika</span>
+                
+                <span class="pill">Outra arbovirose</span>
+                
+                <span class="pill">Outra sindrome febril</span>
+                
+                <span class="pill">Outro</span>
+                
+              
+              
+              
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_remedios</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Medicamentos ate hoje (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_consultas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Consultas/exames ate hoje (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_transporte</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Transporte ate hoje (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_outros</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Outros gastos ate hoje (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_total</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Total aproximado ate hoje (R$)
+              
+              
+              <div class="small muted">Pode repetir a soma dos campos acima se preferir.</div>
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>ausencia_familiar</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Alguem da familia precisou faltar ao trabalho para cuidar de voce?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim, 1 pessoa</span>
+                
+                <span class="pill">Sim, 2 pessoas</span>
+                
+                <span class="pill">Sim, 3 ou mais pessoas</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>observacoes_finais</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Observacoes finais (opcional)
+              
+              
+            </td>
+            <td>
+              <span class="type">textarea</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 5: Consentimento</h3>
+        
+        <p>Confirme o consentimento para participar voluntariamente.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>aceite_tcle</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Aceite do TCLE
+              
+              
+              <div class="small muted">O nome informado sera usado como assinatura do consentimento.</div>
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Confirmo que li o TCLE e aceito participar voluntariamente do estudo.</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  
+  <section class="form-sheet">
+    <div class="sheet-header">
+      <h2>T10 - T10 Atualizacao Forms Codex - SFA Orlandia</h2>
+      <p>Acompanhamento padronizado de 10 dias, com escalas comparaveis ao T30.</p>
+    </div>
+
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 1: Identificacao</h3>
+        
+        <p>Confirmacao para vinculo da resposta.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>cpf</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              CPF
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+              <div class="small muted">prefill: cpf</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>nome</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Nome completo
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+              <div class="small muted">prefill: nome</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>data_entrevista_t10</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Data desta entrevista (T10)
+              
+              
+            </td>
+            <td>
+              <span class="type">date</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 2: Evolucao clinica</h3>
+        
+        <p>Estado de saude e sintomas persistentes.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>classificacao_melhora</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Como classifica sua melhora desde o T0?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Curado(a) - sem sintomas</span>
+                
+                <span class="pill">Melhorando - sintomas leves</span>
+                
+                <span class="pill">Estavel - sem piora nem melhora</span>
+                
+                <span class="pill">Piorando - sintomas persistem ou pioraram</span>
+                
+                <span class="pill">Recaida - melhorei e piorei novamente</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>percentual_recuperacao</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Quanto sente que recuperou em relacao ao estado antes da doenca?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">100% recuperado - como antes da doenca</span>
+                
+                <span class="pill">90-99% recuperado - diferencas minimas</span>
+                
+                <span class="pill">70-89% recuperado - sequelas leves</span>
+                
+                <span class="pill">50-69% recuperado - sequelas moderadas</span>
+                
+                <span class="pill">Menos de 50% recuperado - limitacoes importantes</span>
+                
+                <span class="pill">Ainda doente - sem melhora significativa</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sintomas_persistentes</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sintomas persistentes hoje (marque todos)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Febre alta (&gt;38,5 C)</span>
+                
+                <span class="pill">Dor forte atras dos olhos</span>
+                
+                <span class="pill">Dores musculares intensas</span>
+                
+                <span class="pill">Dores nas articulacoes (juntas)</span>
+                
+                <span class="pill">Manchas vermelhas na pele</span>
+                
+                <span class="pill">Coceira no corpo</span>
+                
+                <span class="pill">Cansaco extremo/fadiga</span>
+                
+                <span class="pill">Dor de cabeca forte</span>
+                
+                <span class="pill">Nausea/vomitos</span>
+                
+                <span class="pill">Nenhum sintoma persistente</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sinais_alerta</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sinais de alerta desde a ultima entrevista
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sangramento (nariz, gengiva, pele)</span>
+                
+                <span class="pill">Urina muito escura</span>
+                
+                <span class="pill">Olhos ou pele amarelados</span>
+                
+                <span class="pill">Vomitos persistentes</span>
+                
+                <span class="pill">Dor abdominal intensa</span>
+                
+                <span class="pill">Confusao mental/tontura</span>
+                
+                <span class="pill">Falta de ar</span>
+                
+                <span class="pill">Nenhum sinal de alerta</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>dor_articular_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Dor articular hoje (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>fadiga_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Fadiga/cansaco hoje (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>impacto_atividades</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Impacto atual nas atividades
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nenhum</span>
+                
+                <span class="pill">Leve - incomoda, mas nao limita</span>
+                
+                <span class="pill">Moderado - limita algumas atividades</span>
+                
+                <span class="pill">Importante - impede varias atividades</span>
+                
+                <span class="pill">Incapacitante - impede atividades basicas</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>retornou_servico_saude</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Precisou retornar a servico de saude desde o T0?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>quantas_vezes_retornou</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Quantas vezes retornou?
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 1
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>internacao_t10</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Foi internado(a) desde o T0?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              O medico chegou a algum diagnostico?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Exames pendentes</span>
+                
+                <span class="pill">Nao entendi o resultado</span>
+                
+              
+              
+              
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico_qual</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Qual foi o diagnostico informado pelo medico?
+              
+              
+            </td>
+            <td>
+              <span class="type">select</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Dengue</span>
+                
+                <span class="pill">Chikungunya</span>
+                
+                <span class="pill">Zika</span>
+                
+                <span class="pill">Outra arbovirose</span>
+                
+                <span class="pill">Outra sindrome febril</span>
+                
+                <span class="pill">Outro</span>
+                
+              
+              
+              
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 3: Impacto funcional e economico acumulado</h3>
+        
+        <p>Valores acumulados desde o inicio dos sintomas ate hoje.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>dias_incap_novos</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Total acumulado de dias completamente incapacitado desde o inicio
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 1
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_remedios</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Medicamentos acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_consultas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Consultas/exames acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_transporte</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Transporte acumulado (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_internacao</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Internacao acumulada (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_outros</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Outros gastos acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>perda_renda_estimada</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Perda estimada de renda acumulada (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>renda_familiar_afetada</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              A renda familiar foi afetada?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim, reducao temporaria</span>
+                
+                <span class="pill">Sim, perda de trabalho temporaria</span>
+                
+                <span class="pill">Sim, uso de economias/reservas</span>
+                
+                <span class="pill">Sim, outros impactos financeiros</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>retorno_atividades_previsao</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Quando espera retomar 100% das atividades?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Ja retomei todas</span>
+                
+                <span class="pill">Em 1 semana ou menos</span>
+                
+                <span class="pill">Em 2-4 semanas</span>
+                
+                <span class="pill">Mais de 1 mes</span>
+                
+                <span class="pill">Nao consigo prever</span>
+                
+                <span class="pill">Acho que terei limitacoes permanentes</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>observacoes_finais</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Observacoes importantes (opcional)
+              
+              
+            </td>
+            <td>
+              <span class="type">textarea</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  
+  <section class="form-sheet">
+    <div class="sheet-header">
+      <h2>T30 - T30 Atualizacao Forms Codex - SFA Orlandia</h2>
+      <p>Acompanhamento final padronizado para medir recuperacao, funcionalidade, sequelas e custo em 30 dias.</p>
+    </div>
+
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 1: Identificacao</h3>
+        
+        <p>Confirmacao para vinculo da resposta.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>cpf</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              CPF
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+              <div class="small muted">prefill: cpf</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>nome</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Nome completo
+              
+              
+            </td>
+            <td>
+              <span class="type">text</span>
+              
+              
+              <div class="small muted">prefill: nome</div>
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 2: Desfecho clinico final</h3>
+        
+        <p>Estado final e sequelas apos 30 dias.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>estado_saude_final</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Como voce se sente hoje comparado a antes da doenca?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">100% recuperado - como antes da doenca</span>
+                
+                <span class="pill">90-99% recuperado - diferencas minimas</span>
+                
+                <span class="pill">70-89% recuperado - sequelas leves</span>
+                
+                <span class="pill">50-69% recuperado - sequelas moderadas</span>
+                
+                <span class="pill">Menos de 50% recuperado - limitacoes importantes</span>
+                
+                <span class="pill">Ainda doente - sem melhora significativa</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sequelas_atuais</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sequelas atuais (marque todas)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Artralgia persistente</span>
+                
+                <span class="pill">Fadiga cronica</span>
+                
+                <span class="pill">Dor muscular residual</span>
+                
+                <span class="pill">Problemas de memoria/concentracao</span>
+                
+                <span class="pill">Ansiedade ou tristeza relacionada a doenca</span>
+                
+                <span class="pill">Problemas de sono</span>
+                
+                <span class="pill">Nenhuma sequela atual</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sintomas_persistentes</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sintomas persistentes hoje (marque todos)
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Febre alta (&gt;38,5 C)</span>
+                
+                <span class="pill">Dor forte atras dos olhos</span>
+                
+                <span class="pill">Dores musculares intensas</span>
+                
+                <span class="pill">Dores nas articulacoes (juntas)</span>
+                
+                <span class="pill">Manchas vermelhas na pele</span>
+                
+                <span class="pill">Coceira no corpo</span>
+                
+                <span class="pill">Cansaco extremo/fadiga</span>
+                
+                <span class="pill">Dor de cabeca forte</span>
+                
+                <span class="pill">Nausea/vomitos</span>
+                
+                <span class="pill">Nenhum sintoma persistente</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>sinais_alerta</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Sinais de alerta desde a ultima entrevista
+              
+              
+            </td>
+            <td>
+              <span class="type">checkboxes</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sangramento (nariz, gengiva, pele)</span>
+                
+                <span class="pill">Urina muito escura</span>
+                
+                <span class="pill">Olhos ou pele amarelados</span>
+                
+                <span class="pill">Vomitos persistentes</span>
+                
+                <span class="pill">Dor abdominal intensa</span>
+                
+                <span class="pill">Confusao mental/tontura</span>
+                
+                <span class="pill">Falta de ar</span>
+                
+                <span class="pill">Nenhum sinal de alerta</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>dor_articular_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Dor articular hoje (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>fadiga_intensidade</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Fadiga/cansaco hoje (1 a 5)
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">1</span>
+                
+                <span class="pill">2</span>
+                
+                <span class="pill">3</span>
+                
+                <span class="pill">4</span>
+                
+                <span class="pill">5</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>impacto_atividades</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Impacto atual nas atividades
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nenhum</span>
+                
+                <span class="pill">Leve - incomoda, mas nao limita</span>
+                
+                <span class="pill">Moderado - limita algumas atividades</span>
+                
+                <span class="pill">Importante - impede varias atividades</span>
+                
+                <span class="pill">Incapacitante - impede atividades basicas</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>retorno_atividades_normais</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Quando voltou as atividades habituais?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">No mesmo dia ou em 1 dia</span>
+                
+                <span class="pill">Em 2 a 3 dias</span>
+                
+                <span class="pill">Em 4 a 7 dias</span>
+                
+                <span class="pill">Em 8 a 14 dias</span>
+                
+                <span class="pill">Em 15 a 30 dias</span>
+                
+                <span class="pill">Depois de 30 dias</span>
+                
+                <span class="pill">Voltei parcialmente, mas ainda nao totalmente</span>
+                
+                <span class="pill">Ainda nao voltei</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              O medico chegou a algum diagnostico?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Sim</span>
+                
+                <span class="pill">Exames pendentes</span>
+                
+                <span class="pill">Nao entendi o resultado</span>
+                
+              
+              
+              
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>diagnostico_medico_qual</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Qual foi o diagnostico informado pelo medico?
+              
+              
+            </td>
+            <td>
+              <span class="type">select</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Dengue</span>
+                
+                <span class="pill">Chikungunya</span>
+                
+                <span class="pill">Zika</span>
+                
+                <span class="pill">Outra arbovirose</span>
+                
+                <span class="pill">Outra sindrome febril</span>
+                
+                <span class="pill">Outro</span>
+                
+              
+              
+              
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 3: Impacto funcional e economico final</h3>
+        
+        <p>Valores acumulados dos 30 dias desde o inicio dos sintomas.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>dias_incap_novos</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Total acumulado de dias completamente incapacitado desde o inicio
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 1
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_remedios</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Medicamentos acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_consultas</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Consultas/exames acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_transporte</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Transporte acumulado (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_internacao</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Internacao acumulada (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>custo_outros</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Outros gastos acumulados (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>perda_renda_estimada</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Perda estimada de renda acumulada (R$)
+              
+              
+            </td>
+            <td>
+              <span class="type">number</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              <div class="small muted" style="margin-top:1mm">
+                min: 0
+                 step: 0.01
+              </div>
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>impacto_emocional_familiar</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Impacto emocional/familiar duradouro
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Nenhum impacto duradouro</span>
+                
+                <span class="pill">Leve estresse familiar</span>
+                
+                <span class="pill">Conflitos temporarios</span>
+                
+                <span class="pill">Problemas financeiros significativos</span>
+                
+                <span class="pill">Ansiedade/tristeza persistente</span>
+                
+                <span class="pill">Outro impacto importante</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <div class="section-head">
+        <h3>Secao 4: Encerramento</h3>
+        
+        <p>Perguntas qualitativas finais, mantidas fora do painel quantitativo principal.</p>
+        
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>
+              <strong>avaliacao_atendimento_saude</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Como avalia o atendimento de saude que recebeu?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Excelente</span>
+                
+                <span class="pill">Bom</span>
+                
+                <span class="pill">Regular</span>
+                
+                <span class="pill">Ruim</span>
+                
+                <span class="pill">Pessimo</span>
+                
+                <span class="pill">Nao utilizei servicos</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>participaria_outro_estudo</strong><br>
+              <span class="small required">
+                Obrigatorio
+              </span>
+            </td>
+            <td>
+              Participaria de outro estudo de saude como este?
+              
+              
+            </td>
+            <td>
+              <span class="type">radio</span>
+              
+              
+            </td>
+            <td>
+              
+                
+                <span class="pill">Sim, com certeza</span>
+                
+                <span class="pill">Sim, talvez</span>
+                
+                <span class="pill">Nao tenho certeza</span>
+                
+                <span class="pill">Nao</span>
+                
+                <span class="pill">Nao, mas sugeriria melhorias</span>
+                
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>conselho_outras_pessoas</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Conselho a outras pessoas com sintomas similares (opcional)
+              
+              
+            </td>
+            <td>
+              <span class="type">textarea</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+          <tr>
+            <td>
+              <strong>observacoes_finais</strong><br>
+              <span class="small muted">
+                Opcional
+              </span>
+            </td>
+            <td>
+              Observacoes finais (opcional)
+              
+              
+            </td>
+            <td>
+              <span class="type">textarea</span>
+              
+              
+            </td>
+            <td>
+              
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              
+              
+              
+            </td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  
+</body>
+</html>

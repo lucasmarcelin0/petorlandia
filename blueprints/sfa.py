@@ -198,6 +198,29 @@ def _coletar_filtros_pacientes() -> dict[str, str]:
     }
 
 
+def _filtros_pacientes_vazios(visao: str = "reais") -> dict[str, str]:
+    return {
+        "visao": visao,
+        "grupo": "",
+        "status": "",
+        "q": "",
+        "mes_inicio_sintomas": "",
+        "data_inicio_sintomas": "",
+        "data_inicio_sintomas_de": "",
+        "data_inicio_sintomas_ate": "",
+        "data_notificacao_de": "",
+        "data_notificacao_ate": "",
+        "respondido_t0_de": "",
+        "respondido_t0_ate": "",
+        "respondido_t10_de": "",
+        "respondido_t10_ate": "",
+        "respondido_t30_de": "",
+        "respondido_t30_ate": "",
+        "proxima_acao_ate": "",
+        "situacao_data": "",
+    }
+
+
 def _parse_month_filter(value: str) -> tuple[int, int] | None:
     text = str(value or "").strip()
     if not text:
@@ -1173,6 +1196,32 @@ def _montar_dashboard_testes_sfa(pacientes) -> dict[str, object]:
         "top_differentiators": top_differentiators[:6],
     }
 
+
+def _formularios_impressao_sfa() -> list[dict[str, object]]:
+    from services.sfa_service import (
+        carregar_t0_form_schema,
+        carregar_t10_form_schema,
+        carregar_t30_form_schema,
+        iterar_campos_form,
+    )
+
+    formularios = [
+        ("T0", carregar_t0_form_schema()),
+        ("T10", carregar_t10_form_schema()),
+        ("T30", carregar_t30_form_schema()),
+    ]
+    itens = []
+    for stage, schema in formularios:
+        itens.append(
+            {
+                "stage": stage,
+                "schema": schema,
+                "field_count": sum(1 for _ in iterar_campos_form(schema)),
+                "section_count": len(schema.get("sections", [])),
+            }
+        )
+    return itens
+
 @bp.route("/pacientes")
 @require_sfa_internal_access
 def pacientes():
@@ -1191,6 +1240,30 @@ def pacientes():
                            paginacao=paginacao,
                            filtros=filtros,
                            dashboard_testes=dashboard_testes)
+
+
+@bp.route("/pacientes/impressao/testes")
+@require_sfa_internal_access
+def pacientes_print_testes():
+    filtros = _coletar_filtros_pacientes()
+    filtros["visao"] = "testes"
+    dashboard_testes = _montar_dashboard_testes_sfa(_consulta_pacientes_filtrada(filtros).all())
+    return render_template(
+        "sfa/print_dashboard_testes.html",
+        dashboard_testes=dashboard_testes,
+        filtros=filtros,
+        generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@bp.route("/formularios/impressao")
+@require_sfa_internal_access
+def formularios_print():
+    return render_template(
+        "sfa/print_form_questions.html",
+        formularios=_formularios_impressao_sfa(),
+        generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
 
 
 @bp.route("/analise-respostas")

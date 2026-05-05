@@ -115,6 +115,14 @@
         <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
       </div>
       <div class="col-auto ms-auto">
+        {% if filtros.visao == 'testes' %}
+        <a href="{{ url_for('sfa_routes.pacientes_print_testes', **filtros) }}" class="btn btn-sm btn-outline-dark" target="_blank" rel="noopener">
+          Graficos A4
+        </a>
+        {% endif %}
+        <a href="{{ url_for('sfa_routes.formularios_print') }}" class="btn btn-sm btn-outline-dark" target="_blank" rel="noopener">
+          Perguntas T0/T10/T30
+        </a>
         <a href="{{ url_for('sfa_routes.analise_respostas', **filtros) }}" class="btn btn-sm btn-outline-success">
           Analise respostas
         </a>

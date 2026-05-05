@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graficos A4 - SFA Testes</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    :root {
+      --teal: #015f73;
+      --orange: #e8711c;
+      --blue: #0d6efd;
+      --green: #198754;
+      --yellow: #ffc107;
+      --border: #d7dee3;
+      --text: #1f2933;
+      --muted: #5b6975;
+      --bg: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.35;
+      background: white;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .cover, .sheet {
+      page-break-after: always;
+    }
+    .sheet:last-child { page-break-after: auto; }
+    .cover {
+      min-height: 270mm;
+      padding: 10mm 8mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background:
+        linear-gradient(145deg, rgba(1,95,115,.1), transparent 35%),
+        linear-gradient(315deg, rgba(232,113,28,.12), transparent 30%);
+      border: 1px solid var(--border);
+    }
+    .eyebrow {
+      color: var(--teal);
+      font-size: 11pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .cover h1 {
+      margin-top: 8mm;
+      font-size: 26pt;
+      line-height: 1.05;
+    }
+    .cover .subtitle {
+      margin-top: 5mm;
+      max-width: 150mm;
+      color: var(--muted);
+      font-size: 12pt;
+    }
+    .meta-box {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4mm;
+      margin-top: 12mm;
+    }
+    .meta-item, .card, .panel, .table-panel {
+      border: 1px solid var(--border);
+      border-radius: 4mm;
+      background: white;
+    }
+    .meta-item {
+      padding: 4mm;
+      background: var(--bg);
+    }
+    .meta-item .label {
+      display: block;
+      color: var(--muted);
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .meta-item strong {
+      display: block;
+      margin-top: 1.5mm;
+      font-size: 16pt;
+    }
+    .footer-note {
+      color: var(--muted);
+      font-size: 8.5pt;
+    }
+    .sheet {
+      min-height: 270mm;
+      padding: 0;
+    }
+    .sheet-header {
+      padding: 4mm 0 3mm;
+      border-bottom: 2px solid var(--teal);
+      margin-bottom: 4mm;
+    }
+    .sheet-header h2 {
+      font-size: 17pt;
+    }
+    .sheet-header p {
+      margin-top: 1mm;
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .grid-4, .grid-2, .grid-3 {
+      display: grid;
+      gap: 4mm;
+    }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      padding: 4mm;
+      break-inside: avoid;
+    }
+    .card .label {
+      color: var(--muted);
+      font-size: 8.5pt;
+    }
+    .card .value {
+      margin-top: 1.5mm;
+      font-size: 17pt;
+      font-weight: 700;
+    }
+    .panel, .table-panel {
+      padding: 4mm;
+      break-inside: avoid;
+    }
+    .panel h3, .table-panel h3 {
+      margin-bottom: 3mm;
+      color: var(--teal);
+      font-size: 11pt;
+    }
+    .kv-list {
+      display: grid;
+      gap: 2.2mm;
+    }
+    .kv-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 4mm;
+      padding-bottom: 1.5mm;
+      border-bottom: 1px dashed #dfe6eb;
+    }
+    .kv-item:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .kv-item .k {
+      color: var(--muted);
+    }
+    .alert {
+      margin-bottom: 2mm;
+      padding: 3mm 3.2mm;
+      border-left: 4px solid var(--yellow);
+      background: #fff8dd;
+      border-radius: 2mm;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.8pt;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 1.8mm 2.2mm;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--bg);
+      font-weight: 700;
+    }
+    .bar-table td:last-child {
+      width: 36mm;
+    }
+    .bar-track {
+      height: 6mm;
+      background: #edf2f5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--orange));
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .small {
+      font-size: 8.4pt;
+    }
+    .pill {
+      display: inline-block;
+      padding: .7mm 2mm;
+      border-radius: 999px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-size: 8pt;
+      margin-right: 1mm;
+      margin-bottom: 1mm;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div>
+      <div class="eyebrow">SFA Orlandia</div>
+      <h1>Graficos e Leituras Analiticas<br>para Impressao A4</h1>
+      <p class="subtitle">
+        Material consolidado a partir da visao de testes em <code>/sfa/pacientes?visao=testes</code>,
+        organizado para reunioes, discussao tecnica e compartilhamento com a equipe.
+      </p>
+      <div class="meta-box">
+        
+        <div class="meta-item">
+          <span class="label">Pacientes avaliados</span>
+          <strong>60</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Grupo A</span>
+          <strong>30 (50%)</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Grupo B</span>
+          <strong>30 (50%)</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Dias incapacitantes T0</span>
+          <strong>4.0</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Dias incapacitantes T30</span>
+          <strong>0.9</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Custo médio final</span>
+          <strong>R$ 14.0</strong>
+        </div>
+        
+        <div class="meta-item">
+          <span class="label">Recuperação alta no T30</span>
+          <strong>24/60</strong>
+        </div>
+        
+      </div>
+    </div>
+    <div class="footer-note">
+      Gerado em 29/04/2026 09:52.
+      
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Resumo Executivo</h2>
+      <p>Indicadores de entrada, interpretacao inicial e alertas para a equipe.</p>
+    </div>
+    <div class="grid-4">
+      
+      <div class="card">
+        <div class="label">Sexo mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Masculino</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Faixa etária mais frequente</div>
+        <div class="value" style="font-size: 13pt;">30-44</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Ocupação mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Domestico(a)</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Sintoma mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Dores nas articulacoes (juntas)</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Contato animal mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Carrapato</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Risco ambiental mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Mata/trilha/camping</div>
+      </div>
+      
+      <div class="card">
+        <div class="label">Risco alimentar mais frequente</div>
+        <div class="value" style="font-size: 13pt;">Leite cru/queijo nao pasteurizado</div>
+      </div>
+      
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Alertas de Pesquisa</h3>
+        
+        <div class="alert">Grupo B com custo final médio maior: R$ 15.0 vs R$ 13.0.</div>
+        
+        <div class="alert">Melhor recuperação alta no segmento 30-44: 40.0%.</div>
+        
+        <div class="alert">Sintoma &#39;Dores musculares intensas&#39; mais concentrado no grupo A: 60.0%.</div>
+        
+        <div class="alert">Maior custo médio aparece em &#39;Em 8 a 14 dias&#39;: R$ 17.0.</div>
+        
+      </div>
+      <div class="panel">
+        <h3>Hipoteses e Padroes</h3>
+        <div class="kv-list">
+          
+          <div class="kv-item">
+            <strong>Sintoma discriminante</strong>
+            <span class="muted small">Dores musculares intensas diferencia mais os grupos, favorecendo o grupo A (60.0 p.p.).</span>
+          </div>
+          
+          <div class="kv-item">
+            <strong>Custo e funcionalidade</strong>
+            <span class="muted small">O maior custo médio aparece em &#39;Em 8 a 14 dias&#39;.</span>
+          </div>
+          
+          <div class="kv-item">
+            <strong>Recuperação mais lenta</strong>
+            <span class="muted small">O segmento Masculino teve a menor taxa de recuperação alta (40.0%).</span>
+          </div>
+          
+          <div class="kv-item">
+            <strong>Cluster predominante</strong>
+            <span class="muted small">O cluster mais frequente foi &#39;Recuperação lenta com limitação funcional&#39; com 24 caso(s).</span>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Linha do Tempo</h3>
+        <div class="kv-list">
+          
+          <div class="kv-item">
+            <span class="k">Dias médios até T0</span>
+            <strong>3.5</strong>
+          </div>
+          
+          <div class="kv-item">
+            <span class="k">Dias médios até T10</span>
+            <strong>13.5</strong>
+          </div>
+          
+          <div class="kv-item">
+            <span class="k">Dias médios até T30</span>
+            <strong>33.5</strong>
+          </div>
+          
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Custos Medios no T30</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Valor</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>Medicamentos</td>
+              <td>R$ 11.5</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 100.0%"></div></div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>Consultas/exames</td>
+              <td>R$ 0.0</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 0.0%"></div></div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>Transporte</td>
+              <td>R$ 2.5</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 21.7%"></div></div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>Outros</td>
+              <td>R$ 0.0</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 0.0%"></div></div>
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Comparacoes Entre Grupos</h2>
+      <p>Leituras prontas para impressao focadas em diferencas entre grupo A e grupo B.</p>
+    </div>
+    <div class="table-panel">
+      <h3>Comparacao Grupo A vs B</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Metrica</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Pacientes</td>
+            <td>30</td>
+            <td>30</td>
+          </tr>
+          
+          <tr>
+            <td>Custo final médio</td>
+            <td>R$ 13.0</td>
+            <td>R$ 15.0</td>
+          </tr>
+          
+          <tr>
+            <td>Dias incapacitantes T30</td>
+            <td>0.9</td>
+            <td>1.0</td>
+          </tr>
+          
+          <tr>
+            <td>Recuperação alta</td>
+            <td>12/30</td>
+            <td>12/30</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Sintomas Mais Discriminantes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Sintoma</th>
+              <th>Grupo lider</th>
+              <th>Diferenca</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>Dores musculares intensas</td>
+              <td>A</td>
+              <td>60.0 p.p.</td>
+            </tr>
+            
+            <tr>
+              <td>Dores nas articulacoes (juntas)</td>
+              <td>B</td>
+              <td>60.0 p.p.</td>
+            </tr>
+            
+            <tr>
+              <td>Cansaco extremo/fadiga</td>
+              <td>B</td>
+              <td>50.0 p.p.</td>
+            </tr>
+            
+            <tr>
+              <td>Dor forte atras dos olhos</td>
+              <td>B</td>
+              <td>50.0 p.p.</td>
+            </tr>
+            
+            <tr>
+              <td>Febre alta (&gt;38,5 C)</td>
+              <td>A</td>
+              <td>50.0 p.p.</td>
+            </tr>
+            
+            <tr>
+              <td>Manchas vermelhas na pele</td>
+              <td>A</td>
+              <td>50.0 p.p.</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Recuperacao Alta por Segmento</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Segmento</th>
+              <th>Resultado</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>30-44</td>
+              <td>24/60 (40.0%)</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 40.0%"></div></div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>Feminino</td>
+              <td>12/30 (40.0%)</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 40.0%"></div></div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>Masculino</td>
+              <td>12/30 (40.0%)</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: 40.0%"></div></div>
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Sintomas x Grupo</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Sintoma</th>
+              <th>Grupo A</th>
+              <th>Grupo B</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>Dores musculares intensas</td>
+              <td>18 (60.0%)</td>
+              <td>0 (0.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Dores nas articulacoes (juntas)</td>
+              <td>0 (0.0%)</td>
+              <td>18 (60.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Cansaco extremo/fadiga</td>
+              <td>0 (0.0%)</td>
+              <td>15 (50.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Dor forte atras dos olhos</td>
+              <td>0 (0.0%)</td>
+              <td>15 (50.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Febre alta (&gt;38,5 C)</td>
+              <td>15 (50.0%)</td>
+              <td>0 (0.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Manchas vermelhas na pele</td>
+              <td>15 (50.0%)</td>
+              <td>0 (0.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Dor de cabeca forte</td>
+              <td>12 (40.0%)</td>
+              <td>0 (0.0%)</td>
+            </tr>
+            
+            <tr>
+              <td>Nausea/vomitos</td>
+              <td>0 (0.0%)</td>
+              <td>12 (40.0%)</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Custo Medio por Retorno as Atividades</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Segmento</th>
+              <th>Valor</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>Em 8 a 14 dias<br><span class="small muted">9 caso(s)</span></td>
+              <td>R$ 17.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 17.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Ainda nao voltei<br><span class="small muted">6 caso(s)</span></td>
+              <td>R$ 17.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 17.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Em 4 a 7 dias<br><span class="small muted">9 caso(s)</span></td>
+              <td>R$ 15.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 15.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Voltei parcialmente, mas ainda nao totalmente<br><span class="small muted">6 caso(s)</span></td>
+              <td>R$ 15.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 15.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Em 2 a 3 dias<br><span class="small muted">9 caso(s)</span></td>
+              <td>R$ 13.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 13.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Depois de 30 dias<br><span class="small muted">6 caso(s)</span></td>
+              <td>R$ 13.0</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 13.0%"></div></div></td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Distribuicoes de Sintomas e Perfil</h2>
+      <p>Tabelas e barras resumindo prevalencia, clusters e caracteristicas demograficas.</p>
+    </div>
+    <div class="table-panel">
+      <h3>Prevalencia de Sintomas no T0</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sintoma</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Dores musculares intensas</td>
+            <td>18 (30.0%)</td>
+            <td>18 (60.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>60.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Dores nas articulacoes (juntas)</td>
+            <td>18 (30.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>18 (60.0%)</td>
+            <td>60.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Cansaco extremo/fadiga</td>
+            <td>15 (25.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Dor forte atras dos olhos</td>
+            <td>15 (25.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Febre alta (&gt;38,5 C)</td>
+            <td>15 (25.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Manchas vermelhas na pele</td>
+            <td>15 (25.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Dor de cabeca forte</td>
+            <td>12 (20.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>40.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Nausea/vomitos</td>
+            <td>12 (20.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>40.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Clusters do Lote</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Resumo</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>Recuperação lenta com limitação funcional</td>
+              <td>24 (40.0%)<br><span class="small muted">Media 23.1 dias desde início dos sintomas até melhora/fechamento</span></td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 40.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Persistência de impacto</td>
+              <td>12 (20.0%)<br><span class="small muted">Media 14.2 dias desde início dos sintomas até melhora/fechamento</span></td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 20.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Recuperação clínica com custo alto</td>
+              <td>12 (20.0%)<br><span class="small muted">Media 24.2 dias desde início dos sintomas até melhora/fechamento</span></td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 20.0%"></div></div></td>
+            </tr>
+            
+            <tr>
+              <td>Recuperação rápida e baixo custo</td>
+              <td>12 (20.0%)<br><span class="small muted">Media 12.8 dias desde início dos sintomas até melhora/fechamento</span></td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: 20.0%"></div></div></td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Distribuicoes Demograficas</h3>
+        
+        <div style="margin-bottom:3mm">
+          <strong>Sexo biológico</strong>
+          <table style="margin-top:1.5mm">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Total</th>
+                <th>A</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+              <tr>
+                <td>Feminino</td>
+                <td>30 (50.0%)</td>
+                <td>30 (100.0%)</td>
+                <td>0 (0.0%)</td>
+              </tr>
+              
+              <tr>
+                <td>Masculino</td>
+                <td>30 (50.0%)</td>
+                <td>0 (0.0%)</td>
+                <td>30 (100.0%)</td>
+              </tr>
+              
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-bottom:3mm">
+          <strong>Faixa etária</strong>
+          <table style="margin-top:1.5mm">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Total</th>
+                <th>A</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+              <tr>
+                <td>30-44</td>
+                <td>60 (100.0%)</td>
+                <td>30 (100.0%)</td>
+                <td>30 (100.0%)</td>
+              </tr>
+              
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-bottom:3mm">
+          <strong>Ocupação principal</strong>
+          <table style="margin-top:1.5mm">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Total</th>
+                <th>A</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+              <tr>
+                <td>Agricultura/pecuaria</td>
+                <td>12 (20.0%)</td>
+                <td>6 (20.0%)</td>
+                <td>6 (20.0%)</td>
+              </tr>
+              
+              <tr>
+                <td>Comercio/escritorio</td>
+                <td>12 (20.0%)</td>
+                <td>6 (20.0%)</td>
+                <td>6 (20.0%)</td>
+              </tr>
+              
+              <tr>
+                <td>Domestico(a)</td>
+                <td>12 (20.0%)</td>
+                <td>6 (20.0%)</td>
+                <td>6 (20.0%)</td>
+              </tr>
+              
+              <tr>
+                <td>Estudante</td>
+                <td>12 (20.0%)</td>
+                <td>6 (20.0%)</td>
+                <td>6 (20.0%)</td>
+              </tr>
+              
+              <tr>
+                <td>Profissional da saude</td>
+                <td>12 (20.0%)</td>
+                <td>6 (20.0%)</td>
+                <td>6 (20.0%)</td>
+              </tr>
+              
+            </tbody>
+          </table>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Perguntas com Distribuicao de Respostas</h2>
+      <p>Blocos da visao de testes convertidos para leitura impressa, mantendo total e recorte por grupo.</p>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Evolução percebida no T10</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Melhorando - Ainda com sintomas moderados</td>
+            <td>21 (35.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Melhorando - Sintomas leves, em recuperacao</td>
+            <td>21 (35.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Estavel - Sem piora importante</td>
+            <td>18 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Estado final no T30</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>100% recuperado - como antes da doenca</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>50-69% recuperado - sequelas moderadas</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>70-89% recuperado - sequelas leves</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>90-99% recuperado - diferencas minimas</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Ainda doente - sem melhora significativa</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Retorno às atividades</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Em 2 a 3 dias</td>
+            <td>9 (15.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Em 4 a 7 dias</td>
+            <td>9 (15.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Em 8 a 14 dias</td>
+            <td>9 (15.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>No mesmo dia ou em 1 dia</td>
+            <td>9 (15.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Ainda nao voltei</td>
+            <td>6 (10.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>20.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Depois de 30 dias</td>
+            <td>6 (10.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>20.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Em 15 a 30 dias</td>
+            <td>6 (10.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>20.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Voltei parcialmente, mas ainda nao totalmente</td>
+            <td>6 (10.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>20.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Tipo de residência</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Apartamento</td>
+            <td>15 (25.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Casa rural</td>
+            <td>15 (25.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Casa urbana</td>
+            <td>15 (25.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Outro</td>
+            <td>15 (25.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Contato com animais</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Caes</td>
+            <td>18 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Gatos</td>
+            <td>9 (15.0%)</td>
+            <td>3 (10.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Gado/porcos/galinhas</td>
+            <td>18 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Roedores</td>
+            <td>9 (15.0%)</td>
+            <td>3 (10.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Carrapato</td>
+            <td>27 (45.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Nenhum contato animal relevante</td>
+            <td>0 (0.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Riscos ambientais</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Agua suja/lama/enchente</td>
+            <td>30 (50.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>100.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Rio/corrego/pesca/natacao</td>
+            <td>21 (35.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>10.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Mata/trilha/camping</td>
+            <td>42 (70.0%)</td>
+            <td>18 (60.0%)</td>
+            <td>24 (80.0%)</td>
+            <td>20.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Area rural/chacara</td>
+            <td>18 (30.0%)</td>
+            <td>18 (60.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>60.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Nenhuma exposicao ambiental</td>
+            <td>0 (0.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Moradia rural</td>
+            <td>15 (25.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>15 (50.0%)</td>
+            <td>50.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Ocupacao agropecuaria</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Riscos alimentares</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Carne malpassada/crua</td>
+            <td>12 (20.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>40.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Leite cru/queijo nao pasteurizado</td>
+            <td>12 (20.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>12 (40.0%)</td>
+            <td>40.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Ovos crus/maionese caseira</td>
+            <td>9 (15.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Agua nao tratada</td>
+            <td>9 (15.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Comida de rua/barracas</td>
+            <td>9 (15.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Nenhuma dessas</td>
+            <td>9 (15.0%)</td>
+            <td>0 (0.0%)</td>
+            <td>9 (30.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Dominios de exposicao</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Ambiental</td>
+            <td>60 (100.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Animal</td>
+            <td>60 (100.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Alimentar</td>
+            <td>51 (85.0%)</td>
+            <td>30 (100.0%)</td>
+            <td>21 (70.0%)</td>
+            <td>30.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>Bairros do lote</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total 60 | A 30 | B 30</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Centro</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Jardim Boa Vista</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Jardim Santa Rita</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Jardim Teixeira</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+          <tr>
+            <td>Vila Freitas</td>
+            <td>12 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>6 (20.0%)</td>
+            <td>0.0 p.p.</td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+</body>
+</html>

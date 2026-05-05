@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perguntas T0 T10 T30 - Impressao A4</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    :root {
+      --teal: #015f73;
+      --orange: #e8711c;
+      --border: #d8e0e6;
+      --muted: #5d6a75;
+      --bg: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #1f2933;
+      font-size: 10pt;
+      line-height: 1.35;
+      background: white;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .cover, .form-sheet {
+      page-break-after: always;
+    }
+    .form-sheet:last-child { page-break-after: auto; }
+    .cover {
+      min-height: 270mm;
+      padding: 12mm 8mm;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(135deg, rgba(1,95,115,.1), transparent 30%),
+        linear-gradient(330deg, rgba(232,113,28,.12), transparent 35%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .eyebrow {
+      color: var(--teal);
+      font-size: 11pt;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .cover h1 {
+      margin-top: 8mm;
+      font-size: 24pt;
+      line-height: 1.05;
+    }
+    .cover .subtitle {
+      margin-top: 5mm;
+      max-width: 155mm;
+      color: var(--muted);
+      font-size: 11.5pt;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4mm;
+      margin-top: 10mm;
+    }
+    .toc-item {
+      padding: 4mm;
+      border: 1px solid var(--border);
+      border-radius: 4mm;
+      background: rgba(255,255,255,.9);
+    }
+    .toc-item strong {
+      display: block;
+      font-size: 16pt;
+      color: var(--teal);
+    }
+    .toc-item span {
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .form-sheet {
+      min-height: 270mm;
+    }
+    .sheet-header {
+      padding-bottom: 3mm;
+      border-bottom: 2px solid var(--teal);
+      margin-bottom: 4mm;
+    }
+    .sheet-header h2 {
+      font-size: 18pt;
+    }
+    .sheet-header p {
+      margin-top: 1.5mm;
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .section {
+      margin-bottom: 5mm;
+      break-inside: avoid;
+    }
+    .section-head {
+      padding: 3mm 3.2mm;
+      border-left: 4px solid var(--orange);
+      background: var(--bg);
+      border-radius: 2mm;
+      margin-bottom: 2.5mm;
+    }
+    .section-head h3 {
+      font-size: 11pt;
+    }
+    .section-head p {
+      margin-top: 1mm;
+      color: var(--muted);
+      font-size: 8.8pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.8pt;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 2mm 2.2mm;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--bg);
+      font-weight: 700;
+    }
+    .pill {
+      display: inline-block;
+      padding: .6mm 1.8mm;
+      margin: 0 1mm 1mm 0;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: white;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: 8pt; }
+    .required {
+      color: #b42318;
+      font-weight: 700;
+    }
+    .type {
+      font-weight: 700;
+      color: var(--teal);
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div>
+      <div class="eyebrow">SFA Orlandia</div>
+      <h1>Perguntas dos Formularios<br>T0, T10 e T30</h1>
+      <p class="subtitle">
+        Caderno A4 com as perguntas atuais dos tres formularios, organizado por secao para
+        revisao com a equipe, alinhamento de fluxo e apoio em entrevistas.
+      </p>
+      <div class="toc">
+        {% for item in formularios %}
+        <div class="toc-item">
+          <strong>{{ item.stage }}</strong>
+          <span>{{ item.field_count }} perguntas em {{ item.section_count }} secoes</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <p class="muted small">Gerado em {{ generated_at }} a partir dos schemas configurados no modulo SFA.</p>
+  </section>
+
+  {% for item in formularios %}
+  <section class="form-sheet">
+    <div class="sheet-header">
+      <h2>{{ item.stage }} - {{ item.schema.title }}</h2>
+      <p>{{ item.schema.subtitle }}</p>
+    </div>
+
+    {% for section in item.schema.sections %}
+    <div class="section">
+      <div class="section-head">
+        <h3>{{ section.title }}</h3>
+        {% if section.description %}
+        <p>{{ section.description }}</p>
+        {% endif %}
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 33mm;">Campo</th>
+            <th>Pergunta</th>
+            <th style="width: 28mm;">Tipo</th>
+            <th style="width: 82mm;">Opcoes e observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for field in section.fields %}
+          <tr>
+            <td>
+              <strong>{{ field.key }}</strong><br>
+              <span class="small {% if field.required %}required{% else %}muted{% endif %}">
+                {{ 'Obrigatorio' if field.required else 'Opcional' }}
+              </span>
+            </td>
+            <td>
+              {{ field.label }}
+              {% if field.placeholder %}
+              <div class="small muted">Placeholder: {{ field.placeholder }}</div>
+              {% endif %}
+              {% if field.help_text %}
+              <div class="small muted">{{ field.help_text }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="type">{{ field.type }}</span>
+              {% if field.readonly %}
+              <div class="small muted">somente leitura</div>
+              {% endif %}
+              {% if field.prefill %}
+              <div class="small muted">prefill: {{ field.prefill }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if field.options %}
+                {% for option in field.options %}
+                <span class="pill">{{ option }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="muted">Sem lista fechada de opcoes.</span>
+              {% endif %}
+              {% if field.min is defined or field.step is defined %}
+              <div class="small muted" style="margin-top:1mm">
+                {% if field.min is defined %}min: {{ field.min }}{% endif %}
+                {% if field.step is defined %} step: {{ field.step }}{% endif %}
+              </div>
+              {% endif %}
+              {% if field.visible_if %}
+              <div class="small muted" style="margin-top:1mm">Campo condicional no formulario.</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</body>
+</html>

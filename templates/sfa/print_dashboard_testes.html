@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graficos A4 - SFA Testes</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    :root {
+      --teal: #015f73;
+      --orange: #e8711c;
+      --blue: #0d6efd;
+      --green: #198754;
+      --yellow: #ffc107;
+      --border: #d7dee3;
+      --text: #1f2933;
+      --muted: #5b6975;
+      --bg: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.35;
+      background: white;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .cover, .sheet {
+      page-break-after: always;
+    }
+    .sheet:last-child { page-break-after: auto; }
+    .cover {
+      min-height: 270mm;
+      padding: 10mm 8mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background:
+        linear-gradient(145deg, rgba(1,95,115,.1), transparent 35%),
+        linear-gradient(315deg, rgba(232,113,28,.12), transparent 30%);
+      border: 1px solid var(--border);
+    }
+    .eyebrow {
+      color: var(--teal);
+      font-size: 11pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .cover h1 {
+      margin-top: 8mm;
+      font-size: 26pt;
+      line-height: 1.05;
+    }
+    .cover .subtitle {
+      margin-top: 5mm;
+      max-width: 150mm;
+      color: var(--muted);
+      font-size: 12pt;
+    }
+    .meta-box {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4mm;
+      margin-top: 12mm;
+    }
+    .meta-item, .card, .panel, .table-panel {
+      border: 1px solid var(--border);
+      border-radius: 4mm;
+      background: white;
+    }
+    .meta-item {
+      padding: 4mm;
+      background: var(--bg);
+    }
+    .meta-item .label {
+      display: block;
+      color: var(--muted);
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .meta-item strong {
+      display: block;
+      margin-top: 1.5mm;
+      font-size: 16pt;
+    }
+    .footer-note {
+      color: var(--muted);
+      font-size: 8.5pt;
+    }
+    .sheet {
+      min-height: 270mm;
+      padding: 0;
+    }
+    .sheet-header {
+      padding: 4mm 0 3mm;
+      border-bottom: 2px solid var(--teal);
+      margin-bottom: 4mm;
+    }
+    .sheet-header h2 {
+      font-size: 17pt;
+    }
+    .sheet-header p {
+      margin-top: 1mm;
+      color: var(--muted);
+      font-size: 9pt;
+    }
+    .grid-4, .grid-2, .grid-3 {
+      display: grid;
+      gap: 4mm;
+    }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      padding: 4mm;
+      break-inside: avoid;
+    }
+    .card .label {
+      color: var(--muted);
+      font-size: 8.5pt;
+    }
+    .card .value {
+      margin-top: 1.5mm;
+      font-size: 17pt;
+      font-weight: 700;
+    }
+    .panel, .table-panel {
+      padding: 4mm;
+      break-inside: avoid;
+    }
+    .panel h3, .table-panel h3 {
+      margin-bottom: 3mm;
+      color: var(--teal);
+      font-size: 11pt;
+    }
+    .kv-list {
+      display: grid;
+      gap: 2.2mm;
+    }
+    .kv-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 4mm;
+      padding-bottom: 1.5mm;
+      border-bottom: 1px dashed #dfe6eb;
+    }
+    .kv-item:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .kv-item .k {
+      color: var(--muted);
+    }
+    .alert {
+      margin-bottom: 2mm;
+      padding: 3mm 3.2mm;
+      border-left: 4px solid var(--yellow);
+      background: #fff8dd;
+      border-radius: 2mm;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.8pt;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 1.8mm 2.2mm;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--bg);
+      font-weight: 700;
+    }
+    .bar-table td:last-child {
+      width: 36mm;
+    }
+    .bar-track {
+      height: 6mm;
+      background: #edf2f5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--orange));
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .small {
+      font-size: 8.4pt;
+    }
+    .pill {
+      display: inline-block;
+      padding: .7mm 2mm;
+      border-radius: 999px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-size: 8pt;
+      margin-right: 1mm;
+      margin-bottom: 1mm;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div>
+      <div class="eyebrow">SFA Orlandia</div>
+      <h1>Graficos e Leituras Analiticas<br>para Impressao A4</h1>
+      <p class="subtitle">
+        Material consolidado a partir da visao de testes em <code>/sfa/pacientes?visao=testes</code>,
+        organizado para reunioes, discussao tecnica e compartilhamento com a equipe.
+      </p>
+      <div class="meta-box">
+        {% for card in dashboard_testes.cards %}
+        <div class="meta-item">
+          <span class="label">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="footer-note">
+      Gerado em {{ generated_at }}.
+      {% if filtros.grupo or filtros.status or filtros.q %}
+      Recorte aplicado:
+      {% if filtros.grupo %}grupo {{ filtros.grupo }}{% endif %}
+      {% if filtros.status %} status {{ filtros.status }}{% endif %}
+      {% if filtros.q %} busca "{{ filtros.q }}"{% endif %}.
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Resumo Executivo</h2>
+      <p>Indicadores de entrada, interpretacao inicial e alertas para a equipe.</p>
+    </div>
+    <div class="grid-4">
+      {% for card in dashboard_testes.research_cards %}
+      <div class="card">
+        <div class="label">{{ card.label }}</div>
+        <div class="value" style="font-size: 13pt;">{{ card.value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Alertas de Pesquisa</h3>
+        {% for alert in dashboard_testes.research_alerts %}
+        <div class="alert">{{ alert }}</div>
+        {% else %}
+        <p class="muted small">Sem alertas relevantes no recorte atual.</p>
+        {% endfor %}
+      </div>
+      <div class="panel">
+        <h3>Hipoteses e Padroes</h3>
+        <div class="kv-list">
+          {% for item in dashboard_testes.hypothesis_cards %}
+          <div class="kv-item">
+            <strong>{{ item.title }}</strong>
+            <span class="muted small">{{ item.body }}</span>
+          </div>
+          {% else %}
+          <p class="muted small">Sem hipoteses calculadas para o recorte atual.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Linha do Tempo</h3>
+        <div class="kv-list">
+          {% for item in dashboard_testes.timeline_cards %}
+          <div class="kv-item">
+            <span class="k">{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Custos Medios no T30</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Valor</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in dashboard_testes.cost_breakdown %}
+            <tr>
+              <td>{{ item.label }}</td>
+              <td>R$ {{ '%.1f'|format(item.value) }}</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: {{ item.pct }}%"></div></div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Comparacoes Entre Grupos</h2>
+      <p>Leituras prontas para impressao focadas em diferencas entre grupo A e grupo B.</p>
+    </div>
+    <div class="table-panel">
+      <h3>Comparacao Grupo A vs B</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Metrica</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in dashboard_testes.group_comparison %}
+          <tr>
+            <td>{{ row.metric }}</td>
+            <td>{{ row.a }}</td>
+            <td>{{ row.b }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Sintomas Mais Discriminantes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Sintoma</th>
+              <th>Grupo lider</th>
+              <th>Diferenca</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in dashboard_testes.top_differentiators %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.group }}</td>
+              <td>{{ row.gap }} p.p.</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Recuperacao Alta por Segmento</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Segmento</th>
+              <th>Resultado</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in dashboard_testes.recovery_segments %}
+            <tr>
+              <td>{{ row.segment }}</td>
+              <td>{{ row.alta }}/{{ row.total }} ({{ row.pct }}%)</td>
+              <td>
+                <div class="bar-track"><div class="bar-fill" style="width: {{ row.pct }}%"></div></div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Sintomas x Grupo</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Sintoma</th>
+              <th>Grupo A</th>
+              <th>Grupo B</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in dashboard_testes.symptom_group_matrix %}
+            <tr>
+              <td>{{ row.symptom }}</td>
+              <td>{{ row.a }} ({{ row.a_pct }}%)</td>
+              <td>{{ row.b }} ({{ row.b_pct }}%)</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Custo Medio por Retorno as Atividades</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Segmento</th>
+              <th>Valor</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in dashboard_testes.return_cost_segments %}
+            <tr>
+              <td>{{ row.segment }}<br><span class="small muted">{{ row.count }} caso(s)</span></td>
+              <td>R$ {{ '%.1f'|format(row.avg_cost) }}</td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: {{ row.avg_cost if row.avg_cost < 100 else 100 }}%"></div></div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Distribuicoes de Sintomas e Perfil</h2>
+      <p>Tabelas e barras resumindo prevalencia, clusters e caracteristicas demograficas.</p>
+    </div>
+    <div class="table-panel">
+      <h3>Prevalencia de Sintomas no T0</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sintoma</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in dashboard_testes.symptom_prevalence %}
+          <tr>
+            <td>{{ item.label }}</td>
+            <td>{{ item.count }} ({{ item.pct }}%)</td>
+            <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+            <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+            <td>{{ item.gap }} p.p.</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Sem dados suficientes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="height:4mm"></div>
+    <div class="grid-2">
+      <div class="table-panel">
+        <h3>Clusters do Lote</h3>
+        <table class="bar-table">
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Resumo</th>
+              <th>Escala</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in dashboard_testes.cluster_summary %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.count }} ({{ row.pct }}%)<br><span class="small muted">Media {{ row.avg_days }} {{ row.time_label }}</span></td>
+              <td><div class="bar-track"><div class="bar-fill" style="width: {{ row.pct }}%"></div></div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-panel">
+        <h3>Distribuicoes Demograficas</h3>
+        {% for chart in dashboard_testes.demographic_distributions %}
+        <div style="margin-bottom:3mm">
+          <strong>{{ chart["title"] }}</strong>
+          <table style="margin-top:1.5mm">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Total</th>
+                <th>A</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in chart["items"] %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }} ({{ item.pct }}%)</td>
+                <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+                <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="muted">Sem dados suficientes.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <div class="sheet-header">
+      <h2>Perguntas com Distribuicao de Respostas</h2>
+      <p>Blocos da visao de testes convertidos para leitura impressa, mantendo total e recorte por grupo.</p>
+    </div>
+    {% for chart in dashboard_testes.distributions %}
+    <div class="table-panel" style="margin-bottom:4mm">
+      <h3>{{ chart["title"] }}</h3>
+      <p class="small muted" style="margin-bottom:2mm">Total {{ chart["total"] }} | A {{ chart["a_total"] }} | B {{ chart["b_total"] }}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Resposta</th>
+            <th>Total</th>
+            <th>Grupo A</th>
+            <th>Grupo B</th>
+            <th>Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in chart["items"] %}
+          <tr>
+            <td>{{ item.label }}</td>
+            <td>{{ item.count }} ({{ item.pct }}%)</td>
+            <td>{{ item.a_count }} ({{ item.a_pct }}%)</td>
+            <td>{{ item.b_count }} ({{ item.b_pct }}%)</td>
+            <td>{{ item.gap }} p.p.</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Sem dados suficientes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </section>
+</body>
+</html>

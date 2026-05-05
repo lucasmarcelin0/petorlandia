@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Atestado de Saude para Viagem | {{ clinica.nome if clinica else '' }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+  <title>Atestado de Saude para Viagem | PetOrlandia Centro Veterinario</title>
+  <link rel="stylesheet" href="../static/print.css">
   <style>
     .travel-certificate-page {
       background:
@@ -506,29 +506,39 @@
   <button onclick="window.print()">Imprimir</button>
   <button onclick="abrirAssinatura()">Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">WhatsApp</button>
-  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">Voltar para a ficha</a>
+  <a href="#">Voltar para a ficha</a>
   <span class="editable-hint">Clique nos campos destacados para ajustar o documento antes de imprimir.</span>
 </div>
 
-{% from 'components/logo.html' import clinic_logo %}
+
 <div class="document">
 
-  {% if clinica %}
+  
     <div class="header">
-      <div class="header-logo">{{ clinic_logo(clinica) }}</div>
+      <div class="header-logo">
+  
+    <img src="../static/print.css" alt="Logo PetOrlândia" class="logo-img rounded-0" />
+  
+  
+</div>
       <div class="header-info">
-        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-nome">PetOrlandia Centro Veterinario</div>
         <div class="clinica-contato">
-          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
-          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
-          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
-          {% if veterinario and veterinario.crmv %}<span>CRMV {{ veterinario.crmv }}</span>{% endif %}
+          <span>Av. das Nacoes, 1500 - Sala 4 - Orlando, FL</span>
+          <span>Tel.: (407) 555-0198</span>
+          <span>contato@petorlandia.com.br</span>
+          <span>CNPJ 12.345.678/0001-90</span>
+          <span>CRMV SP-12345</span>
         </div>
       </div>
-      <div class="header-logo header-logo--right">{{ clinic_logo(clinica) }}</div>
+      <div class="header-logo header-logo--right">
+  
+    <img src="../static/print.css" alt="Logo PetOrlândia" class="logo-img rounded-0" />
+  
+  
+</div>
     </div>
-  {% endif %}
+  
 
   <section class="travel-hero">
     <div class="travel-hero__main">
@@ -550,7 +560,7 @@
       </div>
       <div class="travel-hero__side-item">
         <span class="travel-hero__side-label">Emissao</span>
-        <span class="travel-hero__side-value">{{ data_atual }}</span>
+        <span class="travel-hero__side-value">05/05/2026</span>
       </div>
     </aside>
   </section>
@@ -558,19 +568,19 @@
   <section class="travel-summary">
     <div class="travel-summary__item">
       <span class="travel-summary__label">Paciente</span>
-      <span class="travel-summary__value">{{ animal.name }}</span>
+      <span class="travel-summary__value">Theo</span>
     </div>
     <div class="travel-summary__item">
       <span class="travel-summary__label">Responsavel</span>
-      <span class="travel-summary__value">{{ tutor.name }}</span>
+      <span class="travel-summary__value">Marina Araujo</span>
     </div>
     <div class="travel-summary__item">
       <span class="travel-summary__label">Medico veterinario</span>
-      <span class="travel-summary__value">{{ printing_user.name if printing_user else '' }}</span>
+      <span class="travel-summary__value">Dra. Camila Pereira</span>
     </div>
     <div class="travel-summary__item">
       <span class="travel-summary__label">CRMV</span>
-      <span class="travel-summary__value">{{ veterinario.crmv if veterinario else '' }}</span>
+      <span class="travel-summary__value">SP-12345</span>
     </div>
   </section>
 
@@ -584,23 +594,23 @@
         <ul class="travel-card__list">
           <li class="travel-card__row">
             <span class="travel-card__label">Nome</span>
-            <span class="travel-card__value" contenteditable="true">{{ tutor.name or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Marina Araujo</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">CPF / Passaporte</span>
-            <span class="travel-card__value" contenteditable="true">{{ tutor.cpf or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">123.456.789-00</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Telefone</span>
-            <span class="travel-card__value" contenteditable="true">{{ tutor.phone or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">(11) 98765-4321</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Endereco</span>
-            <span class="travel-card__value" contenteditable="true">{{ tutor.address or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Rua das Palmeiras, 245 - Jardim Botanico</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Cidade / UF</span>
-            <span class="travel-card__value" contenteditable="true">{{ ((tutor.endereco.cidade ~ ' / ' ~ tutor.endereco.estado) if tutor.endereco and tutor.endereco.cidade) or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Sao Paulo / SP</span>
           </li>
         </ul>
       </div>
@@ -615,23 +625,23 @@
         <ul class="travel-card__list">
           <li class="travel-card__row">
             <span class="travel-card__label">Nome</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.name or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Theo</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Nascimento</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' }}</span>
+            <span class="travel-card__value" contenteditable="true">14/08/2021</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Especie</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.species.name if animal.species else '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Canina</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Raca</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.breed.name if animal.breed else '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Spitz Alemao</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Sexo</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.sex or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">Macho</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Porte</span>
@@ -643,7 +653,7 @@
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Microchip</span>
-            <span class="travel-card__value" contenteditable="true">{{ animal.microchip_number or '' }}</span>
+            <span class="travel-card__value" contenteditable="true">900123456789012</span>
           </li>
           <li class="travel-card__row">
             <span class="travel-card__label">Data do microchip</span>
@@ -654,13 +664,13 @@
     </article>
   </section>
 
-  {% set rabies_ns = namespace(vacina=None) %}
-  {% for v in animal.vacinas_ordenadas %}
-    {% if rabies_ns.vacina is none and 'rabi' in v.nome|lower %}
-      {% set rabies_ns.vacina = v %}
-    {% endif %}
-  {% endfor %}
-  {% set vr = rabies_ns.vacina %}
+  
+  
+    
+      
+    
+  
+  
 
   <section class="travel-section">
     <div class="section-title">3. Vacina anti-rabica</div>
@@ -680,9 +690,9 @@
         </thead>
         <tbody>
           <tr>
-            <td contenteditable="true">{{ vr.fabricante if vr and vr.fabricante else '' }}</td>
-            <td contenteditable="true">{{ vr.nome if vr else '' }}</td>
-            <td contenteditable="true">{{ vr.aplicada_em.strftime('%d/%m/%Y') if vr and vr.aplicada_em else '' }}</td>
+            <td contenteditable="true">MSD Saude Animal</td>
+            <td contenteditable="true">Vacina Antirrabica Nobivac</td>
+            <td contenteditable="true">03/04/2026</td>
             <td contenteditable="true" data-ph="__/__/____"></td>
             <td contenteditable="true" data-ph="Numero do lote"></td>
           </tr>
@@ -781,30 +791,30 @@
     <div class="signature-block">
       <div class="signature">
         <div class="signature-line"></div>
-        <span contenteditable="true">{{ printing_user.name if printing_user else '' }}</span>
-        <span class="signature-meta" contenteditable="true">CRMV {{ veterinario.crmv if veterinario else '' }}</span>
+        <span contenteditable="true">Dra. Camila Pereira</span>
+        <span class="signature-meta" contenteditable="true">CRMV SP-12345</span>
         <span class="muted">Medico(a) Veterinario(a)</span>
       </div>
     </div>
   </section>
 
-  {% if clinica %}
+  
   <footer>
-    <span>{{ clinica.nome }}</span>
-    {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
-    {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
-    {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-    {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    <span>PetOrlandia Centro Veterinario</span>
+    <span>Av. das Nacoes, 1500 - Sala 4 - Orlando, FL</span>
+    <span>Tel.: (407) 555-0198</span>
+    <span>contato@petorlandia.com.br</span>
+    <span>CNPJ 12.345.678/0001-90</span>
     <div class="travel-footer-note">
       Consulte as orientacoes oficiais para transito internacional em agricultura.gov.br/assuntos/vigilancia-agropecuaria/animais-estimacao.
     </div>
   </footer>
-  {% endif %}
+  
 
 </div>
 
 <script>
-  const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
+  const numeroWhatsApp = "11987654321";
   const btnWhats = document.getElementById('btn-whatsapp');
   if (!numeroWhatsApp && btnWhats) btnWhats.style.display = 'none';
 
@@ -819,7 +829,7 @@
       alert('Numero de telefone do responsavel nao informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Ola {{ tutor.name }}! Segue o atestado de saude para viagem de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer duvida, estamos a disposicao.\nAtenciosamente,\nEquipe {{ clinica.nome if clinica else '' }}`);
+    const mensagem = encodeURIComponent(`Ola Marina Araujo! Segue o atestado de saude para viagem de Theo:\n\n${window.location.href}\n\nQualquer duvida, estamos a disposicao.\nAtenciosamente,\nEquipe PetOrlandia Centro Veterinario`);
     const wpp = window.open(`https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`, '_blank');
     if (!wpp) alert('Nao foi possivel abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
   }
