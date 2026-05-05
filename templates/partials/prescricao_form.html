@@ -1785,14 +1785,92 @@
     _atualizarAcoesDoseSugerida();
   }
 
+  function _ehUnidadeSolidaSugestao(unidade) {
+    const normalizada = String(unidade || '').toLowerCase();
+    return ['comprimido', 'capsula', 'cÃ¡psula', 'tablete', 'dragea', 'drÃ¡gea'].includes(normalizada);
+  }
+
+  function _concentracaoSugestaoEmMg(valor, unidade) {
+    const numero = Number(valor);
+    if (!isFinite(numero) || numero <= 0) return null;
+    const normalizada = String(unidade || '').toLowerCase();
+    if (normalizada === 'mg' || normalizada === 'ui') return numero;
+    if (normalizada === 'mcg') return numero / 1000;
+    if (normalizada === 'g') return numero * 1000;
+    return null;
+  }
+
+  function _arredondarDosePraticaSugestao(qtd, unidadePratica) {
+    if (!isFinite(qtd) || qtd <= 0) return null;
+    const isSolido = !['ml', 'gota'].includes(String(unidadePratica || '').toLowerCase());
+    return isSolido ? Math.round(qtd * 2) / 2 : Math.round(qtd * 10) / 10;
+  }
+
+  function _escolherGrupoSolidoMaisPratico(grupos, sugestao) {
+    const doseUnit = String(sugestao?.dose_unit_out || '').toLowerCase();
+    if (doseUnit !== 'mg') return null;
+
+    const doseModoVal = _doseParaModo(sugestao, _doseModo);
+    const doseUsar = isFinite(doseModoVal) ? doseModoVal : Number(sugestao?.dose_min);
+    if (!isFinite(doseUsar) || doseUsar <= 0) return null;
+
+    const candidatos = grupos
+      .map((grupo, idx) => {
+        if (!_ehUnidadeSolidaSugestao(grupo.unidade_pratica)) return null;
+        const concMg = _concentracaoSugestaoEmMg(grupo.concentracao_valor, grupo.concentracao_unidade);
+        if (!isFinite(concMg) || concMg <= 0) return null;
+
+        const qtdBruta = doseUsar / concMg;
+        const qtdArredondada = _arredondarDosePraticaSugestao(qtdBruta, grupo.unidade_pratica);
+        if (!isFinite(qtdBruta) || !isFinite(qtdArredondada) || qtdArredondada <= 0) return null;
+
+        const doseEntregueMg = qtdArredondada * concMg;
+        const erroRelativo = Math.abs(doseEntregueMg - doseUsar) / doseUsar;
+
+        let praticidade = 0;
+        if (qtdArredondada > 6) praticidade += 50;
+        else if (qtdArredondada > 4) praticidade += 20;
+        else if (qtdArredondada > 2) praticidade += 8;
+
+        const fracionado = Math.abs(qtdArredondada - Math.round(qtdArredondada)) > 0.001;
+        const formaGrupo = String(grupo.forma || '').toLowerCase();
+        if (fracionado && !formaGrupo.includes('bissul')) praticidade += 3;
+
+        return {
+          idx,
+          qtdArredondada,
+          erroRelativo,
+          score: praticidade + (erroRelativo * 100),
+        };
+      })
+      .filter(Boolean);
+
+    if (!candidatos.length) return null;
+
+    candidatos.sort((a, b) => {
+      const aAceitavel = a.erroRelativo <= 0.2 ? 0 : 1;
+      const bAceitavel = b.erroRelativo <= 0.2 ? 0 : 1;
+      if (aAceitavel !== bAceitavel) return aAceitavel - bAceitavel;
+      if (a.score !== b.score) return a.score - b.score;
+      if (a.qtdArredondada !== b.qtdArredondada) return a.qtdArredondada - b.qtdArredondada;
+      return a.idx - b.idx;
+    });
+
+    return candidatos[0];
+  }
+
   function _selecionarApresentacaoPadraoSugestao() {
     const grupos = window._concGrupos || [];
     if (!grupos.length) return false;
 
-    const grupoSolido = grupos.find(g => ['comprimido', 'capsula', 'cápsula', 'tablete', 'dragea', 'drágea'].includes((g.unidade_pratica || '').toLowerCase()));
-    const grupoPadrao = grupoSolido || grupos[0];
-    if (!grupoPadrao) return false;
+    const melhorGrupoSolido = _escolherGrupoSolidoMaisPratico(grupos, sugestaoDoseAtual);
+    if (melhorGrupoSolido) {
+      _onChipConc(melhorGrupoSolido.idx);
+      return true;
+    }
 
+    const grupoSolido = grupos.find(g => _ehUnidadeSolidaSugestao(g.unidade_pratica));
+    const grupoPadrao = grupoSolido || grupos[0];
     const idx = grupos.indexOf(grupoPadrao);
     if (idx < 0) return false;
     _onChipConc(idx);
