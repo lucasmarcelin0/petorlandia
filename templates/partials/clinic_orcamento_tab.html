@@ -1,4 +1,14 @@
       {% set budget_count = orcamentos_pagination.total if orcamentos_pagination else orcamentos|length %}
+      {% set summary = orcamento_summary if orcamento_summary is defined else {} %}
+      {% set status_counts = orcamento_status_counts if orcamento_status_counts is defined else {} %}
+      {% set status_icons = {
+        'draft': 'fa-pen-to-square',
+        'sent': 'fa-paper-plane',
+        'approved': 'fa-circle-check',
+        'rejected': 'fa-circle-xmark',
+        'canceled': 'fa-ban'
+      } %}
+
       <section class="clinic-panel clinic-panel--budget">
       <div class="clinic-section-heading">
         <div class="clinic-section-heading__icon is-budget" aria-hidden="true">
@@ -18,82 +28,220 @@
       </div>
 
       <style>
-        .orcamento-filter-card .card-header {
-          background: var(--bs-light);
+        .budget-dashboard {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.75rem;
+          margin-bottom: 1rem;
         }
-        .orcamento-filter-card .input-group-text {
-          background: var(--bs-light);
+
+        .budget-metric {
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          border-radius: 8px;
+          background: #fff;
+          padding: 0.95rem 1rem;
+          min-width: 0;
+        }
+
+        .budget-metric span {
+          display: block;
+          color: #64748b;
+          font-size: 0.78rem;
+          font-weight: 750;
+          text-transform: uppercase;
+        }
+
+        .budget-metric strong {
+          display: block;
+          color: #0f172a;
+          font-size: 1.25rem;
+          margin-top: 0.25rem;
+          line-height: 1.2;
+        }
+
+        .budget-metric small {
+          display: block;
+          color: #64748b;
+          margin-top: 0.15rem;
+        }
+
+        .budget-toolbar {
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          border-radius: 8px;
+          background: #fff;
+          padding: 1rem;
+          margin-bottom: 0.85rem;
+        }
+
+        .budget-toolbar .form-label {
+          color: #334155;
+          font-size: 0.82rem;
+          font-weight: 750;
+          margin-bottom: 0.35rem;
+        }
+
+        .budget-status-filter {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+          margin-bottom: 1rem;
+        }
+
+        .budget-status-filter__item {
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          border-radius: 999px;
+          color: #334155;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.38rem 0.75rem;
+          text-decoration: none;
+          background: #fff;
+          font-size: 0.86rem;
+          font-weight: 700;
+        }
+
+        .budget-status-filter__item:hover,
+        .budget-status-filter__item.is-active {
+          border-color: rgba(var(--bs-primary-rgb), 0.45);
           color: var(--bs-primary);
-          border-color: var(--bs-border-color-translucent);
+          background: rgba(var(--bs-primary-rgb), 0.07);
         }
-        .orcamento-filter-card .form-label {
-          font-weight: 600;
-          font-size: 0.9rem;
+
+        .budget-records {
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
         }
-        .orcamento-table-wrapper {
-          overflow: visible;
+
+        .budget-record {
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          border-radius: 8px;
+          background: #fff;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) auto;
+          gap: 1rem;
+          padding: 1rem;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
         }
-        .orcamento-table {
-          width: 100%;
-          white-space: normal;
+
+        .budget-record__main {
+          min-width: 0;
         }
-        .orcamento-table td,
-        .orcamento-table th {
-          vertical-align: middle;
+
+        .budget-record__title-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 0.8rem;
+        }
+
+        .budget-record__title {
+          color: #0f172a;
+          font-size: 1rem;
+          font-weight: 780;
+          line-height: 1.3;
+          margin: 0;
           word-break: break-word;
         }
-        .orcamento-table td:last-child {
-          min-width: 180px;
+
+        .budget-record__id {
+          color: #64748b;
+          font-size: 0.78rem;
+          font-weight: 750;
+          white-space: nowrap;
         }
-        .table-sticky thead th {
-          position: sticky;
-          top: 0;
-          background: var(--bs-body-bg);
-          box-shadow: 0 2px 0 rgba(0, 0, 0, 0.04);
-          z-index: 1;
+
+        .budget-record__meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          margin-top: 0.65rem;
         }
-        @media (max-width: 768px) {
-          .orcamento-table thead {
-            display: none;
-          }
-          .orcamento-table tbody tr {
-            display: block;
-            margin-bottom: 1rem;
-            border: 1px solid var(--bs-border-color-translucent);
-            border-radius: 0.5rem;
-            box-shadow: 0 0.25rem 1rem rgba(15, 23, 42, 0.08);
-          }
-          .orcamento-table tbody td {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-            border-bottom: 1px solid var(--bs-border-color-translucent);
-          }
-          .orcamento-table tbody td:last-child {
-            border-bottom: none;
-          }
-          .orcamento-table tbody td::before {
-            content: attr(data-label);
-            font-weight: 600;
-            color: var(--bs-secondary-color);
-          }
-          .orcamento-table tbody td > * {
-            flex: 1;
-          }
-          .orcamento-table tbody td .d-flex:not(.flex-column) {
-            justify-content: flex-end;
-          }
+
+        .budget-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          border-radius: 999px;
+          color: #475569;
+          background: #f8fafc;
+          padding: 0.28rem 0.55rem;
+          font-size: 0.8rem;
+          font-weight: 650;
         }
+
+        .budget-total-line {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 0.45rem;
+          margin-top: 0.8rem;
+        }
+
+        .budget-total-line strong {
+          color: var(--bs-primary);
+          font-size: 1.18rem;
+        }
+
+        .budget-total-line span {
+          color: #64748b;
+          font-size: 0.86rem;
+        }
+
+        .budget-record__workflow {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+        }
+
+        .budget-flow-block {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 8px;
+          padding: 0.75rem;
+          background: #f8fafc;
+        }
+
+        .budget-flow-block__label {
+          color: #64748b;
+          display: block;
+          font-size: 0.76rem;
+          font-weight: 800;
+          margin-bottom: 0.45rem;
+          text-transform: uppercase;
+        }
+
+        .budget-payment-actions,
+        .budget-record__actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+        }
+
+        .budget-record__actions {
+          align-content: flex-start;
+          justify-content: flex-end;
+          min-width: 150px;
+        }
+
+        .budget-action-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+          white-space: nowrap;
+        }
+
         .status-badge {
-          font-size: 0.85rem;
-          letter-spacing: 0.03em;
+          font-size: 0.78rem;
+          letter-spacing: 0.02em;
         }
-        .status-badge i {
-          font-size: 0.95rem;
-        }
+
         .status-selector {
           width: 100%;
         }
+
         .status-badge-button {
           width: 100%;
           border: none;
@@ -101,16 +249,20 @@
           padding: 0;
           position: relative;
         }
+
         .status-badge-button:focus-visible {
           outline: 2px solid var(--bs-primary);
           outline-offset: 2px;
         }
+
         .status-badge-button[disabled] {
           cursor: progress;
         }
+
         .status-badge-button .status-badge {
           width: 100%;
         }
+
         .status-badge-button--loading::after {
           content: '';
           position: absolute;
@@ -126,148 +278,213 @@
           animation: status-spinner 0.7s linear infinite;
           pointer-events: none;
         }
+
         .status-badge-button--loading .status-badge {
           opacity: 0.45;
         }
+
         .status-dropdown-menu {
           min-width: 12rem;
         }
+
         .status-dropdown-menu .dropdown-item.active,
         .status-dropdown-menu .dropdown-item.active:focus,
         .status-dropdown-menu .dropdown-item.active:hover {
           background-color: var(--bs-primary);
           color: #fff;
         }
+
+        .budget-empty-state {
+          border: 1px dashed rgba(15, 23, 42, 0.18);
+          border-radius: 8px;
+          background: #fff;
+          padding: 2.5rem 1rem;
+          text-align: center;
+        }
+
+        .budget-empty-state__icon {
+          align-items: center;
+          background: rgba(var(--bs-primary-rgb), 0.08);
+          border-radius: 999px;
+          color: var(--bs-primary);
+          display: inline-flex;
+          height: 48px;
+          justify-content: center;
+          margin-bottom: 0.8rem;
+          width: 48px;
+        }
+
         @keyframes status-spinner {
-          from {
-            transform: rotate(0deg);
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1200px) {
+          .budget-dashboard {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
-          to {
-            transform: rotate(360deg);
+
+          .budget-record {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .budget-record__actions {
+            justify-content: flex-start;
           }
         }
-        .orcamento-empty-state img {
-          max-width: 130px;
-          opacity: 0.8;
+
+        @media (max-width: 720px) {
+          .budget-dashboard {
+            grid-template-columns: 1fr;
+          }
+
+          .budget-toolbar {
+            padding: 0.85rem;
+          }
+
+          .budget-record {
+            padding: 0.85rem;
+          }
+
+          .budget-record__title-row {
+            flex-direction: column;
+          }
+
+          .budget-payment-actions .btn,
+          .budget-record__actions .btn {
+            flex: 1 1 calc(50% - 0.45rem);
+          }
         }
       </style>
 
-      <div class="card shadow-sm mb-4 orcamento-filter-card">
-        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div class="d-flex align-items-center gap-2">
-            <div class="icon-wrapper text-primary"><i class="fas fa-sliders-h"></i></div>
-            <div>
-              <div class="fw-semibold">Filtros inteligentes</div>
-              <small class="text-muted">Combine busca, período e status para refinar os resultados.</small>
-            </div>
-          </div>
-          <div class="d-flex align-items-center gap-3 text-muted small">
-            <span><i class="fas fa-search me-1"></i>Busca</span>
-            <span><i class="far fa-calendar-alt me-1"></i>Período</span>
-            <span><i class="fas fa-flag me-1"></i>Status</span>
-          </div>
+      <div class="budget-dashboard" aria-label="Resumo de orçamentos">
+        <div class="budget-metric">
+          <span>Valor filtrado</span>
+          <strong>{{ (summary.total_amount|default(0)) | currency_br }}</strong>
+          <small>{{ summary.filtered_total|default(budget_count) }} orçamento{{ 's' if (summary.filtered_total|default(budget_count)) != 1 else '' }}</small>
         </div>
-        <div class="card-body">
-          <form class="row g-3" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
-            <div class="col-12 col-lg-8">
-              <label class="form-label" for="orcamento-search">Buscar</label>
-              <div class="input-group">
-                <span class="input-group-text" aria-hidden="true"><i class="fas fa-search"></i></span>
-                <input type="text" id="orcamento-search" name="orcamento_search" class="form-control" placeholder="Tutor, paciente ou descrição" value="{{ orcamento_filters.search }}">
-              </div>
-            </div>
-            <div class="col-12 col-lg-4">
-              <label class="form-label" for="orcamento-status">Status</label>
-              <div class="input-group">
-                <span class="input-group-text" aria-hidden="true"><i class="fas fa-flag"></i></span>
-                <select id="orcamento-status" class="form-select" name="orcamento_status">
-                  <option value="all" {% if orcamento_filters.status == 'all' %}selected{% endif %}>Todos</option>
-                  {% for status, label in orcamento_status_labels.items() %}
-                    <option value="{{ status }}" {% if orcamento_filters.status == status %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-4">
-              <label class="form-label" for="orcamento-from">De</label>
-              <div class="input-group">
-                <span class="input-group-text" aria-hidden="true"><i class="fas fa-calendar-day"></i></span>
-                <input type="date" id="orcamento-from" name="orcamento_from" class="form-control" value="{{ orcamento_filters.from }}">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-4">
-              <label class="form-label" for="orcamento-to">Até</label>
-              <div class="input-group">
-                <span class="input-group-text" aria-hidden="true"><i class="fas fa-calendar-check"></i></span>
-                <input type="date" id="orcamento-to" name="orcamento_to" class="form-control" value="{{ orcamento_filters.to }}">
-              </div>
-            </div>
-            <div class="col-12 col-lg-4 d-flex gap-2 align-items-end">
-              {% if start %}
-              <input type="hidden" name="start" value="{{ start }}">
-              {% endif %}
-              {% if end %}
-              <input type="hidden" name="end" value="{{ end }}">
-              {% endif %}
-              <button type="submit" class="btn btn-primary flex-fill">
-                <i class="fas fa-filter me-1"></i>
-                Aplicar filtros
-              </button>
-              <a class="btn btn-outline-secondary" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
-                <i class="fas fa-undo me-1"></i>
-                Limpar
-              </a>
-            </div>
-          </form>
+        <div class="budget-metric">
+          <span>Aprovados</span>
+          <strong>{{ summary.approved_count|default(0) }}</strong>
+          <small>{{ summary.sent_count|default(0) }} enviados</small>
+        </div>
+        <div class="budget-metric">
+          <span>Pagamentos</span>
+          <strong>{{ summary.payment_pending_count|default(0) }} pendente{{ 's' if (summary.payment_pending_count|default(0)) != 1 else '' }}</strong>
+          <small>{{ summary.paid_count|default(0) }} pago{{ 's' if (summary.paid_count|default(0)) != 1 else '' }}</small>
+        </div>
+        <div class="budget-metric">
+          <span>Sem itens</span>
+          <strong>{{ summary.without_items_count|default(0) }}</strong>
+          <small>Não geram pagamento</small>
         </div>
       </div>
 
-      {% set status_icons = {
-        'draft': 'fa-pen-to-square',
-        'sent': 'fa-paper-plane',
-        'approved': 'fa-circle-check',
-        'rejected': 'fa-circle-xmark',
-        'canceled': 'fa-ban'
-      } %}
+      <form class="budget-toolbar" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-xl-4">
+            <label class="form-label" for="orcamento-search">Buscar</label>
+            <div class="input-group">
+              <span class="input-group-text" aria-hidden="true"><i class="fas fa-search"></i></span>
+              <input type="text" id="orcamento-search" name="orcamento_search" class="form-control" placeholder="Tutor, paciente ou descrição" value="{{ orcamento_filters.search }}">
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <label class="form-label" for="orcamento-status">Status</label>
+            <select id="orcamento-status" class="form-select" name="orcamento_status">
+              <option value="all" {% if orcamento_filters.status == 'all' %}selected{% endif %}>Todos</option>
+              {% for status, label in orcamento_status_labels.items() %}
+                <option value="{{ status }}" {% if orcamento_filters.status == status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <label class="form-label" for="orcamento-from">De</label>
+            <input type="date" id="orcamento-from" name="orcamento_from" class="form-control" value="{{ orcamento_filters.from }}">
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <label class="form-label" for="orcamento-to">Até</label>
+            <input type="date" id="orcamento-to" name="orcamento_to" class="form-control" value="{{ orcamento_filters.to }}">
+          </div>
+          <div class="col-12 col-xl-2 d-flex gap-2">
+            {% if start %}
+              <input type="hidden" name="start" value="{{ start }}">
+            {% endif %}
+            {% if end %}
+              <input type="hidden" name="end" value="{{ end }}">
+            {% endif %}
+            <button type="submit" class="btn btn-primary flex-fill">
+              <i class="fas fa-filter me-1" aria-hidden="true"></i>
+              Filtrar
+            </button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento" title="Limpar filtros" aria-label="Limpar filtros">
+              <i class="fas fa-rotate-left" aria-hidden="true"></i>
+            </a>
+          </div>
+        </div>
+      </form>
+
+      <div class="budget-status-filter" aria-label="Filtros rápidos de status">
+        <a class="budget-status-filter__item {% if orcamento_filters.status == 'all' %}is-active{% endif %}" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_status='all', orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">
+          Todos
+          <span>{{ status_counts.all|default(0) }}</span>
+        </a>
+        {% for status_key, label in orcamento_status_labels.items() %}
+          <a class="budget-status-filter__item {% if orcamento_filters.status == status_key %}is-active{% endif %}" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_status=status_key, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">
+            <i class="fas {{ status_icons.get(status_key, 'fa-file-alt') }}" aria-hidden="true"></i>
+            {{ label }}
+            <span>{{ status_counts.get(status_key, 0) }}</span>
+          </a>
+        {% endfor %}
+      </div>
 
       {% if orcamentos %}
-      <div class="orcamento-table-wrapper">
-        <table class="table table-striped table-hover align-middle table-sticky orcamento-table">
-          <thead class="table-light text-uppercase small">
-            <tr>
-              <th>Descrição</th>
-              <th>Tutor / Paciente</th>
-              <th class="text-center">Status</th>
-              <th class="text-center">Atualizado</th>
-              <th class="text-center">Envios</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for o in orcamentos %}
+        <div class="budget-records" role="list">
+          {% for o in orcamentos %}
             {% set consulta = o.consulta %}
             {% set animal = consulta.animal if consulta else None %}
             {% set tutor = animal.owner if animal else None %}
-            <tr data-orcamento-row="{{ o.id }}">
-              <td data-label="Descrição">
-                <div class="fw-semibold">{{ o.descricao }}</div>
-                {% if consulta %}
-                  <small class="text-muted">Consulta #{{ consulta.id }}</small>
-                {% endif %}
-              </td>
-              <td data-label="Tutor / Paciente">
-                {% if animal %}
-                  <div class="fw-semibold">{{ animal.name }}</div>
-                  <small class="text-muted">{{ tutor.name }}</small>
-                {% else %}
-                  <span class="text-muted">—</span>
-                {% endif %}
-              </td>
-              <td class="text-center" data-label="Status">
-                {% set badge = orcamento_status_styles.get(o.status, 'secondary') %}
-                {% set status_label = orcamento_status_labels.get(o.status, o.status|capitalize) %}
-                {% set status_icon = status_icons.get(o.status, 'fa-file-alt') %}
-                <div class="d-flex flex-column gap-2 align-items-center">
+            {% set updated = o.updated_at or o.created_at %}
+            {% set item_count = o.items|length %}
+            {% set has_items = item_count > 0 %}
+            {% set badge = orcamento_status_styles.get(o.status, 'secondary') %}
+            {% set status_label = orcamento_status_labels.get(o.status, o.status|capitalize) %}
+            {% set status_icon = status_icons.get(o.status, 'fa-file-alt') %}
+            {% set payment_status = o.payment_status or 'not_generated' %}
+            {% set payment_badge = orcamento_payment_status_styles.get(payment_status, 'secondary') %}
+            {% set can_share = consulta is not none %}
+            <article class="budget-record" role="listitem" data-orcamento-row="{{ o.id }}">
+              <div class="budget-record__main">
+                <div class="budget-record__title-row">
+                  <h3 class="budget-record__title">{{ o.descricao }}</h3>
+                  <span class="budget-record__id">#{{ o.id }}</span>
+                </div>
+
+                <div class="budget-record__meta">
+                  {% if consulta %}
+                    <span class="budget-chip"><i class="fa-solid fa-notes-medical" aria-hidden="true"></i>Consulta #{{ consulta.id }}</span>
+                  {% else %}
+                    <span class="budget-chip"><i class="fa-solid fa-file-lines" aria-hidden="true"></i>Avulso</span>
+                  {% endif %}
+                  {% if animal %}
+                    <span class="budget-chip"><i class="fa-solid fa-paw" aria-hidden="true"></i>{{ animal.name }}</span>
+                    <span class="budget-chip"><i class="fa-solid fa-user" aria-hidden="true"></i>{{ tutor.name }}</span>
+                  {% endif %}
+                  <span class="budget-chip" data-orcamento-updated>
+                    <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                    {{ updated|format_datetime_brazil('%d/%m/%Y %H:%M') if updated else '—' }}
+                  </span>
+                </div>
+
+                <div class="budget-total-line">
+                  <strong>{{ o.total | currency_br }}</strong>
+                  <span>{{ item_count }} item{{ 's' if item_count != 1 else '' }}</span>
+                </div>
+              </div>
+
+              <div class="budget-record__workflow">
+                <div class="budget-flow-block">
+                  <span class="budget-flow-block__label">Status</span>
                   <div class="dropdown status-selector" data-status-dropdown data-endpoint="{{ url_for('atualizar_status_orcamento', orcamento_id=o.id) }}" data-orcamento-id="{{ o.id }}" data-current-status="{{ o.status }}">
                     <button type="button" class="status-badge-button" data-status-toggle data-bs-toggle="dropdown" aria-expanded="false">
                       <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase" data-status-badge>
@@ -277,86 +494,96 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm status-dropdown-menu" role="menu">
                       {% for status_key, label in orcamento_status_labels.items() %}
-                      <li>
-                        <button type="button" class="dropdown-item d-flex align-items-center gap-2 {% if o.status == status_key %}active{% endif %}" data-status-option data-status="{{ status_key }}">
-                          <i class="fas {{ status_icons.get(status_key, 'fa-file-alt') }}" aria-hidden="true"></i>
-                          <span>{{ label }}</span>
-                        </button>
-                      </li>
+                        <li>
+                          <button type="button" class="dropdown-item d-flex align-items-center gap-2 {% if o.status == status_key %}active{% endif %}" data-status-option data-status="{{ status_key }}">
+                            <i class="fas {{ status_icons.get(status_key, 'fa-file-alt') }}" aria-hidden="true"></i>
+                            <span>{{ label }}</span>
+                          </button>
+                        </li>
                       {% endfor %}
                     </ul>
                   </div>
                 </div>
-              </td>
-              <td class="text-center" data-label="Atualizado" data-orcamento-updated>
-                {% set updated = o.updated_at or o.created_at %}
-                {{ updated|format_datetime_brazil('%d/%m/%Y %H:%M') if updated else '—' }}
-              </td>
-              <td class="text-center" data-label="Envios">
-                <div class="d-flex flex-column gap-1">
-                  <span class="badge bg-light text-dark">E-mail: {{ o.email_sent_count or 0 }}</span>
-                  <span class="badge bg-light text-dark">WhatsApp: {{ o.whatsapp_sent_count or 0 }}</span>
-                </div>
-                {% set payment_status = o.payment_status or 'not_generated' %}
-                <div class="mt-2">
-                  {% set payment_badge = orcamento_payment_status_styles.get(payment_status, 'secondary') %}
-                  <span class="badge bg-{{ payment_badge }} d-inline-flex align-items-center gap-2 px-3" data-payment-status>
-                    <i class="fas fa-wallet"></i>
-                    <span class="payment-status-text">{{ orcamento_payment_status_labels.get(payment_status, 'Sem link') }}</span>
-                  </span>
-                </div>
-                {% set can_share = consulta is not none %}
-                <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
-                  <button type="button" class="btn btn-sm btn-outline-dark" data-generate-payment data-orcamento-id="{{ o.id }}" data-endpoint="{{ url_for('gerar_link_pagamento_orcamento', orcamento_id=o.id) }}">
-                    Gerar link de pagamento
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline-secondary" data-copy-payment data-payment-link="{{ o.payment_link or '' }}" {% if not o.payment_link %}disabled{% endif %}>
-                    Copiar link
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline-primary" data-share-link data-bs-toggle="modal" data-bs-target="#orcamento-share-modal" data-payment-link="{{ o.payment_link or '' }}" data-orcamento-id="{{ o.id }}" data-share-endpoint="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}" {% if not o.payment_link or not can_share %}disabled{% endif %}>
-                    Enviar ao tutor
-                  </button>
-                </div>
-              </td>
-              <td data-label="Ações">
-                <div class="d-flex flex-wrap gap-2">
-                  {% if consulta %}
-                    {% if current_user.worker in ['veterinario', 'colaborador'] %}
-                      <a href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
-                    {% else %}
-                      <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
-                    {% endif %}
-                    <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
-                    {# NFS-e shortcut: link to pre-filled preview for budgets with particular items #}
-                    {% set has_particular = o.items | selectattr('effective_payer_type', 'equalto', 'particular') | list %}
-                    {% if has_particular %}
-                    <a href="{{ url_for('contabilidade_nfse_preview', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-dark" title="Emitir NFS-e">
-                      <i class="fas fa-file-invoice me-1"></i>NFS-e
+
+                <div class="budget-flow-block">
+                  <span class="budget-flow-block__label">Pagamento</span>
+                  <div class="mb-2">
+                    <span class="badge bg-{{ payment_badge }} d-inline-flex align-items-center gap-2 px-3 py-2" data-payment-status>
+                      <i class="fas fa-wallet" aria-hidden="true"></i>
+                      <span class="payment-status-text">{{ orcamento_payment_status_labels.get(payment_status, 'Sem link') }}</span>
+                    </span>
+                  </div>
+                  <div class="budget-payment-actions">
+                    <button type="button" class="btn btn-sm btn-outline-dark budget-action-button" data-generate-payment data-orcamento-id="{{ o.id }}" data-endpoint="{{ url_for('gerar_link_pagamento_orcamento', orcamento_id=o.id) }}" {% if not has_items %}disabled title="Adicione itens para gerar pagamento"{% endif %}>
+                      <i class="fa-solid fa-link" aria-hidden="true"></i>
+                      Gerar
+                    </button>
+                    <a class="btn btn-sm btn-outline-secondary budget-action-button {% if not o.payment_link %}disabled{% endif %}" href="{{ o.payment_link or '#' }}" target="_blank" rel="noopener" data-open-payment aria-disabled="{{ 'false' if o.payment_link else 'true' }}">
+                      <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                      Abrir
                     </a>
-                    {% endif %}
-                  {% else %}
-                    <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
-                    <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
-                  {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary budget-action-button" data-copy-payment data-payment-link="{{ o.payment_link or '' }}" {% if not o.payment_link %}disabled{% endif %}>
+                      <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                      Copiar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary budget-action-button" data-share-link data-can-share="{{ '1' if can_share else '0' }}" data-bs-toggle="modal" data-bs-target="#orcamento-share-modal" data-payment-link="{{ o.payment_link or '' }}" data-orcamento-id="{{ o.id }}" data-share-endpoint="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}" {% if not o.payment_link or not can_share %}disabled{% endif %}>
+                      <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                      Enviar
+                    </button>
+                  </div>
                 </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+              </div>
+
+              <div class="budget-record__actions">
+                {% if consulta %}
+                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                    <a href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary budget-action-button">
+                      <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                      Editar
+                    </a>
+                  {% else %}
+                    <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary budget-action-button">
+                      <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                      Editar
+                    </a>
+                  {% endif %}
+                  <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-secondary budget-action-button" target="_blank">
+                    <i class="fa-solid fa-print" aria-hidden="true"></i>
+                    Imprimir
+                  </a>
+                  {% set has_particular = o.items | selectattr('effective_payer_type', 'equalto', 'particular') | list %}
+                  {% if has_particular %}
+                    <a href="{{ url_for('contabilidade_nfse_preview', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-dark budget-action-button" title="Emitir NFS-e">
+                      <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                      NFS-e
+                    </a>
+                  {% endif %}
+                {% else %}
+                  <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary budget-action-button">
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    Editar
+                  </a>
+                  <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary budget-action-button" target="_blank">
+                    <i class="fa-solid fa-print" aria-hidden="true"></i>
+                    Imprimir
+                  </a>
+                {% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
       {% else %}
-      <div class="card border-0 shadow-sm text-center py-5 mt-3 orcamento-empty-state">
-        <div class="card-body">
-          <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Ilustração de orçamento" class="mb-3">
-          <h5 class="fw-semibold">Sem registros por aqui</h5>
-          <p class="text-muted mb-4">Ajuste os filtros ou cadastre um novo orçamento para visualizar os dados nesta aba.</p>
+        <div class="budget-empty-state">
+          <div class="budget-empty-state__icon">
+            <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+          </div>
+          <h5 class="fw-semibold">Nenhum orçamento encontrado</h5>
+          <p class="text-muted mb-4">Revise os filtros ou crie um orçamento com itens para acompanhar status, pagamento e documentos.</p>
           <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-outline-primary">
-            <i class="fas fa-plus me-1"></i>
-            Criar primeiro orçamento
+            <i class="fas fa-plus me-1" aria-hidden="true"></i>
+            Criar orçamento
           </a>
         </div>
-      </div>
       {% endif %}
 
       <div class="modal fade" id="orcamento-share-modal" tabindex="-1" aria-labelledby="orcamentoShareModalLabel" aria-hidden="true">
@@ -367,7 +594,6 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-              <p class="text-muted small">Copie o link ou escolha um canal rápido para reenviar ao tutor.</p>
               <div class="input-group mb-3">
                 <input type="text" class="form-control" data-share-link-input readonly value="">
                 <button type="button" class="btn btn-outline-secondary" data-share-copy>Copiar</button>
@@ -378,14 +604,20 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   {% endif %}
                   <input type="hidden" name="channel" value="email">
-                  <button type="submit" class="btn btn-primary">Enviar por e-mail</button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-envelope me-1" aria-hidden="true"></i>
+                    Enviar por e-mail
+                  </button>
                 </form>
                 <form method="post" class="d-grid" data-share-form data-channel="whatsapp">
                   {% if csrf_token is defined %}
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   {% endif %}
                   <input type="hidden" name="channel" value="whatsapp">
-                  <button type="submit" class="btn btn-success">Enviar por WhatsApp</button>
+                  <button type="submit" class="btn btn-success">
+                    <i class="fa-brands fa-whatsapp me-1" aria-hidden="true"></i>
+                    Enviar por WhatsApp
+                  </button>
                 </form>
               </div>
             </div>
@@ -407,9 +639,10 @@
           function showToast(message, type = 'success') {
             if (!toastContainer) return;
             const alert = document.createElement('div');
+            const icon = type === 'success' ? 'fa-circle-check text-success' : (type === 'warning' ? 'fa-triangle-exclamation text-warning' : 'fa-circle-exclamation text-danger');
             alert.className = `alert alert-${type} shadow-sm d-flex align-items-center gap-2 mb-2`;
             alert.setAttribute('role', 'alert');
-            alert.innerHTML = `<i class="fas ${type === 'success' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><div>${message}</div>`;
+            alert.innerHTML = `<i class="fas ${icon}"></i><div>${message}</div>`;
             toastContainer.appendChild(alert);
             setTimeout(() => alert.remove(), 5000);
           }
@@ -540,7 +773,7 @@
             if (row) {
               const updatedCell = row.querySelector('[data-orcamento-updated]');
               if (updatedCell && responseData.updated_at) {
-                updatedCell.textContent = formatDateTime(responseData.updated_at);
+                updatedCell.innerHTML = `<i class="fa-regular fa-clock" aria-hidden="true"></i>${formatDateTime(responseData.updated_at)}`;
               }
             }
 
@@ -559,7 +792,7 @@
             const badge = row ? row.querySelector('[data-payment-status]') : null;
             if (badge) {
               const style = paymentStyle || paymentStatusStyles[paymentStatus] || 'secondary';
-              badge.className = `badge bg-${style} d-inline-flex align-items-center gap-2 px-3`;
+              badge.className = `badge bg-${style} d-inline-flex align-items-center gap-2 px-3 py-2`;
               const labelEl = badge.querySelector('.payment-status-text');
               if (labelEl) {
                 labelEl.textContent = paymentLabel || paymentStatusLabels[paymentStatus] || paymentStatusLabels.not_generated;
@@ -570,16 +803,23 @@
               copyBtn.dataset.paymentLink = paymentLink || '';
               copyBtn.disabled = !paymentLink;
             }
+            const openLink = row ? row.querySelector('[data-open-payment]') : null;
+            if (openLink) {
+              openLink.href = paymentLink || '#';
+              openLink.classList.toggle('disabled', !paymentLink);
+              openLink.setAttribute('aria-disabled', paymentLink ? 'false' : 'true');
+            }
             const shareBtn = row ? row.querySelector('[data-share-link]') : null;
             if (shareBtn) {
+              const canShare = shareBtn.dataset.canShare === '1';
               shareBtn.dataset.paymentLink = paymentLink || '';
-              shareBtn.disabled = !paymentLink;
+              shareBtn.disabled = !paymentLink || !canShare;
             }
           }
 
           async function handlePaymentGeneration(button) {
             const endpoint = button.dataset.endpoint;
-            const row = button.closest('tr');
+            const row = button.closest('[data-orcamento-row]');
             if (!endpoint || !row) {
               showToast('Não foi possível iniciar o pagamento.', 'danger');
               return;
@@ -596,10 +836,6 @@
               }
               updatePaymentUI(row, data.payment_status, data.payment_link, data.payment_status_label, data.payment_status_style);
               if (data.status && row) {
-                const select = row.querySelector('.orcamento-status-select');
-                if (select) {
-                  select.value = data.status;
-                }
                 const badge = row.querySelector('[data-status-badge]');
                 if (badge) {
                   const style = data.status_style || statusStyles[data.status] || 'secondary';
@@ -617,11 +853,8 @@
               if (row) {
                 const updatedCell = row.querySelector('[data-orcamento-updated]');
                 if (updatedCell && data.updated_at) {
-                  updatedCell.textContent = formatDateTime(data.updated_at);
+                  updatedCell.innerHTML = `<i class="fa-regular fa-clock" aria-hidden="true"></i>${formatDateTime(data.updated_at)}`;
                 }
-              }
-              if (data.payment_link) {
-                window.open(data.payment_link, '_blank');
               }
               showToast(data.message || 'Link de pagamento gerado.', 'success');
             } catch (error) {
@@ -649,7 +882,7 @@
               }
               if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(link).then(() => {
-                  showToast('Link copiado!', 'success');
+                  showToast('Link copiado.', 'success');
                 }).catch(() => showToast('Não foi possível copiar o link.', 'danger'));
               } else {
                 const input = document.createElement('input');
@@ -658,7 +891,7 @@
                 input.select();
                 document.execCommand('copy');
                 document.body.removeChild(input);
-                showToast('Link copiado!', 'success');
+                showToast('Link copiado.', 'success');
               }
             });
           });
@@ -694,7 +927,7 @@
                   }
                   if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(link).then(() => {
-                      showToast('Link copiado!', 'success');
+                      showToast('Link copiado.', 'success');
                     }).catch(() => showToast('Não foi possível copiar o link.', 'danger'));
                   } else {
                     const tempInput = document.createElement('input');
@@ -703,7 +936,7 @@
                     tempInput.select();
                     document.execCommand('copy');
                     document.body.removeChild(tempInput);
-                    showToast('Link copiado!', 'success');
+                    showToast('Link copiado.', 'success');
                   }
                 };
               }
@@ -713,26 +946,26 @@
       </script>
 
       {% if orcamentos_pagination.pages > 1 %}
-      <nav aria-label="Paginação de orçamentos" class="mt-3">
-        <ul class="pagination pagination-sm mb-0">
-          {% set prev_page = orcamentos_pagination.prev_num if orcamentos_pagination.has_prev else orcamentos_pagination.page %}
-          <li class="page-item {% if not orcamentos_pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=prev_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Anterior</a>
-          </li>
-          {% for page in orcamentos_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-            {% if page %}
-              <li class="page-item {% if page == orcamentos_pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">{{ page }}</a>
-              </li>
-            {% else %}
-              <li class="page-item disabled"><span class="page-link">…</span></li>
-            {% endif %}
-          {% endfor %}
-          {% set next_page = orcamentos_pagination.next_num if orcamentos_pagination.has_next else orcamentos_pagination.page %}
-          <li class="page-item {% if not orcamentos_pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=next_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Próxima</a>
-          </li>
-        </ul>
-      </nav>
+        <nav aria-label="Paginação de orçamentos" class="mt-3">
+          <ul class="pagination pagination-sm mb-0">
+            {% set prev_page = orcamentos_pagination.prev_num if orcamentos_pagination.has_prev else orcamentos_pagination.page %}
+            <li class="page-item {% if not orcamentos_pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=prev_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Anterior</a>
+            </li>
+            {% for page in orcamentos_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+              {% if page %}
+                <li class="page-item {% if page == orcamentos_pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">{{ page }}</a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            {% set next_page = orcamentos_pagination.next_num if orcamentos_pagination.has_next else orcamentos_pagination.page %}
+            <li class="page-item {% if not orcamentos_pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=next_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Próxima</a>
+            </li>
+          </ul>
+        </nav>
       {% endif %}
       </section>

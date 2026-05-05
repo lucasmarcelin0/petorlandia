@@ -1,84 +1,578 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container mt-4">
-  <h2>{{ 'Editar' if form.descricao.data else 'Novo' }} Orçamento</h2>
-  <form method="post" class="orcamento-form" data-orcamento-sync>
-    {{ form.hidden_tag() }}
-    <div class="mb-3">
-      {{ form.descricao.label(class="form-label") }}
-      {{ form.descricao(class="form-control") }}
-    </div>
-    {{ form.submit(class="btn btn-primary") }}
-  </form>
-  <div class="mt-3" data-orcamento-flash-target></div>
-  <div class="mt-4" data-orcamento-list-target hidden></div>
-</div>
-
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.querySelector('[data-orcamento-sync]');
-    if (!form) return;
-
-    const listTarget = document.querySelector('[data-orcamento-list-target]');
-    const flashTarget = document.querySelector('[data-orcamento-flash-target]') || document.body;
-
-    function swapFlashMessages(doc) {
-      if (!flashTarget) return;
-      const newAlerts = doc.querySelectorAll('.alert-container');
-      if (!newAlerts.length) return;
-      flashTarget.querySelectorAll('.alert-container').forEach(alert => alert.remove());
-      newAlerts.forEach(alert => {
-        flashTarget.prepend(alert.cloneNode(true));
-      });
+{% set is_editing = orcamento is defined and orcamento %}
+{% set rows = item_rows if item_rows else [] %}
+<div class="budget-form-page">
+  <style>
+    .budget-form-page {
+      --budget-surface: #ffffff;
+      --budget-muted: #64748b;
+      --budget-line: rgba(15, 23, 42, 0.1);
+      --budget-soft: #f8fafc;
+      --budget-ink: #0f172a;
+      background: #f6f8fb;
+      min-height: calc(100vh - 72px);
+      padding: 2rem 0 3rem;
     }
 
-    function swapOrcamentoList(doc) {
-      if (!listTarget) return;
-      const updatedList = doc.querySelector('#orcamento') || doc.querySelector('[data-orcamento-list-target]');
-      if (!updatedList) return;
-      listTarget.innerHTML = updatedList.innerHTML;
-      listTarget.hidden = false;
+    .budget-form-shell {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
     }
 
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      const submitButton = form.querySelector('button[type="submit"], button:not([type])');
+    .budget-form-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
 
-      const handleSubmit = async () => {
-        const response = await fetch(form.action || window.location.href, {
-          method: 'POST',
-          body: new FormData(form),
-          headers: { 'Accept': 'text/html' },
-        });
+    .budget-form-header__title {
+      margin: 0;
+      color: var(--budget-ink);
+      font-size: clamp(1.6rem, 2vw, 2.15rem);
+      font-weight: 750;
+      letter-spacing: 0;
+    }
 
-        if (!response.ok) {
-          throw new Error('Não foi possível salvar o orçamento.');
-        }
+    .budget-form-header__meta {
+      color: var(--budget-muted);
+      margin: 0.25rem 0 0;
+    }
 
-        const html = await response.text();
-        const parsed = new DOMParser().parseFromString(html, 'text/html');
-        swapFlashMessages(parsed);
-        swapOrcamentoList(parsed);
-        return { success: true, message: 'Orçamento salvo com sucesso.' };
-      };
+    .budget-form-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 1rem;
+      align-items: start;
+    }
 
-      try {
-        if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
-          await window.FormFeedback.withSavingState(submitButton || form, handleSubmit, {
-            form,
-            loadingText: form.dataset.loadingText || 'Salvando...',
-            errorMessage: 'Não foi possível salvar o orçamento.',
-          });
-        } else {
-          await handleSubmit();
-        }
-      } catch (error) {
-        console.error('Falha ao enviar orçamento', error);
-        if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
-          window.FormFeedback.showStatus(form, error?.message || 'Erro ao salvar orçamento.', 'danger');
-        }
+    .budget-panel {
+      background: var(--budget-surface);
+      border: 1px solid var(--budget-line);
+      border-radius: 8px;
+      box-shadow: 0 14px 38px rgba(15, 23, 42, 0.07);
+    }
+
+    .budget-panel__body {
+      padding: 1.25rem;
+    }
+
+    .budget-panel__header {
+      border-bottom: 1px solid var(--budget-line);
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .budget-panel__title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 750;
+      color: var(--budget-ink);
+    }
+
+    .budget-item-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    .budget-items-section {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--budget-line);
+    }
+
+    .budget-items-section__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .budget-item-row {
+      border: 1px solid var(--budget-line);
+      border-radius: 8px;
+      padding: 1rem;
+      background: var(--budget-soft);
+    }
+
+    .budget-item-row__grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 0.7rem;
+      align-items: end;
+    }
+
+    .budget-item-row__grid > div {
+      min-width: 0;
+    }
+
+    .budget-item-field--service {
+      grid-column: span 4;
+    }
+
+    .budget-item-field--payer,
+    .budget-remove-item {
+      grid-column: span 3;
+    }
+
+    .budget-item-field--description,
+    .budget-item-field--code {
+      grid-column: span 6;
+    }
+
+    .budget-item-field--value {
+      grid-column: span 2;
+    }
+
+    .budget-item-row .form-label,
+    .budget-panel .form-label {
+      color: #334155;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+
+    .budget-remove-item {
+      width: 100%;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .budget-summary-card {
+      position: sticky;
+      top: 1rem;
+    }
+
+    .budget-summary-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--budget-line);
+    }
+
+    .budget-summary-line:last-child {
+      border-bottom: 0;
+    }
+
+    .budget-summary-line span {
+      color: var(--budget-muted);
+      font-size: 0.9rem;
+    }
+
+    .budget-summary-line strong {
+      color: var(--budget-ink);
+      font-size: 1rem;
+      text-align: right;
+    }
+
+    .budget-summary-total strong {
+      color: var(--bs-primary);
+      font-size: 1.35rem;
+    }
+
+    .budget-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      justify-content: flex-end;
+      padding-top: 1rem;
+      border-top: 1px solid var(--budget-line);
+      margin-top: 1.25rem;
+    }
+
+    .budget-readonly-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .budget-readonly-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.8rem 0.9rem;
+      border: 1px solid var(--budget-line);
+      border-radius: 8px;
+      background: var(--budget-soft);
+    }
+
+    @media (max-width: 1100px) {
+      .budget-form-grid {
+        grid-template-columns: 1fr;
       }
-    });
-  });
-</script>
+
+      .budget-summary-card {
+        position: static;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .budget-form-header {
+        flex-direction: column;
+      }
+
+      .budget-item-row__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .budget-item-field--service,
+      .budget-item-field--payer,
+      .budget-item-field--description,
+      .budget-item-field--code,
+      .budget-item-field--value {
+        grid-column: span 1;
+      }
+
+      .budget-remove-item {
+        grid-column: span 2;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .budget-form-page {
+        padding-top: 1rem;
+      }
+
+      .budget-form-shell {
+        width: min(100% - 1rem, 1180px);
+      }
+
+      .budget-panel__body,
+      .budget-panel__header {
+        padding: 1rem;
+      }
+
+      .budget-item-row__grid {
+        grid-template-columns: 1fr;
+      }
+
+      .budget-item-field--service,
+      .budget-item-field--payer,
+      .budget-item-field--description,
+      .budget-item-field--code,
+      .budget-item-field--value,
+      .budget-remove-item {
+        grid-column: span 1;
+      }
+
+      .budget-form-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+
+  <div class="budget-form-shell">
+    <div class="budget-form-header">
+      <div>
+        <h1 class="budget-form-header__title">{{ 'Editar orçamento' if is_editing else 'Novo orçamento' }}</h1>
+        <p class="budget-form-header__meta">{{ clinica.nome }}{% if is_editing %} · orçamento #{{ orcamento.id }}{% endif %}</p>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
+        <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>
+        Voltar
+      </a>
+    </div>
+
+    {% if item_errors %}
+      <div class="alert alert-warning" role="alert">
+        {% for error in item_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" class="budget-form-grid" data-budget-form>
+      <div class="budget-panel">
+        <div class="budget-panel__header">
+          <h2 class="budget-panel__title">Dados do orçamento</h2>
+        </div>
+        <div class="budget-panel__body">
+          {{ form.hidden_tag() }}
+          <div class="row g-3">
+            <div class="col-12 col-lg-8">
+              {{ form.descricao.label(class="form-label") }}
+              {{ form.descricao(class="form-control", id="budget-description", placeholder="Ex.: Consulta, exames e medicação inicial") }}
+              {% for error in form.descricao.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label" for="budget-status">Status</label>
+              <select id="budget-status" name="status" class="form-select">
+                {% for status_key, label in orcamento_status_labels.items() %}
+                  <option value="{{ status_key }}" {% if selected_status == status_key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="budget-items-section">
+            <div class="budget-items-section__header">
+              <h2 class="budget-panel__title">Itens</h2>
+              {% if can_edit_items %}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-add-budget-item>
+                  <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>
+                  Adicionar item
+                </button>
+              {% endif %}
+            </div>
+            <div>
+              {% if can_edit_items %}
+                <div class="budget-item-list" data-budget-item-list>
+                  {% for row in rows %}
+                    <div class="budget-item-row" data-budget-item-row>
+                      <div class="budget-item-row__grid">
+                        <div class="budget-item-field--service">
+                          <label class="form-label">Tabela</label>
+                          <select name="item_servico_id[]" class="form-select" data-service-select>
+                            <option value="">Item avulso</option>
+                            {% for service in servicos %}
+                              <option value="{{ service.id }}" data-description="{{ service.descricao }}" data-value="{{ '%.2f'|format(service.valor) }}" data-procedure-code="{{ service.procedure_code or '' }}" {% if row.servico_id|string == service.id|string %}selected{% endif %}>
+                                {{ service.descricao }} · {{ service.valor | currency_br }}
+                              </option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                        <div class="budget-item-field--description">
+                          <label class="form-label">Descrição</label>
+                          <input type="text" name="item_descricao[]" class="form-control" value="{{ row.descricao }}" maxlength="120" data-item-description>
+                        </div>
+                        <div class="budget-item-field--value">
+                          <label class="form-label">Valor</label>
+                          <input type="number" name="item_valor[]" class="form-control" value="{{ row.valor }}" min="0" step="0.01" data-item-value>
+                        </div>
+                        <div class="budget-item-field--payer">
+                          <label class="form-label">Pagador</label>
+                          <select name="item_payer_type[]" class="form-select">
+                            <option value="particular" {% if row.payer_type != 'plan' %}selected{% endif %}>Particular</option>
+                            <option value="plan" {% if row.payer_type == 'plan' %}selected{% endif %}>Plano</option>
+                          </select>
+                        </div>
+                        <div class="budget-item-field--code">
+                          <label class="form-label">Código</label>
+                          <input type="text" name="item_procedure_code[]" class="form-control" value="{{ row.procedure_code }}" maxlength="64" data-item-code>
+                        </div>
+                        <button type="button" class="btn btn-outline-danger budget-remove-item" data-remove-budget-item title="Remover item" aria-label="Remover item">
+                          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="alert alert-info mb-3">Este orçamento possui itens já finalizados no histórico da consulta.</div>
+                <div class="budget-readonly-list">
+                  {% for row in rows %}
+                    <div class="budget-readonly-item">
+                      <div>
+                        <div class="fw-semibold">{{ row.descricao }}</div>
+                        {% if row.procedure_code %}<small class="text-muted">{{ row.procedure_code }}</small>{% endif %}
+                      </div>
+                      <strong>R$ {{ row.valor|replace('.', ',') }}</strong>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="budget-form-actions">
+            <a class="btn btn-outline-secondary" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>
+              {{ 'Salvar alterações' if is_editing else 'Criar orçamento' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="budget-panel budget-summary-card" aria-label="Resumo do orçamento">
+        <div class="budget-panel__header">
+          <h2 class="budget-panel__title">Resumo</h2>
+        </div>
+        <div class="budget-panel__body">
+          <div class="budget-summary-line">
+            <span>Itens</span>
+            <strong data-budget-item-count>0</strong>
+          </div>
+          <div class="budget-summary-line budget-summary-total">
+            <span>Total</span>
+            <strong data-budget-total>R$ 0,00</strong>
+          </div>
+          <div class="budget-summary-line">
+            <span>Status</span>
+            <strong data-budget-status-label>{{ orcamento_status_labels.get(selected_status, selected_status) }}</strong>
+          </div>
+          {% if is_editing and orcamento.updated_at %}
+            <div class="budget-summary-line">
+              <span>Atualizado</span>
+              <strong>{{ orcamento.updated_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</strong>
+            </div>
+          {% endif %}
+        </div>
+      </aside>
+    </form>
+
+    {% if can_edit_items %}
+      <template id="budget-item-template">
+        <div class="budget-item-row" data-budget-item-row>
+          <div class="budget-item-row__grid">
+            <div class="budget-item-field--service">
+              <label class="form-label">Tabela</label>
+              <select name="item_servico_id[]" class="form-select" data-service-select>
+                <option value="">Item avulso</option>
+                {% for service in servicos %}
+                  <option value="{{ service.id }}" data-description="{{ service.descricao }}" data-value="{{ '%.2f'|format(service.valor) }}" data-procedure-code="{{ service.procedure_code or '' }}">
+                    {{ service.descricao }} · {{ service.valor | currency_br }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="budget-item-field--description">
+              <label class="form-label">Descrição</label>
+              <input type="text" name="item_descricao[]" class="form-control" maxlength="120" data-item-description>
+            </div>
+            <div class="budget-item-field--value">
+              <label class="form-label">Valor</label>
+              <input type="number" name="item_valor[]" class="form-control" min="0" step="0.01" data-item-value>
+            </div>
+            <div class="budget-item-field--payer">
+              <label class="form-label">Pagador</label>
+              <select name="item_payer_type[]" class="form-select">
+                <option value="particular" selected>Particular</option>
+                <option value="plan">Plano</option>
+              </select>
+            </div>
+            <div class="budget-item-field--code">
+              <label class="form-label">Código</label>
+              <input type="text" name="item_procedure_code[]" class="form-control" maxlength="64" data-item-code>
+            </div>
+            <button type="button" class="btn btn-outline-danger budget-remove-item" data-remove-budget-item title="Remover item" aria-label="Remover item">
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const list = document.querySelector('[data-budget-item-list]');
+          const template = document.getElementById('budget-item-template');
+          const addButton = document.querySelector('[data-add-budget-item]');
+          const countTarget = document.querySelector('[data-budget-item-count]');
+          const totalTarget = document.querySelector('[data-budget-total]');
+          const statusSelect = document.getElementById('budget-status');
+          const statusLabelTarget = document.querySelector('[data-budget-status-label]');
+          const statusLabels = {{ orcamento_status_labels | tojson }};
+
+          function parseValue(value) {
+            const numeric = parseFloat(String(value || '').replace(',', '.'));
+            return Number.isFinite(numeric) ? numeric : 0;
+          }
+
+          function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+          }
+
+          function rows() {
+            return Array.from(list ? list.querySelectorAll('[data-budget-item-row]') : []);
+          }
+
+          function isFilled(row) {
+            const description = row.querySelector('[data-item-description]')?.value.trim();
+            const value = row.querySelector('[data-item-value]')?.value.trim();
+            const service = row.querySelector('[data-service-select]')?.value.trim();
+            return Boolean(description || value || service);
+          }
+
+          function updateSummary() {
+            const filledRows = rows().filter(isFilled);
+            const total = filledRows.reduce((sum, row) => sum + parseValue(row.querySelector('[data-item-value]')?.value), 0);
+            if (countTarget) countTarget.textContent = String(filledRows.length);
+            if (totalTarget) totalTarget.textContent = formatCurrency(total);
+          }
+
+          function bindRow(row) {
+            row.querySelectorAll('input, select').forEach(input => {
+              input.addEventListener('input', updateSummary);
+              input.addEventListener('change', updateSummary);
+            });
+
+            const serviceSelect = row.querySelector('[data-service-select]');
+            serviceSelect?.addEventListener('change', () => {
+              const option = serviceSelect.selectedOptions[0];
+              if (!option || !option.value) {
+                updateSummary();
+                return;
+              }
+              const description = row.querySelector('[data-item-description]');
+              const value = row.querySelector('[data-item-value]');
+              const code = row.querySelector('[data-item-code]');
+              if (description) description.value = option.dataset.description || description.value;
+              if (value) value.value = option.dataset.value || value.value;
+              if (code) code.value = option.dataset.procedureCode || code.value;
+              updateSummary();
+            });
+
+            row.querySelector('[data-remove-budget-item]')?.addEventListener('click', () => {
+              row.remove();
+              if (rows().length === 0) {
+                addRow();
+              }
+              updateSummary();
+            });
+          }
+
+          function addRow() {
+            if (!list || !template) return;
+            const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('[data-budget-item-row]');
+            list.appendChild(fragment);
+            bindRow(row);
+            updateSummary();
+          }
+
+          rows().forEach(bindRow);
+          if (rows().length === 0) {
+            addRow();
+          }
+          addButton?.addEventListener('click', addRow);
+
+          statusSelect?.addEventListener('change', () => {
+            if (statusLabelTarget) {
+              statusLabelTarget.textContent = statusLabels[statusSelect.value] || statusSelect.value;
+            }
+          });
+
+          updateSummary();
+        });
+      </script>
+    {% else %}
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const countTarget = document.querySelector('[data-budget-item-count]');
+          const totalTarget = document.querySelector('[data-budget-total]');
+          const values = {{ rows | map(attribute='valor') | list | tojson }};
+          const total = values.reduce((sum, value) => sum + (parseFloat(String(value || '0').replace(',', '.')) || 0), 0);
+          if (countTarget) countTarget.textContent = String(values.length);
+          if (totalTarget) {
+            totalTarget.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total);
+          }
+        });
+      </script>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

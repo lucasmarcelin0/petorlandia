@@ -14226,6 +14226,34 @@ def clinic_detail(clinica_id):
     if orcamento_search:
         orcamentos_query = orcamentos_query.distinct()
 
+    summary_orcamentos = list(orcamentos_query.options(selectinload(Orcamento.items)).all())
+    unique_summary_orcamentos = {}
+    for budget in summary_orcamentos:
+        unique_summary_orcamentos[budget.id] = budget
+    summary_orcamentos = list(unique_summary_orcamentos.values())
+
+    orcamento_status_counts = {
+        status or 'draft': count
+        for status, count in (
+            db.session.query(Orcamento.status, func.count(Orcamento.id))
+            .filter(Orcamento.clinica_id == clinica_id)
+            .group_by(Orcamento.status)
+            .all()
+        )
+    }
+    orcamento_status_counts['all'] = sum(orcamento_status_counts.values())
+
+    orcamento_summary = {
+        'filtered_total': len(summary_orcamentos),
+        'total_amount': sum((budget.total or Decimal('0.00') for budget in summary_orcamentos), Decimal('0.00')),
+        'approved_count': sum(1 for budget in summary_orcamentos if budget.status == 'approved'),
+        'sent_count': sum(1 for budget in summary_orcamentos if budget.status == 'sent'),
+        'draft_count': sum(1 for budget in summary_orcamentos if budget.status == 'draft'),
+        'paid_count': sum(1 for budget in summary_orcamentos if budget.payment_status == 'paid'),
+        'payment_pending_count': sum(1 for budget in summary_orcamentos if budget.payment_status == 'pending'),
+        'without_items_count': sum(1 for budget in summary_orcamentos if not budget.items),
+    }
+
     per_page = current_app.config.get('ORCAMENTOS_PER_PAGE', 10)
     orcamentos_pagination = (
         orcamentos_query
@@ -14378,6 +14406,8 @@ def clinic_detail(clinica_id):
         orcamento_status_styles=ORCAMENTO_STATUS_STYLES,
         orcamento_payment_status_labels=ORCAMENTO_PAYMENT_STATUS_LABELS,
         orcamento_payment_status_styles=ORCAMENTO_PAYMENT_STATUS_STYLES,
+        orcamento_status_counts=orcamento_status_counts,
+        orcamento_summary=orcamento_summary,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
@@ -14730,6 +14760,186 @@ def update_inventory_item(item_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
+def _orcamento_services_for_clinic(clinica_id):
+    return (
+        ServicoClinica.query
+        .filter(
+            or_(
+                ServicoClinica.clinica_id == clinica_id,
+                ServicoClinica.clinica_id.is_(None),
+            )
+        )
+        .order_by(ServicoClinica.descricao)
+        .all()
+    )
+
+
+def _format_decimal_for_form(value):
+    if value in (None, ''):
+        return ''
+    try:
+        amount = value if isinstance(value, Decimal) else Decimal(str(value))
+        return f"{amount.quantize(Decimal('0.01')):.2f}"
+    except (ArithmeticError, InvalidOperation, ValueError):
+        return str(value)
+
+
+def _parse_currency_decimal(value):
+    text_value = str(value or '').strip()
+    if not text_value:
+        return None
+    normalized = text_value.replace('R$', '').replace(' ', '')
+    if ',' in normalized:
+        normalized = normalized.replace('.', '').replace(',', '.')
+    try:
+        amount = Decimal(normalized)
+    except (ArithmeticError, InvalidOperation, ValueError) as exc:
+        raise ValueError('Valor inválido.') from exc
+    if not amount.is_finite() or amount < 0:
+        raise ValueError('Valor inválido.')
+    return amount.quantize(Decimal('0.01'))
+
+
+def _orcamento_submitted_item_fields_present():
+    return any(
+        key in request.form
+        for key in (
+            'item_servico_id[]',
+            'item_servico_id',
+            'item_descricao[]',
+            'item_descricao',
+            'item_valor[]',
+            'item_valor',
+        )
+    )
+
+
+def _orcamento_form_item_rows_from_request():
+    def _getlist(field_name):
+        values = request.form.getlist(f'{field_name}[]')
+        if values:
+            return values
+        return request.form.getlist(field_name)
+
+    service_ids = _getlist('item_servico_id')
+    descriptions = _getlist('item_descricao')
+    values = _getlist('item_valor')
+    payer_types = _getlist('item_payer_type')
+    procedure_codes = _getlist('item_procedure_code')
+    row_count = max(
+        len(service_ids),
+        len(descriptions),
+        len(values),
+        len(payer_types),
+        len(procedure_codes),
+    )
+
+    def _value_at(items, index, default=''):
+        return items[index] if index < len(items) else default
+
+    rows = []
+    for index in range(row_count):
+        rows.append({
+            'servico_id': _value_at(service_ids, index),
+            'descricao': _value_at(descriptions, index),
+            'valor': _value_at(values, index),
+            'payer_type': _value_at(payer_types, index, 'particular') or 'particular',
+            'procedure_code': _value_at(procedure_codes, index),
+        })
+    return rows
+
+
+def _orcamento_form_item_rows_from_model(orcamento):
+    rows = []
+    for item in getattr(orcamento, 'items', []) or []:
+        rows.append({
+            'servico_id': str(item.servico_id or ''),
+            'descricao': item.descricao or '',
+            'valor': _format_decimal_for_form(item.valor),
+            'payer_type': item.payer_type or 'particular',
+            'procedure_code': item.procedure_code or '',
+            'locked': bool(item.bloco_id),
+        })
+    return rows
+
+
+def _extract_orcamento_item_payloads(clinica_id):
+    rows = _orcamento_form_item_rows_from_request()
+    payloads = []
+    errors = []
+    for index, row in enumerate(rows, start=1):
+        raw_service_id = str(row.get('servico_id') or '').strip()
+        raw_description = str(row.get('descricao') or '').strip()
+        raw_value = str(row.get('valor') or '').strip()
+        raw_code = str(row.get('procedure_code') or '').strip()
+
+        if not any([raw_service_id, raw_description, raw_value, raw_code]):
+            continue
+
+        service = None
+        service_id = _coerce_int(raw_service_id) if raw_service_id else None
+        if raw_service_id and service_id is None:
+            errors.append(f'Item {index}: selecione um serviço válido.')
+            continue
+        if service_id:
+            service = ServicoClinica.query.get(service_id)
+            if not service:
+                errors.append(f'Item {index}: serviço não encontrado.')
+                continue
+            if service.clinica_id and service.clinica_id != clinica_id:
+                errors.append(f'Item {index}: serviço indisponível para esta clínica.')
+                continue
+
+        description = raw_description or (service.descricao if service else '')
+        procedure_code = raw_code or (service.procedure_code if service else None)
+        if not description:
+            errors.append(f'Item {index}: informe a descrição.')
+            continue
+
+        try:
+            amount = _parse_currency_decimal(raw_value) if raw_value else None
+        except ValueError:
+            errors.append(f'Item {index}: informe um valor válido.')
+            continue
+        if amount is None and service:
+            amount = _parse_currency_decimal(service.valor)
+        if amount is None:
+            errors.append(f'Item {index}: informe o valor.')
+            continue
+
+        payer_type = row.get('payer_type') or 'particular'
+        if payer_type not in PAYER_TYPE_LABELS:
+            payer_type = 'particular'
+
+        payloads.append({
+            'descricao': description[:120],
+            'valor': amount,
+            'servico_id': service.id if service else None,
+            'procedure_code': procedure_code,
+            'payer_type': payer_type,
+        })
+    return payloads, rows, errors
+
+
+def _render_orcamento_form(form, clinica, *, orcamento=None, item_rows=None, selected_status=None, errors=None):
+    if item_rows is None:
+        item_rows = _orcamento_form_item_rows_from_model(orcamento) if orcamento else []
+    locked_items = [row for row in item_rows if row.get('locked')]
+    can_edit_items = not locked_items
+    return render_template(
+        'orcamentos/orcamento_form.html',
+        form=form,
+        clinica=clinica,
+        orcamento=orcamento,
+        servicos=_orcamento_services_for_clinic(clinica.id),
+        item_rows=item_rows,
+        can_edit_items=can_edit_items,
+        selected_status=selected_status or (getattr(orcamento, 'status', None) or 'draft'),
+        orcamento_status_labels=ORCAMENTO_STATUS_LABELS,
+        item_errors=errors or [],
+    )
+
+
 @login_required
 def novo_orcamento(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -14744,12 +14954,46 @@ def novo_orcamento(clinica_id):
         ensure_clinic_access(form_clinic_id)
         if form_clinic_id != clinica.id:
             abort(400)
-        o = Orcamento(clinica_id=form_clinic_id, descricao=form.descricao.data)
+        item_payloads, item_rows, item_errors = _extract_orcamento_item_payloads(form_clinic_id)
+        selected_status = (request.form.get('status') or 'draft').strip()
+        if selected_status not in ORCAMENTO_STATUS_LABELS:
+            selected_status = 'draft'
+        if item_errors:
+            for error in item_errors:
+                flash(error, 'warning')
+            return _render_orcamento_form(
+                form,
+                clinica,
+                item_rows=item_rows,
+                selected_status=selected_status,
+                errors=item_errors,
+            )
+        o = Orcamento(
+            clinica_id=form_clinic_id,
+            descricao=form.descricao.data,
+            status=selected_status,
+        )
         db.session.add(o)
+        db.session.flush()
+        for payload in item_payloads:
+            db.session.add(
+                OrcamentoItem(
+                    orcamento_id=o.id,
+                    clinica_id=form_clinic_id,
+                    **payload,
+                )
+            )
         db.session.commit()
         flash('Orçamento criado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=form_clinic_id) + '#orcamento')
-    return render_template('orcamentos/orcamento_form.html', form=form, clinica=clinica)
+    if request.method == 'POST':
+        return _render_orcamento_form(
+            form,
+            clinica,
+            item_rows=_orcamento_form_item_rows_from_request(),
+            selected_status=request.form.get('status') or 'draft',
+        )
+    return _render_orcamento_form(form, clinica)
 
 
 @login_required
@@ -14766,11 +15010,53 @@ def editar_orcamento(orcamento_id):
         ensure_clinic_access(form_clinic_id)
         if form_clinic_id != orcamento.clinica_id:
             abort(400)
+        item_rows = _orcamento_form_item_rows_from_model(orcamento)
+        can_edit_items = not any(row.get('locked') for row in item_rows)
+        item_payloads = []
+        submitted_items = _orcamento_submitted_item_fields_present()
+        if can_edit_items and submitted_items:
+            item_payloads, submitted_rows, item_errors = _extract_orcamento_item_payloads(form_clinic_id)
+            item_rows = submitted_rows
+            if item_errors:
+                for error in item_errors:
+                    flash(error, 'warning')
+                return _render_orcamento_form(
+                    form,
+                    orcamento.clinica,
+                    orcamento=orcamento,
+                    item_rows=item_rows,
+                    selected_status=request.form.get('status') or orcamento.status,
+                    errors=item_errors,
+                )
         orcamento.descricao = form.descricao.data
+        selected_status = (request.form.get('status') or orcamento.status or 'draft').strip()
+        if selected_status in ORCAMENTO_STATUS_LABELS:
+            orcamento.status = selected_status
+        if can_edit_items and submitted_items:
+            for item in list(orcamento.items):
+                db.session.delete(item)
+            db.session.flush()
+            for payload in item_payloads:
+                db.session.add(
+                    OrcamentoItem(
+                        orcamento_id=orcamento.id,
+                        consulta_id=orcamento.consulta_id,
+                        clinica_id=form_clinic_id,
+                        **payload,
+                    )
+                )
         db.session.commit()
         flash('Orçamento atualizado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
-    return render_template('orcamentos/orcamento_form.html', form=form, clinica=orcamento.clinica)
+    if request.method == 'POST':
+        return _render_orcamento_form(
+            form,
+            orcamento.clinica,
+            orcamento=orcamento,
+            item_rows=_orcamento_form_item_rows_from_request(),
+            selected_status=request.form.get('status') or orcamento.status,
+        )
+    return _render_orcamento_form(form, orcamento.clinica, orcamento=orcamento)
 
 
 @login_required
