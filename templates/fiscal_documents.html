@@ -15,6 +15,85 @@
 
   <div class="card mb-4">
     <div class="card-body">
+      <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
+        <div>
+          <h5 class="mb-1">Emitir NFS-e manual</h5>
+          <p class="text-muted mb-0 small">Use para exames de ultrassonografia pagos por Pix e clinicas recorrentes.</p>
+        </div>
+        {% if emitter and emitter.municipio_ibge == '3106200' %}
+        <span class="badge bg-success align-self-start">PBH / NFS-e Nacional</span>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('fiscal_nfse_manual') }}" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-12 col-lg-4">
+          <label class="form-label" for="tomador_saved">Clinica tomadora</label>
+          <select class="form-select" id="tomador_saved">
+            <option value="">Nova clinica</option>
+            {% for tomador in recent_tomadores %}
+            <option
+              value="{{ tomador.documento }}"
+              data-nome="{{ tomador.nome }}"
+              data-email="{{ tomador.email }}"
+              data-telefone="{{ tomador.telefone }}"
+            >
+              {{ tomador.nome }} - {{ tomador.documento }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="form-label" for="tomador_nome">Nome</label>
+          <input class="form-control" id="tomador_nome" name="tomador_nome" required placeholder="Nome da clinica">
+        </div>
+        <div class="col-12 col-md-4 col-lg-2">
+          <label class="form-label" for="tomador_documento">CPF/CNPJ</label>
+          <input class="form-control" id="tomador_documento" name="tomador_documento" required inputmode="numeric">
+        </div>
+        <div class="col-12 col-md-4 col-lg-2">
+          <label class="form-label" for="valor_total">Valor</label>
+          <input class="form-control" id="valor_total" name="valor_total" type="number" step="0.01" min="0.01" required>
+        </div>
+        <div class="col-12 col-md-4 col-lg-3">
+          <label class="form-label" for="data_competencia">Data do servico</label>
+          <input class="form-control" id="data_competencia" name="data_competencia" type="date" value="{{ manual_defaults.data_competencia }}" required>
+        </div>
+        <div class="col-12 col-lg-5">
+          <label class="form-label" for="descricao">Descricao</label>
+          <input class="form-control" id="descricao" name="descricao" value="{{ manual_defaults.descricao }}" required>
+        </div>
+        <div class="col-12 col-md-4 col-lg-2">
+          <label class="form-label" for="codigo_servico">Servico</label>
+          <input class="form-control" id="codigo_servico" name="codigo_servico" value="{{ manual_defaults.codigo_servico }}" required>
+        </div>
+        <div class="col-12 col-md-4 col-lg-2">
+          <label class="form-label" for="aliquota_iss">ISS %</label>
+          <input class="form-control" id="aliquota_iss" name="aliquota_iss" type="number" step="0.01" min="0" value="{{ manual_defaults.aliquota_iss }}">
+        </div>
+        <div class="col-12 col-md-4 col-lg-3">
+          <label class="form-label" for="tomador_email">E-mail</label>
+          <input class="form-control" id="tomador_email" name="tomador_email" type="email">
+        </div>
+        <div class="col-12 col-md-4 col-lg-3">
+          <label class="form-label" for="tomador_telefone">Telefone</label>
+          <input class="form-control" id="tomador_telefone" name="tomador_telefone">
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" type="submit" {% if not emitter %}disabled{% endif %}>
+            Emitir NFS-e
+          </button>
+        </div>
+      </form>
+      {% if not emitter %}
+      <div class="alert alert-warning mt-3 mb-0 small">
+        Cadastre o emissor fiscal antes de emitir notas manuais.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
       <form class="row g-3" method="get" action="{{ url_for('fiscal_documents') }}">
         <div class="col-md-3">
           <label class="form-label" for="doc_type">Tipo</label>
@@ -139,4 +218,17 @@
     </div>
   </div>
 </div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var select = document.getElementById('tomador_saved');
+    if (!select) return;
+    select.addEventListener('change', function () {
+      var option = select.options[select.selectedIndex];
+      document.getElementById('tomador_nome').value = option.dataset.nome || '';
+      document.getElementById('tomador_documento').value = option.value || '';
+      document.getElementById('tomador_email').value = option.dataset.email || '';
+      document.getElementById('tomador_telefone').value = option.dataset.telefone || '';
+    });
+  });
+</script>
 {% endblock %}

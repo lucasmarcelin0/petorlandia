@@ -1,6 +1,8 @@
-"""Serviço de emissão NFS-e (Betha/Orlândia)."""
+"""Servico de emissao NFS-e (Betha/Orlandia e NFS-e Nacional/PBH)."""
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any, Optional
 
 from flask import current_app
@@ -25,6 +27,15 @@ from models import (
 from providers.nfse.betha import build_lote_xml, sign_betha_xml
 from providers.nfse.betha.client import BethaNfseClient
 from providers.nfse.betha.client import BethaWsdlConfig
+from providers.nfse.nacional import (
+    NacionalNfseClient,
+    NacionalNfseConfig,
+    build_cancel_event_xml,
+    build_dps_id,
+    build_dps_xml,
+    sign_nacional_xml,
+)
+from providers.nfse.nacional.client import NacionalNfseResponse
 from security.crypto import decrypt_bytes, decrypt_text
 from security.redact import redact_sensitive_text, redact_xml
 from services.fiscal.numbering import NumberingReservationError, reserve_next_number
@@ -60,6 +71,43 @@ def create_nfse_document(
         payload_json=payload,
         related_type=related_type,
         related_id=related_id,
+    )
+    db.session.add(document)
+    db.session.flush()
+    _log_event(document, "queued", FiscalDocumentStatus.QUEUED.value)
+    db.session.commit()
+    return document
+
+
+def create_manual_nfse_document(
+    emitter_id: int,
+    payload: dict[str, Any],
+) -> FiscalDocument:
+    emitter = db.session.get(FiscalEmitter, emitter_id)
+    if not emitter:
+        raise ValueError("Emissor fiscal nao encontrado.")
+
+    series = str((payload.get("rps") or {}).get("serie") or payload.get("serie") or "1")
+    number = reserve_next_number(emitter.id, FiscalDocumentType.NFSE, series)
+    payload = dict(payload or {})
+    payload.setdefault("rps", {})
+    payload["rps"]["numero"] = number
+    payload["rps"]["serie"] = series
+
+    tomador = payload.get("tomador") or {}
+    servico = payload.get("servico") or {}
+    document = FiscalDocument(
+        emitter_id=emitter.id,
+        clinic_id=emitter.clinic_id,
+        doc_type=FiscalDocumentType.NFSE,
+        status=FiscalDocumentStatus.QUEUED,
+        series=series,
+        number=number,
+        payload_json=payload,
+        source_type="MANUAL_NFSE",
+        related_type="manual_nfse",
+        human_reference=servico.get("descricao") or payload.get("descricao") or "NFS-e manual",
+        tutor_name=tomador.get("nome"),
     )
     db.session.add(document)
     db.session.flush()
@@ -183,6 +231,12 @@ def emit_nfse_sync(document_id: int, clinic_id: int | None = None) -> FiscalDocu
             raise ValueError("Certificado fiscal A1 não encontrado.")
 
         payload = _normalize_payload(document, emitter)
+        if _is_nacional_nfse(emitter, payload):
+            _emit_nfse_nacional(document, emitter, certificate, payload)
+            db.session.add(document)
+            db.session.commit()
+            return document
+
         lote_xml = build_lote_xml([payload])
         signed_xml = sign_betha_xml(
             lote_xml,
@@ -258,6 +312,13 @@ def poll_nfse(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
         certificate = _get_active_certificate(emitter.id)
         if not certificate:
             raise ValueError("Configuração fiscal incompleta.")
+
+        payload = _normalize_payload(document, emitter)
+        if _is_nacional_nfse(emitter, payload):
+            _poll_nfse_nacional(document, emitter, certificate, payload)
+            db.session.add(document)
+            db.session.commit()
+            return document
 
         client = _build_betha_client(emitter, certificate)
         protocol = document.protocol
@@ -363,6 +424,13 @@ def cancel_nfse_document(
     if not certificate:
         raise ValueError("Configuração fiscal incompleta.")
 
+    payload = _normalize_payload(document, emitter)
+    if _is_nacional_nfse(emitter, payload):
+        _cancel_nfse_nacional(document, emitter, certificate, reason)
+        db.session.add(document)
+        db.session.commit()
+        return document
+
     client = _build_betha_client(emitter, certificate)
     payload = {
         "Pedido": {
@@ -407,9 +475,261 @@ def _normalize_payload(document: FiscalDocument, emitter: FiscalEmitter) -> dict
     payload.setdefault("prestador", {})
     payload["prestador"].setdefault("cnpj", emitter.cnpj)
     payload["prestador"].setdefault("im", emitter.inscricao_municipal)
+    payload["prestador"].setdefault("nome", emitter.razao_social)
     payload["prestador"].setdefault("endereco", emitter.endereco_json or {})
+    payload["prestador"].setdefault("regime_tributario", emitter.regime_tributario)
+
+    clinic = emitter.clinic
+    if clinic is not None:
+        payload.setdefault("municipio_nfse", getattr(clinic, "municipio_nfse", None))
+        payload.setdefault("municipio_ibge", emitter.municipio_ibge or _clinic_field(clinic, "municipio_ibge"))
+        payload.setdefault("codigo_servico", _clinic_field(clinic, "codigo_servico"))
+        payload.setdefault("aliquota_iss", _clinic_field(clinic, "aliquota_iss"))
+        payload.setdefault("regime_tributario", emitter.regime_tributario or _clinic_field(clinic, "regime_tributario"))
+        payload["prestador"].setdefault("regime_tributario", emitter.regime_tributario or _clinic_field(clinic, "regime_tributario"))
+        payload["prestador"].setdefault("telefone", getattr(clinic, "telefone", None))
+        payload["prestador"].setdefault("email", getattr(clinic, "email", None))
+        if not payload["prestador"].get("endereco"):
+            payload["prestador"]["endereco"] = _clinic_address_payload(clinic, emitter)
+
+    payload.setdefault("servico", {})
+    service_code = payload.get("codigo_servico")
+    if service_code and payload["servico"].get("item_lista") in (None, "", "0000"):
+        payload["servico"]["item_lista"] = service_code
+    payload["servico"].setdefault("aliquota_iss", payload.get("aliquota_iss"))
 
     return payload
+
+
+def _clinic_field(clinic: Any, field: str, default: Any = None) -> Any:
+    if clinic is None:
+        return default
+    return getattr(clinic, field, default)
+
+
+def _clinic_address_payload(clinic: Any, emitter: FiscalEmitter) -> dict[str, Any]:
+    endereco = emitter.endereco_json or {}
+    if endereco:
+        return endereco
+    return {
+        "logradouro": _clinic_field(clinic, "endereco"),
+        "codigo_municipio": emitter.municipio_ibge,
+        "uf": emitter.uf,
+    }
+
+
+def _normalize_provider_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+
+
+def _is_nacional_nfse(emitter: FiscalEmitter, payload: dict[str, Any] | None = None) -> bool:
+    payload = payload or {}
+    provider = _normalize_provider_text(payload.get("provider") or payload.get("provedor_nfse"))
+    municipio_nfse = _normalize_provider_text(payload.get("municipio_nfse") or "")
+    municipio_ibge = re.sub(r"\D+", "", str(payload.get("municipio_ibge") or emitter.municipio_ibge or ""))
+    if provider in {"nacional", "nfse_nacional", "pbh", "belo_horizonte"}:
+        return True
+    if municipio_ibge == "3106200":
+        return True
+    return municipio_nfse in {"bh", "pbh", "belo_horizonte", "belo_horizonte_mg"}
+
+
+def _nacional_xml_options() -> dict[str, str]:
+    config = current_app.config.get("NFSE_NACIONAL_XML", {})
+    return {
+        "ambiente": str(config.get("ambiente") or "2"),
+        "versao": str(config.get("versao") or "1.01"),
+        "ver_aplic": str(config.get("ver_aplic") or "Petorlandia-1.0"),
+        "signature_algorithm": str(config.get("signature_algorithm") or "rsa-sha1"),
+        "digest_algorithm": str(config.get("digest_algorithm") or "sha1"),
+    }
+
+
+def _build_nacional_client(
+    certificate: FiscalCertificate,
+) -> NacionalNfseClient:
+    api_config = current_app.config.get("NFSE_NACIONAL_API", {})
+    config = NacionalNfseConfig(
+        base_url=api_config.get("base_url") or NacionalNfseConfig.base_url,
+        environment=api_config.get("environment") or "producao_restrita",
+        production_base_url=api_config.get("production_base_url")
+        or NacionalNfseConfig.production_base_url,
+        timeout=int(api_config.get("timeout") or 30),
+        nfse_path=api_config.get("nfse_path") or "/nfse",
+        dps_path=api_config.get("dps_path") or "/dps/{id}",
+        eventos_path=api_config.get("eventos_path") or "/nfse/{chave_acesso}/eventos",
+    )
+    return NacionalNfseClient(
+        config,
+        pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
+        pfx_password=decrypt_text(certificate.pfx_password_encrypted),
+    )
+
+
+def _document_dps_id(document: FiscalDocument, emitter: FiscalEmitter, payload: dict[str, Any]) -> str:
+    rps = payload.get("rps") or {}
+    prestador = payload.get("prestador") or {}
+    return build_dps_id(
+        payload.get("municipio_ibge") or emitter.municipio_ibge or "3106200",
+        prestador.get("cnpj") or emitter.cnpj,
+        rps.get("serie") or document.series or "1",
+        rps.get("numero") or document.number,
+    )
+
+
+def _apply_nacional_response(document: FiscalDocument, response: NacionalNfseResponse) -> None:
+    document.protocol = response.protocol or document.protocol
+    document.access_key = response.access_key or document.access_key
+    document.nfse_number = response.nfse_number or document.nfse_number
+    document.verification_code = response.verification_code or document.verification_code
+    if response.response_xml:
+        document.xml_authorized = response.response_xml
+
+
+def _emit_nfse_nacional(
+    document: FiscalDocument,
+    emitter: FiscalEmitter,
+    certificate: FiscalCertificate,
+    payload: dict[str, Any],
+) -> None:
+    options = _nacional_xml_options()
+    dps_xml = build_dps_xml(
+        payload,
+        ambiente=options["ambiente"],
+        versao=options["versao"],
+        ver_aplic=options["ver_aplic"],
+    )
+    signed_xml = sign_nacional_xml(
+        dps_xml,
+        pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
+        password=decrypt_text(certificate.pfx_password_encrypted),
+        signature_algorithm=options["signature_algorithm"],
+        digest_algorithm=options["digest_algorithm"],
+    )
+    client = _build_nacional_client(certificate)
+    response = client.emitir_dps(signed_xml)
+
+    document.xml_signed = signed_xml
+    document.protocol = response.protocol or _document_dps_id(document, emitter, payload)
+    _apply_nacional_response(document, response)
+
+    if response.success:
+        if response.response_xml or response.access_key or response.nfse_number:
+            _transition_status(document, FiscalDocumentStatus.AUTHORIZED, "emitir_nfse_nacional")
+            document.authorized_at = now_in_brazil()
+            from services.finance import sync_receivable_from_nfse
+
+            sync_receivable_from_nfse(document, commit=False)
+        _log_event(
+            document,
+            "emitir_nfse_nacional",
+            document.status.value,
+            request_xml=_redact_xml(signed_xml),
+            response_xml=_redact_xml(response.response_xml),
+            protocol=document.protocol,
+        )
+        return
+
+    _transition_status(document, FiscalDocumentStatus.REJECTED, "emitir_nfse_nacional")
+    document.error_message = _humanize_nfse_error(response.error_message)
+    _log_event(
+        document,
+        "emitir_nfse_nacional",
+        FiscalDocumentStatus.REJECTED.value,
+        request_xml=_redact_xml(signed_xml),
+        response_xml=_redact_xml(response.response_xml),
+        protocol=document.protocol,
+        error_message=document.error_message,
+    )
+
+
+def _poll_nfse_nacional(
+    document: FiscalDocument,
+    emitter: FiscalEmitter,
+    certificate: FiscalCertificate,
+    payload: dict[str, Any],
+) -> None:
+    client = _build_nacional_client(certificate)
+    if document.access_key:
+        response = client.consultar_nfse(document.access_key)
+    else:
+        response = client.consultar_dps(_document_dps_id(document, emitter, payload))
+        if response.success and response.access_key and not response.response_xml:
+            response = client.consultar_nfse(response.access_key)
+
+    _apply_nacional_response(document, response)
+    if response.success and (response.response_xml or response.access_key):
+        if document.status != FiscalDocumentStatus.AUTHORIZED:
+            _transition_status(document, FiscalDocumentStatus.AUTHORIZED, "consultar_nfse_nacional")
+        document.authorized_at = document.authorized_at or now_in_brazil()
+        from services.finance import sync_receivable_from_nfse
+
+        sync_receivable_from_nfse(document, commit=False)
+    elif not response.success:
+        document.error_message = _humanize_nfse_error(response.error_message)
+    _log_event(
+        document,
+        "consultar_nfse_nacional",
+        document.status.value,
+        response_xml=_redact_xml(response.response_xml),
+        protocol=document.protocol,
+        error_message=document.error_message if not response.success else None,
+    )
+
+
+def _cancel_nfse_nacional(
+    document: FiscalDocument,
+    emitter: FiscalEmitter,
+    certificate: FiscalCertificate,
+    reason: str | None,
+) -> None:
+    access_key = document.access_key
+    if not access_key:
+        raise ValueError("Chave de acesso da NFS-e nao encontrada para cancelamento.")
+
+    options = _nacional_xml_options()
+    reason_code = reason if reason in {"1", "2", "9"} else "9"
+    reason_description = (
+        "Erro na emissao"
+        if reason in {None, "", "1"}
+        else ("Servico nao prestado" if reason == "2" else str(reason))
+    )
+    event_xml = build_cancel_event_xml(
+        access_key,
+        emitter.cnpj,
+        reason_code=reason_code,
+        reason_description=reason_description,
+        ambiente=options["ambiente"],
+        versao=options["versao"],
+        ver_aplic=options["ver_aplic"],
+    )
+    signed_event_xml = sign_nacional_xml(
+        event_xml,
+        pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
+        password=decrypt_text(certificate.pfx_password_encrypted),
+        node_tag="infPedReg",
+        signature_algorithm=options["signature_algorithm"],
+        digest_algorithm=options["digest_algorithm"],
+    )
+    client = _build_nacional_client(certificate)
+    response = client.registrar_evento(access_key, signed_event_xml)
+
+    if response.success:
+        _transition_status(document, FiscalDocumentStatus.CANCELED, "cancelar_nfse_nacional")
+        document.canceled_at = now_in_brazil()
+        document.error_message = None
+    else:
+        document.error_message = _humanize_nfse_error(response.error_message)
+    _log_event(
+        document,
+        "cancelar_nfse_nacional",
+        document.status.value,
+        request_xml=_redact_xml(signed_event_xml),
+        response_xml=_redact_xml(response.response_xml),
+        error_message=None if response.success else document.error_message,
+    )
 
 
 def _ensure_related_clinic_consistency(
@@ -449,6 +769,23 @@ def _humanize_betha_error(message: str | None) -> str:
     if "servico" in text or "serviço" in text or "item" in text:
         return "Serviço não configurado para emissão fiscal."
     return "Não foi possível emitir a NFS-e no momento."
+
+
+def _humanize_nfse_error(message: str | None) -> str:
+    if not message:
+        return "Não foi possível emitir a NFS-e no momento."
+    text = message.lower()
+    if "dps" in text and ("duplic" in text or "ja existe" in text or "já existe" in text):
+        return "DPS já enviada para esta numeração."
+    if "certificado" in text or "certificate" in text or "tls" in text:
+        return "Certificado digital vencido ou inválido."
+    if "credenc" in text or "autoriza" in text or "convenio" in text or "convênio" in text:
+        return "Prestador ainda não autorizado para emissão no município."
+    if "codigo" in text and "serv" in text:
+        return "Código de serviço não configurado para a PBH/NFS-e Nacional."
+    if "timeout" in text or "timed out" in text or "tempo esgotado" in text:
+        return "Ambiente NFS-e Nacional indisponível, tentaremos novamente."
+    return message[:280]
 
 
 def _ensure_document_scope(

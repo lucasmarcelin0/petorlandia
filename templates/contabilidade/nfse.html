@@ -105,7 +105,7 @@
         <a class="btn btn-outline-primary" href="{{ nfse_setup_resources.wizard_url }}">
           <i class="fas fa-magic me-1"></i>Abrir wizard fiscal
         </a>
-        <a class="btn btn-outline-secondary" href="https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica" target="_blank" rel="noopener">
+        <a class="btn btn-outline-secondary" href="{{ nfse_setup_resources.links[0].url if nfse_setup_resources.links else 'https://www.orlandia.sp.gov.br/novo/servicos/nota-fiscal-eletronica' }}" target="_blank" rel="noopener">
           <i class="fas fa-arrow-up-right-from-square me-1"></i>Portal da prefeitura
         </a>
       </div>
@@ -131,8 +131,12 @@
         <div class="border rounded p-3 h-100">
           <div class="fw-semibold mb-2">1. Prefeitura</div>
           <div class="text-muted small">
+            {% if nfse_settings.municipio_nfse == 'belo_horizonte' %}
+            Em Belo Horizonte, confirme a adesao PBH/NFS-e Nacional, a inscricao municipal, o codigo nacional do servico e o certificado A1 do prestador.
+            {% else %}
             Em Orlândia, a página oficial lista o <strong>Termo de Opção</strong> e o <strong>Requerimento para Solicitação de Senha</strong>.
             Para o Cidadão Web, a prefeitura informa a entrega do <strong>Anexo IV</strong> na Divisão de Tributação.
+            {% endif %}
           </div>
         </div>
       </div>
@@ -140,8 +144,7 @@
         <div class="border rounded p-3 h-100">
           <div class="fw-semibold mb-2">2. Sistema</div>
           <div class="text-muted small">
-            Depois da liberação, preencha aqui a inscrição municipal, regime, CNAE, código do serviço, alíquota ISS, usuário/senha da NFS-e
-            e, se usar integração por certificado, o `.pfx` e a senha do certificado.
+            Depois da liberacao, preencha aqui inscricao municipal, regime, CNAE, codigo do servico, aliquota ISS e certificado A1 quando o municipio exigir assinatura digital.
           </div>
         </div>
       </div>

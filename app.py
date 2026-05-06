@@ -131,6 +131,7 @@ from services.fiscal.certificate import parse_pfx
 from services.fiscal.nfse_service import (
     build_nfse_payload_from_appointment,
     cancel_nfse_document,
+    create_manual_nfse_document,
     create_nfse_draft_from_orcamento,
     create_nfse_document,
     queue_emit_nfse,
@@ -1838,6 +1839,116 @@ def fiscal_certificate_upload():
     )
 
 
+def _only_digits(value: str | None) -> str:
+    return re.sub(r"\D+", "", value or "")
+
+
+def _recent_nfse_tomadores(clinic_id: int) -> list[dict]:
+    seen: dict[str, dict] = {}
+    documents = (
+        FiscalDocument.query
+        .filter_by(clinic_id=clinic_id, doc_type=FiscalDocumentType.NFSE)
+        .order_by(FiscalDocument.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    for document in documents:
+        payload = document.payload_json or {}
+        tomador = payload.get("tomador") or {}
+        doc_digits = _only_digits(
+            tomador.get("cpf_cnpj")
+            or tomador.get("cnpj")
+            or tomador.get("cpf")
+            or tomador.get("documento")
+        )
+        nome = (tomador.get("nome") or "").strip()
+        if not doc_digits or not nome or doc_digits in seen:
+            continue
+        seen[doc_digits] = {
+            "documento": doc_digits,
+            "nome": nome,
+            "email": tomador.get("email") or "",
+            "telefone": tomador.get("telefone") or "",
+        }
+    return list(seen.values())
+
+
+def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
+    clinic = emitter.clinic
+    tomador_nome = (form.get("tomador_nome") or "").strip()
+    tomador_documento = _only_digits(form.get("tomador_documento"))
+    if not tomador_nome:
+        raise ValueError("Informe o nome da clinica tomadora.")
+    if len(tomador_documento) not in {11, 14}:
+        raise ValueError("Informe um CPF/CNPJ valido para o tomador.")
+
+    raw_value = (form.get("valor_total") or "").strip()
+    if "," in raw_value:
+        raw_value = raw_value.replace(".", "").replace(",", ".")
+    try:
+        valor_total = Decimal(raw_value)
+    except (InvalidOperation, ValueError):
+        raise ValueError("Informe um valor valido para a NFS-e.") from None
+    if valor_total <= 0:
+        raise ValueError("O valor da NFS-e deve ser maior que zero.")
+
+    data_competencia = (form.get("data_competencia") or date.today().isoformat()).strip()
+    try:
+        datetime.strptime(data_competencia, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError("Informe uma data de competencia valida.") from None
+
+    codigo_servico = (
+        form.get("codigo_servico")
+        or get_clinica_field(clinic, "codigo_servico", "")
+        or ""
+    ).strip()
+    if not codigo_servico:
+        raise ValueError("Informe o codigo de servico liberado para a PBH/NFS-e.")
+
+    aliquota_iss = (
+        form.get("aliquota_iss")
+        or get_clinica_field(clinic, "aliquota_iss", "")
+        or ""
+    )
+    descricao = (form.get("descricao") or "Exames de ultrassonografia").strip()
+    municipio_nfse = get_clinica_field(clinic, "municipio_nfse", "") or ""
+    municipio_ibge = emitter.municipio_ibge or ("3106200" if _normalize_municipio(municipio_nfse) == "belo_horizonte" else None)
+
+    payload = {
+        "provider": "nfse_nacional" if municipio_ibge == "3106200" else None,
+        "municipio_nfse": municipio_nfse,
+        "municipio_ibge": municipio_ibge,
+        "data_competencia": data_competencia,
+        "valor_total": str(valor_total),
+        "codigo_servico": codigo_servico,
+        "aliquota_iss": str(aliquota_iss) if aliquota_iss not in (None, "") else None,
+        "prestador": {
+            "cnpj": emitter.cnpj,
+            "im": emitter.inscricao_municipal,
+            "nome": emitter.razao_social,
+            "regime_tributario": emitter.regime_tributario or get_clinica_field(clinic, "regime_tributario", ""),
+            "endereco": emitter.endereco_json or {},
+        },
+        "tomador": {
+            "cpf_cnpj": tomador_documento,
+            "nome": tomador_nome,
+            "email": (form.get("tomador_email") or "").strip() or None,
+            "telefone": (form.get("tomador_telefone") or "").strip() or None,
+        },
+        "servico": {
+            "item_lista": codigo_servico,
+            "descricao": descricao,
+            "valor": str(valor_total),
+            "aliquota_iss": str(aliquota_iss) if aliquota_iss not in (None, "") else None,
+        },
+        "rps": {
+            "serie": (form.get("serie") or "1").strip() or "1",
+        },
+    }
+    return payload
+
+
 @login_required
 def fiscal_documents():
     clinic_id = current_user_clinic_id()
@@ -1880,10 +1991,21 @@ def fiscal_documents():
             flash("Data final inválida.", "warning")
 
     documents = query.order_by(FiscalDocument.created_at.desc()).all()
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+    clinic = emitter.clinic if emitter else None
+    manual_defaults = {
+        "descricao": "Exames de ultrassonografia",
+        "data_competencia": date.today().isoformat(),
+        "codigo_servico": get_clinica_field(clinic, "codigo_servico", "") if clinic else "",
+        "aliquota_iss": get_clinica_field(clinic, "aliquota_iss", "") if clinic else "",
+    }
 
     return render_template(
         "fiscal_documents.html",
         documents=documents,
+        emitter=emitter,
+        recent_tomadores=_recent_nfse_tomadores(clinic_id),
+        manual_defaults=manual_defaults,
         doc_type=doc_type or "",
         status=status or "",
         start_date=start_date or "",
@@ -1895,6 +2017,34 @@ def fiscal_documents():
             if status != FiscalDocumentStatus.SENDING
         ],
     )
+
+
+@login_required
+def fiscal_nfse_manual():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+    if not emitter:
+        flash("Cadastre o emissor fiscal antes de emitir NFS-e.", "warning")
+        return redirect(url_for("fiscal_settings"))
+
+    try:
+        payload = _manual_nfse_payload_from_form(request.form, emitter)
+        document = create_manual_nfse_document(emitter.id, payload)
+        try:
+            queue_emit_nfse(document.id, clinic_id=clinic_id)
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("Falha ao enviar NFS-e manual para a fila.")
+            flash("NFS-e criada, mas nao foi possivel iniciar a fila agora. Tente reprocessar em instantes.", "warning")
+            return redirect(url_for("fiscal_document_detail", document_id=document.id))
+    except ValueError as exc:
+        flash(str(exc), "warning")
+        return redirect(url_for("fiscal_documents"))
+
+    flash("NFS-e manual criada e enviada para emissao.", "success")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
 
 
 @login_required
@@ -6100,10 +6250,10 @@ def _nfse_required_fields_by_municipio() -> dict[str, list[str]]:
         ],
         "belo_horizonte": [
             "inscricao_municipal",
+            "regime_tributario",
             "cnae",
             "codigo_servico",
-            "nfse_cert_path",
-            "nfse_cert_password",
+            "aliquota_iss",
         ],
     }
 
@@ -6136,7 +6286,11 @@ def _nfse_missing_fields(clinic: Clinica) -> tuple[list[str], str]:
 
 def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
-    certificate_required = "nfse_cert_path" in required_fields or "nfse_cert_password" in required_fields
+    certificate_required = (
+        municipio_key == "belo_horizonte"
+        or "nfse_cert_path" in required_fields
+        or "nfse_cert_password" in required_fields
+    )
     if not certificate_required:
         return True, "Não exigido para este município."
 
@@ -6157,6 +6311,8 @@ def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool,
 
 
 def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
+    if municipio_key == "belo_horizonte":
+        return True, "PBH integrada pela API da NFS-e Nacional com DPS assinada por certificado A1."
     if municipio_key != "orlandia":
         return True, "Não se aplica ao município."
     if get_clinica_field(clinic, "fiscal_ready", False):
@@ -6392,6 +6548,36 @@ def contabilidade_nfse():
             "wizard_url": url_for("fiscal_onboarding_step", step=1),
             "links": [],
         }
+        if municipio_key == "belo_horizonte":
+            return {
+                "wizard_url": url_for("fiscal_onboarding_step", step=1),
+                "links": [
+                    {
+                        "title": "PBH - NFS-e Nacional",
+                        "description": "Pagina oficial da PBH sobre adesao, migracao e obrigatoriedade de emissores.",
+                        "url": "https://fazenda.pbh.gov.br/nfse/adn/",
+                    },
+                    {
+                        "title": "Documentacao tecnica nacional",
+                        "description": "Leiautes, schemas e manuais atuais da NFS-e Nacional.",
+                        "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+                    },
+                    {
+                        "title": "APIs da NFS-e Nacional",
+                        "description": "Ambientes de producao restrita e producao para emissao por API.",
+                        "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/apis-prod-restrita-e-producao",
+                    },
+                    {
+                        "title": "Emissor Nacional",
+                        "description": "Portal oficial para conferencias e operacao assistida do contribuinte.",
+                        "url": "https://www.nfse.gov.br/EmissorNacional/",
+                    },
+                ],
+                "field_hints": {
+                    "municipio_ibge": "3106200",
+                    "uf": "MG",
+                },
+            }
         if municipio_key != "orlandia":
             return default_resources
         return {
@@ -6678,7 +6864,13 @@ def contabilidade_nfse_preview():
             if cadastro_ok
             else "Faltam informações obrigatórias.",
         },
-        {"label": "Comunicação Betha disponível", "ok": betha_ok, "detail": betha_msg},
+        {
+            "label": "Comunicação PBH/NFS-e Nacional disponível"
+            if municipio_key == "belo_horizonte"
+            else "Comunicação Betha disponível",
+            "ok": betha_ok,
+            "detail": betha_msg,
+        },
     ]
 
     blocking_errors = []
@@ -6693,7 +6885,11 @@ def contabilidade_nfse_preview():
     if not certificado_ok:
         blocking_errors.append("Certificado fiscal inválido ou ausente. Atualize o certificado antes de emitir.")
     if not betha_ok:
-        blocking_errors.append("Teste de comunicação com a Betha pendente. Finalize o wizard fiscal.")
+        blocking_errors.append(
+            "Teste de comunicação com a PBH/NFS-e Nacional pendente."
+            if municipio_key == "belo_horizonte"
+            else "Teste de comunicação com a Betha pendente. Finalize o wizard fiscal."
+        )
 
     can_emit = bool(consulta) and cadastro_ok and certificado_ok and betha_ok
 

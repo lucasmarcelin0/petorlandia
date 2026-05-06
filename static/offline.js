@@ -212,6 +212,56 @@
     }
   }
 
+  function isCsrfFailure(resp, json){
+    if(!resp || resp.status !== 400) return false;
+    if(!json) return false;
+    const errorText = String(json.error || '').toLowerCase();
+    if(errorText.includes('csrf')) return true;
+    if(json.errors && json.errors.csrf_token) return true;
+    return false;
+  }
+
+  async function refreshFormCsrfToken(form){
+    if(!form) return null;
+    try {
+      const response = await fetch(cacheBust(window.location.href), {
+        headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      });
+      if(!response.ok) return null;
+      const html = await response.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      let sourceForm = null;
+      if(form.id){
+        sourceForm = doc.getElementById(form.id);
+      }
+      if(!sourceForm){
+        const currentAction = form.getAttribute('action') || '';
+        sourceForm = Array.from(doc.querySelectorAll('form')).find(candidate => {
+          return (candidate.getAttribute('action') || '') === currentAction;
+        }) || null;
+      }
+      if(!sourceForm) return null;
+
+      const freshToken = sourceForm.querySelector('input[name="csrf_token"]')?.value;
+      if(!freshToken) return null;
+
+      let tokenInput = form.querySelector('input[name="csrf_token"]');
+      if(!tokenInput){
+        tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'csrf_token';
+        form.prepend(tokenInput);
+      }
+      tokenInput.value = freshToken;
+      return freshToken;
+    } catch (error) {
+      console.warn('Nao foi possivel renovar o token CSRF do formulario.', error);
+      return null;
+    }
+  }
+
   document.addEventListener('submit', async ev => {
     if (ev.defaultPrevented) return;
     const form = ev.target;
@@ -260,6 +310,26 @@
       if (resp) {
         try { json = await resp.json(); } catch(e) {}
       }
+
+      if (!offlineQueued && isCsrfFailure(resp, json)) {
+        const freshToken = await refreshFormCsrfToken(form);
+        if (freshToken) {
+          headers['X-CSRFToken'] = freshToken;
+          const retryResult = await window.fetchOrQueue(form.action, {
+            method: form.method || 'POST',
+            headers: headers,
+            body: new FormData(form),
+            timeout: fetchTimeout,
+          });
+          resp = retryResult ? retryResult.response : null;
+          offlineQueued = Boolean(retryResult && retryResult.queued);
+          json = null;
+          if (resp) {
+            try { json = await resp.json(); } catch(e) {}
+          }
+        }
+      }
+
       const mainMessage = json && json.message ? json.message : undefined;
       const category = json && json.category
         ? json.category

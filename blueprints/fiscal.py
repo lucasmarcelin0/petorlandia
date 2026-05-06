@@ -22,6 +22,11 @@ def get_blueprint():
         methods=["GET"],
     )
     bp.add_url_rule(
+        "/fiscal/nfse/manual",
+        view_func=lazy_view("fiscal_nfse_manual"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/fiscal/documents/<int:document_id>",
         view_func=lazy_view("fiscal_document_detail"),
         methods=["GET"],

@@ -327,14 +327,24 @@ def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, 
     merged = dict(payload or {})
     tomador = merged.get("tomador") or _load_json_payload(issue.tomador)
     prestador = merged.get("prestador") or _load_json_payload(issue.prestador)
+    clinic = issue.clinica
     valor_total = merged.get("valor_total")
     if valor_total is None:
         valor_total = issue.valor_total or Decimal("0.00")
+    codigo_servico = (
+        merged.get("codigo_servico")
+        or (merged.get("servico") or {}).get("item_lista")
+        or getattr(clinic, "codigo_servico", None)
+        or "0000"
+    )
     servico = merged.get("servico") or {
         "descricao": merged.get("descricao") or "Atendimento veterinario",
         "valor": valor_total,
-        "item_lista": merged.get("codigo_servico") or "0000",
+        "item_lista": codigo_servico,
     }
+    servico.setdefault("item_lista", codigo_servico)
+    servico.setdefault("valor", valor_total)
+    servico.setdefault("aliquota_iss", getattr(clinic, "aliquota_iss", None))
     rps_payload = dict(merged.get("rps") or {})
     rps_payload.setdefault("serie", issue.serie or merged.get("serie") or "1")
     if issue.data_emissao:
@@ -354,6 +364,12 @@ def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, 
             "servico": servico,
             "valor_total": valor_total,
             "rps": rps_payload,
+            "municipio_nfse": getattr(clinic, "municipio_nfse", None),
+            "municipio_ibge": "3106200" if _normalize_municipio(getattr(clinic, "municipio_nfse", "") or "") == "belo_horizonte" else merged.get("municipio_ibge"),
+            "codigo_servico": codigo_servico,
+            "aliquota_iss": getattr(clinic, "aliquota_iss", None),
+            "regime_tributario": getattr(clinic, "regime_tributario", None),
+            "cnae": getattr(clinic, "cnae", None),
         }
     )
     return _json_ready(merged)
@@ -388,6 +404,10 @@ def _ensure_fiscal_document_for_issue(
         .first()
     )
     normalized_payload = _payload_from_issue(issue, payload)
+    normalized_payload.setdefault("municipio_nfse", municipio)
+    if _normalize_municipio(municipio) == "belo_horizonte":
+        normalized_payload.setdefault("provider", "nfse_nacional")
+        normalized_payload.setdefault("municipio_ibge", "3106200")
     series = str(
         normalized_payload.get("serie")
         or (normalized_payload.get("rps") or {}).get("serie")
@@ -434,7 +454,7 @@ def _legacy_status_from_document(status: FiscalDocumentStatus) -> str:
         FiscalDocumentStatus.QUEUED: "fila",
         FiscalDocumentStatus.SENDING: "processando",
         FiscalDocumentStatus.PROCESSING: "processando",
-        FiscalDocumentStatus.AUTHORIZED: "emitida",
+        FiscalDocumentStatus.AUTHORIZED: "autorizado",
         FiscalDocumentStatus.REJECTED: "erro",
         FiscalDocumentStatus.FAILED: "erro",
         FiscalDocumentStatus.CANCELED: "cancelada",

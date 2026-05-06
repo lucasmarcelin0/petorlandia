@@ -163,3 +163,33 @@ class Config:
         "consultar_nfse_por_rps": os.environ.get("NFSE_BETHA_WSDL_CONSULTAR_NFSE_POR_RPS", ""),
         "cancelar_nfse": os.environ.get("NFSE_BETHA_WSDL_CANCELAR_NFSE", ""),
     }
+
+    NFSE_NACIONAL_API = {
+        "environment": os.environ.get("NFSE_NACIONAL_ENV", "producao_restrita"),
+        "base_url": os.environ.get(
+            "NFSE_NACIONAL_BASE_URL",
+            "https://sefin.producaorestrita.nfse.gov.br/SefinNacional",
+        ),
+        "production_base_url": os.environ.get(
+            "NFSE_NACIONAL_PRODUCTION_BASE_URL",
+            "https://sefin.nfse.gov.br/SefinNacional",
+        ),
+        "timeout": int(os.environ.get("NFSE_NACIONAL_TIMEOUT", "30")),
+        "nfse_path": os.environ.get("NFSE_NACIONAL_NFSE_PATH", "/nfse"),
+        "dps_path": os.environ.get("NFSE_NACIONAL_DPS_PATH", "/dps/{id}"),
+        "eventos_path": os.environ.get(
+            "NFSE_NACIONAL_EVENTOS_PATH",
+            "/nfse/{chave_acesso}/eventos",
+        ),
+    }
+
+    NFSE_NACIONAL_XML = {
+        "ambiente": os.environ.get("NFSE_NACIONAL_AMBIENTE", "2"),
+        "versao": os.environ.get("NFSE_NACIONAL_VERSAO", "1.01"),
+        "ver_aplic": os.environ.get("NFSE_NACIONAL_VER_APLIC", "Petorlandia-1.0"),
+        "signature_algorithm": os.environ.get(
+            "NFSE_NACIONAL_SIGNATURE_ALGORITHM",
+            "rsa-sha1",
+        ),
+        "digest_algorithm": os.environ.get("NFSE_NACIONAL_DIGEST_ALGORITHM", "sha1"),
+    }
