@@ -7,7 +7,12 @@
       return window.FormFeedback.getButton(form);
     }
     if(!form) return null;
-    return form.querySelector('button[type="submit"], button:not([type])');
+    const inFormButton = form.querySelector('button[type="submit"], button:not([type])');
+    if(inFormButton || !form.id) return inFormButton;
+    const escapedId = window.CSS && typeof window.CSS.escape === 'function'
+      ? window.CSS.escape(form.id)
+      : String(form.id).replace(/"/g, '\\"');
+    return document.querySelector(`button[form="${escapedId}"][type="submit"], button[form="${escapedId}"]:not([type])`);
   }
 
   function setFeedbackLoading(button, options = {}) {

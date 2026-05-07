@@ -76,7 +76,7 @@
     <label for="suspeita-clinica" class="form-label fw-bold">
       <i class="bi bi-search-heart"></i> Suspeita ClÃ­nica / HipÃ³tese DiagnÃ³stica
     </label>
-    <input id="suspeita-clinica" name="suspeita_clinica" class="form-control"
+    <input id="suspeita-clinica" name="suspeita_clinica" class="form-control" form="consulta-form"
       placeholder="Ex: gastroenterite, dermatite alÃ©rgica, suspeita respiratÃ³ria..."
       value="{{ consulta.suspeita_clinica or '' }}">
     <div class="form-text">
@@ -92,10 +92,12 @@
       placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
   </div>
 
-  {% include 'partials/clinical_suggestions_panel.html' %}
+</form>
+
+{% include 'partials/clinical_suggestions_panel.html' %}
 
   <div class="d-flex justify-content-between mt-4">
-    <button type="submit" class="btn btn-primary">
+    <button type="submit" class="btn btn-primary" form="consulta-form">
       {% if edit_mode %}
       <i class="bi bi-save2"></i> Salvar Alterações
       {% else %}
@@ -109,7 +111,6 @@
     </a>
     {% endif %}
   </div>
-</form>
 {% if consulta %}
 <div class="d-flex flex-wrap gap-2 mt-3">
   {% if consulta.appointment %}
