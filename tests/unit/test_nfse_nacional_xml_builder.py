@@ -24,6 +24,8 @@ def test_build_dps_xml_para_bh_com_dados_do_pix():
         },
         "servico": {
             "item_lista": "05.09",
+            "cTribMun": "7500100",
+            "cNBS": "114059000",
             "descricao": "Exames de ultrassonografia",
             "valor": "170.00",
             "aliquota_iss": "3.00",
@@ -44,6 +46,8 @@ def test_build_dps_xml_para_bh_com_dados_do_pix():
     assert root.findtext(".//n:cLocEmi", namespaces=ns) == "3106200"
     assert root.findtext(".//n:dCompet", namespaces=ns) == "2026-05-05"
     assert root.findtext(".//n:cTribNac", namespaces=ns) == "050900"
+    assert root.findtext(".//n:cTribMun", namespaces=ns) == "7500100"
+    assert root.findtext(".//n:cNBS", namespaces=ns) == "114059000"
     assert root.findtext(".//n:xDescServ", namespaces=ns) == "Exames de ultrassonografia"
     assert root.findtext(".//n:vServ", namespaces=ns) == "170.00"
     assert root.findtext(".//n:opSimpNac", namespaces=ns) == "3"

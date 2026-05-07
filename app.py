@@ -129,6 +129,9 @@ from services.nfse_queue import (
 from services.nfse_service import _normalize_municipio
 from services.fiscal.certificate import parse_pfx
 from services.fiscal.nfse_service import (
+    NFSE_NACIONAL_MUNICIPIO_IBGE,
+    NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY,
+    VETERINARY_NFSE_SERVICE_DEFAULTS,
     build_nfse_payload_from_appointment,
     cancel_nfse_document,
     create_manual_nfse_document,
@@ -1843,6 +1846,19 @@ def _only_digits(value: str | None) -> str:
     return re.sub(r"\D+", "", value or "")
 
 
+def _manual_nfse_service_defaults(clinic) -> dict:
+    if not clinic:
+        return {}
+    cnae_digits = _only_digits(str(get_clinica_field(clinic, "cnae", "") or ""))
+    service_digits = _only_digits(str(get_clinica_field(clinic, "codigo_servico", "") or ""))
+    if (
+        cnae_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"]
+        or service_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"]
+    ):
+        return dict(VETERINARY_NFSE_SERVICE_DEFAULTS)
+    return {}
+
+
 def _recent_nfse_tomadores(clinic_id: int) -> list[dict]:
     seen: dict[str, dict] = {}
     documents = (
@@ -1875,6 +1891,7 @@ def _recent_nfse_tomadores(clinic_id: int) -> list[dict]:
 
 def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
     clinic = emitter.clinic
+    service_defaults = _manual_nfse_service_defaults(clinic)
     tomador_nome = (form.get("tomador_nome") or "").strip()
     tomador_documento = _only_digits(form.get("tomador_documento"))
     if not tomador_nome:
@@ -1901,22 +1918,39 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
     codigo_servico = (
         form.get("codigo_servico")
         or get_clinica_field(clinic, "codigo_servico", "")
+        or service_defaults.get("codigo_servico")
         or ""
     ).strip()
     if not codigo_servico:
-        raise ValueError("Informe o codigo de servico liberado para a PBH/NFS-e.")
+        raise ValueError("Informe o codigo de servico liberado para a NFS-e.")
 
     aliquota_iss = (
         form.get("aliquota_iss")
         or get_clinica_field(clinic, "aliquota_iss", "")
         or ""
     )
-    descricao = (form.get("descricao") or "Exames de ultrassonografia").strip()
+    codigo_tributacao_municipal = (
+        form.get("codigo_tributacao_municipal")
+        or service_defaults.get("codigo_tributacao_municipal")
+        or ""
+    ).strip()
+    codigo_nbs = (
+        form.get("codigo_nbs")
+        or service_defaults.get("codigo_nbs")
+        or ""
+    ).strip()
+    descricao = (
+        form.get("descricao")
+        or service_defaults.get("descricao")
+        or "Atendimento veterinario"
+    ).strip()
     municipio_nfse = get_clinica_field(clinic, "municipio_nfse", "") or ""
-    municipio_ibge = emitter.municipio_ibge or ("3106200" if _normalize_municipio(municipio_nfse) == "belo_horizonte" else None)
+    municipio_key = _normalize_municipio(municipio_nfse) if municipio_nfse else ""
+    municipio_ibge = emitter.municipio_ibge or NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY.get(municipio_key)
+    is_nacional = municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY or municipio_ibge in NFSE_NACIONAL_MUNICIPIO_IBGE
 
     payload = {
-        "provider": "nfse_nacional" if municipio_ibge == "3106200" else None,
+        "provider": "nfse_nacional" if is_nacional else None,
         "municipio_nfse": municipio_nfse,
         "municipio_ibge": municipio_ibge,
         "data_competencia": data_competencia,
@@ -1938,6 +1972,9 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
         },
         "servico": {
             "item_lista": codigo_servico,
+            "cTribNac": codigo_servico,
+            "cTribMun": codigo_tributacao_municipal or None,
+            "cNBS": codigo_nbs or None,
             "descricao": descricao,
             "valor": str(valor_total),
             "aliquota_iss": str(aliquota_iss) if aliquota_iss not in (None, "") else None,
@@ -1947,6 +1984,25 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
         },
     }
     return payload
+
+
+def _emitter_has_active_certificate(emitter: FiscalEmitter | None) -> bool:
+    if not emitter:
+        return False
+    certificate = (
+        FiscalCertificate.query
+        .filter_by(emitter_id=emitter.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .first()
+    )
+    if not certificate:
+        return False
+    if not certificate.valid_to:
+        return True
+    valid_to = certificate.valid_to
+    if valid_to.tzinfo is None:
+        valid_to = valid_to.replace(tzinfo=timezone.utc)
+    return valid_to >= datetime.now(timezone.utc)
 
 
 @login_required
@@ -1993,17 +2049,24 @@ def fiscal_documents():
     documents = query.order_by(FiscalDocument.created_at.desc()).all()
     emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
     clinic = emitter.clinic if emitter else None
+    service_defaults = _manual_nfse_service_defaults(clinic)
+    certificate_ready = _emitter_has_active_certificate(emitter)
     manual_defaults = {
-        "descricao": "Exames de ultrassonografia",
+        "descricao": service_defaults.get("descricao", "Atendimento veterinario"),
         "data_competencia": date.today().isoformat(),
-        "codigo_servico": get_clinica_field(clinic, "codigo_servico", "") if clinic else "",
+        "codigo_servico": (
+            get_clinica_field(clinic, "codigo_servico", "") if clinic else ""
+        ) or service_defaults.get("codigo_servico", ""),
         "aliquota_iss": get_clinica_field(clinic, "aliquota_iss", "") if clinic else "",
+        "codigo_tributacao_municipal": service_defaults.get("codigo_tributacao_municipal", ""),
+        "codigo_nbs": service_defaults.get("codigo_nbs", ""),
     }
 
     return render_template(
         "fiscal_documents.html",
         documents=documents,
         emitter=emitter,
+        certificate_ready=certificate_ready,
         recent_tomadores=_recent_nfse_tomadores(clinic_id),
         manual_defaults=manual_defaults,
         doc_type=doc_type or "",
@@ -2032,7 +2095,19 @@ def fiscal_nfse_manual():
 
     try:
         payload = _manual_nfse_payload_from_form(request.form, emitter)
-        document = create_manual_nfse_document(emitter.id, payload)
+        certificate_ready = _emitter_has_active_certificate(emitter)
+        document = create_manual_nfse_document(
+            emitter.id,
+            payload,
+            initial_status=(
+                FiscalDocumentStatus.QUEUED
+                if certificate_ready
+                else FiscalDocumentStatus.DRAFT
+            ),
+        )
+        if not certificate_ready:
+            flash("NFS-e criada como rascunho. Envie o certificado fiscal A1 antes de emitir.", "warning")
+            return redirect(url_for("fiscal_document_detail", document_id=document.id))
         try:
             queue_emit_nfse(document.id, clinic_id=clinic_id)
         except Exception:  # noqa: BLE001
@@ -2079,6 +2154,26 @@ def fiscal_document_detail(document_id: int):
         events=events,
         payload_pretty=payload_pretty,
     )
+
+
+@login_required
+def fiscal_document_emit(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    if not _emitter_has_active_certificate(document.emitter):
+        flash("Envie o certificado fiscal A1 antes de emitir esta NFS-e.", "warning")
+        return redirect(url_for("fiscal_document_detail", document_id=document.id))
+    try:
+        queue_emit_nfse(document.id, clinic_id=clinic_id)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Falha ao enviar NFS-e para a fila.")
+        flash("Nao foi possivel iniciar a emissao agora. Tente novamente em instantes.", "warning")
+        return redirect(url_for("fiscal_document_detail", document_id=document.id))
+    flash("NFS-e enviada para emissao.", "success")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
 
 
 @login_required
@@ -6255,6 +6350,11 @@ def _nfse_required_fields_by_municipio() -> dict[str, list[str]]:
             "codigo_servico",
             "aliquota_iss",
         ],
+        "contagem": [
+            "regime_tributario",
+            "cnae",
+            "codigo_servico",
+        ],
     }
 
 
@@ -6287,7 +6387,7 @@ def _nfse_missing_fields(clinic: Clinica) -> tuple[list[str], str]:
 def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
     certificate_required = (
-        municipio_key == "belo_horizonte"
+        municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
         or "nfse_cert_path" in required_fields
         or "nfse_cert_password" in required_fields
     )
@@ -6311,8 +6411,8 @@ def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool,
 
 
 def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
-    if municipio_key == "belo_horizonte":
-        return True, "PBH integrada pela API da NFS-e Nacional com DPS assinada por certificado A1."
+    if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY:
+        return True, "Municipio integrado pela API da NFS-e Nacional com DPS assinada por certificado A1."
     if municipio_key != "orlandia":
         return True, "Não se aplica ao município."
     if get_clinica_field(clinic, "fiscal_ready", False):
@@ -6541,6 +6641,7 @@ def contabilidade_nfse():
         {"value": "", "label": "Selecione um município"},
         {"value": "orlandia", "label": "Orlândia (SP)"},
         {"value": "belo_horizonte", "label": "Belo Horizonte (MG)"},
+        {"value": "contagem", "label": "Contagem (MG)"},
     ]
 
     def _nfse_setup_resources(municipio_key: str):
@@ -6575,6 +6676,31 @@ def contabilidade_nfse():
                 ],
                 "field_hints": {
                     "municipio_ibge": "3106200",
+                    "uf": "MG",
+                },
+            }
+        if municipio_key == "contagem":
+            return {
+                "wizard_url": url_for("fiscal_onboarding_step", step=1),
+                "links": [
+                    {
+                        "title": "Contagem - Receita Municipal",
+                        "description": "Portal oficial da Secretaria Municipal de Fazenda para NFS-e e webservices.",
+                        "url": "https://fazenda.contagem.mg.gov.br/nfe/",
+                    },
+                    {
+                        "title": "Emissor webservice de Contagem",
+                        "description": "Ambiente de producao informado pela prefeitura para a nova solucao de NFS-e.",
+                        "url": "https://nfse-contagem.cidade360.cloud",
+                    },
+                    {
+                        "title": "Documentacao tecnica nacional",
+                        "description": "Leiautes, schemas e manuais do padrao nacional da NFS-e.",
+                        "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+                    },
+                ],
+                "field_hints": {
+                    "municipio_ibge": "3118601",
                     "uf": "MG",
                 },
             }
@@ -6865,8 +6991,8 @@ def contabilidade_nfse_preview():
             else "Faltam informações obrigatórias.",
         },
         {
-            "label": "Comunicação PBH/NFS-e Nacional disponível"
-            if municipio_key == "belo_horizonte"
+            "label": "Comunicacao NFS-e Nacional disponivel"
+            if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
             else "Comunicação Betha disponível",
             "ok": betha_ok,
             "detail": betha_msg,
@@ -6886,8 +7012,8 @@ def contabilidade_nfse_preview():
         blocking_errors.append("Certificado fiscal inválido ou ausente. Atualize o certificado antes de emitir.")
     if not betha_ok:
         blocking_errors.append(
-            "Teste de comunicação com a PBH/NFS-e Nacional pendente."
-            if municipio_key == "belo_horizonte"
+            "Teste de comunicacao com a NFS-e Nacional pendente."
+            if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
             else "Teste de comunicação com a Betha pendente. Finalize o wizard fiscal."
         )
 

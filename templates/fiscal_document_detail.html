@@ -4,7 +4,7 @@
 <title>Detalhe do Documento Fiscal</title>
 {% endblock %}
 
-{% block content %}
+{% block main %}
 <div class="container mt-4">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
@@ -42,10 +42,13 @@
       {% endif %}
     </div>
     <div class="d-flex gap-2">
-      {% if status_value in ['FAILED', 'REJECTED'] %}
-      <button class="btn btn-outline-primary" type="button" disabled title="Reemissão disponível em breve">
-        Reemitir
-      </button>
+      {% if status_value in ['DRAFT', 'FAILED', 'REJECTED'] %}
+      <form method="post" action="{{ url_for('fiscal_document_emit', document_id=document.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-primary" type="submit">
+          {{ 'Emitir' if status_value == 'DRAFT' else 'Reemitir' }}
+        </button>
+      </form>
       {% endif %}
       {% if status_value == 'AUTHORIZED' %}
       <form method="post" action="{{ url_for('fiscal_document_cancel', document_id=document.id) }}">

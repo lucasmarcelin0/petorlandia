@@ -42,6 +42,21 @@ from services.fiscal.numbering import NumberingReservationError, reserve_next_nu
 from time_utils import now_in_brazil
 
 
+NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY = {
+    "belo_horizonte": "3106200",
+    "contagem": "3118601",
+}
+NFSE_NACIONAL_MUNICIPIO_IBGE = set(NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY.values())
+NFSE_NACIONAL_MUNICIPIO_KEYS = set(NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY)
+
+VETERINARY_NFSE_SERVICE_DEFAULTS = {
+    "codigo_servico": "050101",
+    "codigo_tributacao_municipal": "7500100",
+    "codigo_nbs": "114059000",
+    "descricao": "SERVICOS VETERINARIOS",
+}
+
+
 class FiscalXmlParseError(ValueError):
     """Raised when an external fiscal XML response cannot be parsed safely."""
 
@@ -82,6 +97,7 @@ def create_nfse_document(
 def create_manual_nfse_document(
     emitter_id: int,
     payload: dict[str, Any],
+    initial_status: FiscalDocumentStatus = FiscalDocumentStatus.QUEUED,
 ) -> FiscalDocument:
     emitter = db.session.get(FiscalEmitter, emitter_id)
     if not emitter:
@@ -100,7 +116,7 @@ def create_manual_nfse_document(
         emitter_id=emitter.id,
         clinic_id=emitter.clinic_id,
         doc_type=FiscalDocumentType.NFSE,
-        status=FiscalDocumentStatus.QUEUED,
+        status=initial_status,
         series=series,
         number=number,
         payload_json=payload,
@@ -111,7 +127,10 @@ def create_manual_nfse_document(
     )
     db.session.add(document)
     db.session.flush()
-    _log_event(document, "queued", FiscalDocumentStatus.QUEUED.value)
+    if initial_status == FiscalDocumentStatus.DRAFT:
+        _log_event(document, "draft", FiscalDocumentStatus.DRAFT.value)
+    else:
+        _log_event(document, "queued", initial_status.value)
     db.session.commit()
     return document
 
@@ -492,7 +511,12 @@ def _normalize_payload(document: FiscalDocument, emitter: FiscalEmitter) -> dict
         if not payload["prestador"].get("endereco"):
             payload["prestador"]["endereco"] = _clinic_address_payload(clinic, emitter)
 
+    service_defaults = _service_defaults_for_emitter(emitter)
     payload.setdefault("servico", {})
+    for key, value in service_defaults.items():
+        payload["servico"].setdefault(key, value)
+    if service_defaults.get("codigo_servico"):
+        payload.setdefault("codigo_servico", service_defaults["codigo_servico"])
     service_code = payload.get("codigo_servico")
     if service_code and payload["servico"].get("item_lista") in (None, "", "0000"):
         payload["servico"]["item_lista"] = service_code
@@ -518,6 +542,19 @@ def _clinic_address_payload(clinic: Any, emitter: FiscalEmitter) -> dict[str, An
     }
 
 
+def _digits(value: Any) -> str:
+    return re.sub(r"\D+", "", str(value or ""))
+
+
+def _service_defaults_for_emitter(emitter: FiscalEmitter | None) -> dict[str, str]:
+    clinic = emitter.clinic if emitter else None
+    cnae_digits = _digits(getattr(clinic, "cnae", None))
+    codigo_servico = _digits(getattr(clinic, "codigo_servico", None))
+    if cnae_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"] or codigo_servico == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"]:
+        return dict(VETERINARY_NFSE_SERVICE_DEFAULTS)
+    return {}
+
+
 def _normalize_provider_text(value: Any) -> str:
     text = str(value or "").strip().lower()
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
@@ -529,11 +566,18 @@ def _is_nacional_nfse(emitter: FiscalEmitter, payload: dict[str, Any] | None = N
     provider = _normalize_provider_text(payload.get("provider") or payload.get("provedor_nfse"))
     municipio_nfse = _normalize_provider_text(payload.get("municipio_nfse") or "")
     municipio_ibge = re.sub(r"\D+", "", str(payload.get("municipio_ibge") or emitter.municipio_ibge or ""))
-    if provider in {"nacional", "nfse_nacional", "pbh", "belo_horizonte"}:
+    if provider in {"nacional", "nfse_nacional", "pbh", "belo_horizonte", "contagem"}:
         return True
-    if municipio_ibge == "3106200":
+    if municipio_ibge in NFSE_NACIONAL_MUNICIPIO_IBGE:
         return True
-    return municipio_nfse in {"bh", "pbh", "belo_horizonte", "belo_horizonte_mg"}
+    return municipio_nfse in {
+        "bh",
+        "pbh",
+        "belo_horizonte",
+        "belo_horizonte_mg",
+        "contagem",
+        "contagem_mg",
+    }
 
 
 def _nacional_xml_options() -> dict[str, str]:

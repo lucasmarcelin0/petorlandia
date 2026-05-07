@@ -32,6 +32,8 @@ from models import (
 )
 from security.crypto import MissingMasterKeyError, decrypt_text, encrypt_text_for_clinic
 from services.fiscal.nfse_service import (
+    NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY,
+    VETERINARY_NFSE_SERVICE_DEFAULTS,
     cancel_nfse_document,
     emit_nfse_sync,
     poll_nfse,
@@ -168,6 +170,7 @@ class NfseService:
     ) -> None:
         self.adapters = adapters or {
             "belo_horizonte": BeloHorizonteAdapter(),
+            "contagem": ContagemAdapter(),
             "orlandia": OrlandiaAdapter(),
         }
         config = None
@@ -280,6 +283,10 @@ class BeloHorizonteAdapter(NfseAdapterBase):
         return self._run_fiscal_document_operation(issue, payload, "consultar_lote")
 
 
+class ContagemAdapter(BeloHorizonteAdapter):
+    municipio = "contagem"
+
+
 class OrlandiaAdapter(NfseAdapterBase):
     municipio = "orlandia"
 
@@ -306,6 +313,8 @@ def _normalize_municipio(municipio: str) -> str:
     normalized = " ".join(normalized.split())
     if normalized in {"bh", "belo horizonte", "belo horizonte mg", "belo horizonte/mg"}:
         return "belo_horizonte"
+    if normalized in {"contagem", "contagem mg", "contagem/mg"}:
+        return "contagem"
     if normalized in {"orlandia", "orlandia sp", "orlandia/sp"}:
         return "orlandia"
     return normalized.replace(" ", "_")
@@ -342,6 +351,16 @@ def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, 
         "valor": valor_total,
         "item_lista": codigo_servico,
     }
+    cnae_digits = re.sub(r"\D+", "", str(getattr(clinic, "cnae", None) or ""))
+    codigo_servico_digits = re.sub(r"\D+", "", str(codigo_servico or ""))
+    if (
+        cnae_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"]
+        or codigo_servico_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"]
+    ):
+        servico.setdefault("descricao", VETERINARY_NFSE_SERVICE_DEFAULTS["descricao"])
+        servico.setdefault("cTribNac", VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"])
+        servico.setdefault("cTribMun", VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"])
+        servico.setdefault("cNBS", VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_nbs"])
     servico.setdefault("item_lista", codigo_servico)
     servico.setdefault("valor", valor_total)
     servico.setdefault("aliquota_iss", getattr(clinic, "aliquota_iss", None))
@@ -365,7 +384,10 @@ def _payload_from_issue(issue: NfseIssue, payload: Dict[str, Any]) -> dict[str, 
             "valor_total": valor_total,
             "rps": rps_payload,
             "municipio_nfse": getattr(clinic, "municipio_nfse", None),
-            "municipio_ibge": "3106200" if _normalize_municipio(getattr(clinic, "municipio_nfse", "") or "") == "belo_horizonte" else merged.get("municipio_ibge"),
+            "municipio_ibge": NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY.get(
+                _normalize_municipio(getattr(clinic, "municipio_nfse", "") or ""),
+                merged.get("municipio_ibge"),
+            ),
             "codigo_servico": codigo_servico,
             "aliquota_iss": getattr(clinic, "aliquota_iss", None),
             "regime_tributario": getattr(clinic, "regime_tributario", None),
@@ -405,9 +427,10 @@ def _ensure_fiscal_document_for_issue(
     )
     normalized_payload = _payload_from_issue(issue, payload)
     normalized_payload.setdefault("municipio_nfse", municipio)
-    if _normalize_municipio(municipio) == "belo_horizonte":
+    municipio_key = _normalize_municipio(municipio)
+    if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY:
         normalized_payload.setdefault("provider", "nfse_nacional")
-        normalized_payload.setdefault("municipio_ibge", "3106200")
+        normalized_payload.setdefault("municipio_ibge", NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY[municipio_key])
     series = str(
         normalized_payload.get("serie")
         or (normalized_payload.get("rps") or {}).get("serie")

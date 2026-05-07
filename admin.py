@@ -225,6 +225,8 @@ def _normalize_municipio(municipio: str) -> str:
     normalized = " ".join(normalized.split())
     if normalized in {"bh", "belo horizonte", "belo horizonte mg", "belo horizonte/mg"}:
         return "belo_horizonte"
+    if normalized in {"contagem", "contagem mg", "contagem/mg"}:
+        return "contagem"
     if normalized in {"orlandia", "orlandia sp", "orlandia/sp"}:
         return "orlandia"
     return normalized.replace(" ", "_")
@@ -242,6 +244,7 @@ class ContabilidadeConfigForm(FlaskForm):
             ("", "Selecione um município"),
             ("orlandia", "Orlândia (SP)"),
             ("belo_horizonte", "Belo Horizonte (MG)"),
+            ("contagem", "Contagem (MG)"),
         ],
         validators=[validators.DataRequired(message="Informe o município da NFS-e.")],
     )
@@ -329,6 +332,18 @@ class ContabilidadeConfigForm(FlaskForm):
                 ],
                 "formats": {
                     "inscricao_municipal": r"^\d{1,15}$",
+                    "cnae": r"^(\d{7}|\d{4}-?\d/\d{2})$",
+                    "codigo_servico": r"^\d{4,6}$",
+                },
+            },
+            "contagem": {
+                "label": "Contagem (MG)",
+                "required": [
+                    "regime_tributario",
+                    "cnae",
+                    "codigo_servico",
+                ],
+                "formats": {
                     "cnae": r"^(\d{7}|\d{4}-?\d/\d{2})$",
                     "codigo_servico": r"^\d{4,6}$",
                 },
