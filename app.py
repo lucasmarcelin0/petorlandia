@@ -1673,6 +1673,11 @@ from services import (
     update_financial_snapshots_daily,
 )
 from services.geocode_queue import AddressGeocodeQueue
+from authz import (
+    can_manage_budget,
+    can_view_budget,
+    can_view_clinic,
+)
 from services.finance import (
     build_accounting_dashboard,
     build_cash_flow_report,
@@ -2625,14 +2630,10 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
 
 
 def ensure_clinic_access(clinica_id):
-    """Abort with 404 if the current user cannot access the given clinic."""
-    if not clinica_id:
-        return
-    if not current_user.is_authenticated:
+    """Abort with 404 if the current user cannot view the given clinic."""
+    if not clinica_id or not current_user.is_authenticated:
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
-        return
-    if clinica_id not in _viewer_operational_clinic_ids(current_user):
+    if not can_view_clinic(current_user, clinica_id):
         abort(404)
 
 
@@ -26672,7 +26673,8 @@ def imprimir_bloco_orcamento(bloco_id):
 @login_required
 def imprimir_orcamento_padrao(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    ensure_clinic_access(orcamento.clinica_id)
+    if not can_view_budget(current_user, orcamento.clinica_id, orcamento.consulta_id):
+        abort(404)
     return render_template(
         'orcamentos/imprimir_orcamento_padrao.html',
         itens=orcamento.items,
@@ -26801,7 +26803,8 @@ def pagar_orcamento(bloco_id):
 @login_required
 def gerar_link_pagamento_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    ensure_clinic_access(orcamento.clinica_id)
+    if not can_manage_budget(current_user, orcamento.clinica_id, orcamento.consulta_id):
+        abort(404)
     if not orcamento.items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
 
@@ -26915,7 +26918,8 @@ def adicionar_orcamento_item(consulta_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id, consulta.id):
+        abort(404)
     if consulta.clinica_id and consulta.clinica_id != clinic_id:
         return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
     if not consulta.clinica_id:
@@ -26988,7 +26992,8 @@ def deletar_orcamento_item(item_id):
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
-    ensure_clinic_access(consulta.clinica_id)
+    if not can_manage_budget(current_user, consulta.clinica_id, consulta.id):
+        abort(404)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200
@@ -27006,7 +27011,8 @@ def salvar_bloco_orcamento(consulta_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id, consulta.id):
+        abort(404)
     if consulta.clinica_id and consulta.clinica_id != clinic_id:
         return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
     if not consulta.clinica_id:
@@ -27067,8 +27073,8 @@ def historico_orcamentos_partial(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     clinic_id = consulta.clinica_id or current_user_clinic_id() or getattr(consulta.animal, 'clinica_id', None)
 
-    if clinic_id:
-        ensure_clinic_access(clinic_id)
+    if clinic_id and not can_view_budget(current_user, clinic_id, consulta.id):
+        abort(404)
 
     historico_html = _render_orcamento_history(consulta.animal, clinic_id)
     return jsonify({'success': True, 'html': historico_html})
@@ -27078,7 +27084,8 @@ def historico_orcamentos_partial(consulta_id):
 @login_required
 def deletar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id
@@ -27099,7 +27106,8 @@ def deletar_bloco_orcamento(bloco_id):
 @login_required
 def editar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
     return render_template('orcamentos/editar_bloco_orcamento.html', bloco=bloco)
@@ -27109,7 +27117,8 @@ def editar_bloco_orcamento(bloco_id):
 @login_required
 def atualizar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
@@ -27117,7 +27126,8 @@ def atualizar_bloco_orcamento(bloco_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id):
+        abort(404)
     if clinic_id != bloco.clinica_id:
         abort(404)
     itens = data.get('itens', [])
