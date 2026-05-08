@@ -124,3 +124,19 @@
 |baixa|outros|usuário|`app.py:19367`|`app.route('/importar_medicamentos')`|`-`|-|-|login + autorização objeto|parcial|Sem login_required explícito;Sem checagem de autorização/ownership evidente;|
 |baixa|outros|usuário|`app.py:19470`|`app.route("/apresentacao_medicamento", methods=["POST"])`|`-`|-|json body|login + autorização objeto|parcial|Sem login_required explícito;Sem checagem de autorização/ownership evidente;|
 |baixa|outros|usuário|`app.py:19557`|`app.route("/buscar_apresentacoes")`|`-`|-|query|login + autorização objeto|parcial|Sem login_required explícito;Sem checagem de autorização/ownership evidente;|
+## Governança contínua de segurança de rotas
+
+### Security champions (revisão de rotas sensíveis)
+- Cada squad/área deve nomear pelo menos 1 security champion titular e 1 suplente.
+- PRs que alterem rotas sensíveis (dados clínicos, financeiros, PII, permissões admin ou integrações externas) exigem revisão de um security champion antes do merge.
+- O champion deve validar explicitamente autorização por objeto/tenant e risco de IDOR, com comentário no PR.
+
+### Cadência de vistorias
+- **Mensal**: vistoria dos endpoints críticos (alta criticidade na tabela deste documento), com amostragem de fluxos e validação de controles de autorização.
+- **Trimestral**: vistoria completa de rotas (alta, média e baixa), incluindo revalidação de exceções registradas e atualização da matriz de risco.
+- Os resultados devem ser registrados com data, escopo, responsáveis, gaps e plano de remediação.
+
+### Treinamento rápido do time (OWASP Top 10)
+- Realizar um treinamento curto recorrente para o time com foco em OWASP Top 10.
+- Dar ênfase em **Broken Access Control** (incluindo IDOR), com exemplos reais das rotas da aplicação e checklist de prevenção para PR.
+- Novos integrantes devem concluir o treinamento na integração inicial e reciclar trimestralmente.
