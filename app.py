@@ -14327,6 +14327,8 @@ def clinic_detail(clinica_id):
     from models import VetClinicInvite
 
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    if not _is_admin() and not is_owner:
+        abort(403)
     staff = None
     if current_user.is_authenticated:
         staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
