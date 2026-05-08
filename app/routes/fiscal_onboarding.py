@@ -9,7 +9,6 @@ from flask_login import current_user, login_required
 from extensions import db
 from helpers import has_veterinarian_profile
 from models import (
-    Clinica,
     FiscalCertificate,
     FiscalDocument,
     FiscalDocumentStatus,
@@ -21,6 +20,7 @@ from models import (
 )
 from security.crypto import encrypt_bytes, encrypt_text
 from services.fiscal.certificate import parse_pfx
+from authz import get_clinic_or_403
 
 
 FISCAL_UF_CODES = {
@@ -96,7 +96,9 @@ def fiscal_onboarding_step(step: int):
     if not clinic_id:
         abort(403)
 
-    clinic = Clinica.query.filter_by(id=clinic_id).first_or_404()
+    clinic = get_clinic_or_403(clinic_id, current_user)
+    if clinic is None:
+        abort(403)
     emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
     certificates = []
     if emitter:
