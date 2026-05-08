@@ -26752,8 +26752,10 @@ def pagar_orcamento(bloco_id):
     app_message_sent = False
     whatsapp_url = None
     message_content = (
-        f'Olá {tutor_name}! O link de pagamento do orçamento de {animal_name} já está disponível:\n'
-        f'{preference.payment_url}'
+        f'Olá, {tutor_name}.\n\n'
+        f'O orçamento de {animal_name} foi finalizado e o link de pagamento está disponível:\n'
+        f'{preference.payment_url}\n\n'
+        'Para concluir, acesse o link acima e siga as instruções de pagamento.'
     )
 
     if tutor_phone:
@@ -26787,7 +26789,6 @@ def pagar_orcamento(bloco_id):
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
-            'redirect_url': preference.payment_url,
             'whatsapp_url': whatsapp_url,
             'app_message_sent': app_message_sent,
             'payment_status': preference.payment_status,
