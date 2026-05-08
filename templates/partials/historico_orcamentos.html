@@ -108,7 +108,7 @@
           </a>
           {% endif %}
         {% endif %}
-        <button type="button" class="btn btn-outline-success btn-sm" onclick="enviarBlocoParaPagamento({{ bloco.id }})"><i class="fas fa-credit-card me-1"></i>Enviar para pagamento</button>
+        <button type="button" class="btn btn-outline-success btn-sm" data-pagamento-btn onclick="enviarBlocoParaPagamento({{ bloco.id }}, this)"><i class="fas fa-credit-card me-1"></i>Enviar para pagamento</button>
         {% if bloco.payment_link %}
         <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="fas fa-link me-1"></i>Link atual</a>
         {% endif %}
@@ -123,12 +123,21 @@
 
 <script>
 if (!window.enviarBlocoParaPagamento) {
-  window.enviarBlocoParaPagamento = async function enviarBlocoParaPagamento(blocoId) {
+  window.enviarBlocoParaPagamento = async function enviarBlocoParaPagamento(blocoId, buttonEl) {
     const historico = document.getElementById('historico-orcamentos');
+    const button = buttonEl && buttonEl.tagName ? buttonEl : null;
+    const originalButtonHtml = button ? button.innerHTML : null;
     try {
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+      }
       const resp = await fetch(`/pagar_orcamento/${blocoId}`, {
         method: 'POST',
-        headers: {'Accept': 'application/json'}
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() }}'
+        }
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
@@ -152,6 +161,11 @@ if (!window.enviarBlocoParaPagamento) {
         showToast('Erro ao comunicar com o servidor.', 'danger');
       }
       console.error(error);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = originalButtonHtml;
+      }
     }
   }
 }
