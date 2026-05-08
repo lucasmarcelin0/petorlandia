@@ -95,15 +95,7 @@ def veterinarian_with_clinic(app):
             clinica_id=clinic.id
         )
         
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime.utcnow() - timedelta(days=10),
-            trial_ends_at=datetime.utcnow() + timedelta(days=20),
-            paid_until=None
-        )
-        
         db.session.add(vet_profile)
-        db.session.add(membership)
         db.session.commit()
         
         return {
@@ -160,9 +152,18 @@ class TestTutorRegistrationAndLogin:
             'name': 'Carlos Teste',
             'email': 'carlos@teste.com',
             'password': 'senha@123',
+            'confirm_password': 'senha@123',
             'phone': '16988776655',
             'cpf': '987.654.321-00',
-            'date_of_birth': '1995-03-20'
+            'date_of_birth': '1995-03-20',
+            'cep': '14620-000',
+            'rua': 'Rua de Teste',
+            'numero': '123',
+            'bairro': 'Centro',
+            'cidade': 'Orlândia',
+            'estado': 'SP',
+            'latitude': '-20.720000',
+            'longitude': '-47.880000'
         }
         
         response = client.post('/register', data=data, follow_redirects=True)
@@ -174,6 +175,8 @@ class TestTutorRegistrationAndLogin:
             assert user is not None
             assert user.name == 'Carlos Teste'
             assert user.check_password('senha@123')
+            assert user.endereco is not None
+            assert user.endereco.rua == 'Rua de Teste'
     
     def test_login_flow(self, client, tutor, app):
         """Test complete login workflow."""
@@ -193,8 +196,13 @@ class TestTutorRegistrationAndLogin:
         
         assert response.status_code == 200
         
-        # Step 3: Verify redirection to dashboard/index
-        assert b'dashboard' in response.data.lower() or b'ola' in response.data.lower()
+        # Step 3: Verify the user stayed authenticated after the redirected page rendered.
+        with client.session_transaction() as sess:
+            assert sess.get('_user_id') == str(tutor)
+            assert sess.get('_fresh') is True
+
+        response_text = response.data.decode('utf-8', errors='ignore').lower()
+        assert 'bem-vindo' in response_text or email.lower() in response_text
     
     def test_password_reset_flow(self, client, tutor, app):
         """Test password reset request workflow."""
@@ -230,12 +238,16 @@ class TestAnimalManagement:
             'name': 'Rex',
             'species_id': species_and_breeds['dog_species_id'],
             'breed_id': species_and_breeds['labrador_id'],
-            'sex': 'macho',
+            'age': '4',
+            'age_unit': 'anos',
+            'sex': 'Macho',
             'date_of_birth': '2020-01-15',
-            'peso': 25.5,
             'description': 'Cachorro muito amigavel',
-            'microchip_number': '123456789',
-            'neutered': True
+            'modo': 'adotado',
+            'photo_rotation': '0',
+            'photo_zoom': '1.0',
+            'photo_offset_x': '0',
+            'photo_offset_y': '0',
         }
         
         response = client.post('/add-animal', data=data, follow_redirects=True)
@@ -246,8 +258,8 @@ class TestAnimalManagement:
             animal = Animal.query.filter_by(name='Rex', user_id=tutor).first()
             assert animal is not None
             assert animal.species_id == species_and_breeds['dog_species_id']
-            assert animal.peso == 25.5
-            assert animal.neutered is True
+            assert animal.age == '4 anos'
+            assert animal.modo == 'adotado'
     
     def test_edit_animal_workflow(self, client, tutor, species_and_breeds, app):
         """Test editing an existing animal."""
@@ -260,7 +272,7 @@ class TestAnimalManagement:
                 species_id=species_and_breeds['cat_species_id'],
                 breed_id=species_and_breeds['persian_id'],
                 user_id=tutor,
-                sex='femea',
+                sex='Fêmea',
                 peso=4.2
             )
             db.session.add(animal)
@@ -268,27 +280,33 @@ class TestAnimalManagement:
             animal_id = animal.id
         
         # Edit the animal
-        response = client.get(f'/editar-animal/{animal_id}')
+        response = client.get(f'/animal/{animal_id}/editar')
         assert response.status_code == 200
         
         update_data = {
             'name': 'Mimi Updated',
             'species_id': species_and_breeds['cat_species_id'],
             'breed_id': species_and_breeds['persian_id'],
-            'sex': 'femea',
-            'peso': 4.8,
-            'neutered': True
+            'age': '3',
+            'age_unit': 'anos',
+            'sex': 'Fêmea',
+            'description': 'Gata calma e sociavel',
+            'modo': 'adotado',
+            'photo_rotation': '0',
+            'photo_zoom': '1.0',
+            'photo_offset_x': '0',
+            'photo_offset_y': '0',
         }
         
-        response = client.post(f'/editar-animal/{animal_id}', data=update_data, follow_redirects=True)
+        response = client.post(f'/animal/{animal_id}/editar', data=update_data, follow_redirects=True)
         assert response.status_code == 200
         
         # Verify updates
         with app.app_context():
             updated_animal = Animal.query.get(animal_id)
             assert updated_animal.name == 'Mimi Updated'
-            assert updated_animal.peso == 4.8
-            assert updated_animal.neutered is True
+            assert updated_animal.age == '3 anos'
+            assert updated_animal.description == 'Gata calma e sociavel'
     
     def test_view_animal_medical_history(self, client, tutor, species_and_breeds, veterinarian_with_clinic, app):
         """Test viewing complete animal medical history (ficha)."""
@@ -313,7 +331,7 @@ class TestAnimalManagement:
                 queixa_principal="Check-up de rotina",
                 exame_fisico="Animal saudavel",
                 conduta="Manter cuidados",
-                status='completed',
+                status='finalizada',
                 finalizada_em=datetime.utcnow()
             )
             db.session.add(consulta)
@@ -342,6 +360,7 @@ class TestAnimalManagement:
                 animal_id=animal.id,
                 nome="V10",
                 aplicada_em=datetime.utcnow().date(),
+                aplicada=True,
                 aplicada_por="Dr. Joao"
             )
             db.session.add(vacina)
@@ -350,7 +369,7 @@ class TestAnimalManagement:
             animal_id = animal.id
         
         # View medical history
-        response = client.get(f'/ficha/{animal_id}')
+        response = client.get(f'/animal/{animal_id}/ficha')
         assert response.status_code == 200
         assert b'Bobby' in response.data
         assert b'Check-up de rotina' in response.data or b'consulta' in response.data.lower()
@@ -375,7 +394,7 @@ class TestAppointmentWorkflow:
             db.session.commit()
             animal_id = animal.id
         
-        # Schedule appointment
+        # Tutor users can see scheduling surfaces, but direct appointment creation is staff-only.
         appointment_data = {
             'animal_id': animal_id,
             'clinica_id': veterinarian_with_clinic['clinic_id'],
@@ -384,13 +403,16 @@ class TestAppointmentWorkflow:
             'observacoes': 'Check-up anual'
         }
         
-        response = client.post('/agendar', data=appointment_data, follow_redirects=True)
+        response = client.get(f'/veterinario/{veterinarian_with_clinic["vet_profile_id"]}')
+        assert response.status_code == 200
+
+        response = client.post('/appointments', data=appointment_data, follow_redirects=True)
         assert response.status_code == 200
         
         # Verify appointment was created
         with app.app_context():
             evento = AgendaEvento.query.filter_by(responsavel_id=veterinarian_with_clinic['vet_id']).first()
-            assert evento is not None or response.status_code == 200  # May have different implementation
+            assert evento is None
     
     def test_view_appointments(self, client, tutor, species_and_breeds, veterinarian_with_clinic, app):
         """Test viewing scheduled appointments."""
@@ -470,8 +492,10 @@ class TestFinancialWorkflow:
             bloco_id = bloco.id
         
         # View estimate
-        response = client.get(f'/bloco_orcamento/{bloco_id}')
-        assert response.status_code == 200 or response.status_code == 302  # May require different access
+        response = client.get(f'/imprimir_bloco_orcamento/{bloco_id}')
+        assert response.status_code == 200
+        assert b"Thor" in response.data
+        assert b"Consulta veterinaria" in response.data
         
         with app.app_context():
             bloco = BlocoOrcamento.query.get(bloco_id)
@@ -517,9 +541,9 @@ class TestMedicalRecordsAccess:
             bloco_id = bloco.id
         
         # Download prescription
-        response = client.get(f'/imprimir_bloco_prescricao/{bloco_id}')
-        # Should return PDF or HTML page
-        assert response.status_code == 200 or response.status_code == 302
+        response = client.get(f'/bloco_prescricao/{bloco_id}/imprimir')
+        assert response.status_code == 200
+        assert b"Medicacao Teste" in response.data
     
     def test_view_vaccination_history(self, client, tutor, species_and_breeds, app):
         """Test viewing vaccination history."""
@@ -541,18 +565,21 @@ class TestMedicalRecordsAccess:
                     animal_id=animal.id,
                     nome="V8",
                     aplicada_em=datetime.utcnow().date() - timedelta(days=365),
+                    aplicada=True,
                     aplicada_por="Dr. Silva"
                 ),
                 Vacina(
                     animal_id=animal.id,
                     nome="V10",
                     aplicada_em=datetime.utcnow().date() - timedelta(days=180),
+                    aplicada=True,
                     aplicada_por="Dr. Silva"
                 ),
                 Vacina(
                     animal_id=animal.id,
                     nome="Antirrabica",
                     aplicada_em=datetime.utcnow().date() - timedelta(days=90),
+                    aplicada=True,
                     aplicada_por="Dr. Silva"
                 )
             ]
@@ -562,10 +589,18 @@ class TestMedicalRecordsAccess:
             animal_id = animal.id
         
         # View animal details with vaccinations
-        response = client.get(f'/ficha/{animal_id}')
+        response = client.get(f'/animal/{animal_id}/ficha')
         assert response.status_code == 200
-        # Vaccinations should be listed
-        assert b'vacina' in response.data.lower() or b'vacinacao' in response.data.lower()
+
+        response = client.get(
+            f'/animal/{animal_id}/ficha?section=history',
+            headers={'Accept': 'application/json'},
+        )
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        assert 'V8' in payload['html']
+        assert 'Antirrabica' in payload['html']
 
 
 class TestProfileManagement:
@@ -647,7 +682,7 @@ class TestPerformance:
         
         import time
         start = time.time()
-        response = client.get('/meus-animais')
+        response = client.get('/animals')
         elapsed = time.time() - start
         
         # Should handle pagination

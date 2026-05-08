@@ -12,7 +12,7 @@
   <button onclick="window.print()">🖨️ Imprimir</button>
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
-  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
+  <a href="{{ return_url or url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
@@ -42,7 +42,7 @@
     <span class="document-tag">Estimativa de custos</span>
   </div>
 
-  {% set signature_user = printing_user or veterinario %}
+  {% set signature_user = veterinario or printing_user %}
   {% set signature_vet_profile = signature_user.veterinario if signature_user else None %}
   {% set signature_vet_membership = signature_vet_profile.membership if signature_vet_profile else None %}
   {% set signature_has_active_membership = signature_vet_membership and signature_vet_membership.is_active() %}
@@ -56,8 +56,8 @@
   <div class="print-attribution">
     <div class="print-attribution__line">
       <span class="print-attribution__label">Impresso por:</span>
-      <span class="print-attribution__value">{{ signature_user.name if signature_user else '—' }}</span>
-      {% if signature_has_active_membership %}
+      <span class="print-attribution__value">{{ printing_user.name if printing_user else '—' }}</span>
+      {% if signature_has_active_membership and printing_user and signature_user and printing_user.id == signature_user.id %}
         <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
       {% endif %}
     </div>

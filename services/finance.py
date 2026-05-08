@@ -1478,7 +1478,7 @@ def parse_ofx_transactions(ofx_text: str) -> list[dict]:
             {
                 "posted_at": _parse_ofx_date(posted_raw),
                 "amount": _quantize_currency(amount),
-                "memo": _prepare_description(_tag("MEMO") or _tag("NAME"), "LanÃ§amento bancÃ¡rio"),
+                "memo": _prepare_description(_tag("MEMO") or _tag("NAME"), "Lançamento bancário"),
                 "fit_id": _tag("FITID") or None,
             }
         )
@@ -1590,7 +1590,7 @@ def build_accounting_dashboard(clinic_id: int, month: Optional[date | datetime |
         "inadimplencia": _quantize_currency(_ensure_decimal(overdue)),
         "carga_tributaria_real": _quantize_factor(tax_total / revenue) if revenue > ZERO else ZERO,
         "top_servicos": [
-            {"servico": name or "ServiÃ§o", "quantidade": count, "total": _quantize_currency(_ensure_decimal(total))}
+            {"servico": name or "Serviço", "quantidade": count, "total": _quantize_currency(_ensure_decimal(total))}
             for name, count, total in top_services
         ],
     }
@@ -1602,7 +1602,7 @@ def build_veterinarian_revenue_report(clinic_id: int, month: Optional[date | dat
     vet_id_column = getattr(Consulta, "created_by", None)
     if vet_id_column is None:
         return []
-    vet_name = func.coalesce(User.name, "VeterinÃ¡rio")
+    vet_name = func.coalesce(User.name, "Veterinário")
     rows = (
         db.session.query(vet_id_column, vet_name, func.coalesce(func.sum(OrcamentoItem.valor), 0))
         .join(Consulta, Consulta.id == OrcamentoItem.consulta_id)
