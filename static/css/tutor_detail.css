@@ -15,9 +15,13 @@
 
 .tutor-hero__content {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1.5rem 2.5rem;
+}
+
+.tutor-hero__main {
+  min-width: 0;
 }
 
 .tutor-avatar {
@@ -199,6 +203,10 @@
     grid-template-columns: 1fr;
     justify-items: center;
     text-align: center;
+  }
+
+  .tutor-avatar {
+    order: -1;
   }
 
   .tutor-hero__content .flex-grow-1 {
