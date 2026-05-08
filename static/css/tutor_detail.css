@@ -218,3 +218,20 @@
     justify-content: center;
   }
 }
+
+.tutor-photo-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.tutor-photo-field .photo-uploader {
+  flex: 1;
+  min-height: 184px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tutor-photo-field .photo-uploader .photo-cropper {
+  width: 100%;
+}

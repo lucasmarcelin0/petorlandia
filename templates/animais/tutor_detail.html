@@ -145,7 +145,7 @@
               <label class="form-label">Idade</label>
               <input id="tutor_age" type="number" class="form-control" min="0">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4 tutor-photo-field">
               <label class="form-label">Foto do Tutor</label>
               <div class="photo-uploader">
                 {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
