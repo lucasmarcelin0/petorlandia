@@ -9,7 +9,7 @@ from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 from functools import wraps
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
 
 # Tests and factory imports may load this module through either name. Keep both
@@ -26741,11 +26741,53 @@ def pagar_orcamento(bloco_id):
         preference=preference,
         sync_payment_classification=_sync_orcamento_payment_classification,
     )
+
+    tutor = getattr(animal, 'owner', None)
+    tutor_user_id = getattr(animal, 'user_id', None)
+    tutor_phone = getattr(tutor, 'phone', None) if tutor else None
+    tutor_name = getattr(tutor, 'name', 'tutor') if tutor else 'tutor'
+    animal_name = getattr(animal, 'name', 'pet')
+    app_message_sent = False
+    whatsapp_url = None
+    message_content = (
+        f'Olá {tutor_name}! O link de pagamento do orçamento de {animal_name} já está disponível:\n'
+        f'{preference.payment_url}'
+    )
+
+    if tutor_phone:
+        whatsapp_url = (
+            f'https://api.whatsapp.com/send?phone={formatar_telefone(tutor_phone)}'
+            f'&text={quote_plus(message_content)}'
+        )
+
+    if tutor_user_id:
+        try:
+            db.session.add(
+                Message(
+                    sender_id=current_user.id,
+                    receiver_id=tutor_user_id,
+                    animal_id=animal.id,
+                    clinica_id=bloco.clinica_id,
+                    content=message_content,
+                    lida=False,
+                )
+            )
+            db.session.commit()
+            app_message_sent = True
+        except Exception:  # pragma: no cover - avoid breaking payment flow on chat failure
+            db.session.rollback()
+            current_app.logger.exception(
+                'Falha ao registrar mensagem interna de pagamento para bloco %s',
+                bloco.id,
+            )
+
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
             'redirect_url': preference.payment_url,
+            'whatsapp_url': whatsapp_url,
+            'app_message_sent': app_message_sent,
             'payment_status': preference.payment_status,
             'html': historico_html,
             'message': 'Link de pagamento gerado com sucesso.'
