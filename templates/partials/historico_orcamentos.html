@@ -153,8 +153,14 @@ if (!window.enviarBlocoParaPagamento) {
       if (data.redirect_url) {
         window.open(data.redirect_url, '_blank');
       }
+      if (data.whatsapp_url) {
+        window.open(data.whatsapp_url, '_blank');
+      }
       if (typeof showToast === 'function') {
-        showToast(data.message || 'Pagamento iniciado.', 'success');
+        const successMessage = data.app_message_sent
+          ? (data.message || 'Pagamento iniciado.') + ' Link enviado no WhatsApp e também nas mensagens do tutor.'
+          : (data.message || 'Pagamento iniciado.');
+        showToast(successMessage, 'success');
       }
     } catch (error) {
       if (typeof showToast === 'function') {
