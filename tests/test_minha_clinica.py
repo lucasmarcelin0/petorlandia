@@ -96,7 +96,7 @@ def test_layout_shows_minha_clinica_for_veterinario(monkeypatch, app):
         assert b'Minha Cl\xc3\xadnica' in resp.data
 
 
-def test_layout_shows_minha_clinica_for_colaborador(monkeypatch, app):
+def test_layout_hides_minha_clinica_for_colaborador_without_vet_profile(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.create_all()
@@ -109,7 +109,7 @@ def test_layout_shows_minha_clinica_for_colaborador(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: user)
 
         resp = client.get('/')
-        assert b'Minha Cl\xc3\xadnica' in resp.data
+        assert b'Minha Cl\xc3\xadnica' not in resp.data
 
 
 def test_layout_hides_minha_clinica_without_clinic_access(monkeypatch, app):
