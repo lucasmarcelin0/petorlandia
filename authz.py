@@ -126,3 +126,19 @@ def can_manage_fiscal_documents(user: Any, clinic_id: int | None) -> bool:
 
 def can_view_personal_data(user: Any, owner_user_id: int | None) -> bool:
     return bool(user and owner_user_id and getattr(user, "id", None) == owner_user_id) or _can(user, "personal_data", "view")
+
+
+def get_clinic_or_403(clinic_id: int | None, user: Any):
+    """Carrega clínica somente dentro do escopo autorizado do usuário."""
+    if not clinic_id:
+        return None
+    try:
+        clinic_id = int(clinic_id)
+    except (TypeError, ValueError):
+        return None
+    if not can_view_clinic(user, clinic_id):
+        return None
+
+    from models import Clinica
+
+    return Clinica.query.filter_by(id=clinic_id).first()
