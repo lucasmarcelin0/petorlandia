@@ -15,7 +15,7 @@
 
 .tutor-hero__content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 1.5rem 2.5rem;
 }
@@ -205,9 +205,6 @@
     text-align: center;
   }
 
-  .tutor-avatar {
-    order: -1;
-  }
 
   .tutor-hero__content .flex-grow-1 {
     width: 100%;
@@ -217,4 +214,21 @@
   .tutor-hero__content .d-flex.flex-wrap {
     justify-content: center;
   }
+}
+
+.tutor-photo-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.tutor-photo-field .photo-uploader {
+  flex: 1;
+  min-height: 184px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tutor-photo-field .photo-uploader .photo-cropper {
+  width: 100%;
 }

@@ -30,6 +30,20 @@
       </div>
 
       <div class="tutor-hero__content mt-3">
+        <div class="tutor-avatar">
+          <img
+            id="preview-tutor"
+            src="{{ tutor.profile_photo or '' }}"
+            alt="Foto do Tutor"
+            class="avatar {% if not tutor.profile_photo %}d-none{% endif %}"
+            style="--avatar-size:140px;"
+            loading="lazy"
+            data-offset-x="{{ tutor.photo_offset_x or 0 }}"
+            data-offset-y="{{ tutor.photo_offset_y or 0 }}"
+            data-rotation="{{ tutor.photo_rotation or 0 }}"
+            data-zoom="{{ tutor.photo_zoom or 1 }}">
+          <div class="avatar-ring"></div>
+        </div>
         <div class="tutor-hero__main">
           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <h2 class="mb-0">{{ tutor.name }}</h2>
@@ -67,20 +81,6 @@
             </div>
           </div>
         </div>
-        <div class="tutor-avatar">
-          <img
-            id="preview-tutor"
-            src="{{ tutor.profile_photo or '' }}"
-            alt="Foto do Tutor"
-            class="avatar {% if not tutor.profile_photo %}d-none{% endif %}"
-            style="--avatar-size:140px;"
-            loading="lazy"
-            data-offset-x="{{ tutor.photo_offset_x or 0 }}"
-            data-offset-y="{{ tutor.photo_offset_y or 0 }}"
-            data-rotation="{{ tutor.photo_rotation or 0 }}"
-            data-zoom="{{ tutor.photo_zoom or 1 }}">
-          <div class="avatar-ring"></div>
-        </div>
       </div>
     </div>
   </div>
@@ -114,11 +114,17 @@
           </div>
 
           <div class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-4 tutor-photo-field">
+              <label class="form-label">Foto do Tutor</label>
+              <div class="photo-uploader">
+                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
+              </div>
+            </div>
+            <div class="col-md-4">
               <label class="form-label">Nome</label>
               <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">E‑mail</label>
               <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
             </div>
@@ -144,12 +150,6 @@
             <div class="col-md-4">
               <label class="form-label">Idade</label>
               <input id="tutor_age" type="number" class="form-control" min="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Foto do Tutor</label>
-              <div class="photo-uploader">
-                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
-              </div>
             </div>
             {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
             <div class="col-12">
