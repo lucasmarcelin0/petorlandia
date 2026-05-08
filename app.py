@@ -325,12 +325,19 @@ def handle_http_exception(err):
             return redirect(url_for('veterinarian_membership'))
 
     if wants_json:
+        # Defense in depth: avoid leaking cross-tenant resource existence in JSON APIs.
+        sanitized_message = err.description
+        sanitized_error = err.name
+        if err.code in (403, 404):
+            sanitized_error = "Not Found"
+            sanitized_message = "Resource not found."
         payload = {
-            "error": err.name,
-            "message": err.description,
+            "error": sanitized_error,
+            "message": sanitized_message,
             "request_id": getattr(g, "request_id", None),
         }
-        return jsonify(payload), err.code
+        status_code = 404 if err.code in (403, 404) else err.code
+        return jsonify(payload), status_code
     db.session.rollback()
     return render_template("errors/http.html", error=err), err.code
 
@@ -21876,6 +21883,17 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
+def _normalize_role_scope(scope_value, *, allow_global):
+    """Normalize list/dashboard scope defensively by role capabilities."""
+
+    normalized = (scope_value or '').strip().lower()
+    if normalized not in {'all', 'mine'}:
+        return 'all' if allow_global else 'mine'
+    if normalized == 'all' and not allow_global:
+        return 'mine'
+    return normalized
+
+
 def _get_recent_animais(
     scope,
     page,
@@ -21890,7 +21908,9 @@ def _get_recent_animais(
 
     from models import Species, Breed
 
-    resolved_scope = 'mine' if scope == 'mine' else 'all'
+    viewer = current_user if current_user.is_authenticated else None
+    is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
+    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or (getattr(current_user, 'id', None))
     clinic_ids = _normalize_clinic_ids(clinic_id)
 
@@ -22023,8 +22043,6 @@ def _get_recent_animais(
             last_reference = func.coalesce(last_appt.c.last_at, Animal.date_added)
     else:
         query = base_query
-        viewer = current_user if current_user.is_authenticated else None
-        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
         if effective_user_id and not is_admin:
             query = query.filter(Animal.added_by_id == effective_user_id)
 
@@ -22052,7 +22070,9 @@ def _get_recent_tutores(
 ):
     """Return recent tutors and pagination metadata for dashboards."""
 
-    resolved_scope = 'mine' if scope == 'mine' else 'all'
+    viewer = current_user if current_user.is_authenticated else None
+    is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
+    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or getattr(current_user, 'id', None)
     clinic_ids = _normalize_clinic_ids(clinic_id)
 
@@ -22156,8 +22176,6 @@ def _get_recent_tutores(
             query = query.filter(User.clinica_id.in_(clinic_ids))
     else:
         query = User.query.filter(User.created_at != None)
-        viewer = current_user if current_user.is_authenticated else None
-        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
         if effective_user_id and not is_admin:
             query = query.filter(User.added_by_id == effective_user_id)
 
