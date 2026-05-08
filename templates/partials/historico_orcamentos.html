@@ -108,9 +108,13 @@
           </a>
           {% endif %}
         {% endif %}
-        <button type="button" class="btn btn-outline-success btn-sm" data-pagamento-btn onclick="enviarBlocoParaPagamento({{ bloco.id }}, this)"><i class="fas fa-credit-card me-1"></i>Enviar para pagamento</button>
+        <button type="button" class="btn btn-outline-success btn-sm" data-pagamento-btn onclick="enviarBlocoParaPagamento({{ bloco.id }}, this)"><i class="fas fa-paper-plane me-1"></i>Enviar para tutor</button>
         {% if bloco.payment_link %}
-        <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="fas fa-link me-1"></i>Link atual</a>
+        {% set pay_status = bloco.payment_status or 'pending' %}
+        {% set is_overdue = pay_status == 'failed' %}
+        {% set payment_btn_class = 'btn-success' if pay_status == 'paid' else ('btn-danger' if is_overdue else 'btn-warning text-dark') %}
+        {% set payment_btn_label = 'Pagamento realizado' if pay_status == 'paid' else ('Pagamento em atraso' if is_overdue else 'Realizar pagamento') %}
+        <a href="{{ bloco.payment_link }}" target="_blank" class="btn {{ payment_btn_class }} btn-sm fw-semibold"><i class="fas fa-credit-card me-1"></i>{{ payment_btn_label }}</a>
         {% endif %}
       </div>
     </div>
@@ -149,9 +153,6 @@ if (!window.enviarBlocoParaPagamento) {
       if (data.html && historico) {
         historico.innerHTML = data.html;
         if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
-      }
-      if (data.redirect_url) {
-        window.open(data.redirect_url, '_blank');
       }
       if (data.whatsapp_url) {
         window.open(data.whatsapp_url, '_blank');
