@@ -15,7 +15,7 @@
 
 .tutor-hero__content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 1.5rem 2.5rem;
 }
@@ -205,9 +205,6 @@
     text-align: center;
   }
 
-  .tutor-avatar {
-    order: -1;
-  }
 
   .tutor-hero__content .flex-grow-1 {
     width: 100%;
