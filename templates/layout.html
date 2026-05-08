@@ -168,7 +168,7 @@
                   Meu Perfil</a></li>
               <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i
                     class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
-              {% if has_clinic_access %}
+              {% if has_clinic_access and has_veterinarian_profile_flag %}
               <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i
                     class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
               {% endif %}
