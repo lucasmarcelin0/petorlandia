@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import Counter, deque
+from datetime import datetime, timedelta, timezone
+import logging
 from typing import Any
 
 from flask_login import current_user
+from flask import has_request_context, request
+
+from security.redact import redact_sensitive_text
 
 
 SENSITIVE_RESOURCES = {
@@ -43,6 +49,78 @@ ROLE_PERMISSION_MATRIX = {
         "personal_data": {"view": True, "manage": True},
     },
 }
+
+
+AUTHZ_AUDIT_LOGGER = logging.getLogger("authz.audit")
+_DENY_EVENTS_WINDOW = deque(maxlen=3000)
+
+
+def _masked_resource_identifier(resource_identifier: Any) -> str | None:
+    if resource_identifier is None:
+        return None
+    return redact_sensitive_text(str(resource_identifier))
+
+
+def _audit_authz_decision(
+    *,
+    user: Any,
+    role: str,
+    resource: str,
+    resource_identifier: Any,
+    allowed: bool,
+    reason: str,
+) -> None:
+    ip = None
+    user_agent = None
+    route = None
+    if has_request_context():
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        user_agent = request.headers.get("User-Agent")
+        route = request.path
+
+    payload = {
+        "event": "authorization_decision",
+        "user_id": getattr(user, "id", None),
+        "role": role,
+        "resource": resource,
+        "resource_identifier": _masked_resource_identifier(resource_identifier),
+        "result": "allow" if allowed else "deny",
+        "reason": reason,
+        "ip": _masked_resource_identifier(ip),
+        "user_agent": _masked_resource_identifier(user_agent),
+        "route": route,
+    }
+    AUTHZ_AUDIT_LOGGER.info("authz_decision", extra={"authz": payload})
+
+    if not allowed:
+        _DENY_EVENTS_WINDOW.append(
+            {
+                "at": datetime.now(timezone.utc),
+                "route": route or "<unknown>",
+                "user_id": getattr(user, "id", None),
+                "ip": _masked_resource_identifier(ip) or "<unknown>",
+            }
+        )
+
+
+def summarize_authz_denials(window_minutes: int = 5, top_n: int = 5) -> dict[str, list[dict[str, Any]]]:
+    """Resumo para painel/alerta de picos de 403 por rota/usuário/IP."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(1, window_minutes))
+    recent = [event for event in _DENY_EVENTS_WINDOW if event["at"] >= cutoff]
+    by_route = Counter(event["route"] for event in recent)
+    by_user = Counter(str(event["user_id"]) for event in recent)
+    by_ip = Counter(event["ip"] for event in recent)
+
+    def _top(counter: Counter) -> list[dict[str, Any]]:
+        return [{"key": key, "count": count} for key, count in counter.most_common(top_n)]
+
+    return {
+        "window_minutes": window_minutes,
+        "total_denies": len(recent),
+        "by_route": _top(by_route),
+        "by_user": _top(by_user),
+        "by_ip": _top(by_ip),
+    }
 
 
 def _user_roles(user: Any) -> set[str]:
@@ -88,10 +166,25 @@ def _viewer_operational_clinic_ids(user: Any) -> set[int]:
 
 def _can(user: Any, resource: str, action: str) -> bool:
     roles = _user_roles(user)
+    allowed_roles: list[str] = []
     for role in roles:
         if ROLE_PERMISSION_MATRIX.get(role, {}).get(resource, {}).get(action):
-            return True
-    return False
+            allowed_roles.append(role)
+
+    reason = (
+        f"policy_allows:{','.join(sorted(allowed_roles))}:{resource}:{action}"
+        if allowed_roles
+        else f"policy_denies_all_roles:{resource}:{action}"
+    )
+    _audit_authz_decision(
+        user=user,
+        role=",".join(sorted(roles)) or "anonymous",
+        resource=f"{resource}:{action}",
+        resource_identifier=None,
+        allowed=bool(allowed_roles),
+        reason=reason,
+    )
+    return bool(allowed_roles)
 
 
 def can_view_clinic(user: Any, clinic_id: int | None) -> bool:
