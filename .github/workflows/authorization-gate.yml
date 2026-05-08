@@ -23,6 +23,10 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
 
+      - name: Static route security gate (new sensitive routes)
+        run: |
+          python scripts/check_route_security.py
+
       - name: Run authorization integration suite (merge gate)
         run: |
           pytest -q tests/test_sensitive_endpoints_authorization.py tests/test_security_authorization.py tests/test_clinic_staff_permissions.py
