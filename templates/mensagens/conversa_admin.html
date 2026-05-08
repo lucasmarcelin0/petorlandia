@@ -125,11 +125,15 @@
         <div class="mb-2 {% if msg.sender_id == current_user.id %}text-end{% endif %}">
             <div class="p-2 rounded {% if msg.sender_id == current_user.id %}bg-info-subtle{% else %}bg-light{% endif %}">
                 <small>{{ msg.sender.name }}:</small><br>
-                {% if 'mercadopago.com.br/checkout' in msg.content %}
+                {% set payment_link = msg.content|trim %}
+                {% if 'mercadopago.com.br' in payment_link or 'mpago.la' in payment_link %}
+                  {% if not payment_link.startswith('http://') and not payment_link.startswith('https://') %}
+                    {% set payment_link = 'https://' ~ payment_link %}
+                  {% endif %}
                   <div class="payment-message rounded p-3 mt-2">
                     <div class="fw-semibold text-primary mb-1">Pagamento da consulta disponível</div>
                     <div class="small text-muted mb-2">Finalize o pagamento no botão abaixo para confirmar a consulta.</div>
-                    <a href="{{ msg.content|trim }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">Pagar consulta</a>
+                    <a href="{{ payment_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">Pagar consulta</a>
                   </div>
                 {% else %}
                   {{ msg.content }}
