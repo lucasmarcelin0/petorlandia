@@ -113,7 +113,11 @@ python scripts/limpar_duplicatas_migracao.py
 python scripts/backfill_enderecos.py --dry-run
 python scripts/backfill_enderecos.py
 
-# 4. Reimportar prescrições com dados corretos
+# 4. Corrigir modo dos animais migrados para "adotado"
+python scripts/backfill_animais_adotados_vetsmart.py --dry-run
+python scripts/backfill_animais_adotados_vetsmart.py
+
+# 5. Reimportar prescrições com dados corretos
 python scripts/backfill_prescricoes.py --dry-run
 python scripts/backfill_prescricoes.py
 ```
@@ -126,6 +130,7 @@ python scripts/backfill_prescricoes.py
 | `diagnostico_migracao.py` | Mostra duplicatas, órfãos e contagens — não altera nada |
 | `limpar_duplicatas_migracao.py` | Remove tutores/animais/blocos duplicados de múltiplas rodadas |
 | `backfill_enderecos.py` | Atualiza endereços, data de nascimento e RG de tutores já migrados |
+| `backfill_animais_adotados_vetsmart.py` | Corrige animais migrados para `modo=adotado` (e reconcilia `status`/`is_alive`) |
 | `backfill_prescricoes.py` | Reimporta prescrições com estrutura correta (BlocoPrescricao + campos) |
 | `exportar_clientes_vetsmart.py` | Exporta dados via browser (Playwright) — uso quando há Cloudflare |
 
