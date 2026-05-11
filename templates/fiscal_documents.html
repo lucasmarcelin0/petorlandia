@@ -4,7 +4,7 @@
 <title>Documentos Fiscais</title>
 {% endblock %}
 
-{% block content %}
+{% block main %}
 <div class="container mt-4">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
@@ -66,6 +66,8 @@
           <label class="form-label" for="codigo_servico">Servico</label>
           <input class="form-control" id="codigo_servico" name="codigo_servico" value="{{ manual_defaults.codigo_servico }}" required>
         </div>
+        <input type="hidden" name="codigo_tributacao_municipal" value="{{ manual_defaults.codigo_tributacao_municipal }}">
+        <input type="hidden" name="codigo_nbs" value="{{ manual_defaults.codigo_nbs }}">
         <div class="col-12 col-md-4 col-lg-2">
           <label class="form-label" for="aliquota_iss">ISS %</label>
           <input class="form-control" id="aliquota_iss" name="aliquota_iss" type="number" step="0.01" min="0" value="{{ manual_defaults.aliquota_iss }}">
@@ -80,13 +82,17 @@
         </div>
         <div class="col-12 d-flex justify-content-end">
           <button class="btn btn-primary" type="submit" {% if not emitter %}disabled{% endif %}>
-            Emitir NFS-e
+            {{ 'Emitir NFS-e' if certificate_ready else 'Criar rascunho' }}
           </button>
         </div>
       </form>
       {% if not emitter %}
       <div class="alert alert-warning mt-3 mb-0 small">
         Cadastre o emissor fiscal antes de emitir notas manuais.
+      </div>
+      {% elif not certificate_ready %}
+      <div class="alert alert-warning mt-3 mb-0 small">
+        O certificado fiscal A1 ainda nao foi enviado. A nota sera salva como rascunho para emissao posterior.
       </div>
       {% endif %}
     </div>

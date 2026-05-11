@@ -53,7 +53,8 @@
                 {{ form.password.label(class="form-label") }}
                 <div class="input-group">
                     {{ form.password(class="form-control rounded-pill", id="password", placeholder="Crie uma senha") }}
-                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password', this)">
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password', this)"
+                        aria-label="Mostrar ou ocultar senha" title="Mostrar ou ocultar senha">
                         <i class="fa fa-eye"></i>
                     </button>
                 </div>
@@ -72,7 +73,9 @@
                     {{ form.confirm_password(class="form-control rounded-pill", id="confirm_password",
                     placeholder="Confirme a senha") }}
                     <button class="btn btn-outline-secondary" type="button"
-                        onclick="togglePassword('confirm_password', this)">
+                        onclick="togglePassword('confirm_password', this)"
+                        aria-label="Mostrar ou ocultar confirmação de senha"
+                        title="Mostrar ou ocultar confirmação de senha">
                         <i class="fa fa-eye"></i>
                     </button>
                 </div>

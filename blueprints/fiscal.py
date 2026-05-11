@@ -32,6 +32,11 @@ def get_blueprint():
         methods=["GET"],
     )
     bp.add_url_rule(
+        "/fiscal/documents/<int:document_id>/emit",
+        view_func=lazy_view("fiscal_document_emit"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/fiscal/documents/<int:document_id>/status",
         view_func=lazy_view("fiscal_document_status"),
         methods=["GET"],

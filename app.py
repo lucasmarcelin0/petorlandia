@@ -9,10 +9,14 @@ from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 from functools import wraps
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
 
-sys.modules.setdefault("petorlandia_app", sys.modules[__name__])
+# Tests and factory imports may load this module through either name. Keep both
+# aliases pointed at the same module so runtime monkeypatches and configuration
+# changes do not split across two copies.
+sys.modules.setdefault("app", sys.modules[__name__])
+sys.modules["petorlandia_app"] = sys.modules[__name__]
 
 
 
@@ -129,6 +133,9 @@ from services.nfse_queue import (
 from services.nfse_service import _normalize_municipio
 from services.fiscal.certificate import parse_pfx
 from services.fiscal.nfse_service import (
+    NFSE_NACIONAL_MUNICIPIO_IBGE,
+    NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY,
+    VETERINARY_NFSE_SERVICE_DEFAULTS,
     build_nfse_payload_from_appointment,
     cancel_nfse_document,
     create_manual_nfse_document,
@@ -318,12 +325,19 @@ def handle_http_exception(err):
             return redirect(url_for('veterinarian_membership'))
 
     if wants_json:
+        # Defense in depth: avoid leaking cross-tenant resource existence in JSON APIs.
+        sanitized_message = err.description
+        sanitized_error = err.name
+        if err.code in (403, 404):
+            sanitized_error = "Not Found"
+            sanitized_message = "Resource not found."
         payload = {
-            "error": err.name,
-            "message": err.description,
+            "error": sanitized_error,
+            "message": sanitized_message,
             "request_id": getattr(g, "request_id", None),
         }
-        return jsonify(payload), err.code
+        status_code = 404 if err.code in (403, 404) else err.code
+        return jsonify(payload), status_code
     db.session.rollback()
     return render_template("errors/http.html", error=err), err.code
 
@@ -592,6 +606,20 @@ BUCKET = os.getenv("S3_BUCKET_NAME")
 def _s3():
     return boto3.client("s3", aws_access_key_id=AWS_ID, aws_secret_access_key=AWS_SECRET)
 
+
+def _runtime_module_attr(name, default):
+    seen = set()
+    for module_name in ("app", "petorlandia_app", __name__):
+        module = sys.modules.get(module_name)
+        if module is None or id(module) in seen:
+            continue
+        seen.add(id(module))
+        namespace = getattr(module, "__dict__", {})
+        if name in namespace:
+            return namespace[name]
+    return default
+
+
 def upload_to_s3(file, filename, folder="uploads") -> str | None:
     """Compress and upload a file to S3.
 
@@ -603,6 +631,9 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         fileobj = file
         content_type = file.content_type
         filename = secure_filename(filename)
+        bucket = _runtime_module_attr("BUCKET", BUCKET)
+        project_root = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT))
+        s3_factory = _runtime_module_attr("_s3", _s3)
 
         if content_type and content_type.startswith("image"):
             image = Image.open(file.stream)
@@ -626,22 +657,22 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         data = fileobj.read()
         buffer = BytesIO(data)
 
-        if BUCKET:
+        if bucket:
             try:
                 buffer.seek(0)
-                _s3().upload_fileobj(
+                s3_factory().upload_fileobj(
                     buffer,
-                    BUCKET,
+                    bucket,
                     key,
                     ExtraArgs={"ContentType": content_type},
                 )
-                return f"https://{BUCKET}.s3.amazonaws.com/{key}"
+                return f"https://{bucket}.s3.amazonaws.com/{key}"
             except Exception as exc:  # noqa: BLE001
                 app.logger.exception("S3 upload failed: %s", exc)
                 buffer.seek(0)
 
         # Local fallback when S3 is not configured or fails
-        local_path = PROJECT_ROOT / "static" / "uploads" / key
+        local_path = project_root / "static" / "uploads" / key
         local_path.parent.mkdir(parents=True, exist_ok=True)
         with open(local_path, "wb") as fp:
             fp.write(buffer.read())
@@ -1706,6 +1737,11 @@ from services import (
     update_financial_snapshots_daily,
 )
 from services.geocode_queue import AddressGeocodeQueue
+from authz import (
+    can_manage_budget,
+    can_view_budget,
+    can_view_clinic,
+)
 from services.finance import (
     build_accounting_dashboard,
     build_cash_flow_report,
@@ -1900,6 +1936,19 @@ def _only_digits(value: str | None) -> str:
     return re.sub(r"\D+", "", value or "")
 
 
+def _manual_nfse_service_defaults(clinic) -> dict:
+    if not clinic:
+        return {}
+    cnae_digits = _only_digits(str(get_clinica_field(clinic, "cnae", "") or ""))
+    service_digits = _only_digits(str(get_clinica_field(clinic, "codigo_servico", "") or ""))
+    if (
+        cnae_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_tributacao_municipal"]
+        or service_digits == VETERINARY_NFSE_SERVICE_DEFAULTS["codigo_servico"]
+    ):
+        return dict(VETERINARY_NFSE_SERVICE_DEFAULTS)
+    return {}
+
+
 def _recent_nfse_tomadores(clinic_id: int) -> list[dict]:
     seen: dict[str, dict] = {}
     documents = (
@@ -1932,6 +1981,7 @@ def _recent_nfse_tomadores(clinic_id: int) -> list[dict]:
 
 def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
     clinic = emitter.clinic
+    service_defaults = _manual_nfse_service_defaults(clinic)
     tomador_nome = (form.get("tomador_nome") or "").strip()
     tomador_documento = _only_digits(form.get("tomador_documento"))
     if not tomador_nome:
@@ -1958,22 +2008,39 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
     codigo_servico = (
         form.get("codigo_servico")
         or get_clinica_field(clinic, "codigo_servico", "")
+        or service_defaults.get("codigo_servico")
         or ""
     ).strip()
     if not codigo_servico:
-        raise ValueError("Informe o codigo de servico liberado para a PBH/NFS-e.")
+        raise ValueError("Informe o codigo de servico liberado para a NFS-e.")
 
     aliquota_iss = (
         form.get("aliquota_iss")
         or get_clinica_field(clinic, "aliquota_iss", "")
         or ""
     )
-    descricao = (form.get("descricao") or "Exames de ultrassonografia").strip()
+    codigo_tributacao_municipal = (
+        form.get("codigo_tributacao_municipal")
+        or service_defaults.get("codigo_tributacao_municipal")
+        or ""
+    ).strip()
+    codigo_nbs = (
+        form.get("codigo_nbs")
+        or service_defaults.get("codigo_nbs")
+        or ""
+    ).strip()
+    descricao = (
+        form.get("descricao")
+        or service_defaults.get("descricao")
+        or "Atendimento veterinario"
+    ).strip()
     municipio_nfse = get_clinica_field(clinic, "municipio_nfse", "") or ""
-    municipio_ibge = emitter.municipio_ibge or ("3106200" if _normalize_municipio(municipio_nfse) == "belo_horizonte" else None)
+    municipio_key = _normalize_municipio(municipio_nfse) if municipio_nfse else ""
+    municipio_ibge = emitter.municipio_ibge or NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY.get(municipio_key)
+    is_nacional = municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY or municipio_ibge in NFSE_NACIONAL_MUNICIPIO_IBGE
 
     payload = {
-        "provider": "nfse_nacional" if municipio_ibge == "3106200" else None,
+        "provider": "nfse_nacional" if is_nacional else None,
         "municipio_nfse": municipio_nfse,
         "municipio_ibge": municipio_ibge,
         "data_competencia": data_competencia,
@@ -1995,6 +2062,9 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
         },
         "servico": {
             "item_lista": codigo_servico,
+            "cTribNac": codigo_servico,
+            "cTribMun": codigo_tributacao_municipal or None,
+            "cNBS": codigo_nbs or None,
             "descricao": descricao,
             "valor": str(valor_total),
             "aliquota_iss": str(aliquota_iss) if aliquota_iss not in (None, "") else None,
@@ -2004,6 +2074,25 @@ def _manual_nfse_payload_from_form(form, emitter: FiscalEmitter) -> dict:
         },
     }
     return payload
+
+
+def _emitter_has_active_certificate(emitter: FiscalEmitter | None) -> bool:
+    if not emitter:
+        return False
+    certificate = (
+        FiscalCertificate.query
+        .filter_by(emitter_id=emitter.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .first()
+    )
+    if not certificate:
+        return False
+    if not certificate.valid_to:
+        return True
+    valid_to = certificate.valid_to
+    if valid_to.tzinfo is None:
+        valid_to = valid_to.replace(tzinfo=timezone.utc)
+    return valid_to >= datetime.now(timezone.utc)
 
 
 @login_required
@@ -2050,17 +2139,24 @@ def fiscal_documents():
     documents = query.order_by(FiscalDocument.created_at.desc()).all()
     emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
     clinic = emitter.clinic if emitter else None
+    service_defaults = _manual_nfse_service_defaults(clinic)
+    certificate_ready = _emitter_has_active_certificate(emitter)
     manual_defaults = {
-        "descricao": "Exames de ultrassonografia",
+        "descricao": service_defaults.get("descricao", "Atendimento veterinario"),
         "data_competencia": date.today().isoformat(),
-        "codigo_servico": get_clinica_field(clinic, "codigo_servico", "") if clinic else "",
+        "codigo_servico": (
+            get_clinica_field(clinic, "codigo_servico", "") if clinic else ""
+        ) or service_defaults.get("codigo_servico", ""),
         "aliquota_iss": get_clinica_field(clinic, "aliquota_iss", "") if clinic else "",
+        "codigo_tributacao_municipal": service_defaults.get("codigo_tributacao_municipal", ""),
+        "codigo_nbs": service_defaults.get("codigo_nbs", ""),
     }
 
     return render_template(
         "fiscal_documents.html",
         documents=documents,
         emitter=emitter,
+        certificate_ready=certificate_ready,
         recent_tomadores=_recent_nfse_tomadores(clinic_id),
         manual_defaults=manual_defaults,
         doc_type=doc_type or "",
@@ -2089,7 +2185,19 @@ def fiscal_nfse_manual():
 
     try:
         payload = _manual_nfse_payload_from_form(request.form, emitter)
-        document = create_manual_nfse_document(emitter.id, payload)
+        certificate_ready = _emitter_has_active_certificate(emitter)
+        document = create_manual_nfse_document(
+            emitter.id,
+            payload,
+            initial_status=(
+                FiscalDocumentStatus.QUEUED
+                if certificate_ready
+                else FiscalDocumentStatus.DRAFT
+            ),
+        )
+        if not certificate_ready:
+            flash("NFS-e criada como rascunho. Envie o certificado fiscal A1 antes de emitir.", "warning")
+            return redirect(url_for("fiscal_document_detail", document_id=document.id))
         try:
             queue_emit_nfse(document.id, clinic_id=clinic_id)
         except Exception:  # noqa: BLE001
@@ -2136,6 +2244,26 @@ def fiscal_document_detail(document_id: int):
         events=events,
         payload_pretty=payload_pretty,
     )
+
+
+@login_required
+def fiscal_document_emit(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    if not _emitter_has_active_certificate(document.emitter):
+        flash("Envie o certificado fiscal A1 antes de emitir esta NFS-e.", "warning")
+        return redirect(url_for("fiscal_document_detail", document_id=document.id))
+    try:
+        queue_emit_nfse(document.id, clinic_id=clinic_id)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Falha ao enviar NFS-e para a fila.")
+        flash("Nao foi possivel iniciar a emissao agora. Tente novamente em instantes.", "warning")
+        return redirect(url_for("fiscal_document_detail", document_id=document.id))
+    flash("NFS-e enviada para emissao.", "success")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
 
 
 @login_required
@@ -2566,14 +2694,10 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
 
 
 def ensure_clinic_access(clinica_id):
-    """Abort with 404 if the current user cannot access the given clinic."""
-    if not clinica_id:
-        return
-    if not current_user.is_authenticated:
+    """Abort with 404 if the current user cannot view the given clinic."""
+    if not clinica_id or not current_user.is_authenticated:
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
-        return
-    if clinica_id not in _viewer_operational_clinic_ids(current_user):
+    if not can_view_clinic(current_user, clinica_id):
         abort(404)
 
 
@@ -3810,7 +3934,26 @@ def reset_password_request():
                     </html>
                 """
             )
-            mail.send(msg)
+            try:
+                mail.send(msg)
+            except Exception as exc:  # noqa: BLE001 - evita erro 500 quando SMTP não está configurado
+                current_app.logger.warning(
+                    "Falha ao enviar e-mail de redefinição de senha para %s: %s",
+                    user.email,
+                    exc,
+                )
+                message = (
+                    "Não foi possível enviar o e-mail de redefinição agora. "
+                    "Verifique a configuração de e-mail e tente novamente."
+                )
+                if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                    return jsonify({
+                        'success': False,
+                        'errors': {'email': [message]},
+                        'message': message,
+                    }), 503
+                flash(message, 'warning')
+                return render_template('auth/reset_password_request.html', form=form), 200
             if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
                 return jsonify({'success': True, 'redirect': url_for('login_view')})
             flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
@@ -6312,6 +6455,11 @@ def _nfse_required_fields_by_municipio() -> dict[str, list[str]]:
             "codigo_servico",
             "aliquota_iss",
         ],
+        "contagem": [
+            "regime_tributario",
+            "cnae",
+            "codigo_servico",
+        ],
     }
 
 
@@ -6344,7 +6492,7 @@ def _nfse_missing_fields(clinic: Clinica) -> tuple[list[str], str]:
 def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
     required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
     certificate_required = (
-        municipio_key == "belo_horizonte"
+        municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
         or "nfse_cert_path" in required_fields
         or "nfse_cert_password" in required_fields
     )
@@ -6368,8 +6516,8 @@ def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool,
 
 
 def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
-    if municipio_key == "belo_horizonte":
-        return True, "PBH integrada pela API da NFS-e Nacional com DPS assinada por certificado A1."
+    if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY:
+        return True, "Municipio integrado pela API da NFS-e Nacional com DPS assinada por certificado A1."
     if municipio_key != "orlandia":
         return True, "Não se aplica ao município."
     if get_clinica_field(clinic, "fiscal_ready", False):
@@ -6598,6 +6746,7 @@ def contabilidade_nfse():
         {"value": "", "label": "Selecione um município"},
         {"value": "orlandia", "label": "Orlândia (SP)"},
         {"value": "belo_horizonte", "label": "Belo Horizonte (MG)"},
+        {"value": "contagem", "label": "Contagem (MG)"},
     ]
 
     def _nfse_setup_resources(municipio_key: str):
@@ -6632,6 +6781,31 @@ def contabilidade_nfse():
                 ],
                 "field_hints": {
                     "municipio_ibge": "3106200",
+                    "uf": "MG",
+                },
+            }
+        if municipio_key == "contagem":
+            return {
+                "wizard_url": url_for("fiscal_onboarding_step", step=1),
+                "links": [
+                    {
+                        "title": "Contagem - Receita Municipal",
+                        "description": "Portal oficial da Secretaria Municipal de Fazenda para NFS-e e webservices.",
+                        "url": "https://fazenda.contagem.mg.gov.br/nfe/",
+                    },
+                    {
+                        "title": "Emissor webservice de Contagem",
+                        "description": "Ambiente de producao informado pela prefeitura para a nova solucao de NFS-e.",
+                        "url": "https://nfse-contagem.cidade360.cloud",
+                    },
+                    {
+                        "title": "Documentacao tecnica nacional",
+                        "description": "Leiautes, schemas e manuais do padrao nacional da NFS-e.",
+                        "url": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/documentacao-atual",
+                    },
+                ],
+                "field_hints": {
+                    "municipio_ibge": "3118601",
                     "uf": "MG",
                 },
             }
@@ -6922,8 +7096,8 @@ def contabilidade_nfse_preview():
             else "Faltam informações obrigatórias.",
         },
         {
-            "label": "Comunicação PBH/NFS-e Nacional disponível"
-            if municipio_key == "belo_horizonte"
+            "label": "Comunicacao NFS-e Nacional disponivel"
+            if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
             else "Comunicação Betha disponível",
             "ok": betha_ok,
             "detail": betha_msg,
@@ -6943,8 +7117,8 @@ def contabilidade_nfse_preview():
         blocking_errors.append("Certificado fiscal inválido ou ausente. Atualize o certificado antes de emitir.")
     if not betha_ok:
         blocking_errors.append(
-            "Teste de comunicação com a PBH/NFS-e Nacional pendente."
-            if municipio_key == "belo_horizonte"
+            "Teste de comunicacao com a NFS-e Nacional pendente."
+            if municipio_key in NFSE_NACIONAL_MUNICIPIO_IBGE_BY_KEY
             else "Teste de comunicação com a Betha pendente. Finalize o wizard fiscal."
         )
 
@@ -7749,26 +7923,25 @@ def add_animal():
         breed_list = []
 
     # Debug da requisição
-    print("📥 Método da requisição:", request.method)
-    print("📋 Dados recebidos:", request.form)
+    current_app.logger.debug("add_animal request method=%s", request.method)
+    current_app.logger.debug("add_animal form data keys=%s", list(request.form.keys()))
 
     if form.validate_on_submit():
-        print("✅ Formulário validado com sucesso.")
+        current_app.logger.debug("add_animal form validated")
 
         image_url = None
         if form.image.data:
             file = form.image.data
             original_filename = secure_filename(file.filename)
             filename = f"{uuid.uuid4().hex}_{original_filename}"
-            print("🖼️ Upload de imagem iniciado:", filename)
+            current_app.logger.debug("add_animal image upload started filename=%s", filename)
             image_url = upload_to_s3(file, filename, folder="animals")
-            print("✅ Upload concluído. URL:", image_url)
+            current_app.logger.debug("add_animal image upload completed url=%s", image_url)
 
         # IDs das listas
         species_id = request.form.get("species_id", type=int)
         breed_id = request.form.get("breed_id", type=int)
-        print("🔍 Species ID:", species_id)
-        print("🔍 Breed ID:", breed_id)
+        current_app.logger.debug("add_animal species_id=%s breed_id=%s", species_id, breed_id)
 
         dob = form.date_of_birth.data
         idade_valor = (form.age.data or '').strip()
@@ -7813,17 +7986,16 @@ def add_animal():
         db.session.add(animal)
         try:
             db.session.commit()
-            print("✅ Animal salvo com ID:", animal.id)
+            current_app.logger.info("Animal cadastrado com ID %s", animal.id)
             flash('Animal cadastrado com sucesso!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
             db.session.rollback()
-            print("❌ Erro ao salvar no banco:", str(e))
+            current_app.logger.exception("Erro ao salvar animal: %s", e)
             flash('Erro ao salvar o animal.', 'danger')
 
-    else:
-        print("⚠️ Formulário inválido.")
-        print("🧾 Erros do formulário:", form.errors)
+    elif request.method == 'POST':
+        current_app.logger.debug("add_animal invalid form errors=%s", form.errors)
 
     return render_template(
         'animais/add_animal.html',
@@ -10958,17 +11130,9 @@ def logout():
 
 @login_required
 def profile():
-    # Garante que current_user.endereco exista para pré-preenchimento
     form = EditProfileForm(obj=current_user)
     delete_form = DeleteAccountForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-
-    if form.validate_on_submit():
-        if not current_user.endereco:
-            current_user.endereco = Endereco()
-
-
-    form = EditProfileForm(obj=current_user)
 
     if form.validate_on_submit():
         normalized_email = normalize_email(form.email.data)
@@ -10990,26 +11154,8 @@ def profile():
             flash('Celular já está em uso.', 'danger')
             return redirect(url_for('profile'))
 
-        current_user.name = form.name.data
-        current_user.email = normalized_email
-        current_user.phone = normalized_phone
-        current_user.is_private = form.is_private.data
-        current_user.photo_rotation = form.photo_rotation.data
-        current_user.photo_zoom = form.photo_zoom.data
-        current_user.photo_offset_x = form.photo_offset_x.data
-        current_user.photo_offset_y = form.photo_offset_y.data
-
-        # Atualiza ou cria endereço
-        endereco = current_user.endereco
-        endereco.cep = request.form.get("cep")
-        endereco.rua = request.form.get("rua")
-        endereco.numero = request.form.get("numero")
-        endereco.complemento = request.form.get("complemento")
-        endereco.bairro = request.form.get("bairro")
-        endereco.cidade = request.form.get("cidade")
-        endereco.estado = request.form.get("estado")
-
         required_address_labels = {
+            'cep': 'CEP',
             'rua': 'Rua',
             'cidade': 'Cidade',
             'estado': 'Estado',
@@ -11026,6 +11172,26 @@ def profile():
                 return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
             flash(message, 'warning')
             return redirect(url_for('profile'))
+
+        current_user.name = form.name.data
+        current_user.email = normalized_email
+        current_user.phone = normalized_phone
+        current_user.is_private = form.is_private.data
+        current_user.photo_rotation = form.photo_rotation.data
+        current_user.photo_zoom = form.photo_zoom.data
+        current_user.photo_offset_x = form.photo_offset_x.data
+        current_user.photo_offset_y = form.photo_offset_y.data
+
+        # Atualiza ou cria endereço somente depois de validar os campos obrigatórios.
+        endereco = current_user.endereco or Endereco()
+        current_user.endereco = endereco
+        endereco.cep = request.form.get("cep")
+        endereco.rua = request.form.get("rua")
+        endereco.numero = request.form.get("numero")
+        endereco.complemento = request.form.get("complemento")
+        endereco.bairro = request.form.get("bairro")
+        endereco.cidade = request.form.get("cidade")
+        endereco.estado = request.form.get("estado")
 
         if not _update_coordinates_from_request(endereco):
             _geocode_endereco(endereco)
@@ -11108,6 +11274,12 @@ def delete_account():
     return redirect(url_for('profile'))
 
 
+
+
+@app.route('/meus-animais')
+@login_required
+def meus_animais():
+    return redirect(url_for('list_animals'))
 
 
 @app.route('/animals')
@@ -13769,6 +13941,7 @@ def deletar_consulta(consulta_id):
 def imprimir_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     animal = consulta.animal
+    owner_access = _current_user_owns_animal(animal)
     tutor = animal.owner
     veterinario = consulta.veterinario
     clinica = consulta.clinica or (
@@ -13784,6 +13957,7 @@ def imprimir_consulta(consulta_id):
         veterinario=veterinario,
         printing_user=current_user,
         printed_at=datetime.now(BR_TZ),
+        return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
 
 
@@ -14256,6 +14430,8 @@ def clinic_detail(clinica_id):
     from models import VetClinicInvite
 
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    if not _is_admin() and not is_owner:
+        abort(403)
     staff = None
     if current_user.is_authenticated:
         staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
@@ -18616,7 +18792,7 @@ def update_pesquisa_racoes_tutor_status(tutor_id, status_key):
 
     if not _delivery_research_contact_table_available():
         flash(
-            "O controle de status ainda nÃ£o estÃ¡ disponÃ­vel porque a migraÃ§Ã£o do banco nÃ£o foi aplicada.",
+            "O controle de status ainda não está disponível porque a migração do banco não foi aplicada.",
             "warning",
         )
         return redirect(url_for("pesquisa_racoes_tutores"))
@@ -19868,23 +20044,38 @@ def atualizar_bloco_prescricao(bloco_id):
     return jsonify({'success': True})
 
 
+def _current_user_owns_animal(animal) -> bool:
+    return bool(
+        current_user.is_authenticated
+        and animal
+        and getattr(animal, 'user_id', None) == current_user.id
+    )
+
+
 @app.route('/bloco_prescricao/<int:bloco_id>/imprimir')
 @login_required
 def imprimir_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    animal = bloco.animal
+    owner_access = _current_user_owns_animal(animal)
+    if not owner_access:
+        ensure_clinic_access(bloco.clinica_id)
 
-    if not is_veterinarian(current_user):
+    if not owner_access and not is_veterinarian(current_user):
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
         return redirect(url_for('index'))
 
     animal = bloco.animal
     tutor = animal.owner
     consulta = animal.consultas[-1] if animal.consultas else None
-    veterinario = consulta.veterinario if consulta else current_user
+    veterinario = consulta.veterinario if consulta else bloco.saved_by
+    if not veterinario and is_veterinarian(current_user):
+        veterinario = current_user
     clinica = consulta.clinica if consulta and consulta.clinica else (
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
+    if not clinica:
+        clinica = bloco.clinica
     salvo_por = bloco.saved_by or veterinario
 
     return render_template(
@@ -19898,6 +20089,7 @@ def imprimir_bloco_prescricao(bloco_id):
         salvo_por=salvo_por,
         printing_user=current_user,
         printed_at=datetime.now(BR_TZ),
+        return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
 
 
@@ -20883,10 +21075,6 @@ def _wants_json_response():
 
 
 def _delivery_error_response(message, category='danger', status=400):
-    # #region agent log
-    with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_error_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13272','message':'_delivery_error_response called','data':{'message':message,'category':category,'status':status},'sessionId':'debug-session','runId':'run1','hypothesisId':'D'})+'\n')
-    # #endregion
-
     payload = {
         'message': message,
         'category': category,
@@ -20904,10 +21092,6 @@ def _delivery_error_response(message, category='danger', status=400):
 @login_required
 def accept_delivery(req_id):
     try:
-        # #region agent log
-        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_accept','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13289','message':'accept_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-        # #endregion
-
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = (
@@ -20936,9 +21120,6 @@ def accept_delivery(req_id):
                 'html': html,
                 'counts': counts,
             }
-            # #region agent log
-            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_accept_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13303','message':'accept_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-            # #endregion
             return jsonify(**response_data)
         # ⬇️ redireciona direto ao detalhe unificado
         return redirect(url_for('delivery_detail', req_id=req.id))
@@ -20956,10 +21137,6 @@ def accept_delivery(req_id):
 @login_required
 def complete_delivery(req_id):
     try:
-        # #region agent log
-        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_complete','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13325','message':'complete_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-        # #endregion
-
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
@@ -20972,9 +21149,6 @@ def complete_delivery(req_id):
         if _wants_json_response():
             html, counts, _ = _delivery_sections_payload()
             response_data = {'message': 'Entrega concluída.', 'category': 'success', 'redirect': None, 'html': html, 'counts': counts}
-            # #region agent log
-            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_complete_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13338','message':'complete_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-            # #endregion
             return jsonify(**response_data)
         return redirect(url_for('list_delivery_requests'))
     except CSRFError:
@@ -20989,10 +21163,6 @@ def complete_delivery(req_id):
 @login_required
 def cancel_delivery(req_id):
     try:
-        # #region agent log
-        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_cancel','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13351','message':'cancel_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-        # #endregion
-
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
@@ -21006,9 +21176,6 @@ def cancel_delivery(req_id):
         if _wants_json_response():
             html, counts, _ = _delivery_sections_payload()
             response_data = {'message': 'Entrega cancelada.', 'category': 'info', 'redirect': None, 'html': html, 'counts': counts}
-            # #region agent log
-            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_cancel_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13365','message':'cancel_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
-            # #endregion
             return jsonify(**response_data)
         return redirect(url_for('list_delivery_requests'))
     except CSRFError:
@@ -21811,6 +21978,17 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
+def _normalize_role_scope(scope_value, *, allow_global):
+    """Normalize list/dashboard scope defensively by role capabilities."""
+
+    normalized = (scope_value or '').strip().lower()
+    if normalized not in {'all', 'mine'}:
+        return 'all' if allow_global else 'mine'
+    if normalized == 'all' and not allow_global:
+        return 'mine'
+    return normalized
+
+
 def _get_recent_animais(
     scope,
     page,
@@ -21825,7 +22003,9 @@ def _get_recent_animais(
 
     from models import Species, Breed
 
-    resolved_scope = 'mine' if scope == 'mine' else 'all'
+    viewer = current_user if current_user.is_authenticated else None
+    is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
+    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or (getattr(current_user, 'id', None))
     clinic_ids = _normalize_clinic_ids(clinic_id)
 
@@ -21958,8 +22138,6 @@ def _get_recent_animais(
             last_reference = func.coalesce(last_appt.c.last_at, Animal.date_added)
     else:
         query = base_query
-        viewer = current_user if current_user.is_authenticated else None
-        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
         if effective_user_id and not is_admin:
             query = query.filter(Animal.added_by_id == effective_user_id)
 
@@ -21987,7 +22165,9 @@ def _get_recent_tutores(
 ):
     """Return recent tutors and pagination metadata for dashboards."""
 
-    resolved_scope = 'mine' if scope == 'mine' else 'all'
+    viewer = current_user if current_user.is_authenticated else None
+    is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
+    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or getattr(current_user, 'id', None)
     clinic_ids = _normalize_clinic_ids(clinic_id)
 
@@ -22091,8 +22271,6 @@ def _get_recent_tutores(
             query = query.filter(User.clinica_id.in_(clinic_ids))
     else:
         query = User.query.filter(User.created_at != None)
-        viewer = current_user if current_user.is_authenticated else None
-        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
         if effective_user_id and not is_admin:
             query = query.filter(User.added_by_id == effective_user_id)
 
@@ -23323,22 +23501,30 @@ def pedido_detail(order_id):
              )
              .get_or_404(order_id))
 
-    if not _is_admin() and order.user_id != current_user.id:
+    req = order.delivery_requests[0] if order.delivery_requests else None
+    is_admin_user = bool(
+        current_user.is_authenticated
+        and getattr(current_user, "role", None) == "admin"
+    )
+    is_buyer = order.user_id == current_user.id
+    is_assigned_delivery = bool(
+        getattr(current_user, "worker", None) == "delivery"
+        and req
+        and req.worker_id == current_user.id
+    )
+    if not (is_admin_user or is_buyer or is_assigned_delivery):
         abort(403)
 
-    req = order.delivery_requests[0] if order.delivery_requests else None
     items = order.items
     buyer = order.user
     delivery_worker = req.worker if req else None
     total = sum(i.quantity * i.product.price for i in items if i.product)
 
-    if _is_admin():
+    if is_admin_user:
         role = "admin"
-    elif current_user.worker == "delivery":
-        if req and req.worker_id and req.worker_id != current_user.id:
-            abort(403)
+    elif is_assigned_delivery:
         role = "worker"
-    elif current_user.id == buyer.id:
+    elif buyer and current_user.id == buyer.id:
         role = "buyer"
     else:
         abort(403)
@@ -23460,7 +23646,15 @@ def appointments():
     )
 
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
-        abort(403)
+        message = 'Para solicitar um agendamento, escolha um veterinário disponível.'
+        wants_json = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            or request.accept_mimetypes.accept_json
+        )
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 403
+        flash(message, 'warning')
+        return redirect(url_for('veterinarios'))
     if worker == 'veterinario' and is_vet:
         if current_user.role == 'admin':
             veterinario_id_arg = request.args.get(
@@ -26564,11 +26758,15 @@ def imprimir_orcamento(consulta_id):
 @login_required
 def imprimir_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
     animal = bloco.animal
+    owner_access = _current_user_owns_animal(animal)
+    if not owner_access:
+        ensure_clinic_access(bloco.clinica_id)
     tutor = animal.owner
     consulta = animal.consultas[-1] if animal.consultas else None
-    veterinario = consulta.veterinario if consulta else current_user
+    veterinario = consulta.veterinario if consulta else None
+    if not veterinario and is_veterinarian(current_user):
+        veterinario = current_user
     clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
     return render_template(
         'orcamentos/imprimir_orcamento.html',
@@ -26580,6 +26778,7 @@ def imprimir_bloco_orcamento(bloco_id):
         veterinario=veterinario,
         printing_user=current_user,
         printed_at=datetime.now(BR_TZ),
+        return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
 
 
@@ -26587,7 +26786,8 @@ def imprimir_bloco_orcamento(bloco_id):
 @login_required
 def imprimir_orcamento_padrao(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    ensure_clinic_access(orcamento.clinica_id)
+    if not can_view_budget(current_user, orcamento.clinica_id, orcamento.consulta_id):
+        abort(404)
     return render_template(
         'orcamentos/imprimir_orcamento_padrao.html',
         itens=orcamento.items,
@@ -26604,8 +26804,14 @@ def imprimir_orcamento_padrao(orcamento_id):
 @login_required
 def pagar_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    animal = bloco.animal
+    owner_access = _current_user_owns_animal(animal)
+    if not owner_access:
+        ensure_clinic_access(bloco.clinica_id)
     if not bloco.itens:
+        if owner_access and not request.accept_mimetypes.accept_json:
+            flash('Nenhum item no orçamento.', 'warning')
+            return redirect(url_for('imprimir_bloco_orcamento', bloco_id=bloco.id))
         if request.accept_mimetypes.accept_json:
             return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
         flash('Nenhum item no orçamento.', 'warning')
@@ -26622,13 +26828,20 @@ def pagar_orcamento(bloco_id):
     ]
 
     try:
+        back_url = url_for(
+            'imprimir_bloco_orcamento',
+            bloco_id=bloco.id,
+            _external=True,
+        ) if owner_access else url_for(
+            'consulta_direct',
+            animal_id=bloco.animal_id,
+            _external=True,
+        )
         preference = create_payment_preference(
             PaymentPreferenceDTO(
                 items=items,
                 external_reference=f'bloco_orcamento-{bloco.id}',
-                back_url=url_for(
-                    'consulta_direct', animal_id=bloco.animal_id, _external=True
-                ),
+                back_url=back_url,
             ),
             _criar_preferencia_pagamento,
         )
@@ -26636,6 +26849,8 @@ def pagar_orcamento(bloco_id):
         if request.accept_mimetypes.accept_json:
             return jsonify({'success': False, 'message': str(exc)}), exc.status_code
         flash(str(exc), 'danger')
+        if owner_access:
+            return redirect(url_for('imprimir_bloco_orcamento', bloco_id=bloco.id))
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
     apply_payment_to_bloco(
@@ -26643,11 +26858,54 @@ def pagar_orcamento(bloco_id):
         preference=preference,
         sync_payment_classification=_sync_orcamento_payment_classification,
     )
+
+    tutor = getattr(animal, 'owner', None)
+    tutor_user_id = getattr(animal, 'user_id', None)
+    tutor_phone = getattr(tutor, 'phone', None) if tutor else None
+    tutor_name = getattr(tutor, 'name', 'tutor') if tutor else 'tutor'
+    animal_name = getattr(animal, 'name', 'pet')
+    app_message_sent = False
+    whatsapp_url = None
+    message_content = (
+        f'Olá, {tutor_name}.\n\n'
+        f'O orçamento de {animal_name} foi finalizado e o link de pagamento está disponível:\n'
+        f'{preference.payment_url}\n\n'
+        'Para concluir, acesse o link acima e siga as instruções de pagamento.'
+    )
+
+    if tutor_phone:
+        whatsapp_url = (
+            f'https://api.whatsapp.com/send?phone={formatar_telefone(tutor_phone)}'
+            f'&text={quote_plus(message_content)}'
+        )
+
+    if tutor_user_id:
+        try:
+            db.session.add(
+                Message(
+                    sender_id=current_user.id,
+                    receiver_id=tutor_user_id,
+                    animal_id=animal.id,
+                    clinica_id=bloco.clinica_id,
+                    content=message_content,
+                    lida=False,
+                )
+            )
+            db.session.commit()
+            app_message_sent = True
+        except Exception:  # pragma: no cover - avoid breaking payment flow on chat failure
+            db.session.rollback()
+            current_app.logger.exception(
+                'Falha ao registrar mensagem interna de pagamento para bloco %s',
+                bloco.id,
+            )
+
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
-            'redirect_url': preference.payment_url,
+            'whatsapp_url': whatsapp_url,
+            'app_message_sent': app_message_sent,
             'payment_status': preference.payment_status,
             'html': historico_html,
             'message': 'Link de pagamento gerado com sucesso.'
@@ -26659,7 +26917,8 @@ def pagar_orcamento(bloco_id):
 @login_required
 def gerar_link_pagamento_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    ensure_clinic_access(orcamento.clinica_id)
+    if not can_manage_budget(current_user, orcamento.clinica_id, orcamento.consulta_id):
+        abort(404)
     if not orcamento.items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
 
@@ -26773,7 +27032,8 @@ def adicionar_orcamento_item(consulta_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id, consulta.id):
+        abort(404)
     if consulta.clinica_id and consulta.clinica_id != clinic_id:
         return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
     if not consulta.clinica_id:
@@ -26846,7 +27106,8 @@ def deletar_orcamento_item(item_id):
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
-    ensure_clinic_access(consulta.clinica_id)
+    if not can_manage_budget(current_user, consulta.clinica_id, consulta.id):
+        abort(404)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200
@@ -26864,7 +27125,8 @@ def salvar_bloco_orcamento(consulta_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id, consulta.id):
+        abort(404)
     if consulta.clinica_id and consulta.clinica_id != clinic_id:
         return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
     if not consulta.clinica_id:
@@ -26925,8 +27187,8 @@ def historico_orcamentos_partial(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     clinic_id = consulta.clinica_id or current_user_clinic_id() or getattr(consulta.animal, 'clinica_id', None)
 
-    if clinic_id:
-        ensure_clinic_access(clinic_id)
+    if clinic_id and not can_view_budget(current_user, clinic_id, consulta.id):
+        abort(404)
 
     historico_html = _render_orcamento_history(consulta.animal, clinic_id)
     return jsonify({'success': True, 'html': historico_html})
@@ -26936,7 +27198,8 @@ def historico_orcamentos_partial(consulta_id):
 @login_required
 def deletar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id
@@ -26957,7 +27220,8 @@ def deletar_bloco_orcamento(bloco_id):
 @login_required
 def editar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
     return render_template('orcamentos/editar_bloco_orcamento.html', bloco=bloco)
@@ -26967,7 +27231,8 @@ def editar_bloco_orcamento(bloco_id):
 @login_required
 def atualizar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    if not can_manage_budget(current_user, bloco.clinica_id):
+        abort(404)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
@@ -26975,7 +27240,8 @@ def atualizar_bloco_orcamento(bloco_id):
     clinic_id = _coerce_int(data.get('clinica_id'))
     if clinic_id is None:
         return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
-    ensure_clinic_access(clinic_id)
+    if not can_manage_budget(current_user, clinic_id):
+        abort(404)
     if clinic_id != bloco.clinica_id:
         abort(404)
     itens = data.get('itens', [])

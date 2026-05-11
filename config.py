@@ -137,7 +137,7 @@ class Config:
 
     NFSE_ASYNC_MUNICIPIOS = [
         item.strip()
-        for item in os.environ.get("NFSE_ASYNC_MUNICIPIOS", "orlandia,belo horizonte").split(",")
+        for item in os.environ.get("NFSE_ASYNC_MUNICIPIOS", "orlandia,belo horizonte,contagem").split(",")
         if item.strip()
     ]
 
@@ -150,6 +150,11 @@ class Config:
         },
         "belo_horizonte": {
             "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_BELO_HORIZONTE", "30")),
+            "require_reason": True,
+            "allowed_reasons": [],
+        },
+        "contagem": {
+            "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_CONTAGEM", "30")),
             "require_reason": True,
             "allowed_reasons": [],
         },

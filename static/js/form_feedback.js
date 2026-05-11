@@ -13,7 +13,7 @@
     if (!target) return null;
     if (target instanceof HTMLButtonElement) return target;
     if (target instanceof HTMLFormElement) {
-      return target.querySelector('button[type="submit"], button:not([type])');
+      return target.querySelector('button[type="submit"], button:not([type])') || getAssociatedSubmitButton(target);
     }
     if (target.closest) {
       const formAncestor = target.closest('form');
@@ -22,6 +22,16 @@
       }
     }
     return null;
+  }
+
+  function getAssociatedSubmitButton(form) {
+    if (!(form instanceof HTMLFormElement) || !form.id) return null;
+    const escapedId = window.CSS && typeof window.CSS.escape === 'function'
+      ? window.CSS.escape(form.id)
+      : String(form.id).replace(/"/g, '\\"');
+    return document.querySelector(
+      `button[form="${escapedId}"][type="submit"], button[form="${escapedId}"]:not([type])`
+    );
   }
 
   function ensureOriginal(button) {

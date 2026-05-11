@@ -113,12 +113,31 @@
   </div>
 {% endif %}
 
+<style>
+  .payment-message {
+    border: 1px solid #cfe2ff;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+  }
+</style>
+
 <div id="mensagens-container" class="border p-3 mb-3 rounded" style="max-height: 400px; overflow-y: auto;">
     {% for msg in mensagens %}
         <div class="mb-2 {% if msg.sender_id == current_user.id %}text-end{% endif %}">
             <div class="p-2 rounded {% if msg.sender_id == current_user.id %}bg-info-subtle{% else %}bg-light{% endif %}">
                 <small>{{ msg.sender.name }}:</small><br>
-                {{ msg.content }}
+                {% set payment_link = msg.content|trim %}
+                {% if 'mercadopago.com.br' in payment_link or 'mpago.la' in payment_link %}
+                  {% if not payment_link.startswith('http://') and not payment_link.startswith('https://') %}
+                    {% set payment_link = 'https://' ~ payment_link %}
+                  {% endif %}
+                  <div class="payment-message rounded p-3 mt-2">
+                    <div class="fw-semibold text-primary mb-1">Pagamento da consulta disponível</div>
+                    <div class="small text-muted mb-2">Finalize o pagamento no botão abaixo para confirmar a consulta.</div>
+                    <a href="{{ payment_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">Pagar consulta</a>
+                  </div>
+                {% else %}
+                  {{ msg.content }}
+                {% endif %}
                 <div class="text-muted small">{{ msg.timestamp|format_datetime_brazil('%d/%m %H:%M') }}</div>
             </div>
         </div>

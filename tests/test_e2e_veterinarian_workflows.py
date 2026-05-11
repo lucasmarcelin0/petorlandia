@@ -78,15 +78,7 @@ def veterinarian_setup(app):
             clinica_id=clinic.id
         )
         
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime.utcnow() - timedelta(days=15),
-            trial_ends_at=datetime.utcnow() + timedelta(days=15),
-            paid_until=None
-        )
-        
         db.session.add(vet_profile)
-        db.session.add(membership)
         db.session.commit()
         
         return {
@@ -170,10 +162,14 @@ class TestClinicSetup:
             'cnpj': '22.333.444/0001-55',
             'endereco': 'Rua das Palmeiras, 100',
             'telefone': '16 3322-1100',
-            'email': 'contato@petlife.com'
+            'email': 'contato@petlife.com',
+            'photo_rotation': '0',
+            'photo_zoom': '1.0',
+            'photo_offset_x': '0',
+            'photo_offset_y': '0',
         }
         
-        response = client.post('/criar-clinica', data=clinic_data, follow_redirects=True)
+        response = client.post('/minha-clinica', data=clinic_data, follow_redirects=True)
         assert response.status_code == 200 or response.status_code == 302
         
         # Verify clinic was created
@@ -524,7 +520,7 @@ class TestScheduleManagement:
         with app.app_context():
             # Schedule settings would be stored in a separate model
             # For now, just verify the endpoint exists
-            response = client.get('/edit_vet_schedule')
+            response = client.get('/appointments/manage')
             # May redirect or show page
             assert response.status_code in [200, 302]
     
@@ -557,7 +553,7 @@ class TestScheduleManagement:
             db.session.commit()
         
         # View calendar
-        response = client.get('/appointments_calendar')
+        response = client.get('/appointments/calendar')
         assert response.status_code in [200, 302]
 
 
@@ -784,14 +780,14 @@ class TestPerformanceVeterinarian:
                     created_by=veterinarian_setup['vet_id'],
                     clinica_id=veterinarian_setup['clinic_id'],
                     queixa_principal=f'Consulta {i}',
-                    status='completed' if i % 2 == 0 else 'in_progress'
+                    status='finalizada' if i % 2 == 0 else 'in_progress'
                 )
                 db.session.add(consulta)
             db.session.commit()
         
         import time
         start = time.time()
-        response = client.get(f'/consultas?clinica_id={veterinarian_setup["clinic_id"]}')
+        response = client.get(f'/animal/{tutor_with_animal["animal_id"]}/ficha')
         elapsed = time.time() - start
         
         assert response.status_code in [200, 302]

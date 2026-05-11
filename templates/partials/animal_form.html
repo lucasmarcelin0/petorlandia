@@ -58,7 +58,7 @@
             <option value="">Selecionar</option>
             <option value="-" {% if animal.sex == '-' %}selected{% endif %}>-</option>
             <option value="Macho" {% if animal.sex == 'Macho' %}selected{% endif %}>Macho</option>
-            <option value="F&ecirc;mea" {% if animal.sex == 'FÃªmea' %}selected{% endif %}>F&ecirc;mea</option>
+            <option value="F&ecirc;mea" {% if animal.sex == 'Fêmea' %}selected{% endif %}>F&ecirc;mea</option>
           </select>
           <div class="invalid-feedback">Por favor, selecione o sexo.</div>
         </div>
@@ -134,15 +134,36 @@
   </div>
 </form>
 
-<!-- Botao de deletar -->
-<form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta acao nao pode ser desfeita.');"
-      class="animal-delete-form mt-3">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button type="submit" class="btn btn-outline-danger">
-    <i class="bi bi-trash me-1"></i> Remover Animal
+<!-- Acoes sensiveis do animal -->
+<div class="animal-sensitive-actions mt-3">
+  <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-sensitive-actions"
+          aria-expanded="false" aria-controls="animal-sensitive-actions-panel">
+    <i class="bi bi-shield-exclamation me-1"></i> Acoes sensiveis
   </button>
-</form>
+
+  <div id="animal-sensitive-actions-panel" class="d-none mt-2">
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+      <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
+            onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta acao nao pode ser desfeita.');"
+            class="animal-delete-form mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger">
+          <i class="bi bi-trash me-1"></i> Remover Animal
+        </button>
+      </form>
+
+      <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}"
+            onsubmit="return confirm('Deseja marcar este animal como falecido?');"
+            class="animal-mark-deceased-form mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="falecimento_em" value="">
+        <button type="submit" class="btn btn-outline-warning">
+          <i class="bi bi-x-octagon me-1"></i> Marcar como falecido
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- Scripts -->
 {% block scripts %}
@@ -169,6 +190,17 @@
       }
       return true;
     };
+
+    const toggleSensitiveActions = document.getElementById('toggle-sensitive-actions');
+    const sensitiveActionsPanel = document.getElementById('animal-sensitive-actions-panel');
+
+    if (toggleSensitiveActions && sensitiveActionsPanel) {
+      toggleSensitiveActions.addEventListener('click', () => {
+        const isHidden = sensitiveActionsPanel.classList.contains('d-none');
+        sensitiveActionsPanel.classList.toggle('d-none');
+        toggleSensitiveActions.setAttribute('aria-expanded', String(isHidden));
+      });
+    }
   });
 </script>
 {% endblock %}

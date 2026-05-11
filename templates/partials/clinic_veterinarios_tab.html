@@ -79,7 +79,7 @@
                   </div>
                   {% if current_user.id == clinica.owner_id %}
                   <div class="dropdown ms-auto action-dropdown">
-                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do colaborador" title="Ações do colaborador">
                       <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -174,7 +174,7 @@
                     </div>
                     {% if pode_editar %}
                     <div class="dropdown action-dropdown">
-                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do veterinário" title="Ações do veterinário">
                         <i class="bi bi-three-dots"></i>
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">
@@ -271,7 +271,7 @@
                     </div>
                     {% if pode_editar %}
                     <div class="dropdown action-dropdown">
-                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do especialista" title="Ações do especialista">
                         <i class="bi bi-three-dots"></i>
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">

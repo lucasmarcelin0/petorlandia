@@ -41,6 +41,9 @@ logs/
 flask_session/
 .coverage
 .pytest_cache/
+.pytest-tmp/
+.pytest_basetemp/
+.codex_tmp/
 .codex-site-packages/
 
 # OS

@@ -23,6 +23,7 @@
         <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
               onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
               class="ms-lg-auto">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 d-flex align-items-center gap-2">
             <i class="fas fa-trash"></i> Excluir tutor
           </button>
@@ -44,7 +45,7 @@
             data-zoom="{{ tutor.photo_zoom or 1 }}">
           <div class="avatar-ring"></div>
         </div>
-        <div class="flex-grow-1">
+        <div class="tutor-hero__main">
           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <h2 class="mb-0">{{ tutor.name }}</h2>
             {% if tutor.worker %}
@@ -114,11 +115,17 @@
           </div>
 
           <div class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-4 tutor-photo-field">
+              <label class="form-label">Foto do Tutor</label>
+              <div class="photo-uploader">
+                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
+              </div>
+            </div>
+            <div class="col-md-4">
               <label class="form-label">Nome</label>
               <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">E‑mail</label>
               <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
             </div>
@@ -144,12 +151,6 @@
             <div class="col-md-4">
               <label class="form-label">Idade</label>
               <input id="tutor_age" type="number" class="form-control" min="0">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Foto do Tutor</label>
-              <div class="photo-uploader">
-                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
-              </div>
             </div>
             {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
             <div class="col-12">

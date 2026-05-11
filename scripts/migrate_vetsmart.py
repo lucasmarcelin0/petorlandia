@@ -594,6 +594,7 @@ def transform_animal(vs: dict, tutor_pet_id: int,
         "peso":             vs.get("weight") or vs.get("peso"),
         "description":      description,
         "status":           "ativo" if is_alive else "inativo",
+        "modo":             "adotado",
         "is_alive":         is_alive,
         "user_id":          tutor_pet_id,
         "date_added":       _dt(vs.get("createdAt") or vs.get("changedAt") or vs.get("updatedAt")),
@@ -1039,8 +1040,15 @@ def import_all(
                 name=t["name"], user_id=tutor_pet_id, clinica_id=clinica_id
             ).first()
             if existing_animal:
+                # Reconciliar modo/status em reimportações: animais do VetSmart
+                # representam pacientes já vinculados a tutor (não para adoção).
+                existing_animal.modo = t["modo"]
+                existing_animal.status = t["status"]
+                existing_animal.is_alive = t["is_alive"]
+                if t.get("date_of_birth"):
+                    existing_animal.date_of_birth = t["date_of_birth"]
                 animal_id_map[vs_id] = existing_animal.id
-                log.debug("  skip animal '%s' (já existe id=%d)", t["name"], existing_animal.id)
+                log.debug("  update animal existente '%s' (id=%d) com modo=%s", t["name"], existing_animal.id, t["modo"])
                 continue
 
             animal = Animal(
@@ -1054,6 +1062,7 @@ def import_all(
                 peso             = t["peso"],
                 description      = t["description"],
                 status           = t["status"],
+                modo             = t["modo"],
                 is_alive         = t["is_alive"],
                 user_id          = tutor_pet_id,
                 added_by_id      = added_by_user_id,

@@ -459,7 +459,7 @@ document.addEventListener('form-sync-success', function(ev) {
   const {form, data, response} = ev.detail || {};
   if (!form) return;
 
-  const btn = form.querySelector('button[type="submit"]');
+  const btn = window.FormFeedback?.getButton?.(form) || form.querySelector('button[type="submit"]');
   if (btn) {
     clearTimeout(btn.spinnerTimer);
     btn.spinnerTimer = null;
