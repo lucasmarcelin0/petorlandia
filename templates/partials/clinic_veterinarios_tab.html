@@ -158,6 +158,7 @@
           <div id="staff-list" class="row row-cols-1 row-cols-md-2 g-3">
             {% for v in veterinarios %}
             {% set schedule_summary = grouped_vet_schedules.get(v.id, {}) %}
+            {% set is_owner_vet = (v.user.id == clinica.owner_id) %}
             <div class="col" data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or 'veterinario' }}">
               <div class="card team-card h-100">
                 <div class="card-body d-flex flex-column gap-3">
@@ -170,6 +171,13 @@
                           <div class="text-muted small">CRMV: {{ v.crmv }}</div>
                         </div>
                         <span class="badge badge-soft-success">Veterinário</span>
+                        {% if is_owner_vet %}
+                        <span class="badge badge-soft-warning"><i class="bi bi-star-fill me-1"></i>Proprietário</span>
+                        {% endif %}
+                        {% set view_label = {'veterinario': 'Visão: Veterinário', 'colaborador': 'Visão: Colaborador'} %}
+                        {% if v.user.worker in view_label %}
+                        <span class="badge badge-soft-secondary small">{{ view_label[v.user.worker] }}</span>
+                        {% endif %}
                       </div>
                     </div>
                     {% if pode_editar %}
@@ -513,6 +521,11 @@
         {{ staff_permission_forms[s.user.id].can_view_full_calendar.label(class="form-check-label") }}
         <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
       </div>
+      <div class="mb-3 mt-3">
+        {{ staff_permission_forms[s.user.id].appointments_view.label(class="form-label fw-semibold") }}
+        {{ staff_permission_forms[s.user.id].appointments_view(class="form-select form-select-sm") }}
+        <div class="form-text">Define qual visão da página de agenda este usuário verá.</div>
+      </div>
       {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-3") }}
     </form>
   </div>
@@ -574,6 +587,11 @@
         {{ vet_permission_forms[vet.user.id].can_view_full_calendar(class="form-check-input") }}
         {{ vet_permission_forms[vet.user.id].can_view_full_calendar.label(class="form-check-label") }}
         <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+      </div>
+      <div class="mb-3 mt-3">
+        {{ vet_permission_forms[vet.user.id].appointments_view.label(class="form-label fw-semibold") }}
+        {{ vet_permission_forms[vet.user.id].appointments_view(class="form-select form-select-sm") }}
+        <div class="form-text">Define qual visão da página de agenda este veterinário verá ao acessar /appointments.</div>
       </div>
       {{ vet_permission_forms[vet.user.id].submit(class="btn btn-primary btn-sm mt-3") }}
     </form>

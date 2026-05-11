@@ -570,6 +570,15 @@ class ClinicStaffPermissionForm(FlaskForm):
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
     can_view_full_calendar = BooleanField('Visualizar agenda completa da clínica', default=True)
+    appointments_view = SelectField(
+        'Visão de Agenda',
+        choices=[
+            ('', '— padrão —'),
+            ('colaborador', 'Colaborador'),
+            ('veterinario', 'Veterinário'),
+        ],
+        default='',
+    )
     submit = SubmitField('Salvar')
 
 

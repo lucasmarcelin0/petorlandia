@@ -14611,6 +14611,10 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+    # Inclui o vet dono da clínica mesmo que clinica_id do seu perfil seja diferente
+    owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
+    if owner_vet and owner_vet.id not in {v.id for v in veterinarios}:
+        veterinarios = [owner_vet] + list(veterinarios)
     associated_vets = list(clinica.veterinarios_associados)
     veterinarios_ids = {v.id for v in veterinarios}
     specialists = [
@@ -14649,6 +14653,8 @@ def clinic_detail(clinica_id):
     staff_permission_forms = {}
     for s in staff_members:
         form = ClinicStaffPermissionForm(prefix=f"perm_{s.user.id}", obj=s)
+        if request.method == 'GET':
+            form.appointments_view.data = s.user.worker or ''
         staff_permission_forms[s.user.id] = form
 
     vets_for_forms = unique_items_by_id(veterinarios + specialists)
@@ -14659,6 +14665,8 @@ def clinic_detail(clinica_id):
         if not staff:
             staff = ClinicStaff(clinic_id=clinica.id, user_id=v.user.id)
         form = ClinicStaffPermissionForm(prefix=f"vet_perm_{v.user.id}", obj=staff)
+        if request.method == 'GET':
+            form.appointments_view.data = v.user.worker or ''
         vet_permission_forms[v.user.id] = form
 
     for s in staff_members:
@@ -14669,6 +14677,13 @@ def clinic_detail(clinica_id):
             form.populate_obj(s)
             s.user_id = s.user.id
             db.session.add(s)
+            # Atualiza visão de agenda do colaborador
+            new_view = form.appointments_view.data or None
+            # Colaboradores não têm perfil de veterinário — impede atribuição indevida
+            if new_view == 'veterinario' and not getattr(s.user, 'veterinario', None):
+                new_view = 'colaborador'
+            s.user.worker = new_view
+            db.session.add(s.user)
             db.session.commit()
             flash('Permissões atualizadas', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
@@ -14686,6 +14701,11 @@ def clinic_detail(clinica_id):
             form.populate_obj(staff)
             staff.user_id = v.user.id
             db.session.add(staff)
+            # Atualiza visão de agenda do veterinário
+            new_view = form.appointments_view.data or None
+            if new_view in ('veterinario', 'colaborador'):
+                v.user.worker = new_view
+                db.session.add(v.user)
             db.session.commit()
             flash('Permissões atualizadas', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
