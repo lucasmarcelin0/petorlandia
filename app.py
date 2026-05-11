@@ -22023,6 +22023,14 @@ def _veterinarian_accessible_clinic_ids(vet_profile):
         if clinic_id and clinic_id not in clinic_ids:
             clinic_ids.append(clinic_id)
 
+    # Clinics the vet's user owns (owner_id == user.id) may not appear in the
+    # two sets above when the Veterinario record predates the Clinica or when
+    # the staff link was never set.
+    for clinic in getattr(getattr(vet_profile, 'user', None), 'clinicas', []) or []:
+        clinic_id = getattr(clinic, 'id', None)
+        if clinic_id and clinic_id not in clinic_ids:
+            clinic_ids.append(clinic_id)
+
     return clinic_ids
 
 
@@ -23746,13 +23754,7 @@ def appointments():
         if not veterinario:
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
-        clinic_ids = []
-        if getattr(veterinario, "clinica_id", None):
-            clinic_ids.append(veterinario.clinica_id)
-        for clinica in getattr(veterinario, "clinicas", []) or []:
-            clinica_id = getattr(clinica, "id", None)
-            if clinica_id and clinica_id not in clinic_ids:
-                clinic_ids.append(clinica_id)
+        clinic_ids = _veterinarian_accessible_clinic_ids(veterinario)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
         associated_clinics = clinic_repo.list_by_ids(clinic_ids) if clinic_ids else []
         calendar_summary_clinic_ids = clinic_ids
