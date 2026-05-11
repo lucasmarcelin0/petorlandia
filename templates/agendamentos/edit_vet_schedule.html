@@ -70,7 +70,7 @@
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="section-new-tab" data-bs-toggle="tab" data-bs-target="#section-new" type="button" role="tab" aria-controls="section-new" aria-selected="false">
         <span class="icon-circle bg-success text-white"><i class="fa-solid fa-plus"></i></span>
-        <span class="fw-semibold">Nova Consulta</span>
+        <span class="fw-semibold">Novo</span>
       </button>
     </li>
     {% endif %}
@@ -90,6 +90,18 @@
       <button class="nav-link d-flex align-items-center gap-2" id="section-horarios-tab" data-bs-toggle="tab" data-bs-target="#section-horarios" type="button" role="tab" aria-controls="section-horarios" aria-selected="false">
         <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-clock"></i></span>
         <span class="fw-semibold">Horários</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-tutores-tab" data-bs-toggle="tab" data-bs-target="#section-tutores" type="button" role="tab" aria-controls="section-tutores" aria-selected="false">
+        <span class="icon-circle bg-secondary text-white"><i class="fa-solid fa-users"></i></span>
+        <span class="fw-semibold">Tutores</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-animais-tab" data-bs-toggle="tab" data-bs-target="#section-animais" type="button" role="tab" aria-controls="section-animais" aria-selected="false">
+        <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-paw"></i></span>
+        <span class="fw-semibold">Animais</span>
       </button>
     </li>
   </ul>
@@ -1178,6 +1190,7 @@
       </div>
     </div><!-- /accordion-item Tutores -->
 
+<<<<<<< HEAD
     <!-- ── 3. Cadastro de Animais ── -->
     <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
       <h2 class="accordion-header" id="animaisAccordionHeading">
@@ -1213,6 +1226,48 @@
     </div><!-- /accordion #horariosAccordion -->
 
   </div><!-- /tab-pane section-horarios -->
+=======
+  </div><!-- /tab-pane section-horarios -->
+
+  <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
+    <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
+      <div class="card-body p-4 p-lg-5 d-flex flex-column">
+        {% include 'partials/tutor_management_panel.html' %}
+      </div>
+      <div class="px-4 pb-4" id="tutores-adicionados">
+        {% with
+          compact=True,
+          tutores_adicionados=vet_tutores_adicionados,
+          pagination=vet_tutores_pagination,
+          scope=vet_tutores_scope,
+          scope_param='tutor_scope',
+          search_param='tutor_search',
+          sort_param='tutor_sort',
+          page_param='tutor_page',
+          tutor_search=vet_tutor_search,
+          tutor_sort=vet_tutor_sort,
+          fetch_url=url_for('tutores')
+        %}
+          {% include 'partials/tutores_adicionados.html' %}
+        {% endwith %}
+      </div>
+    </div>
+  </div><!-- /tab-pane section-tutores -->
+
+  <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
+    <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
+      <div class="card-body p-4 p-lg-5 d-flex flex-column">
+        {% with animais_adicionados=vet_animais_adicionados,
+                pagination=vet_animais_pagination,
+                scope=vet_animais_scope,
+                animal_search=vet_animal_search,
+                animal_sort=vet_animal_sort %}
+          {% include 'partials/novo_pet_panel.html' %}
+        {% endwith %}
+      </div>
+    </div>
+  </div><!-- /tab-pane section-animais -->
+>>>>>>> 51e567d70a90b01ecd34303b717927e2e73dde65
 
   </div><!-- /tab-content -->
 
