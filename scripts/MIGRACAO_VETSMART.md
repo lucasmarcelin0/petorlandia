@@ -131,6 +131,7 @@ python scripts/backfill_prescricoes.py
 | `limpar_duplicatas_migracao.py` | Remove tutores/animais/blocos duplicados de múltiplas rodadas |
 | `backfill_enderecos.py` | Atualiza endereços, data de nascimento e RG de tutores já migrados |
 | `backfill_animais_adotados_vetsmart.py` | Corrige animais migrados para `modo=adotado` (e reconcilia `status`/`is_alive`) |
+| `backfill_todos_animais_adotados.py` | Força `modo=adotado` para todos os animais (opcional por clínica) |
 | `backfill_prescricoes.py` | Reimporta prescrições com estrutura correta (BlocoPrescricao + campos) |
 | `exportar_clientes_vetsmart.py` | Exporta dados via browser (Playwright) — uso quando há Cloudflare |
 
