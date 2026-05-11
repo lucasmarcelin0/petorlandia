@@ -691,6 +691,27 @@ class VetSpecialtyForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
+_UF_CHOICES = [
+    ('', '— UF —'),
+    ('AC', 'AC'), ('AL', 'AL'), ('AM', 'AM'), ('AP', 'AP'), ('BA', 'BA'),
+    ('CE', 'CE'), ('DF', 'DF'), ('ES', 'ES'), ('GO', 'GO'), ('MA', 'MA'),
+    ('MG', 'MG'), ('MS', 'MS'), ('MT', 'MT'), ('PA', 'PA'), ('PB', 'PB'),
+    ('PE', 'PE'), ('PI', 'PI'), ('PR', 'PR'), ('RJ', 'RJ'), ('RN', 'RN'),
+    ('RO', 'RO'), ('RR', 'RR'), ('RS', 'RS'), ('SC', 'SC'), ('SE', 'SE'),
+    ('SP', 'SP'), ('TO', 'TO'),
+]
+
+
+class VetProfileForm(FlaskForm):
+    name = StringField('Nome completo', validators=[DataRequired(), Length(max=120)])
+    phone = StringField('Telefone / WhatsApp', validators=[Optional(), Length(max=20)])
+    email = EmailField('E-mail', validators=[Optional(), Email(), Length(max=120)])
+    crmv = StringField('Número do CRMV', validators=[DataRequired(), Length(max=20)])
+    crmv_estado = SelectField('UF do CRMV', choices=_UF_CHOICES, default='')
+    specialties = SelectMultipleField('Especialidades', coerce=int, validators=[Optional()])
+    submit = SubmitField('Salvar perfil')
+
+
 class EditAddressForm(FlaskForm):
     """Formulário simples para atualizar o endereço de entrega de um pedido."""
     shipping_address = TextAreaField('Endereço', validators=[DataRequired(), Length(max=200)])

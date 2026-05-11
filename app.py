@@ -1691,6 +1691,7 @@ from forms import (
     ConsultaPlanAuthorizationForm,
     VetScheduleForm,
     VetSpecialtyForm,
+    VetProfileForm,
     VeterinarianMembershipCheckoutForm,
     VeterinarianMembershipCancelTrialForm,
     VeterinarianMembershipRequestNewTrialForm,
@@ -14427,7 +14428,7 @@ def clinic_detail(clinica_id):
             .filter(Clinica.id == clinica_id)
             .first_or_404()
         )
-    from models import VetClinicInvite
+    from models import VetClinicInvite, Specialty
 
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
     if not _is_admin() and not is_owner:
@@ -14668,6 +14669,23 @@ def clinic_detail(clinica_id):
         if request.method == 'GET':
             form.appointments_view.data = v.user.worker or ''
         vet_permission_forms[v.user.id] = form
+
+    all_specialties = Specialty.query.order_by(Specialty.nome).all()
+    vet_profile_forms = {}
+    for v in vets_for_forms:
+        form = VetProfileForm(
+            prefix=f"vetprofile_{v.id}",
+            formdata=request.form if request.method == 'POST' else None,
+        )
+        form.specialties.choices = [(s.id, s.nome) for s in all_specialties]
+        if request.method == 'GET':
+            form.name.data = v.user.name or ''
+            form.phone.data = v.user.phone or ''
+            form.email.data = v.user.email or ''
+            form.crmv.data = v.crmv or ''
+            form.crmv_estado.data = v.crmv_estado or ''
+            form.specialties.data = [s.id for s in v.specialties]
+        vet_profile_forms[v.id] = form
 
     for s in staff_members:
         form = staff_permission_forms[s.user.id]
@@ -15132,6 +15150,8 @@ def clinic_detail(clinica_id):
         specialist_form=specialist_form,
         staff_permission_forms=staff_permission_forms,
         vet_permission_forms=vet_permission_forms,
+        vet_profile_forms=vet_profile_forms,
+        all_specialties=all_specialties,
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
@@ -16957,6 +16977,33 @@ def veterinarian_activity_report(veterinario_id):
     )
 
 
+
+
+@app.route('/veterinario/<int:veterinario_id>/profile', methods=['POST'])
+@login_required
+def update_vet_profile(veterinario_id):
+    from models import Specialty
+    vet = Veterinario.query.get_or_404(veterinario_id)
+    if vet.user_id != current_user.id and not _is_admin():
+        abort(403)
+    form = VetProfileForm(prefix=f"vetprofile_{veterinario_id}")
+    form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
+    next_url = request.form.get('next') or url_for('index')
+    if form.validate_on_submit():
+        vet.user.name = form.name.data.strip()
+        if form.phone.data is not None:
+            vet.user.phone = form.phone.data.strip() or None
+        vet.crmv = form.crmv.data.strip()
+        vet.crmv_estado = form.crmv_estado.data or None
+        selected_ids = form.specialties.data or []
+        vet.specialties = Specialty.query.filter(Specialty.id.in_(selected_ids)).all()
+        db.session.commit()
+        flash('Perfil atualizado com sucesso.', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+    return redirect(next_url)
 
 
 @login_required
