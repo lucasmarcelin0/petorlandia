@@ -982,23 +982,6 @@
         <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
           <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
           <div class="d-flex align-items-center gap-2">
-            <div class="d-flex align-items-center gap-2 d-none" data-schedule-bulk-actions>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                data-schedule-bulk-delete
-                disabled
-              >
-                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                data-schedule-select-all
-              >
-                <i class="fas fa-check-double me-1"></i>Selecionar tudo
-              </button>
-            </div>
             <button
               class="btn btn-sm btn-outline-primary"
               data-schedule-edit-toggle
@@ -1009,6 +992,29 @@
           </div>
         </div>
         <div class="card-body">
+          <div class="schedule-bulk-toolbar d-none" data-schedule-bulk-actions>
+            <div class="schedule-bulk-toolbar__summary">
+              <i class="fas fa-mouse-pointer me-2" aria-hidden="true"></i>
+              <span data-schedule-selection-count>0 selecionados</span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-schedule-select-all
+              >
+                <i class="fas fa-check-double me-1"></i>Selecionar todos
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-schedule-bulk-delete
+                disabled
+              >
+                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
+              </button>
+            </div>
+          </div>
           <div
             class="schedule-inline-container border rounded-3 p-4 mb-4 d-none"
             data-schedule-inline-container
@@ -1360,6 +1366,26 @@
     font-size: 0.75em;
   }
 
+  .schedule-bulk-toolbar {
+    border: 1px solid #d7deea;
+    border-radius: 0.75rem;
+    background: #f7faff;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .schedule-bulk-toolbar__summary {
+    display: flex;
+    align-items: center;
+    color: #3d4f68;
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+
   @media (max-width: 768px) {
     .btn-group .btn {
       font-size: 0.75rem;
@@ -1374,6 +1400,15 @@
     .d-flex.align-items-center .me-3 {
       margin-right: 0 !important;
       margin-bottom: 0.5rem;
+    }
+
+    .schedule-bulk-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .schedule-bulk-toolbar__summary {
+      justify-content: center;
     }
   }
 </style>
