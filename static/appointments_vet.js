@@ -314,19 +314,26 @@ function getSelectedScheduleIds(root) {
 function updateScheduleSelectionState(root) {
   const checkboxes = getScheduleSelectInputs(root);
   const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  const total = checkboxes.length;
+
+  const selectionCountLabel = root?.querySelector('[data-schedule-selection-count]');
+  if (selectionCountLabel) {
+    const plural = selectedCount === 1 ? 'selecionado' : 'selecionados';
+    selectionCountLabel.textContent = `${selectedCount} ${plural}`;
+  }
+
   const bulkDeleteButton = root?.querySelector(SCHEDULE_SELECTORS.bulkDelete);
   if (bulkDeleteButton) {
     bulkDeleteButton.disabled = selectedCount === 0;
   }
   const selectAllButton = root?.querySelector(SCHEDULE_SELECTORS.selectAll);
   if (selectAllButton) {
-    const total = checkboxes.length;
     const allSelected = total > 0 && selectedCount === total;
     selectAllButton.disabled = total === 0;
     selectAllButton.dataset.scheduleSelectAllState = allSelected ? 'all' : 'partial';
     selectAllButton.innerHTML = allSelected
       ? '<i class="fas fa-times me-1"></i>Limpar seleção'
-      : '<i class="fas fa-check-double me-1"></i>Selecionar tudo';
+      : '<i class="fas fa-check-double me-1"></i>Selecionar todos';
   }
 }
 

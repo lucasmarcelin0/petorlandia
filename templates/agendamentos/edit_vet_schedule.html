@@ -985,39 +985,15 @@
   <!-- ===== Tab: Horários ===== -->
   <div class="tab-pane fade" id="section-horarios" role="tabpanel" aria-labelledby="section-horarios-tab" tabindex="0">
 
-    <div class="accordion" id="horariosAccordion">
-
-    <!-- ── 1. Horários Cadastrados ── -->
-    <div class="accordion-item border-0 shadow-sm rounded-4 mb-3" data-schedule-manage-collapse id="{{ vet_schedule_manage_collapse_id }}">
-      <h2 class="accordion-header" id="scheduleAccordionHeading">
-        <button
-          class="accordion-button"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#scheduleAccordionPane"
-          aria-expanded="true"
-          aria-controls="scheduleAccordionPane"
-        >
-          <i class="fas fa-business-time me-2"></i>
-          <span class="flex-grow-1">Horários Cadastrados</span>
-          <div class="d-flex align-items-center gap-2 me-4" onclick="event.stopPropagation()">
-            <div class="d-flex align-items-center gap-2 d-none" data-schedule-bulk-actions>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                data-schedule-bulk-delete
-                disabled
-              >
-                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                data-schedule-select-all
-              >
-                <i class="fas fa-check-double me-1"></i>Selecionar tudo
-              </button>
-            </div>
+    <!-- Gerenciar horários -->
+    <div
+      data-schedule-manage-collapse
+      id="{{ vet_schedule_manage_collapse_id }}"
+    >
+      <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
+          <div class="d-flex align-items-center gap-2">
             <button
               class="btn btn-sm btn-outline-primary"
               data-schedule-edit-toggle
@@ -1026,15 +1002,31 @@
               <i class="fas fa-edit me-1"></i>Editar horários
             </button>
           </div>
-        </button>
-      </h2>
-      <div
-        id="scheduleAccordionPane"
-        class="accordion-collapse collapse show"
-        aria-labelledby="scheduleAccordionHeading"
-        data-bs-parent="#horariosAccordion"
-      >
-      <div class="accordion-body p-3">
+        </div>
+        <div class="card-body">
+          <div class="schedule-bulk-toolbar d-none" data-schedule-bulk-actions>
+            <div class="schedule-bulk-toolbar__summary">
+              <i class="fas fa-mouse-pointer me-2" aria-hidden="true"></i>
+              <span data-schedule-selection-count>0 selecionados</span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-schedule-select-all
+              >
+                <i class="fas fa-check-double me-1"></i>Selecionar todos
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-schedule-bulk-delete
+                disabled
+              >
+                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
+              </button>
+            </div>
+          </div>
           <div
             class="schedule-inline-container border rounded-3 p-4 mb-4 d-none"
             data-schedule-inline-container
@@ -1190,7 +1182,6 @@
       </div>
     </div><!-- /accordion-item Tutores -->
 
-<<<<<<< HEAD
     <!-- ── 3. Cadastro de Animais ── -->
     <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
       <h2 class="accordion-header" id="animaisAccordionHeading">
@@ -1226,48 +1217,6 @@
     </div><!-- /accordion #horariosAccordion -->
 
   </div><!-- /tab-pane section-horarios -->
-=======
-  </div><!-- /tab-pane section-horarios -->
-
-  <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
-    <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
-      <div class="card-body p-4 p-lg-5 d-flex flex-column">
-        {% include 'partials/tutor_management_panel.html' %}
-      </div>
-      <div class="px-4 pb-4" id="tutores-adicionados">
-        {% with
-          compact=True,
-          tutores_adicionados=vet_tutores_adicionados,
-          pagination=vet_tutores_pagination,
-          scope=vet_tutores_scope,
-          scope_param='tutor_scope',
-          search_param='tutor_search',
-          sort_param='tutor_sort',
-          page_param='tutor_page',
-          tutor_search=vet_tutor_search,
-          tutor_sort=vet_tutor_sort,
-          fetch_url=url_for('tutores')
-        %}
-          {% include 'partials/tutores_adicionados.html' %}
-        {% endwith %}
-      </div>
-    </div>
-  </div><!-- /tab-pane section-tutores -->
-
-  <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
-    <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
-      <div class="card-body p-4 p-lg-5 d-flex flex-column">
-        {% with animais_adicionados=vet_animais_adicionados,
-                pagination=vet_animais_pagination,
-                scope=vet_animais_scope,
-                animal_search=vet_animal_search,
-                animal_sort=vet_animal_sort %}
-          {% include 'partials/novo_pet_panel.html' %}
-        {% endwith %}
-      </div>
-    </div>
-  </div><!-- /tab-pane section-animais -->
->>>>>>> 51e567d70a90b01ecd34303b717927e2e73dde65
 
   </div><!-- /tab-content -->
 
@@ -1469,6 +1418,26 @@
     font-size: 0.75em;
   }
 
+  .schedule-bulk-toolbar {
+    border: 1px solid #d7deea;
+    border-radius: 0.75rem;
+    background: #f7faff;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .schedule-bulk-toolbar__summary {
+    display: flex;
+    align-items: center;
+    color: #3d4f68;
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+
   @media (max-width: 768px) {
     .btn-group .btn {
       font-size: 0.75rem;
@@ -1483,6 +1452,15 @@
     .d-flex.align-items-center .me-3 {
       margin-right: 0 !important;
       margin-bottom: 0.5rem;
+    }
+
+    .schedule-bulk-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .schedule-bulk-toolbar__summary {
+      justify-content: center;
     }
   }
 </style>
