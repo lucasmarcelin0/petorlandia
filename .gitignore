@@ -70,3 +70,5 @@ build/
 !.vscode/settings.json
 !.vscode/launch.json
 
+
+.claude/worktrees/
