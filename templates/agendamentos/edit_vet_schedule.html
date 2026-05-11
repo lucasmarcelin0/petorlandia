@@ -1004,29 +1004,6 @@
           </div>
         </div>
         <div class="card-body">
-          <div class="schedule-bulk-toolbar d-none" data-schedule-bulk-actions>
-            <div class="schedule-bulk-toolbar__summary">
-              <i class="fas fa-mouse-pointer me-2" aria-hidden="true"></i>
-              <span data-schedule-selection-count>0 selecionados</span>
-            </div>
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                data-schedule-select-all
-              >
-                <i class="fas fa-check-double me-1"></i>Selecionar todos
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                data-schedule-bulk-delete
-                disabled
-              >
-                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
-              </button>
-            </div>
-          </div>
           <div
             class="schedule-inline-container border rounded-3 p-4 mb-4 d-none"
             data-schedule-inline-container
@@ -1064,6 +1041,29 @@
                 </button>
               </div>
             </form>
+          </div>
+          <div class="schedule-bulk-toolbar d-none mt-3 mb-4" data-schedule-bulk-actions>
+            <div class="schedule-bulk-toolbar__summary">
+              <i class="fas fa-mouse-pointer me-2" aria-hidden="true"></i>
+              <span data-schedule-selection-count>0 selecionados</span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-schedule-select-all
+              >
+                <i class="fas fa-check-double me-1"></i>Selecionar todos
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-schedule-bulk-delete
+                disabled
+              >
+                <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
+              </button>
+            </div>
           </div>
           <div class="row">
             {% for grupo in horarios_grouped %}
