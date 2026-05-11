@@ -13,7 +13,7 @@
         <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form">
             {{ form.hidden_tag() }}
             <input type="hidden" name="next" value="{{ next_url }}">
-            {{ render_field(form.email, classes='form-control rounded-pill') }}
+            {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular') }}
             {{ render_field(form.password, classes='form-control rounded-pill') }}
             {{ render_checkbox(form.remember) }}
             {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}

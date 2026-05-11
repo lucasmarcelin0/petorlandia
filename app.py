@@ -1405,6 +1405,63 @@ def digits_only(value):
     return "".join(filter(str.isdigit, value)) if value else ""
 
 
+def normalize_email(value: str | None) -> str | None:
+    """Normalize an email for case-insensitive lookups."""
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def normalize_phone(value: str | None) -> str | None:
+    """Normalize a phone number into a comparable storage format."""
+    digits = digits_only(value)
+    if not digits:
+        return None
+
+    if digits.startswith("55") and len(digits) >= 12:
+        digits = digits[2:]
+    elif digits.startswith("0") and len(digits) >= 11:
+        digits = digits[1:]
+
+    if len(digits) in {10, 11}:
+        return f"+55{digits}"
+
+    if str(value or "").strip().startswith("+"):
+        return f"+{digits}"
+    return f"+55{digits}"
+
+
+def find_users_by_phone(phone: str | None, *, exclude_user_id: int | None = None) -> list[User]:
+    """Return users whose stored phone matches the normalized phone value."""
+    normalized_phone = normalize_phone(phone)
+    if not normalized_phone:
+        return []
+
+    matches = []
+    candidates = User.query.filter(User.phone.isnot(None), User.phone != "").all()
+    for candidate in candidates:
+        if exclude_user_id is not None and candidate.id == exclude_user_id:
+            continue
+        if normalize_phone(candidate.phone) == normalized_phone:
+            matches.append(candidate)
+    return matches
+
+
+def find_user_by_login_identifier(identifier: str | None) -> tuple[User | None, str | None]:
+    """Resolve a login identifier as email or phone."""
+    normalized_email = normalize_email(identifier)
+    if normalized_email and "@" in normalized_email:
+        return User.query.filter(func.lower(User.email) == normalized_email).first(), None
+
+    phone_matches = find_users_by_phone(identifier)
+    if len(phone_matches) > 1:
+        return None, "Há mais de uma conta com este celular. Entre com seu e-mail por enquanto."
+    if phone_matches:
+        return phone_matches[0], None
+    return None, None
+
+
 @app.template_filter("format_cnpj")
 def format_cnpj(value):
     """Return a formatted CNPJ (00.000.000/0000-00)."""
@@ -7498,12 +7555,21 @@ def register():
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
+        normalized_email = normalize_email(form.email.data)
+        normalized_phone = normalize_phone(form.phone.data)
+
         # Verifica se o e-mail já está em uso
-        existing_user = User.query.filter_by(email=form.email.data).first()
+        existing_user = User.query.filter(func.lower(User.email) == normalized_email).first()
         if existing_user:
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}, 'message': 'Email já está em uso.'}), 400
             flash('Email já está em uso.', 'danger')
+            return render_template('auth/register.html', form=form, endereco=None)
+
+        if normalized_phone and find_users_by_phone(normalized_phone):
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}, 'message': 'Celular já está em uso.'}), 400
+            flash('Celular já está em uso.', 'danger')
             return render_template('auth/register.html', form=form, endereco=None)
 
         required_address_labels = {
@@ -7548,8 +7614,8 @@ def register():
         # Cria o usuário com a URL da imagem no S3
         user = User(
             name=form.name.data,
-            email=form.email.data,
-            phone=form.phone.data,
+            email=normalized_email,
+            phone=normalized_phone,
             profile_photo=photo_url,
             endereco=endereco
         )
@@ -7562,9 +7628,12 @@ def register():
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            # Verifica se é erro de email duplicado
             error_message = str(e).lower()
-            if 'unique' in error_message or 'duplicate' in error_message or 'email' in error_message:
+            if 'phone' in error_message or 'telefone' in error_message or 'celular' in error_message:
+                if is_json_request:
+                    return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}, 'message': 'Celular já está em uso.'}), 400
+                flash('Celular já está em uso.', 'danger')
+            elif 'unique' in error_message or 'duplicate' in error_message or 'email' in error_message:
                 if is_json_request:
                     return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}, 'message': 'Email já está em uso.'}), 400
                 flash('Email já está em uso.', 'danger')
@@ -7767,9 +7836,15 @@ def add_animal():
 def login_view():
     form = LoginForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-    
+
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user, login_error = find_user_by_login_identifier(form.login.data)
+        if login_error:
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400
+            flash(login_error, 'warning')
+            return render_template('auth/login.html', form=form)
+
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             if form.remember.data:
@@ -7780,8 +7855,8 @@ def login_view():
             return redirect(url_for('index'))
         else:
             if is_json_request:
-                return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}, 'message': 'Email ou senha inválidos.'}), 400
-            flash('Email ou senha inválidos.', 'danger')
+                return jsonify({'success': False, 'errors': {'login': ['E-mail, celular ou senha inválidos.']}, 'message': 'E-mail, celular ou senha inválidos.'}), 400
+            flash('E-mail, celular ou senha inválidos.', 'danger')
     elif request.method == 'POST' and is_json_request:
         # Captura erros de validação do formulário (incluindo CSRF)
         errors = {}
@@ -10886,6 +10961,7 @@ def profile():
     # Garante que current_user.endereco exista para pré-preenchimento
     form = EditProfileForm(obj=current_user)
     delete_form = DeleteAccountForm()
+    is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
         if not current_user.endereco:
@@ -10895,9 +10971,28 @@ def profile():
     form = EditProfileForm(obj=current_user)
 
     if form.validate_on_submit():
+        normalized_email = normalize_email(form.email.data)
+        normalized_phone = normalize_phone(form.phone.data)
+
+        email_conflict = User.query.filter(
+            func.lower(User.email) == normalized_email,
+            User.id != current_user.id,
+        ).first()
+        if email_conflict:
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
+            flash('Email já está em uso.', 'danger')
+            return redirect(url_for('profile'))
+
+        if normalized_phone and find_users_by_phone(normalized_phone, exclude_user_id=current_user.id):
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}}), 400
+            flash('Celular já está em uso.', 'danger')
+            return redirect(url_for('profile'))
+
         current_user.name = form.name.data
-        current_user.email = form.email.data
-        current_user.phone = form.phone.data
+        current_user.email = normalized_email
+        current_user.phone = normalized_phone
         current_user.is_private = form.is_private.data
         current_user.photo_rotation = form.photo_rotation.data
         current_user.photo_zoom = form.photo_zoom.data
@@ -10927,7 +11022,7 @@ def profile():
 
         if missing_required:
             message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(missing_required) + '.'
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            if is_json_request:
                 return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
             flash(message, 'warning')
             return redirect(url_for('profile'))

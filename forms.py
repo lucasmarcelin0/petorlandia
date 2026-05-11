@@ -104,9 +104,9 @@ class RegistrationForm(FlaskForm):
 
 class LoginForm(FlaskForm):
 
-    email = StringField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
+    login = StringField(
+        'E-mail ou celular',
+        validators=[DataRequired(message="Informe seu e-mail ou celular")],
         render_kw={"required": True},
     )
     password = PasswordField(
