@@ -65,6 +65,18 @@
         <span class="fw-semibold">Horários</span>
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-tutores-tab" data-bs-toggle="tab" data-bs-target="#section-tutores" type="button" role="tab" aria-controls="section-tutores" aria-selected="false">
+        <span class="icon-circle" style="background-color: #06b6d4; color: #fff;"><i class="fa-solid fa-people"></i></span>
+        <span class="fw-semibold">Gestão de Tutores</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-animais-tab" data-bs-toggle="tab" data-bs-target="#section-animais" type="button" role="tab" aria-controls="section-animais" aria-selected="false">
+        <span class="icon-circle" style="background-color: #f59e0b; color: #fff;"><i class="fa-solid fa-heart-pulse"></i></span>
+        <span class="fw-semibold">Cadastro de Animais</span>
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="appointmentsSectionContent">
@@ -388,7 +400,7 @@
             <p class="mb-0 text-muted">Defina e edite a disponibilidade semanal dos colaboradores.</p>
           </div>
         </div>
-        <div class="appointments-horarios-actions d-flex flex-wrap align-items-center gap-3">
+        <div class="appointments-horarios-actions d-flex flex-wrap align-items-center gap-3 mb-4">
           <button
             id="openScheduleModal"
             class="btn btn-primary rounded-pill px-4 d-inline-flex align-items-center gap-2"
@@ -402,9 +414,49 @@
             As alterações refletem imediatamente nos horários disponíveis para novos agendamentos.
           </p>
         </div>
+
+        <!-- Horários Cadastrados -->
+        <div class="alert alert-info d-flex align-items-start gap-3 mb-4" role="info">
+          <i class="bi bi-info-circle-fill fs-5"></i>
+          <div class="small">
+            <strong>Horários cadastrados:</strong> Visualize e gerencie sua disponibilidade semanal abaixo. Clique em um horário para editar ou remover.
+          </div>
+        </div>
       </div>
     </div>
   </div><!-- /tab-pane section-horarios -->
+
+  <!-- ===== Tab: Gestão de Tutores ===== -->
+  <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--default mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-people"></i></span>
+          <div>
+            <h5 class="mb-0">Gestão de Tutores</h5>
+            <p class="mb-0 text-muted">Gerencie os tutores (proprietários de animais) da sua clínica.</p>
+          </div>
+        </div>
+        {% include 'partials/tutor_management_panel.html' %}
+      </div>
+    </div>
+  </div><!-- /tab-pane section-tutores -->
+
+  <!-- ===== Tab: Cadastro de Animais ===== -->
+  <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--default mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-heart-pulse"></i></span>
+          <div>
+            <h5 class="mb-0">Cadastro de Animais</h5>
+            <p class="mb-0 text-muted">Registre e gerencie os animais da sua clínica veterinária.</p>
+          </div>
+        </div>
+        {% include 'partials/novo_pet_panel.html' %}
+      </div>
+    </div>
+  </div><!-- /tab-pane section-animais -->
 
   </div><!-- /tab-content -->
 
