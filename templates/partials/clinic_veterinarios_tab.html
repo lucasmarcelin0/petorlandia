@@ -180,12 +180,22 @@
                         {% endif %}
                       </div>
                     </div>
-                    {% if pode_editar %}
+                    {% if pode_editar or current_user.id == v.user.id %}
                     <div class="dropdown action-dropdown">
                       <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do veterinário" title="Ações do veterinário">
                         <i class="bi bi-three-dots"></i>
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">
+                        {% if current_user.id == v.user.id %}
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetProfileOffcanvas-{{ v.id }}">
+                            <i class="bi bi-person-gear"></i>
+                            Editar meu perfil
+                          </button>
+                        </li>
+                        {% if pode_editar %}<li><hr class="dropdown-divider"></li>{% endif %}
+                        {% endif %}
+                        {% if pode_editar %}
                         <li>
                           <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetScheduleOffcanvas-{{ v.id }}">
                             <i class="bi bi-calendar-week"></i>
@@ -204,6 +214,7 @@
                             Remover
                           </button>
                         </li>
+                        {% endif %}
                       </ul>
                     </div>
                     {% endif %}
@@ -277,12 +288,22 @@
                         <span class="badge badge-soft-info">Especialista</span>
                       </div>
                     </div>
-                    {% if pode_editar %}
+                    {% if pode_editar or current_user.id == s.user.id %}
                     <div class="dropdown action-dropdown">
                       <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do especialista" title="Ações do especialista">
                         <i class="bi bi-three-dots"></i>
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">
+                        {% if current_user.id == s.user.id %}
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetProfileOffcanvas-{{ s.id }}">
+                            <i class="bi bi-person-gear"></i>
+                            Editar meu perfil
+                          </button>
+                        </li>
+                        {% if pode_editar %}<li><hr class="dropdown-divider"></li>{% endif %}
+                        {% endif %}
+                        {% if pode_editar %}
                         <li>
                           <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetScheduleOffcanvas-{{ s.id }}">
                             <i class="bi bi-calendar-week"></i>
@@ -301,6 +322,7 @@
                             Remover
                           </button>
                         </li>
+                        {% endif %}
                       </ul>
                     </div>
                     {% endif %}
@@ -681,6 +703,52 @@
         {% endif %}
       </div>
     </div>
+  </div>
+</div>
+{% endif %}
+{% if current_user.id == vet.user.id and vet.id in vet_profile_forms %}
+{% set pf = vet_profile_forms[vet.id] %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="vetProfileOffcanvas-{{ vet.id }}" aria-labelledby="vetProfileLabel-{{ vet.id }}">
+  <div class="offcanvas-header">
+    <h5 id="vetProfileLabel-{{ vet.id }}"><i class="bi bi-person-gear me-2"></i>Editar meu perfil</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form method="post" action="{{ url_for('update_vet_profile', veterinario_id=vet.id) }}">
+      {{ pf.hidden_tag() }}
+      <input type="hidden" name="next" value="{{ request.url }}">
+      <div class="mb-3">
+        {{ pf.name.label(class_="form-label fw-semibold") }}
+        {{ pf.name(class="form-control") }}
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-8">
+          {{ pf.crmv.label(class_="form-label fw-semibold") }}
+          {{ pf.crmv(class="form-control", placeholder="Ex: 12345") }}
+        </div>
+        <div class="col-4">
+          {{ pf.crmv_estado.label(class_="form-label fw-semibold") }}
+          {{ pf.crmv_estado(class="form-select") }}
+        </div>
+      </div>
+      <div class="mb-3">
+        {{ pf.phone.label(class_="form-label fw-semibold") }}
+        {{ pf.phone(class="form-control", placeholder="(11) 99999-9999") }}
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">E-mail</label>
+        <input type="text" class="form-control" value="{{ vet.user.email or '' }}" readonly disabled>
+        <div class="form-text">Para alterar o e-mail acesse as configurações da sua conta.</div>
+      </div>
+      <div class="mb-3">
+        {{ pf.specialties.label(class_="form-label fw-semibold") }}
+        {{ pf.specialties(class="form-select", size=6) }}
+        <div class="form-text">Segure Ctrl (ou Cmd) para selecionar múltiplas especialidades.</div>
+      </div>
+      <div class="d-grid">
+        {{ pf.submit(class="btn btn-primary") }}
+      </div>
+    </form>
   </div>
 </div>
 {% endif %}

@@ -1562,6 +1562,7 @@ class Veterinario(db.Model):
         nullable=False,
     )
     crmv = db.Column(db.String(20), nullable=False)
+    crmv_estado = db.Column(db.String(2), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
