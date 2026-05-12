@@ -20,6 +20,13 @@
       </a>
       {% endif %}
 
+      {% if minha_clinica %}
+      <a href="{{ url_for('clinic_loja_produtos', clinica_id=minha_clinica.id) }}"
+         class="btn btn-outline-secondary btn-lg d-flex align-items-center">
+        <i class="fa-solid fa-store me-2"></i> Minha Loja
+      </a>
+      {% endif %}
+
       <a href="{{ url_for('ver_carrinho') }}"
          class="btn btn-success btn-lg d-flex align-items-center position-relative">
         <i class="fa-solid fa-cart-shopping me-2"></i> Ver Carrinho

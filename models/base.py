@@ -2473,6 +2473,15 @@ class Product(db.Model):
     aliquota_pis = db.Column(db.Numeric(10, 4))
     aliquota_cofins = db.Column(db.Numeric(10, 4))
 
+    # Campos de venda por clínica
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id', ondelete='SET NULL'), nullable=True, index=True)
+    clinic_inventory_item_id = db.Column(db.Integer, db.ForeignKey('clinic_inventory_item.id', ondelete='SET NULL'), nullable=True)
+    # 'active' = visível na loja, 'inactive' = oculto pelo dono, 'pending' = aguardando aprovação
+    status = db.Column(db.String(20), default='active', nullable=False)
+
+    clinica = db.relationship('Clinica', backref=db.backref('produtos_loja', lazy='dynamic'))
+    inventory_item = db.relationship('ClinicInventoryItem', backref=db.backref('produto_loja', uselist=False))
+
     # Items de pedido associados ao produto. O cascade facilita remover os
     # OrderItem relacionados quando o produto é excluído.
     order_items = db.relationship(

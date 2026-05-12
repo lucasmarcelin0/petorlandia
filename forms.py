@@ -748,6 +748,31 @@ class OrcamentoForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
+class ClinicProductForm(FlaskForm):
+    """Formulário usado pelo dono da clínica para publicar um produto na loja."""
+    name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    image_upload = FileField('Imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    # Quantidade inicial quando não há item de estoque vinculado
+    quantity = IntegerField('Quantidade em estoque', validators=[Optional(), NumberRange(min=0)], default=0)
+    unit = StringField('Unidade (ex: unidade, kg, caixa)', validators=[Optional(), Length(max=50)])
+    # ID do ClinicInventoryItem existente (0 = criar novo)
+    inventory_item_id = SelectField('Vincular ao estoque existente', coerce=int, validators=[Optional()])
+    submit = SubmitField('Publicar na loja')
+
+
+class ClinicProductEditForm(FlaskForm):
+    """Formulário de edição de produto da clínica."""
+    name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    image_upload = FileField('Nova imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Salvar alterações')
+
+
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 

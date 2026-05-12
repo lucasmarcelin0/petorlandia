@@ -119,4 +119,24 @@ def get_blueprint():
         view_func=lazy_view("delete_vet_schedule_clinic"),
         methods=["POST"],
     )
+    bp.add_url_rule(
+        "/clinica/<int:clinica_id>/loja/produtos",
+        view_func=lazy_view("clinic_loja_produtos"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/editar",
+        view_func=lazy_view("clinic_produto_editar"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/toggle",
+        view_func=lazy_view("clinic_produto_toggle"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/estoque/item/<int:item_id>/publicar",
+        view_func=lazy_view("publish_inventory_to_loja"),
+        methods=["POST"],
+    )
     return bp
