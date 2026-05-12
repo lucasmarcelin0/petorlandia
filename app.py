@@ -13260,35 +13260,76 @@ def _serialize_clinical_protocol(protocol: ProtocoloClinico) -> dict:
         'nome': protocol.nome,
         'suspeita_principal': protocol.suspeita_principal,
         'especie': protocol.especie,
+        'prioridade': protocol.prioridade,
+        'sinais_gatilho': protocol.sinais_gatilho,
+        'conduta_sugerida': protocol.conduta_sugerida,
+        'orientacoes_tutor': protocol.orientacoes_tutor,
+        'alertas': protocol.alertas,
+        'exames': [
+            {
+                'id': item.id,
+                'nome': item.nome,
+                'justificativa': item.justificativa,
+            }
+            for item in (protocol.exames_sugeridos or [])
+        ],
+        'medicamentos': [
+            {
+                'id': item.id,
+                'nome_medicamento': item.nome_medicamento or item.nome_exibicao,
+                'justificativa': item.justificativa,
+                'dosagem_texto': item.dosagem_texto,
+                'frequencia_texto': item.frequencia_texto,
+                'duracao_texto': item.duracao_texto,
+                'observacoes': item.observacoes,
+                'indicacao': item.indicacao,
+            }
+            for item in (protocol.medicamentos_sugeridos or [])
+        ],
+        'retorno': (
+            {
+                'id': protocol.retornos_sugeridos[0].id,
+                'prazo_min_dias': protocol.retornos_sugeridos[0].prazo_min_dias,
+                'prazo_max_dias': protocol.retornos_sugeridos[0].prazo_max_dias,
+                'tipo_retorno': protocol.retornos_sugeridos[0].tipo_retorno,
+                'objetivo': protocol.retornos_sugeridos[0].objetivo,
+                'gatilhos_antecipacao': protocol.retornos_sugeridos[0].gatilhos_antecipacao,
+            }
+            if (protocol.retornos_sugeridos or []) else {}
+        ),
+        'clinica_id': protocol.clinica_id,
     }
 
 
-def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
+def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta) -> ProtocoloClinico:
     nome = _clean_protocol_text(payload.get('nome'))
     suspeita = _clean_protocol_text(payload.get('suspeita_principal'))
     if not nome or not suspeita:
         raise ValueError('Informe pelo menos nome do protocolo e suspeita principal.')
 
-    protocolo = ProtocoloClinico(
-        nome=nome,
-        suspeita_principal=suspeita,
-        especie=_clean_protocol_text(payload.get('especie')),
-        sinais_gatilho=_clean_protocol_text(payload.get('sinais_gatilho')),
-        conduta_sugerida=_clean_protocol_text(payload.get('conduta_sugerida')),
-        orientacoes_tutor=_clean_protocol_text(payload.get('orientacoes_tutor')),
-        alertas=_clean_protocol_text(payload.get('alertas')),
-        prioridade=_protocol_priority(payload.get('prioridade'), default=100),
-        versao=1,
-        ativo=True,
-        clinica_id=consulta.clinica_id,
-        created_by=getattr(current_user, 'id', None),
-    )
+    protocol.nome = nome
+    protocol.suspeita_principal = suspeita
+    protocol.especie = _clean_protocol_text(payload.get('especie'))
+    protocol.sinais_gatilho = _clean_protocol_text(payload.get('sinais_gatilho'))
+    protocol.conduta_sugerida = _clean_protocol_text(payload.get('conduta_sugerida'))
+    protocol.orientacoes_tutor = _clean_protocol_text(payload.get('orientacoes_tutor'))
+    protocol.alertas = _clean_protocol_text(payload.get('alertas'))
+    protocol.prioridade = _protocol_priority(payload.get('prioridade'), default=100)
+    protocol.ativo = True
+    if not getattr(protocol, 'clinica_id', None):
+        protocol.clinica_id = consulta.clinica_id
+    if not getattr(protocol, 'created_by', None):
+        protocol.created_by = getattr(current_user, 'id', None)
+
+    protocol.exames_sugeridos[:] = []
+    protocol.medicamentos_sugeridos[:] = []
+    protocol.retornos_sugeridos[:] = []
 
     for index, exame in enumerate(payload.get('exames') or [], start=1):
         nome_exame = _clean_protocol_text((exame or {}).get('nome'))
         if not nome_exame:
             continue
-        protocolo.exames_sugeridos.append(
+        protocol.exames_sugeridos.append(
             ProtocoloClinicoExame(
                 nome=nome_exame,
                 justificativa=_clean_protocol_text((exame or {}).get('justificativa')),
@@ -13300,7 +13341,7 @@ def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
         nome_medicamento = _clean_protocol_text((medicamento or {}).get('nome_medicamento'))
         if not nome_medicamento:
             continue
-        protocolo.medicamentos_sugeridos.append(
+        protocol.medicamentos_sugeridos.append(
             ProtocoloClinicoMedicamento(
                 nome_medicamento=nome_medicamento,
                 justificativa=_clean_protocol_text((medicamento or {}).get('justificativa')),
@@ -13328,7 +13369,7 @@ def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
     except (TypeError, ValueError):
         prazo_max = None
     if objetivo or gatilhos or prazo_min is not None or prazo_max is not None:
-        protocolo.retornos_sugeridos.append(
+        protocol.retornos_sugeridos.append(
             ProtocoloClinicoRetorno(
                 prazo_min_dias=prazo_min,
                 prazo_max_dias=prazo_max,
@@ -13339,7 +13380,17 @@ def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
             )
         )
 
-    return protocolo
+    return protocol
+
+
+def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
+    protocolo = ProtocoloClinico(
+        versao=1,
+        ativo=True,
+        clinica_id=consulta.clinica_id,
+        created_by=getattr(current_user, 'id', None),
+    )
+    return _apply_protocol_payload(protocolo, payload, consulta)
 
 
 @app.route('/consulta/<int:consulta_id>/sugestoes_clinicas', methods=['POST'])
@@ -13481,6 +13532,16 @@ def aplicar_sugestao_clinica(consulta_id):
                 'observacoes': item.observacoes or '',
                 'texto': item.observacoes or '',
                 'indicacao': item.indicacao or '',
+                'use_weight_based_dose': bool(
+                    resolved_medicamento_id and not (item.dosagem_texto or '').strip()
+                ),
+                'preferred_dose_mode': (
+                    'min'
+                    if (item.nome_exibicao or '').strip().lower() == 'prednisona'
+                    and (item.indicacao or '').strip().lower() == 'alergia'
+                    else ''
+                ),
+                'compact_practical_dose': (item.nome_exibicao or '').strip().lower() == 'simparic',
             },
             'draft_instructions': (protocol.orientacoes_tutor or '').strip() or '',
         }
@@ -13549,6 +13610,78 @@ def criar_protocolo_clinico_inline(consulta_id):
     return jsonify({
         'success': True,
         'message': 'Novo protocolo criado com sucesso.',
+        'protocol': _serialize_clinical_protocol(protocolo),
+        'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
+    })
+
+
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>', methods=['GET'])
+@login_required
+def obter_protocolo_clinico_inline(consulta_id, protocol_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem visualizar protocolos clínicos.'}), 403
+
+    protocolo = (
+        ProtocoloClinico.query
+        .options(
+            selectinload(ProtocoloClinico.exames_sugeridos),
+            selectinload(ProtocoloClinico.medicamentos_sugeridos),
+            selectinload(ProtocoloClinico.retornos_sugeridos),
+        )
+        .get_or_404(protocol_id)
+    )
+    if not protocolo.clinica_id or protocolo.clinica_id != consulta.clinica_id:
+        return jsonify({'success': False, 'message': 'Apenas protocolos da clínica podem ser editados por esta aba.'}), 403
+
+    return jsonify({
+        'success': True,
+        'protocol': _serialize_clinical_protocol(protocolo),
+    })
+
+
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>', methods=['PUT'])
+@login_required
+def atualizar_protocolo_clinico_inline(consulta_id, protocol_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem editar protocolos clínicos.'}), 403
+
+    protocolo = (
+        ProtocoloClinico.query
+        .options(
+            selectinload(ProtocoloClinico.exames_sugeridos),
+            selectinload(ProtocoloClinico.medicamentos_sugeridos),
+            selectinload(ProtocoloClinico.retornos_sugeridos),
+        )
+        .get_or_404(protocol_id)
+    )
+    if not protocolo.clinica_id or protocolo.clinica_id != consulta.clinica_id:
+        return jsonify({'success': False, 'message': 'Apenas protocolos da clínica podem ser editados por esta aba.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        protocolo = _apply_protocol_payload(protocolo, payload, consulta)
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=protocolo.id,
+        actor_user_id=current_user.id,
+        tipo_item='protocolo',
+        acao='updated',
+        titulo_item=protocolo.nome,
+        justificativa=protocolo.suspeita_principal,
+        payload={'origem': 'consulta_inline'},
+    )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Protocolo atualizado com sucesso.',
         'protocol': _serialize_clinical_protocol(protocolo),
         'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
     })

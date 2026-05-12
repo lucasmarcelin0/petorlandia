@@ -154,6 +154,7 @@ def test_clinical_suggestions_can_be_loaded_and_applied(client, monkeypatch):
     assert med_payload['success'] is True
     assert med_payload['draft_prescription']['medicamento_id'] == 10
     assert med_payload['draft_prescription']['medicamento'] == 'Doxiciclina'
+    assert med_payload['draft_prescription']['use_weight_based_dose'] is False
     assert med_payload['draft_instructions'] == 'Observar frequencia da tosse e piora respiratoria.'
 
     conduct_apply = client.post(
@@ -523,6 +524,110 @@ def test_bicheira_protocol_returns_requested_conduct_and_medications(client, mon
     ]
 
 
+def test_dermatitis_protocol_returns_requested_medications(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Dermatologia')
+        tutor = User(id=1, name='Tutor', email='tutor-dermatite@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-dermatite@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+            queixa_principal='Muita coceira, pele vermelha e falhas no pelo.',
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome='Protocolo Inicial para Dermatites',
+            suspeita_principal='dermatite',
+            especie='cao',
+            sinais_gatilho='Prurido, coceira, eritema, alopecia, descamacao, crostas, lesoes cutaneas.',
+            conduta_sugerida='Avaliar distribuicao das lesoes, intensidade do prurido e ectoparasitas.',
+            alertas='Prednisona deve ser usada apenas apos avaliacao do medico-veterinario.',
+            clinica_id=None,
+            prioridade=3,
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo])
+        db.session.flush()
+        db.session.add_all([
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Shampoo de clorexidina - 0,20%, frasco (500mL)',
+                justificativa='Higienizacao e apoio topico em dermatites.',
+                dosagem_texto='Aplicar sobre a pelagem umedecida, massagear e deixar agir por 5 a 10 minutos; enxaguar bem e repetir o processo uma vez.',
+                frequencia_texto='1 vez por semana',
+                duracao_texto='3 meses',
+                prioridade=1,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g + Sulfato de Neomicina 2,5mg/g Generico C',
+                justificativa='Uso topico em lesoes localizadas quando houver indicacao clinica.',
+                dosagem_texto='Aplicar uma camada fina sobre a area afetada',
+                frequencia_texto='2 vezes ao dia',
+                duracao_texto='10 dias',
+                prioridade=2,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Simparic',
+                justificativa='Controle de ectoparasitas conforme peso do animal quando indicado.',
+                frequencia_texto='a cada 30 dias',
+                duracao_texto='conforme protocolo',
+                prioridade=3,
+            ),
+            ProtocoloClinicoMedicamento(
+                protocolo=protocolo,
+                nome_medicamento='Prednisona',
+                justificativa='Controle de prurido/inflamacao quando indicado.',
+                dosagem_texto='',
+                frequencia_texto='',
+                duracao_texto='5 dias',
+                indicacao='Alergia',
+                prioridade=4,
+            ),
+        ])
+        db.session.commit()
+        consulta_id = consulta.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    response = client.post(
+        f'/consulta/{consulta_id}/sugestoes_clinicas',
+        json={'suspeita_clinica': 'dermatite alergica com coceira'},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert len(payload['suggestions']) == 1
+
+    suggestion = payload['suggestions'][0]
+    assert 'prednisona' in suggestion['alertas'].lower()
+    assert [item['nome'] for item in suggestion['medicamentos']] == [
+        'Shampoo de clorexidina - 0,20%, frasco (500mL)',
+        'Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g + Sulfato de Neomicina 2,5mg/g Generico C',
+        'Simparic',
+        'Prednisona',
+    ]
+    assert suggestion['medicamentos'][0]['dosagem'] == 'Aplicar sobre a pelagem umedecida, massagear e deixar agir por 5 a 10 minutos; enxaguar bem e repetir o processo uma vez.'
+    assert suggestion['medicamentos'][0]['frequencia'] == '1 vez por semana'
+    assert suggestion['medicamentos'][0]['duracao'] == '3 meses'
+    assert suggestion['medicamentos'][1]['dosagem'] == 'Aplicar uma camada fina sobre a area afetada'
+    assert suggestion['medicamentos'][1]['frequencia'] == '2 vezes ao dia'
+    assert suggestion['medicamentos'][1]['duracao'] == '10 dias'
+    assert suggestion['medicamentos'][2]['dosagem'] in ('', None)
+    assert suggestion['medicamentos'][3]['indicacao'] == 'Alergia'
+    assert suggestion['medicamentos'][3]['duracao'] == '5 dias'
+
+
 def test_inline_protocol_creation_creates_clinic_protocol_and_updates_suspicion_options(client, monkeypatch):
     with flask_app.app_context():
         clinic = Clinica(id=1, nome='Clinica Protocolos')
@@ -591,3 +696,121 @@ def test_inline_protocol_creation_creates_clinic_protocol_and_updates_suspicion_
         assert len(protocolo.exames_sugeridos) == 1
         assert len(protocolo.medicamentos_sugeridos) == 1
         assert len(protocolo.retornos_sugeridos) == 1
+
+
+def test_inline_protocol_can_be_loaded_and_updated(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Edicao Protocolos')
+        tutor = User(id=1, name='Tutor', email='tutor-edicao-protocolos@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-edicao-protocolos@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Luna', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome='Dermatite Inicial',
+            suspeita_principal='dermatite',
+            especie='cao',
+            prioridade=10,
+            conduta_sugerida='Avaliar pele e ectoparasitas.',
+            sinais_gatilho='prurido, alopecia',
+            orientacoes_tutor='Retornar se piorar.',
+            alertas='Usar corticoide com cautela.',
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+        )
+        protocolo.exames_sugeridos.append(
+            ProtocoloClinicoExame(
+                nome='Citologia cutanea',
+                justificativa='Pesquisar infeccao secundaria.',
+                prioridade=1,
+            )
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                nome_medicamento='Prednisona',
+                indicacao='Alergia',
+                duracao_texto='5 dias',
+                prioridade=1,
+            )
+        )
+        protocolo.retornos_sugeridos.append(
+            ProtocoloClinicoRetorno(
+                prazo_min_dias=5,
+                tipo_retorno='retorno',
+                objetivo='Reavaliar prurido.',
+                prioridade=1,
+            )
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo])
+        db.session.commit()
+        consulta_id = consulta.id
+        protocolo_id = protocolo.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    get_response = client.get(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/protocolos/{protocolo_id}',
+    )
+    assert get_response.status_code == 200
+    get_payload = get_response.get_json()
+    assert get_payload['success'] is True
+    assert get_payload['protocol']['nome'] == 'Dermatite Inicial'
+    assert get_payload['protocol']['medicamentos'][0]['nome_medicamento'] == 'Prednisona'
+
+    update_response = client.put(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/protocolos/{protocolo_id}',
+        json={
+            'nome': 'Dermatite Atualizada',
+            'suspeita_principal': 'dermatite alergica',
+            'especie': 'cao',
+            'prioridade': 5,
+            'conduta_sugerida': 'Avaliar pele, dieta e ectoparasitas.',
+            'sinais_gatilho': 'prurido, eritema',
+            'orientacoes_tutor': 'Manter acompanhamento semanal.',
+            'alertas': 'Evitar automedicacao.',
+            'exames': [
+                {'nome': 'Citologia cutanea', 'justificativa': 'Pesquisar infeccao secundaria.'},
+            ],
+            'medicamentos': [
+                {
+                    'nome_medicamento': 'Prednisona',
+                    'indicacao': 'Alergia',
+                    'duracao_texto': '5 dias',
+                },
+                {
+                    'nome_medicamento': 'Simparic',
+                    'indicacao': 'Controle de ectoparasitas',
+                    'frequencia_texto': 'a cada 30 dias',
+                },
+            ],
+            'retorno': {
+                'prazo_min_dias': 7,
+                'tipo_retorno': 'retorno',
+                'objetivo': 'Reavaliar resposta cutanea.',
+            },
+        },
+    )
+    assert update_response.status_code == 200
+    update_payload = update_response.get_json()
+    assert update_payload['success'] is True
+    assert update_payload['protocol']['nome'] == 'Dermatite Atualizada'
+
+    with flask_app.app_context():
+        protocolo = ProtocoloClinico.query.get(protocolo_id)
+        assert protocolo.nome == 'Dermatite Atualizada'
+        assert protocolo.suspeita_principal == 'dermatite alergica'
+        assert protocolo.prioridade == 5
+        assert len(protocolo.medicamentos_sugeridos) == 2
+        assert protocolo.retornos_sugeridos[0].prazo_min_dias == 7

@@ -834,6 +834,26 @@ def _resolver_indicacao_compativel(disponiveis: List[str], preferida: Optional[s
     return melhor if melhor_score > 0 else None
 
 
+def _extrair_concentracao_alvo_mg(proto) -> Optional[float]:
+    textos = [
+        getattr(proto, 'dose', None),
+        getattr(proto, 'dose_raw_text', None),
+        getattr(proto, 'observacao', None),
+    ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        match = re.search(r'(\d+(?:[.,]\d+)?)\s*mg\b', norm)
+        if not match:
+            continue
+        try:
+            return float(match.group(1).replace(',', '.'))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _categoria_via_texto(texto: Optional[str]) -> Optional[str]:
     """Normaliza vias/formas em poucas categorias clínicas comparáveis."""
     t = _texto_norm(texto)
@@ -1196,7 +1216,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     duracao_e_padrao = False
     duracao_padrao_desc: Optional[str] = None
 
-    if dur_min_d is None and dur_max_d is None:
+    if dur_min_d is None and dur_max_d is None and not (getattr(proto, 'duracao', None) or '').strip():
         pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
         if pd_min is not None:
             dur_min_d, dur_max_d = pd_min, pd_max
@@ -1262,6 +1282,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         apres_info.append({
             'id': ap.id,
             'descricao': desc,
+            'nome_variante': getattr(ap, 'nome_variante', None) or '',
             'fabricante': fabricante,
             'forma': ap.forma or '',
             'concentracao_texto': ap.concentracao or '',
@@ -1315,6 +1336,19 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     )
 
     dose_calc_media = (dose_calc_min + dose_calc_max) / 2.0
+    concentracao_alvo_mg = _extrair_concentracao_alvo_mg(proto)
+    apresentacao_preferida_id = None
+    apresentacao_preferida_nome = ''
+    if concentracao_alvo_mg is not None:
+        for ap in apres_info:
+            valor = ap.get('concentracao_valor')
+            unidade = (ap.get('concentracao_unidade') or '').lower()
+            if valor is None or unidade != 'mg':
+                continue
+            if abs(float(valor) - float(concentracao_alvo_mg)) < 0.001:
+                apresentacao_preferida_id = ap.get('id')
+                apresentacao_preferida_nome = ap.get('nome_variante') or ''
+                break
 
     return {
         'multiplo':                False,
@@ -1346,6 +1380,8 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'duracao_padrao_desc':     duracao_padrao_desc,
         'indicacao':               proto_ind,
         'indicacoes_alternativas': indicacoes_alt,
+        'apresentacao_preferida_id': apresentacao_preferida_id,
+        'apresentacao_preferida_nome': apresentacao_preferida_nome,
         'apresentacoes':           apres_info,
         'concentracoes_conhecidas': concentracoes_conhecidas,
         'fonte':                   proto.fonte or 'SCRAPER',

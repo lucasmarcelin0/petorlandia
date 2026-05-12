@@ -138,12 +138,14 @@ def build_followup_prefill(item, reference_date: date | None = None) -> dict[str
 
 
 def serialize_protocol(protocol: ProtocoloClinico, context: dict[str, Any], reasons: list[str], score: int) -> dict[str, Any]:
+    clinic_id = context.get('clinica_id')
     return {
         "id": protocol.id,
         "nome": protocol.nome,
         "suspeita_principal": protocol.suspeita_principal,
         "especie": protocol.especie,
         "score": score,
+        "editable": bool(protocol.clinica_id and clinic_id and protocol.clinica_id == clinic_id),
         "motivos": reasons,
         "alertas": (protocol.alertas or "").strip() or None,
         "orientacoes_tutor": (protocol.orientacoes_tutor or "").strip() or None,
