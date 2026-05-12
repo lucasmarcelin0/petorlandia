@@ -143,6 +143,38 @@
               </div>
             </div>
           </form>
+
+          {# Botão publicar / link para a loja #}
+          {% if item.produto_loja %}
+            <div class="mt-2 d-flex align-items-center gap-2">
+              <span class="badge bg-success-subtle text-success">
+                <i class="fa-solid fa-shop me-1"></i> Publicado na loja
+              </span>
+              <a href="{{ url_for('clinic_loja_produtos', clinica_id=clinica.id) }}"
+                 class="btn btn-outline-success btn-sm">Gerenciar</a>
+            </div>
+          {% else %}
+            <div class="mt-2">
+              <button class="btn btn-outline-primary btn-sm"
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#publishForm{{ item.id }}">
+                <i class="fa-solid fa-shop me-1"></i> Publicar na loja
+              </button>
+              <div class="collapse mt-2" id="publishForm{{ item.id }}">
+                <form method="post" action="{{ url_for('publish_inventory_to_loja', item_id=item.id) }}" class="d-flex gap-2 align-items-center">
+                  {% if csrf_token is defined %}
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  {% endif %}
+                  <div class="input-group input-group-sm" style="max-width:220px;">
+                    <span class="input-group-text">R$</span>
+                    <input type="text" name="price" class="form-control" placeholder="Preço de venda" required>
+                  </div>
+                  <button type="submit" class="btn btn-success btn-sm">Publicar</button>
+                </form>
+              </div>
+            </div>
+          {% endif %}
         </td>
         <td>{{ item.unit or '-' }}</td>
       </tr>

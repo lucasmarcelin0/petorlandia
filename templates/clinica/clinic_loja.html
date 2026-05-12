@@ -1,0 +1,175 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar para a clínica
+    </a>
+    <div>
+      <h1 class="h3 mb-0 fw-bold"><i class="fa-solid fa-shop me-2 text-primary"></i>Minha Loja</h1>
+      <p class="text-muted small mb-0">{{ clinica.nome }}</p>
+    </div>
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary btn-sm ms-auto">
+      <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Ver loja pública
+    </a>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Formulário de cadastro -->
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body">
+          <h5 class="fw-bold mb-3"><i class="fa-solid fa-plus-circle me-2 text-success"></i>Publicar novo produto</h5>
+          <form method="post" enctype="multipart/form-data" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.name.label(class="form-label fw-semibold") }}
+              {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Ex: Ração Premium 15kg") }}
+              {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.description.label(class="form-label fw-semibold") }}
+              {{ form.description(class="form-control", rows=3, placeholder="Descrição opcional do produto") }}
+            </div>
+
+            <div class="mb-3">
+              {{ form.price.label(class="form-label fw-semibold") }}
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else ""), placeholder="0,00") }}
+                {% for e in form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.inventory_item_id.label(class="form-label fw-semibold") }}
+              {{ form.inventory_item_id(class="form-select", id="inventorySelect") }}
+              <div class="form-text">Escolha um item do estoque ou crie um novo.</div>
+            </div>
+
+            <!-- Campos visíveis apenas ao criar novo item de estoque -->
+            <div id="newItemFields">
+              <div class="mb-3">
+                {{ form.quantity.label(class="form-label fw-semibold") }}
+                {{ form.quantity(class="form-control", placeholder="0") }}
+              </div>
+              <div class="mb-3">
+                {{ form.unit.label(class="form-label fw-semibold") }}
+                {{ form.unit(class="form-control", placeholder="unidade, kg, caixa…") }}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.mp_category_id.label(class="form-label fw-semibold") }}
+              {{ form.mp_category_id(class="form-control", placeholder="Ex: food, health, pet_supplies") }}
+              <div class="form-text">Categoria Mercado Pago (opcional).</div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.image_upload.label(class="form-label fw-semibold") }}
+              {{ form.image_upload(class="form-control") }}
+            </div>
+
+            {{ form.submit(class="btn btn-success w-100") }}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de produtos -->
+    <div class="col-lg-8">
+      <h5 class="fw-bold mb-3">Produtos cadastrados ({{ produtos|length }})</h5>
+
+      {% if produtos %}
+      <div class="row g-3">
+        {% for p in produtos %}
+        <div class="col-sm-6 col-xl-4">
+          <div class="card h-100 border-0 shadow-sm rounded-3 {% if p.status != 'active' %}opacity-50{% endif %}">
+            {% if p.image_url %}
+            <div class="ratio ratio-4x3">
+              {% if 'http' in p.image_url %}
+              <img src="{{ p.image_url }}" class="card-img-top object-fit-cover rounded-top-3" alt="{{ p.name }}">
+              {% else %}
+              <img src="{{ url_for('static', filename=p.image_url) }}" class="card-img-top object-fit-cover rounded-top-3" alt="{{ p.name }}">
+              {% endif %}
+            </div>
+            {% else %}
+            <div class="ratio ratio-4x3 bg-light rounded-top-3 d-flex align-items-center justify-content-center">
+              <i class="fa-regular fa-image fa-2x text-muted"></i>
+            </div>
+            {% endif %}
+
+            <div class="card-body p-3">
+              <div class="d-flex justify-content-between align-items-start mb-1">
+                <h6 class="fw-semibold mb-0 text-truncate" style="max-width:75%">{{ p.name }}</h6>
+                {% if p.status == 'active' %}
+                  <span class="badge bg-success-subtle text-success">Ativo</span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary">Inativo</span>
+                {% endif %}
+              </div>
+
+              <p class="text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}</p>
+
+              {% if p.inventory_item %}
+              <p class="small text-muted mb-2">
+                <i class="fa-solid fa-boxes-stacked me-1"></i>
+                Estoque: {{ p.inventory_item.quantity }} {{ p.inventory_item.unit or 'un.' }}
+              </p>
+              {% else %}
+              <p class="small text-muted mb-2">
+                <i class="fa-solid fa-boxes-stacked me-1"></i>
+                Estoque: {{ p.stock }}
+              </p>
+              {% endif %}
+
+              <div class="d-flex gap-2 mt-auto">
+                <a href="{{ url_for('clinic_produto_editar', clinica_id=clinica.id, product_id=p.id) }}"
+                   class="btn btn-outline-primary btn-sm flex-grow-1">
+                  <i class="fa-solid fa-pen me-1"></i> Editar
+                </a>
+                <form method="post" action="{{ url_for('clinic_produto_toggle', clinica_id=clinica.id, product_id=p.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm {% if p.status == 'active' %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                          title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}">
+                    <i class="fa-solid {% if p.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                  </button>
+                </form>
+                <a href="{{ url_for('produto_detail', product_id=p.id) }}" target="_blank"
+                   class="btn btn-outline-secondary btn-sm" title="Ver na loja">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="fa-solid fa-box-open fa-3x mb-3"></i>
+        <p class="h5">Nenhum produto publicado ainda.</p>
+        <p>Use o formulário ao lado para adicionar seu primeiro produto.</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const select = document.getElementById('inventorySelect');
+  const newFields = document.getElementById('newItemFields');
+  function toggleNewFields() {
+    newFields.style.display = select.value === '0' ? 'block' : 'none';
+  }
+  select.addEventListener('change', toggleNewFields);
+  toggleNewFields();
+</script>
+{% endblock %}

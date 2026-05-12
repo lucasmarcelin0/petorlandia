@@ -1675,6 +1675,8 @@ from forms import (
     DeliveryPromotionForm,
     DeliveryRequestForm,
     EditProfileForm,
+    ClinicProductForm,
+    ClinicProductEditForm,
     InventoryItemForm,
     LoginForm,
     MessageForm,
@@ -15659,6 +15661,166 @@ def update_inventory_item(item_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
+def _clinic_loja_access(clinica_id):
+    """Retorna (clinica, is_owner). Aborta 403 se sem permissão."""
+    clinica = Clinica.query.get_or_404(clinica_id)
+    is_owner = current_user.id == clinica.owner_id
+    staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    has_perm = staff.can_manage_inventory if staff else False
+    if not (_is_admin() or is_owner or has_perm):
+        abort(403)
+    return clinica, is_owner
+
+
+@login_required
+def clinic_loja_produtos(clinica_id):
+    clinica, _ = _clinic_loja_access(clinica_id)
+
+    inventory_items = (
+        ClinicInventoryItem.query
+        .filter_by(clinica_id=clinica.id)
+        .order_by(ClinicInventoryItem.name)
+        .all()
+    )
+
+    form = ClinicProductForm()
+    choices = [(0, '— Criar novo item de estoque —')] + [
+        (it.id, f"{it.name} ({it.quantity} {it.unit or 'un.'})") for it in inventory_items
+    ]
+    form.inventory_item_id.choices = choices
+
+    if form.validate_on_submit():
+        inv_item_id = form.inventory_item_id.data or 0
+
+        if inv_item_id == 0:
+            # Cria item de estoque junto com o produto
+            qty = form.quantity.data or 0
+            inv_item = ClinicInventoryItem(
+                clinica_id=clinica.id,
+                name=form.name.data,
+                quantity=qty,
+                unit=form.unit.data or None,
+            )
+            db.session.add(inv_item)
+            db.session.flush()
+            if qty > 0:
+                db.session.add(ClinicInventoryMovement(
+                    clinica_id=clinica.id,
+                    item=inv_item,
+                    quantity_change=qty,
+                    quantity_before=0,
+                    quantity_after=qty,
+                ))
+        else:
+            inv_item = ClinicInventoryItem.query.get_or_404(inv_item_id)
+            if inv_item.clinica_id != clinica.id:
+                abort(403)
+
+        image_url = None
+        if form.image_upload.data:
+            file = form.image_upload.data
+            image_url = upload_to_s3(file, secure_filename(file.filename), folder='products')
+
+        product = Product(
+            clinica_id=clinica.id,
+            clinic_inventory_item_id=inv_item.id,
+            name=form.name.data,
+            description=form.description.data or None,
+            price=float(form.price.data),
+            stock=inv_item.quantity,
+            image_url=image_url,
+            mp_category_id=(form.mp_category_id.data or 'others').strip(),
+            status='active',
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash('Produto publicado na loja com sucesso!', 'success')
+        return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+    produtos = Product.query.filter_by(clinica_id=clinica.id).order_by(Product.name).all()
+    return render_template(
+        'clinica/clinic_loja.html',
+        clinica=clinica,
+        produtos=produtos,
+        form=form,
+    )
+
+
+@login_required
+def clinic_produto_editar(clinica_id, product_id):
+    clinica, _ = _clinic_loja_access(clinica_id)
+    product = Product.query.filter_by(id=product_id, clinica_id=clinica.id).first_or_404()
+
+    form = ClinicProductEditForm(obj=product)
+    if form.validate_on_submit():
+        product.name = form.name.data
+        product.description = form.description.data or None
+        product.price = float(form.price.data)
+        product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        if form.image_upload.data:
+            file = form.image_upload.data
+            url = upload_to_s3(file, secure_filename(file.filename), folder='products')
+            if url:
+                product.image_url = url
+        db.session.commit()
+        flash('Produto atualizado.', 'success')
+        return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+    return render_template(
+        'clinica/clinic_produto_editar.html',
+        clinica=clinica,
+        product=product,
+        form=form,
+    )
+
+
+@login_required
+def clinic_produto_toggle(clinica_id, product_id):
+    clinica, _ = _clinic_loja_access(clinica_id)
+    product = Product.query.filter_by(id=product_id, clinica_id=clinica.id).first_or_404()
+    product.status = 'inactive' if product.status == 'active' else 'active'
+    db.session.commit()
+    state = 'ativado' if product.status == 'active' else 'desativado'
+    flash(f'Produto {state} na loja.', 'success')
+    return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+
+@login_required
+def publish_inventory_to_loja(item_id):
+    """Publica um item de estoque existente como produto na loja."""
+    item = ClinicInventoryItem.query.get_or_404(item_id)
+    clinica = item.clinica
+    _, _ = _clinic_loja_access(clinica.id)
+
+    if item.produto_loja:
+        flash('Este item já está publicado na loja.', 'warning')
+        return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+    price_raw = request.form.get('price', '0').replace(',', '.')
+    try:
+        price = float(price_raw)
+    except ValueError:
+        price = 0.0
+
+    if price <= 0:
+        flash('Informe um preço válido para publicar na loja.', 'danger')
+        return redirect(url_for('clinic_stock', clinica_id=clinica.id))
+
+    product = Product(
+        clinica_id=clinica.id,
+        clinic_inventory_item_id=item.id,
+        name=item.name,
+        price=price,
+        stock=item.quantity,
+        mp_category_id='others',
+        status='active',
+    )
+    db.session.add(product)
+    db.session.commit()
+    flash(f'"{item.name}" publicado na loja com sucesso!', 'success')
+    return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+
 def _orcamento_services_for_clinic(clinica_id):
     return (
         ServicoClinica.query
@@ -22604,7 +22766,7 @@ from flask_login import login_required
 
 
 def _build_loja_query(search_term: str, filtro: str):
-    query = Product.query
+    query = Product.query.filter(Product.status == 'active')
     if search_term:
         like = f"%{search_term}%"
         query = query.filter(or_(Product.name.ilike(like), Product.description.ilike(like)))
@@ -22645,6 +22807,9 @@ def loja():
     # Verifica se há pedidos anteriores
     has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
 
+    # Clínica do usuário (para mostrar botão de cadastro de produto)
+    minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+
     return render_template(
         "loja/loja.html",
         products=produtos,
@@ -22654,6 +22819,7 @@ def loja():
         has_orders=has_orders,
         selected_filter=filtro,
         search_term=search_term,
+        minha_clinica=minha_clinica,
     )
 
 
@@ -23419,6 +23585,27 @@ def notificacoes_mercado_pago():
                             requested_by_id=pay.user_id,
                             status="pendente",
                         ))
+                    # Decrementa estoque das clínicas para produtos vinculados
+                    order = Order.query.get(pay.order_id)
+                    if order:
+                        for oi in order.items:
+                            prod = oi.product
+                            if prod and prod.clinic_inventory_item_id:
+                                inv = ClinicInventoryItem.query.get(prod.clinic_inventory_item_id)
+                                if inv:
+                                    qty_sold = oi.quantity
+                                    before = inv.quantity
+                                    inv.quantity = max(0, before - qty_sold)
+                                    prod.stock = inv.quantity
+                                    db.session.add(ClinicInventoryMovement(
+                                        clinica_id=inv.clinica_id,
+                                        item=inv,
+                                        quantity_change=-qty_sold,
+                                        quantity_before=before,
+                                        quantity_after=inv.quantity,
+                                        tipo='saida',
+                                        motivo=f'Venda — Pedido #{order.id}',
+                                    ))
 
             normalized_status = _normalize_external_payment_status(status)
 

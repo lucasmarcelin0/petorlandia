@@ -28,6 +28,11 @@
 
         <div class="mt-auto">
           <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</span>
+          {% if product.clinica %}
+          <div class="text-muted small mb-1">
+            <i class="fa-solid fa-store me-1"></i>{{ product.clinica.nome }}
+          </div>
+          {% endif %}
           <div class="text-muted small mb-2"><i class="fa-solid fa-truck-fast me-1"></i>entrega rápida</div>
 
           <!-- Formulário -->
