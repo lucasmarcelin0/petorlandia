@@ -581,6 +581,7 @@
     let currentMode = 'suggestions';
     let currentProtocolLevel = 'v1';
     let editingProtocolId = null;
+    let currentProtocolFormMode = 'create';
 
     const suspicionField = document.getElementById('suspeita-clinica');
     const legacySuspicionGroup = suspicionField?.closest('.mb-3');
@@ -665,16 +666,22 @@
 
     function setProtocolFormMode(mode = 'create') {
       const editing = mode === 'edit';
+      const cloning = mode === 'clone';
+      currentProtocolFormMode = mode;
       editingProtocolId = editing ? (protocolIdField?.value || null) : null;
       if (protocolFormTitle) {
-        protocolFormTitle.textContent = editing ? 'Editar protocolo clínico' : 'Novo protocolo clínico';
+        protocolFormTitle.textContent = editing
+          ? 'Editar protocolo clínico'
+          : (cloning ? 'Salvar protocolo da clínica' : 'Novo protocolo clínico');
       }
       if (protocolFormCopy) {
         protocolFormCopy.textContent = editing
           ? 'Revise e atualize este protocolo da clínica sem sair da consulta.'
-          : 'Cadastre um protocolo da clínica sem sair da consulta.';
+          : (cloning
+            ? 'Este protocolo padrão será usado como base e salvo como protocolo da clínica.'
+            : 'Cadastre um protocolo da clínica sem sair da consulta.');
       }
-      if (cancelProtocolEditButton) cancelProtocolEditButton.classList.toggle('d-none', !editing);
+      if (cancelProtocolEditButton) cancelProtocolEditButton.classList.toggle('d-none', !(editing || cloning));
       if (protocolSubmitButton) {
         protocolSubmitButton.innerHTML = editing
           ? '<i class="bi bi-save me-1"></i>Atualizar protocolo'
@@ -682,7 +689,9 @@
       }
       const protocolModeButton = modeButtons.find(button => button.dataset.clinicalMode === 'protocol');
       if (protocolModeButton) {
-        protocolModeButton.textContent = editing ? 'Editar protocolo' : 'Novo protocolo';
+        protocolModeButton.textContent = editing
+          ? 'Editar protocolo'
+          : (cloning ? 'Salvar protocolo' : 'Novo protocolo');
       }
     }
 
@@ -768,11 +777,10 @@
               </div>
               <div class="d-flex flex-wrap gap-2 align-items-center">
                 <span class="clinical-pill">Score ${escapeHtml(protocol.score || 0)}</span>
-                ${protocol.editable ? `
                 <button type="button" class="btn btn-sm btn-outline-primary js-edit-protocol"
                   data-protocol-id="${protocol.id}">
                   Editar protocolo
-                </button>` : ''}
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
                   data-item-type="protocolo"
                   data-protocol-id="${protocol.id}"
@@ -979,12 +987,12 @@
       };
     }
 
-    function populateProtocolForm(protocol) {
+    function populateProtocolForm(protocol, editMode = 'update') {
       if (!protocolForm) return;
       protocolForm.reset();
       examRows.innerHTML = '';
       medicationRows.innerHTML = '';
-      if (protocolIdField) protocolIdField.value = protocol.id || '';
+      if (protocolIdField) protocolIdField.value = editMode === 'update' ? (protocol.id || '') : '';
       document.getElementById('protocol-name').value = protocol.nome || '';
       document.getElementById('protocol-suspicion').value = protocol.suspeita_principal || '';
       document.getElementById('protocol-species').value = protocol.especie || '';
@@ -1014,9 +1022,14 @@
         || medicamentos.some(item => item.observacoes)
       );
       setProtocolLevel(usarCompleto ? 'v2' : 'v1');
-      setProtocolFormMode('edit');
+      setProtocolFormMode(editMode === 'update' ? 'edit' : 'clone');
       setMode('protocol');
-      setStatus(`Editando protocolo "${protocol.nome}".`, 'info');
+      setStatus(
+        editMode === 'update'
+          ? `Editando protocolo "${protocol.nome}".`
+          : `Usando "${protocol.nome}" como base para um protocolo da clínica.`,
+        'info'
+      );
     }
 
     function updateSuspicionOptions(options) {
@@ -1033,6 +1046,7 @@
       if (!protocolForm) return;
       protocolSubmitButton.disabled = true;
       const editing = Boolean(protocolIdField?.value);
+      const cloning = currentProtocolFormMode === 'clone';
       setStatus(editing ? 'Atualizando protocolo clínico...' : 'Salvando novo protocolo clínico...', 'info');
       try {
         const payload = buildProtocolPayload();
@@ -1061,7 +1075,12 @@
         }
         resetProtocolFormState();
         setMode('suggestions');
-        setStatus(data.message || (editing ? 'Protocolo atualizado com sucesso.' : 'Novo protocolo criado com sucesso.'), 'success');
+        setStatus(
+          data.message || (editing
+            ? 'Protocolo atualizado com sucesso.'
+            : (cloning ? 'Protocolo da clínica salvo com sucesso.' : 'Novo protocolo criado com sucesso.')),
+          'success'
+        );
       } catch (error) {
         setStatus(error.message || (editing ? 'Erro ao atualizar protocolo clínico.' : 'Erro ao criar protocolo clínico.'), 'danger');
       } finally {
@@ -1086,7 +1105,7 @@
         if (!response.ok || data.success === false) {
           throw new Error(data.message || 'Não foi possível carregar o protocolo para edição.');
         }
-        populateProtocolForm(data.protocol || {});
+        populateProtocolForm(data.protocol || {}, data.edit_mode || 'update');
       } catch (error) {
         setStatus(error.message || 'Erro ao carregar protocolo para edição.', 'danger');
       } finally {

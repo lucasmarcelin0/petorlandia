@@ -13632,12 +13632,15 @@ def obter_protocolo_clinico_inline(consulta_id, protocol_id):
         )
         .get_or_404(protocol_id)
     )
-    if not protocolo.clinica_id or protocolo.clinica_id != consulta.clinica_id:
-        return jsonify({'success': False, 'message': 'Apenas protocolos da clínica podem ser editados por esta aba.'}), 403
+    if protocolo.clinica_id and protocolo.clinica_id != consulta.clinica_id:
+        return jsonify({'success': False, 'message': 'Este protocolo pertence a outra clínica.'}), 403
+
+    edit_mode = 'update' if protocolo.clinica_id == consulta.clinica_id else 'clone'
 
     return jsonify({
         'success': True,
         'protocol': _serialize_clinical_protocol(protocolo),
+        'edit_mode': edit_mode,
     })
 
 

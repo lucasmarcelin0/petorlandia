@@ -814,3 +814,58 @@ def test_inline_protocol_can_be_loaded_and_updated(client, monkeypatch):
         assert protocolo.prioridade == 5
         assert len(protocolo.medicamentos_sugeridos) == 2
         assert protocolo.retornos_sugeridos[0].prazo_min_dias == 7
+
+
+def test_inline_global_protocol_can_be_loaded_as_clone_base(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Base Global')
+        tutor = User(id=1, name='Tutor', email='tutor-protocolo-global@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-protocolo-global@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Luna', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome='Dermatite Padrao',
+            suspeita_principal='dermatite',
+            especie='cao',
+            prioridade=10,
+            conduta_sugerida='Avaliar pele e prurido.',
+            sinais_gatilho='prurido',
+            created_by=vet_user.id,
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                nome_medicamento='Prednisona',
+                indicacao='Alergia',
+                duracao_texto='5 dias',
+                prioridade=1,
+            )
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo])
+        db.session.commit()
+        consulta_id = consulta.id
+        protocolo_id = protocolo.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    response = client.get(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/protocolos/{protocolo_id}',
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['edit_mode'] == 'clone'
+    assert payload['protocol']['nome'] == 'Dermatite Padrao'
+    assert payload['protocol']['clinica_id'] is None
