@@ -310,12 +310,12 @@
           <i class="bi bi-shield-check text-success"></i>
           <span>Apoio clínico</span>
         </h5>
-        <p class="clinical-heading-copy">Protocolos revisáveis, discretos e opcionais durante a consulta.</p>
+        <p class="clinical-heading-copy">Protocolos da clínica, consultáveis durante o atendimento.</p>
       </div>
 
       <div class="clinical-toolbar-actions">
         <button type="button" class="clinical-btn clinical-btn-primary" id="toggle-clinical-panel">
-          <i class="bi bi-stars me-1"></i>
+          <i class="bi bi-clipboard2-pulse me-1"></i>
           <span data-open-label="Abrir apoio clínico" data-close-label="Ocultar apoio clínico">Abrir apoio clínico</span>
         </button>
       </div>
@@ -351,7 +351,7 @@
             Sugestões explícitas e justificadas. Nada é gravado sem aprovação do veterinário.
           </div>
           <div id="clinical-suggestions-status" class="clinical-status mt-3">
-            Abra o apoio clínico apenas quando fizer sentido para o caso e pesquise pela hipótese diagnóstica desejada.
+            Pesquise pela suspeita diagnóstica para ver protocolos compatíveis.
           </div>
           <div id="clinical-suggestions-results" class="clinical-results"></div>
         </div>
@@ -776,7 +776,6 @@
                 </div>
               </div>
               <div class="d-flex flex-wrap gap-2 align-items-center">
-                <span class="clinical-pill">Score ${escapeHtml(protocol.score || 0)}</span>
                 <button type="button" class="btn btn-sm btn-outline-primary js-edit-protocol"
                   data-protocol-id="${protocol.id}">
                   Editar protocolo
@@ -790,7 +789,14 @@
               </div>
             </div>
 
-            ${reasons ? `<ul class="small text-muted ps-3 mb-3">${reasons}</ul>` : ''}
+            ${reasons ? `
+              <details class="mb-3">
+                <summary class="small text-muted" style="cursor:pointer;list-style:none;user-select:none;">
+                  <i class="bi bi-chevron-right" style="font-size:.72rem;transition:transform .2s;"></i>
+                  <span style="margin-left:4px;">Ver correspondência</span>
+                </summary>
+                <ul class="small text-muted ps-3 mt-2 mb-0">${reasons}</ul>
+              </details>` : ''}
             ${protocol.alertas ? `<div class="alert alert-warning py-2 small">${escapeHtml(protocol.alertas)}</div>` : ''}
             ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientações ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
 
