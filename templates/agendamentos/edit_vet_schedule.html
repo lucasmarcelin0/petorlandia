@@ -1139,8 +1139,6 @@
       </div><!-- /accordion-collapse scheduleAccordionPane -->
     </div><!-- /accordion-item Horários -->
 
-    </div><!-- /schedule manage collapse -->
-
   </div><!-- /tab-pane section-horarios -->
 
   <!-- ===== Tab: Tutores ===== -->
@@ -1151,7 +1149,7 @@
           <span class="consultation-section-heading__icon"><i class="fa-solid fa-users"></i></span>
           <div>
             <h5 class="mb-0">Gestão de Tutores</h5>
-            <p class="mb-0 text-muted">Gerencie os tutores da sua clínica.</p>
+            <p class="mb-0 text-muted">Cadastre e gerencie os tutores da sua clínica.</p>
           </div>
         </div>
         {% include 'partials/tutor_management_panel.html' %}
@@ -1191,15 +1189,17 @@
       </div>
     </div>
     <div id="animais-adicionados">
-      {% with compact=True,
-              animais_adicionados=vet_animais_adicionados,
-              pagination=vet_animais_pagination,
-              scope=vet_animais_scope,
-              animal_search=vet_animal_search,
-              animal_sort=vet_animal_sort,
-              fetch_url=url_for('novo_animal'),
-              can_create_animals=True,
-              new_animal_url=url_for('novo_animal') %}
+      {% with
+        compact=True,
+        animais_adicionados=vet_animais_adicionados,
+        pagination=vet_animais_pagination,
+        scope=vet_animais_scope,
+        animal_search=vet_animal_search,
+        animal_sort=vet_animal_sort,
+        fetch_url=url_for('novo_animal'),
+        can_create_animals=True,
+        new_animal_url=url_for('novo_animal')
+      %}
         {% include 'partials/animais_adicionados.html' %}
       {% endwith %}
     </div>
