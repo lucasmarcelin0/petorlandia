@@ -21,27 +21,28 @@ def upgrade():
     columns = [c["name"] for c in inspector.get_columns("health_plan")]
 
     if "clinica_id" not in columns:
-        # Find and drop unique index on 'name' before batch recreate
-        name_unique_idx = None
-        for idx in inspector.get_indexes("health_plan"):
-            if idx.get("unique") and idx.get("column_names") == ["name"]:
-                name_unique_idx = idx["name"]
-                break
+        # Drop unique constraint on 'name' (PostgreSQL names it <table>_<col>_key)
+        unique_constraints = [
+            uc["name"]
+            for uc in inspector.get_unique_constraints("health_plan")
+            if "name" in uc.get("column_names", [])
+        ]
+        for uc_name in unique_constraints:
+            op.drop_constraint(uc_name, "health_plan", type_="unique")
 
-        with op.batch_alter_table("health_plan", recreate="auto") as batch_op:
-            if name_unique_idx:
-                batch_op.drop_index(name_unique_idx)
-            batch_op.add_column(
-                sa.Column("clinica_id", sa.Integer(), nullable=True)
-            )
-            batch_op.create_foreign_key(
-                "fk_health_plan_clinica",
-                "clinica",
-                ["clinica_id"],
-                ["id"],
-                ondelete="CASCADE",
-            )
-            batch_op.create_index("ix_health_plan_clinica_id", ["clinica_id"])
+        op.add_column(
+            "health_plan",
+            sa.Column("clinica_id", sa.Integer(), nullable=True),
+        )
+        op.create_foreign_key(
+            "fk_health_plan_clinica",
+            "health_plan",
+            "clinica",
+            ["clinica_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        op.create_index("ix_health_plan_clinica_id", "health_plan", ["clinica_id"])
 
 
 def downgrade():
@@ -50,13 +51,13 @@ def downgrade():
     columns = [c["name"] for c in inspector.get_columns("health_plan")]
 
     if "clinica_id" in columns:
-        with op.batch_alter_table("health_plan") as batch_op:
-            try:
-                batch_op.drop_index("ix_health_plan_clinica_id")
-            except Exception:
-                pass
-            try:
-                batch_op.drop_constraint("fk_health_plan_clinica", type_="foreignkey")
-            except Exception:
-                pass
-            batch_op.drop_column("clinica_id")
+        try:
+            op.drop_index("ix_health_plan_clinica_id", table_name="health_plan")
+        except Exception:
+            pass
+        try:
+            op.drop_constraint("fk_health_plan_clinica", "health_plan", type_="foreignkey")
+        except Exception:
+            pass
+        op.drop_column("health_plan", "clinica_id")
+        op.create_unique_constraint("health_plan_name_key", "health_plan", ["name"])
