@@ -1178,13 +1178,31 @@
 
   <!-- ===== Tab: Animais ===== -->
   <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
-    {% with animais_adicionados=vet_animais_adicionados,
-            pagination=vet_animais_pagination,
-            scope=vet_animais_scope,
-            animal_search=vet_animal_search,
-            animal_sort=vet_animal_sort %}
-      {% include 'partials/novo_pet_panel.html' %}
-    {% endwith %}
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--default mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-paw"></i></span>
+          <div>
+            <h5 class="mb-0">Gestão de Animais</h5>
+            <p class="mb-0 text-muted">Registre e gerencie os animais da sua clínica.</p>
+          </div>
+        </div>
+        {% include 'partials/animal_register_form.html' %}
+      </div>
+    </div>
+    <div id="animais-adicionados">
+      {% with compact=True,
+              animais_adicionados=vet_animais_adicionados,
+              pagination=vet_animais_pagination,
+              scope=vet_animais_scope,
+              animal_search=vet_animal_search,
+              animal_sort=vet_animal_sort,
+              fetch_url=url_for('novo_animal'),
+              can_create_animals=True,
+              new_animal_url=url_for('novo_animal') %}
+        {% include 'partials/animais_adicionados.html' %}
+      {% endwith %}
+    </div>
   </div><!-- /tab-pane section-animais -->
 
   </div><!-- /tab-content -->
