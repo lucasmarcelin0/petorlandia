@@ -1139,84 +1139,53 @@
       </div><!-- /accordion-collapse scheduleAccordionPane -->
     </div><!-- /accordion-item Horários -->
 
-    <!-- ── 2. Gestão de Tutores ── -->
-    <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
-      <h2 class="accordion-header" id="tutoresAccordionHeading">
-        <button
-          class="accordion-button collapsed"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#tutoresAccordionPane"
-          aria-expanded="false"
-          aria-controls="tutoresAccordionPane"
-        >
-          <i class="bi bi-people me-2"></i>Gestão de Tutores
-        </button>
-      </h2>
-      <div
-        id="tutoresAccordionPane"
-        class="accordion-collapse collapse"
-        aria-labelledby="tutoresAccordionHeading"
-        data-bs-parent="#horariosAccordion"
-      >
-        <div class="accordion-body">
-          {% include 'partials/tutor_management_panel.html' %}
-          <div id="tutores-adicionados" class="mt-3">
-            {% with
-              compact=True,
-              tutores_adicionados=vet_tutores_adicionados,
-              pagination=vet_tutores_pagination,
-              scope=vet_tutores_scope,
-              scope_param='tutor_scope',
-              search_param='tutor_search',
-              sort_param='tutor_sort',
-              page_param='tutor_page',
-              tutor_search=vet_tutor_search,
-              tutor_sort=vet_tutor_sort,
-              fetch_url=url_for('tutores')
-            %}
-              {% include 'partials/tutores_adicionados.html' %}
-            {% endwith %}
-          </div>
-        </div>
-      </div>
-    </div><!-- /accordion-item Tutores -->
-
-    <!-- ── 3. Cadastro de Animais ── -->
-    <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
-      <h2 class="accordion-header" id="animaisAccordionHeading">
-        <button
-          class="accordion-button collapsed"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#animaisAccordionPane"
-          aria-expanded="false"
-          aria-controls="animaisAccordionPane"
-        >
-          <i class="bi bi-heart-pulse me-2"></i>Cadastro de Animais
-        </button>
-      </h2>
-      <div
-        id="animaisAccordionPane"
-        class="accordion-collapse collapse"
-        aria-labelledby="animaisAccordionHeading"
-        data-bs-parent="#horariosAccordion"
-      >
-        <div class="accordion-body">
-          {% with animais_adicionados=vet_animais_adicionados,
-                  pagination=vet_animais_pagination,
-                  scope=vet_animais_scope,
-                  animal_search=vet_animal_search,
-                  animal_sort=vet_animal_sort %}
-            {% include 'partials/novo_pet_panel.html' %}
-          {% endwith %}
-        </div>
-      </div>
-    </div><!-- /accordion-item Animais -->
-
-    </div><!-- /accordion #horariosAccordion -->
+    </div><!-- /schedule manage collapse -->
 
   </div><!-- /tab-pane section-horarios -->
+
+  <!-- ===== Tab: Tutores ===== -->
+  <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--default mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-users"></i></span>
+          <div>
+            <h5 class="mb-0">Gestão de Tutores</h5>
+            <p class="mb-0 text-muted">Gerencie os tutores da sua clínica.</p>
+          </div>
+        </div>
+        {% include 'partials/tutor_management_panel.html' %}
+      </div>
+    </div>
+    <div id="tutores-adicionados">
+      {% with
+        compact=True,
+        tutores_adicionados=vet_tutores_adicionados,
+        pagination=vet_tutores_pagination,
+        scope=vet_tutores_scope,
+        scope_param='tutor_scope',
+        search_param='tutor_search',
+        sort_param='tutor_sort',
+        page_param='tutor_page',
+        tutor_search=vet_tutor_search,
+        tutor_sort=vet_tutor_sort,
+        fetch_url=url_for('tutores')
+      %}
+        {% include 'partials/tutores_adicionados.html' %}
+      {% endwith %}
+    </div>
+  </div><!-- /tab-pane section-tutores -->
+
+  <!-- ===== Tab: Animais ===== -->
+  <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
+    {% with animais_adicionados=vet_animais_adicionados,
+            pagination=vet_animais_pagination,
+            scope=vet_animais_scope,
+            animal_search=vet_animal_search,
+            animal_sort=vet_animal_sort %}
+      {% include 'partials/novo_pet_panel.html' %}
+    {% endwith %}
+  </div><!-- /tab-pane section-animais -->
 
   </div><!-- /tab-content -->
 
