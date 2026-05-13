@@ -12528,43 +12528,32 @@ def gerar_termo(animal_id, tipo):
 
 @login_required
 def plano_saude_overview():
-    from models import HealthPlan, HealthSubscription, GroomingPlan, Clinica
-    from forms import HealthPlanForm, GroomingPlanForm
+    from models import HealthPlan, HealthSubscription, Clinica
+    from forms import HealthPlanForm
 
     is_admin = _is_admin()
     minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
 
-    # --- gestão: planos de saúde (admin cria/edita) ---
+    # --- gestão: planos de saúde (admin global ou dono de clínica) ---
     health_form = HealthPlanForm(prefix='hp')
-    if is_admin and health_form.validate_on_submit() and health_form.submit.data:
+    if (is_admin or minha_clinica) and health_form.validate_on_submit() and health_form.submit.data:
         plan = HealthPlan(
             name=health_form.name.data,
             description=health_form.description.data or None,
             price=float(health_form.price.data),
+            clinica_id=minha_clinica.id if minha_clinica and not is_admin else None,
         )
         db.session.add(plan)
         db.session.commit()
         flash('Plano de saúde criado!', 'success')
-        return redirect(url_for('plano_saude_overview') + '#saude')
+        return redirect(url_for('plano_saude_overview'))
 
-    # --- gestão: planos de banho e tosa (dono de clínica cria) ---
-    grooming_form = GroomingPlanForm(prefix='gp')
-    if minha_clinica and grooming_form.validate_on_submit() and grooming_form.submit.data:
-        plan = GroomingPlan(
-            clinica_id=minha_clinica.id,
-            name=grooming_form.name.data,
-            description=grooming_form.description.data or None,
-            service_type=grooming_form.service_type.data,
-            price=grooming_form.price.data,
-            sessions_per_month=grooming_form.sessions_per_month.data,
-        )
-        db.session.add(plan)
-        db.session.commit()
-        flash('Plano de banho e tosa criado!', 'success')
-        return redirect(url_for('plano_saude_overview') + '#tosa')
-
-    all_health_plans = HealthPlan.query.order_by(HealthPlan.name).all()
-    grooming_planos = minha_clinica.grooming_plans.order_by(GroomingPlan.name).all() if minha_clinica else []
+    if is_admin:
+        all_health_plans = HealthPlan.query.order_by(HealthPlan.name).all()
+    elif minha_clinica:
+        all_health_plans = HealthPlan.query.filter_by(clinica_id=minha_clinica.id).order_by(HealthPlan.name).all()
+    else:
+        all_health_plans = []
 
     # --- área do tutor ---
     animais_do_usuario = (
@@ -12584,9 +12573,7 @@ def plano_saude_overview():
         is_admin=is_admin,
         minha_clinica=minha_clinica,
         health_form=health_form,
-        grooming_form=grooming_form,
         all_health_plans=all_health_plans,
-        grooming_planos=grooming_planos,
     )
 
 
@@ -15964,24 +15951,47 @@ def clinic_grooming_assinantes(clinica_id, plan_id):
 
 @login_required
 def grooming_planos_publicos():
-    from models import GroomingPlan, GroomingSubscription
+    from models import GroomingPlan, GroomingSubscription, Clinica
+    from forms import GroomingPlanForm
+
+    minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+
+    grooming_form = GroomingPlanForm(prefix='gp')
+    if minha_clinica and grooming_form.validate_on_submit() and grooming_form.submit.data:
+        plan = GroomingPlan(
+            clinica_id=minha_clinica.id,
+            name=grooming_form.name.data,
+            description=grooming_form.description.data or None,
+            service_type=grooming_form.service_type.data,
+            price=grooming_form.price.data,
+            sessions_per_month=grooming_form.sessions_per_month.data,
+        )
+        db.session.add(plan)
+        db.session.commit()
+        flash('Plano de banho e tosa criado!', 'success')
+        return redirect(url_for('grooming_planos_publicos'))
+
     planos = (
         GroomingPlan.query
         .filter_by(active=True)
         .order_by(GroomingPlan.price)
         .all()
     )
-    # Assinaturas ativas do usuário para controle de botões
     minhas_ids = set(
         s.plan_id for s in
         GroomingSubscription.query
         .filter_by(user_id=current_user.id, active=True)
         .all()
     )
+    grooming_planos = minha_clinica.grooming_plans.order_by(GroomingPlan.name).all() if minha_clinica else []
+
     return render_template(
         'grooming/planos_publicos.html',
         planos=planos,
         minhas_ids=minhas_ids,
+        minha_clinica=minha_clinica,
+        grooming_form=grooming_form,
+        grooming_planos=grooming_planos,
     )
 
 

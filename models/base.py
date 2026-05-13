@@ -2712,9 +2712,16 @@ class Payment(db.Model):
 
 class HealthPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text)
     price = db.Column(db.Float, nullable=False)
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    clinica = db.relationship('Clinica', backref=db.backref('health_plans', lazy='dynamic'))
     coverages = db.relationship(
         'HealthCoverage',
         back_populates='plan',

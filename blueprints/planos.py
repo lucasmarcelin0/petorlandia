@@ -50,6 +50,7 @@ def get_blueprint():
     bp.add_url_rule(
         "/planos/tosa",
         view_func=lazy_view("grooming_planos_publicos"),
+        methods=["GET", "POST"],
     )
     bp.add_url_rule(
         "/planos/tosa/<int:plan_id>/assinar",
