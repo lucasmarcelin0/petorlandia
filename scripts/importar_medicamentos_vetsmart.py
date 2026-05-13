@@ -714,6 +714,7 @@ def _montar_conteudo_estruturado_v2(
     secoes_clinicas: Dict[str, Any],
     interacoes_struct: Dict[str, Any],
     advertencias_extras: Optional[str] = None,
+    raw_sections: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     advertencias = dict(secoes_clinicas.get('advertencias') or _montar_secao_padrao())
     if advertencias_extras:
@@ -730,6 +731,7 @@ def _montar_conteudo_estruturado_v2(
             'itens': interacoes_struct.get('itens') or [],
             'texto': interacoes_struct.get('texto'),
         },
+        'raw_sections': raw_sections or {},
         'metadata': {
             'parser_version': 'v2',
             'fonte': 'vetsmart',
@@ -891,10 +893,31 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         obs_partes.append(f"Advertências:\n{_limpar(warning_meta, 600)}")
     observacoes = '\n\n'.join(obs_partes) or None
 
+    # Todas as seções brutas da página para exibir com atribuição ao Vetsmart
+    _SECOES_ORDEM = [
+        'Sobre',
+        'Apresentações e concentrações',
+        'Indicações e contraindicações',
+        'Administração e doses',
+        'Interações medicamentosas',
+        'Farmacologia',
+        'Estudos',
+        'Videos',
+        'Avaliações',
+        'Distribuidores',
+        'Ref. bibliográficas',
+    ]
+    raw_sections: Dict[str, Optional[str]] = {}
+    for sec_nome in _SECOES_ORDEM:
+        valor = secoes.get(sec_nome)
+        if valor and not _eh_vazio(valor):
+            raw_sections[sec_nome] = _texto_multilinha_limpo(valor)
+
     conteudo_estruturado = _montar_conteudo_estruturado_v2(
         indicacoes_struct,
         interacoes_struct,
         advertencias_extras=_limpar(warning_meta, 1200),
+        raw_sections=raw_sections,
     )
 
     # Bula: farmacologia (rica) → description schema.org → descritivo da seção Sobre
@@ -1093,6 +1116,29 @@ _RE_DOSE_LOCAL_GOTAS = re.compile(
     r'(?:cada\s+)?(olho(?:s)?|conduto(?:\s+auditivo)?|canal\s+auditivo|ouvido(?:s)?|narina(?:s)?)\b',
     re.IGNORECASE,
 )
+# Normaliza descrições de porte de raça para faixas de peso (kg)
+_PORTE_PARA_KG = [
+    (r'ra[cç]as?\s+gigantes?|gigante',     (50.0, None)),
+    (r'ra[cç]as?\s+grandes?|grande',       (25.0, 50.0)),
+    (r'ra[cç]as?\s+m[eé]dias?|m[eé]dio',  (10.0, 25.0)),
+    (r'ra[cç]as?\s+pequenas?|pequeno',     (0.0,  10.0)),
+    (r'ra[cç]as?\s+mini(?:atura)?|mini\b', (0.0,   5.0)),
+]
+
+
+def _porte_para_faixa(texto: str):
+    """Retorna (peso_min_kg, peso_max_kg, faixa_str) para descrição de porte ou (None, None, None)."""
+    t = texto.lower()
+    for pat, (pmin, pmax) in _PORTE_PARA_KG:
+        if re.search(pat, t, re.IGNORECASE):
+            label = f"até {int(pmax)} kg" if pmin == 0 else (
+                f"acima de {int(pmin)} kg" if pmax is None else
+                f"{int(pmin)}–{int(pmax)} kg"
+            )
+            return pmin, pmax, label
+    return None, None, None
+
+
 _RE_FAIXA_ATE   = re.compile(r'at[eé]\s*(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
 _RE_FAIXA_ACIMA = re.compile(r'acima\s+de\s+(\d+(?:[,\.]\d+)?)\s*kg', re.IGNORECASE)
 _RE_FAIXA_ENTRE = re.compile(
@@ -1247,6 +1293,19 @@ def _intervalo_horas_faixa(freq_texto: str) -> tuple:
     t = freq_texto.lower()
     if 'dose unica' in t.replace('ú', 'u') or 'dose única' in t:
         return (None, None)
+
+    # ── abreviações veterinárias latinas ────────────────────────────────────
+    # SID/q24h=24h, BID/q12h=12h, TID/q8h=8h, QID/q6h=6h, EOD/q48h=48h
+    _VET_ABBR = [
+        (r'\bsid\b|q\s*24\s*h\b',         24),
+        (r'\bbid\b|q\s*12\s*h\b',         12),
+        (r'\btid\b|q\s*8\s*h\b',           8),
+        (r'\bqid\b|q\s*6\s*h\b',           6),
+        (r'\beod\b|q\s*48\s*h\b|every\s+other\s+day', 48),
+    ]
+    for pat, horas in _VET_ABBR:
+        if re.search(pat, t):
+            return (horas, horas)
 
     # ── faixa explícita ──────────────────────────────────────────────────────
     _h = r'(?:h|horas?|hrs?)'
@@ -1446,12 +1505,25 @@ def _extrair_doses_estruturadas(
             m = _RE_FAIXA_ACIMA.search(linha)
             peso_min_ctx, peso_max_ctx = _f(m.group(1)), None
             peso_faixa_str = f"Acima de {m.group(1)} kg"
+        else:
+            # Porte-based description: "raças pequenas", "raças grandes", etc.
+            p_min, p_max, p_label = _porte_para_faixa(linha)
+            if p_label:
+                peso_min_ctx, peso_max_ctx = p_min, p_max
+                peso_faixa_str = p_label
 
-        # Atualiza contexto de indicação se a linha inteira começa com uma
-        # (ex.: cabeçalho "Alergias" sozinho numa linha).
+        # Atualiza (ou limpa) contexto de indicação.
+        # Uma linha puramente textual sem números e sem indicação reconhecida
+        # provavelmente é um cabeçalho de subseção (ex.: "Modo de usar",
+        # "Observações") — nesse caso limpamos o contexto para não
+        # "contaminar" doses de seções posteriores com indicações anteriores.
         ind_linha = _extrair_indicacao(linha)
         if ind_linha:
             indicacao_ctx = ind_linha
+        elif (not re.search(r'\d', linha)
+              and not _RE_ESPECIE_TXT.search(linha)
+              and len(linha.split()) <= 6):
+            indicacao_ctx = None
 
         # Quebra a linha em segmentos por indicação — se a mesma linha tem
         # duas indicações (ex.: "Alergia VO 0,5-1 mg/kg Imunossupressão VO 2 mg/kg")
@@ -1575,6 +1647,7 @@ def _extrair_doses_estruturadas(
                     'fonte':         'SCRAPER',
                     'confianca':     'MEDIA',
                 })
+                continue
 
             # "1 comprimido / 10 kg" → COMPRIMIDOS_KG (dose normalizada por peso)
             m = _RE_DOSE_CP_POR_PESO.search(seg_txt)
@@ -2027,7 +2100,7 @@ def scrape_lista_produtos(page, pagina_max: int = 61) -> List[Dict[str, Any]]:
         url_pag = f"{LIST_URL}/{n}"
         log.info(f"Abrindo lista página {n}/{pagina_max}: {url_pag}")
         try:
-            page.goto(url_pag, wait_until="networkidle", timeout=60000)
+            page.goto(url_pag, wait_until="domcontentloaded", timeout=60000)
         except Exception as e:
             log.warning(f"  ! erro ao abrir página {n}: {e}")
             continue
@@ -2065,16 +2138,13 @@ def scrape_detalhe_produto(page, info: Dict, return_html: bool = False):
     url       = info["url"]
     nome_base = info["nome"]
 
-    page.goto(url, wait_until="networkidle", timeout=60000)
-    aguardar_e_aceitar_cookies(page, timeout=4000)
-
-    # Aguarda o conteúdo principal carregar
+    page.goto(url, wait_until="domcontentloaded", timeout=60000)
     try:
-        page.wait_for_selector("h2.side-nav-title, section.container-content", timeout=10000)
+        page.wait_for_selector("h2.side-nav-title, section.container-content", timeout=12000)
     except Exception:
         pass
-
-    time.sleep(1.0)
+    aguardar_e_aceitar_cookies(page, timeout=4000)
+    time.sleep(0.5)
 
     html = page.content()
     prod = extrair_produto_do_html(html, pid, nome_base)
@@ -2117,22 +2187,29 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
           conteudo_estruturado = CASE
             WHEN %s::json IS NULL OR %s::json::jsonb = '{}'::jsonb THEN conteudo_estruturado
             WHEN conteudo_estruturado IS NULL OR conteudo_estruturado::jsonb = '{}'::jsonb THEN %s
-            WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') = '' THEN %s
+            WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') != 'v2' THEN %s
+            WHEN (conteudo_estruturado->'raw_sections' IS NULL
+                  OR conteudo_estruturado->'raw_sections' = '{}'::jsonb)
+                 AND (%s::json->'raw_sections') IS NOT NULL
+                 AND (%s::json->>'raw_sections') != '{}' THEN %s
             ELSE conteudo_estruturado
           END
          WHERE id = %s
     """, (
-        _trunc(prod.classificacao, 100),
-        _trunc(prod.principio_ativo, 200),
-        _trunc(prod.via_administracao, 80),
-        prod.vetsmart_id,
-        prod.bula,
-        prod.observacoes,
-        Json(prod.conteudo_estruturado or {}),
-        Json(prod.conteudo_estruturado or {}),
-        Json(prod.conteudo_estruturado or {}),
-        Json(prod.conteudo_estruturado or {}),
-        medicamento_id,
+        _trunc(prod.classificacao, 100),           # classificacao COALESCE
+        _trunc(prod.principio_ativo, 200),         # principio_ativo COALESCE
+        _trunc(prod.via_administracao, 80),        # via_administracao COALESCE
+        prod.vetsmart_id,                          # vetsmart_produto_id COALESCE
+        prod.bula,                                 # bula COALESCE
+        prod.observacoes,                          # observacoes COALESCE
+        Json(prod.conteudo_estruturado or {}),     # CASE WHEN NULL check
+        Json(prod.conteudo_estruturado or {}),     # CASE WHEN empty check
+        Json(prod.conteudo_estruturado or {}),     # THEN empty-DB branch
+        Json(prod.conteudo_estruturado or {}),     # THEN version-upgrade branch
+        Json(prod.conteudo_estruturado or {}),     # WHEN raw_sections absent check 1
+        Json(prod.conteudo_estruturado or {}),     # WHEN raw_sections absent check 2
+        Json(prod.conteudo_estruturado or {}),     # THEN raw_sections-upgrade branch
+        medicamento_id,                            # WHERE id
     ))
 
 
@@ -2504,7 +2581,7 @@ def main():
             page = context.new_page()
 
             log.info("Abrindo home para aceitar cookies…")
-            page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
             aguardar_e_aceitar_cookies(page, timeout=8000)
             time.sleep(1)
 
@@ -2633,7 +2710,7 @@ def main():
 
             # Aceita cookies na home
             log.info("Abrindo home para aceitar cookies…")
-            page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
             aguardar_e_aceitar_cookies(page, timeout=8000)
             time.sleep(1)
 

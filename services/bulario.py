@@ -673,11 +673,64 @@ def montar_monografia_medicamento(medicamento) -> Dict[str, Any]:
     }
 
 
+def vetsmart_url(medicamento) -> Optional[str]:
+    vid = getattr(medicamento, "vetsmart_produto_id", None)
+    return f"https://vetsmart.com.br/cg/produto/{vid}" if vid else None
+
+
+_SECOES_ORDEM_VETSMART = [
+    'Sobre',
+    'Apresentações e concentrações',
+    'Indicações e contraindicações',
+    'Administração e doses',
+    'Interações medicamentosas',
+    'Farmacologia',
+    'Estudos',
+    'Videos',
+    'Avaliações',
+    'Distribuidores',
+    'Ref. bibliográficas',
+]
+
+_ICONES_SECOES_VETSMART = {
+    'Sobre':                         'fa-circle-info',
+    'Apresentações e concentrações':  'fa-box-open',
+    'Indicações e contraindicações':  'fa-stethoscope',
+    'Administração e doses':          'fa-syringe',
+    'Interações medicamentosas':      'fa-shuffle',
+    'Farmacologia':                   'fa-flask',
+    'Estudos':                        'fa-book-open',
+    'Videos':                         'fa-play-circle',
+    'Avaliações':                     'fa-star',
+    'Distribuidores':                 'fa-truck',
+    'Ref. bibliográficas':            'fa-bookmark',
+}
+
+
+def extrair_secoes_vetsmart(medicamento) -> List[Dict[str, Any]]:
+    """Retorna lista ordenada das seções brutas do Vetsmart gravadas no banco.
+
+    Cada item: {nome, icone, texto}. Retorna [] se não houver raw_sections.
+    """
+    conteudo = _conteudo_carregado_sem_lazyload(medicamento)
+    raw = conteudo.get("raw_sections") if isinstance(conteudo, dict) else None
+    if not isinstance(raw, dict) or not raw:
+        return []
+    resultado = []
+    for nome in _SECOES_ORDEM_VETSMART:
+        texto = raw.get(nome)
+        if texto:
+            resultado.append({
+                "nome": nome,
+                "icone": _ICONES_SECOES_VETSMART.get(nome, "fa-circle"),
+                "texto": texto,
+            })
+    return resultado
+
+
 def serializar_medicamento_busca(medicamento) -> Dict[str, Any]:
     estrutura = montar_monografia_medicamento(medicamento)
-    bula_url = None
-    if getattr(medicamento, "vetsmart_produto_id", None):
-        bula_url = f"https://vetsmart.com.br/cg/produto/{medicamento.vetsmart_produto_id}"
+    bula_url = vetsmart_url(medicamento)
     return {
         "id": medicamento.id,
         "nome": medicamento.nome,

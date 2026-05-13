@@ -18641,7 +18641,7 @@ def salvar_racao(animal_id):
         elif 'racoes' in data:
             racoes_data = data.get('racoes', [])
             for r in racoes_data:
-                marca = r.get('marca_racao', '').strip()
+                marca = _canonicalize_racao_brand(r.get('marca_racao', ''))
                 linha_val = r.get('linha_racao')
                 linha = linha_val.strip() if linha_val else None
 
@@ -18708,7 +18708,7 @@ def criar_tipo_racao():
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     data = request.get_json(silent=True) or {}
-    marca = data.get('marca', '').strip()
+    marca = _canonicalize_racao_brand(data.get('marca', ''))
     linha = data.get('linha', '').strip()
     recomendacao = data.get('recomendacao')
     peso_pacote_kg = data.get('peso_pacote_kg')  # Novo campo
@@ -18762,7 +18762,7 @@ def alterar_tipo_racao(tipo_id):
     data = request.get_json(silent=True) or {}
     marca_val = data.get('marca', tipo.marca)
     if marca_val is not None:
-        marca_val = marca_val.strip()
+        marca_val = _canonicalize_racao_brand(marca_val)
     tipo.marca = marca_val
     linha_val = data.get('linha', tipo.linha)
     if linha_val is not None:
@@ -18828,6 +18828,23 @@ def buscar_racoes():
         }
         for r in resultados[:15]
     ])
+
+
+def _normalize_racao_brand_key(value):
+    text = " ".join((value or "").strip().lower().split())
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _canonicalize_racao_brand(value):
+    text = (value or "").strip()
+    corrections = {
+        "especial dog": "Special Dog",
+        "especialdog": "Special Dog",
+        "especial cat": "Special Cat",
+        "especialcat": "Special Cat",
+    }
+    return corrections.get(_normalize_racao_brand_key(text), text)
 
 
 @app.route('/racao/<int:racao_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -19073,8 +19090,8 @@ def _split_delivery_research_food_label(value):
         return (None, None)
     if " - " in raw:
         marca, linha = raw.split(" - ", 1)
-        return (marca.strip() or raw, linha.strip() or None)
-    return (raw, None)
+        return (_canonicalize_racao_brand(marca) or raw, linha.strip() or None)
+    return (_canonicalize_racao_brand(raw), None)
 
 
 def _delivery_research_food_label_for_type(tipo_racao):
@@ -28110,9 +28127,16 @@ def bulario_detalhe(medicamento_id):
     if not _is_admin():
         abort(403)
     from models.base import Medicamento
-    from services.bulario import montar_monografia_medicamento
-    med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get_or_404(medicamento_id)
-    return render_template("bulario/detalhe.html", med=med, monografia=montar_monografia_medicamento(med))
+    from services.bulario import montar_monografia_medicamento, extrair_secoes_vetsmart, vetsmart_url
+    # Sem defer: precisamos do conteudo_estruturado para raw_sections e monografia
+    med = Medicamento.query.get_or_404(medicamento_id)
+    return render_template(
+        "bulario/detalhe.html",
+        med=med,
+        monografia=montar_monografia_medicamento(med),
+        secoes_vetsmart=extrair_secoes_vetsmart(med),
+        vetsmart_produto_url=vetsmart_url(med),
+    )
 
 
 @login_required

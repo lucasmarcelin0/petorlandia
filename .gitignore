@@ -60,6 +60,15 @@ Thumbs.db
 debug/
 tmp/
 
+# Vetsmart scraping artifacts (large HTML dumps, checkpoints, logs)
+data/vetsmart_html/
+data/harvest_checkpoint.sqlite
+data/harvest.log
+data/process.log
+vetsmart_produtos_cache.json
+importar_medicamentos.log
+backfill_raw_sections.log
+
 # Build
 dist/
 build/

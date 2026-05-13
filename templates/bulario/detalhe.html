@@ -60,10 +60,20 @@
         </div>
       </div>
 
-      <!-- Ação rápida -->
-      <button class="btn bd-btn-copy" onclick="copiarParaPrescricao()" title="Copiar para prescrição">
-        <i class="fas fa-prescription me-2"></i>Usar em prescrição
-      </button>
+      <!-- Ações rápidas -->
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <button class="btn bd-btn-copy" onclick="copiarParaPrescricao()" title="Copiar para prescrição">
+          <i class="fas fa-prescription me-2"></i>Usar em prescrição
+        </button>
+        {% if vetsmart_produto_url %}
+        <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
+           class="btn bd-btn-vetsmart" title="Ver página completa no Vetsmart">
+          <img src="https://vetsmart.com.br/favicon.ico" width="16" height="16"
+               class="me-2 rounded-1" alt="" onerror="this.style.display='none'">
+          Ver no Vetsmart <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.75em"></i>
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
@@ -95,6 +105,16 @@
       <li class="nav-item" role="presentation">
         <button class="bd-tab" data-bs-toggle="tab" data-bs-target="#tab-apres" type="button">
           <i class="fas fa-boxes me-2"></i>Apresentações
+        </button>
+      </li>
+      {% endif %}
+      {% if secoes_vetsmart %}
+      <li class="nav-item" role="presentation">
+        <button class="bd-tab bd-tab--vetsmart" data-bs-toggle="tab" data-bs-target="#tab-vetsmart" type="button">
+          <img src="https://vetsmart.com.br/favicon.ico" width="14" height="14"
+               class="me-2 rounded-1 align-text-bottom" alt=""
+               onerror="this.replaceWith(document.createTextNode(''))">
+          Vetsmart
         </button>
       </li>
       {% endif %}
@@ -480,6 +500,74 @@
     </div>
     {% endif %}
 
+    <!-- ── Vetsmart ── -->
+    {% if secoes_vetsmart %}
+    <div class="tab-pane fade" id="tab-vetsmart" role="tabpanel">
+
+      <!-- Cabeçalho de atribuição -->
+      <div class="bd-vetsmart-header mb-4">
+        <div class="d-flex align-items-center gap-3">
+          <div class="bd-vetsmart-logo-wrap">
+            <img src="https://vetsmart.com.br/favicon.ico" width="28" height="28"
+                 class="rounded-2" alt="Vetsmart"
+                 onerror="this.style.display='none'">
+          </div>
+          <div>
+            <div class="fw-bold text-dark" style="font-size:.95rem">Informações do Vetsmart</div>
+            <div class="text-muted" style="font-size:.82rem">
+              Conteúdo extraído de
+              <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
+                 class="text-primary fw-semibold">vetsmart.com.br
+                <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.7em"></i>
+              </a>
+              — não é produzido pela Petorlandia. Consulte sempre um veterinário.
+            </div>
+          </div>
+          <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
+             class="btn btn-sm bd-btn-vetsmart-outline ms-auto">
+            Abrir original <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.75em"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- Acordeão com todas as seções -->
+      <div class="accordion bd-vetsmart-accordion" id="vetsmartAccordion">
+        {% for secao in secoes_vetsmart %}
+        <div class="accordion-item bd-acc-item">
+          <h2 class="accordion-header" id="vsHead{{ loop.index }}">
+            <button class="accordion-button {% if not loop.first %}collapsed{% endif %} bd-acc-btn"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#vsBody{{ loop.index }}"
+                    aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                    aria-controls="vsBody{{ loop.index }}">
+              <i class="fas {{ secao.icone }} me-2 bd-acc-icon"></i>
+              {{ secao.nome }}
+            </button>
+          </h2>
+          <div id="vsBody{{ loop.index }}"
+               class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+               aria-labelledby="vsHead{{ loop.index }}"
+               data-bs-parent="#vetsmartAccordion">
+            <div class="accordion-body bd-acc-body">
+              <pre class="bd-vetsmart-texto">{{ secao.texto }}</pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Rodapé de atribuição -->
+      <div class="bd-vetsmart-footer mt-4">
+        <i class="fas fa-circle-info me-2"></i>
+        Dados obtidos do
+        <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer">Vetsmart</a>
+        sob responsabilidade editorial deles. A Petorlandia exibe este conteúdo apenas como referência.
+      </div>
+
+    </div>
+    {% endif %}
+
   </div>
 
   <!-- Voltar -->
@@ -854,6 +942,95 @@
   .bd-dose-line__main { flex-direction: column; align-items: flex-start; }
   .bd-clinical-card--full { grid-column: auto; }
 }
+
+/* ── Botão Vetsmart no hero ─────────────────────── */
+.bd-btn-vetsmart {
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: .55rem 1.2rem;
+  white-space: nowrap;
+  font-size: .88rem;
+  transition: background .15s;
+  display: inline-flex;
+  align-items: center;
+}
+.bd-btn-vetsmart:hover { background: rgba(255,255,255,.22); color: #fff; }
+
+/* ── Tab Vetsmart ───────────────────────────────── */
+.bd-tab--vetsmart { color: #1a7a4a !important; }
+.bd-tab--vetsmart.active { border-bottom-color: #1a7a4a !important; }
+
+/* ── Cabeçalho de atribuição ────────────────────── */
+.bd-vetsmart-header {
+  background: #f0faf4;
+  border: 1px solid #bbf0d0;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+}
+.bd-vetsmart-logo-wrap {
+  width: 46px; height: 46px;
+  background: #fff;
+  border: 1px solid #d4edda;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.bd-btn-vetsmart-outline {
+  border: 1px solid #1a7a4a;
+  color: #1a7a4a;
+  border-radius: 8px;
+  font-size: .83rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: .35rem .9rem;
+  flex-shrink: 0;
+}
+.bd-btn-vetsmart-outline:hover { background: #1a7a4a; color: #fff; }
+
+/* ── Acordeão Vetsmart ──────────────────────────── */
+.bd-vetsmart-accordion { border-radius: 14px; overflow: hidden; }
+.bd-acc-item { border: 1px solid #e2e8f0 !important; margin-bottom: .5rem !important; border-radius: 12px !important; overflow: hidden; }
+.bd-acc-btn {
+  font-weight: 600;
+  font-size: .9rem;
+  color: #1e293b;
+  background: #f8fafc;
+  border-radius: 0 !important;
+  padding: .85rem 1.1rem;
+}
+.bd-acc-btn:not(.collapsed) { background: #f0faf4; color: #1a7a4a; }
+.bd-acc-btn::after { filter: none; }
+.bd-acc-icon { color: #64748b; font-size: .85rem; }
+.bd-acc-btn:not(.collapsed) .bd-acc-icon { color: #1a7a4a; }
+.bd-acc-body { padding: 1rem 1.25rem; background: #fff; }
+
+/* ── Texto das seções ───────────────────────────── */
+.bd-vetsmart-texto {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: .88rem;
+  line-height: 1.7;
+  color: #374151;
+  margin: 0;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ── Rodapé de atribuição ───────────────────────── */
+.bd-vetsmart-footer {
+  font-size: .8rem;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: .75rem 1rem;
+}
+.bd-vetsmart-footer a { color: #1a7a4a; font-weight: 600; }
 </style>
 
 <script>
