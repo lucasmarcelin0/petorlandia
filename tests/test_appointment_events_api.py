@@ -385,6 +385,54 @@ def test_clinic_appointments_include_exam_and_vaccine(client, monkeypatch):
     assert vaccine_event['extendedProps']['eventType'] == 'vaccine'
 
 
+def test_clinic_appointments_include_finalized_consultas_without_cross_clinic_leak(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        clinic2 = Clinica(id=2, nome='Outra ClÃ­nica')
+        animal2 = Animal(id=2, name='Bolt', user_id=tutor_id, clinica_id=clinic2.id)
+        db.session.add_all([clinic2, animal2])
+        db.session.commit()
+
+        consulta = Consulta(
+            id=10,
+            animal_id=1,
+            created_by=vet_user_id,
+            clinica_id=clinic_id,
+            status='finalizada',
+            finalizada_em=datetime(2026, 5, 13, 10, 40),
+        )
+        foreign_consulta = Consulta(
+            id=11,
+            animal_id=animal2.id,
+            created_by=vet_user_id,
+            clinica_id=clinic2.id,
+            status='finalizada',
+            finalizada_em=datetime(2026, 5, 13, 11, 0),
+        )
+        db.session.add_all([consulta, foreign_consulta])
+        db.session.commit()
+
+        consulta_id = consulta.id
+        foreign_consulta_id = foreign_consulta.id
+        consulta_start_iso = to_timezone_aware(consulta.finalizada_em).isoformat()
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {'id': 1, 'clinica_id': clinic_id})()
+    })()
+    login(monkeypatch, fake_vet)
+
+    resp = client.get(f'/api/clinic_appointments/{clinic_id}')
+    assert resp.status_code == 200
+    events = {event['id']: event for event in resp.get_json()}
+    assert f'consulta-{consulta_id}' in events
+    assert f'consulta-{foreign_consulta_id}' not in events
+    assert events[f'consulta-{consulta_id}']['start'] == consulta_start_iso
+
+
 def test_vet_appointments_admin_includes_related_events(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
@@ -444,6 +492,56 @@ def test_vet_appointments_admin_includes_related_events(client, monkeypatch):
     vaccine_event = events[f'vaccine-{vaccine_id}']
     assert vaccine_event['start'] == vaccine_start.isoformat()
     assert vaccine_event['end'] == vaccine_end.isoformat()
+
+
+def test_vet_appointments_include_finalized_consultas_and_respect_clinic_filter(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        vet = Veterinario.query.get(1)
+        vet_id = vet.id
+        clinic2 = Clinica(id=2, nome='Outra ClÃ­nica')
+        animal2 = Animal(id=2, name='Bolt', user_id=tutor_id, clinica_id=clinic2.id)
+        db.session.add_all([clinic2, animal2])
+        db.session.commit()
+
+        consulta = Consulta(
+            id=20,
+            animal_id=1,
+            created_by=vet_user_id,
+            clinica_id=clinic_id,
+            status='finalizada',
+            finalizada_em=datetime(2026, 5, 13, 10, 40),
+        )
+        foreign_consulta = Consulta(
+            id=21,
+            animal_id=animal2.id,
+            created_by=vet_user_id,
+            clinica_id=clinic2.id,
+            status='finalizada',
+            finalizada_em=datetime(2026, 5, 13, 11, 0),
+        )
+        db.session.add_all([consulta, foreign_consulta])
+        db.session.commit()
+
+        consulta_id = consulta.id
+        foreign_consulta_id = foreign_consulta.id
+        consulta_start_iso = to_timezone_aware(consulta.finalizada_em).isoformat()
+
+    fake_admin = type('U', (), {
+        'id': 99,
+        'worker': None,
+        'role': 'admin',
+        'clinica_id': None,
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_admin)
+
+    resp = client.get(f'/api/vet_appointments/{vet_id}?clinica_id={clinic_id}')
+    assert resp.status_code == 200
+    events = {event['id']: event for event in resp.get_json()}
+    assert f'consulta-{consulta_id}' in events
+    assert f'consulta-{foreign_consulta_id}' not in events
+    assert events[f'consulta-{consulta_id}']['start'] == consulta_start_iso
 
 
 def test_vet_appointments_collaborator_filters_by_clinic(client, monkeypatch):

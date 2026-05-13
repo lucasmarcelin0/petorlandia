@@ -26934,6 +26934,41 @@ def api_clinic_appointments(clinica_id):
 
     events.extend(vaccine_events)
 
+    consulta_query = (
+        Consulta.query
+        .outerjoin(Consulta.animal)
+        .options(
+            joinedload(Consulta.animal).joinedload(Animal.owner),
+            joinedload(Consulta.veterinario),
+            joinedload(Consulta.clinica),
+        )
+        .filter(
+            Consulta.status == 'finalizada',
+            Consulta.clinica_id == clinica_id,
+        )
+        .order_by(Consulta.finalizada_em, Consulta.created_at)
+    )
+    consultas = consulta_query.all()
+    if allowed_veterinarian_ids is not None:
+        allowed_user_ids = {
+            user_id
+            for (user_id,) in (
+                db.session.query(Veterinario.user_id)
+                .filter(Veterinario.id.in_(allowed_veterinarian_ids))
+                .all()
+            )
+            if user_id is not None
+        }
+        consultas = [
+            consulta
+            for consulta in consultas
+            if getattr(consulta, 'created_by', None) in allowed_user_ids
+        ]
+    for consulta in unique_items_by_id(consultas):
+        event = consulta_to_event(consulta)
+        if event:
+            events.append(event)
+
     return jsonify(events)
 
 
@@ -27023,6 +27058,31 @@ def api_vet_appointments(veterinario_id):
 
     appointments = query.order_by(Appointment.scheduled_at).all()
     events = appointments_to_events(appointments)
+
+    consulta_filters = [
+        Consulta.status == 'finalizada',
+        Consulta.created_by == getattr(veterinario, 'user_id', None),
+    ]
+    if target_clinic_ids:
+        consulta_filters.append(Consulta.clinica_id.in_(target_clinic_ids))
+    elif requested_clinic_ids:
+        consulta_filters.append(false())
+    consultas = (
+        Consulta.query
+        .outerjoin(Consulta.animal)
+        .options(
+            joinedload(Consulta.animal).joinedload(Animal.owner),
+            joinedload(Consulta.veterinario),
+            joinedload(Consulta.clinica),
+        )
+        .filter(*consulta_filters)
+        .order_by(Consulta.finalizada_em, Consulta.created_at)
+        .all()
+    )
+    for consulta in unique_items_by_id(consultas):
+        event = consulta_to_event(consulta)
+        if event:
+            events.append(event)
 
     exam_filters = [
         ExamAppointment.specialist_id == veterinario_id,
