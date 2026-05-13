@@ -56,6 +56,7 @@ from authlib.jose import JsonWebKey, jwt
 import json
 import csv
 import unicodedata
+from document_utils import format_cnpj as format_cnpj_value, only_digits
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased, defer
@@ -1496,12 +1497,7 @@ def find_user_by_login_identifier(identifier: str | None) -> tuple[User | None, 
 @app.template_filter("format_cnpj")
 def format_cnpj(value):
     """Return a formatted CNPJ (00.000.000/0000-00)."""
-    if not value:
-        return ""
-    digits = "".join(ch for ch in str(value) if ch.isdigit())
-    if len(digits) == 14:
-        return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
-    return value
+    return format_cnpj_value(value)
 
 
 @app.template_filter("currency_br")
@@ -1677,6 +1673,9 @@ from forms import (
     EditProfileForm,
     ClinicProductForm,
     ClinicProductEditForm,
+    GroomingPlanForm,
+    GroomingSubscribeForm,
+    HealthPlanForm,
     InventoryItemForm,
     LoginForm,
     MessageForm,
@@ -1780,7 +1779,7 @@ FISCAL_UF_CODES = {
 
 
 def _normalize_cnpj(value: str | None) -> str:
-    return "".join(ch for ch in (value or "") if ch.isdigit())
+    return only_digits(value)
 
 
 def _validate_cnpj_format(value: str | None) -> bool:
@@ -12526,28 +12525,65 @@ def gerar_termo(animal_id, tipo):
 
 @login_required
 def plano_saude_overview():
-    # animais ativos do tutor
+    from models import HealthPlan, HealthSubscription, GroomingPlan, Clinica
+    from forms import HealthPlanForm, GroomingPlanForm
+
+    is_admin = _is_admin()
+    minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+
+    # --- gestão: planos de saúde (admin cria/edita) ---
+    health_form = HealthPlanForm(prefix='hp')
+    if is_admin and health_form.validate_on_submit() and health_form.submit.data:
+        plan = HealthPlan(
+            name=health_form.name.data,
+            description=health_form.description.data or None,
+            price=float(health_form.price.data),
+        )
+        db.session.add(plan)
+        db.session.commit()
+        flash('Plano de saúde criado!', 'success')
+        return redirect(url_for('plano_saude_overview') + '#saude')
+
+    # --- gestão: planos de banho e tosa (dono de clínica cria) ---
+    grooming_form = GroomingPlanForm(prefix='gp')
+    if minha_clinica and grooming_form.validate_on_submit() and grooming_form.submit.data:
+        plan = GroomingPlan(
+            clinica_id=minha_clinica.id,
+            name=grooming_form.name.data,
+            description=grooming_form.description.data or None,
+            service_type=grooming_form.service_type.data,
+            price=grooming_form.price.data,
+            sessions_per_month=grooming_form.sessions_per_month.data,
+        )
+        db.session.add(plan)
+        db.session.commit()
+        flash('Plano de banho e tosa criado!', 'success')
+        return redirect(url_for('plano_saude_overview') + '#tosa')
+
+    all_health_plans = HealthPlan.query.order_by(HealthPlan.name).all()
+    grooming_planos = minha_clinica.grooming_plans.order_by(GroomingPlan.name).all() if minha_clinica else []
+
+    # --- área do tutor ---
     animais_do_usuario = (
         Animal.query
         .filter_by(user_id=current_user.id)
         .filter(Animal.removido_em.is_(None))
         .all()
     )
-
-    # assinaturas de plano de saúde do tutor → dict {animal_id: sub}
-    from models import HealthSubscription
-    subs = (
-        HealthSubscription.query
-        .filter_by(user_id=current_user.id, active=True)
-        .all()
-    )
+    subs = HealthSubscription.query.filter_by(user_id=current_user.id, active=True).all()
     subscriptions = {s.animal_id: s for s in subs}
 
     return render_template(
         "planos/plano_saude_overview.html",
         animais=animais_do_usuario,
-        subscriptions=subscriptions,   # ← agora o template encontra
+        subscriptions=subscriptions,
         user=current_user,
+        is_admin=is_admin,
+        minha_clinica=minha_clinica,
+        health_form=health_form,
+        grooming_form=grooming_form,
+        all_health_plans=all_health_plans,
+        grooming_planos=grooming_planos,
     )
 
 
@@ -15819,6 +15855,233 @@ def publish_inventory_to_loja(item_id):
     db.session.commit()
     flash(f'"{item.name}" publicado na loja com sucesso!', 'success')
     return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
+
+
+# ---------------------------------------------------------------------------
+# Planos de Banho e Tosa
+# ---------------------------------------------------------------------------
+
+def _grooming_clinic_access(clinica_id):
+    """Retorna (clinica, is_owner). Aborta 403 se sem permissão."""
+    from models import Clinica, ClinicStaff
+    clinica = Clinica.query.get_or_404(clinica_id)
+    is_owner = current_user.id == clinica.owner_id
+    staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    if not (_is_admin() or is_owner or staff):
+        abort(403)
+    return clinica, is_owner
+
+
+@login_required
+def clinic_grooming_planos(clinica_id):
+    from models import GroomingPlan
+    from forms import GroomingPlanForm
+    clinica, _ = _grooming_clinic_access(clinica_id)
+
+    form = GroomingPlanForm()
+    if form.validate_on_submit():
+        plan = GroomingPlan(
+            clinica_id=clinica.id,
+            name=form.name.data,
+            description=form.description.data or None,
+            service_type=form.service_type.data,
+            price=form.price.data,
+            sessions_per_month=form.sessions_per_month.data,
+        )
+        db.session.add(plan)
+        db.session.commit()
+        flash('Plano criado com sucesso!', 'success')
+        return redirect(url_for('clinic_grooming_planos', clinica_id=clinica.id))
+
+    planos = GroomingPlan.query.filter_by(clinica_id=clinica.id).order_by(GroomingPlan.name).all()
+    return render_template(
+        'clinica/clinic_grooming_planos.html',
+        clinica=clinica,
+        planos=planos,
+        form=form,
+    )
+
+
+@login_required
+def clinic_grooming_plano_editar(clinica_id, plan_id):
+    from models import GroomingPlan
+    from forms import GroomingPlanForm
+    clinica, _ = _grooming_clinic_access(clinica_id)
+    plan = GroomingPlan.query.filter_by(id=plan_id, clinica_id=clinica.id).first_or_404()
+
+    form = GroomingPlanForm(obj=plan)
+    if form.validate_on_submit():
+        plan.name = form.name.data
+        plan.description = form.description.data or None
+        plan.service_type = form.service_type.data
+        plan.price = form.price.data
+        plan.sessions_per_month = form.sessions_per_month.data
+        db.session.commit()
+        flash('Plano atualizado.', 'success')
+        return redirect(url_for('clinic_grooming_planos', clinica_id=clinica.id))
+
+    return render_template(
+        'clinica/clinic_grooming_plano_editar.html',
+        clinica=clinica,
+        plan=plan,
+        form=form,
+    )
+
+
+@login_required
+def clinic_grooming_plano_toggle(clinica_id, plan_id):
+    from models import GroomingPlan
+    clinica, _ = _grooming_clinic_access(clinica_id)
+    plan = GroomingPlan.query.filter_by(id=plan_id, clinica_id=clinica.id).first_or_404()
+    plan.active = not plan.active
+    db.session.commit()
+    state = 'ativado' if plan.active else 'desativado'
+    flash(f'Plano {state}.', 'success')
+    return redirect(url_for('clinic_grooming_planos', clinica_id=clinica.id))
+
+
+@login_required
+def clinic_grooming_assinantes(clinica_id, plan_id):
+    from models import GroomingPlan, GroomingSubscription
+    clinica, _ = _grooming_clinic_access(clinica_id)
+    plan = GroomingPlan.query.filter_by(id=plan_id, clinica_id=clinica.id).first_or_404()
+    assinantes = (
+        GroomingSubscription.query
+        .filter_by(plan_id=plan.id)
+        .order_by(GroomingSubscription.created_at.desc())
+        .all()
+    )
+    return render_template(
+        'clinica/clinic_grooming_assinantes.html',
+        clinica=clinica,
+        plan=plan,
+        assinantes=assinantes,
+    )
+
+
+@login_required
+def grooming_planos_publicos():
+    from models import GroomingPlan, GroomingSubscription
+    planos = (
+        GroomingPlan.query
+        .filter_by(active=True)
+        .order_by(GroomingPlan.price)
+        .all()
+    )
+    # Assinaturas ativas do usuário para controle de botões
+    minhas_ids = set(
+        s.plan_id for s in
+        GroomingSubscription.query
+        .filter_by(user_id=current_user.id, active=True)
+        .all()
+    )
+    return render_template(
+        'grooming/planos_publicos.html',
+        planos=planos,
+        minhas_ids=minhas_ids,
+    )
+
+
+@login_required
+def grooming_assinar(plan_id):
+    from models import GroomingPlan, GroomingSubscription, Animal
+    from forms import GroomingSubscribeForm
+    plan = GroomingPlan.query.filter_by(id=plan_id, active=True).first_or_404()
+
+    # Verifica se já possui assinatura ativa neste plano
+    if GroomingSubscription.query.filter_by(user_id=current_user.id, plan_id=plan.id, active=True).first():
+        flash('Você já possui uma assinatura ativa neste plano.', 'info')
+        return redirect(url_for('grooming_planos_publicos'))
+
+    animais = Animal.query.filter_by(user_id=current_user.id).all()
+    form = GroomingSubscribeForm()
+    form.animal_id.choices = [(a.id, a.name) for a in animais]
+
+    if form.validate_on_submit():
+        animal = Animal.query.get_or_404(form.animal_id.data)
+        if animal.user_id != current_user.id:
+            abort(403)
+
+        sub = GroomingSubscription(
+            plan_id=plan.id,
+            animal_id=animal.id,
+            user_id=current_user.id,
+            active=False,
+        )
+        db.session.add(sub)
+        db.session.commit()
+
+        preapproval_data = {
+            "reason": f"{plan.name} — {animal.name} ({plan.clinica.nome})",
+            "back_url": url_for('grooming_minhas_assinaturas', _external=True),
+            "payer_email": current_user.email,
+            "auto_recurring": {
+                "frequency": 1,
+                "frequency_type": "months",
+                "transaction_amount": float(plan.price),
+                "currency_id": "BRL",
+            },
+            "external_reference": f"grooming-{sub.id}",
+        }
+
+        try:
+            resp = mp_sdk().preapproval().create(preapproval_data)
+        except Exception:
+            current_app.logger.exception("Erro ao criar preapproval grooming")
+            flash("Falha ao conectar com Mercado Pago.", "danger")
+            return redirect(url_for('grooming_planos_publicos'))
+
+        if resp.get("status") not in {200, 201}:
+            flash("Erro ao iniciar assinatura. Tente novamente.", "danger")
+            return redirect(url_for('grooming_planos_publicos'))
+
+        mp_id = resp.get("response", {}).get("id")
+        init_point = (resp.get("response", {}).get("init_point") or
+                      resp.get("response", {}).get("sandbox_init_point"))
+
+        if mp_id:
+            sub.mp_preapproval_id = mp_id
+            db.session.commit()
+
+        if not init_point:
+            flash("Erro ao iniciar assinatura.", "danger")
+            return redirect(url_for('grooming_planos_publicos'))
+
+        return redirect(init_point)
+
+    return render_template(
+        'grooming/assinar.html',
+        plan=plan,
+        form=form,
+        animais=animais,
+    )
+
+
+@login_required
+def grooming_cancelar(sub_id):
+    from models import GroomingSubscription
+    sub = GroomingSubscription.query.filter_by(id=sub_id, user_id=current_user.id).first_or_404()
+    if sub.mp_preapproval_id:
+        try:
+            mp_sdk().preapproval().update(sub.mp_preapproval_id, {"status": "cancelled"})
+        except Exception:
+            current_app.logger.exception("Erro ao cancelar preapproval MP %s", sub.mp_preapproval_id)
+    sub.active = False
+    db.session.commit()
+    flash('Assinatura cancelada.', 'success')
+    return redirect(url_for('grooming_minhas_assinaturas'))
+
+
+@login_required
+def grooming_minhas_assinaturas():
+    from models import GroomingSubscription
+    assinaturas = (
+        GroomingSubscription.query
+        .filter_by(user_id=current_user.id)
+        .order_by(GroomingSubscription.created_at.desc())
+        .all()
+    )
+    return render_template('grooming/minhas_assinaturas.html', assinaturas=assinaturas)
 
 
 def _orcamento_services_for_clinic(clinica_id):
@@ -23562,12 +23825,20 @@ def notificacoes_mercado_pago():
     onboarding = _resolve_health_onboarding(extref) if extref else None
     payment_status = status_map.get(status, PaymentStatus.PENDING)
 
+    grooming_sub = None
+    if extref and extref.startswith('grooming-'):
+        try:
+            from models import GroomingSubscription
+            grooming_sub = GroomingSubscription.query.get(int(extref.split('-', 1)[1]))
+        except (ValueError, TypeError):
+            pass
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
             orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
-            if not pay and not bloco and not orcamento and not onboarding:
+            if not pay and not bloco and not orcamento and not onboarding and not grooming_sub:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
@@ -23633,6 +23904,12 @@ def notificacoes_mercado_pago():
 
             if onboarding:
                 _sync_health_subscription_from_onboarding(onboarding, payment_status, pay)
+
+            if grooming_sub and payment_status == PaymentStatus.COMPLETED and not grooming_sub.active:
+                grooming_sub.active = True
+                grooming_sub.start_date = utcnow()
+                if mp_id and not grooming_sub.mp_preapproval_id:
+                    grooming_sub.mp_preapproval_id = mp_id
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
