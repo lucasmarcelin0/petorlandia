@@ -1,6 +1,7 @@
 """Modelos fiscais (emissão NF-e/NFS-e)."""
 
 import enum
+from sqlalchemy.orm import validates
 
 try:
     from extensions import db
@@ -8,6 +9,10 @@ except ImportError:  # pragma: no cover - fallback for package import
     from .extensions import db
 
 from cryptography.fernet import InvalidToken
+try:
+    from document_utils import format_cnpj, only_digits
+except ImportError:
+    from ..document_utils import format_cnpj, only_digits
 from time_utils import now_in_brazil
 from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym
@@ -76,6 +81,11 @@ class FiscalEmitter(db.Model):
         cascade="all, delete-orphan",
     )
 
+    @validates("cnpj")
+    def _normalize_cnpj(self, key, value):
+        formatted = format_cnpj(value)
+        return formatted or None
+
 
 class FiscalCertificate(db.Model):
     __tablename__ = "fiscal_certificates"
@@ -96,6 +106,11 @@ class FiscalCertificate(db.Model):
     )
 
     emitter = db.relationship("FiscalEmitter", back_populates="certificates")
+
+    @validates("subject_cnpj")
+    def _normalize_subject_cnpj(self, key, value):
+        digits = only_digits(value)
+        return digits or None
 
 
 class FiscalDocument(db.Model):

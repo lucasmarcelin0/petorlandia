@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width:580px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <h1 class="h4 fw-bold mb-0">Assinar plano</h1>
+  </div>
+
+  <!-- Resumo do plano -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="mb-2">
+        {% if plan.service_type == 'banho' %}
+          <span class="badge bg-info-subtle text-info"><i class="fa-solid fa-droplet me-1"></i>Banho</span>
+        {% elif plan.service_type == 'tosa' %}
+          <span class="badge bg-warning-subtle text-warning"><i class="fa-solid fa-scissors me-1"></i>Tosa</span>
+        {% else %}
+          <span class="badge bg-primary-subtle text-primary"><i class="fa-solid fa-star me-1"></i>Banho e Tosa</span>
+        {% endif %}
+      </div>
+      <h5 class="fw-bold mb-1">{{ plan.name }}</h5>
+      <p class="text-muted small mb-2">
+        <i class="fa-solid fa-house-medical me-1"></i>{{ plan.clinica.nome }}
+      </p>
+      {% if plan.description %}
+      <p class="text-muted small mb-2">{{ plan.description }}</p>
+      {% endif %}
+      <p class="h4 fw-bold text-success mb-0">
+        R$ {{ '%.2f'|format(plan.price)|replace('.', ',') }}
+        <span class="text-muted fs-6 fw-normal">/mês</span>
+      </p>
+      <p class="text-muted small mt-1">
+        <i class="fa-solid fa-calendar-check me-1"></i>{{ plan.sessions_per_month }} sessão(ões) por mês · cobrança mensal recorrente
+      </p>
+    </div>
+  </div>
+
+  <!-- Formulário de assinatura -->
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      <h6 class="fw-bold mb-3">Dados da assinatura</h6>
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+          {{ form.animal_id.label(class="form-label fw-semibold") }}
+          {% if animais %}
+            {{ form.animal_id(class="form-select" + (" is-invalid" if form.animal_id.errors else "")) }}
+            {% for e in form.animal_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          {% else %}
+            <div class="alert alert-warning py-2 small">
+              Você não possui animais cadastrados.
+              <a href="{{ url_for('animais') }}">Cadastre um pet</a> para continuar.
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <div class="form-check">
+            {{ form.consent(class="form-check-input" + (" is-invalid" if form.consent.errors else "")) }}
+            <label class="form-check-label small" for="{{ form.consent.id }}">
+              {{ form.consent.label.text }}
+            </label>
+            {% for e in form.consent.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          Você será redirecionado ao Mercado Pago para autorizar a cobrança mensal. O plano é ativado após a confirmação do pagamento.
+        </div>
+
+        {% if animais %}
+          {{ form.submit(class="btn btn-primary w-100") }}
+        {% else %}
+          <button class="btn btn-primary w-100" disabled>Assinar plano</button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

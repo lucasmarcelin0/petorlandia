@@ -30,7 +30,7 @@
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label" for="cnpj">CNPJ *</label>
-            <input class="form-control" id="cnpj" name="cnpj" maxlength="18" value="{{ emitter.cnpj if emitter else '' }}" required>
+            <input class="form-control" id="cnpj" name="cnpj" maxlength="18" value="{{ emitter.cnpj if emitter else '' }}" data-cnpj-mask="true" required>
           </div>
           <div class="col-md-8">
             <label class="form-label" for="razao_social">Razão social *</label>
@@ -73,5 +73,6 @@
     </div>
   </div>
 </div>
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 <script src="{{ url_for('static', filename='js/fiscal_settings.js') }}"></script>
 {% endblock %}

@@ -42,7 +42,7 @@
     {{ clinica.nome }} – {{ clinica.endereco }}<br>
     {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
     {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
-    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj | format_cnpj }}{% endif %}
   </footer>
   {% endif %}
 </div>

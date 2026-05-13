@@ -34,6 +34,10 @@ try:  # pragma: no cover - import guard
 except ImportError:  # pragma: no cover - executed only when optional dep missing
     from flask_admin.contrib.sqla.fields import QuerySelectField
 from flask_wtf.file import FileField, FileAllowed
+try:
+    from document_utils import format_cnpj, only_digits
+except ImportError:
+    from .document_utils import format_cnpj, only_digits
 from models import PLANTONISTA_ESCALA_STATUS_CHOICES
 
 
@@ -468,6 +472,14 @@ class ClinicForm(FlaskForm):
     photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
     submit = SubmitField('Salvar')
 
+    def validate_cnpj(self, field):
+        if not field.data:
+            return
+        digits = only_digits(field.data)
+        if len(digits) != 14:
+            raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
+        field.data = format_cnpj(field.data)
+
 
 class ClinicHoursForm(FlaskForm):
     clinica_id = SelectField(
@@ -771,6 +783,46 @@ class ClinicProductEditForm(FlaskForm):
     image_upload = FileField('Nova imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Salvar alterações')
+
+
+class HealthPlanForm(FlaskForm):
+    """Criação/edição de plano de saúde (admin)."""
+    name = StringField('Nome do plano', validators=[DataRequired(), Length(max=50)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    price = DecimalField('Mensalidade (R$)', places=2, validators=[DataRequired(), NumberRange(min=1)])
+    submit = SubmitField('Salvar plano')
+
+
+class GroomingPlanForm(FlaskForm):
+    """Usado pelo dono da clínica para criar/editar um plano de banho e tosa."""
+    name = StringField('Nome do plano', validators=[DataRequired(), Length(max=120)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    service_type = SelectField(
+        'Tipo de serviço',
+        choices=[
+            ('banho', 'Banho'),
+            ('tosa', 'Tosa'),
+            ('banho_e_tosa', 'Banho e Tosa'),
+        ],
+        validators=[DataRequired()],
+    )
+    price = DecimalField('Mensalidade (R$)', places=2, validators=[DataRequired(), NumberRange(min=1)])
+    sessions_per_month = IntegerField(
+        'Sessões por mês',
+        validators=[DataRequired(), NumberRange(min=1, max=31)],
+        default=1,
+    )
+    submit = SubmitField('Salvar plano')
+
+
+class GroomingSubscribeForm(FlaskForm):
+    """Usado pelo tutor para assinar um plano de banho e tosa."""
+    animal_id = SelectField('Animal', coerce=int, validators=[DataRequired()])
+    consent = BooleanField(
+        'Concordo com os termos do plano e autorizo a cobrança mensal recorrente.',
+        validators=[DataRequired(message='Você deve aceitar os termos para continuar.')],
+    )
+    submit = SubmitField('Assinar plano')
 
 
 class AppointmentForm(FlaskForm):

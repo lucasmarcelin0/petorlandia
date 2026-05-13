@@ -550,7 +550,7 @@
           {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
           {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
           {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
           {% if veterinario and veterinario.crmv %}<span>CRMV {{ veterinario.crmv }}</span>{% endif %}
         </div>
       </div>
@@ -820,7 +820,7 @@
     {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
     {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
     {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-    {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
     <div class="travel-footer-note">
       Consulte as orientacoes oficiais para transito internacional em agricultura.gov.br/assuntos/vigilancia-agropecuaria/animais-estimacao.
     </div>

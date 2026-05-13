@@ -11,7 +11,7 @@
     </div>
     <div class="mb-3">
       {{ form.cnpj.label }}
-      {{ form.cnpj(class="form-control") }}
+      {{ form.cnpj(class="form-control", **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}
     </div>
     <div class="mb-3">
       {{ form.endereco.label }}
@@ -32,4 +32,5 @@
     {{ form.submit(class="btn btn-primary") }}
   </form>
 </div>
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 {% endblock %}

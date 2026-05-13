@@ -2,78 +2,293 @@
 {% block main %}
 <div class="container mt-4">
 
-    <!-- Imagem de destaque mais compacta -->
-    <div class="d-flex justify-content-center mb-3">
-        <img src="{{ url_for('static', filename='plano_saude_banner1.png') }}"
-             class="rounded-4 shadow-sm"
-             style="height: 220px; width: auto; max-width: 100%; object-fit: cover;"
-             alt="Banner Plano de Saúde Pet"
-             loading="lazy" width="1536" height="1024">
-    </div>
+  <!-- ================================================================
+       Seção de gestão — visível para admin e donos de clínica
+       ================================================================ -->
+  {% if is_admin or minha_clinica %}
+  <div class="mb-5">
+    <h2 class="h4 fw-bold mb-1"><i class="fa-solid fa-sliders me-2 text-primary"></i>Gerenciar planos</h2>
+    <p class="text-muted small mb-3">
+      {% if minha_clinica %}{{ minha_clinica.nome }}{% endif %}
+      {% if is_admin and minha_clinica %} · {% endif %}
+      {% if is_admin %}<span class="badge bg-danger-subtle text-danger">Admin</span>{% endif %}
+    </p>
 
-    <div class="row text-center mb-5 g-4">
-        <div class="col-md-4">
-            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
-                🩺 <strong>Consultas com Desconto</strong><br>
-                Reduza seus custos com atendimento veterinário.
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
-                💉 <strong>Lembrete de Vacinação</strong><br>
-                Receba alertas para manter a imunização em dia.
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
-                🚨 <strong>Atendimento Emergencial</strong><br>
-                Conte com suporte em situações inesperadas.
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
-                🧪 <strong>Exames com Desconto</strong><br>
-                Economize em análises laboratoriais essenciais.
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
-                🏥 <strong>Cirurgias e Internações</strong><br>
-                Em breve: cobertura total para procedimentos complexos.
-            </div>
-        </div>
-    </div>
+    <!-- Abas -->
+    <ul class="nav nav-tabs mb-0" id="mgmtTabs" role="tablist">
+      {% if is_admin %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-saude" data-bs-toggle="tab" data-bs-target="#pane-saude"
+                type="button" role="tab">
+          <i class="fa-solid fa-heart-pulse me-1"></i>Planos de Saúde
+        </button>
+      </li>
+      {% endif %}
+      {% if minha_clinica %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if not is_admin %}active{% endif %}" id="tab-tosa"
+                data-bs-toggle="tab" data-bs-target="#pane-tosa"
+                type="button" role="tab">
+          <i class="fa-solid fa-scissors me-1"></i>Banho e Tosa
+        </button>
+      </li>
+      {% endif %}
+    </ul>
 
-    <hr class="my-5">
+    <div class="tab-content border border-top-0 rounded-bottom-3 p-4 bg-white shadow-sm">
 
-    <h4 class="mb-4">Animais sob sua tutoria</h4>
+      <!-- ---- Planos de Saúde (admin) ---- -->
+      {% if is_admin %}
+      <div class="tab-pane fade show active" id="pane-saude" role="tabpanel">
+        <div class="row g-4">
 
-    {% if animais %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-2">
-            {% for animal in user.animals if not animal.removido_em %}
-                <div class="col">
-                    <div class="card h-100 shadow-sm border-0 rounded-4">
-                        {% if animal.image %}
-                            <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="200" loading="lazy" alt="Foto de {{ animal.name }}">
-                        {% endif %}
-                        <div class="card-body">
-                            <h5 class="card-title">{{ animal.name }}</h5>
-                            <ul class="list-unstyled small text-start mb-3">
-                                <li><strong>Espécie:</strong> {{ animal.species }}</li>
-                                <li><strong>Raça:</strong> {{ animal.breed }}</li>
-                                <li><strong>Idade:</strong> {{ animal.age_display }}</li>
-                                <li><strong>Sexo:</strong> {{ animal.sex }}</li>
-                                {% set sub = subscriptions.get(animal.id) %}
-                                <li><strong>Plano:</strong> {{ sub.plan.name if sub else 'Nenhum' }}</li>
-                            </ul>
-                            <a href="{{ url_for('planosaude_animal', animal_id=animal.id) }}" class="btn btn-outline-success rounded-pill w-100">📋 Ver Plano de Saúde</a>
-                        </div>
-                    </div>
+          <!-- Formulário de criação -->
+          <div class="col-lg-4">
+            <h6 class="fw-bold mb-3">Novo plano de saúde</h6>
+            <form method="post" novalidate>
+              {{ health_form.hidden_tag() }}
+              <div class="mb-3">
+                {{ health_form.name.label(class="form-label fw-semibold") }}
+                {{ health_form.name(class="form-control" + (" is-invalid" if health_form.name.errors else ""), placeholder="Ex: Plano Essencial") }}
+                {% for e in health_form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="mb-3">
+                {{ health_form.description.label(class="form-label fw-semibold") }}
+                {{ health_form.description(class="form-control", rows=3) }}
+              </div>
+              <div class="mb-3">
+                {{ health_form.price.label(class="form-label fw-semibold") }}
+                <div class="input-group">
+                  <span class="input-group-text">R$</span>
+                  {{ health_form.price(class="form-control" + (" is-invalid" if health_form.price.errors else ""), placeholder="0,00") }}
+                  {% for e in health_form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                 </div>
-            {% endfor %}
+              </div>
+              {{ health_form.submit(class="btn btn-success w-100") }}
+            </form>
+          </div>
+
+          <!-- Lista de planos existentes -->
+          <div class="col-lg-8">
+            <h6 class="fw-bold mb-3">Planos cadastrados ({{ all_health_plans|length }})</h6>
+            {% if all_health_plans %}
+            <div class="row g-2">
+              {% for p in all_health_plans %}
+              <div class="col-sm-6">
+                <div class="card border-0 shadow-sm rounded-3 h-100">
+                  <div class="card-body p-3">
+                    <h6 class="fw-bold mb-1">{{ p.name }}</h6>
+                    {% if p.description %}<p class="text-muted small mb-1">{{ p.description|truncate(80) }}</p>{% endif %}
+                    <p class="text-success fw-bold mb-0">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}<span class="text-muted fw-normal fs-6">/mês</span></p>
+                    {% if p.coverages %}
+                    <p class="text-muted small mt-1 mb-0">{{ p.coverages|length }} cobertura(s)</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">Nenhum plano de saúde cadastrado ainda. Use o formulário ao lado para criar.</p>
+            {% endif %}
+          </div>
+
         </div>
-    {% else %}
-        <p class="text-muted mt-3">Você ainda não possui animais cadastrados. <a href="{{ url_for('add_animal') }}">Cadastre um agora!</a></p>
-    {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- ---- Planos de Banho e Tosa (dono de clínica) ---- -->
+      {% if minha_clinica %}
+      <div class="tab-pane fade {% if not is_admin %}show active{% endif %}" id="pane-tosa" role="tabpanel">
+        <div class="row g-4">
+
+          <!-- Formulário de criação -->
+          <div class="col-lg-4">
+            <h6 class="fw-bold mb-3">Novo plano de banho e tosa</h6>
+            <form method="post" novalidate>
+              {{ grooming_form.hidden_tag() }}
+              <div class="mb-3">
+                {{ grooming_form.name.label(class="form-label fw-semibold") }}
+                {{ grooming_form.name(class="form-control" + (" is-invalid" if grooming_form.name.errors else ""), placeholder="Ex: Plano Banho Mensal") }}
+                {% for e in grooming_form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="mb-3">
+                {{ grooming_form.description.label(class="form-label fw-semibold") }}
+                {{ grooming_form.description(class="form-control", rows=3) }}
+              </div>
+              <div class="mb-3">
+                {{ grooming_form.service_type.label(class="form-label fw-semibold") }}
+                {{ grooming_form.service_type(class="form-select") }}
+              </div>
+              <div class="mb-3">
+                {{ grooming_form.price.label(class="form-label fw-semibold") }}
+                <div class="input-group">
+                  <span class="input-group-text">R$</span>
+                  {{ grooming_form.price(class="form-control" + (" is-invalid" if grooming_form.price.errors else ""), placeholder="0,00") }}
+                  {% for e in grooming_form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+              </div>
+              <div class="mb-3">
+                {{ grooming_form.sessions_per_month.label(class="form-label fw-semibold") }}
+                <div class="input-group">
+                  {{ grooming_form.sessions_per_month(class="form-control" + (" is-invalid" if grooming_form.sessions_per_month.errors else ""), placeholder="1") }}
+                  <span class="input-group-text">sessão(ões)/mês</span>
+                </div>
+              </div>
+              {{ grooming_form.submit(class="btn btn-success w-100") }}
+            </form>
+          </div>
+
+          <!-- Lista + link para gerenciar -->
+          <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="fw-bold mb-0">Seus planos ({{ grooming_planos|length }})</h6>
+              <a href="{{ url_for('clinic_grooming_planos', clinica_id=minha_clinica.id) }}"
+                 class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-gear me-1"></i> Gerenciar completo
+              </a>
+            </div>
+
+            {% if grooming_planos %}
+            <div class="row g-2">
+              {% for p in grooming_planos %}
+              <div class="col-sm-6">
+                <div class="card border-0 shadow-sm rounded-3 h-100 {% if not p.active %}opacity-50{% endif %}">
+                  <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                      {% if p.service_type == 'banho' %}
+                        <span class="badge bg-info-subtle text-info"><i class="fa-solid fa-droplet me-1"></i>Banho</span>
+                      {% elif p.service_type == 'tosa' %}
+                        <span class="badge bg-warning-subtle text-warning"><i class="fa-solid fa-scissors me-1"></i>Tosa</span>
+                      {% else %}
+                        <span class="badge bg-primary-subtle text-primary"><i class="fa-solid fa-star me-1"></i>Banho e Tosa</span>
+                      {% endif %}
+                      <span class="badge {% if p.active %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                        {{ 'Ativo' if p.active else 'Inativo' }}
+                      </span>
+                    </div>
+                    <h6 class="fw-bold mb-1 mt-2">{{ p.name }}</h6>
+                    <p class="text-success fw-bold mb-1">
+                      R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}<span class="text-muted fw-normal fs-6">/mês</span>
+                    </p>
+                    <p class="text-muted small mb-2">
+                      <i class="fa-solid fa-calendar-check me-1"></i>{{ p.sessions_per_month }} sessão(ões)/mês
+                      · {{ p.active_subscriptions_count }} assinante(s)
+                    </p>
+                    <div class="d-flex gap-1">
+                      <a href="{{ url_for('clinic_grooming_plano_editar', clinica_id=minha_clinica.id, plan_id=p.id) }}"
+                         class="btn btn-outline-primary btn-sm flex-grow-1">
+                        <i class="fa-solid fa-pen me-1"></i> Editar
+                      </a>
+                      <form method="post" action="{{ url_for('clinic_grooming_plano_toggle', clinica_id=minha_clinica.id, plan_id=p.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm {% if p.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                                title="{{ 'Desativar' if p.active else 'Ativar' }}">
+                          <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mt-2">Nenhum plano criado ainda. Use o formulário ao lado.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div><!-- /tab-content -->
+  </div><!-- /seção gestão -->
+  {% endif %}
+
+  <!-- ================================================================
+       Seção do tutor — todos os usuários veem
+       ================================================================ -->
+  <div class="d-flex justify-content-center mb-3">
+    <img src="{{ url_for('static', filename='plano_saude_banner1.png') }}"
+         class="rounded-4 shadow-sm"
+         style="height:200px;width:auto;max-width:100%;object-fit:cover;"
+         alt="Banner Plano de Saúde Pet" loading="lazy">
+  </div>
+
+  <div class="row text-center mb-5 g-4">
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        🩺 <strong>Consultas com Desconto</strong><br>
+        Reduza seus custos com atendimento veterinário.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        💉 <strong>Lembrete de Vacinação</strong><br>
+        Receba alertas para manter a imunização em dia.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        🚨 <strong>Atendimento Emergencial</strong><br>
+        Conte com suporte em situações inesperadas.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        🧪 <strong>Exames com Desconto</strong><br>
+        Economize em análises laboratoriais essenciais.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        🏥 <strong>Cirurgias e Internações</strong><br>
+        Em breve: cobertura total para procedimentos complexos.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+        ✂️ <strong>Banho e Tosa</strong><br>
+        <a href="{{ url_for('grooming_planos_publicos') }}" class="text-decoration-none">Ver planos disponíveis →</a>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  <h4 class="mb-4">Meus animais e planos de saúde</h4>
+
+  {% if animais %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-2">
+    {% for animal in user.animals if not animal.removido_em %}
+    <div class="col">
+      <div class="card h-100 shadow-sm border-0 rounded-4">
+        {% if animal.image %}
+        <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="200" loading="lazy" alt="Foto de {{ animal.name }}">
+        {% endif %}
+        <div class="card-body">
+          <h5 class="card-title">{{ animal.name }}</h5>
+          <ul class="list-unstyled small text-start mb-3">
+            <li><strong>Espécie:</strong> {{ animal.species }}</li>
+            <li><strong>Raça:</strong> {{ animal.breed }}</li>
+            <li><strong>Idade:</strong> {{ animal.age_display }}</li>
+            {% set sub = subscriptions.get(animal.id) %}
+            <li><strong>Plano saúde:</strong> {{ sub.plan.name if sub else 'Nenhum' }}</li>
+          </ul>
+          <a href="{{ url_for('planosaude_animal', animal_id=animal.id) }}" class="btn btn-outline-success rounded-pill w-100">
+            📋 Ver Plano de Saúde
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mt-3">
+    Você ainda não possui animais cadastrados.
+    <a href="{{ url_for('add_animal') }}">Cadastre um agora!</a>
+  </p>
+  {% endif %}
+
 </div>
 {% endblock %}

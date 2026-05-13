@@ -16,11 +16,15 @@ import uuid
 from sqlalchemy import Enum, event, func, case, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
-from sqlalchemy.orm import synonym, object_session, deferred
+from sqlalchemy.orm import synonym, object_session, deferred, validates
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from cryptography.fernet import InvalidToken
 from functools import lru_cache
+try:
+    from document_utils import format_cnpj
+except ImportError:
+    from ..document_utils import format_cnpj
 from time_utils import utcnow, now_in_brazil
 from security.crypto import (
     MissingMasterKeyError,
@@ -829,6 +833,11 @@ class Clinica(db.Model):
         "nfse_cert_password": "_nfse_cert_password",
         "nfse_token": "_nfse_token",
     }
+
+    @validates("cnpj")
+    def _normalize_cnpj(self, key, value):
+        formatted = format_cnpj(value)
+        return formatted or None
 
     @property
     def fiscal_ready_status(self) -> bool:
@@ -2851,6 +2860,90 @@ class HealthClaim(db.Model):
     subscription = db.relationship('HealthSubscription', back_populates='claims')
     coverage = db.relationship('HealthCoverage', backref=db.backref('claims', cascade='all, delete-orphan'))
     consulta = db.relationship('Consulta', backref=db.backref('claims', cascade='all, delete-orphan'))
+
+
+# ---------------------------------------------------------------------------
+# Planos de Banho e Tosa
+# ---------------------------------------------------------------------------
+
+GROOMING_SERVICE_LABELS = {
+    'banho': 'Banho',
+    'tosa': 'Tosa',
+    'banho_e_tosa': 'Banho e Tosa',
+}
+
+
+class GroomingPlan(db.Model):
+    __tablename__ = 'grooming_plan'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text)
+    # 'banho' | 'tosa' | 'banho_e_tosa'
+    service_type = db.Column(db.String(30), nullable=False, default='banho_e_tosa')
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    sessions_per_month = db.Column(db.Integer, nullable=False, default=1)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    clinica = db.relationship('Clinica', backref=db.backref('grooming_plans', lazy='dynamic'))
+    subscriptions = db.relationship(
+        'GroomingSubscription',
+        back_populates='plan',
+        cascade='all, delete-orphan',
+        lazy='dynamic',
+    )
+
+    @property
+    def service_label(self):
+        return GROOMING_SERVICE_LABELS.get(self.service_type, self.service_type)
+
+    @property
+    def active_subscriptions_count(self):
+        return self.subscriptions.filter_by(active=True).count()
+
+    def __repr__(self):
+        return f"{self.name} — {self.service_label} (R$ {self.price})"
+
+
+class GroomingSubscription(db.Model):
+    __tablename__ = 'grooming_subscription'
+
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(
+        db.Integer,
+        db.ForeignKey('grooming_plan.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    animal_id = db.Column(
+        db.Integer,
+        db.ForeignKey('animal.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    active = db.Column(db.Boolean, nullable=False, default=False)
+    start_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    # ID do preapproval no Mercado Pago para cancelamento futuro
+    mp_preapproval_id = db.Column(db.String(128), nullable=True)
+    sessions_used_this_month = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    plan = db.relationship('GroomingPlan', back_populates='subscriptions')
+    animal = db.relationship('Animal', backref=db.backref('grooming_subscriptions', lazy='dynamic'))
+    user = db.relationship('User', backref=db.backref('grooming_subscriptions', lazy='dynamic'))
 
 
 

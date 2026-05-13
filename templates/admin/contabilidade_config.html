@@ -46,7 +46,7 @@
               <div class="alert alert-light border mt-3 mb-4">
                 <strong>{{ clinic.nome }}</strong>
                 {% if clinic.cnpj %}
-                  <span class="text-muted">• CNPJ {{ clinic.cnpj }}</span>
+                  <span class="text-muted">• CNPJ {{ clinic.cnpj | format_cnpj }}</span>
                 {% endif %}
               </div>
             {% endif %}

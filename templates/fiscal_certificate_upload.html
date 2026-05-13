@@ -19,7 +19,7 @@
   <div class="card shadow-sm mb-4">
     <div class="card-body">
       <h5 class="card-title">Upload do certificado (.pfx)</h5>
-      <p class="text-muted">Emissor: {{ emitter.razao_social }} (CNPJ {{ emitter.cnpj }})</p>
+      <p class="text-muted">Emissor: {{ emitter.razao_social }} (CNPJ {{ emitter.cnpj | format_cnpj }})</p>
       <form method="post" enctype="multipart/form-data" action="{{ url_for('fiscal_certificate_upload') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="row g-3">
@@ -57,7 +57,7 @@
             {% for certificate in certificates %}
             <tr>
               <td class="text-monospace">{{ certificate.fingerprint_sha256[:16] }}...</td>
-              <td>{{ certificate.subject_cnpj }}</td>
+              <td>{{ certificate.subject_cnpj | format_cnpj }}</td>
               <td>
                 {{ certificate.valid_from.strftime('%d/%m/%Y') if certificate.valid_from }}
                 até

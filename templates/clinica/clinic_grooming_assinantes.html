@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('clinic_grooming_planos', clinica_id=clinica.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <div>
+      <h1 class="h4 fw-bold mb-0">{{ plan.name }}</h1>
+      <p class="text-muted small mb-0">{{ plan.service_label }} · R$ {{ '%.2f'|format(plan.price)|replace('.', ',') }}/mês · {{ plan.sessions_per_month }} sessão(ões)/mês</p>
+    </div>
+  </div>
+
+  {% if assinantes %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Tutor</th>
+          <th>Animal</th>
+          <th>Status</th>
+          <th>Desde</th>
+          <th>Sessões usadas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in assinantes %}
+        <tr>
+          <td>{{ s.user.name if s.user else '—' }}</td>
+          <td>{{ s.animal.name if s.animal else '—' }}</td>
+          <td>
+            {% if s.active %}
+              <span class="badge bg-success">Ativa</span>
+            {% else %}
+              <span class="badge bg-secondary">Inativa</span>
+            {% endif %}
+          </td>
+          <td>{{ s.start_date.strftime('%d/%m/%Y') if s.start_date else '—' }}</td>
+          <td>{{ s.sessions_used_this_month }}/{{ plan.sessions_per_month }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="fa-solid fa-users fa-3x mb-3"></i>
+    <p class="h5">Nenhum assinante ainda.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

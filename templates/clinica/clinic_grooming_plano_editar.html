@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width:620px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('clinic_grooming_planos', clinica_id=clinica.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <h1 class="h4 fw-bold mb-0">Editar plano</h1>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+          {{ form.name.label(class="form-label fw-semibold") }}
+          {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+          {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="mb-3">
+          {{ form.description.label(class="form-label fw-semibold") }}
+          {{ form.description(class="form-control", rows=4) }}
+        </div>
+
+        <div class="mb-3">
+          {{ form.service_type.label(class="form-label fw-semibold") }}
+          {{ form.service_type(class="form-select") }}
+        </div>
+
+        <div class="mb-3">
+          {{ form.price.label(class="form-label fw-semibold") }}
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else "")) }}
+            {% for e in form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="mb-4">
+          {{ form.sessions_per_month.label(class="form-label fw-semibold") }}
+          <div class="input-group">
+            {{ form.sessions_per_month(class="form-control" + (" is-invalid" if form.sessions_per_month.errors else "")) }}
+            <span class="input-group-text">sessão(ões)/mês</span>
+            {% for e in form.sessions_per_month.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="alert alert-info py-2 small">
+          <i class="fa-solid fa-circle-info me-1"></i>
+          Alterações de preço não afetam assinantes existentes — apenas novos contratos.
+        </div>
+
+        <div class="d-grid">
+          {{ form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

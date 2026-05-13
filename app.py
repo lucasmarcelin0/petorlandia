@@ -56,7 +56,10 @@ from authlib.jose import JsonWebKey, jwt
 import json
 import csv
 import unicodedata
-from document_utils import format_cnpj as format_cnpj_value, only_digits
+try:
+    from document_utils import format_cnpj as format_cnpj_value, only_digits
+except ImportError:
+    from .document_utils import format_cnpj as format_cnpj_value, only_digits
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased, defer

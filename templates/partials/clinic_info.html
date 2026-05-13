@@ -63,7 +63,7 @@
       <form method="post" enctype="multipart/form-data" class="row g-3">
         {{ clinic_form.hidden_tag() }}
         <div class="col-md-6">{{ clinic_form.nome.label }} {{ clinic_form.nome(class="form-control") }}</div>
-        <div class="col-md-6">{{ clinic_form.cnpj.label }} {{ clinic_form.cnpj(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.cnpj.label }} {{ clinic_form.cnpj(class="form-control", **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}</div>
         <div class="col-md-12">{{ clinic_form.endereco.label }} {{ clinic_form.endereco(class="form-control") }}</div>
         <div class="col-md-6">{{ clinic_form.telefone.label }} {{ clinic_form.telefone(class="form-control") }}</div>
         <div class="col-md-6">{{ clinic_form.email.label }} {{ clinic_form.email(class="form-control") }}</div>
@@ -78,6 +78,7 @@
     </div>
   </div>
 {% endif %}
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 
 {% if show_clinic_metrics %}
   {% set prescricao_url = None %}

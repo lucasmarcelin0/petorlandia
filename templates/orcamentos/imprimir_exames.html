@@ -28,7 +28,7 @@
           {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
           {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
           {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
         </div>
       </div>
       <div class="header-logo header-logo--right">
@@ -118,7 +118,7 @@
       {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
       {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
       {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-      {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+      {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
     {% endif %}
   </footer>
 </div>

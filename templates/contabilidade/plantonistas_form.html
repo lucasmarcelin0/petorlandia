@@ -35,7 +35,7 @@
           </div>
           <div class="col-md-6">
             {{ form.medico_cnpj.label(class_='form-label fw-semibold') }}
-            {{ form.medico_cnpj(class_='form-control', placeholder='00.000.000/0000-00', **{'data-plantao-medico-cnpj': 'true'}) }}
+            {{ form.medico_cnpj(class_='form-control', placeholder='00.000.000/0000-00', **{'data-plantao-medico-cnpj': 'true', 'data-cnpj-mask': 'true'}) }}
             {% for error in form.medico_cnpj.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-12">
@@ -120,4 +120,5 @@
   <script>
     window.PLANTAO_MODELOS = {{ (plantao_modelos or []) | tojson | safe }};
   </script>
+  <script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 {% endblock %}
