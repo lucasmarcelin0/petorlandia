@@ -1143,65 +1143,113 @@
 
   <!-- ===== Tab: Tutores ===== -->
   <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
-    <div class="card shadow-sm border-0 rounded-4 mb-4">
-      <div class="card-body p-4">
-        <div class="consultation-section-heading consultation-section-heading--default mb-4">
-          <span class="consultation-section-heading__icon"><i class="fa-solid fa-users"></i></span>
-          <div>
-            <h5 class="mb-0">Gestão de Tutores</h5>
-            <p class="mb-0 text-muted">Cadastre e gerencie os tutores da sua clínica.</p>
+    <div class="accordion accordion-flush" id="tutoresAccordion">
+
+      <!-- Lista de tutores (aberta por padrão) -->
+      <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
+        <h2 class="accordion-header" id="tutoresListaHeading">
+          <button class="accordion-button rounded-4 fw-semibold" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#tutoresListaPane"
+                  aria-expanded="true" aria-controls="tutoresListaPane">
+            <i class="fa-solid fa-user-group me-2 text-info"></i>Lista de Tutores
+          </button>
+        </h2>
+        <div id="tutoresListaPane" class="accordion-collapse collapse show"
+             aria-labelledby="tutoresListaHeading" data-bs-parent="#tutoresAccordion">
+          <div class="accordion-body p-0">
+            <div id="tutores-adicionados">
+              {% with
+                compact=True,
+                tutores_adicionados=vet_tutores_adicionados,
+                pagination=vet_tutores_pagination,
+                scope=vet_tutores_scope,
+                scope_param='tutor_scope',
+                search_param='tutor_search',
+                sort_param='tutor_sort',
+                page_param='tutor_page',
+                tutor_search=vet_tutor_search,
+                tutor_sort=vet_tutor_sort,
+                fetch_url=url_for('tutores')
+              %}
+                {% include 'partials/tutores_adicionados.html' %}
+              {% endwith %}
+            </div>
           </div>
         </div>
-        {% include 'partials/tutor_management_panel.html' %}
       </div>
-    </div>
-    <div id="tutores-adicionados">
-      {% with
-        compact=True,
-        tutores_adicionados=vet_tutores_adicionados,
-        pagination=vet_tutores_pagination,
-        scope=vet_tutores_scope,
-        scope_param='tutor_scope',
-        search_param='tutor_search',
-        sort_param='tutor_sort',
-        page_param='tutor_page',
-        tutor_search=vet_tutor_search,
-        tutor_sort=vet_tutor_sort,
-        fetch_url=url_for('tutores')
-      %}
-        {% include 'partials/tutores_adicionados.html' %}
-      {% endwith %}
+
+      <!-- Cadastrar novo tutor (fechado por padrão) -->
+      <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
+        <h2 class="accordion-header" id="tutoresCadastroHeading">
+          <button class="accordion-button collapsed rounded-4 fw-semibold" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#tutoresCadastroPane"
+                  aria-expanded="false" aria-controls="tutoresCadastroPane">
+            <i class="fa-solid fa-user-plus me-2 text-success"></i>Cadastrar Novo Tutor
+          </button>
+        </h2>
+        <div id="tutoresCadastroPane" class="accordion-collapse collapse"
+             aria-labelledby="tutoresCadastroHeading" data-bs-parent="#tutoresAccordion">
+          <div class="accordion-body">
+            {% include 'partials/tutor_management_panel.html' %}
+          </div>
+        </div>
+      </div>
+
     </div>
   </div><!-- /tab-pane section-tutores -->
 
   <!-- ===== Tab: Animais ===== -->
   <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
-    <div class="card shadow-sm border-0 rounded-4 mb-4">
-      <div class="card-body p-4">
-        <div class="consultation-section-heading consultation-section-heading--default mb-4">
-          <span class="consultation-section-heading__icon"><i class="fa-solid fa-paw"></i></span>
-          <div>
-            <h5 class="mb-0">Gestão de Animais</h5>
-            <p class="mb-0 text-muted">Registre e gerencie os animais da sua clínica.</p>
+    <div class="accordion accordion-flush" id="animaisAccordion">
+
+      <!-- Lista de animais (aberta por padrão) -->
+      <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
+        <h2 class="accordion-header" id="animaisListaHeading">
+          <button class="accordion-button rounded-4 fw-semibold" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#animaisListaPane"
+                  aria-expanded="true" aria-controls="animaisListaPane">
+            <i class="fa-solid fa-paw me-2 text-danger"></i>Lista de Animais
+          </button>
+        </h2>
+        <div id="animaisListaPane" class="accordion-collapse collapse show"
+             aria-labelledby="animaisListaHeading" data-bs-parent="#animaisAccordion">
+          <div class="accordion-body p-0">
+            <div id="animais-adicionados">
+              {% with
+                compact=True,
+                animais_adicionados=vet_animais_adicionados,
+                pagination=vet_animais_pagination,
+                scope=vet_animais_scope,
+                animal_search=vet_animal_search,
+                animal_sort=vet_animal_sort,
+                fetch_url=url_for('novo_animal'),
+                can_create_animals=True,
+                new_animal_url=url_for('novo_animal')
+              %}
+                {% include 'partials/animais_adicionados.html' %}
+              {% endwith %}
+            </div>
           </div>
         </div>
-        {% include 'partials/animal_register_form.html' %}
       </div>
-    </div>
-    <div id="animais-adicionados">
-      {% with
-        compact=True,
-        animais_adicionados=vet_animais_adicionados,
-        pagination=vet_animais_pagination,
-        scope=vet_animais_scope,
-        animal_search=vet_animal_search,
-        animal_sort=vet_animal_sort,
-        fetch_url=url_for('novo_animal'),
-        can_create_animals=True,
-        new_animal_url=url_for('novo_animal')
-      %}
-        {% include 'partials/animais_adicionados.html' %}
-      {% endwith %}
+
+      <!-- Cadastrar novo animal (fechado por padrão) -->
+      <div class="accordion-item border-0 shadow-sm rounded-4 mb-3">
+        <h2 class="accordion-header" id="animaisCadastroHeading">
+          <button class="accordion-button collapsed rounded-4 fw-semibold" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#animaisCadastroPane"
+                  aria-expanded="false" aria-controls="animaisCadastroPane">
+            <i class="fa-solid fa-paw me-2 text-success"></i>Cadastrar Novo Animal
+          </button>
+        </h2>
+        <div id="animaisCadastroPane" class="accordion-collapse collapse"
+             aria-labelledby="animaisCadastroHeading" data-bs-parent="#animaisAccordion">
+          <div class="accordion-body">
+            {% include 'partials/animal_register_form.html' %}
+          </div>
+        </div>
+      </div>
+
     </div>
   </div><!-- /tab-pane section-animais -->
 
