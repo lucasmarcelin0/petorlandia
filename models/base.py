@@ -1823,7 +1823,7 @@ class Appointment(db.Model):
     @staticmethod
     def _set_clinica(mapper, connection, target):
         """Populate clinica_id from veterinarian or animal if not set."""
-        if target.veterinario_id:
+        if not target.clinica_id and target.veterinario_id:
             vet = db.session.get(Veterinario, target.veterinario_id)
             if vet and vet.clinica_id:
                 target.clinica_id = vet.clinica_id

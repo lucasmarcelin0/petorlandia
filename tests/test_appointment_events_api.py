@@ -135,6 +135,66 @@ def test_my_appointments_returns_consulta_without_appointment(client, monkeypatc
     assert event['extendedProps']['animalId'] == animal_id
 
 
+def test_my_appointments_returns_completed_consulta_linked_to_appointment(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='ClÃ­nica Central')
+        tutor = User(id=1, name='Tutor', email='t@test', worker=None)
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='v@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add_all([clinic, tutor, vet_user, vet, animal])
+        db.session.commit()
+
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='finalizada',
+            created_at=datetime(2026, 5, 13, 8, 40),
+            finalizada_em=datetime(2026, 5, 13, 8, 49),
+        )
+        appt = Appointment(
+            id=1,
+            animal_id=animal.id,
+            tutor_id=tutor.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2026, 4, 28, 11, 0),
+            clinica_id=clinic.id,
+            consulta=consulta,
+            status='completed',
+            kind='consulta',
+        )
+        db.session.add_all([consulta, appt])
+        db.session.commit()
+
+        consulta_id = consulta.id
+        appointment_id = appt.id
+        start_iso = to_timezone_aware(consulta.finalizada_em).isoformat()
+        clinic_id = clinic.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {'id': vet_id, 'clinica_id': clinic_id})(),
+    })()
+
+    login(monkeypatch, fake_vet)
+    resp = client.get('/api/my_appointments')
+    assert resp.status_code == 200
+    events = {event['id']: event for event in resp.get_json()}
+    assert f'appointment-{appointment_id}' in events
+    assert f'consulta-{consulta_id}' in events
+    assert events[f'consulta-{consulta_id}']['start'] == start_iso
+    assert events[f'consulta-{consulta_id}']['extendedProps']['eventType'] == 'consulta'
+
+
 def test_my_appointments_includes_exam_and_vaccine_for_tutor(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()

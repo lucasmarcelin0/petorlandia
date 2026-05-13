@@ -141,6 +141,8 @@ def schedule_return_appointment(
         status="accepted" if same_user else "scheduled",
         created_by=actor_id,
         created_at=utcnow(),
+        clinica_id=getattr(consulta, "clinica_id", None)
+        or getattr(consulta.animal, "clinica_id", None),
     )
     db.session.add(appt)
     db.session.commit()

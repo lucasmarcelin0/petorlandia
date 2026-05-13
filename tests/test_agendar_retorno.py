@@ -99,6 +99,64 @@ def test_agendar_retorno_cria_appointment(client, monkeypatch):
         assert appt.status == 'accepted'
 
 
+def test_agendar_retorno_preserva_clinica_da_consulta(client, monkeypatch):
+    with flask_app.app_context():
+        consulta_clinic = Clinica(id=1, nome='Clinica da consulta')
+        vet_home_clinic = Clinica(id=2, nome='Clinica principal do vet')
+        tutor = User(id=1, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=vet_home_clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=consulta_clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=consulta_clinic.id,
+            status='finalizada',
+        )
+        db.session.add_all([consulta_clinic, vet_home_clinic, tutor, vet_user, vet, animal, consulta])
+        db.session.commit()
+        consulta_id = consulta.id
+        animal_id = animal.id
+        vet_id = vet.id
+        consulta_clinic_id = consulta_clinic.id
+        vet_home_clinic_id = vet_home_clinic.id
+        vet_user_id = vet_user.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'name': 'Vet',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'user': type('WU', (), {'name': 'Vet'})(),
+            'clinica_id': vet_home_clinic_id,
+            'clinicas': [type('C', (), {'id': consulta_clinic_id})()],
+        })()
+    })()
+    login(monkeypatch, fake_vet)
+
+    resp = client.post(
+        f'/agendar_retorno/{consulta_id}',
+        data={
+            'animal_id': animal_id,
+            'veterinario_id': vet_id,
+            'date': '2024-05-01',
+            'time': '10:00',
+            'reason': 'ReavaliaÃ§Ã£o',
+        }
+    )
+
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        appt = Appointment.query.one()
+        assert appt.clinica_id == consulta_clinic_id
+
+
 def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):
     with flask_app.app_context():
         clinic = Clinica(id=1, nome='Clinica')

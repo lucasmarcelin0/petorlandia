@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 
 import flask_login.utils as login_utils
 import pytest
@@ -105,6 +106,35 @@ def test_collaborator_can_schedule_with_autocomplete_ids(client, monkeypatch):
         appointment = Appointment.query.one()
         assert appointment.animal_id == ids['animal_id']
         assert appointment.veterinario_id == ids['vet_id']
+
+
+def test_explicit_clinic_is_preserved_for_associated_vet(client):
+    with flask_app.app_context():
+        home_clinic = Clinica(id=1, nome='ClÃ­nica Principal')
+        scheduling_clinic = Clinica(id=2, nome='ClÃ­nica Parceira')
+        tutor = User(id=10, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        animal = Animal(id=11, name='Rex', user_id=tutor.id, clinica_id=scheduling_clinic.id)
+        vet_user = User(id=12, name='Dra. Ana', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=13, user_id=vet_user.id, crmv='123', clinica_id=home_clinic.id)
+        db.session.add_all([home_clinic, scheduling_clinic, tutor, animal, vet_user, vet])
+        db.session.commit()
+
+        appointment = Appointment(
+            animal_id=animal.id,
+            tutor_id=tutor.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2024, 5, 20, 9, 0),
+            clinica_id=scheduling_clinic.id,
+            kind='consulta',
+        )
+        db.session.add(appointment)
+        db.session.commit()
+
+        assert appointment.clinica_id == scheduling_clinic.id
+        assert Appointment.query.filter_by(clinica_id=scheduling_clinic.id).count() == 1
+        assert Appointment.query.filter_by(clinica_id=home_clinic.id).count() == 0
 
 
 def test_collaborator_cannot_schedule_with_foreign_animal(client, monkeypatch):

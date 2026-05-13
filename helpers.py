@@ -864,7 +864,7 @@ def consulta_to_event(consulta):
     if not consulta:
         return None
 
-    start = getattr(consulta, 'created_at', None)
+    start = getattr(consulta, 'finalizada_em', None) or getattr(consulta, 'created_at', None)
     if not start:
         return None
 

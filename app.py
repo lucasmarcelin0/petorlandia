@@ -26600,7 +26600,7 @@ def api_my_appointments():
                 joinedload(Consulta.veterinario),
                 joinedload(Consulta.clinica),
             )
-            .filter(~Consulta.appointment.has())
+            .filter(Consulta.status == 'finalizada')
         )
         and_conditions = [cond for cond in (and_filters or []) if cond is not None]
         if and_conditions:
