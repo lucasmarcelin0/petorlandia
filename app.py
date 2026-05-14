@@ -123,6 +123,7 @@ from models import (
     clinica_has_column,
     get_clinica_field,
 )
+from models import CasaDeRacao, CasaDeRacaoHorario  # noqa: E402
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
     get_nfse_cancel_rules,
@@ -1676,6 +1677,9 @@ from forms import (
     EditProfileForm,
     ClinicProductForm,
     ClinicProductEditForm,
+    CasaDeRacaoForm,
+    CasaDeRacaoProductForm,
+    CasaDeRacaoProductEditForm,
     GroomingPlanForm,
     GroomingSubscribeForm,
     HealthPlanForm,
@@ -3901,6 +3905,15 @@ def inject_has_clinic_access():
         is not None
     )
     return dict(has_clinic_access=has_clinic_access)
+
+
+@app.context_processor
+def inject_minha_casa_de_racao():
+    """Expõe a casa de ração do usuário logado para os templates."""
+    if not current_user.is_authenticated:
+        return dict(minha_casa_de_racao=None)
+    casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
+    return dict(minha_casa_de_racao=casa)
 
 
 @app.context_processor
@@ -14348,6 +14361,286 @@ def _user_can_manage_clinic(clinica):
     return False
 
 
+# ── Casa de Ração ─────────────────────────────────────────────────────────────
+
+def _casa_loja_access(casa_id):
+    """Retorna a CasaDeRacao ou aborta 403 se o usuário não for dono/admin."""
+    casa = CasaDeRacao.query.get_or_404(casa_id)
+    if not (_is_admin() or current_user.id == casa.owner_id):
+        abort(403)
+    return casa
+
+
+@login_required
+def minha_casa_de_racao():
+    casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
+    if not casa:
+        form = CasaDeRacaoForm()
+        if form.validate_on_submit():
+            nova_casa = CasaDeRacao(
+                nome=form.nome.data,
+                razao_social=form.razao_social.data or None,
+                cnpj=form.cnpj.data or None,
+                descricao=form.descricao.data or None,
+                telefone=form.telefone.data or None,
+                email=form.email.data or None,
+                endereco=form.endereco.data or None,
+                owner_id=current_user.id,
+                status='pendente',
+            )
+            file = form.logotipo.data
+            if file and getattr(file, 'filename', ''):
+                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+                image_url = upload_to_s3(file, filename, folder='casas_de_racao')
+                if image_url:
+                    nova_casa.logotipo = image_url
+                    nova_casa.photo_rotation = form.photo_rotation.data
+                    nova_casa.photo_zoom = float(form.photo_zoom.data)
+                    nova_casa.photo_offset_x = float(form.photo_offset_x.data)
+                    nova_casa.photo_offset_y = float(form.photo_offset_y.data)
+            db.session.add(nova_casa)
+            db.session.commit()
+            flash(
+                'Cadastro enviado! Aguarde a aprovação do administrador para começar a vender.',
+                'success',
+            )
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=nova_casa.id))
+        return render_template('casa_de_racao/create.html', form=form)
+    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+
+@login_required
+def casa_de_racao_dashboard(casa_id):
+    casa = _casa_loja_access(casa_id)
+    return render_template('casa_de_racao/dashboard.html', casa=casa)
+
+
+@login_required
+def casa_de_racao_produtos(casa_id):
+    casa = _casa_loja_access(casa_id)
+    if casa.status == 'pendente' and not _is_admin():
+        flash('Sua loja ainda está aguardando aprovação. Você poderá publicar produtos em breve.', 'warning')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    form = CasaDeRacaoProductForm()
+    if form.validate_on_submit():
+        image_url = None
+        if form.image_upload.data:
+            file = form.image_upload.data
+            image_url = upload_to_s3(file, secure_filename(file.filename), folder='products')
+
+        product = Product(
+            casa_de_racao_id=casa.id,
+            name=form.name.data,
+            description=form.description.data or None,
+            price=float(form.price.data),
+            stock=form.stock.data or 0,
+            image_url=image_url,
+            mp_category_id=(form.mp_category_id.data or 'others').strip(),
+            status='active',
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash('Produto publicado na loja com sucesso!', 'success')
+        return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
+
+    produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()
+    return render_template('casa_de_racao/produtos.html', casa=casa, produtos=produtos, form=form)
+
+
+@login_required
+def casa_produto_editar(casa_id, product_id):
+    casa = _casa_loja_access(casa_id)
+    product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
+
+    form = CasaDeRacaoProductEditForm(obj=product)
+    if form.validate_on_submit():
+        product.name = form.name.data
+        product.description = form.description.data or None
+        product.price = float(form.price.data)
+        product.stock = form.stock.data or 0
+        product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        if form.image_upload.data:
+            file = form.image_upload.data
+            url = upload_to_s3(file, secure_filename(file.filename), folder='products')
+            if url:
+                product.image_url = url
+        db.session.commit()
+        flash('Produto atualizado.', 'success')
+        return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
+
+    return render_template('casa_de_racao/produto_editar.html', casa=casa, product=product, form=form)
+
+
+@login_required
+def casa_produto_toggle(casa_id, product_id):
+    casa = _casa_loja_access(casa_id)
+    product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
+    product.status = 'inactive' if product.status == 'active' else 'active'
+    db.session.commit()
+    state = 'ativado' if product.status == 'active' else 'desativado'
+    flash(f'Produto {state} na loja.', 'success')
+    return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
+
+
+@login_required
+def admin_casas_de_racao():
+    if not _is_admin():
+        abort(403)
+    pendentes = CasaDeRacao.query.filter_by(status='pendente').order_by(CasaDeRacao.created_at).all()
+    ativas = CasaDeRacao.query.filter_by(status='ativa').order_by(CasaDeRacao.nome).all()
+    suspensas = CasaDeRacao.query.filter_by(status='suspensa').order_by(CasaDeRacao.nome).all()
+    return render_template(
+        'casa_de_racao/admin_lista.html',
+        pendentes=pendentes,
+        ativas=ativas,
+        suspensas=suspensas,
+    )
+
+
+@login_required
+def admin_aprovar_casa_de_racao(casa_id):
+    if not _is_admin():
+        abort(403)
+    casa = CasaDeRacao.query.get_or_404(casa_id)
+    casa.status = 'ativa'
+    db.session.commit()
+    flash(f'Casa de ração "{casa.nome}" aprovada.', 'success')
+    return redirect(url_for('admin_casas_de_racao'))
+
+
+@login_required
+def admin_suspender_casa_de_racao(casa_id):
+    if not _is_admin():
+        abort(403)
+    casa = CasaDeRacao.query.get_or_404(casa_id)
+    casa.status = 'suspensa'
+    db.session.commit()
+    flash(f'Casa de ração "{casa.nome}" suspensa.', 'warning')
+    return redirect(url_for('admin_casas_de_racao'))
+
+@login_required
+def casa_de_racao_vendas(casa_id):
+    """Dashboard de vendas: pedidos que contêm produtos da casa de ração."""
+    casa = _casa_loja_access(casa_id)
+
+    # Todos os OrderItems cujo produto pertence a esta casa
+    from sqlalchemy import func
+    items = (
+        OrderItem.query
+        .join(Product, OrderItem.product_id == Product.id)
+        .filter(Product.casa_de_racao_id == casa.id)
+        .options(
+            db.joinedload(OrderItem.product),
+            db.joinedload(OrderItem.order).joinedload(Order.user),
+        )
+        .order_by(OrderItem.order_id.desc())
+        .all()
+    )
+
+    # Agrupa por pedido para exibição
+    pedidos: dict = {}
+    for oi in items:
+        oid = oi.order_id
+        if oid not in pedidos:
+            pedidos[oid] = {
+                'order': oi.order,
+                'items': [],
+                'total': 0.0,
+                'delivery': None,
+            }
+        pedidos[oid]['items'].append(oi)
+        pedidos[oid]['total'] += float(oi.unit_price or 0) * oi.quantity
+
+    # Busca os DeliveryRequests correspondentes
+    if pedidos:
+        drs = (
+            DeliveryRequest.query
+            .filter(
+                DeliveryRequest.order_id.in_(list(pedidos.keys())),
+                DeliveryRequest.casa_de_racao_id == casa.id,
+            )
+            .all()
+        )
+        for dr in drs:
+            if dr.order_id in pedidos:
+                pedidos[dr.order_id]['delivery'] = dr
+
+    receita_total = sum(p['total'] for p in pedidos.values())
+    pedidos_list = sorted(pedidos.values(), key=lambda p: p['order'].id, reverse=True)
+
+    return render_template(
+        'casa_de_racao/vendas.html',
+        casa=casa,
+        pedidos=pedidos_list,
+        receita_total=receita_total,
+    )
+
+
+@login_required
+def casa_de_racao_entregas(casa_id):
+    """Lista de entregas próprias para a casa de ração gerenciar."""
+    casa = _casa_loja_access(casa_id)
+    if casa.modo_entrega != 'propria' and not _is_admin():
+        flash('Sua loja usa entregadores da plataforma — não há entregas próprias para gerenciar.', 'info')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    pendentes = (
+        DeliveryRequest.query
+        .filter_by(casa_de_racao_id=casa.id, tipo_entrega='propria', archived=False)
+        .filter(DeliveryRequest.status.in_(['pendente', 'em_andamento']))
+        .options(db.joinedload(DeliveryRequest.order).joinedload(Order.user))
+        .order_by(DeliveryRequest.requested_at.asc())
+        .all()
+    )
+    concluidas = (
+        DeliveryRequest.query
+        .filter_by(casa_de_racao_id=casa.id, tipo_entrega='propria', archived=False)
+        .filter(DeliveryRequest.status.in_(['concluida', 'cancelada']))
+        .options(db.joinedload(DeliveryRequest.order).joinedload(Order.user))
+        .order_by(DeliveryRequest.completed_at.desc())
+        .limit(30)
+        .all()
+    )
+
+    return render_template(
+        'casa_de_racao/entregas.html',
+        casa=casa,
+        pendentes=pendentes,
+        concluidas=concluidas,
+    )
+
+
+@login_required
+def casa_entrega_atualizar_status(casa_id, dr_id):
+    """Vendedor atualiza o status de uma entrega própria."""
+    casa = _casa_loja_access(casa_id)
+    dr = DeliveryRequest.query.filter_by(
+        id=dr_id,
+        casa_de_racao_id=casa.id,
+        tipo_entrega='propria',
+    ).first_or_404()
+
+    novo_status = request.form.get('status', '').strip()
+    validos = {'em_andamento', 'concluida', 'cancelada'}
+    if novo_status not in validos:
+        flash('Status inválido.', 'danger')
+        return redirect(url_for('casa_de_racao_entregas', casa_id=casa.id))
+
+    dr.status = novo_status
+    if novo_status == 'concluida':
+        dr.completed_at = now_in_brazil()
+    elif novo_status == 'cancelada':
+        dr.canceled_at = now_in_brazil()
+        dr.canceled_by_id = current_user.id
+    db.session.commit()
+    flash('Status da entrega atualizado.', 'success')
+    return redirect(url_for('casa_de_racao_entregas', casa_id=casa.id))
+
+
+# ── Fim Casa de Ração ──────────────────────────────────────────────────────────
+
+
 def _send_clinic_invite_email(clinica, veterinarian_user, inviter):
     """Send the invite email for a clinic invitation."""
     if not veterinarian_user:
@@ -21603,6 +21896,9 @@ def _delivery_context_for_current_user():
 
     # -------------------------------------------------------- ENTREGADOR
     if current_user.worker == "delivery":
+        # Entregadores só veem entregas da plataforma (não as do próprio vendedor)
+        base = base.filter(DeliveryRequest.tipo_entrega == 'plataforma')
+
         # total (para o badge)
         available_total = base.filter_by(status="pendente").count()
 
@@ -21680,6 +21976,7 @@ def api_delivery_counts():
     """Return delivery counts for the current user."""
     base = DeliveryRequest.query.filter_by(archived=False)
     if current_user.worker == "delivery":
+        base = base.filter(DeliveryRequest.tipo_entrega == 'plataforma')
         available_total = base.filter_by(status="pendente").count()
         doing = base.filter_by(worker_id=current_user.id,
                               status="em_andamento").count()
@@ -23058,11 +23355,36 @@ from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-def _build_loja_query(search_term: str, filtro: str):
-    query = Product.query.filter(Product.status == 'active')
+def _build_loja_query(search_term: str, filtro: str, vendedor: str = ''):
+    from sqlalchemy import and_
+    query = (
+        Product.query
+        .filter(Product.status == 'active')
+        .outerjoin(CasaDeRacao, Product.casa_de_racao_id == CasaDeRacao.id)
+        .filter(
+            or_(
+                Product.casa_de_racao_id == None,   # produto de clínica
+                CasaDeRacao.status == 'ativa',       # produto de casa aprovada
+            )
+        )
+    )
+
     if search_term:
         like = f"%{search_term}%"
         query = query.filter(or_(Product.name.ilike(like), Product.description.ilike(like)))
+
+    if vendedor.startswith('c_'):
+        try:
+            cid = int(vendedor[2:])
+            query = query.filter(Product.clinica_id == cid)
+        except ValueError:
+            pass
+    elif vendedor.startswith('r_'):
+        try:
+            rid = int(vendedor[2:])
+            query = query.filter(Product.casa_de_racao_id == rid)
+        except ValueError:
+            pass
 
     if filtro == "lowStock":
         query = query.filter(Product.stock < 5)
@@ -23078,6 +23400,35 @@ def _build_loja_query(search_term: str, filtro: str):
     return query
 
 
+def _get_vendedores_ativos():
+    """Retorna lista de dicts {key, nome, logo_url} de todos os vendedores com produtos ativos."""
+    from models import Clinica as ClinicaModel
+    vendedores = []
+    clinicas = (
+        ClinicaModel.query
+        .join(Product, Product.clinica_id == ClinicaModel.id)
+        .filter(Product.status == 'active')
+        .distinct()
+        .order_by(ClinicaModel.nome)
+        .all()
+    )
+    for c in clinicas:
+        vendedores.append({'key': f'c_{c.id}', 'nome': c.nome, 'logo_url': c.logo_url})
+
+    casas = (
+        CasaDeRacao.query
+        .join(Product, Product.casa_de_racao_id == CasaDeRacao.id)
+        .filter(Product.status == 'active', CasaDeRacao.status == 'ativa')
+        .distinct()
+        .order_by(CasaDeRacao.nome)
+        .all()
+    )
+    for r in casas:
+        vendedores.append({'key': f'r_{r.id}', 'nome': r.nome, 'logo_url': r.logo_url})
+
+    return vendedores
+
+
 @login_required
 def loja():
     pagamento_pendente = None
@@ -23089,19 +23440,18 @@ def loja():
 
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
+    vendedor = request.args.get("vendedor", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro)
+    query = _build_loja_query(search_term, filtro, vendedor)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
 
-    # Verifica se há pedidos anteriores
     has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
-
-    # Clínica do usuário (para mostrar botão de cadastro de produto)
     minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+    vendedores = _get_vendedores_ativos()
 
     return render_template(
         "loja/loja.html",
@@ -23113,6 +23463,8 @@ def loja():
         selected_filter=filtro,
         search_term=search_term,
         minha_clinica=minha_clinica,
+        vendedores=vendedores,
+        selected_vendedor=vendedor,
     )
 
 
@@ -23120,10 +23472,11 @@ def loja():
 def loja_data():
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
+    vendedor = request.args.get("vendedor", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro)
+    query = _build_loja_query(search_term, filtro, vendedor)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -23154,6 +23507,7 @@ def loja_data():
         form=form,
         selected_filter=filtro,
         search_term=search_term,
+        selected_vendedor=vendedor,
     )
     return html
 
@@ -23880,14 +24234,33 @@ def notificacoes_mercado_pago():
                     _sync_veterinarian_membership_payment(pay)
 
                 if pay.status == PaymentStatus.COMPLETED and pay.order_id:
-                    if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
-                        db.session.add(DeliveryRequest(
-                            order_id=pay.order_id,
-                            requested_by_id=pay.user_id,
-                            status="pendente",
-                        ))
-                    # Decrementa estoque das clínicas para produtos vinculados
                     order = Order.query.get(pay.order_id)
+                    if order and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                        # Agrupa itens por vendedor (clinica_id, casa_de_racao_id)
+                        seller_items: dict = {}
+                        for oi in order.items:
+                            prod = oi.product
+                            if not prod:
+                                continue
+                            key = (prod.clinica_id, prod.casa_de_racao_id)
+                            seller_items.setdefault(key, []).append(oi)
+
+                        for (clinica_id, casa_id), _ in seller_items.items():
+                            tipo = 'plataforma'
+                            if casa_id:
+                                casa = CasaDeRacao.query.get(casa_id)
+                                if casa and casa.modo_entrega == 'propria':
+                                    tipo = 'propria'
+                            db.session.add(DeliveryRequest(
+                                order_id=pay.order_id,
+                                requested_by_id=pay.user_id,
+                                status="pendente",
+                                clinica_id=clinica_id,
+                                casa_de_racao_id=casa_id,
+                                tipo_entrega=tipo,
+                            ))
+
+                    # Decrementa estoque das clínicas para produtos vinculados
                     if order:
                         for oi in order.items:
                             prod = oi.product
@@ -23907,6 +24280,9 @@ def notificacoes_mercado_pago():
                                         tipo='saida',
                                         motivo=f'Venda — Pedido #{order.id}',
                                     ))
+                            # Decrementa estoque simples de casas de ração
+                            if prod and prod.casa_de_racao_id:
+                                prod.stock = max(0, prod.stock - oi.quantity)
 
             normalized_status = _normalize_external_payment_status(status)
 

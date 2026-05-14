@@ -172,6 +172,10 @@
               <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i
                     class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
               {% endif %}
+              {% if minha_casa_de_racao %}
+              <li><a class="dropdown-item" href="{{ url_for('minha_casa_de_racao') }}"><i
+                    class="fa-solid fa-store me-2 text-success"></i> Minha Casa de Ração</a></li>
+              {% endif %}
               {% if has_veterinarian_profile_flag %}
               <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i
                     class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>

@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+{% block main %}
+<div class="container mt-4" style="max-width: 680px;">
+
+  <div class="text-center mb-4">
+    <div class="mb-3">
+      <span class="fs-1">🌾</span>
+    </div>
+    <h1 class="h3 fw-bold">Cadastre sua Casa de Ração</h1>
+    <p class="text-muted">
+      Preencha os dados abaixo para se tornar um parceiro da loja PetOrlândia.
+      Após o envio, nossa equipe analisará seu cadastro em até 48h.
+    </p>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {{ form.hidden_tag() }}
+
+        <h5 class="fw-semibold mb-3 text-primary">
+          <i class="fa-solid fa-store me-2"></i>Dados da loja
+        </h5>
+
+        <div class="mb-3">
+          {{ form.nome.label(class="form-label fw-semibold") }}
+          {{ form.nome(class="form-control" + (" is-invalid" if form.nome.errors else ""), placeholder="Nome da sua loja") }}
+          {% for e in form.nome.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="mb-3">
+          {{ form.razao_social.label(class="form-label fw-semibold") }}
+          {{ form.razao_social(class="form-control", placeholder="Razão social (opcional)") }}
+        </div>
+
+        <div class="mb-3">
+          {{ form.cnpj.label(class="form-label fw-semibold") }}
+          {{ form.cnpj(class="form-control" + (" is-invalid" if form.cnpj.errors else ""),
+                       **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}
+          {% for e in form.cnpj.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="mb-3">
+          {{ form.descricao.label(class="form-label fw-semibold") }}
+          {{ form.descricao(class="form-control", rows=3, placeholder="Conte um pouco sobre sua loja…") }}
+        </div>
+
+        <hr class="my-4">
+        <h5 class="fw-semibold mb-3 text-primary">
+          <i class="fa-solid fa-address-book me-2"></i>Contato e endereço
+        </h5>
+
+        <div class="row g-3">
+          <div class="col-sm-6">
+            {{ form.telefone.label(class="form-label fw-semibold") }}
+            {{ form.telefone(class="form-control", placeholder="(99) 99999-9999") }}
+          </div>
+          <div class="col-sm-6">
+            {{ form.email.label(class="form-label fw-semibold") }}
+            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="contato@loja.com") }}
+            {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="mb-3 mt-3">
+          {{ form.endereco.label(class="form-label fw-semibold") }}
+          {{ form.endereco(class="form-control", placeholder="Rua, número, bairro, cidade – UF") }}
+        </div>
+
+        <hr class="my-4">
+        <h5 class="fw-semibold mb-3 text-primary">
+          <i class="fa-solid fa-truck me-2"></i>Modo de entrega
+        </h5>
+
+        <div class="mb-3">
+          {% for subfield in form.modo_entrega %}
+          <div class="form-check mb-2">
+            {{ subfield(class="form-check-input") }}
+            {{ subfield.label(class="form-check-label") }}
+          </div>
+          {% endfor %}
+          <div class="form-text">
+            Você pode alterar essa configuração depois, no painel da sua loja.
+          </div>
+        </div>
+
+        <hr class="my-4">
+        <h5 class="fw-semibold mb-3 text-primary">
+          <i class="fa-solid fa-image me-2"></i>Logo da loja
+        </h5>
+
+        <div class="mb-3">
+          {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'racao_logo', 'user') }}
+        </div>
+
+        <div class="d-grid mt-4">
+          {{ form.submit(class="btn btn-primary btn-lg") }}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-center text-muted small mt-3">
+    <i class="fa-solid fa-lock me-1"></i>Seus dados são protegidos e usados apenas para identificar sua loja na plataforma.
+  </p>
+</div>
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <div>
+      <h1 class="h3 mb-0 fw-bold"><i class="fa-solid fa-chart-line me-2 text-success"></i>Minhas Vendas</h1>
+      <p class="text-muted small mb-0">{{ casa.nome }}</p>
+    </div>
+    {% if casa.modo_entrega == 'propria' %}
+    <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
+       class="btn btn-outline-primary btn-sm ms-auto">
+      <i class="fa-solid fa-truck me-1"></i> Gerenciar Entregas
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Receita total -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
+        <div class="h3 fw-bold text-success mb-0">
+          R$ {{ "%.2f"|format(receita_total)|replace('.', ',') }}
+        </div>
+        <div class="small text-muted">Receita total</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
+        <div class="h3 fw-bold text-primary mb-0">{{ pedidos|length }}</div>
+        <div class="small text-muted">Pedidos com seus produtos</div>
+      </div>
+    </div>
+  </div>
+
+  {% if not pedidos %}
+  <div class="text-center py-5 text-muted">
+    <i class="fa-solid fa-receipt fa-3x mb-3 opacity-25"></i>
+    <p class="mb-0">Nenhuma venda registrada ainda.</p>
+    <p class="small">As vendas aparecerão aqui após um pedido ser confirmado.</p>
+  </div>
+  {% else %}
+
+  <!-- Lista de pedidos -->
+  <div class="d-flex flex-column gap-3">
+    {% for p in pedidos %}
+    {% set order = p.order %}
+    {% set dr = p.delivery %}
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body p-4">
+
+        <!-- Cabeçalho do pedido -->
+        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap mb-3">
+          <div>
+            <span class="fw-bold"># {{ order.id }}</span>
+            <span class="text-muted small ms-2">
+              {% if order.created_at %}
+                {{ order.created_at.strftime('%d/%m/%Y às %H:%M') }}
+              {% endif %}
+            </span>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if dr %}
+              {% if dr.status == 'pendente' %}
+              <span class="badge bg-warning text-dark"><i class="fa-solid fa-clock me-1"></i>Entrega pendente</span>
+              {% elif dr.status == 'em_andamento' %}
+              <span class="badge bg-info text-dark"><i class="fa-solid fa-truck me-1"></i>Em andamento</span>
+              {% elif dr.status == 'concluida' %}
+              <span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Entregue</span>
+              {% elif dr.status == 'cancelada' %}
+              <span class="badge bg-danger"><i class="fa-solid fa-ban me-1"></i>Cancelada</span>
+              {% endif %}
+              {% if dr.tipo_entrega == 'propria' %}
+              <span class="badge bg-secondary"><i class="fa-solid fa-store me-1"></i>Entrega própria</span>
+              {% else %}
+              <span class="badge bg-light text-dark border"><i class="fa-solid fa-motorcycle me-1"></i>Plataforma</span>
+              {% endif %}
+            {% else %}
+            <span class="badge bg-light text-muted border">Sem entrega</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Comprador -->
+        {% if order.user %}
+        <p class="small text-muted mb-2">
+          <i class="fa-solid fa-user me-1"></i>
+          {{ order.user.name or order.user.email }}
+        </p>
+        {% endif %}
+
+        <!-- Itens -->
+        <ul class="list-unstyled mb-0">
+          {% for oi in p.items %}
+          <li class="d-flex justify-content-between align-items-center py-1 border-bottom border-light">
+            <span class="small">
+              {% if oi.product %}
+                {{ oi.product.name }}
+              {% else %}
+                Produto removido
+              {% endif %}
+              <span class="text-muted">× {{ oi.quantity }}</span>
+            </span>
+            <span class="small fw-semibold">
+              R$ {{ "%.2f"|format((oi.unit_price or 0) * oi.quantity)|replace('.', ',') }}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <!-- Total do pedido -->
+        <div class="d-flex justify-content-end mt-2">
+          <span class="fw-bold text-success">Total: R$ {{ "%.2f"|format(p.total)|replace('.', ',') }}</span>
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

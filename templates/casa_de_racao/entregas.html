@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 860px;">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <div>
+      <h1 class="h3 mb-0 fw-bold"><i class="fa-solid fa-truck me-2 text-primary"></i>Minhas Entregas</h1>
+      <p class="text-muted small mb-0">{{ casa.nome }}</p>
+    </div>
+    <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}" class="btn btn-outline-success btn-sm ms-auto">
+      <i class="fa-solid fa-chart-line me-1"></i> Ver Vendas
+    </a>
+  </div>
+
+  <!-- Pendentes / Em andamento -->
+  <h5 class="fw-semibold mb-3">
+    <i class="fa-solid fa-clock me-2 text-warning"></i>Pendentes e em andamento
+    {% if pendentes %}
+    <span class="badge bg-warning text-dark ms-1">{{ pendentes|length }}</span>
+    {% endif %}
+  </h5>
+
+  {% if not pendentes %}
+  <div class="text-center py-4 text-muted mb-4">
+    <i class="fa-solid fa-circle-check fa-2x mb-2 opacity-25"></i>
+    <p class="mb-0 small">Nenhuma entrega pendente no momento.</p>
+  </div>
+  {% else %}
+  <div class="d-flex flex-column gap-3 mb-5">
+    {% for dr in pendentes %}
+    {% set order = dr.order %}
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+          <div>
+            <span class="fw-bold">Pedido #{{ order.id }}</span>
+            {% if order.user %}
+            <span class="text-muted small ms-2">
+              <i class="fa-solid fa-user me-1"></i>{{ order.user.name or order.user.email }}
+            </span>
+            {% endif %}
+            {% if order.shipping_address %}
+            <p class="small text-muted mb-0 mt-1">
+              <i class="fa-solid fa-location-dot me-1"></i>{{ order.shipping_address }}
+            </p>
+            {% endif %}
+            <p class="small text-muted mb-0">
+              <i class="fa-solid fa-calendar me-1"></i>
+              {% if dr.requested_at %}{{ dr.requested_at.strftime('%d/%m/%Y às %H:%M') }}{% endif %}
+            </p>
+          </div>
+          <div>
+            {% if dr.status == 'pendente' %}
+            <span class="badge bg-warning text-dark mb-2 d-block text-center">
+              <i class="fa-solid fa-clock me-1"></i>Pendente
+            </span>
+            {% elif dr.status == 'em_andamento' %}
+            <span class="badge bg-info text-dark mb-2 d-block text-center">
+              <i class="fa-solid fa-truck me-1"></i>Em andamento
+            </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Ações de status -->
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          {% if dr.status == 'pendente' %}
+          <form method="post"
+                action="{{ url_for('casa_entrega_atualizar_status', casa_id=casa.id, dr_id=dr.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="em_andamento">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-truck me-1"></i>Iniciar entrega
+            </button>
+          </form>
+          <form method="post"
+                action="{{ url_for('casa_entrega_atualizar_status', casa_id=casa.id, dr_id=dr.id) }}"
+                onsubmit="return confirm('Cancelar esta entrega?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="cancelada">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="fa-solid fa-ban me-1"></i>Cancelar
+            </button>
+          </form>
+          {% elif dr.status == 'em_andamento' %}
+          <form method="post"
+                action="{{ url_for('casa_entrega_atualizar_status', casa_id=casa.id, dr_id=dr.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="concluida">
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="fa-solid fa-check me-1"></i>Marcar como entregue
+            </button>
+          </form>
+          <form method="post"
+                action="{{ url_for('casa_entrega_atualizar_status', casa_id=casa.id, dr_id=dr.id) }}"
+                onsubmit="return confirm('Cancelar esta entrega?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="cancelada">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="fa-solid fa-ban me-1"></i>Cancelar
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Histórico (concluídas / canceladas) -->
+  {% if concluidas %}
+  <h5 class="fw-semibold mb-3 text-muted">
+    <i class="fa-solid fa-history me-2"></i>Histórico recente
+  </h5>
+  <div class="d-flex flex-column gap-2">
+    {% for dr in concluidas %}
+    {% set order = dr.order %}
+    <div class="card border-0 bg-light rounded-4">
+      <div class="card-body py-3 px-4 d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <div>
+          <span class="fw-semibold small">Pedido #{{ order.id }}</span>
+          {% if order.user %}
+          <span class="text-muted small ms-2">{{ order.user.name or order.user.email }}</span>
+          {% endif %}
+        </div>
+        <div>
+          {% if dr.status == 'concluida' %}
+          <span class="badge bg-success">
+            <i class="fa-solid fa-check me-1"></i>Entregue
+          </span>
+          {% else %}
+          <span class="badge bg-danger">
+            <i class="fa-solid fa-ban me-1"></i>Cancelada
+          </span>
+          {% endif %}
+          {% if dr.completed_at %}
+          <span class="text-muted small ms-2">{{ dr.completed_at.strftime('%d/%m/%Y') }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

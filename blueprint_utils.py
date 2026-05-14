@@ -32,6 +32,7 @@ def register_domain_blueprints(app):
         api,
         auth,
         bulario,
+        casa_de_racao,
         clinica,
         financeiro,
         fiscal,
@@ -45,6 +46,10 @@ def register_domain_blueprints(app):
     bulario_bp = bulario.get_blueprint()
     if not _is_blueprint_registered(app, bulario_bp):
         _register_with_alias(app, bulario_bp)
+
+    casa_de_racao_bp = casa_de_racao.get_blueprint()
+    if not _is_blueprint_registered(app, casa_de_racao_bp):
+        _register_with_alias(app, casa_de_racao_bp)
 
     clinica_bp = clinica.get_blueprint()
     if not _is_blueprint_registered(app, clinica_bp):

@@ -945,6 +945,69 @@ class ClinicHours(db.Model):
     )
 
 
+class CasaDeRacao(db.Model):
+    __tablename__ = 'casa_de_racao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    razao_social = db.Column(db.String(200), nullable=True)
+    cnpj = db.Column(db.String(18), nullable=True, unique=True)
+    descricao = db.Column(db.Text, nullable=True)
+    telefone = db.Column(db.String(20), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    endereco = db.Column(db.String(200), nullable=True)
+    logotipo = db.Column(db.String(200), nullable=True)
+    photo_rotation = db.Column(db.Integer, default=0)
+    photo_zoom = db.Column(db.Float, default=1.0)
+    photo_offset_x = db.Column(db.Float, default=0.0)
+    photo_offset_y = db.Column(db.Float, default=0.0)
+    # 'pendente' = aguardando aprovação do admin, 'ativa' = aprovada, 'suspensa' = bloqueada
+    status = db.Column(db.String(20), default='pendente', nullable=False)
+    # 'plataforma' = entregadores da rede, 'propria' = vendedor gerencia a entrega
+    modo_entrega = db.Column(db.String(20), default='plataforma', nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+
+    owner = db.relationship(
+        'User',
+        backref=db.backref('casas_de_racao', foreign_keys='CasaDeRacao.owner_id'),
+        foreign_keys=[owner_id],
+    )
+
+    @validates('cnpj')
+    def _normalize_cnpj(self, key, value):
+        formatted = format_cnpj(value)
+        return formatted or None
+
+    @property
+    def logo_url(self):
+        if not self.logotipo:
+            return ''
+        if self.logotipo.startswith('http'):
+            return self.logotipo
+        if self.logotipo.startswith('/'):
+            return request.url_root.rstrip('/') + self.logotipo
+        return url_for('static', filename=f'uploads/casas_de_racao/{self.logotipo}', _external=True)
+
+    def __str__(self):
+        return f'{self.nome} ({self.cnpj or "sem CNPJ"})'
+
+
+class CasaDeRacaoHorario(db.Model):
+    __tablename__ = 'casa_de_racao_horario'
+
+    id = db.Column(db.Integer, primary_key=True)
+    casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id'), nullable=False)
+    dia_semana = db.Column(db.String(20), nullable=False)
+    hora_abertura = db.Column(db.Time, nullable=False)
+    hora_fechamento = db.Column(db.Time, nullable=False)
+
+    casa_de_racao = db.relationship(
+        'CasaDeRacao',
+        backref=db.backref('horarios', cascade='all, delete-orphan'),
+    )
+
+
 class ClinicStaff(db.Model):
     __tablename__ = 'clinic_staff'
     id = db.Column(db.Integer, primary_key=True)
@@ -2485,11 +2548,14 @@ class Product(db.Model):
     # Campos de venda por clínica
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id', ondelete='SET NULL'), nullable=True, index=True)
     clinic_inventory_item_id = db.Column(db.Integer, db.ForeignKey('clinic_inventory_item.id', ondelete='SET NULL'), nullable=True)
+    # Vendedor alternativo: casa de ração parceira
+    casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
     # 'active' = visível na loja, 'inactive' = oculto pelo dono, 'pending' = aguardando aprovação
     status = db.Column(db.String(20), default='active', nullable=False)
 
     clinica = db.relationship('Clinica', backref=db.backref('produtos_loja', lazy='dynamic'))
     inventory_item = db.relationship('ClinicInventoryItem', backref=db.backref('produto_loja', uselist=False))
+    casa_de_racao = db.relationship('CasaDeRacao', backref=db.backref('produtos_loja', lazy='dynamic'))
 
     # Items de pedido associados ao produto. O cascade facilita remover os
     # OrderItem relacionados quando o produto é excluído.
@@ -2618,6 +2684,11 @@ class DeliveryRequest(db.Model):
         nullable=True,
     )
     archived = db.Column(db.Boolean, default=False, nullable=False)
+    # Vendedor responsável por esta entrega (apenas um dos dois estará preenchido)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id', ondelete='SET NULL'), nullable=True, index=True)
+    casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
+    # 'plataforma' = fila de entregadores, 'propria' = vendedor gerencia
+    tipo_entrega = db.Column(db.String(20), default='plataforma', nullable=False)
 
     order = db.relationship('Order', backref='delivery_requests')
     requested_by = db.relationship(
@@ -2629,6 +2700,9 @@ class DeliveryRequest(db.Model):
     canceled_by = db.relationship('User', foreign_keys=[canceled_by_id])
     pickup_id   = db.Column(db.Integer, db.ForeignKey('pickup_location.id'))
     pickup      = db.relationship('PickupLocation')
+    clinica     = db.relationship('Clinica', foreign_keys=[clinica_id])
+    casa_de_racao = db.relationship('CasaDeRacao', foreign_keys=[casa_de_racao_id],
+                                    backref=db.backref('delivery_requests', lazy='dynamic'))
 
     def __str__(self):
         return f"Entrega #{self.id} - Pedido #{self.order_id} ({self.status})"

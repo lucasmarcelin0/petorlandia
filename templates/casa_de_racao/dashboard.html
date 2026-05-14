@@ -1,0 +1,162 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 800px;">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex align-items-start gap-3 mb-4 flex-wrap">
+    {% if casa.logo_url %}
+    <img src="{{ casa.logo_url }}" alt="Logo {{ casa.nome }}"
+         class="rounded-3 border object-fit-cover"
+         style="width:80px;height:80px;">
+    {% else %}
+    <div class="rounded-3 border bg-light d-flex align-items-center justify-content-center"
+         style="width:80px;height:80px;">
+      <i class="fa-solid fa-store fa-2x text-muted"></i>
+    </div>
+    {% endif %}
+    <div class="flex-grow-1">
+      <h1 class="h3 fw-bold mb-1">{{ casa.nome }}</h1>
+      {% if casa.razao_social %}
+      <p class="text-muted small mb-1">{{ casa.razao_social }}</p>
+      {% endif %}
+      {% if casa.status == 'pendente' %}
+      <span class="badge bg-warning text-dark">
+        <i class="fa-solid fa-clock me-1"></i>Aguardando aprovação
+      </span>
+      {% elif casa.status == 'ativa' %}
+      <span class="badge bg-success">
+        <i class="fa-solid fa-check-circle me-1"></i>Loja ativa
+      </span>
+      {% else %}
+      <span class="badge bg-danger">
+        <i class="fa-solid fa-ban me-1"></i>Suspensa
+      </span>
+      {% endif %}
+    </div>
+    <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
+       class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+      <i class="fa-solid fa-box me-2"></i>Meus Produtos
+    </a>
+  </div>
+
+  <!-- Aviso de pendência -->
+  {% if casa.status == 'pendente' %}
+  <div class="alert alert-warning border-0 rounded-3" role="alert">
+    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+    <strong>Seu cadastro está em análise.</strong>
+    Nossa equipe verificará seus dados em até 48h. Você receberá um aviso assim que sua loja for aprovada e poderá começar a publicar produtos.
+  </div>
+  {% endif %}
+
+  <!-- Informações da loja -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-semibold mb-0"><i class="fa-solid fa-circle-info me-2 text-primary"></i>Informações</h5>
+        <a href="{{ url_for('minha_casa_de_racao') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="fa-solid fa-pen me-1"></i>Editar
+        </a>
+      </div>
+
+      <div class="row g-3">
+        {% if casa.cnpj %}
+        <div class="col-sm-6">
+          <span class="text-muted small d-block">CNPJ</span>
+          <span class="fw-semibold">{{ casa.cnpj }}</span>
+        </div>
+        {% endif %}
+        {% if casa.telefone %}
+        <div class="col-sm-6">
+          <span class="text-muted small d-block">Telefone</span>
+          <span class="fw-semibold">{{ casa.telefone }}</span>
+        </div>
+        {% endif %}
+        {% if casa.email %}
+        <div class="col-sm-6">
+          <span class="text-muted small d-block">E-mail</span>
+          <span class="fw-semibold">{{ casa.email }}</span>
+        </div>
+        {% endif %}
+        {% if casa.endereco %}
+        <div class="col-12">
+          <span class="text-muted small d-block">Endereço</span>
+          <span class="fw-semibold">{{ casa.endereco }}</span>
+        </div>
+        {% endif %}
+        {% if casa.descricao %}
+        <div class="col-12">
+          <span class="text-muted small d-block">Sobre a loja</span>
+          <p class="mb-0">{{ casa.descricao }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Modo de entrega -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="fw-semibold mb-1">
+            <i class="fa-solid fa-truck me-2 text-primary"></i>Modo de entrega
+          </h5>
+          {% if casa.modo_entrega == 'propria' %}
+          <p class="mb-0 text-muted small">
+            <span class="badge bg-info text-dark me-2">Entrega própria</span>
+            Você mesmo realiza suas entregas.
+          </p>
+          {% else %}
+          <p class="mb-0 text-muted small">
+            <span class="badge bg-secondary me-2">Plataforma</span>
+            Entregadores da PetOrlândia cuidam das suas entregas.
+          </p>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('minha_casa_de_racao') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="fa-solid fa-pen me-1"></i>Alterar
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resumo de produtos -->
+  {% set total_produtos = casa.produtos_loja.count() %}
+  {% set ativos = casa.produtos_loja.filter_by(status='active').count() %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
+        <div class="h2 fw-bold text-primary mb-0">{{ total_produtos }}</div>
+        <div class="small text-muted">Total de produtos</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
+        <div class="h2 fw-bold text-success mb-0">{{ ativos }}</div>
+        <div class="small text-muted">Ativos na loja</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
+       class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+      <i class="fa-solid fa-plus me-2"></i>Publicar produto
+    </a>
+    <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
+       class="btn btn-outline-success {% if casa.status == 'pendente' %}disabled{% endif %}">
+      <i class="fa-solid fa-chart-line me-1"></i>Minhas Vendas
+    </a>
+    {% if casa.modo_entrega == 'propria' %}
+    <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
+       class="btn btn-outline-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+      <i class="fa-solid fa-truck me-1"></i>Minhas Entregas
+    </a>
+    {% endif %}
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Ver loja pública
+    </a>
+  </div>
+
+</div>
+{% endblock %}

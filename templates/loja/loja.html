@@ -26,6 +26,12 @@
         <i class="fa-solid fa-store me-2"></i> Minha Loja
       </a>
       {% endif %}
+      {% if minha_casa_de_racao %}
+      <a href="{{ url_for('casa_de_racao_produtos', casa_id=minha_casa_de_racao.id) }}"
+         class="btn btn-outline-success btn-lg d-flex align-items-center">
+        <i class="fa-solid fa-seedling me-2"></i> Minha Casa de Ração
+      </a>
+      {% endif %}
 
       <a href="{{ url_for('ver_carrinho') }}"
          class="btn btn-success btn-lg d-flex align-items-center position-relative">
@@ -72,10 +78,42 @@
 </section>
 {% endif %}
 
+<!-- Filtro por Vendedor -->
+{% if vendedores and vendedores|length > 0 %}
+<section class="mb-3">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h2 class="h5 m-0 text-secondary">
+      <i class="fa-solid fa-store me-2"></i> Vendedores
+    </h2>
+    {% if selected_vendedor %}
+    <a href="{{ url_for('loja', q=search_term, filter=selected_filter) }}" class="btn btn-sm btn-outline-secondary">
+      Limpar
+    </a>
+    {% endif %}
+  </div>
+  <div class="chips-scroll py-1">
+    {% for v in vendedores %}
+    <a href="{{ url_for('loja', vendedor=v.key, q=search_term, filter=selected_filter) }}"
+       class="chip text-decoration-none d-flex align-items-center gap-2 {% if selected_vendedor == v.key %}chip-active{% endif %}">
+      {% if v.logo_url %}
+      <img src="{{ v.logo_url }}" alt="" class="rounded-circle border" style="width:22px;height:22px;object-fit:cover;">
+      {% else %}
+      <i class="fa-solid fa-store" style="font-size:.85rem;"></i>
+      {% endif %}
+      {{ v.nome }}
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <!-- Busca + Filtros -->
 <form method="get" id="search-form" class="row g-2 align-items-stretch mb-3">
   {% if request.args.get('category') %}
   <input type="hidden" name="category" value="{{ request.args.get('category') }}">
+  {% endif %}
+  {% if selected_vendedor %}
+  <input type="hidden" name="vendedor" value="{{ selected_vendedor }}">
   {% endif %}
 
   <div class="col-12 col-lg-7">

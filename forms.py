@@ -785,6 +785,70 @@ class ClinicProductEditForm(FlaskForm):
     submit = SubmitField('Salvar alterações')
 
 
+class CasaDeRacaoForm(FlaskForm):
+    """Cadastro/edição de uma casa de ração parceira."""
+    nome = StringField('Nome da loja', validators=[DataRequired(), Length(max=120)])
+    razao_social = StringField('Razão social', validators=[Optional(), Length(max=200)])
+    cnpj = StringField('CNPJ', validators=[Optional()])
+    descricao = TextAreaField('Descrição / bio da loja', validators=[Optional()])
+    telefone = StringField('Telefone', validators=[Optional(), Length(max=20)])
+    email = StringField('E-mail', validators=[Optional(), Email()])
+    endereco = StringField('Endereço', validators=[Optional(), Length(max=200)])
+    modo_entrega = SelectField(
+        'Modo de entrega',
+        choices=[
+            ('plataforma', 'Entregadores da plataforma PetOrlândia'),
+            ('propria', 'Entrega própria — eu mesmo entrego meus pedidos'),
+        ],
+        default='plataforma',
+    )
+    logotipo = FileField(
+        'Logo da loja',
+        validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
+    )
+    photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
+    photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
+    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
+    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
+    submit = SubmitField('Salvar')
+
+    def validate_cnpj(self, field):
+        if not field.data:
+            return
+        digits = only_digits(field.data)
+        if len(digits) != 14:
+            raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
+        field.data = format_cnpj(field.data)
+
+
+class CasaDeRacaoProductForm(FlaskForm):
+    """Formulário para publicar um produto da casa de ração na loja."""
+    name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    stock = IntegerField('Estoque', validators=[Optional(), NumberRange(min=0)], default=0)
+    image_upload = FileField(
+        'Imagem',
+        validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
+    )
+    mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Publicar na loja')
+
+
+class CasaDeRacaoProductEditForm(FlaskForm):
+    """Formulário de edição de produto da casa de ração."""
+    name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    stock = IntegerField('Estoque', validators=[Optional(), NumberRange(min=0)])
+    image_upload = FileField(
+        'Nova imagem',
+        validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
+    )
+    mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Salvar alterações')
+
+
 class HealthPlanForm(FlaskForm):
     """Criação/edição de plano de saúde (admin)."""
     name = StringField('Nome do plano', validators=[DataRequired(), Length(max=50)])

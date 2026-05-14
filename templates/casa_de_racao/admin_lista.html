@@ -1,0 +1,146 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-store me-2 text-primary"></i>Casas de Ração Parceiras</h1>
+  </div>
+
+  <!-- Pendentes -->
+  <h5 class="fw-semibold text-warning mb-3">
+    <i class="fa-solid fa-clock me-2"></i>Aguardando aprovação ({{ pendentes|length }})
+  </h5>
+
+  {% if pendentes %}
+  <div class="row g-3 mb-5">
+    {% for casa in pendentes %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-warning border-2 rounded-4 h-100">
+        <div class="card-body p-4">
+          <div class="d-flex gap-3 align-items-start mb-3">
+            {% if casa.logo_url %}
+            <img src="{{ casa.logo_url }}" class="rounded-3 border object-fit-cover" style="width:56px;height:56px;" alt="">
+            {% else %}
+            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center border" style="width:56px;height:56px;">
+              <i class="fa-solid fa-store text-muted"></i>
+            </div>
+            {% endif %}
+            <div>
+              <h6 class="fw-bold mb-0">{{ casa.nome }}</h6>
+              {% if casa.cnpj %}<div class="text-muted small">{{ casa.cnpj }}</div>{% endif %}
+              {% if casa.endereco %}<div class="text-muted small">{{ casa.endereco }}</div>{% endif %}
+            </div>
+          </div>
+          {% if casa.descricao %}
+          <p class="small text-muted mb-3">{{ casa.descricao|truncate(120) }}</p>
+          {% endif %}
+          <div class="text-muted small mb-3">
+            <i class="fa-solid fa-calendar me-1"></i>Cadastro: {{ casa.created_at.strftime('%d/%m/%Y') if casa.created_at else '—' }}
+          </div>
+          <div class="d-flex gap-2">
+            <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-success btn-sm">
+                <i class="fa-solid fa-check me-1"></i>Aprovar
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('admin_suspender_casa_de_racao', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline-danger btn-sm">
+                <i class="fa-solid fa-ban me-1"></i>Rejeitar
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-5">Nenhum cadastro pendente.</p>
+  {% endif %}
+
+  <!-- Ativas -->
+  <h5 class="fw-semibold text-success mb-3">
+    <i class="fa-solid fa-check-circle me-2"></i>Ativas ({{ ativas|length }})
+  </h5>
+
+  {% if ativas %}
+  <div class="table-responsive mb-5">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Loja</th>
+          <th>CNPJ</th>
+          <th>Endereço</th>
+          <th>Produtos</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for casa in ativas %}
+        <tr>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              {% if casa.logo_url %}
+              <img src="{{ casa.logo_url }}" class="rounded-2 border object-fit-cover" style="width:36px;height:36px;" alt="">
+              {% endif %}
+              <span class="fw-semibold">{{ casa.nome }}</span>
+            </div>
+          </td>
+          <td class="text-muted">{{ casa.cnpj or '—' }}</td>
+          <td class="text-muted small">{{ casa.endereco or '—' }}</td>
+          <td>{{ casa.produtos_loja.count() }}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin_suspender_casa_de_racao', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline-warning btn-sm">
+                <i class="fa-solid fa-pause me-1"></i>Suspender
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted mb-5">Nenhuma loja ativa.</p>
+  {% endif %}
+
+  <!-- Suspensas -->
+  {% if suspensas %}
+  <h5 class="fw-semibold text-danger mb-3">
+    <i class="fa-solid fa-ban me-2"></i>Suspensas ({{ suspensas|length }})
+  </h5>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle opacity-75">
+      <thead class="table-light">
+        <tr>
+          <th>Loja</th>
+          <th>CNPJ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for casa in suspensas %}
+        <tr>
+          <td class="fw-semibold">{{ casa.nome }}</td>
+          <td class="text-muted">{{ casa.cnpj or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline-success btn-sm">
+                <i class="fa-solid fa-rotate-left me-1"></i>Reativar
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

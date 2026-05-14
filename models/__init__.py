@@ -1,6 +1,7 @@
 """Pacote de modelos com reexportações para compatibilidade."""
 
 from .base import *  # noqa: F401,F403
+from .base import CasaDeRacao, CasaDeRacaoHorario  # noqa: F401
 from .agenda import AgendaEvento, Appointment, ExamAppointment, PlantaoModelo, PlantonistaEscala, VetSchedule
 from .loja import (
     DeliveryRequest,
@@ -52,6 +53,8 @@ from .sfa import (
 )
 
 __all__ = [
+    "CasaDeRacao",
+    "CasaDeRacaoHorario",
     "AgendaEvento",
     "Appointment",
     "AccountingAccount",
