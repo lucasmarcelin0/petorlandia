@@ -195,6 +195,11 @@
       </div>
 
       <div id="sugestao-dose-conteudo" class="d-none">
+        <div id="sug-dose-diagnostico" class="alert alert-secondary py-2 px-3 small d-none mb-3">
+          <div class="fw-semibold mb-1" id="sug-dose-diagnostico-titulo">Resumo clínico</div>
+          <div id="sug-dose-diagnostico-texto" class="mb-0"></div>
+          <div id="sug-dose-riscos" class="mt-2 d-none"></div>
+        </div>
         <div class="row">
           <div class="col-md-6">
             <p class="mb-1"><strong>Animal:</strong> <span id="sug-animal" class="text-muted">–</span></p>
@@ -978,6 +983,7 @@
     if (card) card.classList.add('d-none');
     const indispEl = document.getElementById('sugestao-dose-indisponivel');
     if (indispEl) { indispEl.innerHTML = ''; indispEl.classList.add('d-none'); }
+    _limparValoresCardSugestao();
     sugestaoDoseAtual = null;
     _medicamentoIdSugestao = null;
   }
@@ -1284,6 +1290,12 @@
 
     const obsEl = document.getElementById('sug-observacao');
     if (obsEl) { obsEl.textContent = ''; obsEl.classList.add('d-none'); }
+    const diagWrap = document.getElementById('sug-dose-diagnostico');
+    if (diagWrap) diagWrap.classList.add('d-none');
+    const diagTexto = document.getElementById('sug-dose-diagnostico-texto');
+    if (diagTexto) diagTexto.textContent = '';
+    const diagRiscos = document.getElementById('sug-dose-riscos');
+    if (diagRiscos) { diagRiscos.innerHTML = ''; diagRiscos.classList.add('d-none'); }
     _atualizarAcoesDoseSugerida();
   }
 
@@ -1406,6 +1418,92 @@
     }
   }
 
+  function _badgeRiscoClass(nivel) {
+    switch (String(nivel || '').toLowerCase()) {
+      case 'critico': return 'text-bg-danger';
+      case 'atencao': return 'text-bg-warning';
+      default: return 'text-bg-secondary';
+    }
+  }
+
+  function _renderDiagnosticoDose(s) {
+    const wrap = document.getElementById('sug-dose-diagnostico');
+    const titulo = document.getElementById('sug-dose-diagnostico-titulo');
+    const texto = document.getElementById('sug-dose-diagnostico-texto');
+    const riscos = document.getElementById('sug-dose-riscos');
+    if (!wrap || !titulo || !texto || !riscos) return;
+
+    const diag = s?.diagnosticos || {};
+    const origem = s?.origem || diag?.origem || {};
+    const partes = [];
+    if (origem.rotulo) partes.push(origem.rotulo);
+    if (origem.detalhe) partes.push(origem.detalhe);
+    if (diag.requer_validacao_clinica) {
+      partes.push('Use como apoio e valide antes de concluir a prescrição.');
+    }
+
+    if (!partes.length) {
+      wrap.classList.add('d-none');
+      texto.textContent = '';
+      riscos.innerHTML = '';
+      riscos.classList.add('d-none');
+      return;
+    }
+
+    titulo.textContent = diag.requer_validacao_clinica ? 'Resumo clínico e validação' : 'Resumo clínico';
+    texto.textContent = partes.join(' ');
+
+    const flags = Array.isArray(s?.flags_risco) ? s.flags_risco : [];
+    if (flags.length) {
+      riscos.innerHTML = flags.map(flag => `
+        <div class="d-flex align-items-start gap-2 mb-1">
+          <span class="badge ${_badgeRiscoClass(flag.nivel)} text-uppercase" style="font-size:.62rem;">${flag.nivel || 'info'}</span>
+          <span><strong>${flag.titulo || 'Atenção'}:</strong> ${flag.detalhe || ''}</span>
+        </div>
+      `).join('');
+      riscos.classList.remove('d-none');
+    } else {
+      riscos.innerHTML = '';
+      riscos.classList.add('d-none');
+    }
+
+    wrap.classList.remove('d-none');
+  }
+
+  async function _registrarUsoDoseBulario(s) {
+    if (!s) return;
+    try {
+      await fetch(`/consulta/{{ consulta.id }}/sugestoes_clinicas/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+          item_type: 'dose_bulario',
+          action: 'accepted',
+          title: (s.medicamento && s.medicamento.nome) || 'Dose do bulário',
+          justificativa: (s.indicacao ? `Indicação: ${s.indicacao}. ` : '') + ((s.origem && s.origem.rotulo) || 'Dose aplicada a partir do bulário.'),
+          payload: {
+            medicamento_id: s.medicamento?.id || null,
+            protocolo_id: s.protocolo_id || null,
+            indicacao: s.indicacao || null,
+            via: s.via || null,
+            dose_exibir: s.dose_exibir || null,
+            dose_unit_out: s.dose_unit_out || null,
+            apresentacao_preferida_id: s.apresentacao_preferida_id || null,
+            apresentacao_escolhida_id: _apresentacaoEscolhida?.id || null,
+            origem: s.origem || null,
+            flags_risco: s.flags_risco || [],
+          }
+        })
+      });
+    } catch (err) {
+      console.warn('Não foi possível registrar auditoria da dose do bulário.', err);
+    }
+  }
+
   async function carregarSugestaoDose(medicamentoId, indicacao = null, autoResolvida = false) {
     if (!medicamentoId) return false;
     if (!ANIMAL_ID_CONSULTA) {
@@ -1525,6 +1623,7 @@
       if (s.confianca) fonteTxt.push(`confiança: ${s.confianca.toLowerCase()}`);
       document.getElementById('sugestao-dose-fonte').textContent =
         fonteTxt.length ? '· ' + fonteTxt.join(' · ') : '';
+      _renderDiagnosticoDose(s);
 
       // Seletor de apresentação + preview da dose prática por extenso.
       _renderSeletorApresentacoes(s.apresentacoes || []);
@@ -1636,7 +1735,14 @@
       const ehLiquido = cuLower.includes('/ml') || cuLower.includes('/l');
       const unidRaw = ap.unidade_pratica || 'unidade';
       const unid = (unidRaw === 'unidade' && !ehLiquido) ? 'comprimido' : unidRaw;
-      const key = `${ap.concentracao_valor ?? ''}|${ap.concentracao_unidade ?? ''}|${unid}`;
+      const rotuloEscolha = ap.rotulo_escolha || {};
+      const contextoApresentacao = [
+        rotuloEscolha.principal || '',
+        rotuloEscolha.secundario || '',
+        ap.faixa_peso_label || '',
+        ap.especie_label || '',
+      ].join('|');
+      const key = `${ap.concentracao_valor ?? ''}|${ap.concentracao_unidade ?? ''}|${unid}|${contextoApresentacao}`;
       if (!grupos[key]) {
         grupos[key] = {
           key,
@@ -1644,8 +1750,26 @@
           concentracao_unidade: ap.concentracao_unidade,
           forma: unid,
           unidade_pratica: unid,
+          faixa_peso_label: ap.faixa_peso_label || '',
+          especie_label: ap.especie_label || '',
+          rotulo_escolha: {
+            principal: rotuloEscolha.principal || '',
+            secundario: rotuloEscolha.secundario || '',
+          },
           apresentacoes: [],
         };
+      }
+      if (!grupos[key].faixa_peso_label && ap.faixa_peso_label) {
+        grupos[key].faixa_peso_label = ap.faixa_peso_label;
+      }
+      if (!grupos[key].especie_label && ap.especie_label) {
+        grupos[key].especie_label = ap.especie_label;
+      }
+      if (!grupos[key].rotulo_escolha.principal && rotuloEscolha.principal) {
+        grupos[key].rotulo_escolha.principal = rotuloEscolha.principal;
+      }
+      if (!grupos[key].rotulo_escolha.secundario && rotuloEscolha.secundario) {
+        grupos[key].rotulo_escolha.secundario = rotuloEscolha.secundario;
       }
       grupos[key].apresentacoes.push(ap);
     }
@@ -1662,9 +1786,17 @@
       const cv = g.concentracao_valor;
       const cu = g.concentracao_unidade || '';
       const cvFmt = cv ? (cv % 1 === 0 ? Math.round(cv) : cv) : null;
-      const label = cvFmt != null
+      const rotuloEscolha = g.rotulo_escolha || {};
+      const labelConcentracao = cvFmt != null
         ? `${cvFmt}${cu} <span class="fw-normal opacity-75" style="font-size:.8em;">${g.forma}</span>`
         : g.forma || '—';
+      const labelPrincipal = rotuloEscolha.principal || labelConcentracao;
+      const labelSecundarioTexto = rotuloEscolha.principal
+        ? (rotuloEscolha.secundario || labelConcentracao)
+        : '';
+      const labelSecundario = labelSecundarioTexto
+        ? `<div class="text-muted mt-1" style="font-size:.72rem;line-height:1.1;">${labelSecundarioTexto}</div>`
+        : '';
       const nBrands = g.apresentacoes.length;
       const brandTip = nBrands > 1
         ? ` title="${g.apresentacoes.map(a => a.fabricante || a.descricao).filter(Boolean).slice(0,6).join(', ')}"`
@@ -1673,7 +1805,12 @@
                 class="btn btn-sm btn-outline-secondary sug-chip-conc"
                 id="sug-chip-${i}"
                 onclick="_onChipConc(${i})"
-                ${brandTip}>${label}${nBrands > 1 ? `<span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:.65rem;">${nBrands}</span>` : ''}</button>`;
+                ${brandTip}>
+                <div class="text-start" style="line-height:1.05;">
+                  <div>${labelPrincipal}${nBrands > 1 ? `<span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:.65rem;">${nBrands}</span>` : ''}</div>
+                  ${labelSecundario}
+                </div>
+              </button>`;
     }).join('');
 
     const extrasChip = extras.length
@@ -2134,6 +2271,7 @@
     if (doseStr) document.getElementById('dose').value = doseStr;
     if (freqStr) document.getElementById('frequencia').value = freqStr;
     if (durStr)  document.getElementById('duracao').value = durStr;
+    _registrarUsoDoseBulario(s);
     mostrarFeedback('Dose pré-calculada aplicada — você ainda pode editar os campos.', 'success');
   }
 
@@ -2286,7 +2424,10 @@
     document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
     const obsSection = document.getElementById('med-obs-section');
     const obsText = document.getElementById('med-observacoes');
-    if (m.observacoes) {
+    // Ocultar observações brutas quando o conteúdo estruturado já cobre as seções clínicas,
+    // evitando duplicidade entre a parede de texto e a monografia organizada.
+    const temConteudoEstruturado = !!(m.monografia_estruturada?.tem_conteudo_clinico);
+    if (m.observacoes && !temConteudoEstruturado) {
       obsText.textContent = m.observacoes;
       obsSection.classList.remove('d-none');
       const obsCollapse = document.getElementById('med-obs-body');

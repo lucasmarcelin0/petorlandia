@@ -715,6 +715,7 @@ def _montar_conteudo_estruturado_v2(
     interacoes_struct: Dict[str, Any],
     advertencias_extras: Optional[str] = None,
     raw_sections: Optional[Dict[str, Any]] = None,
+    raw_sections_html: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     advertencias = dict(secoes_clinicas.get('advertencias') or _montar_secao_padrao())
     if advertencias_extras:
@@ -732,8 +733,9 @@ def _montar_conteudo_estruturado_v2(
             'texto': interacoes_struct.get('texto'),
         },
         'raw_sections': raw_sections or {},
+        'raw_sections_html': raw_sections_html or {},
         'metadata': {
-            'parser_version': 'v2',
+            'parser_version': 'v3',
             'fonte': 'vetsmart',
             'secao_indicacoes_bruta': secoes_clinicas.get('texto_bruto'),
             'secao_interacoes_bruta': interacoes_struct.get('texto_bruto'),
@@ -867,6 +869,12 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         frequencia_texto=frequencia,
         duracao_texto=duracao_tratamento,
         especies_str=especies,
+        indicacoes_texto=secoes.get('IndicaÃ§Ãµes e contraindicaÃ§Ãµes') or '',
+        classificacao=classificacao,
+    )
+    doses_estruturadas = _pos_processar_doses_por_apresentacao(
+        doses_estruturadas,
+        apresentacoes,
     )
 
     # ── Indicações / Interações / Farmacologia ───────────────────────────
@@ -908,16 +916,21 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         'Ref. bibliográficas',
     ]
     raw_sections: Dict[str, Optional[str]] = {}
+    raw_sections_html: Dict[str, str] = {}
     for sec_nome in _SECOES_ORDEM:
         valor = secoes.get(sec_nome)
         if valor and not _eh_vazio(valor):
             raw_sections[sec_nome] = _texto_multilinha_limpo(valor)
+        html_secao = _html_secao_limpo(secoes_content.get(sec_nome))
+        if html_secao:
+            raw_sections_html[sec_nome] = html_secao
 
     conteudo_estruturado = _montar_conteudo_estruturado_v2(
         indicacoes_struct,
         interacoes_struct,
         advertencias_extras=_limpar(warning_meta, 1200),
         raw_sections=raw_sections,
+        raw_sections_html=raw_sections_html,
     )
 
     # Bula: farmacologia (rica) → description schema.org → descritivo da seção Sobre
@@ -947,6 +960,19 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         apresentacoes       = apresentacoes,
         doses               = doses_estruturadas,
     )
+
+
+def _html_secao_limpo(content_div) -> Optional[str]:
+    if not content_div:
+        return None
+    clone = BeautifulSoup(str(content_div), 'html.parser')
+    raiz = clone.find(class_='content-comercial-info') or clone
+    for el in raiz.find_all(['script', 'style', 'noscript']):
+        el.decompose()
+    for el in raiz.find_all(class_='title-content'):
+        el.decompose()
+    html = raiz.decode_contents().strip()
+    return html or None
 
 
 def _parsear_admin_doses(texto: str) -> dict:
@@ -1187,9 +1213,14 @@ _INDICACAO_PATTERNS = [
     (r'analges?i[ao]|controle\s+da\s+dor|\bdor\b',             'Analgesia'),
     (r'asma|broncoespasmo|broncopat|bronqu',                   'Respiratório'),
     (r'infec[cç][aã]o|bacteri|infec[cç][oõ]es',                'Infecção'),
-    (r'alerg(?:ia|ias|ico|icos|ica|icas)',                     'Alergia'),
+    (r'al[eé]rg(?:ia|ias|ico|icos|ica|icas)',                  'Alergia'),
     (r'prurido|coceira',                                       'Prurido'),
 ]
+
+_INDICACOES_GENERICAS_CORTICOIDE = {
+    'Anti-inflamatório',
+    'Uso prolongado',
+}
 
 
 def _extrair_indicacao(texto: str) -> Optional[str]:
@@ -1211,6 +1242,82 @@ def _extrair_indicacao(texto: str) -> Optional[str]:
         if melhor is None or chave < melhor[0]:
             melhor = (chave, nome)
     return melhor[1] if melhor else None
+
+
+def _extrair_indicacoes_multiplas(texto: str) -> List[str]:
+    """Retorna indicações canônicas únicas na ordem em que aparecem no texto."""
+    if not texto:
+        return []
+    achados: List[tuple[int, int, str]] = []
+    for prioridade, (pat, nome) in enumerate(_INDICACAO_PATTERNS):
+        for m in re.finditer(pat, texto, flags=re.IGNORECASE):
+            achados.append((m.start(), prioridade, nome))
+    if not achados:
+        return []
+    achados.sort()
+    vistos: set[str] = set()
+    resultado: List[str] = []
+    for _, _, nome in achados:
+        if nome in vistos:
+            continue
+        vistos.add(nome)
+        resultado.append(nome)
+    return resultado
+
+
+def _eh_contexto_corticoide(classificacao: Optional[str], indicacoes_texto: Optional[str] = None) -> bool:
+    alvo = ' '.join([classificacao or '', indicacoes_texto or '']).lower()
+    return any(token in alvo for token in (
+        'esteroidal', 'cortic', 'prednis', 'dexamet', 'hidrocortis', 'metilpred',
+    ))
+
+
+def _refinar_indicacao_dose(
+    indicacao_base: Optional[str],
+    *,
+    linha: str,
+    seg_txt: str,
+    frequencia_texto: Optional[str],
+    duracao_texto: Optional[str],
+    indicacoes_texto: Optional[str],
+    classificacao: Optional[str],
+) -> Optional[str]:
+    """Refina rótulos genéricos de dose para contextos clínicos mais úteis.
+
+    Foco principal: corticosteroides, nos quais rótulos como "Anti-inflamatório"
+    e "Uso prolongado" costumam ser pouco úteis para a prescrição assistida.
+    """
+    contexto_linha = ' '.join(filter(None, [linha, seg_txt]))
+    contexto_local = ' '.join(filter(None, [
+        contexto_linha, frequencia_texto or '', duracao_texto or '',
+    ]))
+    if not contexto_linha:
+        return indicacao_base
+
+    candidatas_locais = _extrair_indicacoes_multiplas(contexto_linha)
+
+    if re.search(r'hipoadrenocortic|hipocort(?:icismo|isolismo)|addison|substitui[cç][aã]o|hipoadrenocortical', contexto_linha, re.IGNORECASE):
+        return 'Hipoadrenocorticismo'
+
+    if indicacao_base == 'Uso prolongado':
+        for nome in candidatas_locais:
+            if nome not in _INDICACOES_GENERICAS_CORTICOIDE:
+                return nome
+
+    if _eh_contexto_corticoide(classificacao, indicacoes_texto):
+        if re.search(r'al[eé]rg|prurido|coceira|atopi|dermatite', contexto_linha, re.IGNORECASE):
+            if 'Dermatite atópica' in candidatas_locais:
+                return 'Dermatite atópica'
+            return 'Alergia'
+        if re.search(r'imun[ouó]s{0,2}[\s-]?s?upres|autoimun|lupus|lúpus', contexto_linha, re.IGNORECASE):
+            return 'Imunossupressão'
+
+        if indicacao_base in _INDICACOES_GENERICAS_CORTICOIDE or indicacao_base is None:
+            for nome in candidatas_locais:
+                if nome not in _INDICACOES_GENERICAS_CORTICOIDE:
+                    return nome
+
+    return indicacao_base or (candidatas_locais[0] if candidatas_locais else None)
 
 
 def _splitar_por_indicacao(linha: str):
@@ -1437,6 +1544,8 @@ def _extrair_doses_estruturadas(
     frequencia_texto: Optional[str],
     duracao_texto: Optional[str],
     especies_str: Optional[str],
+    indicacoes_texto: Optional[str] = None,
+    classificacao: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Monta registros de dose estruturados a partir das linhas brutas da
     seção 'Administração e doses'.
@@ -1533,6 +1642,15 @@ def _extrair_doses_estruturadas(
         for ind_seg, seg_txt in segmentos:
             # Resolve indicação para este segmento: segmento > linha > freq.
             indicacao_final = ind_seg or indicacao_ctx or indicacao_freq
+            indicacao_final = _refinar_indicacao_dose(
+                indicacao_final,
+                linha=linha,
+                seg_txt=seg_txt,
+                frequencia_texto=frequencia_texto,
+                duracao_texto=duracao_texto,
+                indicacoes_texto=indicacoes_texto,
+                classificacao=classificacao,
+            )
 
             # mg/kg (com espaços tolerados)
             m = _RE_DOSE_MGKG.search(seg_txt)
@@ -1784,6 +1902,77 @@ def _norm_ascii_lower(texto: str) -> str:
 
     nfkd = unicodedata.normalize("NFKD", texto or "")
     return nfkd.encode("ASCII", "ignore").decode().lower()
+
+
+def _apresentacao_eh_solida(ap: Dict[str, Any]) -> bool:
+    forma = _norm_ascii_lower(str(ap.get('forma') or ''))
+    unidade = _norm_ascii_lower(str(ap.get('concentracao_unidade') or ''))
+    if not ap.get('concentracao_valor') or not unidade:
+        return False
+    if unidade in {'mg/ml', 'mcg/ml'}:
+        return False
+    if any(token in forma for token in ('suspens', 'solucao', 'xarope', 'colirio', 'gota', 'spray', 'gel', 'pomada', 'creme', 'pasta', 'locao')):
+        return False
+    return True
+
+
+def _dose_tem_forca_explicita_registro(reg: Dict[str, Any]) -> bool:
+    for texto in (reg.get('dose'), reg.get('dose_raw_text'), reg.get('observacao')):
+        norm = _norm_ascii_lower(str(texto or ''))
+        if re.search(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b', norm):
+            return True
+    return False
+
+
+def _pos_processar_doses_por_apresentacao(
+    doses: List[Dict[str, Any]],
+    apresentacoes: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Enriquece ou descarta doses por comprimido sem força explícita.
+
+    Regra de segurança:
+      - se a página tem uma única força sólida conhecida, anexa essa força ao
+        texto da dose;
+      - se a página tem múltiplas forças sólidas e a dose não diz qual é,
+        descarta a linha por ambiguidade.
+    """
+    forcas = []
+    vistos: set[tuple[float, str]] = set()
+    for ap in apresentacoes or []:
+        if not _apresentacao_eh_solida(ap):
+            continue
+        chave = (float(ap['concentracao_valor']), str(ap['concentracao_unidade']).lower())
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        forcas.append(chave)
+
+    if not forcas:
+        return doses
+
+    saida: List[Dict[str, Any]] = []
+    unica_forca = None
+    if len(forcas) == 1:
+        valor, unidade = forcas[0]
+        valor_txt = str(int(valor)) if float(valor).is_integer() else str(valor).replace('.', ',')
+        unica_forca = f'{valor_txt} {unidade}'
+
+    for reg in doses:
+        unidade = (reg.get('dose_unidade') or '').upper()
+        if unidade not in {'COMPRIMIDOS_ANIMAL', 'COMPRIMIDOS_KG'} or _dose_tem_forca_explicita_registro(reg):
+            saida.append(reg)
+            continue
+
+        if len(forcas) > 1:
+            continue
+
+        if unica_forca:
+            dose_txt = str(reg.get('dose') or '')
+            if ' de ' not in dose_txt.lower():
+                dose_txt = re.sub(r'(comprimido\(s\)|comprimidos?|c[aá]psulas?)', rf'\1 de {unica_forca}', dose_txt, count=1, flags=re.IGNORECASE)
+                reg['dose'] = dose_txt
+        saida.append(reg)
+    return saida
 
 
 def _percentual_equivale_mg_ml(forma: str, conc_raw: str) -> bool:
@@ -2187,9 +2376,9 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
           conteudo_estruturado = CASE
             WHEN %s::json IS NULL OR %s::json::jsonb = '{}'::jsonb THEN conteudo_estruturado
             WHEN conteudo_estruturado IS NULL OR conteudo_estruturado::jsonb = '{}'::jsonb THEN %s
-            WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') != 'v2' THEN %s
-            WHEN (conteudo_estruturado->'raw_sections' IS NULL
-                  OR conteudo_estruturado->'raw_sections' = '{}'::jsonb)
+            WHEN COALESCE(conteudo_estruturado->'metadata'->>'parser_version', '') != 'v3' THEN %s
+            WHEN ((conteudo_estruturado::jsonb->'raw_sections') IS NULL
+                  OR (conteudo_estruturado::jsonb->'raw_sections') = '{}'::jsonb)
                  AND (%s::json->'raw_sections') IS NOT NULL
                  AND (%s::json->>'raw_sections') != '{}' THEN %s
             ELSE conteudo_estruturado

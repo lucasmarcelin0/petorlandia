@@ -8,6 +8,11 @@ import re
 import unicodedata
 from typing import Optional, Dict, Any, List, Tuple
 
+try:
+    from bs4 import BeautifulSoup
+except ImportError:  # pragma: no cover
+    BeautifulSoup = None
+
 
 def _strip_accents(s: str) -> str:
     """Remove acentos: 'Antibiótico' → 'Antibiotico'. Assim os regex dos
@@ -220,6 +225,54 @@ def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional
         if re.search(pat, alvo):
             return (mn, mx, desc)
     return (None, None, None)
+
+
+def _adicionar_flag_risco(
+    flags: List[Dict[str, str]],
+    *,
+    codigo: str,
+    nivel: str,
+    titulo: str,
+    detalhe: str,
+) -> None:
+    flags.append({
+        'codigo': codigo,
+        'nivel': nivel,
+        'titulo': titulo,
+        'detalhe': detalhe,
+    })
+
+
+def _resumo_origem_dose(proto, *, duracao_e_padrao: bool, proto_ind: Optional[str]) -> Dict[str, Any]:
+    fonte = (getattr(proto, 'fonte', None) or 'SCRAPER').upper()
+    confianca = (getattr(proto, 'confianca', None) or 'MEDIA').upper()
+
+    base = {
+        'fonte': fonte,
+        'confianca': confianca,
+        'tem_indicacao_explicita': bool((proto_ind or '').strip()),
+        'usa_duracao_padrao': bool(duracao_e_padrao),
+    }
+
+    if fonte == 'SCRAPER':
+        base.update({
+            'tipo': 'fonte_primaria_estruturada',
+            'rotulo': 'Dose estruturada do bulário',
+            'detalhe': 'Sugestão calculada a partir de protocolo estruturado importado do bulário.',
+        })
+    elif fonte == 'LLM':
+        base.update({
+            'tipo': 'fonte_assistida',
+            'rotulo': 'Dose estruturada com assistência automatizada',
+            'detalhe': 'Protocolo estruturado com apoio automatizado; revisar antes de prescrever.',
+        })
+    else:
+        base.update({
+            'tipo': 'fonte_curada',
+            'rotulo': 'Dose cadastrada manualmente',
+            'detalhe': 'Protocolo estruturado manualmente na plataforma; confirmar aderência ao caso clínico.',
+        })
+    return base
 
 
 def construir_macro_grupos(
@@ -613,8 +666,56 @@ def _dose_combina_com_especie(dose, alvo: str) -> bool:
     return True
 
 
+def _apresentacoes_solidas_com_forca(medicamento) -> List[tuple[float, str]]:
+    resultado: List[tuple[float, str]] = []
+    vistos: set[tuple[float, str]] = set()
+    for ap in (getattr(medicamento, 'apresentacoes', []) or []):
+        valor = getattr(ap, 'concentracao_valor', None)
+        unidade = (getattr(ap, 'concentracao_unidade', None) or '').lower()
+        forma = _texto_norm(getattr(ap, 'forma', None))
+        if valor is None or not unidade:
+            continue
+        if unidade in {'mg/ml', 'mcg/ml'}:
+            continue
+        if any(token in forma for token in ('suspens', 'solucao', 'xarope', 'colirio', 'gota', 'spray', 'gel', 'pomada', 'creme', 'pasta', 'locao')):
+            continue
+        chave = (float(valor), unidade)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        resultado.append(chave)
+    return resultado
+
+
+def _dose_texto_tem_forca_explicita(dose) -> bool:
+    textos = [
+        getattr(dose, 'dose', None),
+        getattr(dose, 'dose_raw_text', None),
+        getattr(dose, 'observacao', None),
+    ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        if re.search(r'\b\d+(?:[.,]\d+)?\s*(mg|mcg|g|ui)\b', norm):
+            return True
+    return False
+
+
+def _dose_ambigua_por_apresentacao(medicamento, dose) -> bool:
+    unidade = (getattr(dose, 'dose_unidade', None) or '').upper()
+    if unidade not in {'COMPRIMIDOS_ANIMAL', 'COMPRIMIDOS_KG'}:
+        return False
+    if _dose_texto_tem_forca_explicita(dose):
+        return False
+    return len(_apresentacoes_solidas_com_forca(medicamento)) > 1
+
+
 def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
-    doses = list(getattr(medicamento, "doses", []) or [])
+    doses = [
+        d for d in (getattr(medicamento, "doses", []) or [])
+        if not _dose_ambigua_por_apresentacao(medicamento, d)
+    ]
     tabs: List[Dict[str, Any]] = []
     for slug, label, icon in [
         ("caes", "Cães", "fa-dog"),
@@ -627,8 +728,14 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
         for dose in linhas:
             chave = _texto_limpo(getattr(dose, "indicacao", None)) or "Uso geral"
             grupos.setdefault(chave, []).append(dose)
+        chaves_exibidas = list(grupos.keys())
+        if _eh_corticoide_medicamento(medicamento):
+            especificas = [c for c in chaves_exibidas if c not in _INDICACOES_GENERICAS_CORTICOIDE]
+            if especificas:
+                chaves_exibidas = [c for c in chaves_exibidas if c not in _INDICACOES_GENERICAS_CORTICOIDE]
         protocolos = []
-        for indicacao, itens in grupos.items():
+        for indicacao in chaves_exibidas:
+            itens = grupos[indicacao]
             protocolos.append({
                 "indicacao": indicacao,
                 "linhas": [
@@ -706,14 +813,46 @@ _ICONES_SECOES_VETSMART = {
     'Ref. bibliográficas':            'fa-bookmark',
 }
 
+_TAGS_PERMITIDAS_VETSMART = {
+    'p', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'br',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'span', 'div',
+    'h2', 'h3', 'h4',
+}
+
+
+def _sanitizar_html_vetsmart(html: Optional[str]) -> Optional[str]:
+    if not html or BeautifulSoup is None:
+        return None
+    soup = BeautifulSoup(html, 'html.parser')
+    for tag in soup.find_all(True):
+        nome = (tag.name or '').lower()
+        if nome in {'script', 'style', 'iframe', 'form', 'input', 'button', 'svg'}:
+            tag.decompose()
+            continue
+        if nome not in _TAGS_PERMITIDAS_VETSMART:
+            tag.unwrap()
+            continue
+
+        attrs_permitidos: Dict[str, str] = {}
+        if nome == 'a':
+            href = (tag.get('href') or '').strip()
+            if href.startswith('http://') or href.startswith('https://'):
+                attrs_permitidos['href'] = href
+                attrs_permitidos['target'] = '_blank'
+                attrs_permitidos['rel'] = 'noopener noreferrer'
+        tag.attrs = attrs_permitidos
+    saida = soup.decode().strip()
+    return saida or None
+
 
 def extrair_secoes_vetsmart(medicamento) -> List[Dict[str, Any]]:
     """Retorna lista ordenada das seções brutas do Vetsmart gravadas no banco.
 
-    Cada item: {nome, icone, texto}. Retorna [] se não houver raw_sections.
+    Cada item: {nome, icone, texto, html}. Retorna [] se não houver raw_sections.
     """
     conteudo = _conteudo_carregado_sem_lazyload(medicamento)
     raw = conteudo.get("raw_sections") if isinstance(conteudo, dict) else None
+    raw_html = conteudo.get("raw_sections_html") if isinstance(conteudo, dict) else None
     if not isinstance(raw, dict) or not raw:
         return []
     resultado = []
@@ -724,6 +863,7 @@ def extrair_secoes_vetsmart(medicamento) -> List[Dict[str, Any]]:
                 "nome": nome,
                 "icone": _ICONES_SECOES_VETSMART.get(nome, "fa-circle"),
                 "texto": texto,
+                "html": _sanitizar_html_vetsmart(raw_html.get(nome)) if isinstance(raw_html, dict) else None,
             })
     return resultado
 
@@ -815,6 +955,82 @@ def _texto_norm(s: Optional[str]) -> str:
     return _strip_accents(s or '').lower().strip()
 
 
+def _fmt_apresentacao_label(v: float) -> str:
+    if v == int(v):
+        return f"{int(v)}"
+    return f"{v:.2f}".rstrip('0').rstrip('.').replace('.', ',')
+
+
+def _extrair_faixa_peso_apresentacao(ap) -> Optional[str]:
+    textos = [
+        getattr(ap, 'nome_variante', None),
+        getattr(ap, 'concentracao', None),
+        getattr(ap, 'forma', None),
+    ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        m = re.search(r'ate\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        if m:
+            return f'até {m.group(1).replace(".", ",")} kg'
+        m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:a|ate|-)\s*(\d+(?:[.,]\d+)?)\s*kg', norm)
+        if m:
+            ini = m.group(1).replace('.', ',')
+            fim = m.group(2).replace('.', ',')
+            return f'{ini} a {fim} kg'
+        m = re.search(r'acima\s+de\s+(\d+(?:[.,]\d+)?)\s*kg', norm)
+        if m:
+            return f'acima de {m.group(1).replace(".", ",")} kg'
+    return None
+
+
+def _extrair_especie_apresentacao(ap) -> Optional[str]:
+    textos = [
+        getattr(ap, 'nome_variante', None),
+        getattr(ap, 'concentracao', None),
+        getattr(ap, 'forma', None),
+    ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        if re.search(r'\bcae?s?\b|\bcaes\b|\bcachorr', norm):
+            return 'Caes'
+        if re.search(r'\bgat[oa]s?\b|\bfelin', norm):
+            return 'Gatos'
+    return None
+
+
+def _montar_rotulo_apresentacao_escolha(ap) -> Dict[str, str]:
+    faixa_peso = _extrair_faixa_peso_apresentacao(ap) or ''
+    especie = _extrair_especie_apresentacao(ap) or ''
+
+    if faixa_peso and especie:
+        principal = f'{especie} {faixa_peso}'
+    else:
+        principal = faixa_peso or especie
+
+    detalhes = []
+    if getattr(ap, 'concentracao_valor', None):
+        valor = _fmt_apresentacao_label(float(ap.concentracao_valor))
+        unidade = getattr(ap, 'concentracao_unidade', None) or ''
+        detalhes.append(f'{valor} {unidade}'.strip())
+    elif getattr(ap, 'concentracao', None):
+        detalhes.append(str(getattr(ap, 'concentracao')))
+
+    forma = getattr(ap, 'forma', None) or ''
+    if forma:
+        detalhes.append(forma)
+
+    secundario = ' '.join(p for p in detalhes if p).strip()
+    return {
+        'principal': principal,
+        'secundario': secundario,
+        'especie': especie,
+    }
+
+
 _INDICACAO_STOPWORDS = {
     'a', 'ao', 'aos', 'as', 'com', 'contra', 'da', 'das', 'de', 'do', 'dos',
     'e', 'em', 'na', 'nas', 'no', 'nos', 'o', 'os', 'ou', 'para', 'por',
@@ -838,6 +1054,11 @@ _INDICACAO_SINONIMOS = (
     ('lesa', {'topic', 'topico', 'cutan', 'dermat', 'ferida', 'lesao', 'cicatriz'}),
 )
 
+_INDICACOES_GENERICAS_CORTICOIDE = {
+    'Anti-inflamatório',
+    'Uso prolongado',
+}
+
 
 def _tokens_indicacao(texto: Optional[str]) -> set[str]:
     norm = _texto_norm(texto)
@@ -853,6 +1074,35 @@ def _tokens_indicacao(texto: Optional[str]) -> set[str]:
             if gatilho in token:
                 expandidos.update(sinonimos)
     return expandidos
+
+
+def _eh_corticoide_medicamento(medicamento) -> bool:
+    alvo = ' '.join(filter(None, [
+        getattr(medicamento, 'classificacao', None),
+        getattr(medicamento, 'principio_ativo', None),
+        getattr(medicamento, 'nome', None),
+    ]))
+    norm = _texto_norm(alvo)
+    return any(token in norm for token in (
+        'esteroidal', 'cortico', 'prednis', 'dexamet', 'hidrocortis', 'metilpred',
+    ))
+
+
+def _filtrar_indicacoes_genericas(medicamento, indicacoes: List[str]) -> List[str]:
+    """Oculta rótulos genéricos quando o medicamento oferece opções mais clínicas.
+
+    Em corticoides, "Anti-inflamatório" e "Uso prolongado" ajudam pouco quando
+    já temos opções mais operacionais como "Alergia" e "Imunossupressão".
+    """
+    if not indicacoes:
+        return []
+    if not _eh_corticoide_medicamento(medicamento):
+        return indicacoes
+
+    especificas = [i for i in indicacoes if i not in _INDICACOES_GENERICAS_CORTICOIDE]
+    if not especificas:
+        return indicacoes
+    return especificas
 
 
 def _resolver_indicacao_compativel(disponiveis: List[str], preferida: Optional[str]) -> Optional[str]:
@@ -1074,12 +1324,14 @@ def _indicacoes_disponiveis(medicamento, animal) -> List[str]:
     esp_code = _especie_animal_code(animal)
     vistas: List[str] = []
     for proto in (getattr(medicamento, 'doses', []) or []):
+        if _dose_ambigua_por_apresentacao(medicamento, proto):
+            continue
         if not _proto_aplica_basico(proto, esp_code, peso):
             continue
         ind = (getattr(proto, 'indicacao', None) or '').strip()
         if ind and ind not in vistas:
             vistas.append(ind)
-    return vistas
+    return _filtrar_indicacoes_genericas(medicamento, vistas)
 
 
 def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -1135,7 +1387,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         return None
 
     esp_code = _especie_animal_code(animal)
-    protos = list(getattr(medicamento, 'doses', []) or [])
+    protos = [
+        p for p in (getattr(medicamento, 'doses', []) or [])
+        if not _dose_ambigua_por_apresentacao(medicamento, p)
+    ]
     if not protos:
         return None
 
@@ -1344,6 +1599,9 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
             'volume_unidade': ap.volume_unidade or '',
             'unidade_pratica': unidade_pratica,
+            'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
+            'especie_label': _extrair_especie_apresentacao(ap),
+            'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
             # Se `concentracao_valor` existir, o frontend pode calcular
             # automaticamente; senão, precisa pedir ao vet que digite.
             'permite_calculo_automatico': bool(ap.concentracao_valor),
@@ -1403,6 +1661,80 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
                 apresentacao_preferida_nome = ap.get('nome_variante') or ''
                 break
 
+    origem = _resumo_origem_dose(proto, duracao_e_padrao=duracao_e_padrao, proto_ind=proto_ind)
+    flags_risco: List[Dict[str, str]] = []
+    if origem['fonte'] == 'LLM':
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='PROTOCOLO_ASSISTIDO',
+            nivel='atencao',
+            titulo='Revisão clínica recomendada',
+            detalhe='A estrutura da dose contou com assistência automatizada; revise antes de usar.',
+        )
+    if origem['confianca'] == 'BAIXA':
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='CONFIANCA_BAIXA',
+            nivel='critico',
+            titulo='Confianca baixa',
+            detalhe='O protocolo foi marcado com baixa confiança e exige checagem manual antes da prescrição.',
+        )
+    elif origem['confianca'] == 'MEDIA':
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='CONFIANCA_MEDIA',
+            nivel='atencao',
+            titulo='Confianca intermediaria',
+            detalhe='A dose é utilizável como apoio, mas ainda deve ser validada no contexto clínico.',
+        )
+    if duracao_e_padrao:
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='DURACAO_INFERIDA',
+            nivel='atencao',
+            titulo='Duracao de referencia',
+            detalhe='A duracao foi inferida pela classe farmacologica porque o protocolo original nao informava esse campo.',
+        )
+    if not proto_ind:
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='INDICACAO_NAO_ESPECIFICADA',
+            nivel='atencao',
+            titulo='Indicacao nao especificada',
+            detalhe='O protocolo aplicado nao trouxe indicacao clinica explicita; valide se a dose faz sentido para o objetivo do tratamento.',
+        )
+    if not apres_info:
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='SEM_APRESENTACAO_COMERCIAL',
+            nivel='informativo',
+            titulo='Sem apresentacao vinculada',
+            detalhe='Nao ha apresentacao comercial estruturada para converter automaticamente a dose em comprimidos, mL ou gotas.',
+        )
+    elif not any(ap.get('permite_calculo_automatico') for ap in apres_info):
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='APRESENTACAO_SEM_CONCENTRACAO',
+            nivel='atencao',
+            titulo='Apresentacao depende de concentracao',
+            detalhe='As apresentacoes disponiveis exigem que o veterinario confirme a concentracao antes da conversao pratica.',
+        )
+
+    diagnosticos = {
+        'requer_validacao_clinica': any(flag['nivel'] in {'critico', 'atencao'} for flag in flags_risco),
+        'tem_apresentacao_calculavel': any(ap.get('permite_calculo_automatico') for ap in apres_info),
+        'tem_apresentacao_preferida': bool(apresentacao_preferida_id),
+        'quantidade_protocolos_candidatos': len(candidatos),
+        'quantidade_indicacoes_disponiveis': len(indicacoes_disp),
+        'origem': origem,
+        'flags_risco': flags_risco,
+        'resumo_clinico': {
+            'indicacao_escolhida': proto_ind,
+            'via_escolhida': proto.via or medicamento.via_administracao or '',
+            'fonte_label': origem['rotulo'],
+        },
+    }
+
     return {
         'multiplo':                False,
         'protocolo_id':            proto.id,
@@ -1440,4 +1772,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'fonte':                   proto.fonte or 'SCRAPER',
         'confianca':               proto.confianca or 'MEDIA',
         'observacao':              proto.observacao,
+        'origem':                  origem,
+        'flags_risco':             flags_risco,
+        'diagnosticos':            diagnosticos,
     }
