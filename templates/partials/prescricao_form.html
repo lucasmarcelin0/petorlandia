@@ -118,12 +118,15 @@
     </div>
     <div class="card-body">
       <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-6" id="med-meta-col">
           <p><strong>Classificação:</strong> <span id="med-classificacao" class="text-muted">–</span></p>
           <p><strong>Princípio ativo:</strong> <span id="med-principio" class="text-muted">–</span></p>
           <p><strong>Via:</strong> <span id="med-via" class="text-muted">–</span></p>
+          <p id="med-posologia-resumo-linha" class="d-none">
+            <strong>Posologia:</strong> <span id="med-posologia-resumo" class="text-muted">–</span>
+          </p>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6" id="med-posologia-legado-col">
           <p><strong>Dosagem:</strong> <span id="med-dosagem" class="text-muted">–</span></p>
           <p><strong>Frequência:</strong> <span id="med-frequencia" class="text-muted">–</span></p>
           <p><strong>Duração:</strong> <span id="med-duracao" class="text-muted">–</span></p>
@@ -2415,13 +2418,49 @@
   function preencherCardMedicamento(m) {
     // Carrega favoritos (se ainda não foi feito) e atualiza ícone da estrela
     _carregarFavoritosSeNecessario().then(() => _atualizarIconeFavorito(m?.id));
+    const tabs = m?.monografia_estruturada?.resumo_posologia?.tabs || [];
+    const temPosologiaEstruturada = Array.isArray(tabs) && tabs.length > 0;
+    const totalProtocolos = temPosologiaEstruturada
+      ? tabs.reduce((s, t) => s + ((t.protocolos || []).length), 0)
+      : 0;
+    const metaCol = document.getElementById('med-meta-col');
+    const legadoCol = document.getElementById('med-posologia-legado-col');
+    const resumoLinha = document.getElementById('med-posologia-resumo-linha');
+    const resumoTexto = document.getElementById('med-posologia-resumo');
+
     document.getElementById('med-nome-card').textContent = m.nome;
     document.getElementById('med-classificacao').textContent = m.classificacao || '–';
     document.getElementById('med-principio').textContent = m.principio_ativo || '–';
     document.getElementById('med-via').textContent = m.via_administracao || '–';
-    document.getElementById('med-dosagem').textContent = m.dosagem_recomendada || '–';
-    document.getElementById('med-frequencia').textContent = m.frequencia || '–';
-    document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
+
+    if (temPosologiaEstruturada) {
+      if (legadoCol) legadoCol.classList.add('d-none');
+      if (metaCol) {
+        metaCol.classList.remove('col-md-6');
+        metaCol.classList.add('col-md-12');
+      }
+      if (resumoLinha && resumoTexto) {
+        const especies = tabs.map(t => t.label).filter(Boolean).join(' e ');
+        const protocoloLabel = totalProtocolos === 1 ? '1 protocolo estruturado' : `${totalProtocolos} protocolos estruturados`;
+        resumoTexto.textContent = `${protocoloLabel}${especies ? ` para ${especies}` : ''}. Veja os detalhes abaixo.`;
+        resumoLinha.classList.remove('d-none');
+      }
+      document.getElementById('med-dosagem').textContent = '–';
+      document.getElementById('med-frequencia').textContent = '–';
+      document.getElementById('med-duracao').textContent = '–';
+    } else {
+      if (legadoCol) legadoCol.classList.remove('d-none');
+      if (metaCol) {
+        metaCol.classList.remove('col-md-12');
+        metaCol.classList.add('col-md-6');
+      }
+      if (resumoLinha) resumoLinha.classList.add('d-none');
+      if (resumoTexto) resumoTexto.textContent = '–';
+      document.getElementById('med-dosagem').textContent = m.dosagem_recomendada || '–';
+      document.getElementById('med-frequencia').textContent = m.frequencia || '–';
+      document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
+    }
+
     const obsSection = document.getElementById('med-obs-section');
     const obsText = document.getElementById('med-observacoes');
     // Ocultar observações brutas quando o conteúdo estruturado já cobre as seções clínicas,
