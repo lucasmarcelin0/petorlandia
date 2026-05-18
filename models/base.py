@@ -88,7 +88,7 @@ def _decrypt_nfse_value(value):
 class Endereco(db.Model):
     __tablename__ = 'endereco'
     id = db.Column(db.Integer, primary_key=True)
-    cep = db.Column(db.String(9), nullable=False)  # Ex: 14620-000
+    cep = db.Column(db.String(9), nullable=True)  # Ex: 14620-000
     rua = db.Column(db.String(120), nullable=True)
     numero = db.Column(db.String(20), nullable=True)
     complemento = db.Column(db.String(100), nullable=True)

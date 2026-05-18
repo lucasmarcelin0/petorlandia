@@ -15163,7 +15163,7 @@ def casa_de_racao_tutores(casa_id):
         estado = (request.form.get('estado') or '').strip() or None
 
         has_address_data = any([cep, rua, numero, complemento, bairro, cidade, estado])
-        if cep:
+        if has_address_data:
             endereco = tutor.endereco or Endereco()
             endereco.cep = cep
             endereco.rua = rua
@@ -15178,8 +15178,6 @@ def casa_de_racao_tutores(casa_id):
                 db.session.add(endereco)
                 db.session.flush()
                 tutor.endereco_id = endereco.id
-        elif has_address_data:
-            flash('Tutor salvo. O endereco foi ignorado porque o CEP nao foi informado.', 'warning')
 
         db.session.commit()
         flash('Tutor cadastrado para a loja.', 'success')
@@ -15301,6 +15299,7 @@ def casa_de_racao_animais(casa_id):
             compact=True,
             fetch_url=url_for('casa_de_racao_animais', casa_id=casa.id),
             can_create_animals=True,
+            can_start_consultation=False,
             new_animal_url=url_for('casa_de_racao_animais', casa_id=casa.id),
             animal_search=animal_search,
             animal_sort=animal_sort,

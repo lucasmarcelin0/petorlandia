@@ -61,7 +61,7 @@ def test_feed_store_owner_can_create_tutor_and_animal(app, client, monkeypatch):
         assert animal.added_by_id == owner.id
 
 
-def test_feed_store_tutor_form_ignores_incomplete_address(app, client, monkeypatch):
+def test_feed_store_tutor_form_keeps_address_without_cep(app, client, monkeypatch):
     with app.app_context():
         owner, casa = _create_owner_and_store(email="lojista-endereco@example.com")
         _login(monkeypatch, owner)
@@ -83,7 +83,10 @@ def test_feed_store_tutor_form_ignores_incomplete_address(app, client, monkeypat
         assert resp.status_code == 302
         tutor = User.query.filter_by(email="sem-cep@example.com").one()
         assert tutor.casa_de_racao_id == casa.id
-        assert tutor.endereco_id is None
+        assert tutor.endereco_id is not None
+        assert tutor.endereco.cep is None
+        assert tutor.endereco.rua == "Rua sem CEP"
+        assert tutor.endereco.cidade == "Orlandia"
 
 
 def test_feed_store_owner_can_save_pet_ration(app, client, monkeypatch):
@@ -134,6 +137,12 @@ def test_feed_store_crm_is_scoped_to_store_owner(app, client, monkeypatch):
 def test_feed_store_professional_pages_hide_veterinary_tabs(app, client, monkeypatch):
     with app.app_context():
         owner, casa = _create_owner_and_store(email="lojista-ui@example.com")
+        tutor = User(name="Tutor UI", email="tutor-ui@example.com", casa_de_racao_id=casa.id)
+        tutor.set_password("x")
+        db.session.add(tutor)
+        db.session.flush()
+        db.session.add(Animal(name="Pet UI", user_id=tutor.id, casa_de_racao_id=casa.id, status="privado"))
+        db.session.commit()
         _login(monkeypatch, owner)
 
         dashboard = client.get(f"/casa-de-racao/{casa.id}")
