@@ -14542,7 +14542,7 @@ def casa_de_racao_dashboard(casa_id):
 
     produtos_count = (
         Product.query
-        .filter_by(casa_de_racao_id=casa.id, active=True)
+        .filter_by(casa_de_racao_id=casa.id, status='active')
         .count()
     )
     entregas_pendentes = 0
