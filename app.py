@@ -14311,6 +14311,20 @@ def clinicas():
 
 
 @login_required
+def parceiro_clinica_landing():
+    if current_user.is_authenticated:
+        clinicas = clinicas_do_usuario().all()
+        if clinicas:
+            preferred_id = (
+                getattr(getattr(current_user, 'veterinario', None), 'clinica_id', None)
+                or getattr(current_user, 'clinica_id', None)
+            )
+            target = next((c for c in clinicas if c.id == preferred_id), clinicas[0])
+            return redirect(url_for('clinic_detail', clinica_id=target.id) + '#clinica')
+        return redirect(url_for('minha_clinica'))
+    return render_template('clinica/parceiro_landing.html')
+
+
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:

@@ -7,6 +7,7 @@ def get_blueprint():
     bp = Blueprint("clinica_routes", __name__)
 
     bp.add_url_rule("/clinicas", view_func=lazy_view("clinicas"))
+    bp.add_url_rule("/parceiros/clinica", view_func=lazy_view("parceiro_clinica_landing"))
     bp.add_url_rule(
         "/minha-clinica",
         view_func=lazy_view("minha_clinica"),
