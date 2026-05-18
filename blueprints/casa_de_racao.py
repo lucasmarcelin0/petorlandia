@@ -7,6 +7,10 @@ def get_blueprint():
     bp = Blueprint("casa_de_racao_routes", __name__)
 
     bp.add_url_rule(
+        "/parceiros/loja",
+        view_func=lazy_view("parceiro_loja_landing"),
+    )
+    bp.add_url_rule(
         "/minha-casa-de-racao",
         view_func=lazy_view("minha_casa_de_racao"),
         methods=["GET", "POST"],

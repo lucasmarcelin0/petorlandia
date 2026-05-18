@@ -79,13 +79,19 @@
         </h5>
 
         <div class="mb-3">
-          {% for subfield in form.modo_entrega %}
-          <div class="form-check mb-2">
-            {{ subfield(class="form-check-input") }}
-            {{ subfield.label(class="form-check-label") }}
+          <div class="d-flex flex-column gap-2">
+            {% for subfield in form.modo_entrega %}
+            <label class="d-flex align-items-start gap-3 p-3 border rounded-3 cursor-pointer"
+                   style="cursor:pointer"
+                   for="{{ subfield.id }}">
+              {{ subfield(class="form-check-input mt-1 flex-shrink-0") }}
+              <div>
+                <div class="fw-semibold small">{{ subfield.label.text }}</div>
+              </div>
+            </label>
+            {% endfor %}
           </div>
-          {% endfor %}
-          <div class="form-text">
+          <div class="form-text mt-2">
             Você pode alterar essa configuração depois, no painel da sua loja.
           </div>
         </div>

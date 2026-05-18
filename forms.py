@@ -6,6 +6,7 @@ from wtforms import (
     TextAreaField,
     SelectField,
     SelectMultipleField,
+    RadioField,
     PasswordField,
     SubmitField,
     BooleanField,
@@ -806,7 +807,7 @@ class CasaDeRacaoForm(FlaskForm):
     telefone = StringField('Telefone', validators=[Optional(), Length(max=20)])
     email = StringField('E-mail', validators=[Optional(), Email()])
     endereco = StringField('Endereço', validators=[Optional(), Length(max=200)])
-    modo_entrega = SelectField(
+    modo_entrega = RadioField(
         'Modo de entrega',
         choices=[
             ('plataforma', 'Entregadores da plataforma PetOrlândia'),

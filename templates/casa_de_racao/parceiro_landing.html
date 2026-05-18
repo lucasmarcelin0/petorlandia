@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-5" style="max-width: 680px;">
+
+  <div class="text-center mb-5">
+    <span class="fs-1">🌾</span>
+    <h1 class="h2 fw-bold mt-3">Venda na PetOrlândia</h1>
+    <p class="text-muted lead">
+      Cadastre sua casa de ração e comece a receber pedidos online hoje mesmo.
+    </p>
+  </div>
+
+  <!-- Passos -->
+  <div class="row g-4 mb-5">
+    <div class="col-md-4 text-center">
+      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+           style="width:56px;height:56px;">
+        <span class="fw-bold text-primary fs-5">1</span>
+      </div>
+      <h6 class="fw-semibold">Crie sua conta</h6>
+      <p class="text-muted small">Cadastro gratuito, leva menos de 1 minuto.</p>
+    </div>
+    <div class="col-md-4 text-center">
+      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+           style="width:56px;height:56px;">
+        <span class="fw-bold text-primary fs-5">2</span>
+      </div>
+      <h6 class="fw-semibold">Cadastre sua loja</h6>
+      <p class="text-muted small">Nome, endereço e modo de entrega. Simples assim.</p>
+    </div>
+    <div class="col-md-4 text-center">
+      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+           style="width:56px;height:56px;">
+        <span class="fw-bold text-primary fs-5">3</span>
+      </div>
+      <h6 class="fw-semibold">Conecte o Mercado Pago</h6>
+      <p class="text-muted small">Um clique para autorizar. Pagamentos caem direto na sua conta.</p>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="d-grid gap-2 mb-4">
+    <a href="{{ url_for('register') }}?next={{ url_for('minha_casa_de_racao') }}"
+       class="btn btn-primary btn-lg">
+      Quero vender na PetOrlândia
+    </a>
+    <a href="{{ url_for('login') }}?next={{ url_for('minha_casa_de_racao') }}"
+       class="btn btn-outline-secondary">
+      Já tenho conta — entrar
+    </a>
+  </div>
+
+  <p class="text-center text-muted small">
+    <i class="fa-solid fa-lock me-1"></i>Seus dados são protegidos. Sem taxas de adesão.
+  </p>
+
+  <!-- QR Code da própria página -->
+  <div class="text-center mt-5 pt-4 border-top">
+    <p class="text-muted small mb-3">Compartilhe este link com outros lojistas</p>
+    <div id="qrcode" class="d-inline-block mb-2"></div>
+    <div>
+      <code class="small text-muted" id="page-url"></code>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"
+        integrity="sha512-FNK4h8E1IHNB7MG8bCv+MNmhk4GYFrn8l/EHFp8YPlIB9KxQ3K5kXjP4EV8TUO1DkPNIHuOxcmFnlFCqN+qg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  const url = window.location.origin + '{{ url_for("parceiro_loja_landing") }}';
+  document.getElementById('page-url').textContent = url;
+  new QRious({
+    element: document.getElementById('qrcode'),
+    value: url,
+    size: 160,
+    backgroundAlpha: 1,
+    foreground: '#1a1a2e',
+  });
+</script>
+{% endblock %}

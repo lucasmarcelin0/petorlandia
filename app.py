@@ -14398,6 +14398,15 @@ def _casa_loja_access(casa_id):
     return casa
 
 
+def parceiro_loja_landing():
+    if current_user.is_authenticated:
+        casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
+        if casa:
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+        return redirect(url_for('minha_casa_de_racao'))
+    return render_template('casa_de_racao/parceiro_landing.html')
+
+
 @login_required
 def minha_casa_de_racao():
     casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
