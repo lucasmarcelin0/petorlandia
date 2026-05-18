@@ -338,8 +338,13 @@
     </a>
     {% if casa.modo_entrega == 'propria' %}
     <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
-       class="btn btn-outline-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+       class="btn {% if entregas_pendentes %}btn-warning{% else %}btn-outline-primary{% endif %} {% if casa.status == 'pendente' %}disabled{% endif %} position-relative">
       <i class="fa-solid fa-truck me-1"></i>Minhas Entregas
+      {% if entregas_pendentes %}
+      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+        {{ entregas_pendentes }}
+      </span>
+      {% endif %}
     </a>
     {% endif %}
     <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">

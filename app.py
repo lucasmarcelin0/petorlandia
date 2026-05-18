@@ -14487,11 +14487,20 @@ def casa_de_racao_dashboard(casa_id):
         .first()
     )
     mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
+    entregas_pendentes = 0
+    if casa.modo_entrega == 'propria':
+        entregas_pendentes = (
+            DeliveryRequest.query
+            .filter_by(casa_de_racao_id=casa.id, tipo_entrega='propria', archived=False)
+            .filter(DeliveryRequest.status.in_(['pendente', 'em_andamento']))
+            .count()
+        )
     return render_template(
         'casa_de_racao/dashboard.html',
         casa=casa,
         payment_account=payment_account,
         mp_oauth_available=mp_oauth_available,
+        entregas_pendentes=entregas_pendentes,
     )
 
 
