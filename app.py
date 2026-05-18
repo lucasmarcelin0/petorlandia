@@ -19371,10 +19371,13 @@ from sqlalchemy.orm import joinedload
 @app.route('/ficha_tutor/<int:tutor_id>')
 @login_required
 def ficha_tutor(tutor_id):
-    # Restrição de acesso
-    if not has_professional_access(current_user):
+    # Restrição de acesso — profissionais clínicos OU donos de casa de ração
+    is_store_owner = CasaDeRacao.query.filter_by(owner_id=current_user.id).first() is not None
+    if not has_professional_access(current_user) and not is_store_owner:
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
+
+    can_consult = has_professional_access(current_user)
 
     # Dados do tutor
     tutor = get_user_or_404(tutor_id)
@@ -19414,14 +19417,15 @@ def ficha_tutor(tutor_id):
     return render_template(
         'animais/tutor_detail.html',
         tutor=tutor,
-        endereco=tutor.endereco,  # Passa explicitamente o endereço
+        endereco=tutor.endereco,
         animais=animais,
         current_year=current_year,
         species_list=species_list,
         breed_map=breed_map,
         tutor_form=tutor_form,
         animal_forms=animal_forms,
-        new_animal_form=new_animal_form
+        new_animal_form=new_animal_form,
+        can_consult=can_consult,
     )
 
 

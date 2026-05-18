@@ -255,9 +255,11 @@
                   </td>
                   <td class="text-end">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
+                      {% if can_consult|default(False) %}
                       <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="btn btn-outline-success btn-sm">
                         <i class="fas fa-stethoscope me-1"></i> Consulta
                       </a>
+                      {% endif %}
                       <a href="{{ url_for('ficha_animal', animal_id=a.id) }}" class="btn btn-outline-info btn-sm">
                         <i class="fas fa-file-lines me-1"></i> Ficha
                       </a>
