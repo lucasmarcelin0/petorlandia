@@ -174,17 +174,76 @@ def test_prednisona_indicacoes_extraidas():
     assert scraper._extrair_indicacao('neoplasias') == 'Neoplasia'
 
 
-def test_dipirona_gera_conteudo_estruturado_v2():
+def test_refino_indicacao_corticoide_prioriza_contexto_clinico():
+    assert scraper._refinar_indicacao_dose(
+        'Uso prolongado',
+        linha='Manutenção hipoadrenocortical: 0,2 a 0,4 mg/Kg em dias alternados',
+        seg_txt='Manutenção hipoadrenocortical: 0,2 a 0,4 mg/Kg em dias alternados',
+        frequencia_texto='em dias alternados (48h)',
+        duracao_texto=None,
+        indicacoes_texto='Indicado para endocrinopatias e dermatites alérgicas.',
+        classificacao='Anti-inflamatório Esteroidal',
+    ) == 'Hipoadrenocorticismo'
+
+    assert scraper._refinar_indicacao_dose(
+        'Anti-inflamatório',
+        linha='Processos alérgicos: 1 mg/Kg a cada 12 horas',
+        seg_txt='Processos alérgicos: 1 mg/Kg a cada 12 horas',
+        frequencia_texto='12/12 horas',
+        duracao_texto=None,
+        indicacoes_texto='Indicado para dermatites alérgicas.',
+        classificacao='Anti-inflamatório Esteroidal',
+    ) == 'Alergia'
+
+
+def test_pos_processar_doses_descarta_comprimido_ambiguo_sem_forca():
+    doses = [{
+        'dose': '1 comprimido/animal',
+        'dose_raw_text': '1 comprimido / animal',
+        'dose_unidade': 'COMPRIMIDOS_ANIMAL',
+        'observacao': None,
+    }]
+    apresentacoes = [
+        {'forma': 'comprimido', 'concentracao_valor': 5.0, 'concentracao_unidade': 'mg'},
+        {'forma': 'comprimido', 'concentracao_valor': 20.0, 'concentracao_unidade': 'mg'},
+    ]
+
+    saida = scraper._pos_processar_doses_por_apresentacao(doses, apresentacoes)
+
+    assert saida == []
+
+
+def test_pos_processar_doses_enriquece_comprimido_quando_ha_forca_unica():
+    doses = [{
+        'dose': '1 comprimido/animal',
+        'dose_raw_text': '1 comprimido / animal',
+        'dose_unidade': 'COMPRIMIDOS_ANIMAL',
+        'observacao': None,
+    }]
+    apresentacoes = [
+        {'forma': 'comprimido', 'concentracao_valor': 20.0, 'concentracao_unidade': 'mg'},
+    ]
+
+    saida = scraper._pos_processar_doses_por_apresentacao(doses, apresentacoes)
+
+    assert len(saida) == 1
+    assert '20 mg' in saida[0]['dose']
+
+
+def test_dipirona_gera_conteudo_estruturado_v3():
     prod = scraper.extrair_produto_do_html(HTML_DIPIRONA, pid=10001, nome_fallback='?')
     conteudo = prod.conteudo_estruturado
 
-    assert conteudo["metadata"]["parser_version"] == "v2"
+    assert conteudo["metadata"]["parser_version"] == "v3"
     assert conteudo["metadata"]["fonte"] == "vetsmart"
     assert conteudo["indicacoes"]["itens"] == ["Controle da dor aguda", "controle da febre"]
     assert "gestantes" in " ".join(conteudo["contraindicacoes"]["itens"]).lower()
     assert conteudo["interacoes"]["itens"][0]["agente"] == "Fenobarbital"
     assert conteudo["interacoes"]["itens"][0]["conduta"] == "Ajustar dose"
     assert "desidratados" in " ".join(conteudo["advertencias"]["itens"]).lower()
+    assert "raw_sections_html" in conteudo
+    assert "<ul>" in conteudo["raw_sections_html"]["Interações medicamentosas"]
+    assert "Fenobarbital" in conteudo["raw_sections_html"]["Interações medicamentosas"]
 
 
 def test_dipirona_doses_multiplas_indicacoes_na_mesma_linha():

@@ -128,7 +128,7 @@
 
     <!-- ── Posologia ── -->
     <div class="tab-pane fade show active" id="tab-posologia" role="tabpanel">
-      {% if med.dosagem_recomendada or med.frequencia or med.duracao_tratamento %}
+      {% if (med.dosagem_recomendada or med.frequencia or med.duracao_tratamento) and not monografia.resumo_posologia.tabs %}
       <div class="row g-3 mb-4">
 
         {% if med.dosagem_recomendada %}
@@ -550,7 +550,11 @@
                aria-labelledby="vsHead{{ loop.index }}"
                data-bs-parent="#vetsmartAccordion">
             <div class="accordion-body bd-acc-body">
+              {% if secao.html %}
+              <div class="bd-vetsmart-html">{{ secao.html|safe }}</div>
+              {% else %}
               <pre class="bd-vetsmart-texto">{{ secao.texto }}</pre>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -1019,6 +1023,47 @@
   background: none;
   border: none;
   padding: 0;
+}
+
+.bd-vetsmart-html {
+  font-size: .9rem;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.bd-vetsmart-html p:last-child,
+.bd-vetsmart-html ul:last-child,
+.bd-vetsmart-html ol:last-child,
+.bd-vetsmart-html table:last-child {
+  margin-bottom: 0;
+}
+
+.bd-vetsmart-html ul,
+.bd-vetsmart-html ol {
+  padding-left: 1.2rem;
+}
+
+.bd-vetsmart-html table {
+  width: 100%;
+  font-size: .86rem;
+  border-collapse: collapse;
+}
+
+.bd-vetsmart-html th,
+.bd-vetsmart-html td {
+  border: 1px solid #e2e8f0;
+  padding: .5rem .65rem;
+  vertical-align: top;
+}
+
+.bd-vetsmart-html th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.bd-vetsmart-html a {
+  color: #1a7a4a;
+  font-weight: 600;
 }
 
 /* ── Rodapé de atribuição ───────────────────────── */
