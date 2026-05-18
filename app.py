@@ -15162,7 +15162,8 @@ def casa_de_racao_tutores(casa_id):
         cidade = (request.form.get('cidade') or '').strip() or None
         estado = (request.form.get('estado') or '').strip() or None
 
-        if rua or cidade:
+        has_address_data = any([cep, rua, numero, complemento, bairro, cidade, estado])
+        if cep:
             endereco = tutor.endereco or Endereco()
             endereco.cep = cep
             endereco.rua = rua
@@ -15177,6 +15178,8 @@ def casa_de_racao_tutores(casa_id):
                 db.session.add(endereco)
                 db.session.flush()
                 tutor.endereco_id = endereco.id
+        elif has_address_data:
+            flash('Tutor salvo. O endereco foi ignorado porque o CEP nao foi informado.', 'warning')
 
         db.session.commit()
         flash('Tutor cadastrado para a loja.', 'success')

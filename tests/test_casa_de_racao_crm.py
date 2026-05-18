@@ -61,6 +61,31 @@ def test_feed_store_owner_can_create_tutor_and_animal(app, client, monkeypatch):
         assert animal.added_by_id == owner.id
 
 
+def test_feed_store_tutor_form_ignores_incomplete_address(app, client, monkeypatch):
+    with app.app_context():
+        owner, casa = _create_owner_and_store(email="lojista-endereco@example.com")
+        _login(monkeypatch, owner)
+
+        resp = client.post(
+            f"/casa-de-racao/{casa.id}/tutores",
+            data={
+                "_from_dashboard": "1",
+                "name": "Tutor Sem Cep",
+                "email": "sem-cep@example.com",
+                "rua": "Rua sem CEP",
+                "cidade": "Orlandia",
+                "estado": "SP",
+            },
+            follow_redirects=False,
+            headers={"Accept": "text/html"},
+        )
+
+        assert resp.status_code == 302
+        tutor = User.query.filter_by(email="sem-cep@example.com").one()
+        assert tutor.casa_de_racao_id == casa.id
+        assert tutor.endereco_id is None
+
+
 def test_feed_store_owner_can_save_pet_ration(app, client, monkeypatch):
     with app.app_context():
         owner, casa = _create_owner_and_store(email="lojista-racao@example.com")
