@@ -14473,6 +14473,31 @@ def casa_de_racao_dashboard(casa_id):
     hours_form = StoreHoursForm()
 
     if request.method == 'POST':
+        if request.form.get('_action') == 'add_product':
+            from forms import CasaDeRacaoProductForm
+            product_form = CasaDeRacaoProductForm()
+            if product_form.validate_on_submit():
+                image_url = None
+                if product_form.image_upload.data:
+                    file = product_form.image_upload.data
+                    image_url = upload_to_s3(file, secure_filename(file.filename), folder='products')
+                product = Product(
+                    casa_de_racao_id=casa.id,
+                    name=product_form.name.data,
+                    description=product_form.description.data or None,
+                    price=float(product_form.price.data),
+                    stock=product_form.stock.data or 0,
+                    image_url=image_url,
+                    mp_category_id=(product_form.mp_category_id.data or 'others').strip(),
+                    status='active',
+                )
+                db.session.add(product)
+                db.session.commit()
+                flash('Produto publicado com sucesso!', 'success')
+                return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
+            flash('Verifique os campos do produto.', 'warning')
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
+
         if request.form.get('_action') == 'update_info' and store_form.validate_on_submit():
             casa.nome = store_form.nome.data
             casa.razao_social = store_form.razao_social.data or None
@@ -14527,12 +14552,12 @@ def casa_de_racao_dashboard(casa_id):
     mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
     mp_platform_configured = bool((current_app.config.get("MERCADOPAGO_ACCESS_TOKEN") or "").strip())
 
-    tutores = User.query.filter_by(casa_de_racao_id=casa.id).order_by(User.name).all()
-    animais = (
+    tutores_adicionados = User.query.filter_by(casa_de_racao_id=casa.id).order_by(User.name).all()
+    animais_adicionados = (
         Animal.query
         .filter_by(casa_de_racao_id=casa.id)
         .filter(Animal.removido_em.is_(None))
-        .order_by(Animal.name)
+        .order_by(Animal.date_added.desc())
         .all()
     )
     horarios = CasaDeRacaoHorario.query.filter_by(casa_de_racao_id=casa.id).all()
@@ -14540,11 +14565,10 @@ def casa_de_racao_dashboard(casa_id):
     _dia_order = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     horarios = sorted(horarios, key=lambda h: _dia_order.index(h.dia_semana) if h.dia_semana in _dia_order else 99)
 
-    produtos_count = (
-        Product.query
-        .filter_by(casa_de_racao_id=casa.id, status='active')
-        .count()
-    )
+    from forms import CasaDeRacaoProductForm
+    product_form = CasaDeRacaoProductForm(formdata=None)
+    produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.name).all()
+    produtos_count = sum(1 for p in produtos if p.status == 'active')
     entregas_pendentes = 0
     if casa.modo_entrega == 'propria':
         entregas_pendentes = (
@@ -14561,12 +14585,16 @@ def casa_de_racao_dashboard(casa_id):
         casa=casa,
         store_form=store_form,
         hours_form=hours_form,
+        product_form=product_form,
         payment_account=payment_account,
         mp_oauth_available=mp_oauth_available,
         mp_platform_configured=mp_platform_configured,
-        tutores=tutores,
-        animais=animais,
+        tutores=tutores_adicionados,
+        animais=animais_adicionados,
+        tutores_adicionados=tutores_adicionados,
+        animais_adicionados=animais_adicionados,
         horarios=horarios,
+        produtos=produtos,
         produtos_count=produtos_count,
         entregas_pendentes=entregas_pendentes,
         store_initials=store_initials,
@@ -15119,12 +15147,43 @@ def casa_de_racao_tutores(casa_id):
         flash('Tutor cadastrado para a loja.', 'success')
         return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
 
-    tutores = (
-        User.query
-        .filter_by(casa_de_racao_id=casa.id)
-        .order_by(User.name.asc())
-        .all()
+    tutor_search = (request.args.get('tutor_search', '') or '').strip()
+    tutor_sort = request.args.get('tutor_sort', 'name_asc')
+
+    q = User.query.filter_by(casa_de_racao_id=casa.id)
+    if tutor_search:
+        q = q.filter(db.or_(
+            User.name.ilike(f'%{tutor_search}%'),
+            User.email.ilike(f'%{tutor_search}%'),
+            User.phone.ilike(f'%{tutor_search}%'),
+        ))
+    sort_map = {
+        'name_desc': User.name.desc(),
+        'date_desc': User.created_at.desc(),
+        'date_asc': User.created_at.asc(),
+    }
+    q = q.order_by(sort_map.get(tutor_sort, User.name.asc()))
+    tutores = q.all()
+
+    is_ajax = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
     )
+    if is_ajax:
+        html = render_template(
+            'partials/tutores_adicionados.html',
+            tutores_adicionados=tutores,
+            pagination=None,
+            compact=True,
+            fetch_url=url_for('casa_de_racao_tutores', casa_id=casa.id),
+            shared_access_map={},
+            viewer_clinic_id=None,
+            scope='all',
+            tutor_search=tutor_search,
+            tutor_sort=tutor_sort,
+        )
+        return jsonify(html=html, scope='all')
+
     return render_template('casa_de_racao/tutores.html', casa=casa, tutores=tutores)
 
 
@@ -15167,13 +15226,43 @@ def casa_de_racao_animais(casa_id):
         flash('Animal cadastrado para acompanhamento da loja.', 'success')
         return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
 
-    animais = (
+    animal_search = (request.args.get('animal_search', '') or '').strip()
+    animal_sort = request.args.get('animal_sort', 'date_desc')
+
+    q = (
         Animal.query
         .filter_by(casa_de_racao_id=casa.id)
+        .filter(Animal.removido_em.is_(None))
         .options(joinedload(Animal.owner), joinedload(Animal.racoes).joinedload(Racao.tipo_racao))
-        .order_by(Animal.name.asc())
-        .all()
     )
+    if animal_search:
+        q = q.filter(Animal.name.ilike(f'%{animal_search}%'))
+    sort_map_a = {
+        'name_asc': Animal.name.asc(),
+        'name_desc': Animal.name.desc(),
+        'date_asc': Animal.date_added.asc(),
+    }
+    q = q.order_by(sort_map_a.get(animal_sort, Animal.date_added.desc()))
+    animais = q.all()
+
+    is_ajax = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+    )
+    if is_ajax:
+        html = render_template(
+            'partials/animais_adicionados.html',
+            animais_adicionados=animais,
+            pagination=None,
+            compact=True,
+            fetch_url=url_for('casa_de_racao_animais', casa_id=casa.id),
+            can_create_animals=True,
+            new_animal_url=url_for('casa_de_racao_animais', casa_id=casa.id),
+            animal_search=animal_search,
+            animal_sort=animal_sort,
+        )
+        return jsonify(html=html, scope='all')
+
     return render_template(
         'casa_de_racao/animais.html',
         casa=casa,

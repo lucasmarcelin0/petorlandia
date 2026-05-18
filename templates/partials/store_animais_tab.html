@@ -1,0 +1,6 @@
+{% with compact=True,
+        fetch_url=url_for('casa_de_racao_animais', casa_id=casa.id),
+        can_create_animals=pode_editar,
+        new_animal_url=url_for('casa_de_racao_animais', casa_id=casa.id) %}
+  {% include 'partials/animais_adicionados.html' %}
+{% endwith %}

@@ -1,0 +1,6 @@
+{% with compact=True,
+        fetch_url=url_for('casa_de_racao_tutores', casa_id=casa.id),
+        shared_access_map={},
+        viewer_clinic_id=None %}
+  {% include 'partials/tutores_adicionados.html' %}
+{% endwith %}
