@@ -937,7 +937,7 @@
                       </div>
                     </div>
                   </div>
-                  {% if can_respond %}
+                  {% if can_respond and 'accept_exam_request' in current_app.view_functions %}
                   <div class="d-flex gap-2">
                     <form method="POST" action="{{ url_for('accept_exam_request', exam_id=exam.id) }}">
                       <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
