@@ -25,6 +25,28 @@
       {{ form.email.label }}
       {{ form.email(class="form-control") }}
     </div>
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        {{ form.modo_entrega.label }}
+        {{ form.modo_entrega(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        {{ form.valor_frete.label }}
+        {{ form.valor_frete(class="form-control", placeholder="0,00") }}
+      </div>
+      <div class="col-md-6">
+        {{ form.pedido_minimo_entrega.label }}
+        {{ form.pedido_minimo_entrega(class="form-control", placeholder="Opcional") }}
+      </div>
+      <div class="col-md-3">
+        {{ form.prazo_entrega_min.label }}
+        {{ form.prazo_entrega_min(class="form-control", placeholder="30") }}
+      </div>
+      <div class="col-md-3">
+        {{ form.prazo_entrega_max.label }}
+        {{ form.prazo_entrega_max(class="form-control", placeholder="60") }}
+      </div>
+    </div>
     <div class="mb-3">
       {{ form.logotipo.label }}
       {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'clinic_logo', 'user') }}

@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 1080px;">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="small text-decoration-none">
+        <i class="fa-solid fa-arrow-left me-1"></i>{{ casa.nome }}
+      </a>
+      <h1 class="h3 fw-bold mb-1">Animais dos clientes</h1>
+      <p class="text-muted mb-0">Registre os pets atendidos pela loja e a racao que cada um usa.</p>
+    </div>
+    <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" class="btn btn-outline-primary">
+      <i class="fa-solid fa-users me-2"></i>Tutores
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Novo animal</h2>
+          {% if tutores %}
+          <form method="post" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label">Tutor</label>
+              <select class="form-select" name="tutor_id" required>
+                {% for tutor in tutores %}
+                <option value="{{ tutor.id }}">{{ tutor.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Nome do animal</label>
+              <input class="form-control" name="name" maxlength="100" required>
+            </div>
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label">Idade</label>
+                <input class="form-control" name="age" maxlength="50" placeholder="Ex: 3 anos">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Peso</label>
+                <input class="form-control" name="peso" inputmode="decimal" placeholder="Ex: 12,5">
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Sexo</label>
+              <select class="form-select" name="sex">
+                <option value="">Nao informado</option>
+                <option value="Macho">Macho</option>
+                <option value="Femea">Femea</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Observacoes</label>
+              <textarea class="form-control" name="description" rows="3" maxlength="500"></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">
+              <i class="fa-solid fa-plus me-2"></i>Cadastrar animal
+            </button>
+          </form>
+          {% else %}
+          <p class="text-muted">Cadastre um tutor antes de incluir animais.</p>
+          <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" class="btn btn-primary">
+            <i class="fa-solid fa-user-plus me-2"></i>Cadastrar tutor
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Animais cadastrados</h2>
+          {% if animais %}
+          <div class="list-group list-group-flush">
+            {% for animal in animais %}
+            <div class="list-group-item px-0 d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <div class="fw-semibold">{{ animal.name }}</div>
+                <div class="small text-muted">
+                  Tutor: {{ animal.owner.name if animal.owner else 'Sem tutor' }}
+                  {% if animal.age %} &middot; {{ animal.age }}{% endif %}
+                  {% if animal.peso %} &middot; {{ '%.1f'|format(animal.peso)|replace('.', ',') }} kg{% endif %}
+                </div>
+                {% if animal.racoes %}
+                <div class="small mt-1">
+                  Racao:
+                  {% for racao in animal.racoes %}
+                    {{ racao.tipo_racao.marca }}{% if racao.tipo_racao.linha %} {{ racao.tipo_racao.linha }}{% endif %}{% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              <a href="{{ url_for('casa_de_racao_animal_racoes', casa_id=casa.id, animal_id=animal.id) }}"
+                 class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-bowl-food me-1"></i>Racao
+              </a>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum animal cadastrado ainda.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

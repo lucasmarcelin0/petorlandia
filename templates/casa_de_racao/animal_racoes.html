@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 900px;">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}" class="small text-decoration-none">
+        <i class="fa-solid fa-arrow-left me-1"></i>Animais
+      </a>
+      <h1 class="h3 fw-bold mb-1">Racao de {{ animal.name }}</h1>
+      <p class="text-muted mb-0">Historico de alimentos informados pelo tutor ou pela loja.</p>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-5">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Adicionar racao</h2>
+          <form method="post" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label">Marca</label>
+              <input class="form-control" name="marca" maxlength="100" required>
+            </div>
+            <div>
+              <label class="form-label">Linha</label>
+              <input class="form-control" name="linha" maxlength="100" placeholder="Ex: Adultos, Filhotes, Premium">
+            </div>
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label">Preco pago</label>
+                <input class="form-control" name="preco_pago" inputmode="decimal" placeholder="Ex: 189,90">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Embalagem</label>
+                <input class="form-control" name="tamanho_embalagem" maxlength="50" placeholder="Ex: 15 kg">
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Observacoes</label>
+              <textarea class="form-control" name="observacoes_racao" rows="3"></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">
+              <i class="fa-solid fa-plus me-2"></i>Salvar racao
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-7">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Historico</h2>
+          {% if racoes %}
+          <div class="list-group list-group-flush">
+            {% for racao in racoes %}
+            <div class="list-group-item px-0">
+              <div class="fw-semibold">
+                {{ racao.tipo_racao.marca }}{% if racao.tipo_racao.linha %} {{ racao.tipo_racao.linha }}{% endif %}
+              </div>
+              <div class="small text-muted">
+                {% if racao.tamanho_embalagem %}{{ racao.tamanho_embalagem }}{% endif %}
+                {% if racao.preco_pago %} R$ {{ '%.2f'|format(racao.preco_pago)|replace('.', ',') }}{% endif %}
+                {% if racao.data_cadastro %} {{ racao.data_cadastro.strftime('%d/%m/%Y') }}{% endif %}
+              </div>
+              {% if racao.observacoes_racao %}
+              <p class="small mb-0 mt-1">{{ racao.observacoes_racao }}</p>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">Nenhuma racao cadastrada para este animal.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

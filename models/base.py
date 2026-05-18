@@ -240,6 +240,8 @@ class User(UserMixin, db.Model):
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
+    casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True)
+    casa_de_racao = db.relationship('CasaDeRacao', backref='tutores', foreign_keys=[casa_de_racao_id])
     is_private = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
@@ -417,6 +419,8 @@ class Animal(db.Model):
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='animais')
+    casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True)
+    casa_de_racao = db.relationship('CasaDeRacao', backref='animais')
 
     is_alive = db.Column(db.Boolean, default=True)
     falecido_em = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -804,6 +808,11 @@ class Clinica(db.Model):
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     logotipo = db.Column(db.String(200))  # caminho para imagem do logo
+    modo_entrega = db.Column(db.String(20), default='plataforma', nullable=False)
+    valor_frete = db.Column(db.Numeric(10, 2), default=0, nullable=False)
+    pedido_minimo_entrega = db.Column(db.Numeric(10, 2), nullable=True)
+    prazo_entrega_min = db.Column(db.Integer, nullable=True)
+    prazo_entrega_max = db.Column(db.Integer, nullable=True)
     photo_rotation = db.Column(db.Integer, default=0)
     photo_zoom = db.Column(db.Float, default=1.0)
     photo_offset_x = db.Column(db.Float, default=0.0)
@@ -965,6 +974,10 @@ class CasaDeRacao(db.Model):
     status = db.Column(db.String(20), default='pendente', nullable=False)
     # 'plataforma' = entregadores da rede, 'propria' = vendedor gerencia a entrega
     modo_entrega = db.Column(db.String(20), default='plataforma', nullable=False)
+    valor_frete = db.Column(db.Numeric(10, 2), default=0, nullable=False)
+    pedido_minimo_entrega = db.Column(db.Numeric(10, 2), nullable=True)
+    prazo_entrega_min = db.Column(db.Integer, nullable=True)
+    prazo_entrega_max = db.Column(db.Integer, nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
@@ -1006,6 +1019,83 @@ class CasaDeRacaoHorario(db.Model):
         'CasaDeRacao',
         backref=db.backref('horarios', cascade='all, delete-orphan'),
     )
+
+
+class StorePaymentAccount(db.Model):
+    __tablename__ = 'store_payment_account'
+    __table_args__ = (
+        db.UniqueConstraint('casa_de_racao_id', 'provider', name='uq_store_payment_provider'),
+        db.UniqueConstraint('clinica_id', 'provider', name='uq_store_payment_clinic_provider'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    casa_de_racao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('casa_de_racao.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    provider = db.Column(db.String(40), nullable=False, default='mercado_pago')
+    provider_user_id = db.Column(db.String(80), nullable=True, index=True)
+    public_key = db.Column(db.String(255), nullable=True)
+    access_token_encrypted = db.Column(db.Text, nullable=True)
+    refresh_token_encrypted = db.Column(db.Text, nullable=True)
+    oauth_state = db.Column(db.String(128), nullable=True, unique=True, index=True)
+    code_verifier_encrypted = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    error_message = db.Column(db.Text, nullable=True)
+    connected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_refreshed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+    )
+
+    casa_de_racao = db.relationship(
+        'CasaDeRacao',
+        backref=db.backref('payment_accounts', cascade='all, delete-orphan', lazy='dynamic'),
+    )
+    clinica = db.relationship(
+        'Clinica',
+        backref=db.backref('payment_accounts', cascade='all, delete-orphan', lazy='dynamic'),
+    )
+
+    @property
+    def is_connected(self):
+        return self.status == 'connected' and bool(self.access_token_encrypted)
+
+    @property
+    def access_token(self):
+        return decrypt_text(self.access_token_encrypted) if self.access_token_encrypted else None
+
+    @access_token.setter
+    def access_token(self, value):
+        self.access_token_encrypted = encrypt_text(value) if value else None
+
+    @property
+    def refresh_token(self):
+        return decrypt_text(self.refresh_token_encrypted) if self.refresh_token_encrypted else None
+
+    @refresh_token.setter
+    def refresh_token(self, value):
+        self.refresh_token_encrypted = encrypt_text(value) if value else None
+
+    @property
+    def code_verifier(self):
+        return decrypt_text(self.code_verifier_encrypted) if self.code_verifier_encrypted else None
+
+    @code_verifier.setter
+    def code_verifier(self, value):
+        self.code_verifier_encrypted = encrypt_text(value) if value else None
 
 
 class ClinicStaff(db.Model):
@@ -2961,7 +3051,13 @@ class GroomingPlan(db.Model):
     clinica_id = db.Column(
         db.Integer,
         db.ForeignKey('clinica.id', ondelete='CASCADE'),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    casa_de_racao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('casa_de_racao.id', ondelete='CASCADE'),
+        nullable=True,
         index=True,
     )
     name = db.Column(db.String(120), nullable=False)
@@ -2974,6 +3070,7 @@ class GroomingPlan(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     clinica = db.relationship('Clinica', backref=db.backref('grooming_plans', lazy='dynamic'))
+    casa_de_racao = db.relationship('CasaDeRacao', backref=db.backref('grooming_plans', lazy='dynamic'))
     subscriptions = db.relationship(
         'GroomingSubscription',
         back_populates='plan',
@@ -2988,6 +3085,14 @@ class GroomingPlan(db.Model):
     @property
     def active_subscriptions_count(self):
         return self.subscriptions.filter_by(active=True).count()
+
+    @property
+    def provider_name(self):
+        if self.clinica:
+            return self.clinica.nome
+        if self.casa_de_racao:
+            return self.casa_de_racao.nome
+        return 'PetOrlandia'
 
     def __repr__(self):
         return f"{self.name} — {self.service_label} (R$ {self.price})"

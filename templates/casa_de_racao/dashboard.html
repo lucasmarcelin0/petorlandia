@@ -113,9 +113,124 @@
           </p>
           {% endif %}
         </div>
+        <div class="mt-3">
+          <span class="text-muted small d-block">Frete da loja</span>
+          <span class="fw-semibold">R$ {{ '%.2f'|format(casa.valor_frete or 0)|replace('.', ',') }}</span>
+          {% if casa.prazo_entrega_min or casa.prazo_entrega_max %}
+          <span class="text-muted small ms-2">
+            Prazo:
+            {% if casa.prazo_entrega_min and casa.prazo_entrega_max %}
+              {{ casa.prazo_entrega_min }}-{{ casa.prazo_entrega_max }} min
+            {% elif casa.prazo_entrega_min %}
+              a partir de {{ casa.prazo_entrega_min }} min
+            {% else %}
+              até {{ casa.prazo_entrega_max }} min
+            {% endif %}
+          </span>
+          {% endif %}
+        </div>
         <a href="{{ url_for('minha_casa_de_racao') }}" class="btn btn-outline-secondary btn-sm">
           <i class="fa-solid fa-pen me-1"></i>Alterar
         </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mercado Pago -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <h5 class="fw-semibold mb-1">
+            <i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago
+          </h5>
+          {% if payment_account and payment_account.status == 'connected' %}
+          <p class="mb-1 text-muted small">
+            <span class="badge bg-success me-2">Conectado</span>
+            Pagamentos serÃ£o enviados para a conta autorizada.
+          </p>
+          {% if payment_account.provider_user_id %}
+          <span class="text-muted small">Collector ID: {{ payment_account.provider_user_id }}</span>
+          {% endif %}
+          {% elif payment_account and payment_account.status == 'pending' %}
+          <p class="mb-0 text-muted small">
+            <span class="badge bg-warning text-dark me-2">Pendente</span>
+            A autorizaÃ§Ã£o foi iniciada e ainda nÃ£o foi concluÃ­da.
+          </p>
+          {% elif payment_account and payment_account.status == 'error' %}
+          <p class="mb-0 text-muted small">
+            <span class="badge bg-danger me-2">Erro</span>
+            NÃ£o foi possÃ­vel concluir a conexÃ£o. Tente novamente.
+          </p>
+          {% else %}
+          <p class="mb-0 text-muted small">
+            <span class="badge bg-secondary me-2">NÃ£o conectado</span>
+            Conecte sua conta para habilitar vendas com recebimento pela loja.
+          </p>
+          {% endif %}
+        </div>
+
+        {% if payment_account and payment_account.status == 'connected' %}
+        <form method="post" action="{{ url_for('mercadopago_oauth_disconnect', casa_id=casa.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="fa-solid fa-link-slash me-1"></i>Desconectar
+          </button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-link me-1"></i>Conectar Mercado Pago
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Planos de banho e tosa -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div>
+          <h5 class="fw-semibold mb-1">
+            <i class="fa-solid fa-scissors me-2 text-primary"></i>Planos de banho e tosa
+          </h5>
+          <p class="mb-0 text-muted small">
+            Cadastre pacotes mensais para vender junto com os produtos da loja.
+          </p>
+        </div>
+        <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}"
+           class="btn btn-outline-primary btn-sm">
+          <i class="fa-solid fa-gear me-1"></i>Gerenciar planos
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Area profissional -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div>
+          <h5 class="fw-semibold mb-1">
+            <i class="fa-solid fa-address-book me-2 text-primary"></i>Tutores e animais
+          </h5>
+          <p class="mb-0 text-muted small">
+            Acompanhe clientes, pets e racoes usadas sem as abas veterinarias.
+          </p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}"
+             class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-users me-1"></i>Tutores
+          </a>
+          <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}"
+             class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-paw me-1"></i>Animais
+          </a>
+        </div>
       </div>
     </div>
   </div>

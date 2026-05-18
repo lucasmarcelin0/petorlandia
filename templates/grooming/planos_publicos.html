@@ -5,7 +5,7 @@
   <!-- ================================================================
        Seção de gestão — colapsável, discreta (donos de clínica)
        ================================================================ -->
-  {% if minha_clinica %}
+  {% if minha_clinica or minha_casa_de_racao %}
   <div class="mb-4">
     <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2 mb-2"
             type="button"
@@ -22,7 +22,7 @@
       <div class="border rounded-3 p-4 bg-white shadow-sm">
         <div class="d-flex align-items-center gap-2 mb-3">
           <h2 class="h5 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Banho e Tosa</h2>
-          <p class="text-muted small mb-0">· {{ minha_clinica.nome }}</p>
+          <p class="text-muted small mb-0">· {{ minha_clinica.nome if minha_clinica else minha_casa_de_racao.nome }}</p>
         </div>
 
         <div class="row g-4">
@@ -67,7 +67,7 @@
           <div class="col-lg-8">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h6 class="fw-bold mb-0">Seus planos ({{ grooming_planos|length }})</h6>
-              <a href="{{ url_for('clinic_grooming_planos', clinica_id=minha_clinica.id) }}"
+              <a href="{{ url_for('clinic_grooming_planos', clinica_id=minha_clinica.id) if minha_clinica else url_for('casa_de_racao_grooming_planos', casa_id=minha_casa_de_racao.id) }}"
                  class="btn btn-outline-primary btn-sm">
                 <i class="fa-solid fa-gear me-1"></i> Gerenciar completo
               </a>
@@ -100,11 +100,13 @@
                       · {{ p.active_subscriptions_count }} assinante(s)
                     </p>
                     <div class="d-flex gap-1">
+                      {% if minha_clinica %}
                       <a href="{{ url_for('clinic_grooming_plano_editar', clinica_id=minha_clinica.id, plan_id=p.id) }}"
                          class="btn btn-outline-primary btn-sm flex-grow-1">
                         <i class="fa-solid fa-pen me-1"></i> Editar
                       </a>
-                      <form method="post" action="{{ url_for('clinic_grooming_plano_toggle', clinica_id=minha_clinica.id, plan_id=p.id) }}">
+                      {% endif %}
+                      <form method="post" action="{{ url_for('clinic_grooming_plano_toggle', clinica_id=minha_clinica.id, plan_id=p.id) if minha_clinica else url_for('casa_de_racao_grooming_plano_toggle', casa_id=minha_casa_de_racao.id, plan_id=p.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-sm {% if p.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
                                 title="{{ 'Desativar' if p.active else 'Ativar' }}">
@@ -165,7 +167,7 @@
 
           <h5 class="fw-bold mt-2 mb-1">{{ p.name }}</h5>
           <p class="text-muted small mb-1">
-            <i class="fa-solid fa-house-medical me-1"></i>{{ p.clinica.nome }}
+            <i class="fa-solid fa-store me-1"></i>{{ p.provider_name }}
           </p>
 
           {% if p.description %}

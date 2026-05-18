@@ -30,8 +30,40 @@
     {% endfor %}
   </ul>
 
-  <div class="d-flex justify-content-end mb-3">
-    <strong id="cartTotal" data-total-value="{{ '%.2f'|format(order.total_value()) }}">Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
+  {% if shipping and shipping.stores %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold mb-3"><i class="fa-solid fa-truck me-2 text-primary"></i>Frete por loja</h6>
+      {% for store in shipping.stores %}
+      <div class="d-flex justify-content-between align-items-start border-bottom py-2">
+        <div>
+          <span class="fw-semibold">{{ store.name }}</span>
+          {% if store.prazo_min or store.prazo_max %}
+          <span class="text-muted small d-block">
+            {% if store.prazo_min and store.prazo_max %}
+              Entrega estimada: {{ store.prazo_min }}-{{ store.prazo_max }} min
+            {% elif store.prazo_min %}
+              Entrega a partir de {{ store.prazo_min }} min
+            {% else %}
+              Entrega até {{ store.prazo_max }} min
+            {% endif %}
+          </span>
+          {% endif %}
+          {% if store.minimum and not store.meets_minimum %}
+          <span class="text-warning small d-block">Pedido mínimo: R$ {{ '%.2f'|format(store.minimum)|replace('.', ',') }}</span>
+          {% endif %}
+        </div>
+        <span class="fw-semibold">R$ {{ '%.2f'|format(store.freight)|replace('.', ',') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="text-end mb-3">
+    <div class="text-muted small">Produtos: R$ {{ '%.2f'|format(shipping.products_total if shipping else order.total_value()) }}</div>
+    <div class="text-muted small">Fretes: R$ {{ '%.2f'|format(shipping.shipping_total if shipping else 0) }}</div>
+    <strong id="cartTotal" data-total-value="{{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}">Total:&nbsp;R$ {{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}</strong>
   </div>
 
   <div id="new-address-form" class="d-none mb-4">

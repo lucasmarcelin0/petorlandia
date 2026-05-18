@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 980px;">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="small text-decoration-none">
+        <i class="fa-solid fa-arrow-left me-1"></i>{{ casa.nome }}
+      </a>
+      <h1 class="h3 fw-bold mb-1">Tutores da loja</h1>
+      <p class="text-muted mb-0">Cadastre clientes para acompanhar pets, preferencias e historico de racao.</p>
+    </div>
+    <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}" class="btn btn-outline-primary">
+      <i class="fa-solid fa-paw me-2"></i>Animais
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Novo tutor</h2>
+          <form method="post" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label">Nome</label>
+              <input class="form-control" name="name" maxlength="120" required>
+            </div>
+            <div>
+              <label class="form-label">E-mail</label>
+              <input class="form-control" type="email" name="email" maxlength="120">
+              <div class="form-text">Opcional para atendimento de balcao.</div>
+            </div>
+            <div>
+              <label class="form-label">Telefone</label>
+              <input class="form-control" name="phone" maxlength="20">
+            </div>
+            <div>
+              <label class="form-label">CPF</label>
+              <input class="form-control" name="cpf" maxlength="14">
+            </div>
+            <button class="btn btn-primary" type="submit">
+              <i class="fa-solid fa-user-plus me-2"></i>Cadastrar tutor
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h2 class="h5 fw-semibold mb-3">Tutores cadastrados</h2>
+          {% if tutores %}
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Contato</th>
+                  <th class="text-end">Pets</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for tutor in tutores %}
+                <tr>
+                  <td class="fw-semibold">{{ tutor.name }}</td>
+                  <td>
+                    <div>{{ tutor.phone or 'Sem telefone' }}</div>
+                    {% if tutor.email and not tutor.email.endswith('@petorlandia.local') %}
+                    <small class="text-muted">{{ tutor.email }}</small>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">{{ tutor.animals|length }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum tutor cadastrado ainda.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -67,6 +67,11 @@
         <div class="col-md-12">{{ clinic_form.endereco.label }} {{ clinic_form.endereco(class="form-control") }}</div>
         <div class="col-md-6">{{ clinic_form.telefone.label }} {{ clinic_form.telefone(class="form-control") }}</div>
         <div class="col-md-6">{{ clinic_form.email.label }} {{ clinic_form.email(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.modo_entrega.label }} {{ clinic_form.modo_entrega(class="form-select") }}</div>
+        <div class="col-md-6">{{ clinic_form.valor_frete.label }} {{ clinic_form.valor_frete(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.pedido_minimo_entrega.label }} {{ clinic_form.pedido_minimo_entrega(class="form-control") }}</div>
+        <div class="col-md-3">{{ clinic_form.prazo_entrega_min.label }} {{ clinic_form.prazo_entrega_min(class="form-control") }}</div>
+        <div class="col-md-3">{{ clinic_form.prazo_entrega_max.label }} {{ clinic_form.prazo_entrega_max(class="form-control") }}</div>
         <div class="col-md-12">
           {{ clinic_form.logotipo.label }}
           {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
@@ -75,6 +80,38 @@
           {{ clinic_form.submit(class="btn btn-primary") }}
         </div>
       </form>
+    </div>
+  </div>
+{% endif %}
+
+{% if pode_editar %}
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div>
+        <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
+        {% if payment_account and payment_account.status == 'connected' %}
+          <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos da loja da clínica usam a conta autorizada.</p>
+        {% else %}
+          <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Conecte uma conta para receber vendas de produtos e planos.</p>
+        {% endif %}
+        <p class="mb-0 small text-muted">
+          Frete atual: <strong>R$ {{ '%.2f'|format(clinica.valor_frete or 0)|replace('.', ',') }}</strong>
+          {% if clinica.prazo_entrega_min or clinica.prazo_entrega_max %}
+            · Prazo: {{ clinica.prazo_entrega_min or '?' }}-{{ clinica.prazo_entrega_max or '?' }} min
+          {% endif %}
+        </p>
+      </div>
+      {% if payment_account and payment_account.status == 'connected' %}
+        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_disconnect', clinica_id=clinica.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_start', clinica_id=clinica.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar Mercado Pago</button>
+        </form>
+      {% endif %}
     </div>
   </div>
 {% endif %}

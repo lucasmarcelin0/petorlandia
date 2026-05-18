@@ -135,6 +135,16 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/clinica/<int:clinica_id>/mercado-pago/conectar",
+        view_func=lazy_view("clinic_mercadopago_oauth_start"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/clinica/<int:clinica_id>/mercado-pago/desconectar",
+        view_func=lazy_view("clinic_mercadopago_oauth_disconnect"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/estoque/item/<int:item_id>/publicar",
         view_func=lazy_view("publish_inventory_to_loja"),
         methods=["POST"],

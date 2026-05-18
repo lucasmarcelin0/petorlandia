@@ -10,8 +10,24 @@
     </li>
     {% endfor %}
   </ul>
-  <div class="d-flex justify-content-end mb-3">
-    <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
+  {% if shipping and shipping.stores %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h6 class="fw-bold mb-3"><i class="fa-solid fa-truck me-2 text-primary"></i>Frete por loja</h6>
+      {% for store in shipping.stores %}
+      <div class="d-flex justify-content-between py-2 border-bottom">
+        <span>{{ store.name }}</span>
+        <span>R$ {{ '%.2f'|format(store.freight)|replace('.', ',') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="text-end mb-3">
+    <div class="text-muted small">Produtos: R$ {{ '%.2f'|format(shipping.products_total if shipping else order.total_value()) }}</div>
+    <div class="text-muted small">Fretes: R$ {{ '%.2f'|format(shipping.shipping_total if shipping else 0) }}</div>
+    <strong>Total:&nbsp;R$ {{ '%.2f'|format(shipping.grand_total if shipping else order.total_value()) }}</strong>
   </div>
 
   <div class="mb-4">

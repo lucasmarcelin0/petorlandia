@@ -85,6 +85,32 @@
           </div>
         </div>
 
+        <div class="row g-3">
+          <div class="col-sm-6">
+            {{ form.valor_frete.label(class="form-label fw-semibold") }}
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              {{ form.valor_frete(class="form-control", placeholder="0,00") }}
+            </div>
+            <div class="form-text">Cobrado uma vez quando o carrinho tiver produtos da sua loja.</div>
+          </div>
+          <div class="col-sm-6">
+            {{ form.pedido_minimo_entrega.label(class="form-label fw-semibold") }}
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              {{ form.pedido_minimo_entrega(class="form-control", placeholder="Opcional") }}
+            </div>
+          </div>
+          <div class="col-sm-6">
+            {{ form.prazo_entrega_min.label(class="form-label fw-semibold") }}
+            {{ form.prazo_entrega_min(class="form-control", placeholder="Ex: 30") }}
+          </div>
+          <div class="col-sm-6">
+            {{ form.prazo_entrega_max.label(class="form-label fw-semibold") }}
+            {{ form.prazo_entrega_max(class="form-control", placeholder="Ex: 60") }}
+          </div>
+        </div>
+
         <hr class="my-4">
         <h5 class="fw-semibold mb-3 text-primary">
           <i class="fa-solid fa-image me-2"></i>Logo da loja

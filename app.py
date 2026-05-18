@@ -15,7 +15,7 @@ from typing import Iterable, Optional, Set, Dict
 # Tests and factory imports may load this module through either name. Keep both
 # aliases pointed at the same module so runtime monkeypatches and configuration
 # changes do not split across two copies.
-sys.modules.setdefault("app", sys.modules[__name__])
+sys.modules["app"] = sys.modules[__name__]
 sys.modules["petorlandia_app"] = sys.modules[__name__]
 
 
@@ -118,6 +118,7 @@ from models import (
     OAuthConsent,
     OAuthJwkKey,
     OAuthRefreshToken,
+    StorePaymentAccount,
     User,
     Veterinario,
     clinica_has_column,
@@ -165,6 +166,12 @@ from services.payments import (
     apply_payment_to_bloco,
     apply_payment_to_orcamento,
     create_payment_preference,
+)
+from services.mercadopago_oauth import (
+    MercadoPagoOAuthError,
+    build_authorization_start,
+    exchange_code_for_credentials,
+    renew_due_store_accounts,
 )
 from security.crypto import (
     MissingMasterKeyError,
@@ -12423,10 +12430,25 @@ def _run_financial_snapshot_job() -> None:
         update_financial_snapshots_daily()
 
 
+def _run_mercadopago_oauth_renewal_job() -> None:
+    """Daily hook executed by APScheduler to renew seller OAuth tokens."""
+
+    with app.app_context():
+        result = renew_due_store_accounts(db, StorePaymentAccount)
+        if result.checked:
+            current_app.logger.info(
+                "Mercado Pago OAuth renewal checked=%s renewed=%s failed=%s",
+                result.checked,
+                result.renewed,
+                result.failed,
+            )
+
+
 if not app.config.get("TESTING"):
     scheduler = BackgroundScheduler(timezone=str(BR_TZ))
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
     scheduler.add_job(_run_financial_snapshot_job, 'cron', hour=2, minute=30)
+    scheduler.add_job(_run_mercadopago_oauth_renewal_job, 'cron', hour=3, minute=15)
     scheduler.start()
 
 
@@ -14300,6 +14322,11 @@ def minha_clinica():
                 endereco=form.endereco.data,
                 telefone=form.telefone.data,
                 email=form.email.data,
+                modo_entrega=form.modo_entrega.data or 'plataforma',
+                valor_frete=form.valor_frete.data or Decimal('0'),
+                pedido_minimo_entrega=form.pedido_minimo_entrega.data or None,
+                prazo_entrega_min=form.prazo_entrega_min.data or None,
+                prazo_entrega_max=form.prazo_entrega_max.data or None,
                 owner_id=current_user.id,
             )
             file = form.logotipo.data
@@ -14385,6 +14412,11 @@ def minha_casa_de_racao():
                 telefone=form.telefone.data or None,
                 email=form.email.data or None,
                 endereco=form.endereco.data or None,
+                modo_entrega=form.modo_entrega.data or 'plataforma',
+                valor_frete=form.valor_frete.data or Decimal('0'),
+                pedido_minimo_entrega=form.pedido_minimo_entrega.data or None,
+                prazo_entrega_min=form.prazo_entrega_min.data or None,
+                prazo_entrega_max=form.prazo_entrega_max.data or None,
                 owner_id=current_user.id,
                 status='pendente',
             )
@@ -14412,7 +14444,179 @@ def minha_casa_de_racao():
 @login_required
 def casa_de_racao_dashboard(casa_id):
     casa = _casa_loja_access(casa_id)
-    return render_template('casa_de_racao/dashboard.html', casa=casa)
+    payment_account = (
+        StorePaymentAccount.query
+        .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
+        .first()
+    )
+    return render_template(
+        'casa_de_racao/dashboard.html',
+        casa=casa,
+        payment_account=payment_account,
+    )
+
+
+@login_required
+def mercadopago_oauth_start(casa_id):
+    casa = _casa_loja_access(casa_id)
+    try:
+        oauth_start = build_authorization_start()
+    except MercadoPagoOAuthError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
+        .first()
+    )
+    if not account:
+        account = StorePaymentAccount(casa_de_racao_id=casa.id, provider='mercado_pago')
+        db.session.add(account)
+
+    account.oauth_state = oauth_start.state
+    account.code_verifier = oauth_start.code_verifier
+    account.status = 'pending'
+    account.error_message = None
+    db.session.commit()
+    return redirect(oauth_start.authorization_url)
+
+
+@login_required
+def mercadopago_oauth_callback():
+    code = (request.args.get('code') or '').strip()
+    state = (request.args.get('state') or '').strip()
+    error = (request.args.get('error') or '').strip()
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(oauth_state=state, provider='mercado_pago')
+        .first()
+        if state else None
+    )
+    if not account:
+        flash('NÃ£o foi possÃ­vel validar a conexÃ£o com o Mercado Pago. Tente novamente.', 'danger')
+        return redirect(url_for('minha_casa_de_racao'))
+
+    casa = account.casa_de_racao
+    clinica = account.clinica
+    if casa:
+        can_manage_account = _is_admin() or current_user.id == casa.owner_id
+        success_redirect = url_for('casa_de_racao_dashboard', casa_id=casa.id)
+    elif clinica:
+        can_manage_account = _user_can_manage_clinic(clinica)
+        success_redirect = url_for('clinic_detail', clinica_id=clinica.id) + '#clinica'
+    else:
+        can_manage_account = False
+        success_redirect = url_for('minha_casa_de_racao')
+
+    if not can_manage_account:
+        abort(403)
+
+    if error or not code:
+        account.status = 'error'
+        account.error_message = error or 'AutorizaÃ§Ã£o cancelada ou incompleta.'
+        account.oauth_state = None
+        account.code_verifier = None
+        db.session.commit()
+        flash('A conexÃ£o com o Mercado Pago foi cancelada ou nÃ£o foi concluÃ­da.', 'warning')
+        return redirect(success_redirect)
+
+    try:
+        credentials = exchange_code_for_credentials(code, account.code_verifier)
+        account.access_token = credentials.access_token
+        account.refresh_token = credentials.refresh_token
+        account.public_key = credentials.public_key
+        account.provider_user_id = credentials.provider_user_id
+        account.token_expires_at = credentials.expires_at
+        account.status = 'connected'
+        account.error_message = None
+        account.connected_at = utcnow()
+        account.last_refreshed_at = utcnow()
+        account.oauth_state = None
+        account.code_verifier = None
+        db.session.commit()
+    except (MercadoPagoOAuthError, MissingMasterKeyError) as exc:
+        db.session.rollback()
+        account.status = 'error'
+        account.error_message = str(exc)
+        account.oauth_state = None
+        account.code_verifier = None
+        db.session.add(account)
+        db.session.commit()
+        flash('NÃ£o foi possÃ­vel concluir a conexÃ£o com o Mercado Pago.', 'danger')
+        return redirect(success_redirect)
+
+    flash('Mercado Pago conectado com sucesso. Sua loja jÃ¡ pode receber pagamentos.', 'success')
+    return redirect(success_redirect)
+
+
+@login_required
+def mercadopago_oauth_disconnect(casa_id):
+    casa = _casa_loja_access(casa_id)
+    account = (
+        StorePaymentAccount.query
+        .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
+        .first()
+    )
+    if account:
+        account.status = 'revoked'
+        account.access_token = None
+        account.refresh_token = None
+        account.oauth_state = None
+        account.code_verifier = None
+        db.session.commit()
+    flash('ConexÃ£o com o Mercado Pago desativada para esta loja.', 'info')
+    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+
+@login_required
+def clinic_mercadopago_oauth_start(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    try:
+        oauth_start = build_authorization_start()
+    except MercadoPagoOAuthError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(clinica_id=clinica.id, provider='mercado_pago')
+        .first()
+    )
+    if not account:
+        account = StorePaymentAccount(clinica_id=clinica.id, provider='mercado_pago')
+        db.session.add(account)
+
+    account.oauth_state = oauth_start.state
+    account.code_verifier = oauth_start.code_verifier
+    account.status = 'pending'
+    account.error_message = None
+    db.session.commit()
+    return redirect(oauth_start.authorization_url)
+
+
+@login_required
+def clinic_mercadopago_oauth_disconnect(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    account = (
+        StorePaymentAccount.query
+        .filter_by(clinica_id=clinica.id, provider='mercado_pago')
+        .first()
+    )
+    if account:
+        account.status = 'revoked'
+        account.access_token = None
+        account.refresh_token = None
+        account.oauth_state = None
+        account.code_verifier = None
+        db.session.commit()
+    flash('ConexÃ£o com o Mercado Pago desativada para esta clÃ­nica.', 'info')
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
 
 
 @login_required
@@ -14608,6 +14812,216 @@ def casa_de_racao_entregas(casa_id):
         casa=casa,
         pendentes=pendentes,
         concluidas=concluidas,
+    )
+
+
+@login_required
+def casa_de_racao_grooming_planos(casa_id):
+    from forms import GroomingPlanForm
+    from models import GroomingPlan
+
+    casa = _casa_loja_access(casa_id)
+    form = GroomingPlanForm()
+    if form.validate_on_submit():
+        plan = GroomingPlan(
+            casa_de_racao_id=casa.id,
+            name=form.name.data,
+            description=form.description.data or None,
+            service_type=form.service_type.data,
+            price=form.price.data,
+            sessions_per_month=form.sessions_per_month.data,
+        )
+        db.session.add(plan)
+        db.session.commit()
+        flash('Plano de banho e tosa criado para a casa de racao.', 'success')
+        return redirect(url_for('casa_de_racao_grooming_planos', casa_id=casa.id))
+
+    planos = (
+        GroomingPlan.query
+        .filter_by(casa_de_racao_id=casa.id)
+        .order_by(GroomingPlan.name)
+        .all()
+    )
+    return render_template(
+        'casa_de_racao/grooming_planos.html',
+        casa=casa,
+        planos=planos,
+        form=form,
+    )
+
+
+@login_required
+def casa_de_racao_grooming_plano_toggle(casa_id, plan_id):
+    from models import GroomingPlan
+
+    casa = _casa_loja_access(casa_id)
+    plan = GroomingPlan.query.filter_by(id=plan_id, casa_de_racao_id=casa.id).first_or_404()
+    plan.active = not plan.active
+    db.session.commit()
+    state = 'ativado' if plan.active else 'desativado'
+    flash(f'Plano {state}.', 'success')
+    return redirect(url_for('casa_de_racao_grooming_planos', casa_id=casa.id))
+
+
+def _optional_decimal_from_form(field_name):
+    raw_value = (request.form.get(field_name) or '').strip().replace(',', '.')
+    if not raw_value:
+        return None
+    try:
+        return float(Decimal(raw_value))
+    except Exception:
+        return None
+
+
+@login_required
+def casa_de_racao_tutores(casa_id):
+    casa = _casa_loja_access(casa_id)
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        email = (request.form.get('email') or '').strip().lower()
+        phone = (request.form.get('phone') or '').strip() or None
+        cpf = (request.form.get('cpf') or '').strip() or None
+
+        if not name:
+            flash('Informe o nome do tutor.', 'warning')
+            return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
+
+        tutor = User.query.filter_by(email=email).first() if email else None
+        if tutor and tutor.casa_de_racao_id not in (None, casa.id):
+            flash('Este e-mail ja esta vinculado a outra loja.', 'warning')
+            return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
+        if not tutor:
+            tutor = User(
+                name=name,
+                email=email or f"tutor-{casa.id}-{uuid.uuid4().hex[:12]}@petorlandia.local",
+                role='adotante',
+                added_by=current_user,
+                casa_de_racao_id=casa.id,
+                is_private=True,
+            )
+            tutor.set_password(uuid.uuid4().hex)
+            db.session.add(tutor)
+        else:
+            tutor.name = name
+            tutor.casa_de_racao_id = casa.id
+            tutor.added_by = tutor.added_by or current_user
+            tutor.is_private = True
+
+        tutor.phone = phone
+        tutor.cpf = cpf
+        db.session.commit()
+        flash('Tutor cadastrado para a loja.', 'success')
+        return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
+
+    tutores = (
+        User.query
+        .filter_by(casa_de_racao_id=casa.id)
+        .order_by(User.name.asc())
+        .all()
+    )
+    return render_template('casa_de_racao/tutores.html', casa=casa, tutores=tutores)
+
+
+@login_required
+def casa_de_racao_animais(casa_id):
+    casa = _casa_loja_access(casa_id)
+    tutores = (
+        User.query
+        .filter_by(casa_de_racao_id=casa.id)
+        .order_by(User.name.asc())
+        .all()
+    )
+
+    if request.method == 'POST':
+        tutor_id = request.form.get('tutor_id', type=int)
+        tutor = User.query.filter_by(id=tutor_id, casa_de_racao_id=casa.id).first()
+        if not tutor:
+            flash('Selecione um tutor cadastrado nesta loja.', 'warning')
+            return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
+
+        name = (request.form.get('name') or '').strip()
+        if not name:
+            flash('Informe o nome do animal.', 'warning')
+            return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
+
+        animal = Animal(
+            name=name,
+            user_id=tutor.id,
+            added_by_id=current_user.id,
+            casa_de_racao_id=casa.id,
+            age=(request.form.get('age') or '').strip() or None,
+            sex=(request.form.get('sex') or '').strip() or None,
+            peso=_optional_decimal_from_form('peso'),
+            description=(request.form.get('description') or '').strip() or None,
+            status='privado',
+            modo='adotado',
+        )
+        db.session.add(animal)
+        db.session.commit()
+        flash('Animal cadastrado para acompanhamento da loja.', 'success')
+        return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
+
+    animais = (
+        Animal.query
+        .filter_by(casa_de_racao_id=casa.id)
+        .options(joinedload(Animal.owner), joinedload(Animal.racoes).joinedload(Racao.tipo_racao))
+        .order_by(Animal.name.asc())
+        .all()
+    )
+    return render_template(
+        'casa_de_racao/animais.html',
+        casa=casa,
+        tutores=tutores,
+        animais=animais,
+    )
+
+
+@login_required
+def casa_de_racao_animal_racoes(casa_id, animal_id):
+    casa = _casa_loja_access(casa_id)
+    animal = Animal.query.filter_by(id=animal_id, casa_de_racao_id=casa.id).first_or_404()
+    if request.method == 'POST':
+        marca = _canonicalize_racao_brand(request.form.get('marca') or '')
+        linha = (request.form.get('linha') or '').strip() or None
+        if not marca:
+            flash('Informe a marca da racao.', 'warning')
+            return redirect(url_for('casa_de_racao_animal_racoes', casa_id=casa.id, animal_id=animal.id))
+
+        tipo = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+        if not tipo:
+            tipo = TipoRacao(marca=marca, linha=linha, created_by=current_user.id)
+            db.session.add(tipo)
+            db.session.flush()
+
+        racao = Racao(
+            animal_id=animal.id,
+            tipo_racao_id=tipo.id,
+            preco_pago=_optional_decimal_from_form('preco_pago'),
+            tamanho_embalagem=(request.form.get('tamanho_embalagem') or '').strip() or None,
+            observacoes_racao=(request.form.get('observacoes_racao') or '').strip() or None,
+            created_by=current_user.id,
+        )
+        db.session.add(racao)
+        db.session.commit()
+        try:
+            list_rations.cache_clear()
+        except Exception:
+            pass
+        flash('Racao vinculada ao animal.', 'success')
+        return redirect(url_for('casa_de_racao_animal_racoes', casa_id=casa.id, animal_id=animal.id))
+
+    racoes = (
+        Racao.query
+        .filter_by(animal_id=animal.id)
+        .options(joinedload(Racao.tipo_racao))
+        .order_by(Racao.data_cadastro.desc())
+        .all()
+    )
+    return render_template(
+        'casa_de_racao/animal_racoes.html',
+        casa=casa,
+        animal=animal,
+        racoes=racoes,
     )
 
 
@@ -15585,6 +15999,11 @@ def clinic_detail(clinica_id):
     clinic_theme = _build_clinic_theme(clinica)
     clinic_subtitle = _build_clinic_subtitle(clinica)
     clinic_initials = _clinic_initials(clinica)
+    payment_account = (
+        StorePaymentAccount.query
+        .filter_by(clinica_id=clinica.id, provider='mercado_pago')
+        .first()
+    )
 
     return render_template(
         'clinica/clinic_detail.html',
@@ -15592,6 +16011,7 @@ def clinic_detail(clinica_id):
         clinic_theme=clinic_theme,
         clinic_subtitle=clinic_subtitle,
         clinic_initials=clinic_initials,
+        payment_account=payment_account,
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,
@@ -16244,15 +16664,17 @@ def clinic_grooming_assinantes(clinica_id, plan_id):
 
 @login_required
 def grooming_planos_publicos():
-    from models import GroomingPlan, GroomingSubscription, Clinica
+    from models import GroomingPlan, GroomingSubscription, Clinica, CasaDeRacao
     from forms import GroomingPlanForm
 
     minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+    minha_casa_de_racao = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
 
     grooming_form = GroomingPlanForm(prefix='gp')
-    if minha_clinica and grooming_form.validate_on_submit() and grooming_form.submit.data:
+    if (minha_clinica or minha_casa_de_racao) and grooming_form.validate_on_submit() and grooming_form.submit.data:
         plan = GroomingPlan(
-            clinica_id=minha_clinica.id,
+            clinica_id=minha_clinica.id if minha_clinica else None,
+            casa_de_racao_id=minha_casa_de_racao.id if not minha_clinica and minha_casa_de_racao else None,
             name=grooming_form.name.data,
             description=grooming_form.description.data or None,
             service_type=grooming_form.service_type.data,
@@ -16276,13 +16698,18 @@ def grooming_planos_publicos():
         .filter_by(user_id=current_user.id, active=True)
         .all()
     )
-    grooming_planos = minha_clinica.grooming_plans.order_by(GroomingPlan.name).all() if minha_clinica else []
+    grooming_planos = []
+    if minha_clinica:
+        grooming_planos = minha_clinica.grooming_plans.order_by(GroomingPlan.name).all()
+    elif minha_casa_de_racao:
+        grooming_planos = minha_casa_de_racao.grooming_plans.order_by(GroomingPlan.name).all()
 
     return render_template(
         'grooming/planos_publicos.html',
         planos=planos,
         minhas_ids=minhas_ids,
         minha_clinica=minha_clinica,
+        minha_casa_de_racao=minha_casa_de_racao,
         grooming_form=grooming_form,
         grooming_planos=grooming_planos,
     )
@@ -22760,8 +23187,40 @@ from forms import AddToCartForm, CheckoutForm, CartAddressForm  # Added Checkout
 #  SDK (lazy – lê token do config)
 # ─────────────────────────────────────────────────────────
 @cache
-def mp_sdk():
-    return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
+def mp_sdk(access_token=None):
+    return mercadopago.SDK(access_token or current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
+
+
+def _connected_mercadopago_account_for_order(order):
+    seller_keys = {
+        (item.product.clinica_id, item.product.casa_de_racao_id)
+        for item in (order.items or [])
+        if item.product and (item.product.clinica_id or item.product.casa_de_racao_id)
+    }
+    if len(seller_keys) != 1:
+        return None
+    clinica_id, casa_id = next(iter(seller_keys))
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(
+            clinica_id=clinica_id,
+            casa_de_racao_id=casa_id,
+            provider='mercado_pago',
+            status='connected',
+        )
+        .first()
+    )
+    if account and account.is_connected:
+        return account
+    return None
+
+
+def _mercadopago_marketplace_fee(total_amount):
+    fee_percent = float(current_app.config.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT") or 0)
+    if fee_percent <= 0:
+        return 0.0
+    return round(float(total_amount) * fee_percent / 100, 2)
 
 
 def _mp_auto_return_enabled(back_urls: dict) -> bool:
@@ -23294,6 +23753,100 @@ def _mp_item_payload(it):
         "unit_price": float(it.unit_price or 0),
     }
 
+
+def _money_decimal(value) -> Decimal:
+    try:
+        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    except Exception:  # noqa: BLE001
+        return Decimal("0.00")
+
+
+def _order_vendor_shipping(order):
+    """Return per-store shipping lines for a cart/order."""
+    if not order or not getattr(order, 'items', None):
+        return {
+            "stores": [],
+            "products_total": Decimal("0.00"),
+            "shipping_total": Decimal("0.00"),
+            "grand_total": Decimal("0.00"),
+        }
+
+    grouped = {}
+    products_total = Decimal("0.00")
+    for item in order.items:
+        product = item.product
+        unit_price = _money_decimal(item.unit_price if item.unit_price is not None else (product.price if product else 0))
+        line_total = unit_price * int(item.quantity or 0)
+        products_total += line_total
+        casa_id = product.casa_de_racao_id if product and product.casa_de_racao_id else None
+        clinica_id = product.clinica_id if product and product.clinica_id else None
+        if not casa_id and not clinica_id:
+            continue
+        seller_key = (clinica_id, casa_id)
+        provider = product.casa_de_racao if casa_id else product.clinica
+        entry = grouped.setdefault(
+            seller_key,
+            {
+                "provider": provider,
+                "kind": "casa_de_racao" if casa_id else "clinica",
+                "seller_id": casa_id or clinica_id,
+                "items": [],
+                "subtotal": Decimal("0.00"),
+            },
+        )
+        entry["items"].append(item)
+        entry["subtotal"] += line_total
+
+    stores = []
+    shipping_total = Decimal("0.00")
+    for seller_key, entry in grouped.items():
+        provider = entry["provider"]
+        freight = _money_decimal(getattr(provider, "valor_frete", 0))
+        minimum = _money_decimal(getattr(provider, "pedido_minimo_entrega", 0))
+        meets_minimum = not minimum or entry["subtotal"] >= minimum
+        shipping_total += freight
+        stores.append({
+            "seller_key": f"{entry['kind']}-{entry['seller_id']}",
+            "seller_id": entry["seller_id"],
+            "kind": entry["kind"],
+            "name": provider.nome if provider else "Estabelecimento",
+            "subtotal": entry["subtotal"],
+            "freight": freight,
+            "minimum": minimum,
+            "meets_minimum": meets_minimum,
+            "prazo_min": getattr(provider, "prazo_entrega_min", None),
+            "prazo_max": getattr(provider, "prazo_entrega_max", None),
+        })
+
+    return {
+        "stores": stores,
+        "products_total": products_total,
+        "shipping_total": shipping_total,
+        "grand_total": products_total + shipping_total,
+    }
+
+
+def _order_checkout_total(order) -> Decimal:
+    return _order_vendor_shipping(order)["grand_total"]
+
+
+def _shipping_items_for_preference(order):
+    shipping = _order_vendor_shipping(order)
+    items = []
+    for store in shipping["stores"]:
+        if store["freight"] <= 0:
+            continue
+        items.append({
+            "id": f"frete-{store['seller_key']}",
+            "title": f"Frete - {store['name']}",
+            "description": f"Entrega da loja {store['name']}",
+            "category_id": "services",
+            "quantity": 1,
+            "unit_price": float(store["freight"]),
+        })
+    return items
+
+
 # Helper to fetch the current order from session and verify ownership
 def _get_current_order():
     order_id = session.get("current_order")
@@ -23629,7 +24182,7 @@ def adicionar_carrinho(product_id):
     flash("Produto adicionado ao carrinho.", "success")
     
     if is_ajax:
-        total_value = order.total_value()
+        total_value = _order_checkout_total(order)
         total_qty = sum(i.quantity for i in order.items)
         return jsonify(
             success=True,
@@ -23659,7 +24212,7 @@ def aumentar_item_carrinho(item_id):
     
     wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if wants_json:
-        total_value = order.total_value()
+        total_value = _order_checkout_total(order)
         total_qty = sum(i.quantity for i in order.items)
         return jsonify(
             message="Quantidade atualizada",
@@ -23697,7 +24250,7 @@ def diminuir_item_carrinho(item_id):
     
     wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if wants_json:
-        total_value = order.total_value()
+        total_value = _order_checkout_total(order)
         total_qty = sum(i.quantity for i in order.items)
         payload = {
             "message": message,
@@ -23744,6 +24297,7 @@ def ver_carrinho():
         'loja/carrinho.html',
         form=form,
         order=order,
+        shipping=_order_vendor_shipping(order),
         pagamento_pendente=pagamento_pendente,
         default_address=default_address,
         saved_addresses=current_user.saved_addresses,
@@ -23814,6 +24368,7 @@ def checkout_confirm():
         "loja/checkout_confirm.html",
         form=form,
         order=order,
+        shipping=_order_vendor_shipping(order),
         selected_address=selected_address,
     )
 
@@ -23853,8 +24408,12 @@ def checkout():
     form = CheckoutForm()
     _setup_checkout_form(form, preserve_selected=True)
     prefers_json = (
-        request.accept_mimetypes['application/json'] >=
-        request.accept_mimetypes['text/html']
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or (
+            request.accept_mimetypes['application/json'] > 0
+            and request.accept_mimetypes['application/json'] >=
+            request.accept_mimetypes['text/html']
+        )
     )
 
     def respond_error(message, category="danger", status=400, errors=None):
@@ -23946,7 +24505,8 @@ def checkout():
         method=PaymentMethod.PIX,          # ou outro enum que prefira
         status=PaymentStatus.PENDING,
     )
-    payment.amount = Decimal(str(order.total_value()))
+    shipping = _order_vendor_shipping(order)
+    payment.amount = shipping["grand_total"]
     db.session.add(payment)
     db.session.flush()                     # gera payment.id sem fechar a transação
     payment.external_reference = str(payment.id)
@@ -23967,6 +24527,7 @@ def checkout():
         }
         for it in order.items
     ]
+    items.extend(_shipping_items_for_preference(order))
 
 
     # 4️⃣ payload Preference
@@ -24025,12 +24586,27 @@ def checkout():
     }
     if _mp_auto_return_enabled(back_urls):
         preference_data["auto_return"] = "approved"
+    seller_payment_account = _connected_mercadopago_account_for_order(order)
+    sdk_access_token = None
+    if seller_payment_account:
+        try:
+            sdk_access_token = seller_payment_account.access_token
+        except MissingMasterKeyError:
+            current_app.logger.exception(
+                "Chave mestra ausente ao descriptografar token Mercado Pago da casa %s",
+                seller_payment_account.casa_de_racao_id,
+            )
+            return respond_error("Pagamento da loja indisponivel no momento.")
+        marketplace_fee = _mercadopago_marketplace_fee(payment.amount)
+        if marketplace_fee > 0:
+            preference_data["marketplace_fee"] = marketplace_fee
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))
 
     # 5️⃣ cria Preference no Mercado Pago
     try:
-        resp = mp_sdk().preference().create(preference_data)
+        sdk = mp_sdk(sdk_access_token) if sdk_access_token else mp_sdk()
+        resp = sdk.preference().create(preference_data)
     except Exception:
         current_app.logger.exception("Erro de conexão com Mercado Pago")
         return respond_error("Falha ao conectar com Mercado Pago.")
@@ -24250,6 +24826,10 @@ def notificacoes_mercado_pago():
                             if casa_id:
                                 casa = CasaDeRacao.query.get(casa_id)
                                 if casa and casa.modo_entrega == 'propria':
+                                    tipo = 'propria'
+                            elif clinica_id:
+                                clinica = Clinica.query.get(clinica_id)
+                                if clinica and clinica.modo_entrega == 'propria':
                                     tipo = 'propria'
                             db.session.add(DeliveryRequest(
                                 order_id=pay.order_id,

@@ -465,6 +465,18 @@ class ClinicForm(FlaskForm):
     endereco = StringField('Endereço', validators=[Optional()])
     telefone = StringField('Telefone', validators=[Optional()])
     email = StringField('Email', validators=[Optional(), Email()])
+    modo_entrega = SelectField(
+        'Modo de entrega',
+        choices=[
+            ('plataforma', 'Entregadores da plataforma PetOrlÃ¢ndia'),
+            ('propria', 'Entrega prÃ³pria'),
+        ],
+        default='plataforma',
+    )
+    valor_frete = DecimalField('Frete por pedido (R$)', places=2, default=0, validators=[Optional(), NumberRange(min=0)])
+    pedido_minimo_entrega = DecimalField('Pedido mÃ­nimo para entrega (R$)', places=2, validators=[Optional(), NumberRange(min=0)])
+    prazo_entrega_min = IntegerField('Prazo mÃ­nimo (min)', validators=[Optional(), NumberRange(min=0, max=1440)])
+    prazo_entrega_max = IntegerField('Prazo mÃ¡ximo (min)', validators=[Optional(), NumberRange(min=0, max=1440)])
     logotipo = FileField('Imagem da Clínica', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
     photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
@@ -801,6 +813,25 @@ class CasaDeRacaoForm(FlaskForm):
             ('propria', 'Entrega própria — eu mesmo entrego meus pedidos'),
         ],
         default='plataforma',
+    )
+    valor_frete = DecimalField(
+        'Frete por pedido (R$)',
+        places=2,
+        default=0,
+        validators=[Optional(), NumberRange(min=0)],
+    )
+    pedido_minimo_entrega = DecimalField(
+        'Pedido mínimo para entrega (R$)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
+    )
+    prazo_entrega_min = IntegerField(
+        'Prazo mínimo (min)',
+        validators=[Optional(), NumberRange(min=0, max=1440)],
+    )
+    prazo_entrega_max = IntegerField(
+        'Prazo máximo (min)',
+        validators=[Optional(), NumberRange(min=0, max=1440)],
     )
     logotipo = FileField(
         'Logo da loja',

@@ -40,8 +40,47 @@ def get_blueprint():
         view_func=lazy_view("casa_de_racao_entregas"),
     )
     bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/planos/tosa",
+        view_func=lazy_view("casa_de_racao_grooming_planos"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/planos/tosa/<int:plan_id>/toggle",
+        view_func=lazy_view("casa_de_racao_grooming_plano_toggle"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/tutores",
+        view_func=lazy_view("casa_de_racao_tutores"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/animais",
+        view_func=lazy_view("casa_de_racao_animais"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/animal/<int:animal_id>/racoes",
+        view_func=lazy_view("casa_de_racao_animal_racoes"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
         "/casa-de-racao/<int:casa_id>/entrega/<int:dr_id>/status",
         view_func=lazy_view("casa_entrega_atualizar_status"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/mercado-pago/conectar",
+        view_func=lazy_view("mercadopago_oauth_start"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/mercado-pago/callback",
+        view_func=lazy_view("mercadopago_oauth_callback"),
+    )
+    bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/mercado-pago/desconectar",
+        view_func=lazy_view("mercadopago_oauth_disconnect"),
         methods=["POST"],
     )
     bp.add_url_rule(

@@ -32,6 +32,10 @@ def _build_beat_schedule() -> dict[str, dict[str, object]]:
             "task": "jobs.fiscal_maintenance",
             "schedule": crontab(hour=hour, minute=minute),
         },
+        "mercadopago-oauth-renewal-daily": {
+            "task": "jobs.mercadopago_oauth_renewal",
+            "schedule": crontab(hour=3, minute=15),
+        },
     }
 
 

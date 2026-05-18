@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <div>
+      <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Planos de Banho e Tosa</h1>
+      <p class="text-muted small mb-0">{{ casa.nome }}</p>
+    </div>
+    <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-primary btn-sm ms-auto">
+      <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Ver página pública
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body">
+          <h5 class="fw-bold mb-3"><i class="fa-solid fa-plus-circle me-2 text-success"></i>Novo plano</h5>
+          <form method="post" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.name.label(class="form-label fw-semibold") }}
+              {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Ex: Banho Mensal") }}
+              {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.description.label(class="form-label fw-semibold") }}
+              {{ form.description(class="form-control", rows=3, placeholder="Detalhes do plano") }}
+            </div>
+
+            <div class="mb-3">
+              {{ form.service_type.label(class="form-label fw-semibold") }}
+              {{ form.service_type(class="form-select") }}
+            </div>
+
+            <div class="mb-3">
+              {{ form.price.label(class="form-label fw-semibold") }}
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else ""), placeholder="0,00") }}
+                {% for e in form.price.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.sessions_per_month.label(class="form-label fw-semibold") }}
+              <div class="input-group">
+                {{ form.sessions_per_month(class="form-control" + (" is-invalid" if form.sessions_per_month.errors else ""), placeholder="1") }}
+                <span class="input-group-text">sessão(ões)/mês</span>
+                {% for e in form.sessions_per_month.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+
+            {{ form.submit(class="btn btn-success w-100") }}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <h5 class="fw-bold mb-3">Planos cadastrados ({{ planos|length }})</h5>
+
+      {% if planos %}
+      <div class="row g-3">
+        {% for p in planos %}
+        <div class="col-sm-6">
+          <div class="card border-0 shadow-sm rounded-3 h-100 {% if not p.active %}opacity-50{% endif %}">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="badge bg-primary-subtle text-primary">{{ p.service_label }}</span>
+                <span class="badge {% if p.active %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                  {{ 'Ativo' if p.active else 'Inativo' }}
+                </span>
+              </div>
+
+              <h6 class="fw-bold mb-1">{{ p.name }}</h6>
+              {% if p.description %}
+              <p class="text-muted small mb-2">{{ p.description|truncate(90) }}</p>
+              {% endif %}
+              <p class="h5 text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}<span class="text-muted fs-6 fw-normal">/mês</span></p>
+              <p class="small text-muted mb-3">
+                <i class="fa-solid fa-calendar-check me-1"></i>{{ p.sessions_per_month }} sessão(ões)/mês
+              </p>
+
+              <form method="post" action="{{ url_for('casa_de_racao_grooming_plano_toggle', casa_id=casa.id, plan_id=p.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm {% if p.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                  <i class="fa-solid {% if p.active %}fa-eye-slash{% else %}fa-eye{% endif %} me-1"></i>
+                  {% if p.active %}Desativar{% else %}Ativar{% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="fa-solid fa-scissors fa-3x mb-3"></i>
+        <p class="h5">Nenhum plano cadastrado ainda.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
