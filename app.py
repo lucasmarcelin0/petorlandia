@@ -14424,34 +14424,7 @@ def parceiro_loja_landing():
 def minha_casa_de_racao():
     casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
     if casa:
-        form = CasaDeRacaoForm(obj=casa)
-        if form.validate_on_submit():
-            casa.nome = form.nome.data
-            casa.razao_social = form.razao_social.data or None
-            casa.cnpj = form.cnpj.data or None
-            casa.descricao = form.descricao.data or None
-            casa.telefone = form.telefone.data or None
-            casa.email = form.email.data or None
-            casa.endereco = form.endereco.data or None
-            casa.modo_entrega = form.modo_entrega.data or 'plataforma'
-            casa.valor_frete = form.valor_frete.data or Decimal('0')
-            casa.pedido_minimo_entrega = form.pedido_minimo_entrega.data or None
-            casa.prazo_entrega_min = form.prazo_entrega_min.data or None
-            casa.prazo_entrega_max = form.prazo_entrega_max.data or None
-            file = form.logotipo.data
-            if file and getattr(file, 'filename', ''):
-                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                image_url = upload_to_s3(file, filename, folder='casas_de_racao')
-                if image_url:
-                    casa.logotipo = image_url
-                    casa.photo_rotation = form.photo_rotation.data
-                    casa.photo_zoom = float(form.photo_zoom.data)
-                    casa.photo_offset_x = float(form.photo_offset_x.data)
-                    casa.photo_offset_y = float(form.photo_offset_y.data)
-            db.session.commit()
-            flash('Dados da loja atualizados com sucesso.', 'success')
-            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
-        return render_template('casa_de_racao/create.html', form=form, editing=True, casa=casa)
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
 
     form = CasaDeRacaoForm()
     if form.validate_on_submit():
