@@ -14493,13 +14493,85 @@ def minha_casa_de_racao():
 
 @login_required
 def casa_de_racao_dashboard(casa_id):
+    from forms import CasaDeRacaoForm, StoreHoursForm
     casa = _casa_loja_access(casa_id)
+
+    store_form = CasaDeRacaoForm(obj=casa)
+    hours_form = StoreHoursForm()
+
+    if request.method == 'POST':
+        if request.form.get('_action') == 'update_info' and store_form.validate_on_submit():
+            casa.nome = store_form.nome.data
+            casa.razao_social = store_form.razao_social.data or None
+            casa.cnpj = store_form.cnpj.data or None
+            casa.descricao = store_form.descricao.data or None
+            casa.telefone = store_form.telefone.data or None
+            casa.email = store_form.email.data or None
+            casa.endereco = store_form.endereco.data or None
+            casa.modo_entrega = store_form.modo_entrega.data or 'plataforma'
+            casa.valor_frete = store_form.valor_frete.data or Decimal('0')
+            casa.pedido_minimo_entrega = store_form.pedido_minimo_entrega.data or None
+            casa.prazo_entrega_min = store_form.prazo_entrega_min.data or None
+            casa.prazo_entrega_max = store_form.prazo_entrega_max.data or None
+            file = store_form.logotipo.data
+            if file and getattr(file, 'filename', ''):
+                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+                image_url = upload_to_s3(file, filename, folder='casas_de_racao')
+                if image_url:
+                    casa.logotipo = image_url
+                    casa.photo_rotation = store_form.photo_rotation.data
+                    casa.photo_zoom = float(store_form.photo_zoom.data)
+                    casa.photo_offset_x = float(store_form.photo_offset_x.data)
+                    casa.photo_offset_y = float(store_form.photo_offset_y.data)
+            db.session.commit()
+            flash('Dados da loja atualizados.', 'success')
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#loja')
+
+        elif request.form.get('_action') == 'add_hours' and hours_form.validate_on_submit():
+            for dia in hours_form.dias_semana.data:
+                existing = CasaDeRacaoHorario.query.filter_by(
+                    casa_de_racao_id=casa.id, dia_semana=dia
+                ).first()
+                if existing:
+                    existing.hora_abertura = hours_form.hora_abertura.data
+                    existing.hora_fechamento = hours_form.hora_fechamento.data
+                else:
+                    db.session.add(CasaDeRacaoHorario(
+                        casa_de_racao_id=casa.id,
+                        dia_semana=dia,
+                        hora_abertura=hours_form.hora_abertura.data,
+                        hora_fechamento=hours_form.hora_fechamento.data,
+                    ))
+            db.session.commit()
+            flash('Horários salvos.', 'success')
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#horarios')
+
     payment_account = (
         StorePaymentAccount.query
         .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
         .first()
     )
     mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
+    mp_platform_configured = bool((current_app.config.get("MERCADOPAGO_ACCESS_TOKEN") or "").strip())
+
+    tutores = User.query.filter_by(casa_de_racao_id=casa.id).order_by(User.name).all()
+    animais = (
+        Animal.query
+        .filter_by(casa_de_racao_id=casa.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+    horarios = CasaDeRacaoHorario.query.filter_by(casa_de_racao_id=casa.id).all()
+
+    _dia_order = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    horarios = sorted(horarios, key=lambda h: _dia_order.index(h.dia_semana) if h.dia_semana in _dia_order else 99)
+
+    produtos_count = (
+        Product.query
+        .filter_by(casa_de_racao_id=casa.id, active=True)
+        .count()
+    )
     entregas_pendentes = 0
     if casa.modo_entrega == 'propria':
         entregas_pendentes = (
@@ -14508,13 +14580,35 @@ def casa_de_racao_dashboard(casa_id):
             .filter(DeliveryRequest.status.in_(['pendente', 'em_andamento']))
             .count()
         )
+
+    store_initials = ''.join(w[0].upper() for w in (casa.nome or '').split() if w)[:2] or '??'
+
     return render_template(
         'casa_de_racao/dashboard.html',
         casa=casa,
+        store_form=store_form,
+        hours_form=hours_form,
         payment_account=payment_account,
         mp_oauth_available=mp_oauth_available,
+        mp_platform_configured=mp_platform_configured,
+        tutores=tutores,
+        animais=animais,
+        horarios=horarios,
+        produtos_count=produtos_count,
         entregas_pendentes=entregas_pendentes,
+        store_initials=store_initials,
+        pode_editar=True,
     )
+
+
+@login_required
+def casa_de_racao_horario_delete(casa_id, horario_id):
+    casa = _casa_loja_access(casa_id)
+    horario = CasaDeRacaoHorario.query.filter_by(id=horario_id, casa_de_racao_id=casa.id).first_or_404()
+    db.session.delete(horario)
+    db.session.commit()
+    flash('Horário removido.', 'info')
+    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#horarios')
 
 
 @login_required

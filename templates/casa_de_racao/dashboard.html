@@ -1,356 +1,452 @@
 {% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+{% from 'components/logo.html' import clinic_logo %}
+
+{% macro store_tab(tab_id, label, icon_class, tone_class, meta='', active=False) -%}
+  <li class="nav-item clinic-tabs__item" role="presentation">
+    <button
+      class="nav-link clinic-tabs__link {{ tone_class }}{% if active %} active{% endif %}"
+      id="{{ tab_id }}-tab"
+      data-bs-toggle="tab"
+      data-bs-target="#{{ tab_id }}"
+      type="button" role="tab"
+      aria-controls="{{ tab_id }}"
+      aria-selected="{{ 'true' if active else 'false' }}"
+    >
+      <span class="clinic-tabs__icon" aria-hidden="true"><i class="{{ icon_class }}"></i></span>
+      <span class="clinic-tabs__copy">
+        <span class="clinic-tabs__label">{{ label }}</span>
+        {% if meta %}<span class="clinic-tabs__meta">{{ meta }}</span>{% endif %}
+      </span>
+    </button>
+  </li>
+{%- endmacro %}
+
 {% block main %}
-<div class="container mt-4" style="max-width: 800px;">
+<div class="clinic-page-shell" data-clinic-workspace>
 
-  <!-- Cabeçalho -->
-  <div class="d-flex align-items-start gap-3 mb-4 flex-wrap">
-    {% if casa.logo_url %}
-    <img src="{{ casa.logo_url }}" alt="Logo {{ casa.nome }}"
-         class="rounded-3 border object-fit-cover"
-         style="width:80px;height:80px;">
-    {% else %}
-    <div class="rounded-3 border bg-light d-flex align-items-center justify-content-center"
-         style="width:80px;height:80px;">
-      <i class="fa-solid fa-store fa-2x text-muted"></i>
-    </div>
-    {% endif %}
-    <div class="flex-grow-1">
-      <h1 class="h3 fw-bold mb-1">{{ casa.nome }}</h1>
-      {% if casa.razao_social %}
-      <p class="text-muted small mb-1">{{ casa.razao_social }}</p>
-      {% endif %}
-      {% if casa.status == 'pendente' %}
-      <span class="badge bg-warning text-dark">
-        <i class="fa-solid fa-clock me-1"></i>Aguardando aprovação
-      </span>
-      {% elif casa.status == 'ativa' %}
-      <span class="badge bg-success">
-        <i class="fa-solid fa-check-circle me-1"></i>Loja ativa
-      </span>
-      {% else %}
-      <span class="badge bg-danger">
-        <i class="fa-solid fa-ban me-1"></i>Suspensa
-      </span>
-      {% endif %}
-    </div>
-    <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
-       class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
-      <i class="fa-solid fa-box me-2"></i>Meus Produtos
-    </a>
-  </div>
-
-  <!-- Aviso de pendência -->
-  {% if casa.status == 'pendente' %}
-  <div class="alert alert-warning border-0 rounded-3" role="alert">
-    <i class="fa-solid fa-triangle-exclamation me-2"></i>
-    <strong>Seu cadastro está em análise.</strong>
-    Nossa equipe verificará seus dados em até 48h. Você receberá um aviso assim que sua loja for aprovada e poderá começar a publicar produtos.
-  </div>
-  {% endif %}
-
-  <!-- Informações da loja -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-semibold mb-0"><i class="fa-solid fa-circle-info me-2 text-primary"></i>Informações</h5>
-        <a href="{{ url_for('minha_casa_de_racao') }}" class="btn btn-outline-secondary btn-sm">
-          <i class="fa-solid fa-pen me-1"></i>Editar
-        </a>
-      </div>
-
-      <div class="row g-3">
-        {% if casa.cnpj %}
-        <div class="col-sm-6">
-          <span class="text-muted small d-block">CNPJ</span>
-          <span class="fw-semibold">{{ casa.cnpj }}</span>
-        </div>
-        {% endif %}
-        {% if casa.telefone %}
-        <div class="col-sm-6">
-          <span class="text-muted small d-block">Telefone</span>
-          <span class="fw-semibold">{{ casa.telefone }}</span>
-        </div>
-        {% endif %}
-        {% if casa.email %}
-        <div class="col-sm-6">
-          <span class="text-muted small d-block">E-mail</span>
-          <span class="fw-semibold">{{ casa.email }}</span>
-        </div>
-        {% endif %}
-        {% if casa.endereco %}
-        <div class="col-12">
-          <span class="text-muted small d-block">Endereço</span>
-          <span class="fw-semibold">{{ casa.endereco }}</span>
-        </div>
-        {% endif %}
-        {% if casa.descricao %}
-        <div class="col-12">
-          <span class="text-muted small d-block">Sobre a loja</span>
-          <p class="mb-0">{{ casa.descricao }}</p>
-        </div>
+  {# ── Cabeçalho ── #}
+  <section class="clinic-context-card" aria-labelledby="store-context-title">
+    <div class="clinic-context-card__identity">
+      <div class="clinic-context-card__logo" aria-hidden="true">
+        {% if casa.logotipo %}
+          {{ clinic_logo(casa, alt_text='Logo da loja') }}
+        {% else %}
+          <span>{{ store_initials }}</span>
         {% endif %}
       </div>
-    </div>
-  </div>
-
-  <!-- Modo de entrega -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between align-items-center">
-        <div>
-          <h5 class="fw-semibold mb-1">
-            <i class="fa-solid fa-truck me-2 text-primary"></i>Modo de entrega
-          </h5>
-          {% if casa.modo_entrega == 'propria' %}
-          <p class="mb-0 text-muted small">
-            <span class="badge bg-info text-dark me-2">Entrega própria</span>
-            Você mesmo realiza suas entregas.
-          </p>
-          {% else %}
-          <p class="mb-0 text-muted small">
-            <span class="badge bg-secondary me-2">Plataforma</span>
-            Entregadores da PetOrlândia cuidam das suas entregas.
-          </p>
+      <div class="clinic-context-card__title">
+        <span class="clinic-context-card__eyebrow">
+          Casa de Ração
+          {% if casa.status == 'pendente' %}
+            <span class="badge bg-warning text-dark ms-2 fw-normal" style="font-size:.7rem">Em análise</span>
+          {% elif casa.status == 'suspensa' %}
+            <span class="badge bg-danger ms-2 fw-normal" style="font-size:.7rem">Suspensa</span>
           {% endif %}
+        </span>
+        <h1 id="store-context-title">{{ casa.nome }}</h1>
+        <div class="clinic-context-card__contacts">
+          {% if casa.endereco %}<span><i class="fa-solid fa-location-dot" aria-hidden="true"></i>{{ casa.endereco }}</span>{% endif %}
+          {% if casa.telefone %}<span><i class="fa-solid fa-phone" aria-hidden="true"></i>{{ casa.telefone }}</span>{% endif %}
+          {% if casa.email %}<span><i class="fa-solid fa-envelope" aria-hidden="true"></i>{{ casa.email }}</span>{% endif %}
         </div>
-        <div class="mt-3">
-          <span class="text-muted small d-block">Frete da loja</span>
-          <span class="fw-semibold">R$ {{ '%.2f'|format(casa.valor_frete or 0)|replace('.', ',') }}</span>
-          {% if casa.prazo_entrega_min or casa.prazo_entrega_max %}
-          <span class="text-muted small ms-2">
-            Prazo:
-            {% if casa.prazo_entrega_min and casa.prazo_entrega_max %}
-              {{ casa.prazo_entrega_min }}-{{ casa.prazo_entrega_max }} min
-            {% elif casa.prazo_entrega_min %}
-              a partir de {{ casa.prazo_entrega_min }} min
-            {% else %}
-              até {{ casa.prazo_entrega_max }} min
-            {% endif %}
-          </span>
-          {% endif %}
-        </div>
-        <a href="{{ url_for('minha_casa_de_racao') }}" class="btn btn-outline-secondary btn-sm">
-          <i class="fa-solid fa-pen me-1"></i>Alterar
-        </a>
       </div>
     </div>
-  </div>
+    <div class="clinic-context-card__actions">
+      <button type="button" class="btn btn-primary"
+              onclick="toggleStoreEdit(); document.getElementById('edit-store-info').scrollIntoView({behavior:'smooth'});">
+        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Editar dados
+      </button>
+    </div>
+  </section>
 
-  <!-- Mercado Pago -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-        <div>
-          <h5 class="fw-semibold mb-1">
-            <i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago
-          </h5>
-          {% if payment_account and payment_account.status == 'connected' %}
-          <p class="mb-1 text-muted small">
-            <span class="badge bg-success me-2">Conectado</span>
-            Pagamentos serão enviados para a conta configurada.
-          </p>
-          {% if payment_account.provider_user_id %}
-          <span class="text-muted small">Collector ID: {{ payment_account.provider_user_id }}</span>
-          {% endif %}
-          {% elif payment_account and payment_account.status == 'error' %}
-          <p class="mb-0 text-muted small">
-            <span class="badge bg-danger me-2">Erro</span>
-            Não foi possível conectar. Verifique suas credenciais.
-          </p>
-          {% else %}
-          <p class="mb-0 text-muted small">
-            <span class="badge bg-secondary me-2">Não conectado</span>
-            Informe suas credenciais para habilitar pagamentos pela loja.
-          </p>
-          {% endif %}
-        </div>
-        {% if payment_account and payment_account.status == 'connected' %}
-        <form method="post" action="{{ url_for('mercadopago_oauth_disconnect', casa_id=casa.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-outline-danger btn-sm">
-            <i class="fa-solid fa-link-slash me-1"></i>Desconectar
-          </button>
-        </form>
-        {% endif %}
-      </div>
+  {# ── Tabs ── #}
+  <nav class="clinic-tabs-shell" aria-label="Seções da loja">
+    <ul class="nav clinic-tabs pet-nav" id="storeTabs" role="tablist">
+      {{ store_tab('loja',     'Loja',     'fa-solid fa-store',      'is-clinic',  'Dados e pagamento', True) }}
+      {{ store_tab('horarios', 'Horários', 'fa-solid fa-clock',      'is-agenda',  (horarios|length) ~ ' configurados') }}
+      {{ store_tab('tutores',  'Tutores',  'fa-solid fa-user-group', 'is-tutors',  (tutores|length) ~ ' ativos') }}
+      {{ store_tab('animais',  'Animais',  'fa-solid fa-paw',        'is-animals', (animais|length) ~ ' cadastrados') }}
+      {{ store_tab('produtos', 'Produtos', 'fa-solid fa-box-open',   'is-stock',   produtos_count ~ ' ativos') }}
+    </ul>
+  </nav>
 
-      {% if not (payment_account and payment_account.status == 'connected') %}
-        {% if mp_oauth_available %}
-        {# OAuth: lojista só clica e autoriza — sem precisar copiar token #}
-        <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago
-          </button>
-        </form>
-        <details class="mt-3">
-          <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
-          <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1" for="mp_access_token_casa">
-                Access Token <span class="text-danger">*</span>
-              </label>
-              <input type="password" class="form-control form-control-sm" id="mp_access_token_casa"
-                     name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-              <div class="form-text">
-                Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
+  <div class="tab-content clinic-tab-content">
+
+    {# ══════════════════════ TAB: LOJA ══════════════════════ #}
+    <div class="tab-pane clinic-tab-pane fade show active" id="loja" role="tabpanel" aria-labelledby="loja-tab">
+
+      {# Hero #}
+      <section class="clinic-hero mb-4"
+               style="--clinic-primary:#2e7d32;--clinic-secondary:#66bb6a;--clinic-text-color:#fff;
+                      --clinic-subtitle-color:rgba(255,255,255,.85);--clinic-eyebrow-color:rgba(255,255,255,.8);
+                      --clinic-chip-bg:rgba(255,255,255,.15);--clinic-chip-border:rgba(255,255,255,.25);
+                      --clinic-chip-text:#fff;--clinic-logo-frame-bg:#fff;
+                      --clinic-logo-frame-shadow:rgba(0,0,0,.12);--clinic-logo-frame-border:rgba(255,255,255,.35);
+                      --clinic-avatar-bg:rgba(255,255,255,.1);--clinic-avatar-text:#fff;">
+        <div class="clinic-hero__inner row g-4 align-items-center">
+          <div class="col-lg-7">
+            <p class="clinic-hero__eyebrow mb-1">Loja parceira</p>
+            <h1 class="clinic-hero__title mb-2">{{ casa.nome }}</h1>
+            {% if casa.razao_social %}<p class="clinic-hero__subtitle mb-3">{{ casa.razao_social }}</p>{% endif %}
+            <div class="clinic-hero__chips mb-4">
+              {% if casa.endereco %}<span class="clinic-hero__chip"><i class="fa-solid fa-location-dot"></i>{{ casa.endereco }}</span>{% endif %}
+              {% if casa.telefone %}<span class="clinic-hero__chip"><i class="fa-solid fa-phone"></i>{{ casa.telefone }}</span>{% endif %}
+              {% if casa.email %}<span class="clinic-hero__chip"><i class="fa-solid fa-envelope"></i>{{ casa.email }}</span>{% endif %}
+            </div>
+            <div class="clinic-hero__actions d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-light btn-lg d-inline-flex align-items-center gap-2"
+                      onclick="toggleStoreEdit(); document.getElementById('edit-store-info').scrollIntoView({behavior:'smooth'});">
+                <i class="fa-solid fa-pen-to-square"></i> Editar dados
+              </button>
+              <a href="{{ url_for('loja') }}" class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2" target="_blank">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver loja
+              </a>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="clinic-hero__brand text-center text-lg-end">
+              <div class="clinic-hero__logo-frame {{ 'clinic-hero__logo-frame--has-logo' if casa.logotipo }}">
+                {% if casa.logotipo %}
+                  {{ clinic_logo(casa, alt_text='Logo da loja') }}
+                {% else %}
+                  <span class="clinic-hero__avatar" aria-hidden="true">{{ store_initials }}</span>
+                {% endif %}
               </div>
             </div>
-            <div class="mb-3">
-              <label class="form-label small fw-semibold mb-1" for="mp_public_key_casa">
-                Public Key <span class="text-muted fw-normal">(opcional)</span>
-              </label>
-              <input type="text" class="form-control form-control-sm" id="mp_public_key_casa"
-                     name="public_key" placeholder="APP_USR-..." autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      {# Formulário de edição (oculto) #}
+      <div id="edit-store-info" class="card shadow-lg border-0 rounded-3 mb-4" style="display:none;">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0">Atualizar informações da loja</h5>
+            <button type="button" class="btn-close" onclick="toggleStoreEdit()"></button>
+          </div>
+          <form method="post" enctype="multipart/form-data" class="row g-3" action="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}">
+            {{ store_form.hidden_tag() }}
+            <input type="hidden" name="_action" value="update_info">
+            <div class="col-md-6">{{ store_form.nome.label(class="form-label fw-semibold") }}{{ store_form.nome(class="form-control") }}</div>
+            <div class="col-md-6">{{ store_form.razao_social.label(class="form-label fw-semibold") }}{{ store_form.razao_social(class="form-control") }}</div>
+            <div class="col-md-6">{{ store_form.cnpj.label(class="form-label fw-semibold") }}{{ store_form.cnpj(class="form-control", **{'data-cnpj-mask':'true','placeholder':'00.000.000/0000-00'}) }}</div>
+            <div class="col-md-6">{{ store_form.telefone.label(class="form-label fw-semibold") }}{{ store_form.telefone(class="form-control") }}</div>
+            <div class="col-md-6">{{ store_form.email.label(class="form-label fw-semibold") }}{{ store_form.email(class="form-control") }}</div>
+            <div class="col-md-6">{{ store_form.endereco.label(class="form-label fw-semibold") }}{{ store_form.endereco(class="form-control") }}</div>
+            <div class="col-12">{{ store_form.descricao.label(class="form-label fw-semibold") }}{{ store_form.descricao(class="form-control", rows=3) }}</div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Modo de entrega</label>
+              {% for subfield in store_form.modo_entrega %}
+              <div class="form-check">{{ subfield(class="form-check-input") }}{{ subfield.label(class="form-check-label") }}</div>
+              {% endfor %}
             </div>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">
-              <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
-            </button>
+            <div class="col-md-4">{{ store_form.valor_frete.label(class="form-label fw-semibold") }}<div class="input-group"><span class="input-group-text">R$</span>{{ store_form.valor_frete(class="form-control") }}</div></div>
+            <div class="col-md-4">{{ store_form.pedido_minimo_entrega.label(class="form-label fw-semibold") }}<div class="input-group"><span class="input-group-text">R$</span>{{ store_form.pedido_minimo_entrega(class="form-control") }}</div></div>
+            <div class="col-md-6">{{ store_form.prazo_entrega_min.label(class="form-label fw-semibold") }}{{ store_form.prazo_entrega_min(class="form-control", placeholder="Ex: 30") }}</div>
+            <div class="col-md-6">{{ store_form.prazo_entrega_max.label(class="form-label fw-semibold") }}{{ store_form.prazo_entrega_max(class="form-control", placeholder="Ex: 60") }}</div>
+            <div class="col-12">
+              {{ store_form.logotipo.label(class="form-label fw-semibold") }}
+              {{ photo_cropper(store_form.logotipo, store_form.photo_rotation, store_form.photo_zoom, store_form.photo_offset_x, store_form.photo_offset_y, casa.logotipo, 150, 'store_logo', 'user') }}
+            </div>
+            <div class="col-12"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar alterações</button></div>
           </form>
-        </details>
-        {% else %}
-        {# Fallback: OAuth não configurado, pedir token direto #}
-        <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1" for="mp_access_token_casa">
-              Access Token <span class="text-danger">*</span>
-            </label>
-            <input type="password" class="form-control form-control-sm" id="mp_access_token_casa"
-                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-            <div class="form-text">
-              Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
+        </div>
+      </div>
+
+      {# Mercado Pago #}
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+            <div>
+              <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago</h5>
+              {% if payment_account and payment_account.status == 'connected' %}
+                <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos usam a conta própria da loja.</p>
+                {% if payment_account.provider_user_id %}<span class="text-muted small">Collector ID: {{ payment_account.provider_user_id }}</span>{% endif %}
+              {% elif payment_account and payment_account.status == 'error' %}
+                <p class="text-muted small mb-1"><span class="badge bg-danger me-2">Erro</span>Não foi possível conectar. Verifique suas credenciais.</p>
+              {% elif mp_platform_configured %}
+                <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos processados pela conta da plataforma PetOrlândia.</p>
+              {% else %}
+                <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Configure suas credenciais para receber pagamentos.</p>
+              {% endif %}
             </div>
+            {% if payment_account and payment_account.status == 'connected' %}
+            <form method="post" action="{{ url_for('mercadopago_oauth_disconnect', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
+            </form>
+            {% endif %}
           </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold mb-1" for="mp_public_key_casa_fb">
-              Public Key <span class="text-muted fw-normal">(opcional)</span>
-            </label>
-            <input type="text" class="form-control form-control-sm" id="mp_public_key_casa_fb"
-                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
-          </button>
-        </form>
-        {% endif %}
-      {% elif payment_account and payment_account.status == 'connected' %}
-      <details class="mt-2">
-        <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
-        <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1" for="mp_access_token_casa_update">
-              Novo Access Token <span class="text-danger">*</span>
-            </label>
-            <input type="password" class="form-control form-control-sm" id="mp_access_token_casa_update"
-                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label small fw-semibold mb-1" for="mp_public_key_casa_update">
-              Nova Public Key <span class="text-muted fw-normal">(opcional)</span>
-            </label>
-            <input type="text" class="form-control form-control-sm" id="mp_public_key_casa_update"
-                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-outline-primary btn-sm">
-            <i class="fa-solid fa-floppy-disk me-1"></i>Atualizar
-          </button>
-        </form>
-      </details>
-      {% endif %}
-    </div>
-  </div>
 
-  <!-- Planos de banho e tosa -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div>
-          <h5 class="fw-semibold mb-1">
-            <i class="fa-solid fa-scissors me-2 text-primary"></i>Planos de banho e tosa
-          </h5>
-          <p class="mb-0 text-muted small">
-            Cadastre pacotes mensais para vender junto com os produtos da loja.
-          </p>
+          {% if not (payment_account and payment_account.status == 'connected') and not mp_platform_configured %}
+            {% if mp_oauth_available %}
+            <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago</button>
+            </form>
+            <details class="mt-3">
+              <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
+              <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
+                <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+                <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+              </form>
+            </details>
+            {% else %}
+            <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
+              <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+              <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+            </form>
+            {% endif %}
+          {% elif payment_account and payment_account.status == 'connected' %}
+          <details class="mt-2">
+            <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
+            <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="mb-2"><label class="form-label small fw-semibold mb-1">Novo Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required></div>
+              <div class="mb-3"><label class="form-label small fw-semibold mb-1">Nova Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+              <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Atualizar</button>
+            </form>
+          </details>
+          {% endif %}
         </div>
-        <a href="{{ url_for('casa_de_racao_grooming_planos', casa_id=casa.id) }}"
-           class="btn btn-outline-primary btn-sm">
-          <i class="fa-solid fa-gear me-1"></i>Gerenciar planos
+      </div>
+
+      {# Métricas #}
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
+            <i class="fa-solid fa-user-group fa-2x text-primary mb-2"></i>
+            <div class="fs-3 fw-bold">{{ tutores|length }}</div>
+            <div class="text-muted small">Tutores</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
+            <i class="fa-solid fa-paw fa-2x text-success mb-2"></i>
+            <div class="fs-3 fw-bold">{{ animais|length }}</div>
+            <div class="text-muted small">Animais</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
+              <i class="fa-solid fa-box-open fa-2x text-warning mb-2"></i>
+              <div class="fs-3 fw-bold">{{ produtos_count }}</div>
+              <div class="text-muted small">Produtos ativos</div>
+            </div>
+          </a>
+        </div>
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-3">
+              <i class="fa-solid fa-chart-line fa-2x text-info mb-2"></i>
+              <div class="fs-3 fw-bold">—</div>
+              <div class="text-muted small">Ver vendas</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      {# Atalhos #}
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
+           class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+          <i class="fa-solid fa-plus me-1"></i>Publicar produto
         </a>
+        <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
+           class="btn btn-outline-success {% if casa.status == 'pendente' %}disabled{% endif %}">
+          <i class="fa-solid fa-chart-line me-1"></i>Minhas vendas
+        </a>
+        {% if casa.modo_entrega == 'propria' %}
+        <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
+           class="btn {% if entregas_pendentes %}btn-warning{% else %}btn-outline-primary{% endif %} {% if casa.status == 'pendente' %}disabled{% endif %} position-relative">
+          <i class="fa-solid fa-truck me-1"></i>Minhas entregas
+          {% if entregas_pendentes %}
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ entregas_pendentes }}</span>
+          {% endif %}
+        </a>
+        {% endif %}
       </div>
-    </div>
-  </div>
+    </div>{# fim tab loja #}
 
-  <!-- Area profissional -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div>
-          <h5 class="fw-semibold mb-1">
-            <i class="fa-solid fa-address-book me-2 text-primary"></i>Tutores e animais
-          </h5>
-          <p class="mb-0 text-muted small">
-            Acompanhe clientes, pets e racoes usadas sem as abas veterinarias.
-          </p>
+    {# ══════════════════════ TAB: HORÁRIOS ══════════════════════ #}
+    <div class="tab-pane clinic-tab-pane fade" id="horarios" role="tabpanel" aria-labelledby="horarios-tab">
+      <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-body">
+          <h5 class="fw-semibold mb-3"><i class="fa-solid fa-clock me-2 text-primary"></i>Horários de funcionamento</h5>
+
+          {% if horarios %}
+          <div class="table-responsive mb-4">
+            <table class="table table-sm align-middle">
+              <thead class="table-light"><tr><th>Dia</th><th>Abertura</th><th>Fechamento</th><th></th></tr></thead>
+              <tbody>
+                {% for h in horarios %}
+                <tr>
+                  <td class="fw-semibold">{{ h.dia_semana }}</td>
+                  <td>{{ h.hora_abertura.strftime('%H:%M') if h.hora_abertura }}</td>
+                  <td>{{ h.hora_fechamento.strftime('%H:%M') if h.hora_fechamento }}</td>
+                  <td class="text-end">
+                    <form method="post" action="{{ url_for('casa_de_racao_horario_delete', casa_id=casa.id, horario_id=h.id) }}"
+                          onsubmit="return confirm('Remover este horário?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted small mb-4">Nenhum horário cadastrado ainda.</p>
+          {% endif %}
+
+          <h6 class="fw-semibold mb-3">Adicionar / atualizar horário</h6>
+          <form method="post" action="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="row g-3">
+            {{ hours_form.hidden_tag() }}
+            <input type="hidden" name="_action" value="add_hours">
+            <div class="col-md-4">
+              {{ hours_form.dias_semana.label(class="form-label fw-semibold") }}
+              {{ hours_form.dias_semana(class="form-select") }}
+              <div class="form-text">Ctrl+clique para selecionar vários.</div>
+            </div>
+            <div class="col-md-4">
+              {{ hours_form.hora_abertura.label(class="form-label fw-semibold") }}
+              {{ hours_form.hora_abertura(class="form-control") }}
+            </div>
+            <div class="col-md-4">
+              {{ hours_form.hora_fechamento.label(class="form-label fw-semibold") }}
+              {{ hours_form.hora_fechamento(class="form-control") }}
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk me-1"></i>Salvar horário
+              </button>
+            </div>
+          </form>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}"
-             class="btn btn-outline-primary btn-sm">
-            <i class="fa-solid fa-users me-1"></i>Tutores
-          </a>
-          <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}"
-             class="btn btn-outline-primary btn-sm">
-            <i class="fa-solid fa-paw me-1"></i>Animais
+      </div>
+    </div>
+
+    {# ══════════════════════ TAB: TUTORES ══════════════════════ #}
+    <div class="tab-pane clinic-tab-pane fade" id="tutores" role="tabpanel" aria-labelledby="tutores-tab">
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0"><i class="fa-solid fa-user-group me-2 text-primary"></i>Tutores</h5>
+            <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Ver todos
+            </a>
+          </div>
+          {% if tutores %}
+          <div class="row g-3">
+            {% for tutor in tutores[:24] %}
+            <div class="col-sm-6 col-md-4 col-lg-3">
+              <div class="card border-0 bg-light rounded-3 h-100">
+                <div class="card-body p-3">
+                  <div class="fw-semibold small text-truncate">{{ tutor.name or tutor.email }}</div>
+                  {% if tutor.email %}<div class="text-muted" style="font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tutor.email }}</div>{% endif %}
+                  {% if tutor.phone %}<div class="text-muted" style="font-size:.75rem">{{ tutor.phone }}</div>{% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+            {% if tutores|length > 24 %}
+            <div class="col-12 text-center">
+              <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+                Ver todos os {{ tutores|length }} tutores
+              </a>
+            </div>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="fa-solid fa-user-group fa-3x mb-3 opacity-25"></i>
+            <p>Nenhum tutor vinculado ainda.</p>
+            <a href="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" class="btn btn-outline-primary btn-sm">Adicionar tutor</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ══════════════════════ TAB: ANIMAIS ══════════════════════ #}
+    <div class="tab-pane clinic-tab-pane fade" id="animais" role="tabpanel" aria-labelledby="animais-tab">
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0"><i class="fa-solid fa-paw me-2 text-success"></i>Animais</h5>
+            <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Ver todos
+            </a>
+          </div>
+          {% if animais %}
+          <div class="row g-3">
+            {% for animal in animais[:24] %}
+            <div class="col-sm-6 col-md-4 col-lg-3">
+              <div class="card border-0 bg-light rounded-3 h-100">
+                <div class="card-body p-3 d-flex align-items-center gap-2">
+                  {% if animal.foto %}
+                  <img src="{{ animal.foto }}" class="rounded-circle flex-shrink-0" width="36" height="36" style="object-fit:cover" alt="">
+                  {% else %}
+                  <div class="rounded-circle flex-shrink-0 bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width:36px;height:36px">
+                    <i class="fa-solid fa-paw text-success" style="font-size:.8rem"></i>
+                  </div>
+                  {% endif %}
+                  <div style="min-width:0">
+                    <div class="fw-semibold small text-truncate">{{ animal.name }}</div>
+                    <div class="text-muted" style="font-size:.75rem">{{ animal.species or '' }}{% if animal.breed %} · {{ animal.breed }}{% endif %}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+            {% if animais|length > 24 %}
+            <div class="col-12 text-center">
+              <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">
+                Ver todos os {{ animais|length }} animais
+              </a>
+            </div>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="fa-solid fa-paw fa-3x mb-3 opacity-25"></i>
+            <p>Nenhum animal cadastrado ainda.</p>
+            <a href="{{ url_for('casa_de_racao_animais', casa_id=casa.id) }}" class="btn btn-outline-success btn-sm">Cadastrar animal</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ══════════════════════ TAB: PRODUTOS ══════════════════════ #}
+    <div class="tab-pane clinic-tab-pane fade" id="produtos" role="tabpanel" aria-labelledby="produtos-tab">
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-body text-center py-5">
+          <i class="fa-solid fa-box-open fa-3x text-warning mb-3 opacity-50"></i>
+          <p class="text-muted mb-3">Gerencie os produtos publicados na loja.</p>
+          <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
+             class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Ir para produtos
           </a>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Resumo de produtos -->
-  {% set total_produtos = casa.produtos_loja.count() %}
-  {% set ativos = casa.produtos_loja.filter_by(status='active').count() %}
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
-        <div class="h2 fw-bold text-primary mb-0">{{ total_produtos }}</div>
-        <div class="small text-muted">Total de produtos</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm rounded-4 text-center p-3">
-        <div class="h2 fw-bold text-success mb-0">{{ ativos }}</div>
-        <div class="small text-muted">Ativos na loja</div>
-      </div>
-    </div>
-  </div>
+  </div>{# fim tab-content #}
+</div>{# fim clinic-page-shell #}
 
-  <div class="d-flex gap-2 flex-wrap">
-    <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
-       class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
-      <i class="fa-solid fa-plus me-2"></i>Publicar produto
-    </a>
-    <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
-       class="btn btn-outline-success {% if casa.status == 'pendente' %}disabled{% endif %}">
-      <i class="fa-solid fa-chart-line me-1"></i>Minhas Vendas
-    </a>
-    {% if casa.modo_entrega == 'propria' %}
-    <a href="{{ url_for('casa_de_racao_entregas', casa_id=casa.id) }}"
-       class="btn {% if entregas_pendentes %}btn-warning{% else %}btn-outline-primary{% endif %} {% if casa.status == 'pendente' %}disabled{% endif %} position-relative">
-      <i class="fa-solid fa-truck me-1"></i>Minhas Entregas
-      {% if entregas_pendentes %}
-      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-        {{ entregas_pendentes }}
-      </span>
-      {% endif %}
-    </a>
-    {% endif %}
-    <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">
-      <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Ver loja pública
-    </a>
-  </div>
-
-</div>
+<script>
+function toggleStoreEdit() {
+  const el = document.getElementById('edit-store-info');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
 {% endblock %}

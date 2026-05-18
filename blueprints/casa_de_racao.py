@@ -83,6 +83,11 @@ def get_blueprint():
         view_func=lazy_view("mercadopago_oauth_callback"),
     )
     bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/horario/<int:horario_id>/delete",
+        view_func=lazy_view("casa_de_racao_horario_delete"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/casa-de-racao/<int:casa_id>/mercado-pago/desconectar",
         view_func=lazy_view("mercadopago_oauth_disconnect"),
         methods=["POST"],

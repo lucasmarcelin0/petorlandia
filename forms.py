@@ -536,6 +536,34 @@ class ClinicHoursForm(FlaskForm):
         ]
 
 
+class StoreHoursForm(FlaskForm):
+    dias_semana = SelectMultipleField(
+        'Dias da semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo'),
+        ],
+        validators=[DataRequired()],
+        render_kw={"class": "form-select", "multiple": True, "size": "4"},
+    )
+    hora_abertura = TimeField(
+        'Hora de abertura',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    hora_fechamento = TimeField(
+        'Hora de fechamento',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    submit = SubmitField('Salvar horário')
+
+
 def _strip_filter(value):
     return value.strip() if isinstance(value, str) else value
 
