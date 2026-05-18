@@ -91,9 +91,11 @@
         <div>
           <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
           {% if payment_account and payment_account.status == 'connected' %}
-            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos da clínica usam a conta configurada.</p>
+            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos usam a conta própria da clínica.</p>
           {% elif payment_account and payment_account.status == 'error' %}
             <p class="text-muted small mb-1"><span class="badge bg-danger me-2">Erro</span>Não foi possível conectar. Verifique suas credenciais.</p>
+          {% elif mp_platform_configured %}
+            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos processados pela conta da plataforma PetOrlândia.</p>
           {% else %}
             <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Informe suas credenciais para receber vendas de produtos e planos.</p>
           {% endif %}
@@ -112,7 +114,7 @@
         {% endif %}
       </div>
 
-      {% if not (payment_account and payment_account.status == 'connected') %}
+      {% if not (payment_account and payment_account.status == 'connected') and not mp_platform_configured %}
         {% if mp_oauth_available %}
         <form method="post" action="{{ url_for('clinic_mercadopago_oauth_start', clinica_id=clinica.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

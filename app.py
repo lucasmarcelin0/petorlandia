@@ -14310,7 +14310,6 @@ def clinicas():
     return render_template('clinica/clinicas.html', clinicas=clinicas)
 
 
-@login_required
 def parceiro_clinica_landing():
     if current_user.is_authenticated:
         clinicas = clinicas_do_usuario().all()
@@ -16145,6 +16144,7 @@ def clinic_detail(clinica_id):
         .first()
     )
     mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
+    mp_platform_configured = bool((current_app.config.get("MERCADOPAGO_ACCESS_TOKEN") or "").strip())
 
     return render_template(
         'clinica/clinic_detail.html',
@@ -16154,6 +16154,7 @@ def clinic_detail(clinica_id):
         clinic_initials=clinic_initials,
         payment_account=payment_account,
         mp_oauth_available=mp_oauth_available,
+        mp_platform_configured=mp_platform_configured,
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,
