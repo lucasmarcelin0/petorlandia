@@ -2,7 +2,7 @@
 
   {# ── Formulário de novo tutor ── #}
   <div class="col-lg-4">
-    <div class="card shadow-sm border-0 rounded-3 h-100">
+    <div class="card shadow-sm border-0 rounded-3">
       <div class="card-body">
         <h5 class="fw-bold mb-3">
           <i class="fa-solid fa-user-plus me-2 text-primary"></i>Adicionar tutor
@@ -10,23 +10,45 @@
         <form method="post" action="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="_from_dashboard" value="1">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Nome <span class="text-danger">*</span></label>
-            <input name="name" class="form-control" placeholder="Nome completo" required>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Nome <span class="text-danger">*</span></label>
+              <input name="name" class="form-control" placeholder="Nome completo" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">E-mail</label>
+              <input name="email" type="email" class="form-control" placeholder="email@exemplo.com">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Telefone / WhatsApp</label>
+              <input name="phone" class="form-control" placeholder="(16) 99999-0000">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">CPF</label>
+              <input name="cpf" class="form-control" placeholder="000.000.000-00">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">RG</label>
+              <input name="rg" class="form-control" placeholder="00.000.000-0">
+            </div>
+            <div class="col-md-7">
+              <label class="form-label fw-semibold">Data de Nascimento</label>
+              <input id="store_tutor_dob" name="date_of_birth" type="text" class="form-control" placeholder="dd/mm/aaaa">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">Idade</label>
+              <input id="store_tutor_age" type="number" class="form-control" min="0" placeholder="—">
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">E-mail</label>
-            <input name="email" type="email" class="form-control" placeholder="email@exemplo.com">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Telefone / WhatsApp</label>
-            <input name="phone" class="form-control" placeholder="(16) 99999-0000">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">CPF</label>
-            <input name="cpf" class="form-control" placeholder="000.000.000-00">
-          </div>
-          <button type="submit" class="btn btn-primary w-100">
+
+          <hr class="my-3">
+          <h6 class="fw-semibold mb-3 text-secondary">
+            <i class="bi bi-geo-alt me-1"></i>Endereço <span class="text-muted fw-normal small">(opcional)</span>
+          </h6>
+
+          {% include "partials/endereco_form.html" %}
+
+          <button type="submit" class="btn btn-primary w-100 mt-3">
             <i class="fa-solid fa-floppy-disk me-1"></i>Salvar tutor
           </button>
         </form>
@@ -45,3 +67,56 @@
   </div>
 
 </div>
+
+{# Flatpickr for DOB field #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="{{ url_for('static', filename='js/date_mask.js') }}"></script>
+<script>
+(function () {
+  const dobInput = document.getElementById('store_tutor_dob');
+  const ageInput = document.getElementById('store_tutor_age');
+
+  if (!dobInput || !ageInput) return;
+
+  const calcAge = (date) => {
+    if (!date) { ageInput.value = ''; return; }
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - date.getFullYear();
+    const m = hoje.getMonth() - date.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < date.getDate())) idade--;
+    ageInput.value = Math.max(idade, 0);
+  };
+
+  const picker = flatpickr(dobInput, {
+    locale: 'pt',
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    allowInput: true,
+    onReady(selectedDates, dateStr, instance) {
+      if (window.DateMaskUtils) {
+        window.DateMaskUtils.syncMaskedInput(instance, {
+          onDateSync: calcAge,
+          onClear: () => calcAge(null),
+        });
+      }
+      calcAge(selectedDates[0] || null);
+    },
+    onChange(selectedDates) {
+      calcAge(selectedDates[0] || null);
+    }
+  });
+
+  ageInput.addEventListener('input', () => {
+    const idade = parseInt(ageInput.value, 10);
+    if (Number.isNaN(idade)) {
+      if (!ageInput.value.trim()) { picker.clear(); calcAge(null); }
+      return;
+    }
+    const hoje = new Date();
+    picker.setDate(new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate()), true);
+  });
+})();
+</script>

@@ -15145,9 +15145,42 @@ def casa_de_racao_tutores(casa_id):
 
         tutor.phone = phone
         tutor.cpf = cpf
+        tutor.rg = (request.form.get('rg') or '').strip() or None
+
+        date_str = (request.form.get('date_of_birth') or '').strip()
+        if date_str:
+            try:
+                tutor.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        cep = (request.form.get('cep') or '').strip() or None
+        rua = (request.form.get('rua') or '').strip() or None
+        numero = (request.form.get('numero') or '').strip() or None
+        complemento = (request.form.get('complemento') or '').strip() or None
+        bairro = (request.form.get('bairro') or '').strip() or None
+        cidade = (request.form.get('cidade') or '').strip() or None
+        estado = (request.form.get('estado') or '').strip() or None
+
+        if rua or cidade:
+            endereco = tutor.endereco or Endereco()
+            endereco.cep = cep
+            endereco.rua = rua
+            endereco.numero = numero
+            endereco.complemento = complemento
+            endereco.bairro = bairro
+            endereco.cidade = cidade
+            endereco.estado = estado
+            if not _update_coordinates_from_request(endereco):
+                _geocode_endereco(endereco)
+            if not tutor.endereco:
+                db.session.add(endereco)
+                db.session.flush()
+                tutor.endereco_id = endereco.id
+
         db.session.commit()
         flash('Tutor cadastrado para a loja.', 'success')
-        if request.form.get('_from_dashboard'):
+        if from_dashboard:
             return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#tutores')
         return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
 
