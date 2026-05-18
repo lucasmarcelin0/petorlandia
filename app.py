@@ -14401,44 +14401,72 @@ def _casa_loja_access(casa_id):
 @login_required
 def minha_casa_de_racao():
     casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
-    if not casa:
-        form = CasaDeRacaoForm()
+    if casa:
+        form = CasaDeRacaoForm(obj=casa)
         if form.validate_on_submit():
-            nova_casa = CasaDeRacao(
-                nome=form.nome.data,
-                razao_social=form.razao_social.data or None,
-                cnpj=form.cnpj.data or None,
-                descricao=form.descricao.data or None,
-                telefone=form.telefone.data or None,
-                email=form.email.data or None,
-                endereco=form.endereco.data or None,
-                modo_entrega=form.modo_entrega.data or 'plataforma',
-                valor_frete=form.valor_frete.data or Decimal('0'),
-                pedido_minimo_entrega=form.pedido_minimo_entrega.data or None,
-                prazo_entrega_min=form.prazo_entrega_min.data or None,
-                prazo_entrega_max=form.prazo_entrega_max.data or None,
-                owner_id=current_user.id,
-                status='pendente',
-            )
+            casa.nome = form.nome.data
+            casa.razao_social = form.razao_social.data or None
+            casa.cnpj = form.cnpj.data or None
+            casa.descricao = form.descricao.data or None
+            casa.telefone = form.telefone.data or None
+            casa.email = form.email.data or None
+            casa.endereco = form.endereco.data or None
+            casa.modo_entrega = form.modo_entrega.data or 'plataforma'
+            casa.valor_frete = form.valor_frete.data or Decimal('0')
+            casa.pedido_minimo_entrega = form.pedido_minimo_entrega.data or None
+            casa.prazo_entrega_min = form.prazo_entrega_min.data or None
+            casa.prazo_entrega_max = form.prazo_entrega_max.data or None
             file = form.logotipo.data
             if file and getattr(file, 'filename', ''):
                 filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
                 image_url = upload_to_s3(file, filename, folder='casas_de_racao')
                 if image_url:
-                    nova_casa.logotipo = image_url
-                    nova_casa.photo_rotation = form.photo_rotation.data
-                    nova_casa.photo_zoom = float(form.photo_zoom.data)
-                    nova_casa.photo_offset_x = float(form.photo_offset_x.data)
-                    nova_casa.photo_offset_y = float(form.photo_offset_y.data)
-            db.session.add(nova_casa)
+                    casa.logotipo = image_url
+                    casa.photo_rotation = form.photo_rotation.data
+                    casa.photo_zoom = float(form.photo_zoom.data)
+                    casa.photo_offset_x = float(form.photo_offset_x.data)
+                    casa.photo_offset_y = float(form.photo_offset_y.data)
             db.session.commit()
-            flash(
-                'Cadastro enviado! Aguarde a aprovação do administrador para começar a vender.',
-                'success',
-            )
-            return redirect(url_for('casa_de_racao_dashboard', casa_id=nova_casa.id))
-        return render_template('casa_de_racao/create.html', form=form)
-    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+            flash('Dados da loja atualizados com sucesso.', 'success')
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+        return render_template('casa_de_racao/create.html', form=form, editing=True, casa=casa)
+
+    form = CasaDeRacaoForm()
+    if form.validate_on_submit():
+        nova_casa = CasaDeRacao(
+            nome=form.nome.data,
+            razao_social=form.razao_social.data or None,
+            cnpj=form.cnpj.data or None,
+            descricao=form.descricao.data or None,
+            telefone=form.telefone.data or None,
+            email=form.email.data or None,
+            endereco=form.endereco.data or None,
+            modo_entrega=form.modo_entrega.data or 'plataforma',
+            valor_frete=form.valor_frete.data or Decimal('0'),
+            pedido_minimo_entrega=form.pedido_minimo_entrega.data or None,
+            prazo_entrega_min=form.prazo_entrega_min.data or None,
+            prazo_entrega_max=form.prazo_entrega_max.data or None,
+            owner_id=current_user.id,
+            status='pendente',
+        )
+        file = form.logotipo.data
+        if file and getattr(file, 'filename', ''):
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder='casas_de_racao')
+            if image_url:
+                nova_casa.logotipo = image_url
+                nova_casa.photo_rotation = form.photo_rotation.data
+                nova_casa.photo_zoom = float(form.photo_zoom.data)
+                nova_casa.photo_offset_x = float(form.photo_offset_x.data)
+                nova_casa.photo_offset_y = float(form.photo_offset_y.data)
+        db.session.add(nova_casa)
+        db.session.commit()
+        flash(
+            'Cadastro enviado! Aguarde a aprovação do administrador para começar a vender.',
+            'success',
+        )
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=nova_casa.id))
+    return render_template('casa_de_racao/create.html', form=form, editing=False)
 
 
 @login_required
@@ -14449,10 +14477,12 @@ def casa_de_racao_dashboard(casa_id):
         .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
         .first()
     )
+    mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
     return render_template(
         'casa_de_racao/dashboard.html',
         casa=casa,
         payment_account=payment_account,
+        mp_oauth_available=mp_oauth_available,
     )
 
 
@@ -16082,6 +16112,7 @@ def clinic_detail(clinica_id):
         .filter_by(clinica_id=clinica.id, provider='mercado_pago')
         .first()
     )
+    mp_oauth_available = bool((current_app.config.get("MERCADOPAGO_CLIENT_ID") or "").strip())
 
     return render_template(
         'clinica/clinic_detail.html',
@@ -16090,6 +16121,7 @@ def clinic_detail(clinica_id):
         clinic_subtitle=clinic_subtitle,
         clinic_initials=clinic_initials,
         payment_account=payment_account,
+        mp_oauth_available=mp_oauth_available,
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,

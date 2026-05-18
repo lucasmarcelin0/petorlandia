@@ -7,11 +7,16 @@
     <div class="mb-3">
       <span class="fs-1">🌾</span>
     </div>
+    {% if editing %}
+    <h1 class="h3 fw-bold">Editar dados da loja</h1>
+    <p class="text-muted">Atualize as informações da sua casa de ração.</p>
+    {% else %}
     <h1 class="h3 fw-bold">Cadastre sua Casa de Ração</h1>
     <p class="text-muted">
       Preencha os dados abaixo para se tornar um parceiro da loja PetOrlândia.
       Após o envio, nossa equipe analisará seu cadastro em até 48h.
     </p>
+    {% endif %}
   </div>
 
   <div class="card border-0 shadow-sm rounded-4">
@@ -120,8 +125,16 @@
           {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'racao_logo', 'user') }}
         </div>
 
-        <div class="d-grid mt-4">
-          {{ form.submit(class="btn btn-primary btn-lg") }}
+        <div class="d-flex gap-2 mt-4">
+          {% if editing %}
+          <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}"
+             class="btn btn-outline-secondary flex-shrink-0">Cancelar</a>
+          <button type="submit" class="btn btn-primary flex-grow-1">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Salvar alterações
+          </button>
+          {% else %}
+          {{ form.submit(class="btn btn-primary btn-lg w-100") }}
+          {% endif %}
         </div>
       </form>
     </div>
