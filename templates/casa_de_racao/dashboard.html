@@ -179,39 +179,74 @@
             {% endif %}
           </div>
 
-          {% if not (payment_account and payment_account.status == 'connected') and not mp_platform_configured %}
-            {% if mp_oauth_available %}
-            <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago</button>
-            </form>
-            <details class="mt-3">
-              <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
-              <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+          {% if not (payment_account and payment_account.status == 'connected') %}
+            {# Sem conta própria conectada: mostra opções para conectar #}
+            {% if not mp_platform_configured %}
+              {# Sem fallback da plataforma: formulário principal visível #}
+              {% if mp_oauth_available %}
+              <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago</button>
+              </form>
+              <details class="mt-3">
+                <summary class="text-muted small" style="cursor:pointer">Prefiro inserir o token manualmente</summary>
+                <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
+                  <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+                  <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+                </form>
+              </details>
+              {% else %}
+              <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
                 <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
-                <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+              </form>
+              {% endif %}
+            {% else %}
+              {# Plataforma configurada como fallback: opção colapsável para usar conta própria #}
+              <details class="mt-1">
+                <summary class="text-muted small" style="cursor:pointer"><i class="fa-solid fa-circle-info me-1"></i>Quero usar minha própria conta do Mercado Pago</summary>
+                <div class="mt-3 p-3 bg-light rounded-3">
+                  <p class="small text-muted mb-3">Seus pagamentos já funcionam normalmente via PetOrlândia. Se preferir receber diretamente na sua conta, insira suas credenciais abaixo.</p>
+                  {% if mp_oauth_available %}
+                  <form method="post" action="{{ url_for('mercadopago_oauth_start', casa_id=casa.id) }}" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar com Mercado Pago</button>
+                  </form>
+                  <details>
+                    <summary class="text-muted small" style="cursor:pointer">Inserir token manualmente</summary>
+                    <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
+                      <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+                      <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+                    </form>
+                  </details>
+                  {% else %}
+                  <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
+                    <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </details>
+            {% endif %}
+          {% else %}
+            {# Conta própria conectada: opção de atualizar #}
+            <details class="mt-2">
+              <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
+              <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-2"><label class="form-label small fw-semibold mb-1">Novo Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required></div>
+                <div class="mb-3"><label class="form-label small fw-semibold mb-1">Nova Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
+                <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Atualizar</button>
               </form>
             </details>
-            {% else %}
-            <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <div class="mb-2"><label class="form-label small fw-semibold mb-1">Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required><div class="form-text">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Credenciais</a>.</div></div>
-              <div class="mb-3"><label class="form-label small fw-semibold mb-1">Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
-              <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais</button>
-            </form>
-            {% endif %}
-          {% elif payment_account and payment_account.status == 'connected' %}
-          <details class="mt-2">
-            <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
-            <form method="post" action="{{ url_for('mercadopago_direct_save', casa_id=casa.id) }}" class="mt-2">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <div class="mb-2"><label class="form-label small fw-semibold mb-1">Novo Access Token <span class="text-danger">*</span></label><input type="password" class="form-control form-control-sm" name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required></div>
-              <div class="mb-3"><label class="form-label small fw-semibold mb-1">Nova Public Key <span class="text-muted fw-normal">(opcional)</span></label><input type="text" class="form-control form-control-sm" name="public_key" placeholder="APP_USR-..." autocomplete="off"></div>
-              <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-floppy-disk me-1"></i>Atualizar</button>
-            </form>
-          </details>
           {% endif %}
         </div>
       </div>
