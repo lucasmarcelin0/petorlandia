@@ -1,6 +1,47 @@
-{% with compact=True,
-        fetch_url=url_for('casa_de_racao_tutores', casa_id=casa.id),
-        shared_access_map={},
-        viewer_clinic_id=None %}
-  {% include 'partials/tutores_adicionados.html' %}
-{% endwith %}
+<div class="row g-4">
+
+  {# ── Formulário de novo tutor ── #}
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 rounded-3 h-100">
+      <div class="card-body">
+        <h5 class="fw-bold mb-3">
+          <i class="fa-solid fa-user-plus me-2 text-primary"></i>Adicionar tutor
+        </h5>
+        <form method="post" action="{{ url_for('casa_de_racao_tutores', casa_id=casa.id) }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="_from_dashboard" value="1">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nome <span class="text-danger">*</span></label>
+            <input name="name" class="form-control" placeholder="Nome completo" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">E-mail</label>
+            <input name="email" type="email" class="form-control" placeholder="email@exemplo.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Telefone / WhatsApp</label>
+            <input name="phone" class="form-control" placeholder="(16) 99999-0000">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">CPF</label>
+            <input name="cpf" class="form-control" placeholder="000.000.000-00">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Salvar tutor
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── Listing panel ── #}
+  <div class="col-lg-8">
+    {% with compact=True,
+            fetch_url=url_for('casa_de_racao_tutores', casa_id=casa.id),
+            shared_access_map={},
+            viewer_clinic_id=None %}
+      {% include 'partials/tutores_adicionados.html' %}
+    {% endwith %}
+  </div>
+
+</div>

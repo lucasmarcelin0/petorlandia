@@ -15111,6 +15111,8 @@ def _optional_decimal_from_form(field_name):
 def casa_de_racao_tutores(casa_id):
     casa = _casa_loja_access(casa_id)
     if request.method == 'POST':
+        from_dashboard = bool(request.form.get('_from_dashboard'))
+        _back = (url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#tutores') if from_dashboard else url_for('casa_de_racao_tutores', casa_id=casa.id)
         name = (request.form.get('name') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
         phone = (request.form.get('phone') or '').strip() or None
@@ -15118,12 +15120,12 @@ def casa_de_racao_tutores(casa_id):
 
         if not name:
             flash('Informe o nome do tutor.', 'warning')
-            return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
+            return redirect(_back)
 
         tutor = User.query.filter_by(email=email).first() if email else None
         if tutor and tutor.casa_de_racao_id not in (None, casa.id):
             flash('Este e-mail ja esta vinculado a outra loja.', 'warning')
-            return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
+            return redirect(_back)
         if not tutor:
             tutor = User(
                 name=name,
@@ -15145,6 +15147,8 @@ def casa_de_racao_tutores(casa_id):
         tutor.cpf = cpf
         db.session.commit()
         flash('Tutor cadastrado para a loja.', 'success')
+        if request.form.get('_from_dashboard'):
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#tutores')
         return redirect(url_for('casa_de_racao_tutores', casa_id=casa.id))
 
     tutor_search = (request.args.get('tutor_search', '') or '').strip()
@@ -15198,16 +15202,18 @@ def casa_de_racao_animais(casa_id):
     )
 
     if request.method == 'POST':
+        from_dashboard = bool(request.form.get('_from_dashboard'))
+        _back = (url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#animais') if from_dashboard else url_for('casa_de_racao_animais', casa_id=casa.id)
         tutor_id = request.form.get('tutor_id', type=int)
         tutor = User.query.filter_by(id=tutor_id, casa_de_racao_id=casa.id).first()
         if not tutor:
             flash('Selecione um tutor cadastrado nesta loja.', 'warning')
-            return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
+            return redirect(_back)
 
         name = (request.form.get('name') or '').strip()
         if not name:
             flash('Informe o nome do animal.', 'warning')
-            return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
+            return redirect(_back)
 
         animal = Animal(
             name=name,
@@ -15223,7 +15229,9 @@ def casa_de_racao_animais(casa_id):
         )
         db.session.add(animal)
         db.session.commit()
-        flash('Animal cadastrado para acompanhamento da loja.', 'success')
+        flash('Animal cadastrado.', 'success')
+        if from_dashboard:
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#animais')
         return redirect(url_for('casa_de_racao_animais', casa_id=casa.id))
 
     animal_search = (request.args.get('animal_search', '') or '').strip()
