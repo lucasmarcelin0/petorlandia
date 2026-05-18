@@ -86,31 +86,80 @@
 
 {% if pode_editar %}
   <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body d-flex justify-content-between align-items-start gap-3 flex-wrap">
-      <div>
-        <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
-        {% if payment_account and payment_account.status == 'connected' %}
-          <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos da loja da clínica usam a conta autorizada.</p>
-        {% else %}
-          <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Conecte uma conta para receber vendas de produtos e planos.</p>
-        {% endif %}
-        <p class="mb-0 small text-muted">
-          Frete atual: <strong>R$ {{ '%.2f'|format(clinica.valor_frete or 0)|replace('.', ',') }}</strong>
-          {% if clinica.prazo_entrega_min or clinica.prazo_entrega_max %}
-            · Prazo: {{ clinica.prazo_entrega_min or '?' }}-{{ clinica.prazo_entrega_max or '?' }} min
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+        <div>
+          <h5 class="fw-semibold mb-1"><i class="fa-solid fa-credit-card me-2 text-primary"></i>Mercado Pago e frete</h5>
+          {% if payment_account and payment_account.status == 'connected' %}
+            <p class="text-muted small mb-1"><span class="badge bg-success me-2">Conectado</span>Pagamentos da clínica usam a conta configurada.</p>
+          {% elif payment_account and payment_account.status == 'error' %}
+            <p class="text-muted small mb-1"><span class="badge bg-danger me-2">Erro</span>Não foi possível conectar. Verifique suas credenciais.</p>
+          {% else %}
+            <p class="text-muted small mb-1"><span class="badge bg-secondary me-2">Não conectado</span>Informe suas credenciais para receber vendas de produtos e planos.</p>
           {% endif %}
-        </p>
+          <p class="mb-0 small text-muted">
+            Frete atual: <strong>R$ {{ '%.2f'|format(clinica.valor_frete or 0)|replace('.', ',') }}</strong>
+            {% if clinica.prazo_entrega_min or clinica.prazo_entrega_max %}
+              · Prazo: {{ clinica.prazo_entrega_min or '?' }}-{{ clinica.prazo_entrega_max or '?' }} min
+            {% endif %}
+          </p>
+        </div>
+        {% if payment_account and payment_account.status == 'connected' %}
+          <form method="post" action="{{ url_for('clinic_mercadopago_oauth_disconnect', clinica_id=clinica.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
+          </form>
+        {% endif %}
       </div>
-      {% if payment_account and payment_account.status == 'connected' %}
-        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_disconnect', clinica_id=clinica.id) }}">
+
+      {% if not (payment_account and payment_account.status == 'connected') %}
+      <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic">
+            Access Token <span class="text-danger">*</span>
+          </label>
+          <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic"
+                 name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
+          <div class="form-text">
+            Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Mercado Pago → Seus negócios → Credenciais</a>.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic">
+            Public Key <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic"
+                 name="public_key" placeholder="APP_USR-..." autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Salvar credenciais
+        </button>
+      </form>
+      {% elif payment_account and payment_account.status == 'connected' %}
+      <details class="mt-1">
+        <summary class="text-muted small" style="cursor:pointer">Atualizar credenciais</summary>
+        <form method="post" action="{{ url_for('clinic_mercadopago_direct_save', clinica_id=clinica.id) }}" class="mt-2">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-1"></i>Desconectar</button>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1" for="mp_access_token_clinic_update">
+              Novo Access Token <span class="text-danger">*</span>
+            </label>
+            <input type="password" class="form-control form-control-sm" id="mp_access_token_clinic_update"
+                   name="access_token" placeholder="APP_USR-... ou TEST-..." autocomplete="off" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold mb-1" for="mp_public_key_clinic_update">
+              Nova Public Key <span class="text-muted fw-normal">(opcional)</span>
+            </label>
+            <input type="text" class="form-control form-control-sm" id="mp_public_key_clinic_update"
+                   name="public_key" placeholder="APP_USR-..." autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Atualizar
+          </button>
         </form>
-      {% else %}
-        <form method="post" action="{{ url_for('clinic_mercadopago_oauth_start', clinica_id=clinica.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-link me-1"></i>Conectar Mercado Pago</button>
-        </form>
+      </details>
       {% endif %}
     </div>
   </div>

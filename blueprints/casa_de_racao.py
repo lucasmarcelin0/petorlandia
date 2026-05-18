@@ -84,6 +84,11 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/casa-de-racao/<int:casa_id>/mercado-pago/credenciais",
+        view_func=lazy_view("mercadopago_direct_save"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/admin/casas-de-racao",
         view_func=lazy_view("admin_casas_de_racao"),
     )

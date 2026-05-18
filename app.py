@@ -14462,7 +14462,8 @@ def mercadopago_oauth_start(casa_id):
     try:
         oauth_start = build_authorization_start()
     except MercadoPagoOAuthError as exc:
-        flash(str(exc), 'danger')
+        current_app.logger.error('mercadopago_oauth_start failed for casa %s: %s', casa.id, exc)
+        flash('Não foi possível iniciar a conexão com o Mercado Pago. Tente novamente ou entre em contato com o suporte.', 'danger')
         return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
 
     account = (
@@ -14566,7 +14567,44 @@ def mercadopago_oauth_disconnect(casa_id):
         account.oauth_state = None
         account.code_verifier = None
         db.session.commit()
-    flash('ConexÃ£o com o Mercado Pago desativada para esta loja.', 'info')
+    flash('Conexão com o Mercado Pago desativada para esta loja.', 'info')
+    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+
+@login_required
+def mercadopago_direct_save(casa_id):
+    casa = _casa_loja_access(casa_id)
+    access_token = (request.form.get('access_token') or '').strip()
+    public_key = (request.form.get('public_key') or '').strip()
+
+    if not access_token:
+        flash('Informe o Access Token do Mercado Pago.', 'danger')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    if not (access_token.startswith('APP_USR-') or access_token.startswith('TEST-')):
+        flash('Access Token inválido. Deve começar com APP_USR- (produção) ou TEST- (teste).', 'danger')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(casa_de_racao_id=casa.id, provider='mercado_pago')
+        .first()
+    )
+    if not account:
+        account = StorePaymentAccount(casa_de_racao_id=casa.id, provider='mercado_pago')
+        db.session.add(account)
+
+    account.access_token = access_token
+    account.public_key = public_key or None
+    account.refresh_token = None
+    account.oauth_state = None
+    account.code_verifier = None
+    account.status = 'connected'
+    account.error_message = None
+    account.connected_at = utcnow()
+    account.last_refreshed_at = utcnow()
+    db.session.commit()
+    flash('Credenciais do Mercado Pago salvas. Sua loja já pode receber pagamentos.', 'success')
     return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
 
 
@@ -14578,7 +14616,8 @@ def clinic_mercadopago_oauth_start(clinica_id):
     try:
         oauth_start = build_authorization_start()
     except MercadoPagoOAuthError as exc:
-        flash(str(exc), 'danger')
+        current_app.logger.error('clinic_mercadopago_oauth_start failed for clinica %s: %s', clinica.id, exc)
+        flash('Não foi possível iniciar a conexão com o Mercado Pago. Tente novamente ou entre em contato com o suporte.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
 
     account = (
@@ -14615,7 +14654,46 @@ def clinic_mercadopago_oauth_disconnect(clinica_id):
         account.oauth_state = None
         account.code_verifier = None
         db.session.commit()
-    flash('ConexÃ£o com o Mercado Pago desativada para esta clÃ­nica.', 'info')
+    flash('Conexão com o Mercado Pago desativada para esta clínica.', 'info')
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+
+@login_required
+def clinic_mercadopago_direct_save(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    access_token = (request.form.get('access_token') or '').strip()
+    public_key = (request.form.get('public_key') or '').strip()
+
+    if not access_token:
+        flash('Informe o Access Token do Mercado Pago.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+    if not (access_token.startswith('APP_USR-') or access_token.startswith('TEST-')):
+        flash('Access Token inválido. Deve começar com APP_USR- (produção) ou TEST- (teste).', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+    account = (
+        StorePaymentAccount.query
+        .filter_by(clinica_id=clinica.id, provider='mercado_pago')
+        .first()
+    )
+    if not account:
+        account = StorePaymentAccount(clinica_id=clinica.id, provider='mercado_pago')
+        db.session.add(account)
+
+    account.access_token = access_token
+    account.public_key = public_key or None
+    account.refresh_token = None
+    account.oauth_state = None
+    account.code_verifier = None
+    account.status = 'connected'
+    account.error_message = None
+    account.connected_at = utcnow()
+    account.last_refreshed_at = utcnow()
+    db.session.commit()
+    flash('Credenciais do Mercado Pago salvas. A clínica já pode receber pagamentos.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
 
 
