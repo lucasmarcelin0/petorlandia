@@ -928,6 +928,74 @@ _FORMAS_EMBALAGEM_COMPRIMIDO = (
     'cartucho', 'blister', 'blíster', 'display', 'caixa', 'cartela',
 )
 
+_FABRICANTE_MANIPULADO = (
+    'manipul', 'farmacia', 'ligvet', 'animalia farma', 'animaliapharma',
+    'formula animal',
+)
+
+
+def _forma_categoria_apresentacao_servico(forma: Optional[str], concentracao: Optional[str] = None) -> Tuple[str, str]:
+    texto = _texto_norm(f"{forma or ''} {concentracao or ''}")
+    if any(k in texto for k in ('colirio', 'oftalm')):
+        return ('oftalmico', 'Oftalmicos')
+    if any(k in texto for k in ('otolog', 'auric', 'ouvido')):
+        return ('otico', 'Oticos')
+    if any(k in texto for k in ('injet', 'ampola', 'frasco ampola', 'frasco-ampola')):
+        return ('injetavel', 'Injetaveis')
+    if any(k in texto for k in ('pomada', 'creme', 'gel', 'spray', 'locao', 'shampoo', 'xampu')):
+        return ('topico', 'Topicos')
+    if 'suspens' in texto:
+        return ('suspensao_oral', 'Suspensoes orais')
+    if any(k in texto for k in ('solucao', 'xarope', 'elixir', 'emuls', 'liquido', 'gota')):
+        return ('liquido_oral', 'Liquidos orais')
+    if any(k in texto for k in ('comprim', 'capsul', 'tablete', 'drage', 'petisco', 'biscoito', 'cartucho', 'blister', 'display', 'caixa', 'cartela')):
+        return ('solido_oral', 'Comprimidos e capsulas')
+    return ('outros', 'Outras apresentacoes')
+
+
+def _tipo_origem_apresentacao(fabricante: Optional[str]) -> str:
+    texto = _texto_norm(fabricante)
+    return 'manipulado' if any(k in texto for k in _FABRICANTE_MANIPULADO) else 'comercial'
+
+
+def _chave_visual_apresentacao(ap_info: Dict[str, Any]) -> tuple:
+    valor = ap_info.get('concentracao_valor')
+    try:
+        valor_key = round(float(valor), 4) if valor is not None else None
+    except (TypeError, ValueError):
+        valor_key = None
+    return (
+        ap_info.get('categoria') or '',
+        valor_key,
+        (ap_info.get('concentracao_unidade') or '').lower(),
+        (ap_info.get('unidade_pratica') or '').lower(),
+        ap_info.get('tipo_origem') or '',
+    )
+
+
+def _ordenar_apresentacao_info(ap_info: Dict[str, Any]) -> tuple:
+    ordem_cat = {
+        'solido_oral': 0,
+        'suspensao_oral': 1,
+        'liquido_oral': 2,
+        'injetavel': 3,
+        'oftalmico': 4,
+        'otico': 5,
+        'topico': 6,
+        'outros': 7,
+    }
+    tipo_score = 1 if ap_info.get('tipo_origem') == 'manipulado' else 0
+    valor = ap_info.get('concentracao_valor')
+    valor_score = float(valor) if valor is not None else 999999.0
+    return (
+        ordem_cat.get(ap_info.get('categoria'), 99),
+        tipo_score,
+        valor_score,
+        ap_info.get('forma') or '',
+        ap_info.get('fabricante') or '',
+    )
+
+
 def _unidade_pratica_por_forma(forma: Optional[str]) -> str:
     """Mapeia a forma farmacêutica ('Cápsulas', 'Suspensão', ...) para a
     unidade que o tutor vai usar na administração ('cápsula', 'mL', 'gota').
@@ -1586,12 +1654,17 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         # Unidade prática que o tutor administra (cápsula, mL, gota, etc.).
         # Usada para gerar a frase "X cápsulas (cinco cápsulas)" no card.
         unidade_pratica = _unidade_pratica_por_forma(ap.forma)
+        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
+        tipo_origem = _tipo_origem_apresentacao(fabricante)
 
         apres_info.append({
             'id': ap.id,
             'descricao': desc,
             'nome_variante': getattr(ap, 'nome_variante', None) or '',
             'fabricante': fabricante,
+            'tipo_origem': tipo_origem,
+            'categoria': categoria,
+            'categoria_label': categoria_label,
             'forma': ap.forma or '',
             'concentracao_texto': ap.concentracao or '',
             'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
@@ -1610,6 +1683,27 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
 
     # Lista de indicações alternativas disponíveis para o mesmo animal
     # (pro frontend permitir trocar sem nova round-trip se quiser).
+    apres_unicas: Dict[tuple, Dict[str, Any]] = {}
+    for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):
+        chave = _chave_visual_apresentacao(ap_info)
+        existente = apres_unicas.get(chave)
+        fabricante_atual = ap_info.get('fabricante') or ''
+        if not existente:
+            ap_info['fabricantes'] = [fabricante_atual] if fabricante_atual else []
+            ap_info['source_count'] = 1
+            apres_unicas[chave] = ap_info
+            continue
+        if fabricante_atual and fabricante_atual not in existente.get('fabricantes', []):
+            existente.setdefault('fabricantes', []).append(fabricante_atual)
+        existente['source_count'] = int(existente.get('source_count') or 1) + 1
+        if (
+            not existente.get('permite_calculo_automatico') and ap_info.get('permite_calculo_automatico')
+        ) or len(ap_info.get('descricao') or '') > len(existente.get('descricao') or ''):
+            ap_info['fabricantes'] = existente.get('fabricantes', [])
+            ap_info['source_count'] = existente.get('source_count', 1)
+            apres_unicas[chave] = ap_info
+    apres_info = list(apres_unicas.values())
+
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
     proto_ind = (getattr(proto, 'indicacao', None) or '').strip() or None
     indicacoes_alt = [i for i in indicacoes_disp if i != proto_ind]

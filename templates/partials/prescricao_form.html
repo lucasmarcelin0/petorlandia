@@ -1739,13 +1739,7 @@
       const unidRaw = ap.unidade_pratica || 'unidade';
       const unid = (unidRaw === 'unidade' && !ehLiquido) ? 'comprimido' : unidRaw;
       const rotuloEscolha = ap.rotulo_escolha || {};
-      const contextoApresentacao = [
-        rotuloEscolha.principal || '',
-        rotuloEscolha.secundario || '',
-        ap.faixa_peso_label || '',
-        ap.especie_label || '',
-      ].join('|');
-      const key = `${ap.concentracao_valor ?? ''}|${ap.concentracao_unidade ?? ''}|${unid}|${contextoApresentacao}`;
+      const key = `${ap.categoria || 'outros'}|${ap.tipo_origem || 'comercial'}|${ap.concentracao_valor ?? ''}|${ap.concentracao_unidade ?? ''}|${unid}`;
       if (!grupos[key]) {
         grupos[key] = {
           key,
@@ -1753,6 +1747,9 @@
           concentracao_unidade: ap.concentracao_unidade,
           forma: unid,
           unidade_pratica: unid,
+          categoria: ap.categoria || 'outros',
+          categoria_label: ap.categoria_label || 'Outras apresentacoes',
+          tipo_origem: ap.tipo_origem || 'comercial',
           faixa_peso_label: ap.faixa_peso_label || '',
           especie_label: ap.especie_label || '',
           rotulo_escolha: {
@@ -1819,7 +1816,7 @@
     const extrasChip = extras.length
       ? `<button type="button" class="btn btn-sm btn-outline-secondary sug-chip-conc text-muted"
                  id="sug-chip-extras" onclick="_toggleExtrasApres()">
-           <i class="bi bi-capsule me-1"></i>Manipulado (${extras.length})
+           <i class="bi bi-droplet-half me-1"></i>Outras formas (${extras.length})
          </button>`
       : '';
 
@@ -1827,9 +1824,10 @@
 
     if (extras.length && extrasDiv) {
       extrasDiv.innerHTML = _montarBlocosApresentacoes(extras);
+      extrasDiv.classList.remove('d-none');
       if (toggleBtn) {
         document.getElementById('sug-apresentacoes-toggle-label').textContent =
-          `Apresentações manipuladas (${extras.length})`;
+          `Outras apresentações (${extras.length})`;
         toggleBtn.classList.remove('d-none');
       }
     }

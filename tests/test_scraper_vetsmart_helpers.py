@@ -365,3 +365,35 @@ def test_extrair_secao_interacoes_disabled_retorna_vazio():
     secao = scraper._extrair_secao_interacoes(soup.div)
     assert secao["itens"] == []
     assert secao["texto"] is None
+
+
+def test_apresentacoes_canonicas_deduplicam_forca_sem_perder_suspensao():
+    apresentacoes = [
+        {
+            'forma': 'Comprimido',
+            'concentracao': '75 mg',
+            'concentracao_valor': 75.0,
+            'concentracao_unidade': 'mg',
+        },
+        {
+            'forma': 'comprimido',
+            'concentracao': '75mg',
+            'concentracao_valor': 75.0,
+            'concentracao_unidade': 'mg',
+        },
+        {
+            'forma': 'Suspensao',
+            'concentracao': '',
+            'concentracao_valor': None,
+            'concentracao_unidade': None,
+        },
+    ]
+
+    saida = scraper._deduplicar_apresentacoes_canonicas(apresentacoes, 'LigVet Farmacia de Manipulacao')
+
+    assert len(saida) == 2
+    categorias = {a['forma_categoria'] for a in saida}
+    assert categorias == {'solido_oral', 'suspensao_oral'}
+    susp = next(a for a in saida if a['forma_categoria'] == 'suspensao_oral')
+    assert susp['unidade_pratica'] == 'mL'
+    assert susp['tipo_origem'] == 'manipulado'

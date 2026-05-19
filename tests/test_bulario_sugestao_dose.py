@@ -172,6 +172,44 @@ def test_sugerir_dose_expoe_nome_variante_da_apresentacao():
     }
 
 
+def test_sugerir_dose_deduplica_forcas_e_preserva_suspensao():
+    ap_75_a = _apresentacao('Comprimido', '75 mg', fabricante='Duprat')
+    ap_75_a.id = 101
+    ap_75_a.concentracao_valor = 75
+    ap_75_a.concentracao_unidade = 'mg'
+    ap_75_b = _apresentacao('Comprimido', '75 mg', fabricante='Cepav')
+    ap_75_b.id = 102
+    ap_75_b.concentracao_valor = 75
+    ap_75_b.concentracao_unidade = 'mg'
+    susp = _apresentacao('Suspensao', '', fabricante='LigVet Farmacia de Manipulacao')
+    susp.id = 103
+
+    med = SimpleNamespace(
+        id=41,
+        via_administracao='Oral',
+        apresentacoes=[ap_75_a, ap_75_b, susp],
+        doses=[
+            _dose(9, 'Oral', '20 - 30 mg/kg', 20, 30, 'MG_KG', indicacao='Infeccao'),
+        ],
+    )
+
+    sugestao = sugerir_dose(med, _animal_caes(5), indicacao='Infeccao')
+
+    assert sugestao is not None
+    comprimidos_75 = [
+        ap for ap in sugestao['apresentacoes']
+        if ap['categoria'] == 'solido_oral' and ap['concentracao_valor'] == 75
+    ]
+    assert len(comprimidos_75) == 1
+    assert comprimidos_75[0]['source_count'] == 2
+    assert set(comprimidos_75[0]['fabricantes']) == {'Duprat', 'Cepav'}
+
+    suspensoes = [ap for ap in sugestao['apresentacoes'] if ap['categoria'] == 'suspensao_oral']
+    assert len(suspensoes) == 1
+    assert suspensoes[0]['permite_calculo_automatico'] is False
+    assert suspensoes[0]['tipo_origem'] == 'manipulado'
+
+
 def test_sugerir_dose_preserva_duracao_textual_do_protocolo():
     med = SimpleNamespace(
         id=50,

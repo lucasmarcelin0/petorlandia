@@ -707,7 +707,7 @@ def _extrair_apresentacoes_estruturadas(ul_apres, principios: List[str], nome: s
             }
             ap.update(_estruturar_apresentacao_campos(forma or '', txt_resto or '', nome))
             apresentacoes.append(ap)
-    return apresentacoes
+    return _deduplicar_apresentacoes_canonicas(apresentacoes)
 
 
 def _montar_conteudo_estruturado_v2(
@@ -1904,6 +1904,106 @@ def _norm_ascii_lower(texto: str) -> str:
     return nfkd.encode("ASCII", "ignore").decode().lower()
 
 
+_FORMAS_LIQUIDAS = (
+    'suspens', 'solucao oral', 'solucao', 'xarope', 'elixir', 'emuls',
+    'liquido', 'gotas', 'gota',
+)
+_FORMAS_SOLIDAS = (
+    'comprim', 'capsul', 'tablete', 'drage', 'petisco', 'biscoito',
+)
+_FORMAS_INJETAVEIS = ('injet', 'ampola', 'frasco ampola', 'frasco-ampola')
+_FORMAS_TOPICAS = ('pomada', 'creme', 'gel', 'spray', 'locao', 'shampoo', 'xampu')
+_FORMAS_OFTALMICAS = ('colirio', 'oftalm')
+_FORMAS_OTICAS = ('otolog', 'auric', 'ouvido')
+_FABRICANTE_MANIPULADO = (
+    'manipul', 'farmacia', 'ligvet', 'animalia farma', 'animaliapharma',
+    'formula animal',
+)
+
+
+def _forma_categoria_apresentacao(forma: Optional[str], conc_raw: Optional[str] = None) -> str:
+    texto = _norm_ascii_lower(f"{forma or ''} {conc_raw or ''}")
+    if any(t in texto for t in _FORMAS_OFTALMICAS):
+        return 'oftalmico'
+    if any(t in texto for t in _FORMAS_OTICAS):
+        return 'otico'
+    if any(t in texto for t in _FORMAS_INJETAVEIS):
+        return 'injetavel'
+    if any(t in texto for t in _FORMAS_TOPICAS):
+        return 'topico'
+    if any(t in texto for t in ('suspens',)):
+        return 'suspensao_oral'
+    if any(t in texto for t in _FORMAS_LIQUIDAS):
+        return 'liquido_oral'
+    if any(t in texto for t in _FORMAS_SOLIDAS):
+        return 'solido_oral'
+    if any(t in texto for t in ('cartucho', 'blister', 'display', 'caixa', 'cartela')):
+        return 'solido_oral'
+    return 'outros'
+
+
+def _unidade_pratica_canonica(forma: Optional[str], categoria: Optional[str] = None) -> str:
+    texto = _norm_ascii_lower(forma or '')
+    cat = categoria or _forma_categoria_apresentacao(forma)
+    if 'gota' in texto or cat in {'oftalmico', 'otico'}:
+        return 'gota'
+    if cat in {'suspensao_oral', 'liquido_oral', 'injetavel'}:
+        return 'mL'
+    if 'capsul' in texto:
+        return 'capsula'
+    if any(t in texto for t in ('comprim', 'tablete', 'drage', 'cartucho', 'blister', 'display', 'caixa', 'cartela')):
+        return 'comprimido'
+    if 'petisco' in texto or 'biscoito' in texto:
+        return 'petisco'
+    if cat == 'topico':
+        return 'aplicacao'
+    return 'unidade'
+
+
+def _fabricante_eh_manipulado(fabricante: Optional[str]) -> bool:
+    texto = _norm_ascii_lower(fabricante or '')
+    return any(t in texto for t in _FABRICANTE_MANIPULADO)
+
+
+def _chave_canonica_apresentacao(ap: Dict[str, Any], fabricante: Optional[str] = None) -> tuple:
+    categoria = ap.get('forma_categoria') or _forma_categoria_apresentacao(ap.get('forma'), ap.get('concentracao'))
+    unidade_pratica = ap.get('unidade_pratica') or _unidade_pratica_canonica(ap.get('forma'), categoria)
+    valor = ap.get('concentracao_valor')
+    try:
+        valor_key = round(float(valor), 4) if valor is not None else None
+    except (TypeError, ValueError):
+        valor_key = None
+    unidade = _norm_ascii_lower(str(ap.get('concentracao_unidade') or ''))
+    tipo_origem = 'manipulado' if _fabricante_eh_manipulado(fabricante) else 'comercial'
+    # Dedupe by clinical/admin intent. Manufacturer is kept as provenance, not
+    # as a visual multiplier.
+    return (categoria, valor_key, unidade, unidade_pratica, tipo_origem)
+
+
+def _enriquecer_apresentacao_canonica(ap: Dict[str, Any], fabricante: Optional[str] = None) -> Dict[str, Any]:
+    categoria = _forma_categoria_apresentacao(ap.get('forma'), ap.get('concentracao'))
+    ap['forma_categoria'] = categoria
+    ap['unidade_pratica'] = _unidade_pratica_canonica(ap.get('forma'), categoria)
+    ap['tipo_origem'] = 'manipulado' if _fabricante_eh_manipulado(fabricante) else 'comercial'
+    return ap
+
+
+def _deduplicar_apresentacoes_canonicas(apresentacoes: List[Dict[str, Any]], fabricante: Optional[str] = None) -> List[Dict[str, Any]]:
+    unicas: Dict[tuple, Dict[str, Any]] = {}
+    for ap in apresentacoes or []:
+        ap = _enriquecer_apresentacao_canonica(dict(ap), fabricante)
+        chave = _chave_canonica_apresentacao(ap, fabricante)
+        atual = unicas.get(chave)
+        if not atual:
+            unicas[chave] = ap
+            continue
+        # Prefer the row with richer original text while preserving the same
+        # canonical clinical option.
+        if len(str(ap.get('concentracao') or '')) > len(str(atual.get('concentracao') or '')):
+            unicas[chave] = ap
+    return list(unicas.values())
+
+
 def _apresentacao_eh_solida(ap: Dict[str, Any]) -> bool:
     forma = _norm_ascii_lower(str(ap.get('forma') or ''))
     unidade = _norm_ascii_lower(str(ap.get('concentracao_unidade') or ''))
@@ -2484,27 +2584,60 @@ def _inserir_apresentacoes_consolidado(
 
     # Carrega apresentações já existentes
     cur.execute("""
-        SELECT id, forma, concentracao, fabricante
+        SELECT id, forma, concentracao, fabricante,
+               concentracao_valor, concentracao_unidade,
+               volume_valor, volume_unidade
           FROM apresentacao_medicamento
          WHERE medicamento_id = %s
     """, (medicamento_id,))
+    rows_existentes = list(cur.fetchall())
+    keep_por_chave: Dict[tuple, Dict[str, Any]] = {}
+    ids_remover: List[int] = []
+    for r in rows_existentes:
+        chave = _chave_canonica_apresentacao({
+            "forma": r.get("forma") or '',
+            "concentracao": r.get("concentracao") or '',
+            "concentracao_valor": r.get("concentracao_valor"),
+            "concentracao_unidade": r.get("concentracao_unidade"),
+            "volume_valor": r.get("volume_valor"),
+            "volume_unidade": r.get("volume_unidade"),
+        }, r.get("fabricante") or '')
+        atual = keep_por_chave.get(chave)
+        if not atual:
+            keep_por_chave[chave] = dict(r)
+            continue
+        atual_tem_conc = atual.get("concentracao_valor") is not None
+        novo_tem_conc = r.get("concentracao_valor") is not None
+        if novo_tem_conc and not atual_tem_conc:
+            ids_remover.append(atual["id"])
+            keep_por_chave[chave] = dict(r)
+        else:
+            ids_remover.append(r["id"])
+    if ids_remover:
+        cur.execute(
+            "DELETE FROM apresentacao_medicamento WHERE id = ANY(%s)",
+            (ids_remover,),
+        )
+        rows_existentes = [r for r in rows_existentes if r["id"] not in set(ids_remover)]
+
     existentes = {
-        (_norm(r.get("forma") or ''),
-         _norm(r.get("concentracao") or ''),
-         _norm(r.get("fabricante") or '')): r["id"]
-        for r in cur.fetchall()
+        _chave_canonica_apresentacao({
+            "forma": r.get("forma") or '',
+            "concentracao": r.get("concentracao") or '',
+            "concentracao_valor": r.get("concentracao_valor"),
+            "concentracao_unidade": r.get("concentracao_unidade"),
+            "volume_valor": r.get("volume_valor"),
+            "volume_unidade": r.get("volume_unidade"),
+        }, r.get("fabricante") or ''): r["id"]
+        for r in rows_existentes
     }
 
     inseridas = 0
-    for ap in prod.apresentacoes:
+    for ap in _deduplicar_apresentacoes_canonicas(prod.apresentacoes or [], prod.fabricante):
         forma = ap.get("forma")
         if forma in ("N/A", "", None):
             continue
-        chave = (
-            _norm(forma or ''),
-            _norm(ap.get("concentracao") or ''),
-            _norm(prod.fabricante or ''),
-        )
+        chave = _chave_canonica_apresentacao(ap, prod.fabricante)
         if chave in existentes:
             continue  # já tem essa apresentação/fabricante
         cur.execute(
@@ -2548,7 +2681,7 @@ def _inserir_doses_consolidado(
 
     # Carrega doses já existentes pro dedup
     cur.execute("""
-        SELECT especie_code, peso_min_kg, peso_max_kg,
+        SELECT id, especie_code, peso_min_kg, peso_max_kg,
                dose_min, dose_max, dose_unidade,
                intervalo_horas, indicacao
           FROM dose_medicamento
@@ -2557,6 +2690,31 @@ def _inserir_doses_consolidado(
     def _dec(v):
         # Normaliza Decimal → float para comparação com o parser
         return float(v) if v is not None else None
+    rows_doses = list(cur.fetchall())
+    keep_doses: Dict[tuple, Dict[str, Any]] = {}
+    ids_doses_remover: List[int] = []
+    for r in rows_doses:
+        chave = (
+            (r.get("especie_code") or '').upper() or None,
+            _dec(r.get("peso_min_kg")),
+            _dec(r.get("peso_max_kg")),
+            _dec(r.get("dose_min")),
+            _dec(r.get("dose_max")),
+            (r.get("dose_unidade") or '').upper() or None,
+            r.get("intervalo_horas"),
+            (r.get("indicacao") or '').strip() or None,
+        )
+        if chave in keep_doses:
+            ids_doses_remover.append(r["id"])
+        else:
+            keep_doses[chave] = dict(r)
+    if ids_doses_remover:
+        cur.execute(
+            "DELETE FROM dose_medicamento WHERE id = ANY(%s)",
+            (ids_doses_remover,),
+        )
+        rows_doses = [r for r in rows_doses if r["id"] not in set(ids_doses_remover)]
+
     existentes = {
         (
             (r.get("especie_code") or '').upper() or None,
@@ -2568,7 +2726,7 @@ def _inserir_doses_consolidado(
             r.get("intervalo_horas"),
             (r.get("indicacao") or '').strip() or None,
         )
-        for r in cur.fetchall()
+        for r in rows_doses
     }
 
     inseridas = 0
