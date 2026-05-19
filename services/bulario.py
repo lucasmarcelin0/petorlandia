@@ -4,7 +4,9 @@ Usado pelo endpoint /api/bulario/sugerir-dose e por qualquer outro caller
 que precise propor uma dose para um animal específico.
 """
 from __future__ import annotations
+import os
 import re
+import importlib.util
 import unicodedata
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -12,6 +14,19 @@ try:
     from bs4 import BeautifulSoup
 except ImportError:  # pragma: no cover
     BeautifulSoup = None
+
+# Normalizador de posologia carregado relativo a este arquivo — funciona tanto
+# importado como pacote (services.bulario) quanto carregado standalone via
+# importlib (como fazem os testes), sem disparar services/__init__.py.
+_pn_spec = importlib.util.spec_from_file_location(
+    "posologia_normalizacao",
+    os.path.join(os.path.dirname(__file__), "posologia_normalizacao.py"),
+)
+_pn = importlib.util.module_from_spec(_pn_spec)
+_pn_spec.loader.exec_module(_pn)
+normalizar_frequencia = _pn.normalizar_frequencia
+normalizar_duracao = _pn.normalizar_duracao
+consolidar_linhas = _pn.consolidar_linhas
 
 
 def _strip_accents(s: str) -> str:
@@ -841,22 +856,41 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
             especificas = [c for c in chaves_exibidas if c not in _INDICACOES_GENERICAS_CORTICOIDE]
             if especificas:
                 chaves_exibidas = [c for c in chaves_exibidas if c not in _INDICACOES_GENERICAS_CORTICOIDE]
+        med_freq = normalizar_frequencia(getattr(medicamento, "frequencia", None))
+        med_dur = normalizar_duracao(getattr(medicamento, "duracao_tratamento", None))
         protocolos = []
         for indicacao in chaves_exibidas:
             itens = grupos[indicacao]
+            linhas_norm = []
+            for d in itens:
+                freq = (
+                    normalizar_frequencia(
+                        getattr(d, "frequencia", None),
+                        getattr(d, "intervalo_min_horas", None) or getattr(d, "intervalo_horas", None),
+                        getattr(d, "intervalo_max_horas", None),
+                    )
+                    or med_freq
+                    or "Conforme orientação veterinária"
+                )
+                dur = (
+                    normalizar_duracao(getattr(d, "duracao", None))
+                    or med_dur
+                    or "Conforme orientação veterinária"
+                )
+                linhas_norm.append({
+                    "faixa_peso": _texto_limpo(getattr(d, "faixa_peso", None)) or "Sem faixa definida",
+                    "via": _texto_limpo(getattr(d, "via", None)) or _texto_limpo(getattr(medicamento, "via_administracao", None)) or "—",
+                    "dose": _texto_limpo(getattr(d, "dose", None)) or "—",
+                    "frequencia": freq,
+                    "duracao": dur,
+                    "observacao": _texto_limpo(getattr(d, "observacao", None)),
+                })
+            linhas_dedup = consolidar_linhas(linhas_norm)
+            if not linhas_dedup:
+                continue
             protocolos.append({
                 "indicacao": indicacao,
-                "linhas": [
-                    {
-                        "faixa_peso": _texto_limpo(getattr(d, "faixa_peso", None)) or "Sem faixa definida",
-                        "via": _texto_limpo(getattr(d, "via", None)) or _texto_limpo(getattr(medicamento, "via_administracao", None)) or "—",
-                        "dose": _texto_limpo(getattr(d, "dose", None)) or "—",
-                        "frequencia": _texto_limpo(getattr(d, "frequencia", None)) or _texto_limpo(getattr(medicamento, "frequencia", None)) or "—",
-                        "duracao": _texto_limpo(getattr(d, "duracao", None)) or _texto_limpo(getattr(medicamento, "duracao_tratamento", None)) or "—",
-                        "observacao": _texto_limpo(getattr(d, "observacao", None)),
-                    }
-                    for d in itens
-                ],
+                "linhas": linhas_dedup,
             })
         tabs.append({
             "slug": slug,

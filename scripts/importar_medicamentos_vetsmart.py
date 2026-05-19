@@ -38,6 +38,27 @@ except ImportError:
     print("Instale: pip install beautifulsoup4")
     sys.exit(1)
 
+# Normalizador de posologia (frequência/duração) — compartilhado com a camada
+# de apresentação. Carregado por caminho p/ funcionar mesmo quando só
+# `scripts/` está no sys.path. Degrada para texto bruto se indisponível.
+try:
+    import importlib.util as _ilu
+    _PN_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "services", "posologia_normalizacao.py",
+    )
+    _pn_spec = _ilu.spec_from_file_location("posologia_normalizacao", _PN_PATH)
+    _pn = _ilu.module_from_spec(_pn_spec)
+    _pn_spec.loader.exec_module(_pn)
+    _normalizar_frequencia = _pn.normalizar_frequencia
+    _normalizar_duracao = _pn.normalizar_duracao
+except Exception as _e:  # pragma: no cover
+    logging.getLogger(__name__).warning(
+        "Normalizador de posologia indisponível (%s) — usando texto bruto.", _e
+    )
+    _normalizar_frequencia = lambda t, *a, **k: t  # noqa: E731
+    _normalizar_duracao = lambda t, *a, **k: t      # noqa: E731
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -2812,27 +2833,46 @@ def _inserir_doses_consolidado(
     cur.execute("""
         SELECT id, especie_code, peso_min_kg, peso_max_kg,
                dose_min, dose_max, dose_unidade,
-               intervalo_horas, indicacao
+               intervalo_horas, intervalo_min_horas, intervalo_max_horas,
+               frequencia, indicacao
           FROM dose_medicamento
          WHERE medicamento_id = %s
     """, (medicamento_id,))
     def _dec(v):
         # Normaliza Decimal → float para comparação com o parser
         return float(v) if v is not None else None
+
+    def _freq_key(row) -> Optional[str]:
+        """Frequência canônica p/ dedup — estável entre raw e já-normalizado.
+
+        Usar a string normalizada (ex.: '8/8h ou 12/12h') em vez do
+        `intervalo_horas` cru evita que '8/8 horas 12/12 horas' e
+        'Via Oral: 8-12h.' virem linhas distintas a cada re-scrape.
+        """
+        f = _normalizar_frequencia(
+            row.get("frequencia"),
+            row.get("intervalo_min_horas") or row.get("intervalo_horas"),
+            row.get("intervalo_max_horas") or row.get("intervalo_horas"),
+        )
+        return (f or '').strip().lower() or (row.get("intervalo_horas"))
+
+    def _chave_dose(row) -> tuple:
+        return (
+            (row.get("especie_code") or '').upper() or None,
+            _dec(row.get("peso_min_kg")),
+            _dec(row.get("peso_max_kg")),
+            _dec(row.get("dose_min")),
+            _dec(row.get("dose_max")),
+            (row.get("dose_unidade") or '').upper() or None,
+            _freq_key(row),
+            (row.get("indicacao") or '').strip() or None,
+        )
+
     rows_doses = list(cur.fetchall())
     keep_doses: Dict[tuple, Dict[str, Any]] = {}
     ids_doses_remover: List[int] = []
     for r in rows_doses:
-        chave = (
-            (r.get("especie_code") or '').upper() or None,
-            _dec(r.get("peso_min_kg")),
-            _dec(r.get("peso_max_kg")),
-            _dec(r.get("dose_min")),
-            _dec(r.get("dose_max")),
-            (r.get("dose_unidade") or '').upper() or None,
-            r.get("intervalo_horas"),
-            (r.get("indicacao") or '').strip() or None,
-        )
+        chave = _chave_dose(r)
         if chave in keep_doses:
             ids_doses_remover.append(r["id"])
         else:
@@ -2844,32 +2884,25 @@ def _inserir_doses_consolidado(
         )
         rows_doses = [r for r in rows_doses if r["id"] not in set(ids_doses_remover)]
 
-    existentes = {
-        (
-            (r.get("especie_code") or '').upper() or None,
-            _dec(r.get("peso_min_kg")),
-            _dec(r.get("peso_max_kg")),
-            _dec(r.get("dose_min")),
-            _dec(r.get("dose_max")),
-            (r.get("dose_unidade") or '').upper() or None,
-            r.get("intervalo_horas"),
-            (r.get("indicacao") or '').strip() or None,
-        )
-        for r in rows_doses
-    }
+    existentes = {_chave_dose(r) for r in rows_doses}
 
     inseridas = 0
     for d in doses:
-        chave = (
-            (d.get("especie_code") or '').upper() or None,
-            _dec(d.get("peso_min_kg")),
-            _dec(d.get("peso_max_kg")),
-            _dec(d.get("dose_min")),
-            _dec(d.get("dose_max")),
-            (d.get("dose_unidade") or '').upper() or None,
-            d.get("intervalo_horas"),
-            (d.get("indicacao") or '').strip() or None,
+        # Normaliza o texto de frequência/duração ANTES de gravar e de gerar a
+        # chave de dedup: o banco passa a guardar '8/8h ou 12/12h' em vez de
+        # '8/8 horas 12/12 horas' / 'Via Oral: 8-12h.' / parágrafos truncados.
+        # O raw original continua preservado em `dose_raw_text`.
+        freq_norm = _normalizar_frequencia(
+            d.get("frequencia"),
+            d.get("intervalo_min_horas") or d.get("intervalo_horas"),
+            d.get("intervalo_max_horas") or d.get("intervalo_horas"),
         )
+        if freq_norm:
+            d["frequencia"] = freq_norm
+        dur_norm = _normalizar_duracao(d.get("duracao"))
+        if dur_norm:
+            d["duracao"] = dur_norm
+        chave = _chave_dose(d)
         if chave in existentes:
             continue
         cur.execute("""

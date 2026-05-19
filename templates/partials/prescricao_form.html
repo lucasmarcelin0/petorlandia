@@ -161,8 +161,13 @@
         </a>
       </div>
     </div>
-    <div class="text-end mt-2">
-      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="editarMedicamentoSelecionado()">Editar medicamento</button>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2 px-2 pb-2">
+      <button type="button" id="btn-abrir-sugestao-dose"
+              class="btn btn-sm btn-outline-info d-none"
+              onclick="abrirSugestaoDose()">
+        <i class="bi bi-calculator me-1"></i>Calcular dose para este paciente
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="editarMedicamentoSelecionado()">Editar medicamento</button>
     </div>
   </div>
 
@@ -583,7 +588,6 @@
     if (med.id) {
       medicamentoSelecionado = med;
       preencherCardMedicamento(med);
-      carregarSugestaoDose(med.id);
       _atualizarIconeFavorito(med.id);
     } else {
       medicamentoSelecionado = null;
@@ -794,10 +798,6 @@
       document.getElementById('dose').value = '';
       document.getElementById('frequencia').value = '';
       document.getElementById('duracao').value = '';
-      // Se o medicamento foi recém-salvo e tem ID, tenta buscar dose calculada.
-      if (medicamentoSelecionado?.id) {
-        carregarSugestaoDose(medicamentoSelecionado.id);
-      }
     } catch (e) {
       mostrarFeedback('Erro ao salvar medicação.', 'danger');
     }
@@ -981,6 +981,33 @@
   // onChange do select de indicação para saber qual endpoint re-chamar.
   let _medicamentoIdSugestao = null;
 
+  // Mostra/oculta o botão opt-in "Calcular dose para este paciente".
+  // A dose pré-calculada NÃO aparece sozinha: o veterinário decide quando
+  // quer vê-la. Só faz sentido oferecer se houver animal na consulta.
+  function _toggleBotaoSugestao(mostrar) {
+    const btn = document.getElementById('btn-abrir-sugestao-dose');
+    if (!btn) return;
+    btn.classList.toggle('d-none', !(mostrar && ANIMAL_ID_CONSULTA));
+  }
+
+  // Chamado ao selecionar um medicamento: apenas prepara (não busca nada,
+  // não abre o card). Deixa o botão opt-in disponível.
+  function prepararSugestaoDose(medicamentoId) {
+    const card = document.getElementById('sugestao-dose-card');
+    if (card) card.classList.add('d-none');
+    _limparValoresCardSugestao();
+    sugestaoDoseAtual = null;
+    _medicamentoIdSugestao = medicamentoId || null;
+    _toggleBotaoSugestao(!!medicamentoId);
+  }
+
+  // Acionado pelo clique no botão opt-in — aí sim busca e abre o card.
+  function abrirSugestaoDose() {
+    if (!_medicamentoIdSugestao) return;
+    _toggleBotaoSugestao(false);
+    carregarSugestaoDose(_medicamentoIdSugestao);
+  }
+
   function fecharSugestaoDose() {
     const card = document.getElementById('sugestao-dose-card');
     if (card) card.classList.add('d-none');
@@ -988,7 +1015,9 @@
     if (indispEl) { indispEl.innerHTML = ''; indispEl.classList.add('d-none'); }
     _limparValoresCardSugestao();
     sugestaoDoseAtual = null;
-    _medicamentoIdSugestao = null;
+    // Mantém o medicamento lembrado e reexibe o botão opt-in, para o vet
+    // poder reabrir a dose pré-calculada se quiser.
+    _toggleBotaoSugestao(!!_medicamentoIdSugestao);
   }
 
   async function salvarPesoInline(animalId, inputId, errId, medicamentoId) {
@@ -1445,7 +1474,12 @@
       partes.push('Use como apoio e valide antes de concluir a prescrição.');
     }
 
-    if (!partes.length) {
+    const flags = Array.isArray(s?.flags_risco) ? s.flags_risco : [];
+    const criticos = flags.filter(f => String(f.nivel || '').toLowerCase() === 'critico');
+    const outros = flags.filter(f => String(f.nivel || '').toLowerCase() !== 'critico');
+
+    // Nada relevante e nenhum ponto crítico → não polui a tela.
+    if (!partes.length && !criticos.length && !outros.length) {
       wrap.classList.add('d-none');
       texto.textContent = '';
       riscos.innerHTML = '';
@@ -1453,22 +1487,34 @@
       return;
     }
 
-    titulo.textContent = diag.requer_validacao_clinica ? 'Resumo clínico e validação' : 'Resumo clínico';
-    texto.textContent = partes.join(' ');
+    titulo.textContent = 'Resumo clínico';
+    // Linha única e enxuta: só a origem da dose (sem o aviso genérico
+    // "valide antes de concluir", que é sempre verdade e vira ruído).
+    texto.textContent = partes.length ? partes.join(' ') : 'Dose calculada a partir do bulário.';
 
-    const flags = Array.isArray(s?.flags_risco) ? s.flags_risco : [];
-    if (flags.length) {
-      riscos.innerHTML = flags.map(flag => `
-        <div class="d-flex align-items-start gap-2 mb-1">
-          <span class="badge ${_badgeRiscoClass(flag.nivel)} text-uppercase" style="font-size:.62rem;">${flag.nivel || 'info'}</span>
-          <span><strong>${flag.titulo || 'Atenção'}:</strong> ${flag.detalhe || ''}</span>
-        </div>
-      `).join('');
-      riscos.classList.remove('d-none');
-    } else {
-      riscos.innerHTML = '';
-      riscos.classList.add('d-none');
+    const _flagLinha = (flag) => `
+      <div class="d-flex align-items-start gap-2 mb-1">
+        <span class="badge ${_badgeRiscoClass(flag.nivel)} text-uppercase" style="font-size:.62rem;">${flag.nivel || 'info'}</span>
+        <span><strong>${flag.titulo || 'Atenção'}:</strong> ${flag.detalhe || ''}</span>
+      </div>`;
+
+    let html = '';
+    // Pontos CRÍTICOS são de segurança — sempre visíveis.
+    if (criticos.length) html += criticos.map(_flagLinha).join('');
+    // Demais pontos (atenção/informativo) ficam recolhidos por padrão:
+    // só aparecem se o veterinário pedir.
+    if (outros.length) {
+      html += `
+        <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 mt-1"
+                style="font-size:.74rem;"
+                onclick="(function(b){var d=document.getElementById('sug-riscos-extra');var o=d.classList.toggle('d-none');b.querySelector('.cv').textContent=o?'Ver validação clínica ('+${outros.length}+')':'Ocultar validação clínica';b.querySelector('i').style.transform=o?'':'rotate(180deg)';})(this)">
+          <i class="bi bi-chevron-down" style="font-size:.65rem;transition:transform .2s;"></i>
+          <span class="cv">Ver validação clínica (${outros.length})</span>
+        </button>
+        <div id="sug-riscos-extra" class="d-none mt-1">${outros.map(_flagLinha).join('')}</div>`;
     }
+    riscos.innerHTML = html;
+    riscos.classList.toggle('d-none', !html);
 
     wrap.classList.remove('d-none');
   }
@@ -2448,6 +2494,9 @@
   function preencherCardMedicamento(m) {
     // Carrega favoritos (se ainda não foi feito) e atualiza ícone da estrela
     _carregarFavoritosSeNecessario().then(() => _atualizarIconeFavorito(m?.id));
+    // Ponto único: ao exibir a monografia, a dose pré-calculada fica
+    // disponível como botão opt-in (nunca abre sozinha).
+    prepararSugestaoDose(m?.id);
     const tabs = m?.monografia_estruturada?.resumo_posologia?.tabs || [];
     const temPosologiaEstruturada = Array.isArray(tabs) && tabs.length > 0;
     const totalProtocolos = temPosologiaEstruturada
@@ -2839,8 +2888,6 @@
                 document.getElementById('duracao').value = '';
                 sugestoes.innerHTML = '';
                 sugestoes.style.display = 'none';
-                // Tenta buscar uma dose pré-calculada do bulário para este animal.
-                if (item.id) carregarSugestaoDose(item.id);
               };
               sugestoes.appendChild(li);
             });
