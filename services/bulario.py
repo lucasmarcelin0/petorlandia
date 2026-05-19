@@ -1029,6 +1029,10 @@ def serializar_medicamento_busca(medicamento) -> Dict[str, Any]:
         "bula": getattr(medicamento, "bula", None),
         "bula_url": bula_url,
         "monografia_estruturada": estrutura,
+        # Apresentações vão junto pra alimentar o dropdown obrigatório logo
+        # após a escolha do medicamento — sem apresentação não há prescrição
+        # válida (250 mg comprimido ≠ 250 mg/5 mL suspensão).
+        "apresentacoes": listar_apresentacoes_medicamento(medicamento),
     }
 
 
@@ -1242,6 +1246,107 @@ def _montar_rotulo_apresentacao_escolha(ap) -> Dict[str, str]:
         'secundario': secundario,
         'especie': especie,
     }
+
+
+def listar_apresentacoes_medicamento(
+    medicamento,
+    dose_unit_out: Optional[str] = None,
+    dose_media: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """Lista deduplicada/ordenada de apresentações do medicamento (sem precisar
+    de animal/dose).  Reutilizada por:
+
+      - `sugerir_dose`  (com `dose_unit_out`+`dose_media`) para incluir a
+        equivalência "X cápsulas por administração" no card opt-in.
+      - `serializar_medicamento_busca` (sem dose) para popular o dropdown de
+        apresentação que vai logo abaixo da escolha do medicamento — a
+        apresentação é obrigatória pra prescrição ter valor clínico.
+
+    Dedup por (categoria, concentração_valor, concentração_unidade,
+    unidade_prática, tipo_origem); preserva a apresentação mais informativa
+    quando há colisão, e acumula fabricantes equivalentes em `fabricantes`.
+    """
+    apres_info: List[Dict[str, Any]] = []
+    for ap in (getattr(medicamento, 'apresentacoes', None) or []):
+        desc_parts = [ap.forma]
+        if ap.concentracao_valor:
+            desc_parts.append(
+                f"{_fmt_apresentacao_label(float(ap.concentracao_valor))} {ap.concentracao_unidade}"
+            )
+        if ap.volume_valor:
+            desc_parts.append(
+                f"({_fmt_apresentacao_label(float(ap.volume_valor))} {ap.volume_unidade})"
+            )
+        desc = ' '.join(p for p in desc_parts if p)
+        fabricante = getattr(ap, 'fabricante', None)
+        if fabricante:
+            desc = f"{desc} — {fabricante}"
+
+        equiv = None
+        if (dose_media is not None and dose_unit_out == 'mg'
+                and ap.concentracao_valor and ap.concentracao_unidade):
+            cv = float(ap.concentracao_valor)
+            un_ap = (ap.concentracao_unidade or '').lower()
+            if un_ap in ('mg', 'g', 'mcg'):
+                cv_mg = cv
+                if un_ap == 'g':
+                    cv_mg = cv * 1000.0
+                elif un_ap == 'mcg':
+                    cv_mg = cv / 1000.0
+                n = dose_media / cv_mg
+                equiv = f"{_fmt_apresentacao_label(n)} × {ap.forma} de {_fmt_apresentacao_label(cv)} {un_ap} por administração"
+            elif un_ap in ('mg/ml', 'mcg/ml'):
+                cv_mg_ml = cv / 1000.0 if un_ap == 'mcg/ml' else cv
+                ml = dose_media / cv_mg_ml
+                equiv = f"{_fmt_apresentacao_label(ml)} mL por administração"
+
+        unidade_pratica = _unidade_pratica_por_forma(ap.forma)
+        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
+        tipo_origem = _tipo_origem_apresentacao(fabricante)
+
+        apres_info.append({
+            'id': ap.id,
+            'descricao': desc,
+            'nome_variante': getattr(ap, 'nome_variante', None) or '',
+            'fabricante': fabricante,
+            'tipo_origem': tipo_origem,
+            'categoria': categoria,
+            'categoria_label': categoria_label,
+            'forma': ap.forma or '',
+            'concentracao_texto': ap.concentracao or '',
+            'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
+            'concentracao_unidade': ap.concentracao_unidade or '',
+            'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
+            'volume_unidade': ap.volume_unidade or '',
+            'unidade_pratica': unidade_pratica,
+            'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
+            'especie_label': _extrair_especie_apresentacao(ap),
+            'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
+            'permite_calculo_automatico': bool(ap.concentracao_valor),
+            'equivalencia': equiv,
+        })
+
+    apres_unicas: Dict[tuple, Dict[str, Any]] = {}
+    for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):
+        chave = _chave_visual_apresentacao(ap_info)
+        existente = apres_unicas.get(chave)
+        fabricante_atual = ap_info.get('fabricante') or ''
+        if not existente:
+            ap_info['fabricantes'] = [fabricante_atual] if fabricante_atual else []
+            ap_info['source_count'] = 1
+            apres_unicas[chave] = ap_info
+            continue
+        if fabricante_atual and fabricante_atual not in existente.get('fabricantes', []):
+            existente.setdefault('fabricantes', []).append(fabricante_atual)
+        existente['source_count'] = int(existente.get('source_count') or 1) + 1
+        if (
+            (not existente.get('permite_calculo_automatico') and ap_info.get('permite_calculo_automatico'))
+            or len(ap_info.get('descricao') or '') > len(existente.get('descricao') or '')
+        ):
+            ap_info['fabricantes'] = existente.get('fabricantes', [])
+            ap_info['source_count'] = existente.get('source_count', 1)
+            apres_unicas[chave] = ap_info
+    return list(apres_unicas.values())
 
 
 _INDICACAO_STOPWORDS = {
@@ -1781,92 +1886,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         dur_texto = duracao_proto_texto or '—'
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
 
-    # Equivalências por apresentação
+    # Equivalências por apresentação — usa o helper compartilhado com
+    # `serializar_medicamento_busca` (que precisa da mesma lista sem dose).
     dose_media = (dose_calc_min + dose_calc_max) / 2.0
-    apres_info: List[Dict[str, Any]] = []
-    for ap in (medicamento.apresentacoes or []):
-        desc_parts = [ap.forma]
-        if ap.concentracao_valor:
-            desc_parts.append(f"{_fmt(float(ap.concentracao_valor))} {ap.concentracao_unidade}")
-        if ap.volume_valor:
-            desc_parts.append(f"({_fmt(float(ap.volume_valor))} {ap.volume_unidade})")
-        desc = ' '.join(p for p in desc_parts if p)
-        fabricante = getattr(ap, 'fabricante', None)
-        if fabricante:
-            desc = f"{desc} — {fabricante}"
-
-        equiv = None
-        if dose_unit_out == 'mg' and ap.concentracao_valor and ap.concentracao_unidade:
-            cv = float(ap.concentracao_valor)
-            un_ap = (ap.concentracao_unidade or '').lower()
-            if un_ap in ('mg', 'g', 'mcg'):
-                cv_mg = cv
-                if un_ap == 'g':
-                    cv_mg = cv * 1000.0
-                elif un_ap == 'mcg':
-                    cv_mg = cv / 1000.0
-                n = dose_media / cv_mg
-                equiv = f"{_fmt(n)} × {ap.forma} de {_fmt(cv)} {un_ap} por administração"
-            elif un_ap in ('mg/ml', 'mcg/ml'):
-                cv_mg_ml = cv / 1000.0 if un_ap == 'mcg/ml' else cv
-                ml = dose_media / cv_mg_ml
-                equiv = f"{_fmt(ml)} mL por administração"
-        elif dose_unit_out == 'mL' and ap.concentracao_unidade == 'mg/ml':
-            # dose em mL já é direta
-            pass
-
-        # Unidade prática que o tutor administra (cápsula, mL, gota, etc.).
-        # Usada para gerar a frase "X cápsulas (cinco cápsulas)" no card.
-        unidade_pratica = _unidade_pratica_por_forma(ap.forma)
-        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
-        tipo_origem = _tipo_origem_apresentacao(fabricante)
-
-        apres_info.append({
-            'id': ap.id,
-            'descricao': desc,
-            'nome_variante': getattr(ap, 'nome_variante', None) or '',
-            'fabricante': fabricante,
-            'tipo_origem': tipo_origem,
-            'categoria': categoria,
-            'categoria_label': categoria_label,
-            'forma': ap.forma or '',
-            'concentracao_texto': ap.concentracao or '',
-            'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
-            'concentracao_unidade': ap.concentracao_unidade or '',
-            'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
-            'volume_unidade': ap.volume_unidade or '',
-            'unidade_pratica': unidade_pratica,
-            'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
-            'especie_label': _extrair_especie_apresentacao(ap),
-            'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
-            # Se `concentracao_valor` existir, o frontend pode calcular
-            # automaticamente; senão, precisa pedir ao vet que digite.
-            'permite_calculo_automatico': bool(ap.concentracao_valor),
-            'equivalencia': equiv,
-        })
-
-    # Lista de indicações alternativas disponíveis para o mesmo animal
-    # (pro frontend permitir trocar sem nova round-trip se quiser).
-    apres_unicas: Dict[tuple, Dict[str, Any]] = {}
-    for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):
-        chave = _chave_visual_apresentacao(ap_info)
-        existente = apres_unicas.get(chave)
-        fabricante_atual = ap_info.get('fabricante') or ''
-        if not existente:
-            ap_info['fabricantes'] = [fabricante_atual] if fabricante_atual else []
-            ap_info['source_count'] = 1
-            apres_unicas[chave] = ap_info
-            continue
-        if fabricante_atual and fabricante_atual not in existente.get('fabricantes', []):
-            existente.setdefault('fabricantes', []).append(fabricante_atual)
-        existente['source_count'] = int(existente.get('source_count') or 1) + 1
-        if (
-            not existente.get('permite_calculo_automatico') and ap_info.get('permite_calculo_automatico')
-        ) or len(ap_info.get('descricao') or '') > len(existente.get('descricao') or ''):
-            ap_info['fabricantes'] = existente.get('fabricantes', [])
-            ap_info['source_count'] = existente.get('source_count', 1)
-            apres_unicas[chave] = ap_info
-    apres_info = list(apres_unicas.values())
+    apres_info = listar_apresentacoes_medicamento(medicamento, dose_unit_out, dose_media)
 
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
     proto_ind = (getattr(proto, 'indicacao', None) or '').strip() or None

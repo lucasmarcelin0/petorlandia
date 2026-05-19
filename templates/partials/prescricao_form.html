@@ -132,6 +132,28 @@
           <p><strong>Duração:</strong> <span id="med-duracao" class="text-muted">–</span></p>
         </div>
       </div>
+
+      <!-- Seleção de apresentação — obrigatória pra prescrição ter valor:
+           250 mg comprimido ≠ 250 mg/5 mL suspensão.  Aparece sempre que o
+           medicamento tem apresentações cadastradas, logo após a escolha do
+           medicamento (não fica escondida atrás da dose pré-calculada). -->
+      <div id="presc-apresentacao-wrap" class="mb-2 d-none"
+           style="border:1px solid #c3e6cb;border-left:3px solid #198754;border-radius:7px;padding:10px 12px;background:#f3fbf5;">
+        <label for="presc-apresentacao" class="form-label small fw-semibold mb-1 d-flex align-items-center gap-1"
+               style="color:#0f5132;">
+          <i class="bi bi-capsule"></i>
+          Apresentação <span class="text-danger" aria-hidden="true">*</span>
+          <span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— obrigatória para prescrever</span>
+        </label>
+        <select id="presc-apresentacao" class="form-select form-select-sm"
+                onchange="onApresentacaoPrescricaoChange()">
+          <option value="">— escolha a apresentação dispensada —</option>
+        </select>
+        <small class="text-muted d-block mt-1" id="presc-apresentacao-hint" style="font-size:.72rem;">
+          Define o que o tutor vai comprar e administrar (forma, concentração, fabricante).
+        </small>
+      </div>
+
       <hr>
       <div id="med-monografia-estruturada" class="d-none"></div>
 
@@ -598,6 +620,12 @@
     // pedir a sugestão de dose pré-calculada ao bulário.
     const ANIMAL_ID_CONSULTA = {{ animal.id|tojson if animal else 'null' }};
     let sugestaoDoseAtual = null;
+    // Apresentação obrigatória pra prescrição ter valor clínico — escolhida
+    // no dropdown verde logo após selecionar o medicamento, INDEPENDENTE da
+    // dose pré-calculada (que continua opt-in).  Cache da lista vinda do
+    // serializador é usado pelo dose card pra pre-selecionar quando abrir.
+    let _apresentacaoPrescricao = null;
+    let _apresentacoesDisponiveis = [];
     // Estado do seletor de apresentação no card de dose pré-calculada.
     // Declaradas aqui (topo do script) pra serem acessíveis em
     // `_limparValoresCardSugestao`, que roda antes da seção de render.
@@ -1676,6 +1704,10 @@
 
       // Seletor de apresentação + preview da dose prática por extenso.
       _renderSeletorApresentacoes(s.apresentacoes || []);
+      // Se o vet já escolheu uma apresentação no dropdown principal, o card
+      // de dose pré-calculada precisa refletir a mesma escolha — uma só
+      // apresentação por prescrição.
+      if (_apresentacaoPrescricao) _selecionarApresentacaoPadraoSugestao();
 
       const obsEl = document.getElementById('sug-observacao');
       if (s.observacao) {
@@ -1741,6 +1773,91 @@
         </label>
       </div>
     `).join('');
+  }
+
+  // ── Dropdown obrigatório de apresentação (logo após escolha do medicamento) ──
+  // Esse dropdown vive FORA do card de dose pré-calculada: a apresentação
+  // precisa ser definida pra prescrição ter valor (250 mg comprimido é
+  // farmacologicamente diferente de 250 mg/5 mL suspensão).
+  function _rotuloOpcaoApresentacao(ap) {
+    const partes = [];
+    if (ap.forma) partes.push(ap.forma);
+    if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
+      const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
+      partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
+    } else if (ap.concentracao_texto) {
+      partes.push(ap.concentracao_texto);
+    }
+    let label = partes.filter(Boolean).join(' · ');
+    if (ap.fabricante) label += ` — ${ap.fabricante}`;
+    return label || (ap.descricao || 'Apresentação');
+  }
+
+  function _renderDropdownApresentacaoPrescricao(apresentacoes) {
+    _apresentacoesDisponiveis = Array.isArray(apresentacoes) ? apresentacoes : [];
+    _apresentacaoPrescricao = null;
+    const wrap   = document.getElementById('presc-apresentacao-wrap');
+    const select = document.getElementById('presc-apresentacao');
+    if (!wrap || !select) return;
+    if (!_apresentacoesDisponiveis.length) {
+      wrap.classList.add('d-none');
+      select.innerHTML = '<option value="">— sem apresentação cadastrada —</option>';
+      return;
+    }
+    // Agrupa por categoria_label (Comprimidos, Suspensões, Líquidos, …)
+    const grupos = new Map();
+    for (const ap of _apresentacoesDisponiveis) {
+      const cat = ap.categoria_label || 'Outras apresentações';
+      if (!grupos.has(cat)) grupos.set(cat, []);
+      grupos.get(cat).push(ap);
+    }
+    const placeholderCount = _apresentacoesDisponiveis.length;
+    let html = `<option value="">— escolha a apresentação (${placeholderCount}) —</option>`;
+    for (const [cat, lista] of grupos) {
+      html += `<optgroup label="${cat}">`;
+      for (const ap of lista) {
+        const lbl = _rotuloOpcaoApresentacao(ap).replace(/</g, '&lt;');
+        html += `<option value="${ap.id}">${lbl}</option>`;
+      }
+      html += `</optgroup>`;
+    }
+    select.innerHTML = html;
+    select.classList.remove('is-invalid');
+    wrap.classList.remove('d-none');
+  }
+
+  function onApresentacaoPrescricaoChange() {
+    const select = document.getElementById('presc-apresentacao');
+    if (!select) return;
+    const id = parseInt(select.value, 10);
+    _apresentacaoPrescricao = Number.isFinite(id)
+      ? (_apresentacoesDisponiveis.find(a => a.id === id) || null)
+      : null;
+    if (_apresentacaoPrescricao) select.classList.remove('is-invalid');
+    // Sincroniza com o card de dose pré-calculada quando estiver aberto.
+    if (typeof onApresentacaoEscolhida === 'function'
+        && document.getElementById('sug-apresentacoes-wrap')
+        && !document.getElementById('sugestao-dose-card')?.classList.contains('d-none')
+        && _apresentacaoPrescricao) {
+      try { onApresentacaoEscolhida(_apresentacaoPrescricao.id); } catch (_) {}
+    }
+  }
+
+  // Rótulo curto da apresentação escolhida para anexar ao nome na receita.
+  // NÃO inclui fabricante — é informação comercial, não clínica.  O tutor
+  // compra o que estiver disponível; forma + concentração é o que importa.
+  function _rotuloApresentacaoParaReceita(ap) {
+    if (!ap) return '';
+    if (ap.nome_variante) return ap.nome_variante;
+    const partes = [];
+    if (ap.forma) partes.push(ap.forma);
+    if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
+      const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
+      partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
+    } else if (ap.concentracao_texto) {
+      partes.push(ap.concentracao_texto);
+    }
+    return partes.filter(Boolean).join(' · ') || (ap.descricao || 'Apresentação');
   }
 
   // ── novo: renderiza chips de concentração agrupados ──────────────────
@@ -1920,6 +2037,17 @@
     const ap = (sugestaoDoseAtual.apresentacoes || []).find(a => a.id === apresentacaoId);
     if (!ap) return;
     _apresentacaoEscolhida = ap;
+    // Mantém o dropdown principal (verde) em sincronia com a escolha feita
+    // dentro do card de dose pré-calculada — uma só apresentação por receita.
+    const selPrinc = document.getElementById('presc-apresentacao');
+    if (selPrinc && String(selPrinc.value) !== String(apresentacaoId)) {
+      const apPrinc = _apresentacoesDisponiveis.find(a => a.id === apresentacaoId);
+      if (apPrinc) {
+        selPrinc.value = String(apresentacaoId);
+        _apresentacaoPrescricao = apPrinc;
+        selPrinc.classList.remove('is-invalid');
+      }
+    }
 
     if (ap.permite_calculo_automatico && ap.concentracao_valor) {
       // Apresentação já tem concentração cadastrada — usa direto.
@@ -2116,6 +2244,19 @@
   function _selecionarApresentacaoPadraoSugestao() {
     const grupos = window._concGrupos || [];
     if (!grupos.length) return false;
+
+    // Prioridade máxima: a apresentação que o vet já escolheu no dropdown
+    // principal — o card de dose pré-calculada deve refletir essa escolha.
+    const idPrincipal = Number(_apresentacaoPrescricao?.id || 0);
+    if (idPrincipal > 0) {
+      const idxPrinc = grupos.findIndex(g =>
+        (g.apresentacoes || []).some(ap => Number(ap.id) === idPrincipal)
+      );
+      if (idxPrinc >= 0) {
+        _onChipConc(idxPrinc);
+        return true;
+      }
+    }
 
     const apPreferidaId = Number(sugestaoDoseAtual?.apresentacao_preferida_id || 0);
     if (apPreferidaId > 0) {
@@ -2497,6 +2638,9 @@
     // Ponto único: ao exibir a monografia, a dose pré-calculada fica
     // disponível como botão opt-in (nunca abre sozinha).
     prepararSugestaoDose(m?.id);
+    // Dropdown obrigatório de apresentação — renderizado sempre que houver
+    // apresentações cadastradas, independente da dose pré-calculada.
+    _renderDropdownApresentacaoPrescricao(m?.apresentacoes || []);
     const tabs = m?.monografia_estruturada?.resumo_posologia?.tabs || [];
     const temPosologiaEstruturada = Array.isArray(tabs) && tabs.length > 0;
     const totalProtocolos = temPosologiaEstruturada
@@ -2670,7 +2814,20 @@
       mostrarFeedback('Informe o nome do medicamento.', 'danger');
       return false;
     }
-    
+
+    // Apresentação é obrigatória sempre que o medicamento tem opções
+    // cadastradas — sem ela a prescrição não tem valor clínico (250 mg
+    // comprimido ≠ 250 mg/5 mL suspensão).
+    if (_apresentacoesDisponiveis.length && !_apresentacaoPrescricao) {
+      const sel = document.getElementById('presc-apresentacao');
+      if (sel) {
+        sel.classList.add('is-invalid');
+        sel.focus();
+      }
+      mostrarFeedback('Escolha a apresentação dispensada antes de prescrever.', 'danger');
+      return false;
+    }
+
     const modoPersonalizado = document.getElementById('modo-personalizado').checked;
     if (modoPersonalizado) {
       const texto = document.getElementById('instrucao-unica').value.trim();
@@ -2682,13 +2839,13 @@
       const frequencia = document.getElementById('frequencia').value.trim();
       const dose = document.getElementById('dose').value.trim();
       const duracao = document.getElementById('duracao').value.trim();
-      
+
       if (!frequencia || !dose || !duracao) {
         mostrarFeedback('Preencha todos os campos obrigatórios.', 'danger');
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -2696,8 +2853,19 @@
   function adicionarMedicamento() {
     if (!validarCampos()) return;
 
-    const nome = document.getElementById('nome-medicamento').value.trim();
+    let nome = document.getElementById('nome-medicamento').value.trim();
     const modoPersonalizado = document.getElementById('modo-personalizado').checked;
+
+    // Anexa a apresentação ao nome da receita pra ficar inequívoco para o
+    // tutor (forma + concentração + fabricante).  Idempotente: se a dose
+    // pré-calculada já incluiu o rótulo, não duplica.
+    let apresentacaoRotulo = '';
+    if (_apresentacaoPrescricao) {
+      apresentacaoRotulo = _rotuloApresentacaoParaReceita(_apresentacaoPrescricao);
+      if (apresentacaoRotulo && !nome.includes(apresentacaoRotulo)) {
+        nome = `${nome} — ${apresentacaoRotulo}`;
+      }
+    }
 
     let observacoes = '';
     let texto = '';
@@ -2722,7 +2890,9 @@
       dosagem: dose || '',
       frequencia: frequencia || '',
       duracao: duracao || '',
-      observacoes: observacoes || ''
+      observacoes: observacoes || '',
+      apresentacao_id: _apresentacaoPrescricao?.id || null,
+      apresentacao_nome: apresentacaoRotulo || ''
     });
 
     renderPrescricoesTemp();
@@ -2735,6 +2905,8 @@
     document.getElementById('dose').value = '';
     document.getElementById('duracao').value = '';
     document.getElementById('info-medicamento').classList.add('d-none');
+    // Reseta o dropdown de apresentação pro próximo medicamento.
+    _renderDropdownApresentacaoPrescricao([]);
     medicamentoSelecionado = null;
     fecharSugestaoDose();
   }
