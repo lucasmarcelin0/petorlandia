@@ -1761,18 +1761,46 @@
   }
 
   // Agrupa apresentações manipuladas (sem concentração) em radios — fallback
+  function _escapeHtml(txt) {
+    return String(txt ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[ch]));
+  }
+
+  function _fmtNumeroApresentacao(valor) {
+    const num = Number(valor);
+    if (Number.isFinite(num)) {
+      return num.toLocaleString('pt-BR', {
+        useGrouping: false,
+        maximumFractionDigits: 4,
+      });
+    }
+    return String(valor ?? '')
+      .replace('.', ',')
+      .replace(/(,\d*?)0+$/, '$1')
+      .replace(/,$/, '');
+  }
+
   function _montarBlocosApresentacoes(apresentacoes) {
     if (!apresentacoes.length) return '';
-    return apresentacoes.map(ap => `
+    return apresentacoes.map(ap => {
+      const label = _escapeHtml(_rotuloOpcaoApresentacao(ap));
+      const detalhe = ap.rotulo_secundario ? `<div class="text-muted" style="font-size:.72rem;">${_escapeHtml(ap.rotulo_secundario)}</div>` : '';
+      return `
       <div class="form-check form-check-sm mb-1">
         <input class="form-check-input" type="radio" name="sug-apres-extra"
                id="sug-apres-${ap.id}" value="${ap.id}"
                onchange="onApresentacaoEscolhida(${ap.id})">
         <label class="form-check-label small" for="sug-apres-${ap.id}">
-          ${ap.forma || '—'}${ap.fabricante ? ` <span class="text-muted">— ${ap.fabricante}</span>` : ''}
+          ${label}${detalhe}
         </label>
       </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   // ── Dropdown obrigatório de apresentação (logo após escolha do medicamento) ──
@@ -1780,17 +1808,30 @@
   // precisa ser definida pra prescrição ter valor (250 mg comprimido é
   // farmacologicamente diferente de 250 mg/5 mL suspensão).
   function _rotuloOpcaoApresentacao(ap) {
+    const escolha = ap.rotulo_escolha || {};
+    const principalClinico = String(ap.rotulo_principal || '').trim();
+    const principalContexto = String(escolha.principal || '').trim();
+    let label = principalClinico || principalContexto || String(ap.concentracao_label || '').trim();
+    if (principalContexto && principalClinico && principalContexto !== principalClinico) {
+      label = `${principalContexto} - ${principalClinico}`;
+    }
+    const secundario = String(ap.rotulo_secundario || '').trim();
+    if (secundario && !label.toLowerCase().includes(secundario.toLowerCase())) {
+      label += ` - ${secundario}`;
+    }
+    if (label) return label;
+
     const partes = [];
     if (ap.forma) partes.push(ap.forma);
     if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
-      const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
+      const val = _fmtNumeroApresentacao(ap.concentracao_valor);
       partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
     } else if (ap.concentracao_texto) {
       partes.push(ap.concentracao_texto);
     }
-    let label = partes.filter(Boolean).join(' · ');
-    if (ap.fabricante) label += ` — ${ap.fabricante}`;
-    return label || (ap.descricao || 'Apresentação');
+    let fallbackLabel = partes.filter(Boolean).join(' · ');
+    if (ap.fabricante) fallbackLabel += ` — ${ap.fabricante}`;
+    return fallbackLabel || (ap.descricao || 'Apresentação');
   }
 
   function _renderDropdownApresentacaoPrescricao(apresentacoes) {
@@ -1816,7 +1857,7 @@
     for (const [cat, lista] of grupos) {
       html += `<optgroup label="${cat}">`;
       for (const ap of lista) {
-        const lbl = _rotuloOpcaoApresentacao(ap).replace(/</g, '&lt;');
+        const lbl = _escapeHtml(_rotuloOpcaoApresentacao(ap));
         html += `<option value="${ap.id}">${lbl}</option>`;
       }
       html += `</optgroup>`;
@@ -1848,11 +1889,15 @@
   // compra o que estiver disponível; forma + concentração é o que importa.
   function _rotuloApresentacaoParaReceita(ap) {
     if (!ap) return '';
+    if (ap.rotulo_principal) {
+      const contexto = ap.rotulo_escolha?.principal || '';
+      return contexto ? `${ap.rotulo_principal} (${contexto})` : ap.rotulo_principal;
+    }
     if (ap.nome_variante) return ap.nome_variante;
     const partes = [];
     if (ap.forma) partes.push(ap.forma);
     if (ap.concentracao_valor !== null && ap.concentracao_valor !== undefined) {
-      const val = String(ap.concentracao_valor).replace('.', ',').replace(/,?0+$/, '');
+      const val = _fmtNumeroApresentacao(ap.concentracao_valor);
       partes.push(`${val} ${ap.concentracao_unidade || ''}`.trim());
     } else if (ap.concentracao_texto) {
       partes.push(ap.concentracao_texto);
@@ -1913,6 +1958,9 @@
           categoria: ap.categoria || 'outros',
           categoria_label: ap.categoria_label || 'Outras apresentacoes',
           tipo_origem: ap.tipo_origem || 'comercial',
+          rotulo_principal: ap.rotulo_principal || '',
+          concentracao_label: ap.concentracao_label || '',
+          forma_label: ap.forma_label || '',
           faixa_peso_label: ap.faixa_peso_label || '',
           especie_label: ap.especie_label || '',
           rotulo_escolha: {
@@ -1934,6 +1982,15 @@
       if (!grupos[key].rotulo_escolha.secundario && rotuloEscolha.secundario) {
         grupos[key].rotulo_escolha.secundario = rotuloEscolha.secundario;
       }
+      if (!grupos[key].rotulo_principal && ap.rotulo_principal) {
+        grupos[key].rotulo_principal = ap.rotulo_principal;
+      }
+      if (!grupos[key].concentracao_label && ap.concentracao_label) {
+        grupos[key].concentracao_label = ap.concentracao_label;
+      }
+      if (!grupos[key].forma_label && ap.forma_label) {
+        grupos[key].forma_label = ap.forma_label;
+      }
       grupos[key].apresentacoes.push(ap);
     }
 
@@ -1946,23 +2003,20 @@
 
     // Monta chips
     const chipHtml = window._concGrupos.map((g, i) => {
-      const cv = g.concentracao_valor;
-      const cu = g.concentracao_unidade || '';
-      const cvFmt = cv ? (cv % 1 === 0 ? Math.round(cv) : cv) : null;
       const rotuloEscolha = g.rotulo_escolha || {};
-      const labelConcentracao = cvFmt != null
-        ? `${cvFmt}${cu} <span class="fw-normal opacity-75" style="font-size:.8em;">${g.forma}</span>`
-        : g.forma || '—';
-      const labelPrincipal = rotuloEscolha.principal || labelConcentracao;
-      const labelSecundarioTexto = rotuloEscolha.principal
-        ? (rotuloEscolha.secundario || labelConcentracao)
+      const labelChipBase = _escapeHtml(g.rotulo_principal || g.concentracao_label || g.forma || 'Apresentacao');
+      const labelChipContexto = _escapeHtml(rotuloEscolha.principal || '');
+      const labelChipPrincipal = labelChipContexto || labelChipBase;
+      const labelChipSecundarioTexto = rotuloEscolha.principal
+        ? (g.rotulo_principal || rotuloEscolha.secundario || g.concentracao_label || '')
         : '';
-      const labelSecundario = labelSecundarioTexto
-        ? `<div class="text-muted mt-1" style="font-size:.72rem;line-height:1.1;">${labelSecundarioTexto}</div>`
+      const labelChipSecundario = labelChipSecundarioTexto
+        ? `<div class="text-muted mt-1" style="font-size:.72rem;line-height:1.1;">${_escapeHtml(labelChipSecundarioTexto)}</div>`
         : '';
       const nBrands = g.apresentacoes.length;
+      const brandTipText = g.apresentacoes.map(a => a.fabricante || a.descricao).filter(Boolean).slice(0,6).join(', ');
       const brandTip = nBrands > 1
-        ? ` title="${g.apresentacoes.map(a => a.fabricante || a.descricao).filter(Boolean).slice(0,6).join(', ')}"`
+        ? ` title="${_escapeHtml(brandTipText)}"`
         : '';
       return `<button type="button"
                 class="btn btn-sm btn-outline-secondary sug-chip-conc"
@@ -1970,8 +2024,8 @@
                 onclick="_onChipConc(${i})"
                 ${brandTip}>
                 <div class="text-start" style="line-height:1.05;">
-                  <div>${labelPrincipal}${nBrands > 1 ? `<span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:.65rem;">${nBrands}</span>` : ''}</div>
-                  ${labelSecundario}
+                  <div>${labelChipPrincipal}${nBrands > 1 ? `<span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:.65rem;">${nBrands}</span>` : ''}</div>
+                  ${labelChipSecundario}
                 </div>
               </button>`;
     }).join('');

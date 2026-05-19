@@ -1113,13 +1113,37 @@ def _chave_visual_apresentacao(ap_info: Dict[str, Any]) -> tuple:
         valor_key = round(float(valor), 4) if valor is not None else None
     except (TypeError, ValueError):
         valor_key = None
+    volume = ap_info.get('volume_valor')
+    try:
+        volume_key = round(float(volume), 4) if volume is not None else None
+    except (TypeError, ValueError):
+        volume_key = None
     return (
         ap_info.get('categoria') or '',
         valor_key,
         (ap_info.get('concentracao_unidade') or '').lower(),
+        volume_key,
+        (ap_info.get('volume_unidade') or '').lower(),
         (ap_info.get('unidade_pratica') or '').lower(),
+        _texto_norm(ap_info.get('rotulo_principal') or '') if valor_key is None else '',
         ap_info.get('tipo_origem') or '',
     )
+
+
+def _valor_ordem_concentracao(ap_info: Dict[str, Any]) -> float:
+    valor = ap_info.get('concentracao_valor')
+    if valor is None:
+        return 999999.0
+    try:
+        valor_float = float(valor)
+    except (TypeError, ValueError):
+        return 999999.0
+    unidade = (ap_info.get('concentracao_unidade') or '').lower()
+    if unidade == 'g':
+        return valor_float * 1000.0
+    if unidade in {'mcg', 'ug'}:
+        return valor_float / 1000.0
+    return valor_float
 
 
 def _ordenar_apresentacao_info(ap_info: Dict[str, Any]) -> tuple:
@@ -1134,8 +1158,7 @@ def _ordenar_apresentacao_info(ap_info: Dict[str, Any]) -> tuple:
         'outros': 7,
     }
     tipo_score = 1 if ap_info.get('tipo_origem') == 'manipulado' else 0
-    valor = ap_info.get('concentracao_valor')
-    valor_score = float(valor) if valor is not None else 999999.0
+    valor_score = _valor_ordem_concentracao(ap_info)
     return (
         ordem_cat.get(ap_info.get('categoria'), 99),
         tipo_score,
@@ -1145,12 +1168,36 @@ def _ordenar_apresentacao_info(ap_info: Dict[str, Any]) -> tuple:
     )
 
 
-def _unidade_pratica_por_forma(forma: Optional[str]) -> str:
+def _unidade_pratica_por_forma(
+    forma: Optional[str],
+    categoria: Optional[str] = None,
+    concentracao: Optional[str] = None,
+) -> str:
     """Mapeia a forma farmacêutica ('Cápsulas', 'Suspensão', ...) para a
     unidade que o tutor vai usar na administração ('cápsula', 'mL', 'gota').
 
     Quando não reconhece, devolve 'unidade' como fallback seguro.
     """
+    texto = _texto_norm(f"{forma or ''} {concentracao or ''}")
+    if 'gota' in texto:
+        return 'gota'
+    if 'drage' in texto:
+        return 'drágea'
+    if 'comprim' in texto:
+        return 'comprimido'
+    if 'capsul' in texto:
+        return 'cápsula'
+    if 'petisco' in texto:
+        return 'petisco'
+    if categoria in {'suspensao_oral', 'liquido_oral', 'injetavel'}:
+        return 'mL'
+    if categoria in {'oftalmico', 'otico'}:
+        return 'gota'
+    if categoria == 'topico':
+        if any(k in texto for k in ('pipeta', 'bisnaga')):
+            return 'pipeta'
+        return 'aplicacao'
+
     if not forma:
         return 'unidade'
     chave = forma.strip().lower()
@@ -1176,6 +1223,211 @@ def _fmt_apresentacao_label(v: float) -> str:
     if v == int(v):
         return f"{int(v)}"
     return f"{v:.2f}".rstrip('0').rstrip('.').replace('.', ',')
+
+
+def _fmt_unidade_apresentacao(unidade: Optional[str]) -> str:
+    raw = (unidade or '').strip()
+    if not raw:
+        return ''
+    chave = raw.lower().replace(' ', '')
+    mapa = {
+        'mg/ml': 'mg/mL',
+        'mcg/ml': 'mcg/mL',
+        'ug/ml': 'mcg/mL',
+        'g/ml': 'g/mL',
+        'ui/ml': 'UI/mL',
+        'ml': 'mL',
+        'l': 'L',
+        'ui': 'UI',
+        'ug': 'mcg',
+        'mcg': 'mcg',
+        'mg': 'mg',
+        'g': 'g',
+        '%': '%',
+        'un': 'un',
+    }
+    return mapa.get(chave, raw)
+
+
+def _normalizar_concentracao_textual(texto: Optional[str]) -> str:
+    s = (texto or '').replace('\xa0', ' ').strip()
+    if not s:
+        return ''
+    s = re.sub(r'\s+', ' ', s)
+    s = re.sub(r'(?i)\bm\s*l\b|\bml\b', 'mL', s)
+    s = re.sub(r'\s*/\s*', '/', s)
+    s = re.sub(
+        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(\d+(?:[.,]\d+)?)\s*(ml|mL|l)\b',
+        lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}/{m.group(3)} {_fmt_unidade_apresentacao(m.group(4))}",
+        s,
+    )
+    s = re.sub(
+        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)/(ml|mL|l)\b',
+        lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2) + '/' + m.group(3))}",
+        s,
+    )
+    s = re.sub(
+        r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b',
+        lambda m: f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}",
+        s,
+    )
+    s = re.sub(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%', r'\1%', s)
+    return s.strip()
+
+
+def _concentracao_principal_apresentacao(ap) -> str:
+    textos = [
+        getattr(ap, 'concentracao', None),
+        getattr(ap, 'nome_variante', None),
+        getattr(ap, 'forma', None),
+    ]
+    combinado = ' '.join(str(t) for t in textos if t)
+    if combinado:
+        m = re.search(
+            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:m\s*l|ml)\b',
+            combinado,
+        )
+        if m:
+            return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}/{m.group(3)} mL"
+        m = re.search(
+            r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\s*/\s*(?:m\s*l|ml)\b',
+            combinado,
+        )
+        if m:
+            return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2) + '/ml')}"
+        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*%', combinado)
+        if m:
+            return f"{m.group(1)}%"
+        m = re.search(r'(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|ug|g|ui)\b', combinado)
+        if m:
+            return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
+
+    valor = getattr(ap, 'concentracao_valor', None)
+    unidade = _fmt_unidade_apresentacao(getattr(ap, 'concentracao_unidade', None))
+    if valor is not None and unidade:
+        if unidade == '%':
+            return f"{_fmt_apresentacao_label(float(valor))}%"
+        return f"{_fmt_apresentacao_label(float(valor))} {unidade}"
+    return ''
+
+
+def _forma_principal_apresentacao(ap, categoria: str, unidade_pratica: str) -> str:
+    texto = _texto_norm(f"{getattr(ap, 'forma', '') or ''} {getattr(ap, 'concentracao', '') or ''}")
+    if 'drage' in texto:
+        return 'drágea'
+    if 'gota' in texto:
+        return 'gotas'
+    if 'suspens' in texto or categoria == 'suspensao_oral':
+        return 'suspensão oral'
+    if 'pasta' in texto:
+        return 'pasta oral'
+    if categoria == 'liquido_oral':
+        if 'xarope' in texto:
+            return 'xarope'
+        if 'emuls' in texto:
+            return 'emulsão oral'
+        return 'solução oral'
+    if categoria == 'injetavel':
+        return 'solução injetável'
+    if categoria == 'oftalmico':
+        return 'colírio'
+    if categoria == 'otico':
+        return 'otológico'
+    if categoria == 'topico':
+        for termo, label in (
+            ('shampoo', 'shampoo'),
+            ('xampu', 'shampoo'),
+            ('pomada', 'pomada'),
+            ('creme', 'creme'),
+            ('spray', 'spray'),
+            ('locao', 'loção'),
+            ('gel', 'gel'),
+            ('pipeta', 'pipeta'),
+        ):
+            if termo in texto:
+                return label
+        return 'tópico'
+    if 'capsul' in texto or unidade_pratica in {'capsula', 'cápsula'}:
+        return 'cápsula'
+    if 'petisco' in texto or unidade_pratica == 'petisco':
+        return 'petisco'
+    if 'comprim' in texto or unidade_pratica == 'comprimido':
+        if 'trisulcad' in texto:
+            return 'comprimido trisulcado'
+        if 'sulcad' in texto:
+            return 'comprimido sulcado'
+        return 'comprimido'
+    forma = (getattr(ap, 'forma', None) or '').strip()
+    if _texto_norm(forma) in {'frasco', 'caixa', 'cartucho', 'blister', 'display', 'cartela'}:
+        return ''
+    return forma
+
+
+def _volume_apresentacao_label(ap) -> str:
+    valor = getattr(ap, 'volume_valor', None)
+    unidade = _fmt_unidade_apresentacao(getattr(ap, 'volume_unidade', None))
+    if valor is not None and unidade and unidade.lower() not in {'un', 'unidade'}:
+        return f"{_fmt_apresentacao_label(float(valor))} {unidade}"
+    texto = getattr(ap, 'concentracao', None) or ''
+    m = re.search(r'(?i)\((\d+(?:[.,]\d+)?)\s*(m\s*l|ml|l)\)', texto)
+    if m:
+        return f"{m.group(1)} {_fmt_unidade_apresentacao(m.group(2))}"
+    return ''
+
+
+def _rotulo_principal_apresentacao(ap, categoria: str, unidade_pratica: str) -> str:
+    conc = _concentracao_principal_apresentacao(ap)
+    forma = _forma_principal_apresentacao(ap, categoria, unidade_pratica)
+    volume = _volume_apresentacao_label(ap)
+    if conc and forma:
+        label = f"{conc} {forma}"
+    else:
+        label = conc or forma
+    if not conc and _tipo_origem_apresentacao(getattr(ap, 'fabricante', None)) == 'manipulado':
+        manipulados = {
+            'cápsula': 'cápsulas manipuladas',
+            'suspensão oral': 'suspensão oral manipulada',
+            'solução oral': 'solução oral manipulada',
+            'petisco': 'petisco manipulado',
+            'pasta': 'pasta manipulada',
+            'pasta oral': 'pasta oral manipulada',
+            'loção': 'loção manipulada',
+            'tópico': 'apresentação tópica manipulada',
+        }
+        label = manipulados.get(label, f"{label} manipulada" if label else label)
+    if volume and volume not in label:
+        label = f"{label} ({volume})" if label else volume
+    if not label:
+        label = _normalizar_concentracao_textual(getattr(ap, 'concentracao', None))
+    return re.sub(r'\s+', ' ', label or '').strip()
+
+
+def _rotulo_secundario_apresentacao(ap, principal: str) -> str:
+    nome = (getattr(ap, 'nome_variante', None) or '').strip()
+    fabricante = (getattr(ap, 'fabricante', None) or '').strip()
+    partes: List[str] = []
+    if nome and _texto_norm(nome) not in _texto_norm(principal):
+        partes.append(nome)
+    if fabricante and fabricante not in {'VetSmart Prescritor'}:
+        partes.append(fabricante)
+    return ' - '.join(partes)
+
+
+def _apresentacao_tem_forca_ou_forma_util(ap_info: Dict[str, Any]) -> bool:
+    if ap_info.get('concentracao_valor') is not None:
+        return True
+    categoria = ap_info.get('categoria')
+    if categoria in {'suspensao_oral', 'liquido_oral', 'injetavel', 'oftalmico', 'otico', 'topico'}:
+        if ap_info.get('concentracao_texto') or ap_info.get('volume_valor') is not None:
+            return True
+    if ap_info.get('tipo_origem') == 'manipulado' and categoria != 'outros':
+        return True
+    texto = _texto_norm(f"{ap_info.get('forma') or ''} {ap_info.get('concentracao_texto') or ''}")
+    if ap_info.get('tipo_origem') == 'manipulado' and any(k in texto for k in ('capsul', 'suspens', 'petisco', 'pasta')):
+        return True
+    if categoria == 'solido_oral' and any(k in texto for k in ('capsul', 'suspens', 'petisco', 'pasta')):
+        return True
+    return False
 
 
 def _extrair_faixa_peso_apresentacao(ap) -> Optional[str]:
@@ -1231,7 +1483,7 @@ def _montar_rotulo_apresentacao_escolha(ap) -> Dict[str, str]:
     detalhes = []
     if getattr(ap, 'concentracao_valor', None):
         valor = _fmt_apresentacao_label(float(ap.concentracao_valor))
-        unidade = getattr(ap, 'concentracao_unidade', None) or ''
+        unidade = _fmt_unidade_apresentacao(getattr(ap, 'concentracao_unidade', None))
         detalhes.append(f'{valor} {unidade}'.strip())
     elif getattr(ap, 'concentracao', None):
         detalhes.append(str(getattr(ap, 'concentracao')))
@@ -1268,17 +1520,15 @@ def listar_apresentacoes_medicamento(
     """
     apres_info: List[Dict[str, Any]] = []
     for ap in (getattr(medicamento, 'apresentacoes', None) or []):
-        desc_parts = [ap.forma]
-        if ap.concentracao_valor:
-            desc_parts.append(
-                f"{_fmt_apresentacao_label(float(ap.concentracao_valor))} {ap.concentracao_unidade}"
-            )
-        if ap.volume_valor:
-            desc_parts.append(
-                f"({_fmt_apresentacao_label(float(ap.volume_valor))} {ap.volume_unidade})"
-            )
-        desc = ' '.join(p for p in desc_parts if p)
         fabricante = getattr(ap, 'fabricante', None)
+        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
+        unidade_pratica = _unidade_pratica_por_forma(ap.forma, categoria, ap.concentracao)
+        tipo_origem = _tipo_origem_apresentacao(fabricante)
+        rotulo_principal = _rotulo_principal_apresentacao(ap, categoria, unidade_pratica)
+        rotulo_secundario = _rotulo_secundario_apresentacao(ap, rotulo_principal)
+
+        desc_parts = [rotulo_principal or ap.forma]
+        desc = ' '.join(p for p in desc_parts if p)
         if fabricante:
             desc = f"{desc} — {fabricante}"
 
@@ -1300,11 +1550,7 @@ def listar_apresentacoes_medicamento(
                 ml = dose_media / cv_mg_ml
                 equiv = f"{_fmt_apresentacao_label(ml)} mL por administração"
 
-        unidade_pratica = _unidade_pratica_por_forma(ap.forma)
-        categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
-        tipo_origem = _tipo_origem_apresentacao(fabricante)
-
-        apres_info.append({
+        ap_info = {
             'id': ap.id,
             'descricao': desc,
             'nome_variante': getattr(ap, 'nome_variante', None) or '',
@@ -1315,16 +1561,22 @@ def listar_apresentacoes_medicamento(
             'forma': ap.forma or '',
             'concentracao_texto': ap.concentracao or '',
             'concentracao_valor': float(ap.concentracao_valor) if ap.concentracao_valor is not None else None,
-            'concentracao_unidade': ap.concentracao_unidade or '',
+            'concentracao_unidade': _fmt_unidade_apresentacao(ap.concentracao_unidade),
             'volume_valor': float(ap.volume_valor) if ap.volume_valor is not None else None,
-            'volume_unidade': ap.volume_unidade or '',
+            'volume_unidade': _fmt_unidade_apresentacao(ap.volume_unidade),
             'unidade_pratica': unidade_pratica,
+            'rotulo_principal': rotulo_principal,
+            'rotulo_secundario': rotulo_secundario,
+            'concentracao_label': _concentracao_principal_apresentacao(ap),
+            'forma_label': _forma_principal_apresentacao(ap, categoria, unidade_pratica),
             'faixa_peso_label': _extrair_faixa_peso_apresentacao(ap),
             'especie_label': _extrair_especie_apresentacao(ap),
             'rotulo_escolha': _montar_rotulo_apresentacao_escolha(ap),
             'permite_calculo_automatico': bool(ap.concentracao_valor),
             'equivalencia': equiv,
-        })
+        }
+        if _apresentacao_tem_forca_ou_forma_util(ap_info):
+            apres_info.append(ap_info)
 
     apres_unicas: Dict[tuple, Dict[str, Any]] = {}
     for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):

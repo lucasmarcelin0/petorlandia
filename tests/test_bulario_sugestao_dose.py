@@ -11,6 +11,7 @@ SPEC.loader.exec_module(MODULE)
 sugerir_dose = MODULE.sugerir_dose
 extrair_secoes_vetsmart = MODULE.extrair_secoes_vetsmart
 montar_monografia_medicamento = MODULE.montar_monografia_medicamento
+listar_apresentacoes_medicamento = MODULE.listar_apresentacoes_medicamento
 
 
 def _animal_caes(peso=10.0):
@@ -209,6 +210,49 @@ def test_sugerir_dose_deduplica_forcas_e_preserva_suspensao():
     assert len(suspensoes) == 1
     assert suspensoes[0]['permite_calculo_automatico'] is False
     assert suspensoes[0]['tipo_origem'] == 'manipulado'
+
+
+def test_listar_apresentacoes_cefalexina_preserva_concentracao_clinica_e_filtra_embalagem():
+    sol_250 = _apresentacao('Solucao oral', '250 mg / 5mL, solucao', fabricante='VetSmart Prescritor')
+    sol_250.id = 201
+    sol_250.concentracao_valor = 50
+    sol_250.concentracao_unidade = 'mg/ml'
+
+    gotas = _apresentacao('Gotas', '100 mg/mL, gotas', fabricante='VetSmart Prescritor')
+    gotas.id = 202
+    gotas.concentracao_valor = 100
+    gotas.concentracao_unidade = 'mg/ml'
+
+    susp = _apresentacao('frasco', 'Suspensao (60 mL)', fabricante='Cepav', nome_variante='Suspensao')
+    susp.id = 203
+    susp.volume_valor = 60
+    susp.volume_unidade = 'ml'
+
+    pacote = _apresentacao('comprimido', 'Lexin (12 un)', fabricante='Duprat', nome_variante='Lexin')
+    pacote.id = 204
+
+    med = SimpleNamespace(
+        id=42,
+        via_administracao='Oral',
+        apresentacoes=[sol_250, gotas, susp, pacote],
+    )
+
+    apresentacoes = listar_apresentacoes_medicamento(med)
+    por_id = {ap['id']: ap for ap in apresentacoes}
+
+    assert set(por_id) == {201, 202, 203}
+    assert por_id[201]['rotulo_principal'] == '250 mg/5 mL solução oral'
+    assert por_id[201]['concentracao_label'] == '250 mg/5 mL'
+    assert por_id[201]['concentracao_unidade'] == 'mg/mL'
+    assert por_id[201]['unidade_pratica'] == 'mL'
+
+    assert por_id[202]['rotulo_principal'] == '100 mg/mL gotas'
+    assert por_id[202]['unidade_pratica'] == 'gota'
+
+    assert por_id[203]['categoria'] == 'suspensao_oral'
+    assert por_id[203]['rotulo_principal'] == 'suspensão oral (60 mL)'
+    assert por_id[203]['unidade_pratica'] == 'mL'
+    assert por_id[203]['permite_calculo_automatico'] is False
 
 
 def test_sugerir_dose_preserva_duracao_textual_do_protocolo():
