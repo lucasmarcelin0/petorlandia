@@ -10,6 +10,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 sugerir_dose = MODULE.sugerir_dose
 extrair_secoes_vetsmart = MODULE.extrair_secoes_vetsmart
+montar_monografia_medicamento = MODULE.montar_monografia_medicamento
 
 
 def _animal_caes(peso=10.0):
@@ -281,6 +282,76 @@ def test_sugerir_dose_usa_duracao_do_prescritor_vetsmart_como_fallback():
     assert sugestao['duracao_do_prescritor_vetsmart'] is True
     assert sugestao['duracao_e_padrao'] is False
     assert 'DURACAO_PRESCRITOR_VETSMART' in {f['codigo'] for f in sugestao['flags_risco']}
+
+
+def test_sugerir_dose_prefere_duracao_do_painel_vetsmart_produto():
+    med = SimpleNamespace(
+        id=52,
+        nome='Cefalexina',
+        classificacao='Antibacteriano',
+        via_administracao='Oral',
+        conteudo_estruturado={
+            'produtos_vetsmart': [
+                {
+                    'nome': 'Cefalexina',
+                    'tipo': 'principio_ativo',
+                    'duracao_tratamento': 'Frequentemente usa-se de 5 a 10 dias.',
+                    'secoes': {},
+                }
+            ],
+            'prescritor_vetsmart': {
+                'duracao_min_dias': 7,
+                'duracao_max_dias': 7,
+                'duracao_texto': '7 dias',
+            },
+        },
+        apresentacoes=[],
+        doses=[
+            _dose(13, 'Oral', '20 - 30 mg/kg', 20, 30, 'MG_KG', intervalo_horas=12),
+        ],
+    )
+
+    sugestao = sugerir_dose(med, _animal_caes(5))
+
+    assert sugestao is not None
+    assert sugestao['duracao_min_dias'] == 5
+    assert sugestao['duracao_max_dias'] == 10
+    assert sugestao['duracao_do_prescritor_vetsmart'] is True
+
+
+def test_monografia_expoe_produtos_vetsmart():
+    med = SimpleNamespace(
+        id=53,
+        nome='Cefalexina',
+        dosagem_recomendada=None,
+        frequencia=None,
+        duracao_tratamento=None,
+        observacoes=None,
+        conteudo_estruturado={
+            'produtos_vetsmart': [
+                {
+                    'vetsmart_produto_id': 10,
+                    'nome': 'Cefaseptin',
+                    'tipo': 'produto',
+                    'fabricante': 'Vetoquinol',
+                    'frequencia': '12/12 horas',
+                    'duracao_tratamento': 'A criterio do medico veterinario.',
+                    'apresentacoes': [{'forma': 'Comprimido', 'concentracao': '75 mg'}],
+                    'doses': [{'dose': '15 mg/kg'}],
+                    'secoes': {'Composição': {'texto': 'Cefalexina 75 mg.'}},
+                    'fonte': 'https://vetsmart.com.br/cg/produto/10',
+                }
+            ]
+        },
+        doses=[],
+    )
+
+    monografia = montar_monografia_medicamento(med)
+
+    assert monografia['produtos_vetsmart'][0]['nome'] == 'Cefaseptin'
+    assert monografia['produtos_vetsmart'][0]['apresentacoes_count'] == 1
+    assert monografia['produtos_vetsmart'][0]['doses_count'] == 1
+    assert monografia['tem_conteudo_clinico'] is True
 
 
 def test_sugerir_dose_expoe_proveniencia_e_flags_de_validacao():

@@ -235,6 +235,58 @@ def _prescritor_vetsmart_stats(medicamento) -> Dict[str, Any]:
     return stats if isinstance(stats, dict) else {}
 
 
+def _produtos_vetsmart(medicamento) -> List[Dict[str, Any]]:
+    conteudo = getattr(medicamento, 'conteudo_estruturado', None) or {}
+    if not isinstance(conteudo, dict):
+        return []
+    produtos = conteudo.get('produtos_vetsmart') or []
+    if not isinstance(produtos, list):
+        return []
+    return [p for p in produtos if isinstance(p, dict)]
+
+
+def _resumir_produtos_vetsmart(medicamento) -> List[Dict[str, Any]]:
+    saida: List[Dict[str, Any]] = []
+    for prod in _produtos_vetsmart(medicamento):
+        secoes = prod.get('secoes') if isinstance(prod.get('secoes'), dict) else {}
+        apresentacoes = prod.get('apresentacoes') if isinstance(prod.get('apresentacoes'), list) else []
+        doses = prod.get('doses') if isinstance(prod.get('doses'), list) else []
+        saida.append({
+            'vetsmart_produto_id': prod.get('vetsmart_produto_id'),
+            'nome': prod.get('nome'),
+            'tipo': prod.get('tipo') or 'produto',
+            'fabricante': prod.get('fabricante'),
+            'classificacao': prod.get('classificacao'),
+            'especies': prod.get('especies'),
+            'via_administracao': prod.get('via_administracao'),
+            'frequencia': prod.get('frequencia'),
+            'duracao_tratamento': prod.get('duracao_tratamento'),
+            'observacoes': prod.get('observacoes'),
+            'fonte': prod.get('fonte'),
+            'apresentacoes_count': len(apresentacoes),
+            'doses_count': len(doses),
+            'apresentacoes': [
+                {
+                    'forma': ap.get('forma'),
+                    'concentracao': ap.get('concentracao'),
+                    'concentracao_valor': ap.get('concentracao_valor'),
+                    'concentracao_unidade': ap.get('concentracao_unidade'),
+                }
+                for ap in apresentacoes[:12]
+                if isinstance(ap, dict)
+            ],
+            'secoes': {
+                nome: {
+                    'texto': (valor.get('texto') if isinstance(valor, dict) else None),
+                    'html': _sanitizar_html_vetsmart(valor.get('html')) if isinstance(valor, dict) else None,
+                }
+                for nome, valor in secoes.items()
+                if isinstance(valor, dict) and (valor.get('texto') or valor.get('html'))
+            },
+        })
+    return saida
+
+
 def _duracao_prescritor_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     stats = _prescritor_vetsmart_stats(medicamento)
     try:
@@ -246,6 +298,41 @@ def _duracao_prescritor_vetsmart(medicamento) -> Tuple[Optional[int], Optional[i
         return (None, None, None)
     desc = stats.get('duracao_texto') or 'referencia do prescritor VetSmart'
     return (mn, mx, desc)
+
+
+def _parse_duracao_dias(texto: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+    if not texto:
+        return (None, None)
+    t = _strip_accents(str(texto)).lower()
+    faixa = re.search(r'(\d{1,3})\s*(?:a|-|ate)\s*(\d{1,3})\s*dias?', t)
+    if faixa:
+        return (int(faixa.group(1)), int(faixa.group(2)))
+    unico = re.search(r'(?:por|durante|continuidade por|usa-se de)?\s*(\d{1,3})\s*dias?', t)
+    if unico:
+        val = int(unico.group(1))
+        return (val, val)
+    semanas = re.search(r'(\d{1,2})\s*semanas?', t)
+    if semanas:
+        val = int(semanas.group(1)) * 7
+        return (val, val)
+    return (None, None)
+
+
+def _duracao_produtos_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    for prod in _produtos_vetsmart(medicamento):
+        candidatos = [
+            prod.get('duracao_tratamento'),
+            ((prod.get('secoes') or {}).get('Duração do Tratamento') or {}).get('texto')
+            if isinstance((prod.get('secoes') or {}).get('Duração do Tratamento'), dict) else None,
+            ((prod.get('secoes') or {}).get('Administração e doses') or {}).get('texto')
+            if isinstance((prod.get('secoes') or {}).get('Administração e doses'), dict) else None,
+        ]
+        for texto in candidatos:
+            mn, mx = _parse_duracao_dias(texto)
+            if mn is not None or mx is not None:
+                nome = prod.get('nome') or 'VetSmart'
+                return (mn, mx, f'painel clinico VetSmart: {nome}')
+    return (None, None, None)
 
 
 def _adicionar_flag_risco(
@@ -783,6 +870,7 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
 def montar_monografia_medicamento(medicamento) -> Dict[str, Any]:
     secoes = _conteudo_estruturado_do_scraper(medicamento) or _fallback_conteudo_estruturado(medicamento)
     posologia_tabs = construir_posologia_por_especie(medicamento)
+    produtos_vetsmart = _resumir_produtos_vetsmart(medicamento)
     return {
         "resumo_posologia": {
             "dose": _texto_limpo(getattr(medicamento, "dosagem_recomendada", None)),
@@ -791,12 +879,14 @@ def montar_monografia_medicamento(medicamento) -> Dict[str, Any]:
             "tabs": posologia_tabs,
         },
         "secoes": secoes,
+        "produtos_vetsmart": produtos_vetsmart,
         "tem_conteudo_clinico": any([
             secoes["indicacoes"]["itens"],
             secoes["contraindicacoes"]["itens"],
             secoes["efeitos_adversos"]["itens"],
             secoes["advertencias"]["itens"],
             secoes["interacoes"]["itens"],
+            produtos_vetsmart,
         ]),
     }
 
@@ -1613,19 +1703,31 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     duracao_e_padrao = False
     duracao_do_prescritor = False
     duracao_padrao_desc: Optional[str] = None
+    duracao_proto_texto = (getattr(proto, 'duracao', None) or '').strip()
 
-    if dur_min_d is None and dur_max_d is None and not (getattr(proto, 'duracao', None) or '').strip():
-        pd_min, pd_max, pd_desc = _duracao_prescritor_vetsmart(medicamento)
+    if dur_min_d is None and dur_max_d is None and duracao_proto_texto:
+        txt_min, txt_max = _parse_duracao_dias(duracao_proto_texto)
+        if txt_min is not None or txt_max is not None:
+            dur_min_d, dur_max_d = txt_min, txt_max
+
+    if dur_min_d is None and dur_max_d is None:
+        pd_min, pd_max, pd_desc = _duracao_produtos_vetsmart(medicamento)
         if pd_min is not None or pd_max is not None:
             dur_min_d, dur_max_d = pd_min, pd_max
             duracao_do_prescritor = True
             duracao_padrao_desc = pd_desc
         else:
-            pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
-            if pd_min is not None:
+            pd_min, pd_max, pd_desc = _duracao_prescritor_vetsmart(medicamento)
+            if pd_min is not None or pd_max is not None:
                 dur_min_d, dur_max_d = pd_min, pd_max
-                duracao_e_padrao = True
+                duracao_do_prescritor = True
                 duracao_padrao_desc = pd_desc
+            elif not duracao_proto_texto:
+                pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
+                if pd_min is not None:
+                    dur_min_d, dur_max_d = pd_min, pd_max
+                    duracao_e_padrao = True
+                    duracao_padrao_desc = pd_desc
 
     tem_faixa_dur = bool(dur_min_d and dur_max_d and dur_min_d != dur_max_d)
 
@@ -1642,7 +1744,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         dur_texto = f"por {dur_min_d} dias"
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
     else:
-        dur_texto = proto.duracao or '—'
+        dur_texto = duracao_proto_texto or '—'
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
 
     # Equivalências por apresentação
@@ -1822,8 +1924,8 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             flags_risco,
             codigo='DURACAO_PRESCRITOR_VETSMART',
             nivel='informativo',
-            titulo='Duracao do prescritor',
-            detalhe='A duracao veio de estatisticas do prescritor VetSmart porque o protocolo original nao informava esse campo.',
+            titulo='Duracao VetSmart',
+            detalhe='A duracao veio de dados estruturados do VetSmart porque o protocolo original nao informava esse campo.',
         )
     if not proto_ind:
         _adicionar_flag_risco(

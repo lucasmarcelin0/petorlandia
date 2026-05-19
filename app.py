@@ -21326,7 +21326,6 @@ def buscar_medicamentos():
     # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
     resultados = (
         Medicamento.query
-        .options(defer(Medicamento.conteudo_estruturado))
         .filter(
             (Medicamento.nome.ilike(f"%{q}%")) |
             (Medicamento.principio_ativo.ilike(f"%{q}%"))
@@ -21425,7 +21424,7 @@ def listar_medicamentos_favoritos():
     from services.bulario import serializar_medicamento_busca
     resultado = []
     for f in favs:
-        med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get(f.medicamento_id)
+        med = Medicamento.query.get(f.medicamento_id)
         if med:
             entry = serializar_medicamento_busca(med)
             entry["favorito"] = True
@@ -21498,7 +21497,7 @@ def medicamentos_frequentes():
                 if med_id in ids_incluidos:
                     nomes_vistos.add(nome_key)
                     continue
-                med = Medicamento.query.options(defer(Medicamento.conteudo_estruturado)).get(med_id)
+                med = Medicamento.query.get(med_id)
                 if med:
                     entry = serializar_medicamento_busca(med)
                     entry["total_prescricoes"] = total

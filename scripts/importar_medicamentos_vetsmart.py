@@ -743,6 +743,115 @@ def _montar_conteudo_estruturado_v2(
     }
 
 
+_SECOES_CLINICAS_PRODUTO = [
+    'Sobre',
+    'ApresentaÃ§Ãµes e concentraÃ§Ãµes',
+    'IndicaÃ§Ãµes e contraindicaÃ§Ãµes',
+    'AdministraÃ§Ã£o e doses',
+    'Dosagens',
+    'Via',
+    'FrequÃªncia',
+    'DuraÃ§Ã£o do Tratamento',
+    'ComposiÃ§Ã£o',
+    'ObservaÃ§Ãµes',
+    'Armazenamento',
+    'InformaÃ§Ãµes ao Cliente',
+    'InteraÃ§Ãµes medicamentosas',
+    'Farmacologia',
+]
+
+
+def _produto_vetsmart_snapshot(prod: ProdutoVetsmart) -> Dict[str, Any]:
+    """Preserva a camada de produto industrializado dentro do PA canonico."""
+    conteudo = prod.conteudo_estruturado or {}
+    raw_sections = conteudo.get('raw_sections') if isinstance(conteudo, dict) else {}
+    raw_html = conteudo.get('raw_sections_html') if isinstance(conteudo, dict) else {}
+    if not isinstance(raw_sections, dict):
+        raw_sections = {}
+    if not isinstance(raw_html, dict):
+        raw_html = {}
+
+    def _por_nome_secao(raw: Dict[str, Any], nome: str):
+        if nome in raw:
+            return raw.get(nome)
+        nome_norm = _norm(nome)
+        for chave, valor in raw.items():
+            if _norm(chave) == nome_norm:
+                return valor
+        return None
+
+    secoes = {}
+    for nome in _SECOES_CLINICAS_PRODUTO:
+        texto = _por_nome_secao(raw_sections, nome)
+        html = _por_nome_secao(raw_html, nome)
+        if texto or html:
+            secoes[nome] = {
+                'texto': _texto_multilinha_limpo(texto),
+                'html': html,
+            }
+    for nome in [
+        'Apresenta\u00e7\u00f5es e concentra\u00e7\u00f5es',
+        'Indica\u00e7\u00f5es e contraindica\u00e7\u00f5es',
+        'Administra\u00e7\u00e3o e doses',
+        'Frequ\u00eancia',
+        'Dura\u00e7\u00e3o do Tratamento',
+        'Composi\u00e7\u00e3o',
+        'Observa\u00e7\u00f5es',
+        'Informa\u00e7\u00f5es ao Cliente',
+        'Intera\u00e7\u00f5es medicamentosas',
+    ]:
+        if nome in secoes:
+            continue
+        texto = raw_sections.get(nome)
+        html = raw_html.get(nome)
+        if texto or html:
+            secoes[nome] = {
+                'texto': _texto_multilinha_limpo(texto),
+                'html': html,
+            }
+
+    is_principio_ativo = not (prod.fabricante or '').strip()
+    return {
+        'vetsmart_produto_id': prod.vetsmart_id,
+        'nome': prod.nome,
+        'tipo': 'principio_ativo' if is_principio_ativo else 'produto',
+        'fabricante': prod.fabricante,
+        'classificacao': prod.classificacao,
+        'principio_ativo': prod.principio_ativo,
+        'especies': prod.especies,
+        'via_administracao': prod.via_administracao,
+        'dosagem_recomendada': prod.dosagem_recomendada,
+        'frequencia': prod.frequencia,
+        'duracao_tratamento': prod.duracao_tratamento,
+        'observacoes': prod.observacoes,
+        'apresentacoes': prod.apresentacoes or [],
+        'doses': prod.doses or [],
+        'secoes': secoes,
+        'fonte': f"{BASE_URL}/cg/produto/{prod.vetsmart_id}",
+    }
+
+
+def _mesclar_produto_vetsmart(conteudo_atual: Optional[Dict[str, Any]], prod: ProdutoVetsmart) -> Dict[str, Any]:
+    atual = dict(conteudo_atual or {})
+    produtos = atual.get('produtos_vetsmart')
+    if not isinstance(produtos, list):
+        produtos = []
+
+    snapshot = _produto_vetsmart_snapshot(prod)
+    pid = snapshot['vetsmart_produto_id']
+    produtos = [p for p in produtos if not (isinstance(p, dict) and p.get('vetsmart_produto_id') == pid)]
+    produtos.append(snapshot)
+    produtos.sort(key=lambda p: (0 if p.get('tipo') == 'principio_ativo' else 1, (p.get('nome') or '').lower()))
+    atual['produtos_vetsmart'] = produtos
+    metadata = atual.get('metadata')
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata['tem_produtos_vetsmart'] = True
+    metadata['produtos_vetsmart_count'] = len(produtos)
+    atual['metadata'] = metadata
+    return atual
+
+
 def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoVetsmart:
     """Extrai todos os dados do produto a partir do HTML completo da página.
 
@@ -907,6 +1016,14 @@ def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoV
         'Apresentações e concentrações',
         'Indicações e contraindicações',
         'Administração e doses',
+        'Dosagens',
+        'Via',
+        'Frequência',
+        'Duração do Tratamento',
+        'Composição',
+        'Observações',
+        'Armazenamento',
+        'Informações ao Cliente',
         'Interações medicamentosas',
         'Farmacologia',
         'Estudos',
@@ -2501,6 +2618,18 @@ def _atualizar_medicamento_existente(cur, medicamento_id: int, prod: 'ProdutoVet
         medicamento_id,                            # WHERE id
     ))
 
+    cur.execute(
+        "SELECT conteudo_estruturado FROM medicamento WHERE id = %s",
+        (medicamento_id,),
+    )
+    row = cur.fetchone()
+    conteudo_atual = row.get("conteudo_estruturado") if isinstance(row, dict) else (row[0] if row else None)
+    conteudo_com_produto = _mesclar_produto_vetsmart(conteudo_atual or prod.conteudo_estruturado or {}, prod)
+    cur.execute(
+        "UPDATE medicamento SET conteudo_estruturado = %s WHERE id = %s",
+        (Json(conteudo_com_produto), medicamento_id),
+    )
+
 
 def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
     """Garante que existe exatamente 1 Medicamento para o princípio ativo de
@@ -2559,7 +2688,7 @@ def _encontrar_ou_criar_medicamento_por_pa(cur, prod: 'ProdutoVetsmart') -> int:
             prod.duracao_tratamento,
             prod.observacoes,
             prod.bula,
-            Json(prod.conteudo_estruturado or {}),
+            Json(_mesclar_produto_vetsmart(prod.conteudo_estruturado or {}, prod)),
             prod.vetsmart_id,
             CREATED_BY_USER_ID,
         ))

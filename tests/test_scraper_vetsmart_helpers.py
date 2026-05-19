@@ -368,6 +368,39 @@ def test_extrair_secao_interacoes_disabled_retorna_vazio():
     assert secao["texto"] is None
 
 
+def test_produto_snapshot_preserva_painel_clinico_e_apresentacoes():
+    prod = scraper.ProdutoVetsmart(
+        vetsmart_id=123,
+        nome='Cefaseptin',
+        fabricante='Vetoquinol',
+        principio_ativo='Cefalexina',
+        via_administracao='Oral',
+        frequencia='12/12 horas',
+        duracao_tratamento='A criterio do medico veterinario.',
+        conteudo_estruturado={
+            'raw_sections': {
+                'Composição': 'Cada comprimido contém cefalexina 75 mg.',
+                'Observações': 'Nao administrar com antibioticos bacteriostaticos.',
+            },
+            'raw_sections_html': {},
+        },
+        apresentacoes=[
+            {'forma': 'Comprimido sulcado', 'concentracao': '75 mg'},
+        ],
+        doses=[
+            {'dose': '15 mg/kg', 'frequencia': '12/12 horas'},
+        ],
+    )
+
+    snapshot = scraper._produto_vetsmart_snapshot(prod)
+
+    assert snapshot['tipo'] == 'produto'
+    assert snapshot['fabricante'] == 'Vetoquinol'
+    assert snapshot['apresentacoes'][0]['concentracao'] == '75 mg'
+    assert snapshot['secoes']['Composição']['texto'].startswith('Cada comprimido')
+    assert snapshot['secoes']['Observações']['texto'].startswith('Nao administrar')
+
+
 def test_apresentacoes_canonicas_deduplicam_forca_sem_perder_suspensao():
     apresentacoes = [
         {

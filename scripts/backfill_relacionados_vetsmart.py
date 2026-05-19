@@ -137,6 +137,18 @@ def processar_medicamento(conn, page, med: Dict[str, Any], apply: bool) -> Dict[
             with conn.cursor() as cur:
                 if idx == 1:
                     vetsmart._atualizar_medicamento_existente(cur, med["id"], prod)
+                else:
+                    cur.execute(
+                        "SELECT conteudo_estruturado FROM medicamento WHERE id = %s",
+                        (med["id"],),
+                    )
+                    row = cur.fetchone()
+                    conteudo_atual = row.get("conteudo_estruturado") if isinstance(row, dict) else None
+                    conteudo = vetsmart._mesclar_produto_vetsmart(conteudo_atual or {}, prod)
+                    cur.execute(
+                        "UPDATE medicamento SET conteudo_estruturado = %s WHERE id = %s",
+                        (vetsmart.Json(conteudo), med["id"]),
+                    )
                 total_apres += vetsmart._inserir_apresentacoes_consolidado(cur, med["id"], prod)
                 total_doses += vetsmart._inserir_doses_consolidado(cur, med["id"], prod.doses or [])
 

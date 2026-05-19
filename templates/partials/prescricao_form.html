@@ -2283,6 +2283,7 @@
 
     const secoes = monografia?.secoes || {};
     const tabs = monografia?.resumo_posologia?.tabs || [];
+    const produtosVetSmart = Array.isArray(monografia?.produtos_vetsmart) ? monografia.produtos_vetsmart : [];
     const contra = secoes.contraindicacoes || {};
     const indic = secoes.indicacoes || {};
     const efeitos = secoes.efeitos_adversos || {};
@@ -2376,6 +2377,35 @@
         ${item.descricao ? `<p style="font-size:.71rem;color:#adb5bd;margin:3px 0 0;line-height:1.4;">${item.descricao}</p>` : ''}
       </div>`).join('') : '';
 
+    const produtosHtml = produtosVetSmart.length ? produtosVetSmart.map((prod, pi) => {
+      const secoesProd = prod.secoes || {};
+      const duracao = prod.duracao_tratamento || secoesProd['Duração do Tratamento']?.texto || '';
+      const frequencia = prod.frequencia || secoesProd['Frequência']?.texto || '';
+      const via = prod.via_administracao || secoesProd['Via']?.texto || '';
+      const obs = secoesProd['Observações']?.texto || prod.observacoes || '';
+      const composicao = secoesProd['Composição']?.texto || '';
+      const apresentacoes = Array.isArray(prod.apresentacoes) ? prod.apresentacoes.slice(0, 8) : [];
+      const fonte = prod.tipo === 'principio_ativo' ? 'Princípio ativo' : (prod.fabricante || 'Produto');
+      return `
+        <div style="padding:8px 0;${pi < produtosVetSmart.length-1 ? 'border-bottom:1px solid #eef1f4;' : ''}">
+          <div class="d-flex justify-content-between gap-2 align-items-start">
+            <div>
+              <div style="font-size:.84rem;font-weight:700;color:#212529;">${prod.nome || 'Produto VetSmart'}</div>
+              <div style="font-size:.7rem;color:#6c757d;">${fonte}${prod.apresentacoes_count ? ` · ${prod.apresentacoes_count} apresentações` : ''}${prod.doses_count ? ` · ${prod.doses_count} doses` : ''}</div>
+            </div>
+            ${prod.fonte ? `<a href="${prod.fonte}" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="font-size:.7rem;">VetSmart</a>` : ''}
+          </div>
+          <div class="d-flex flex-wrap gap-1 mt-2">
+            ${via ? `<span class="badge text-bg-light border">Via: ${via}</span>` : ''}
+            ${frequencia ? `<span class="badge text-bg-light border">Freq.: ${frequencia}</span>` : ''}
+            ${duracao ? `<span class="badge text-bg-light border">Duração: ${duracao}</span>` : ''}
+          </div>
+          ${apresentacoes.length ? `<div class="d-flex flex-wrap gap-1 mt-2">${apresentacoes.map(ap => `<span class="badge rounded-pill text-bg-secondary bg-opacity-10 text-secondary border">${ap.concentracao || ap.forma || 'apresentação'}</span>`).join('')}</div>` : ''}
+          ${composicao ? `<p style="font-size:.73rem;color:#495057;line-height:1.45;margin:7px 0 0;"><strong>Composição:</strong> ${composicao}</p>` : ''}
+          ${obs ? `<p style="font-size:.73rem;color:#495057;line-height:1.45;margin:7px 0 0;"><strong>Observações:</strong> ${obs}</p>` : ''}
+        </div>`;
+    }).join('') : '';
+
     // ── guard ─────────────────────────────────────────────────────────────────
     const temConteudo = !!(
       tabs.length ||
@@ -2383,7 +2413,8 @@
       (indic.itens && indic.itens.length) ||
       (efeitos.itens && efeitos.itens.length) ||
       (advert.itens && advert.itens.length) ||
-      (inter.itens && inter.itens.length)
+      (inter.itens && inter.itens.length) ||
+      produtosVetSmart.length
     );
 
     if (!temConteudo) {
@@ -2402,6 +2433,7 @@
         ${efeitos.itens?.length ? _section('bi-activity', 'Efeitos adversos', efeitosHtml, '#6c757d', efeitos.itens.length) : ''}
         ${advert.itens?.length ? _section('bi-exclamation-circle', 'Advertências', advertenciasHtml, '#ffc107', advert.itens.length) : ''}
         ${interacoesHtml ? _section('bi-arrow-left-right', 'Interações medicamentosas', interacoesHtml, '#e03e3e', inter.itens.length) : ''}
+        ${produtosHtml ? _section('bi-box-seam', 'Produtos VetSmart', produtosHtml, '#20c997', produtosVetSmart.length) : ''}
       </div>
     `;
 
