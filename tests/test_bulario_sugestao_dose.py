@@ -253,6 +253,36 @@ def test_sugerir_dose_preserva_duracao_textual_do_protocolo():
     assert sugestao['duracao_texto'] == 'Conforme protocolo mensal'
 
 
+def test_sugerir_dose_usa_duracao_do_prescritor_vetsmart_como_fallback():
+    med = SimpleNamespace(
+        id=51,
+        nome='Cefalexina',
+        classificacao='Antibacteriano',
+        via_administracao='Oral',
+        conteudo_estruturado={
+            'prescritor_vetsmart': {
+                'duracao_min_dias': 5,
+                'duracao_max_dias': 10,
+                'duracao_texto': '5 a 10 dias',
+                'frequencia_texto': '8/8 ou 12/12 horas',
+            }
+        },
+        apresentacoes=[],
+        doses=[
+            _dose(12, 'Oral', '20 - 30 mg/kg', 20, 30, 'MG_KG', intervalo_horas=12),
+        ],
+    )
+
+    sugestao = sugerir_dose(med, _animal_caes(5))
+
+    assert sugestao is not None
+    assert sugestao['duracao_min_dias'] == 5
+    assert sugestao['duracao_max_dias'] == 10
+    assert sugestao['duracao_do_prescritor_vetsmart'] is True
+    assert sugestao['duracao_e_padrao'] is False
+    assert 'DURACAO_PRESCRITOR_VETSMART' in {f['codigo'] for f in sugestao['flags_risco']}
+
+
 def test_sugerir_dose_expoe_proveniencia_e_flags_de_validacao():
     med = SimpleNamespace(
         id=60,

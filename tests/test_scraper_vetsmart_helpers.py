@@ -17,6 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import importar_medicamentos_vetsmart as scraper  # noqa: E402
+import backfill_apresentacoes_prescritor_vetsmart as prescritor  # noqa: E402
 
 
 # ── _extrair_indicacao ──────────────────────────────────────────────────────
@@ -397,3 +398,46 @@ def test_apresentacoes_canonicas_deduplicam_forca_sem_perder_suspensao():
     susp = next(a for a in saida if a['forma_categoria'] == 'suspensao_oral')
     assert susp['unidade_pratica'] == 'mL'
     assert susp['tipo_origem'] == 'manipulado'
+
+
+def test_prescritor_extrai_apresentacao_liquida_cefalexina():
+    ap = prescritor._apresentacao_do_drug({
+        'drug': 'Cefalexina',
+        'dosageForm': '250 mg / 5mL, solução',
+        'dosageData': {'type': 'Mililitro (mL)'},
+    })
+
+    assert ap is not None
+    assert ap['forma'] == 'Solucao oral'
+    assert ap['concentracao'] == '250 mg / 5mL, solução'
+    assert ap['concentracao_valor'] == 50.0
+    assert ap['concentracao_unidade'] == 'mg/ml'
+    assert ap['forma_categoria'] == 'liquido_oral'
+
+
+def test_prescritor_extrai_apresentacao_gotas_keflex():
+    ap = prescritor._apresentacao_do_drug({
+        'drug': 'Keflex',
+        'dosageForm': '100 mg/mL, gotas',
+        'dosageData': {'type': 'Gota'},
+    })
+
+    assert ap is not None
+    assert ap['forma'] == 'Gotas'
+    assert ap['concentracao_valor'] == 100.0
+    assert ap['concentracao_unidade'] == 'mg/ml'
+
+
+def test_prescritor_resume_frequencia_e_duracao_aguda():
+    resumo = prescritor._resumo_prescritor([
+        {'dosageForm': '600 mg, comprimido', 'dosage': 'Dar 1 comprimido a cada 12 horas por 5 dias', 'usage': 'Oral', 'dosageData': {'interval': '12', 'intervalUnit': 'Horas', 'duration': '5', 'durationUnit': 'Dias'}},
+        {'dosageForm': '500 mg, comprimido', 'dosage': 'Dar 1 comprimido a cada 12 horas por 10 dias', 'usage': 'Oral', 'dosageData': {'interval': '12', 'intervalUnit': 'Horas', 'duration': '10', 'durationUnit': 'Dias'}},
+        {'dosageForm': '75 mg, comprimido', 'dosage': 'Dar 1 comprimido a cada 12 horas por 30 dias', 'usage': 'Oral', 'dosageData': {'interval': '12', 'intervalUnit': 'Horas', 'duration': '30', 'durationUnit': 'Dias'}},
+        {'dosageForm': '100 mg/mL, gotas', 'dosage': 'Dar 1 gota a cada 8 horas por 7 dias', 'usage': 'Oral', 'dosageData': {'interval': '8', 'intervalUnit': 'Horas', 'duration': '7', 'durationUnit': 'Dias'}},
+    ])
+
+    assert resumo is not None
+    assert resumo['duracao_min_dias'] == 5
+    assert resumo['duracao_max_dias'] == 10
+    assert resumo['duracao_texto'] == '5 a 10 dias'
+    assert resumo['frequencia_texto'] == '8/8 horas ou 12/12 horas'

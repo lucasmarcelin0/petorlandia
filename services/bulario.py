@@ -227,6 +227,27 @@ def _duracao_padrao(medicamento) -> Tuple[Optional[int], Optional[int], Optional
     return (None, None, None)
 
 
+def _prescritor_vetsmart_stats(medicamento) -> Dict[str, Any]:
+    conteudo = getattr(medicamento, 'conteudo_estruturado', None) or {}
+    if not isinstance(conteudo, dict):
+        return {}
+    stats = conteudo.get('prescritor_vetsmart') or {}
+    return stats if isinstance(stats, dict) else {}
+
+
+def _duracao_prescritor_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    stats = _prescritor_vetsmart_stats(medicamento)
+    try:
+        mn = int(stats.get('duracao_min_dias')) if stats.get('duracao_min_dias') is not None else None
+        mx = int(stats.get('duracao_max_dias')) if stats.get('duracao_max_dias') is not None else None
+    except (TypeError, ValueError):
+        return (None, None, None)
+    if mn is None and mx is None:
+        return (None, None, None)
+    desc = stats.get('duracao_texto') or 'referencia do prescritor VetSmart'
+    return (mn, mx, desc)
+
+
 def _adicionar_flag_risco(
     flags: List[Dict[str, str]],
     *,
@@ -1590,14 +1611,21 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     dur_min_d = proto.duracao_min_dias
     dur_max_d = proto.duracao_max_dias
     duracao_e_padrao = False
+    duracao_do_prescritor = False
     duracao_padrao_desc: Optional[str] = None
 
     if dur_min_d is None and dur_max_d is None and not (getattr(proto, 'duracao', None) or '').strip():
-        pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
-        if pd_min is not None:
+        pd_min, pd_max, pd_desc = _duracao_prescritor_vetsmart(medicamento)
+        if pd_min is not None or pd_max is not None:
             dur_min_d, dur_max_d = pd_min, pd_max
-            duracao_e_padrao = True
+            duracao_do_prescritor = True
             duracao_padrao_desc = pd_desc
+        else:
+            pd_min, pd_max, pd_desc = _duracao_padrao(medicamento)
+            if pd_min is not None:
+                dur_min_d, dur_max_d = pd_min, pd_max
+                duracao_e_padrao = True
+                duracao_padrao_desc = pd_desc
 
     tem_faixa_dur = bool(dur_min_d and dur_max_d and dur_min_d != dur_max_d)
 
@@ -1789,6 +1817,14 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             titulo='Duracao de referencia',
             detalhe='A duracao foi inferida pela classe farmacologica porque o protocolo original nao informava esse campo.',
         )
+    if duracao_do_prescritor:
+        _adicionar_flag_risco(
+            flags_risco,
+            codigo='DURACAO_PRESCRITOR_VETSMART',
+            nivel='informativo',
+            titulo='Duracao do prescritor',
+            detalhe='A duracao veio de estatisticas do prescritor VetSmart porque o protocolo original nao informava esse campo.',
+        )
     if not proto_ind:
         _adicionar_flag_risco(
             flags_risco,
@@ -1820,6 +1856,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'tem_apresentacao_preferida': bool(apresentacao_preferida_id),
         'quantidade_protocolos_candidatos': len(candidatos),
         'quantidade_indicacoes_disponiveis': len(indicacoes_disp),
+        'tem_estatistica_prescritor_vetsmart': bool(_prescritor_vetsmart_stats(medicamento)),
         'origem': origem,
         'flags_risco': flags_risco,
         'resumo_clinico': {
@@ -1856,6 +1893,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'duracao_texto_max':       dur_texto_max,
         'tem_faixa_duracao':       tem_faixa_dur,
         'duracao_e_padrao':        duracao_e_padrao,
+        'duracao_do_prescritor_vetsmart': duracao_do_prescritor,
         'duracao_padrao_desc':     duracao_padrao_desc,
         'indicacao':               proto_ind,
         'indicacoes_alternativas': indicacoes_alt,
