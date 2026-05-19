@@ -461,6 +461,39 @@ def test_prescritor_extrai_apresentacao_gotas_keflex():
     assert ap['concentracao_unidade'] == 'mg/ml'
 
 
+def test_prescritor_extrai_opcao_dropdown_keflex_liquido_sem_perder_variante():
+    ap = prescritor._apresentacao_do_drug({
+        'drug': 'Keflex',
+        'dosageForm': 'Keflex 500 mg / 5 mL, lÃ­quido',
+        'dosageData': {'type': 'Mililitro (mL)'},
+    })
+
+    assert ap is not None
+    assert ap['nome_variante'] == 'Keflex'
+    assert ap['forma'] == 'Solucao oral'
+    assert ap['concentracao'] == '500 mg / 5 mL, lÃ­quido'
+    assert ap['concentracao_valor'] == 100.0
+    assert ap['concentracao_unidade'] == 'mg/ml'
+
+
+def test_prescritor_extrai_shampoo_topico_com_percentual_e_volume():
+    ap = prescritor._apresentacao_do_drug({
+        'drug': 'Shampoo de Clorexidina',
+        'dosageForm': 'Shampoo de Clorexidina 0,20%, frasco (500mL)',
+        'dosageData': {},
+    })
+
+    assert ap is not None
+    assert ap['nome_variante'] == 'Shampoo de Clorexidina'
+    assert ap['forma'] == 'Shampoo'
+    assert ap['concentracao'] == '0,20%, frasco (500mL)'
+    assert ap['concentracao_valor'] == 0.2
+    assert ap['concentracao_unidade'] == '%'
+    assert ap['volume_valor'] == 500.0
+    assert ap['volume_unidade'] == 'ml'
+    assert ap['forma_categoria'] == 'topico'
+
+
 def test_prescritor_resume_frequencia_e_duracao_aguda():
     resumo = prescritor._resumo_prescritor([
         {'dosageForm': '600 mg, comprimido', 'dosage': 'Dar 1 comprimido a cada 12 horas por 5 dias', 'usage': 'Oral', 'dosageData': {'interval': '12', 'intervalUnit': 'Horas', 'duration': '5', 'durationUnit': 'Dias'}},

@@ -90,8 +90,49 @@ def _normalizar_forma_prescritor(dosage_form: str, dosage_data: Dict[str, Any]) 
     return forma[:50]
 
 
+def _limpar_prefixo_produto_dosage_form(dosage_form: str, drug_name: str) -> str:
+    texto = str(dosage_form or "").strip()
+    nome = str(drug_name or "").strip()
+    if not texto or not nome:
+        return texto
+    texto_norm = _norm(texto)
+    nome_norm = _norm(nome)
+    if not texto_norm.startswith(nome_norm):
+        return texto
+    resto = texto[len(nome):].strip(" ,-–—")
+    # O dropdown do prescritor mostra "Keflex 500 mg / 5 mL, liquido";
+    # para concentracao/apresentacao, o nome comercial deve ficar em
+    # nome_variante e a forca em concentracao.
+    if resto and RE_CONCENTRACAO_FARMACOLOGICA.search(resto):
+        return resto
+    return texto
+
+
+def _forma_por_contexto_prescritor(drug_name: str, dosage_form_original: str, forma: str) -> str:
+    contexto = _norm(f"{drug_name} {dosage_form_original} {forma}")
+    topicos = [
+        ("shampoo", "Shampoo"),
+        ("xampu", "Shampoo"),
+        ("pomada", "Pomada"),
+        ("creme", "Creme"),
+        ("spray", "Spray"),
+        ("locao", "Locao"),
+        ("gel", "Gel"),
+        ("pipeta", "Pipeta"),
+    ]
+    for token, rotulo in topicos:
+        if token in contexto:
+            return rotulo
+    return forma
+
+
 def _apresentacao_do_drug(drug: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    dosage_form = str(drug.get("dosageForm") or "").strip()
+    drug_name = str(drug.get("drug") or "").strip()
+    dosage_form_original = str(drug.get("dosageForm") or "").strip()
+    dosage_form = _limpar_prefixo_produto_dosage_form(
+        dosage_form_original,
+        drug_name,
+    )
     if not dosage_form:
         return None
     if not RE_CONCENTRACAO_FARMACOLOGICA.search(dosage_form):
@@ -99,12 +140,14 @@ def _apresentacao_do_drug(drug: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     dosage_data = drug.get("dosageData") or {}
     forma = _normalizar_forma_prescritor(dosage_form, dosage_data)
+    forma = _forma_por_contexto_prescritor(drug_name, dosage_form_original, forma)
     ap = {
         "forma": forma[:50],
         "concentracao": dosage_form[:100],
-        "nome_variante": str(drug.get("drug") or "").strip()[:100] or None,
+        "nome_variante": drug_name[:100] or None,
     }
-    ap.update(_estruturar_apresentacao_campos(forma, dosage_form, str(drug.get("drug") or "")))
+    ap.update(_estruturar_apresentacao_campos(forma, dosage_form, drug_name))
+    ap["nome_variante"] = drug_name[:100] or ap.get("nome_variante")
     ap["forma_categoria"] = _forma_categoria_apresentacao(ap["forma"], ap["concentracao"])
     return ap
 
