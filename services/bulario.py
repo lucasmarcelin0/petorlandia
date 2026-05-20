@@ -27,6 +27,7 @@ _pn_spec.loader.exec_module(_pn)
 normalizar_frequencia = _pn.normalizar_frequencia
 normalizar_duracao = _pn.normalizar_duracao
 consolidar_linhas = _pn.consolidar_linhas
+intervalos_disponiveis_horas = _pn.intervalos_disponiveis_horas
 
 
 def _strip_accents(s: str) -> str:
@@ -348,6 +349,27 @@ def _duracao_produtos_vetsmart(medicamento) -> Tuple[Optional[int], Optional[int
                 nome = prod.get('nome') or 'VetSmart'
                 return (mn, mx, f'painel clinico VetSmart: {nome}')
     return (None, None, None)
+
+
+def _duracao_texto_de_produtos_vetsmart(medicamento) -> Optional[str]:
+    """Última carta na manga quando NENHUMA duração numérica foi extraída:
+    procura uma frase de duração nos produtos VetSmart e normaliza ("Até 3
+    dias ou a critério do veterinário" → "3 dias", "Conforme protocolo
+    médico" → "Conforme protocolo médico").  Independente do medicamento
+    (qualquer um cujos produtos tenham `duracao_tratamento`).
+    """
+    for prod in _produtos_vetsmart(medicamento):
+        secoes = prod.get('secoes') if isinstance(prod.get('secoes'), dict) else {}
+        candidatos = [
+            prod.get('duracao_tratamento'),
+            (secoes.get('Duração do Tratamento') or {}).get('texto')
+            if isinstance(secoes.get('Duração do Tratamento'), dict) else None,
+        ]
+        for texto in candidatos:
+            norm = normalizar_duracao(texto)
+            if norm:
+                return norm
+    return None
 
 
 def _adicionar_flag_risco(
@@ -834,10 +856,63 @@ def _dose_ambigua_por_apresentacao(medicamento, dose) -> bool:
     return len(_apresentacoes_solidas_com_forca(medicamento)) > 1
 
 
+def _dose_texto_tem_concentracao_explicita(dose) -> bool:
+    textos = [
+        getattr(dose, 'dose', None),
+        getattr(dose, 'dose_raw_text', None),
+        getattr(dose, 'observacao', None),
+    ]
+    for texto in textos:
+        norm = _texto_norm(texto)
+        if not norm:
+            continue
+        if re.search(r'\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ui)\s*/\s*(?:ml|l)\b', norm):
+            return True
+    return False
+
+
+def _apresentacoes_liquidas_compativeis_com_dose(medicamento, dose) -> List[tuple[float, str]]:
+    via_proto = _categoria_via_texto(getattr(dose, 'via', None))
+    resultado: List[tuple[float, str]] = []
+    vistos: set[tuple[float, str]] = set()
+    for ap in (getattr(medicamento, 'apresentacoes', []) or []):
+        valor = getattr(ap, 'concentracao_valor', None)
+        unidade = (getattr(ap, 'concentracao_unidade', None) or '').lower()
+        if valor is None or unidade not in {'mg/ml', 'mcg/ml', 'g/ml'}:
+            continue
+
+        cat = _categoria_apresentacao(ap)
+        if via_proto:
+            # mL IM/SC/IV só é acionável se houver uma apresentação injetável
+            # claramente vinculada. Não reaproveita gotas/solução oral por
+            # coincidência de concentração.
+            if via_proto == 'INJETAVEL' and cat != 'INJETAVEL':
+                continue
+            if via_proto in {'ORAL', 'OFTALMICA', 'OTICA', 'TOPICA'} and cat and cat != via_proto:
+                continue
+
+        chave = (float(valor), unidade)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        resultado.append(chave)
+    return resultado
+
+
+def _dose_volumetrica_ambigua(medicamento, dose) -> bool:
+    unidade = (getattr(dose, 'dose_unidade', None) or '').upper()
+    if unidade not in {'ML_ANIMAL', 'ML_KG'}:
+        return False
+    if _dose_texto_tem_concentracao_explicita(dose):
+        return False
+    return len(_apresentacoes_liquidas_compativeis_com_dose(medicamento, dose)) != 1
+
+
 def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
     doses = [
         d for d in (getattr(medicamento, "doses", []) or [])
         if not _dose_ambigua_por_apresentacao(medicamento, d)
+        and not _dose_volumetrica_ambigua(medicamento, d)
     ]
     tabs: List[Dict[str, Any]] = []
     for slug, label, icon in [
@@ -2009,6 +2084,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     def _aplica(p):
         if not _proto_aplica_basico(p, esp_code, peso):
             return False
+        if _dose_ambigua_por_apresentacao(medicamento, p):
+            return False
+        if _dose_volumetrica_ambigua(medicamento, p):
+            return False
         if indicacao_filtro is not None:
             p_ind = (getattr(p, 'indicacao', None) or '').strip() or None
             if p_ind != indicacao_filtro:
@@ -2135,7 +2214,15 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         dur_texto = f"por {dur_min_d} dias"
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
     else:
-        dur_texto = duracao_proto_texto or '—'
+        # Sem nenhuma duração numérica — preserva texto não-numérico útil
+        # (ex.: "Até 3 dias ou a critério do veterinário" de produtos
+        # VetSmart) ou cai pra frase canônica profissional.
+        dur_texto = (
+            normalizar_duracao(duracao_proto_texto)
+            or normalizar_duracao(getattr(medicamento, 'duracao_tratamento', None))
+            or _duracao_texto_de_produtos_vetsmart(medicamento)
+            or 'A critério do médico-veterinário'
+        )
         dur_texto_min = dur_texto_max = dur_texto_media = dur_texto
 
     # Equivalências por apresentação — usa o helper compartilhado com
@@ -2292,6 +2379,13 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'intervalo_horas':         proto.intervalo_horas,
         'intervalo_min_horas':     freq_min_h,
         'intervalo_max_horas':     freq_max_h,
+        # Lista de intervalos discretos extraídos da frequência (ex.: '6/6h
+        # ou 8/8h ou 12/12h' -> [6, 8, 12]).  O frontend usa pra renderizar
+        # botões com valores reais quando há mais de uma opção, em vez de
+        # 'mín/padrão/máx' abstrato.  Genérico — vale pra qualquer med.
+        'intervalos_disponiveis':  _pn.intervalos_disponiveis_horas(
+            getattr(proto, 'frequencia', None), freq_min_h, freq_max_h
+        ),
         'tem_faixa_frequencia':    tem_faixa_freq,
         'frequencia_texto':        freq_texto,
         'frequencia_bruta':        getattr(proto, 'frequencia', None) or '',

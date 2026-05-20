@@ -501,6 +501,43 @@ def test_monografia_ignora_dose_de_comprimido_ambigua_em_medicamento_consolidado
     assert sugestao['protocolo_id'] == 11
 
 
+def test_monografia_ignora_ml_animal_sem_concentracao_liquida_inequivoca():
+    comp = _apresentacao('Comprimido', '500 mg')
+    comp.concentracao_valor = 500
+    comp.concentracao_unidade = 'mg'
+    gotas = _apresentacao('Gotas', '500 mg/mL')
+    gotas.id = 2
+    gotas.concentracao_valor = 500
+    gotas.concentracao_unidade = 'mg/ml'
+    solucao = _apresentacao('Solucao Oral', '50 mg/mL')
+    solucao.id = 3
+    solucao.concentracao_valor = 50
+    solucao.concentracao_unidade = 'mg/ml'
+
+    dose_mg = _dose(20, 'IM', '25 mg/kg', 25, 25, 'MG_KG', intervalo_horas=8)
+    dose_ml = _dose(21, 'IM', '1 - 5 ml/animal', 1, 5, 'ML_ANIMAL', intervalo_horas=8)
+
+    med = SimpleNamespace(
+        id=63,
+        nome='Dipirona',
+        classificacao='Analgesico',
+        principio_ativo='Dipirona',
+        via_administracao='IM',
+        apresentacoes=[comp, gotas, solucao],
+        doses=[dose_mg, dose_ml],
+    )
+
+    monografia = montar_monografia_medicamento(med)
+    linhas = monografia['resumo_posologia']['tabs'][0]['protocolos'][0]['linhas']
+
+    assert [linha['dose'] for linha in linhas] == ['25 mg/kg']
+
+    sugestao = sugerir_dose(med, _animal_caes(10))
+
+    assert sugestao is not None
+    assert sugestao['protocolo_id'] == 20
+
+
 def test_extrair_secoes_vetsmart_prefere_html_sanitizado():
     med = SimpleNamespace(
         conteudo_estruturado={

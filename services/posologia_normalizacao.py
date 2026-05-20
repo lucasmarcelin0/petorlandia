@@ -133,6 +133,17 @@ def _coletar_intervalos(t: str) -> List[Any]:
         if n > 0:
             achados.append(max(1, 24 // n))
 
+    # "N/N" soltos com "h" implícito (vem do final do texto).  Só ativa
+    # quando já achamos pelo menos UM intervalo (contexto de frequência), pra
+    # não pegar "0/0", "1/2" ou números aleatórios em outros campos.
+    # Ex.: "6/6 ou 8/8 ou 12/12 horas" -> _RE_NN_H pega só "12/12 horas"; este
+    # passo adicional captura "6/6" e "8/8" também.
+    if achados:
+        for m in re.finditer(r"(?<![\d.,/])(\d{1,3})\s*/\s*\1(?![\d.,/])", t):
+            v = int(m.group(1))
+            if 1 <= v <= 72:
+                achados.append(v)
+
     # Último recurso: "12h" / "24hrs" soltos (sem "a cada"/"/"/etc.).
     # Só quando nada mais foi detectado, pega o PRIMEIRO token de horas
     # plausível — evita mostrar a prosa bruta do VetSmart.
@@ -153,6 +164,36 @@ def _coletar_intervalos(t: str) -> List[Any]:
         vistos.add(key)
         out.append(a)
     return out
+
+
+def intervalos_disponiveis_horas(
+    texto: Optional[str],
+    intervalo_min: Optional[int] = None,
+    intervalo_max: Optional[int] = None,
+) -> List[int]:
+    """Lista de intervalos em horas DISCRETOS extraídos do texto de frequência.
+
+    Quando o texto traz múltiplos protocolos colados (ex.: '6/6 ou 8/8h',
+    '8/8 horas 12/12 horas'), retorna todos como inteiros distintos ordenados.
+    Faixas contínuas ('a cada 8–12h') expandem para os dois extremos.
+    Usado pela UI pra renderizar botões com os valores reais quando há mais
+    de uma opção, em vez de 'mín/padrão/máx' abstratos.
+    """
+    intervalos = _coletar_intervalos(_limpo(texto or ""))
+    valores: set = set()
+    for it in intervalos:
+        if isinstance(it, tuple):
+            a, b = it
+            valores.add(a)
+            valores.add(b)
+        else:
+            valores.add(it)
+    if not valores and intervalo_min and intervalo_max:
+        valores.add(intervalo_min)
+        valores.add(intervalo_max)
+    elif not valores and intervalo_min:
+        valores.add(intervalo_min)
+    return sorted(v for v in valores if isinstance(v, int) and 1 <= v <= 72)
 
 
 # Frases curtas e legítimas que devem ser preservadas (não têm intervalo).
@@ -285,10 +326,12 @@ def normalizar_duracao(texto: Optional[str]) -> Optional[str]:
         if re.search(pat, sa):
             return label
 
-    # 3) texto curto e limpo (não truncado mid-word) -> mantém apresentável
-    if 2 < len(t) <= 50 and not t.endswith("-") and re.search(r"[\.\)]\s*$|\b(dias?|semanas?|mes(?:es)?)\b", t):
-        t = t.rstrip(" .;:-–")
-        return t[0].upper() + t[1:] if t else None
+    # 3) texto curto e limpo (não truncado mid-word) -> preserva como veio
+    #    Ex.: "Conforme protocolo mensal", "Tratamento contínuo", "Indefinido".
+    #    Filtros: comprimento razoável + sem hífen final (= truncamento).
+    if 2 < len(t) <= 60 and not t.rstrip().endswith("-"):
+        cleaned = t.rstrip(" .;:-–")
+        return cleaned[0].upper() + cleaned[1:] if cleaned else None
 
     # 4) prosa longa/truncada sem âncora -> deixa o chamador usar fallback
     return None
