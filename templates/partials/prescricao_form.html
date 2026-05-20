@@ -257,6 +257,16 @@
           </div>
         </div>
 
+        <div id="sug-opcoes-recomendadas-wrap" class="d-none mb-3">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <div class="small fw-semibold text-secondary">
+              <i class="bi bi-sliders me-1"></i>Opções recomendadas
+            </div>
+            <span class="small text-muted">Escolha o protocolo antes de aplicar</span>
+          </div>
+          <div id="sug-opcoes-recomendadas" class="d-grid gap-2"></div>
+        </div>
+
         <div class="row">
           <div class="col-md-6">
             <p class="mb-1"><strong>Animal:</strong> <span id="sug-animal" class="text-muted">–</span></p>
@@ -663,6 +673,7 @@
     let _durModo = 'media';
     // Dias calculados da sugestão atual (para passagem ao form). null = sem faixa.
     let _duracaoDias = null;
+    let _opcaoRecomendadaEscolhida = null;
 
   function aplicarHistoricoPrescricoes(html) {
     const container = document.getElementById('historico-prescricoes');
@@ -1338,6 +1349,107 @@
     }
   }
 
+  function _escapeHtmlSugestao(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[ch]));
+  }
+
+  function _resumoOpcaoRecomendada(opcao) {
+    return [
+      opcao.dose_exibir || '',
+      opcao.via || '',
+      opcao.frequencia_texto || '',
+      opcao.duracao_texto || ''
+    ].filter(Boolean).join(' · ');
+  }
+
+  function _renderOpcoesRecomendadas(s) {
+    const wrap = document.getElementById('sug-opcoes-recomendadas-wrap');
+    const container = document.getElementById('sug-opcoes-recomendadas');
+    if (!wrap || !container) return;
+    const opcoes = Array.isArray(s?.opcoes_recomendadas) ? s.opcoes_recomendadas : [];
+    if (opcoes.length <= 1) {
+      wrap.classList.add('d-none');
+      container.innerHTML = '';
+      _opcaoRecomendadaEscolhida = null;
+      return;
+    }
+
+    const protocoloAtual = Number(s.protocolo_id || 0);
+    _opcaoRecomendadaEscolhida = opcoes.find(o => Number(o.protocolo_id || 0) === protocoloAtual) || opcoes[0];
+    container.innerHTML = opcoes.map((opcao, idx) => {
+      const ativa = Number(opcao.protocolo_id || 0) === Number(_opcaoRecomendadaEscolhida?.protocolo_id || 0);
+      const indicacao = opcao.indicacao && opcao.indicacao !== 'Uso geral'
+        ? `<span class="badge text-bg-light border">${_escapeHtmlSugestao(opcao.indicacao)}</span>`
+        : '';
+      return `
+        <button type="button"
+                class="btn text-start border rounded-3 px-3 py-2 ${ativa ? 'btn-info text-white border-info' : 'btn-light'}"
+                onclick="selecionarOpcaoRecomendada(${idx})"
+                style="box-shadow:none;">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <div class="fw-semibold">${_escapeHtmlSugestao(opcao.dose_exibir || 'Dose recomendada')}</div>
+              <div class="${ativa ? 'text-white-50' : 'text-muted'} small">
+                ${_escapeHtmlSugestao([opcao.via, opcao.frequencia_texto, opcao.duracao_texto].filter(Boolean).join(' · '))}
+              </div>
+            </div>
+            ${indicacao}
+          </div>
+        </button>`;
+    }).join('');
+    container.dataset.opcoes = JSON.stringify(opcoes);
+    wrap.classList.remove('d-none');
+  }
+
+  function selecionarOpcaoRecomendada(index) {
+    const container = document.getElementById('sug-opcoes-recomendadas');
+    if (!container || !sugestaoDoseAtual) return;
+    let opcoes = [];
+    try { opcoes = JSON.parse(container.dataset.opcoes || '[]'); } catch (e) { opcoes = []; }
+    const opcao = opcoes[index];
+    if (!opcao) return;
+    _opcaoRecomendadaEscolhida = opcao;
+
+    const campos = [
+      'protocolo_id', 'via', 'dose_min', 'dose_media', 'dose_max', 'dose_unit_out',
+      'dose_exibir', 'faixa_texto', 'intervalo_horas', 'intervalo_min_horas',
+      'intervalo_max_horas', 'intervalos_disponiveis', 'tem_faixa_frequencia',
+      'frequencia_texto', 'frequencia_bruta', 'duracao_min_dias', 'duracao_max_dias',
+      'duracao_texto', 'duracao_bruta', 'tem_faixa_duracao', 'observacao'
+    ];
+    campos.forEach(campo => {
+      if (Object.prototype.hasOwnProperty.call(opcao, campo)) {
+        sugestaoDoseAtual[campo] = opcao[campo];
+      }
+    });
+
+    _doseModo = 'media';
+    _freqModo = 'media';
+    _freqIntervaloEscolhido = null;
+    _durModo = 'media';
+    _duracaoDias = null;
+    _renderOpcoesRecomendadas(sugestaoDoseAtual);
+    const temIntervaloDose = sugestaoDoseAtual
+      && sugestaoDoseAtual.dose_min !== null
+      && sugestaoDoseAtual.dose_max !== null
+      && sugestaoDoseAtual.dose_min !== sugestaoDoseAtual.dose_max;
+    const modoDoseWrap = document.getElementById('sug-dose-modo-wrap');
+    if (modoDoseWrap) modoDoseWrap.classList.toggle('d-none', !temIntervaloDose);
+    _atualizarBotoesDoseModo();
+    _atualizarDisplayDose(sugestaoDoseAtual);
+    document.getElementById('sug-faixa').textContent = sugestaoDoseAtual.faixa_texto ? `(${sugestaoDoseAtual.faixa_texto})` : '';
+    document.getElementById('sug-via').textContent = sugestaoDoseAtual.via || '—';
+    _atualizarDisplayFrequencia(sugestaoDoseAtual);
+    _atualizarDisplayDuracao(sugestaoDoseAtual);
+    _atualizarPrescricaoPratica();
+  }
+
   // Picker NOVO: vet clica em "6/6h" ou "8/8h" — escolha explícita.  Aplica
   // ao display de frequência e recalcula a prescrição prática.
   function selecionarFreqInterval(horas) {
@@ -1371,6 +1483,9 @@
     const freqBruta = String(s.frequencia_bruta || '').trim();
     if (/dose\s+u[nn]ica/i.test(_normalizarTextoSugestaoClinica(freqBruta))) {
       return 'Dose unica';
+    }
+    if (_freqIntervaloEscolhido) {
+      return _freqTextoParaHoras(_freqIntervaloEscolhido);
     }
     if (s.tem_faixa_frequencia && s.intervalo_min_horas && s.intervalo_max_horas) {
       const h = _calcFreqHoras(s, _freqModo);
@@ -1438,6 +1553,14 @@
     _doseModo = 'media';
     const freqModoWrap = document.getElementById('sug-freq-modo-wrap');
     if (freqModoWrap) freqModoWrap.classList.add('d-none');
+    const opcoesWrap = document.getElementById('sug-opcoes-recomendadas-wrap');
+    if (opcoesWrap) opcoesWrap.classList.add('d-none');
+    const opcoesDiv = document.getElementById('sug-opcoes-recomendadas');
+    if (opcoesDiv) {
+      opcoesDiv.innerHTML = '';
+      delete opcoesDiv.dataset.opcoes;
+    }
+    _opcaoRecomendadaEscolhida = null;
 
     const obsEl = document.getElementById('sug-observacao');
     if (obsEl) { obsEl.textContent = ''; obsEl.classList.add('d-none'); }
@@ -1799,6 +1922,7 @@
       _atualizarDisplayFrequencia(s);
       _duracaoDias = null;
       _atualizarDisplayDuracao(s);
+      _renderOpcoesRecomendadas(sugestaoDoseAtual);
       const fonteClinica = [];
       if (s.indicacao) fonteClinica.push(s.indicacao);
       if (s.fonte) fonteClinica.push('bulário estruturado');

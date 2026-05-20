@@ -2159,6 +2159,100 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             return f"{int(v)}"
         return f"{v:.2f}".rstrip('0').rstrip('.').replace('.', ',')
 
+    def _normalizar_duracao_proto(p) -> Tuple[Optional[int], Optional[int], str]:
+        d_min = getattr(p, 'duracao_min_dias', None)
+        d_max = getattr(p, 'duracao_max_dias', None)
+        d_txt = (getattr(p, 'duracao', None) or '').strip()
+        if d_min is None and d_max is None and d_txt:
+            txt_min, txt_max = _parse_duracao_dias(d_txt)
+            if txt_min is not None or txt_max is not None:
+                d_min, d_max = txt_min, txt_max
+        if d_min is None and d_max is None:
+            pd_min, pd_max, _pd_desc = _duracao_produtos_vetsmart(medicamento)
+            if pd_min is None and pd_max is None:
+                pd_min, pd_max, _pd_desc = _duracao_prescritor_vetsmart(medicamento)
+            if pd_min is None and pd_max is None and not d_txt:
+                pd_min, pd_max, _pd_desc = _duracao_padrao(medicamento)
+            d_min, d_max = pd_min, pd_max
+        if d_min and d_max and d_min != d_max:
+            return d_min, d_max, f"por {d_min}-{d_max} dias"
+        if d_max and not d_min:
+            return d_min, d_max, f"por até {d_max} dias"
+        if d_min:
+            return d_min, d_max, f"por {d_min} dias"
+        return d_min, d_max, (
+            normalizar_duracao(d_txt)
+            or normalizar_duracao(getattr(medicamento, 'duracao_tratamento', None))
+            or _duracao_texto_de_produtos_vetsmart(medicamento)
+            or 'A critério do médico-veterinário'
+        )
+
+    def _opcao_recomendada_para_proto(p) -> Optional[Dict[str, Any]]:
+        try:
+            p_min_v = float(p.dose_min)
+        except (TypeError, ValueError):
+            return None
+        p_max_v = float(p.dose_max) if p.dose_max is not None else p_min_v
+        p_un = (p.dose_unidade or 'MG_KG').upper()
+        p_unit_out = unit_out_map.get(p_un, '')
+        if p_un.endswith('_KG'):
+            p_calc_min = p_min_v * peso
+            p_calc_max = p_max_v * peso
+        else:
+            p_calc_min = p_min_v
+            p_calc_max = p_max_v
+        p_calc_media = (p_calc_min + p_calc_max) / 2.0
+        if p_calc_min == p_calc_max:
+            p_dose_exibir = f"{_fmt(p_calc_min)} {p_unit_out}".strip()
+        else:
+            p_dose_exibir = f"{_fmt(p_calc_min)}-{_fmt(p_calc_max)} {p_unit_out}".strip()
+        p_faixa_label = {
+            'MG_KG': 'mg/kg', 'MCG_KG': 'mcg/kg', 'ML_KG': 'mL/kg', 'UI_KG': 'UI/kg',
+            'MG_ANIMAL': 'mg/animal', 'ML_ANIMAL': 'mL/animal',
+            'PIPETA_ANIMAL': 'pipeta/animal', 'COMPRIMIDOS_ANIMAL': 'cp/animal',
+            'GOTAS_ANIMAL': 'gotas/animal', 'COMPRIMIDOS_KG': 'cp/kg',
+            'PIPETA_KG': 'pipeta/kg',
+        }.get(p_un, p_un.lower())
+        p_faixa_texto = (
+            f"{_fmt(p_min_v)} {p_faixa_label}"
+            if p_min_v == p_max_v
+            else f"{_fmt(p_min_v)}-{_fmt(p_max_v)} {p_faixa_label}"
+        )
+        p_freq_min = getattr(p, 'intervalo_min_horas', None)
+        p_freq_max = getattr(p, 'intervalo_max_horas', None)
+        p_intervalos = _pn.intervalos_disponiveis_horas(getattr(p, 'frequencia', None), p_freq_min, p_freq_max)
+        if p_freq_min and p_freq_max and p_freq_min != p_freq_max:
+            p_freq_texto = f"a cada {p_freq_min}-{p_freq_max}h"
+        elif getattr(p, 'intervalo_horas', None):
+            p_freq_texto = f"a cada {p.intervalo_horas}h"
+        else:
+            p_freq_texto = normalizar_frequencia(getattr(p, 'frequencia', None)) or 'A critério do médico-veterinário'
+        p_dur_min, p_dur_max, p_dur_texto = _normalizar_duracao_proto(p)
+        return {
+            'protocolo_id': getattr(p, 'id', None),
+            'indicacao': (getattr(p, 'indicacao', None) or '').strip() or INDICACAO_USO_GERAL,
+            'via': getattr(p, 'via', None) or medicamento.via_administracao or '',
+            'dose_min': p_calc_min,
+            'dose_media': p_calc_media,
+            'dose_max': p_calc_max,
+            'dose_unit_out': p_unit_out,
+            'dose_exibir': p_dose_exibir,
+            'faixa_texto': p_faixa_texto,
+            'intervalo_horas': getattr(p, 'intervalo_horas', None),
+            'intervalo_min_horas': p_freq_min,
+            'intervalo_max_horas': p_freq_max,
+            'intervalos_disponiveis': p_intervalos,
+            'tem_faixa_frequencia': bool(p_freq_min and p_freq_max and p_freq_min != p_freq_max),
+            'frequencia_texto': p_freq_texto,
+            'frequencia_bruta': getattr(p, 'frequencia', None) or '',
+            'duracao_min_dias': p_dur_min,
+            'duracao_max_dias': p_dur_max,
+            'duracao_texto': p_dur_texto,
+            'duracao_bruta': getattr(p, 'duracao', None) or '',
+            'tem_faixa_duracao': bool(p_dur_min and p_dur_max and p_dur_min != p_dur_max),
+            'observacao': getattr(p, 'observacao', None),
+        }
+
     if dose_calc_min == dose_calc_max:
         dose_exibir = f"{_fmt(dose_calc_min)} {dose_unit_out}".strip()
     else:
@@ -2298,6 +2392,32 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         key=lambda c: (c['unidade'], c['valor']),
     )
 
+    opcoes_recomendadas: List[Dict[str, Any]] = []
+    opcoes_vistas: set = set()
+    for cand in candidatos:
+        opcao = _opcao_recomendada_para_proto(cand)
+        if not opcao:
+            continue
+        chave_opcao = (
+            opcao.get('indicacao') or '',
+            opcao.get('via') or '',
+            round(float(opcao.get('dose_min') or 0), 4),
+            round(float(opcao.get('dose_max') or 0), 4),
+            opcao.get('dose_unit_out') or '',
+            opcao.get('frequencia_texto') or '',
+            opcao.get('duracao_texto') or '',
+        )
+        if chave_opcao in opcoes_vistas:
+            continue
+        opcoes_vistas.add(chave_opcao)
+        opcoes_recomendadas.append(opcao)
+    opcoes_recomendadas.sort(key=lambda o: (
+        0 if o.get('protocolo_id') == getattr(proto, 'id', None) else 1,
+        o.get('via') or '',
+        float(o.get('dose_media') or 0),
+        o.get('frequencia_texto') or '',
+    ))
+
     dose_calc_media = (dose_calc_min + dose_calc_max) / 2.0
     concentracao_alvo_mg = _extrair_concentracao_alvo_mg(proto)
     apresentacao_preferida_id = None
@@ -2434,6 +2554,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         'duracao_padrao_desc':     duracao_padrao_desc,
         'indicacao':               proto_ind,
         'indicacoes_alternativas': indicacoes_alt,
+        'opcoes_recomendadas':     opcoes_recomendadas,
         'apresentacao_preferida_id': apresentacao_preferida_id,
         'apresentacao_preferida_nome': apresentacao_preferida_nome,
         'apresentacoes':           apres_info,
