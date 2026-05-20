@@ -21361,17 +21361,17 @@ def buscar_medicamentos():
         texto = unicodedata.normalize("NFKD", str(valor or "").lower())
         return "".join(c for c in texto if not unicodedata.combining(c))
 
-    def _produto_vetsmart_match(m):
+    def _produto_vetsmart_match_info(m):
         conteudo = getattr(m, "conteudo_estruturado", None) or {}
         produtos = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
         if not isinstance(produtos, list):
-            return False
+            return None
         for prod in produtos:
             if not isinstance(prod, dict):
                 continue
             if any(q_norm in _norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo")):
-                return True
-        return False
+                return prod
+        return None
 
     def _score(m):
         # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
@@ -21379,9 +21379,10 @@ def buscar_medicamentos():
         tem_doses = 1 if m.doses else 0
         prefixo = 1 if m.nome.lower().startswith(q_lower) else 0
         pa_exato = 1 if (m.principio_ativo or "").lower() == q_lower else 0
-        produto_match = 1 if _produto_vetsmart_match(m) else 0
+        produto_match = _produto_vetsmart_match_info(m)
+        produto_match_score = 1 if produto_match else 0
         tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
-        return (produto_match, tem_doses, prefixo, pa_exato, tem_dados)
+        return (produto_match_score, tem_doses, prefixo, pa_exato, tem_dados)
 
     filtrados.sort(key=_score, reverse=True)
 
@@ -21397,7 +21398,17 @@ def buscar_medicamentos():
         filtrados = ordenar_por_species_scope(filtrados, scope_alvo)
 
     from services.bulario import serializar_medicamento_busca
-    return jsonify([serializar_medicamento_busca(m) for m in filtrados[:15]])
+    saida = []
+    for med in filtrados[:15]:
+        item = serializar_medicamento_busca(med)
+        produto_match = _produto_vetsmart_match_info(med)
+        if produto_match:
+            item["produto_match_nome"] = produto_match.get("nome")
+            item["produto_match_fabricante"] = produto_match.get("fabricante")
+            item["produto_match_vetsmart_id"] = produto_match.get("vetsmart_produto_id")
+            item["nome_exibicao_busca"] = produto_match.get("nome") or item.get("nome")
+        saida.append(item)
+    return jsonify(saida)
 
 
 

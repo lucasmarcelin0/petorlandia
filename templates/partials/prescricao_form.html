@@ -735,8 +735,8 @@
       sugestoesNova.style.display = 'none';
     }
 
-    document.getElementById('buscar-medicamento-nova').value = med?.nome || '';
-    document.getElementById('nova-medicacao-nome').value = med?.nome || '';
+    document.getElementById('buscar-medicamento-nova').value = _nomeVisivelMedicamento(med) || '';
+    document.getElementById('nova-medicacao-nome').value = _nomeVisivelMedicamento(med) || '';
     document.getElementById('nova-medicacao-principio').value = med?.principio_ativo || '';
     document.getElementById('nova-medicacao-classificacao').value = med?.classificacao || '';
     document.getElementById('nova-medicacao-via').value = med?.via_administracao || '';
@@ -890,6 +890,28 @@
       .replace(/[\u0300-\u036f]/g, '')
       .trim()
       .toLowerCase();
+  }
+
+  function _nomeVisivelMedicamento(med) {
+    return med?.nome_exibicao_busca || med?.produto_match_nome || med?.nome || '';
+  }
+
+  function _renderOpcaoMedicamentoBusca(item) {
+    const nomeVisivel = _escapeHtml(_nomeVisivelMedicamento(item));
+    if (item?.produto_match_nome) {
+      const principio = _escapeHtml(item.nome || item.principio_ativo || '');
+      const fabricante = item.produto_match_fabricante
+        ? `<span class="text-muted"> · ${_escapeHtml(item.produto_match_fabricante)}</span>`
+        : '';
+      return `
+        <div class="fw-semibold">${nomeVisivel}${fabricante}</div>
+        <div class="small text-muted">${principio}</div>
+      `;
+    }
+    const principio = item?.principio_ativo && item.principio_ativo !== item.nome
+      ? `<div class="small text-muted">${_escapeHtml(item.principio_ativo)}</div>`
+      : '';
+    return `<div class="fw-semibold">${nomeVisivel}</div>${principio}`;
   }
 
   async function _resolverMedicamentoParaSugestao(draft) {
@@ -2705,7 +2727,15 @@
     const resumoLinha = document.getElementById('med-posologia-resumo-linha');
     const resumoTexto = document.getElementById('med-posologia-resumo');
 
-    document.getElementById('med-nome-card').textContent = m.nome;
+    const nomeCard = document.getElementById('med-nome-card');
+    if (m.produto_match_nome) {
+      nomeCard.innerHTML = `
+        <span>${_escapeHtml(_nomeVisivelMedicamento(m))}</span>
+        <small class="d-block mt-1 opacity-75" style="font-size:.72rem;">${_escapeHtml(m.nome || '')}</small>
+      `;
+    } else {
+      nomeCard.textContent = m.nome;
+    }
     document.getElementById('med-classificacao').textContent = m.classificacao || '–';
     document.getElementById('med-principio').textContent = m.principio_ativo || '–';
     document.getElementById('med-via').textContent = m.via_administracao || '–';
@@ -3097,11 +3127,11 @@
             data.forEach(item => {
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
-              li.textContent = item.nome;
+              li.innerHTML = _renderOpcaoMedicamentoBusca(item);
               li.onclick = () => {
                 medicamentoSelecionado = item;
                 preencherCardMedicamento(item);
-                input.value = item.nome;
+                input.value = _nomeVisivelMedicamento(item);
                 // NÃO copia dosagem/frequência/duração da monografia para os
                 // campos da prescrição — esses textos são a referência genérica
                 // da bula ("0,5-1 mg/kg", "Alergia: 12h / Uso prolongado: 48h")
@@ -3162,7 +3192,7 @@
             data.forEach(item => {
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
-              li.textContent = item.nome;
+              li.innerHTML = _renderOpcaoMedicamentoBusca(item);
               li.onclick = () => {
                 openMedicacaoCard(item);
                 sugestoesNova.innerHTML = '';
