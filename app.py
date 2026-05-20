@@ -60,7 +60,7 @@ try:
     from document_utils import format_cnpj as format_cnpj_value, only_digits
 except ImportError:
     from .document_utils import format_cnpj as format_cnpj_value, only_digits
-from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
+from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text, cast, Text
 from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased, defer
 
@@ -21324,11 +21324,15 @@ def buscar_medicamentos():
         return jsonify([])
 
     # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
+    like = f"%{q}%"
     resultados = (
         Medicamento.query
         .filter(
-            (Medicamento.nome.ilike(f"%{q}%")) |
-            (Medicamento.principio_ativo.ilike(f"%{q}%"))
+            or_(
+                Medicamento.nome.ilike(like),
+                Medicamento.principio_ativo.ilike(like),
+                cast(Medicamento.conteudo_estruturado, Text).ilike(like),
+            )
         )
         .order_by(Medicamento.nome)
         .limit(40)
@@ -21350,6 +21354,24 @@ def buscar_medicamentos():
         filtrados.append(m)
 
     q_lower = q.lower()
+    q_norm = unicodedata.normalize("NFKD", q_lower)
+    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
+
+    def _norm_busca(valor):
+        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
+        return "".join(c for c in texto if not unicodedata.combining(c))
+
+    def _produto_vetsmart_match(m):
+        conteudo = getattr(m, "conteudo_estruturado", None) or {}
+        produtos = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
+        if not isinstance(produtos, list):
+            return False
+        for prod in produtos:
+            if not isinstance(prod, dict):
+                continue
+            if any(q_norm in _norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo")):
+                return True
+        return False
 
     def _score(m):
         # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
@@ -21357,8 +21379,9 @@ def buscar_medicamentos():
         tem_doses = 1 if m.doses else 0
         prefixo = 1 if m.nome.lower().startswith(q_lower) else 0
         pa_exato = 1 if (m.principio_ativo or "").lower() == q_lower else 0
+        produto_match = 1 if _produto_vetsmart_match(m) else 0
         tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
-        return (tem_doses, prefixo, pa_exato, tem_dados)
+        return (produto_match, tem_doses, prefixo, pa_exato, tem_dados)
 
     filtrados.sort(key=_score, reverse=True)
 
@@ -29584,11 +29607,11 @@ def bulario_buscar_api():
     like = f"%{q}%"
     resultados = (
         Medicamento.query
-        .options(defer(Medicamento.conteudo_estruturado))
         .filter(
             or_(
                 Medicamento.nome.ilike(like),
                 Medicamento.principio_ativo.ilike(like),
+                cast(Medicamento.conteudo_estruturado, Text).ilike(like),
             )
         )
         .order_by(Medicamento.nome)
