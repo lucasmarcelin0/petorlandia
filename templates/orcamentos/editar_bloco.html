@@ -142,7 +142,7 @@ function validarMedicamentos() {
 function salvarEdicaoBloco(bloco_id) {
   const erro = validarMedicamentos();
   if (erro) {
-    alert(erro);
+    window.showAppToast ? window.showAppToast(erro, 'warning') : alert(erro);
     return;
   }
   const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
@@ -156,11 +156,11 @@ function salvarEdicaoBloco(bloco_id) {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      alert('Bloco atualizado com sucesso!');
+      window.showAppToast ? window.showAppToast('Prescrição atualizada com sucesso.', 'success') : alert('Prescrição atualizada com sucesso.');
       localStorage.setItem('abaAtivaConsulta', 'medicamentos');
       window.location.href = `/consulta/${ANIMAL_ID}`;
     } else {
-      alert('Erro ao atualizar bloco.');
+      window.showAppToast ? window.showAppToast('Não foi possível atualizar a prescrição.', 'danger') : alert('Não foi possível atualizar a prescrição.');
     }
   });
 }

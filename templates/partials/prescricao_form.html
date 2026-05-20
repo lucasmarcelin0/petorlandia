@@ -10,7 +10,6 @@
     </div>
   </div>
 
-  <h5 class="mb-3">Prescrição de Medicamentos</h5>
   <!-- Botões de ação -->
   <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
     <button type="button" class="btn btn-outline-primary" onclick="toggleNovaMedicacao()">➕ Nova medicação</button>
@@ -112,7 +111,7 @@
           <i id="icon-favorito" class="bi bi-star" style="font-size:1.2rem;color:#ffc107;"></i>
         </button>
         <span class="badge bg-light text-success">
-          <i class="bi bi-book-fill me-1"></i>Monografia (referência)
+          <i class="bi bi-book-fill me-1"></i>Bulário clínico
         </span>
       </div>
     </div>
@@ -189,16 +188,16 @@
               onclick="abrirSugestaoDose()">
         <i class="bi bi-calculator me-1"></i>Calcular dose para este paciente
       </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="editarMedicamentoSelecionado()">Editar medicamento</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="editarMedicamentoSelecionado()">Revisar cadastro</button>
     </div>
   </div>
 
-  <!-- Card de sugestão de dose pré-calculada (bulário) -->
+  <!-- Card de sugestão clínica de dose (bulário) -->
   <div id="sugestao-dose-card" class="card border-info mb-3 d-none">
     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
       <span>
         <i class="bi bi-calculator-fill me-1"></i>
-        <strong>Dose pré-calculada</strong>
+        <strong>Sugestão clínica de dose</strong>
         <small class="ms-2 opacity-75" id="sugestao-dose-fonte"></small>
       </span>
       <button type="button" class="btn-close btn-close-white btn-sm" aria-label="Fechar" onclick="fecharSugestaoDose()"></button>
@@ -1800,12 +1799,23 @@
       _atualizarDisplayFrequencia(s);
       _duracaoDias = null;
       _atualizarDisplayDuracao(s);
-      const fonteTxt = [];
-      if (s.indicacao) fonteTxt.push(`indicação: ${s.indicacao.toLowerCase()}`);
-      if (s.fonte) fonteTxt.push(`fonte: ${s.fonte.toLowerCase()}`);
-      if (s.confianca) fonteTxt.push(`confiança: ${s.confianca.toLowerCase()}`);
-      document.getElementById('sugestao-dose-fonte').textContent =
-        fonteTxt.length ? '· ' + fonteTxt.join(' · ') : '';
+      const fonteClinica = [];
+      if (s.indicacao) fonteClinica.push(s.indicacao);
+      if (s.fonte) fonteClinica.push('bulário estruturado');
+      const fonteClinicaEl = document.getElementById('sugestao-dose-fonte');
+      fonteClinicaEl.textContent = fonteClinica.length ? '· ' + fonteClinica.join(' · ') : '';
+      if (s.confianca || s.fonte) {
+        const detalhes = [
+          s.fonte ? `Origem: ${s.fonte}` : '',
+          s.confianca ? `Validação: ${s.confianca}` : ''
+        ].filter(Boolean).join(' · ');
+        fonteClinicaEl.setAttribute('title', detalhes || 'Sugestão baseada no bulário estruturado.');
+        fonteClinicaEl.setAttribute('data-bs-toggle', 'tooltip');
+        try { new bootstrap.Tooltip(fonteClinicaEl); } catch (e) {}
+      } else {
+        fonteClinicaEl.removeAttribute('title');
+        fonteClinicaEl.removeAttribute('data-bs-toggle');
+      }
       _renderDiagnosticoDose(s);
 
       // Seletor de apresentação + preview da dose prática por extenso.
@@ -2678,7 +2688,7 @@
     if (freqStr) document.getElementById('frequencia').value = freqStr;
     if (durStr)  document.getElementById('duracao').value = durStr;
     _registrarUsoDoseBulario(s);
-    mostrarFeedback('Dose pré-calculada aplicada — você ainda pode editar os campos.', 'success');
+    mostrarFeedback('Sugestão clínica aplicada. Revise e ajuste antes de prescrever.', 'success');
   }
 
   // Preencher card de informações do medicamento
@@ -2795,10 +2805,10 @@
         <div style="padding:8px 0;${pi < produtosVetSmart.length-1 ? 'border-bottom:1px solid #eef1f4;' : ''}">
           <div class="d-flex justify-content-between gap-2 align-items-start">
             <div>
-              <div style="font-size:.84rem;font-weight:700;color:#212529;">${prod.nome || 'Produto VetSmart'}</div>
+              <div style="font-size:.84rem;font-weight:700;color:#212529;">${prod.nome || 'Produto técnico'}</div>
               <div style="font-size:.7rem;color:#6c757d;">${fonte}${prod.apresentacoes_count ? ` · ${prod.apresentacoes_count} apresentações` : ''}${prod.doses_count ? ` · ${prod.doses_count} doses` : ''}</div>
             </div>
-            ${prod.fonte ? `<a href="${prod.fonte}" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="font-size:.7rem;">VetSmart</a>` : ''}
+            ${prod.fonte ? `<a href="${prod.fonte}" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="font-size:.7rem;">Fonte técnica</a>` : ''}
           </div>
           <div class="d-flex flex-wrap gap-1 mt-2">
             ${via ? `<span class="badge text-bg-light border">Via: ${via}</span>` : ''}
@@ -2838,7 +2848,7 @@
         ${efeitos.itens?.length ? _section('bi-activity', 'Efeitos adversos', efeitosHtml, '#6c757d', efeitos.itens.length) : ''}
         ${advert.itens?.length ? _section('bi-exclamation-circle', 'Advertências', advertenciasHtml, '#ffc107', advert.itens.length) : ''}
         ${interacoesHtml ? _section('bi-arrow-left-right', 'Interações medicamentosas', interacoesHtml, '#e03e3e', inter.itens.length) : ''}
-        ${produtosHtml ? _section('bi-box-seam', 'Produtos VetSmart', produtosHtml, '#20c997', produtosVetSmart.length) : ''}
+        ${produtosHtml ? _section('bi-box-seam', 'Produtos e apresentações', produtosHtml, '#20c997', produtosVetSmart.length) : ''}
       </div>
     `;
 
@@ -3278,7 +3288,7 @@
                 // campos da prescrição — esses textos são a referência genérica
                 // da bula ("0,5-1 mg/kg", "Alergia: 12h / Uso prolongado: 48h")
                 // e não servem como prescrição para o tutor ler. A prescrição
-                // individualizada vem via o card azul "Dose pré-calculada" →
+                // individualizada vem via o card azul "Sugestão clínica de dose" →
                 // botão "Usar esta dose", que calcula pelo peso do animal +
                 // indicação + apresentação escolhida.
                 document.getElementById('dose').value = '';

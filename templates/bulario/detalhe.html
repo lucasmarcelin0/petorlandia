@@ -67,10 +67,10 @@
         </button>
         {% if vetsmart_produto_url %}
         <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
-           class="btn bd-btn-vetsmart" title="Ver página completa no Vetsmart">
+           class="btn btn-outline-light btn-sm" title="Abrir fonte técnica em nova aba">
           <img src="https://vetsmart.com.br/favicon.ico" width="16" height="16"
                class="me-2 rounded-1" alt="" onerror="this.style.display='none'">
-          Ver no Vetsmart <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.75em"></i>
+          Fonte técnica <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.75em"></i>
         </a>
         {% endif %}
       </div>
@@ -114,7 +114,7 @@
           <img src="https://vetsmart.com.br/favicon.ico" width="14" height="14"
                class="me-2 rounded-1 align-text-bottom" alt=""
                onerror="this.replaceWith(document.createTextNode(''))">
-          Vetsmart
+          Fonte técnica
         </button>
       </li>
       {% endif %}
@@ -500,7 +500,7 @@
     </div>
     {% endif %}
 
-    <!-- ── Vetsmart ── -->
+    <!-- ── Fonte técnica ── -->
     {% if secoes_vetsmart %}
     <div class="tab-pane fade" id="tab-vetsmart" role="tabpanel">
 
@@ -513,14 +513,14 @@
                  onerror="this.style.display='none'">
           </div>
           <div>
-            <div class="fw-bold text-dark" style="font-size:.95rem">Informações do Vetsmart</div>
+            <div class="fw-bold text-dark" style="font-size:.95rem">Fonte técnica complementar</div>
             <div class="text-muted" style="font-size:.82rem">
-              Conteúdo extraído de
+              Conteúdo técnico consultável em
               <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
                  class="text-primary fw-semibold">vetsmart.com.br
                 <i class="fas fa-arrow-up-right-from-square ms-1" style="font-size:.7em"></i>
               </a>
-              — não é produzido pela Petorlandia. Consulte sempre um veterinário.
+              — use como apoio e valide no contexto clínico.
             </div>
           </div>
           <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer"
@@ -564,9 +564,9 @@
       <!-- Rodapé de atribuição -->
       <div class="bd-vetsmart-footer mt-4">
         <i class="fas fa-circle-info me-2"></i>
-        Dados obtidos do
+        Fonte técnica:
         <a href="{{ vetsmart_produto_url }}" target="_blank" rel="noopener noreferrer">Vetsmart</a>
-        sob responsabilidade editorial deles. A Petorlandia exibe este conteúdo apenas como referência.
+        . A Petorlandia organiza este conteúdo como apoio à decisão clínica.
       </div>
 
     </div>

@@ -1953,10 +1953,21 @@ def _proto_aplica_basico(proto, esp_code: str, peso: float) -> bool:
     return True
 
 
+#: Rótulo sintético para protocolos sem indicação cadastrada no banco
+#: (DoseMedicamento.indicacao IS NULL).  O posology display já usa esta
+#: string, então é coerente apresentá-la também no dropdown de indicação.
+INDICACAO_USO_GERAL = "Uso geral"
+
+
 def _indicacoes_disponiveis(medicamento, animal) -> List[str]:
     """Lista as indicações clínicas distintas para as quais existe ao menos um
     protocolo aplicável ao animal (mesma espécie + peso na faixa). Ordem
-    estável pela frequência de aparição."""
+    estável pela frequência de aparição.
+
+    Quando há protocolos com `indicacao IS NULL` *e* protocolos com indicação
+    nomeada, adiciona `Uso geral` como opção sintética — sem ela o vet não
+    consegue escolher os protocolos genéricos no dropdown (e fica preso na
+    indicação que vier por sorte como primeira escolha)."""
     peso = getattr(animal, 'peso', None)
     if peso is None:
         return []
@@ -1968,15 +1979,25 @@ def _indicacoes_disponiveis(medicamento, animal) -> List[str]:
         return []
     esp_code = _especie_animal_code(animal)
     vistas: List[str] = []
+    tem_generico = False
     for proto in (getattr(medicamento, 'doses', []) or []):
         if _dose_ambigua_por_apresentacao(medicamento, proto):
             continue
         if not _proto_aplica_basico(proto, esp_code, peso):
             continue
         ind = (getattr(proto, 'indicacao', None) or '').strip()
-        if ind and ind not in vistas:
-            vistas.append(ind)
-    return _filtrar_indicacoes_genericas(medicamento, vistas)
+        if ind:
+            if ind not in vistas:
+                vistas.append(ind)
+        else:
+            tem_generico = True
+    out = _filtrar_indicacoes_genericas(medicamento, vistas)
+    # Só faz sentido oferecer "Uso geral" quando há outras indicações nomeadas
+    # pra contrastar; se TODOS os protocolos forem genéricos, não há escolha
+    # a fazer e o dropdown nem aparece.
+    if tem_generico and out:
+        out.append(INDICACAO_USO_GERAL)
+    return out
 
 
 def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -2048,10 +2069,11 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             and not ((getattr(p, 'indicacao', None) or '').strip())
             for p in protos
         )
-        # Considera "múltiplo" apenas quando há >=2 indicações diferentes
-        # (evita forçar dropdown quando só existe "Alergia" ou quando todos
-        # são NULL).
-        if len(indicacoes) >= 2:
+        # Considera "múltiplo" apenas quando há >=2 indicações NOMEADAS.  O
+        # rótulo sintético "Uso geral" não conta — ele é uma alternativa pra
+        # o vet TROCAR no dropdown, não um motivo pra forçar escolha inicial.
+        indicacoes_nomeadas = [i for i in indicacoes if i != INDICACAO_USO_GERAL]
+        if len(indicacoes_nomeadas) >= 2:
             return {
                 'multiplo': True,
                 'indicacoes': indicacoes,
@@ -2061,7 +2083,7 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
         # protocolo genérico aplicável. Se coexistem linhas genéricas com uma
         # única indicação nomeada (caso comum em AINEs), mantemos tudo no pool
         # para a heurística de via/apresentação escolher o protocolo mais útil.
-        indicacao_filtro = indicacoes[0] if (len(indicacoes) == 1 and not tem_generico_aplicavel) else None
+        indicacao_filtro = indicacoes_nomeadas[0] if (len(indicacoes_nomeadas) == 1 and not tem_generico_aplicavel) else None
     else:
         indicacao_filtro = (indicacao or '').strip() or None
         if indicacao_filtro is not None:
@@ -2090,7 +2112,12 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
             return False
         if indicacao_filtro is not None:
             p_ind = (getattr(p, 'indicacao', None) or '').strip() or None
-            if p_ind != indicacao_filtro:
+            # "Uso geral" é o rótulo sintético pros protocolos com indicacao
+            # IS NULL — equivale a "sem indicação cadastrada".
+            if indicacao_filtro == INDICACAO_USO_GERAL:
+                if p_ind is not None:
+                    return False
+            elif p_ind != indicacao_filtro:
                 return False
         return True
 
@@ -2232,6 +2259,11 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
 
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
     proto_ind = (getattr(proto, 'indicacao', None) or '').strip() or None
+    # Se o vet escolheu "Uso geral" explicitamente E o protocolo casa (sem
+    # indicação cadastrada), reporta o rótulo sintético — assim o dropdown
+    # reflete a escolha em vez de mostrar "—".
+    if proto_ind is None and indicacao_filtro == INDICACAO_USO_GERAL:
+        proto_ind = INDICACAO_USO_GERAL
     indicacoes_alt = [i for i in indicacoes_disp if i != proto_ind]
 
     # Concentrações conhecidas — união das concentrações cadastradas em

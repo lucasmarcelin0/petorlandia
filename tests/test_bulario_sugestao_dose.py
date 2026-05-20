@@ -112,6 +112,40 @@ def test_sugerir_dose_nao_forca_indicacao_unica_se_ha_protocolos_genericos():
     assert sugestao['dose_unit_out'] == 'mg'
 
 
+def test_sugerir_dose_inclui_uso_geral_no_dropdown_quando_misto():
+    """Quando coexistem protocolos com indicação nomeada E sem indicação,
+    o dropdown precisa oferecer 'Uso geral' como alternativa pro vet trocar.
+    Sem isso o usuário fica preso na indicação nomeada (bug do screenshot
+    'só tem como escolher Infecção, e Uso geral some')."""
+    med = SimpleNamespace(
+        id=80,
+        via_administracao='Oral',
+        apresentacoes=[_apresentacao('Comprimido', '5 mg')],
+        doses=[
+            # 3 protocolos sem indicação cadastrada (= "Uso geral" no display)
+            _dose(801, 'Oral', '10 mg/kg', 10.0, 10.0, 'MG_KG', intervalo_horas=24),
+            _dose(802, 'Oral', '5 - 10 mg/kg', 5.0, 10.0, 'MG_KG', intervalo_horas=12),
+            _dose(803, 'Oral', '5 mg/kg', 5.0, 5.0, 'MG_KG', intervalo_horas=12),
+            # 1 protocolo com indicação nomeada
+            _dose(804, 'Oral', '5 mg/kg', 5.0, 5.0, 'MG_KG', indicacao='Infecção', intervalo_horas=12),
+        ],
+    )
+
+    # Caso A: vet escolheu "Infecção" → resposta deve listar "Uso geral" como
+    # alternativa pra ele poder trocar.
+    sug_infeccao = sugerir_dose(med, _animal_caes(), indicacao='Infecção')
+    assert sug_infeccao is not None
+    assert sug_infeccao['indicacao'] == 'Infecção'
+    assert 'Uso geral' in (sug_infeccao.get('indicacoes_alternativas') or [])
+
+    # Caso B: vet escolheu "Uso geral" → deve casar com protocolos NULL.
+    sug_geral = sugerir_dose(med, _animal_caes(), indicacao='Uso geral')
+    assert sug_geral is not None
+    assert sug_geral['indicacao'] == 'Uso geral'
+    assert sug_geral['protocolo_id'] in {801, 802, 803}, \
+        f"Esperava protocolo genérico, veio {sug_geral['protocolo_id']}"
+
+
 def test_sugerir_dose_em_gotas_preserva_contexto_local():
     med = SimpleNamespace(
         id=30,

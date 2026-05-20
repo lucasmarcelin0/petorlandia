@@ -1,15 +1,15 @@
 {% extends "layout.html" %}
 
 {% block head %}
-<title>Wizard fiscal · Testes</title>
+<title>Configuração fiscal · Validação</title>
 {% endblock %}
 
 {% block main %}
 <div class="container mt-4">
   <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
     <div>
-      <h2 class="mb-1">Wizard fiscal</h2>
-      <p class="text-muted mb-0">Passo 3 de 4 — Teste de comunicação e emissão.</p>
+      <h2 class="mb-1">Configuração fiscal</h2>
+      <p class="text-muted mb-0">Passo 3 de 4 — Validação de comunicação e emissão.</p>
     </div>
   </div>
 
@@ -25,17 +25,17 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h5 class="card-title">Teste de comunicação (Betha + SEFAZ homolog)</h5>
+          <h5 class="card-title">Validação de comunicação fiscal</h5>
           <p class="text-muted">Confirma que a integração está preparada para falar com os provedores.</p>
           {% if comm_tested_at %}
-          <div class="alert alert-success">Último teste marcado em {{ comm_tested_at }}.</div>
+          <div class="alert alert-success">Última validação registrada em {{ comm_tested_at }}.</div>
           {% else %}
-          <div class="alert alert-warning">Teste pendente.</div>
+          <div class="alert alert-warning">Validação pendente.</div>
           {% endif %}
           <form method="post" action="{{ url_for('fiscal_onboarding_step', step=3) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="action" value="communication_test" />
-            <button class="btn btn-outline-primary" type="submit">Executar teste</button>
+            <button class="btn btn-outline-primary" type="submit">Validar comunicação</button>
           </form>
         </div>
       </div>
@@ -44,17 +44,17 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h5 class="card-title">Teste de emissão (documento dummy)</h5>
-          <p class="text-muted">Cria um documento fictício para validar o fluxo sem vincular a uma venda real.</p>
+          <h5 class="card-title">Validação de emissão</h5>
+          <p class="text-muted">Cria um documento de validação para conferir o fluxo sem vincular a uma venda real.</p>
           {% if emission_doc %}
-          <div class="alert alert-success">Documento dummy criado (ID {{ emission_doc.id }}).</div>
+          <div class="alert alert-success">Documento de validação criado.</div>
           {% else %}
-          <div class="alert alert-warning">Nenhum documento de teste criado ainda.</div>
+          <div class="alert alert-warning">Nenhum documento de validação criado ainda.</div>
           {% endif %}
           <form method="post" action="{{ url_for('fiscal_onboarding_step', step=3) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="action" value="emission_test" />
-            <button class="btn btn-outline-primary" type="submit">Criar documento dummy</button>
+            <button class="btn btn-outline-primary" type="submit">Criar documento de validação</button>
           </form>
         </div>
       </div>

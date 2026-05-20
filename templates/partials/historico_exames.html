@@ -267,11 +267,11 @@ function salvarSolicitacaoExames(blocoId) {
   });
 
   if (!valid) {
-    alert('Preencha o nome e a justificativa de todos os exames.');
+    window.showAppToast ? window.showAppToast('Preencha o nome e a justificativa de todos os exames.', 'warning') : alert('Preencha o nome e a justificativa de todos os exames.');
     return;
   }
   if (!exames.length) {
-    alert('Adicione ao menos um exame.');
+    window.showAppToast ? window.showAppToast('Adicione ao menos um exame.', 'warning') : alert('Adicione ao menos um exame.');
     return;
   }
 
@@ -285,10 +285,10 @@ function salvarSolicitacaoExames(blocoId) {
   })
     .then(async res => {
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar solicitacao.');
+      if (!res.ok || !data.success) throw new Error(data.message || 'Não foi possível salvar a solicitação.');
       refreshHistoricoExames(data);
     })
-    .catch(err => alert(err.message || 'Erro ao salvar solicitacao.'));
+    .catch(err => window.showAppToast ? window.showAppToast(err.message || 'Não foi possível salvar a solicitação.', 'danger') : alert(err.message || 'Não foi possível salvar a solicitação.'));
 }
 
 function salvarRealizacaoExames(blocoId) {
@@ -310,9 +310,9 @@ function salvarRealizacaoExames(blocoId) {
   })
     .then(async res => {
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar realizacao.');
+      if (!res.ok || !data.success) throw new Error(data.message || 'Não foi possível salvar a realização.');
       refreshHistoricoExames(data);
     })
-    .catch(err => alert(err.message || 'Erro ao salvar realizacao.'));
+    .catch(err => window.showAppToast ? window.showAppToast(err.message || 'Não foi possível salvar a realização.', 'danger') : alert(err.message || 'Não foi possível salvar a realização.'));
 }
 </script>

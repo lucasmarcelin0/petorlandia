@@ -130,15 +130,15 @@ function salvarEdicaoVacina(id) {
   .then(res => res.json())
   .then(d => {
     if (d.success) {
-      alert('Vacina atualizada!');
+      window.showAppToast ? window.showAppToast('Vacina atualizada com sucesso.', 'success') : alert('Vacina atualizada com sucesso.');
       location.reload();
     } else {
-      alert('Erro ao salvar.');
+      window.showAppToast ? window.showAppToast('Não foi possível salvar a vacina.', 'danger') : alert('Não foi possível salvar a vacina.');
     }
   })
   .catch(err => {
     console.error('Erro:', err);
-    alert('Erro na requisição.');
+    window.showAppToast ? window.showAppToast('Não foi possível concluir a ação agora.', 'danger') : alert('Não foi possível concluir a ação agora.');
   });
 }
 
@@ -151,12 +151,12 @@ function excluirVacina(id) {
         const li = document.querySelector(`[data-vacina-id='${id}']`);
         li?.remove();
       } else {
-        alert(d.error || 'Erro ao excluir vacina.');
+        window.showAppToast ? window.showAppToast(d.error || 'Não foi possível excluir a vacina.', 'danger') : alert(d.error || 'Não foi possível excluir a vacina.');
       }
     })
     .catch(err => {
       console.error('Erro ao excluir vacina:', err);
-      alert('Erro ao excluir vacina.');
+      window.showAppToast ? window.showAppToast('Não foi possível excluir a vacina.', 'danger') : alert('Não foi possível excluir a vacina.');
     });
 }
 </script>

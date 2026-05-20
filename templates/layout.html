@@ -294,6 +294,17 @@
       TOAST_BG_CLASSES.forEach(cls => toastEl.classList.remove(cls));
       toastEl.classList.add('bg-' + normalizeToastCategory(category));
     }
+
+    window.showAppToast = function showAppToast(message, category = 'info') {
+      const toastEl = document.getElementById('actionToast');
+      if (!toastEl || typeof bootstrap === 'undefined' || !bootstrap.Toast) {
+        window.alert(message);
+        return;
+      }
+      toastEl.querySelector('.toast-body').textContent = message;
+      applyToastTone(toastEl, category);
+      new bootstrap.Toast(toastEl).show();
+    };
   </script>
 
   <script>

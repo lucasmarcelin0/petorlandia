@@ -137,12 +137,11 @@
     <!-- Pendências de revisão -->
     <div class="card shadow-sm mb-3">
       <div class="card-header" style="background:var(--sfa-orange);color:white">
-        <i class="fas fa-flask me-2"></i>Base de testes
+        <i class="fas fa-flask me-2"></i>Ambiente de validação
       </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
-          Gera um lote isolado com pacientes marcados como teste, T0/T10/T30 preenchidos
-          e ocultos do fluxo real por padrão.
+          Gera um lote isolado para validar T0/T10/T30 sem misturar esses registros ao fluxo real.
         </p>
         <div class="small mb-3">
           <div><strong>Total:</strong> {{ resumo_testes.total }}</div>
@@ -154,14 +153,14 @@
             <input type="number" min="1" max="100" name="quantidade" value="20" class="form-control form-control-sm">
           </div>
           <div class="col-6 d-grid">
-            <button type="submit" class="btn btn-sm btn-primary">Gerar lote de teste</button>
+            <button type="submit" class="btn btn-sm btn-primary">Gerar lote de validação</button>
           </div>
         </form>
         <div class="d-flex flex-wrap gap-2">
-          <a href="{{ url_for('sfa_routes.pacientes', visao='testes') }}" class="btn btn-sm btn-outline-secondary">Ver testes</a>
-          <form method="POST" action="{{ url_for('sfa_routes.apagar_teste_dados') }}" onsubmit="return confirm('Apagar todos os pacientes de teste da SFA?');">
+          <a href="{{ url_for('sfa_routes.pacientes', visao='testes') }}" class="btn btn-sm btn-outline-secondary">Ver validações</a>
+          <form method="POST" action="{{ url_for('sfa_routes.apagar_teste_dados') }}" onsubmit="return confirm('Limpar todos os registros de validação da SFA?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-outline-danger">Apagar testes</button>
+            <button type="submit" class="btn btn-sm btn-outline-danger">Limpar validações</button>
           </form>
         </div>
       </div>
