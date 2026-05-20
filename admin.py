@@ -44,6 +44,9 @@ try:
         Consulta,
         Veterinario,
         Specialty,
+        CasaDeRacao,
+        CasaDeRacaoHorario,
+        StorePaymentAccount,
         Clinica,
         ClinicHours,
         VetSchedule,
@@ -91,6 +94,9 @@ except ImportError:
         Consulta,
         Veterinario,
         Specialty,
+        CasaDeRacao,
+        CasaDeRacaoHorario,
+        StorePaymentAccount,
         Clinica,
         ClinicHours,
         VetSchedule,
@@ -923,15 +929,41 @@ class ProductAdmin(MyModelView):
         'image_upload': FileField('Imagem')
     }
 
-    form_columns = ['name', 'description', 'price', 'stock', 'image_upload']
+    form_columns = [
+        'name',
+        'description',
+        'price',
+        'stock',
+        'status',
+        'clinica',
+        'casa_de_racao',
+        'mp_category_id',
+        'image_upload',
+    ]
 
-    column_list = ['image_url', 'name', 'price', 'stock']
-    column_searchable_list = ('name',)
-    column_sortable_list = ('name', 'price', 'stock', 'id')
+    column_list = ['image_url', 'name', 'price', 'stock', 'status', 'seller']
+    column_searchable_list = ('name', 'casa_de_racao.nome', 'clinica.nome')
+    column_filters = ('status', 'clinica', 'casa_de_racao')
+    column_sortable_list = ('name', 'price', 'stock', 'status', 'id')
+    column_labels = {
+        'image_url': 'Imagem',
+        'name': 'Produto',
+        'price': 'Preco',
+        'stock': 'Estoque',
+        'status': 'Status',
+        'seller': 'Vendedor',
+        'casa_de_racao': 'Casa de racao',
+        'clinica': 'Clinica',
+    }
     column_formatters = {
         'image_url': lambda v, c, m, p: Markup(
             f'<img src="{m.image_url}" width="100">'
-        ) if m.image_url else ''
+        ) if m.image_url else '',
+        'seller': lambda v, c, m, p: (
+            m.casa_de_racao.nome if m.casa_de_racao else
+            m.clinica.nome if m.clinica else
+            'Sem vendedor'
+        ),
     }
 
     def on_model_change(self, form, model, is_created):
@@ -954,6 +986,151 @@ class ProductAdmin(MyModelView):
         """Remover itens de pedido antes de excluir o produto."""
         for item in list(model.order_items):
             db.session.delete(item)
+
+
+class CasaDeRacaoAdminView(MyModelView):
+    form_extra_fields = {
+        'logotipo_upload': FileField('Logotipo')
+    }
+
+    column_list = (
+        'nome',
+        'razao_social',
+        'cnpj',
+        'status',
+        'owner',
+        'telefone',
+        'email',
+        'modo_entrega',
+        'created_at',
+    )
+    column_searchable_list = ('nome', 'razao_social', 'cnpj', 'email', 'telefone', 'owner.name')
+    column_filters = ('status', 'modo_entrega', 'created_at')
+    column_sortable_list = ('nome', 'razao_social', 'cnpj', 'status', 'created_at')
+    column_default_sort = ('created_at', True)
+    form_columns = (
+        'nome',
+        'razao_social',
+        'cnpj',
+        'descricao',
+        'telefone',
+        'email',
+        'endereco',
+        'status',
+        'modo_entrega',
+        'valor_frete',
+        'pedido_minimo_entrega',
+        'prazo_entrega_min',
+        'prazo_entrega_max',
+        'owner',
+        'logotipo_upload',
+        'photo_rotation',
+        'photo_zoom',
+        'photo_offset_x',
+        'photo_offset_y',
+    )
+    column_labels = {
+        'nome': 'Nome fantasia',
+        'razao_social': 'Razao social',
+        'cnpj': 'CNPJ',
+        'status': 'Status',
+        'owner': 'Responsavel',
+        'telefone': 'Telefone',
+        'email': 'E-mail',
+        'endereco': 'Endereco',
+        'modo_entrega': 'Modo de entrega',
+        'valor_frete': 'Frete',
+        'pedido_minimo_entrega': 'Pedido minimo',
+        'prazo_entrega_min': 'Prazo min',
+        'prazo_entrega_max': 'Prazo max',
+        'created_at': 'Criada em',
+    }
+    column_formatters = {
+        'status': lambda v, c, m, p: Markup(
+            '<span class="badge bg-{color}">{label}</span>'.format(
+                color='success' if m.status == 'ativa' else 'warning' if m.status == 'pendente' else 'secondary',
+                label=m.status,
+            )
+        ),
+        'owner': lambda v, c, m, p: Markup(
+            f'<a href="{url_for("user.edit_view", id=m.owner.id)}">{m.owner.name}</a>'
+        ) if m.owner else 'Sem responsavel',
+    }
+    form_overrides = {
+        'status': SelectField,
+        'modo_entrega': SelectField,
+    }
+    form_args = {
+        'status': {
+            'choices': [
+                ('pendente', 'Pendente'),
+                ('ativa', 'Ativa'),
+                ('suspensa', 'Suspensa'),
+            ]
+        },
+        'modo_entrega': {
+            'choices': [
+                ('plataforma', 'Entregadores da plataforma'),
+                ('propria', 'Entrega propria'),
+            ]
+        },
+    }
+
+    def on_model_change(self, form, model, is_created):
+        if form.logotipo_upload.data:
+            file = form.logotipo_upload.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            from app import upload_to_s3
+            image_url = upload_to_s3(file, filename, folder="casas_de_racao")
+            if image_url:
+                model.logotipo = image_url
+
+    def on_form_prefill(self, form, id):
+        obj = self.get_one(id)
+        if obj and obj.logotipo:
+            form.logotipo_upload.description = Markup(
+                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'style="max-height:150px;margin-top:10px;">'
+            )
+
+
+class CasaDeRacaoHorarioAdminView(MyModelView):
+    column_list = ('casa_de_racao', 'dia_semana', 'hora_abertura', 'hora_fechamento')
+    column_filters = ('casa_de_racao', 'dia_semana')
+    form_columns = column_list
+    column_labels = {
+        'casa_de_racao': 'Casa de racao',
+        'dia_semana': 'Dia da semana',
+        'hora_abertura': 'Abertura',
+        'hora_fechamento': 'Fechamento',
+    }
+
+
+class StorePaymentAccountAdminView(MyModelView):
+    can_create = False
+    column_list = (
+        'casa_de_racao',
+        'clinica',
+        'provider',
+        'provider_user_id',
+        'status',
+        'connected_at',
+        'last_refreshed_at',
+        'error_message',
+    )
+    column_searchable_list = ('provider_user_id', 'casa_de_racao.nome', 'clinica.nome')
+    column_filters = ('provider', 'status', 'connected_at', 'last_refreshed_at')
+    form_columns = ('status', 'error_message')
+    column_labels = {
+        'casa_de_racao': 'Casa de racao',
+        'clinica': 'Clinica',
+        'provider': 'Provedor',
+        'provider_user_id': 'ID do provedor',
+        'status': 'Status',
+        'connected_at': 'Conectado em',
+        'last_refreshed_at': 'Atualizado em',
+        'error_message': 'Erro',
+    }
 
 
 
@@ -1167,6 +1344,21 @@ def init_admin(app):
         Product, db.session,
         name='Produtos', category='Loja',
         menu_icon_type='fa', menu_icon_value='fa-box-open'
+    ))
+    admin.add_view(CasaDeRacaoAdminView(
+        CasaDeRacao, db.session,
+        name='Casas de racao', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-store'
+    ))
+    admin.add_view(CasaDeRacaoHorarioAdminView(
+        CasaDeRacaoHorario, db.session,
+        name='Horarios das casas', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-clock'
+    ))
+    admin.add_view(StorePaymentAccountAdminView(
+        StorePaymentAccount, db.session,
+        name='Contas de pagamento', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-credit-card'
     ))
     admin.add_view(MyModelView(
         HealthPlan, db.session,
