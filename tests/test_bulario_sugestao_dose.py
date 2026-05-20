@@ -572,6 +572,56 @@ def test_monografia_ignora_ml_animal_sem_concentracao_liquida_inequivoca():
     assert sugestao['protocolo_id'] == 20
 
 
+def test_monografia_nao_usa_colirio_para_dose_im_em_ml():
+    colirio = _apresentacao('Colírio', '1 mg/mL')
+    colirio.concentracao_valor = 1
+    colirio.concentracao_unidade = 'mg/ml'
+    comprimido = _apresentacao('Comprimido', '4 mg')
+    comprimido.id = 2
+    comprimido.concentracao_valor = 4
+    comprimido.concentracao_unidade = 'mg'
+
+    dose_ml_im = _dose(31, 'IM', '0,25 - 0,5 ml/animal', 0.25, 0.5, 'ML_ANIMAL', intervalo_horas=24)
+    dose_mg_im = _dose(32, 'IM', '0,25 - 0,5 mg/animal', 0.25, 0.5, 'MG_ANIMAL', intervalo_horas=24)
+
+    med = SimpleNamespace(
+        id=64,
+        nome='Dexametasona',
+        classificacao='Anti-inflamatório Esteroidal',
+        principio_ativo='Dexametasona',
+        via_administracao='Oral',
+        apresentacoes=[colirio, comprimido],
+        doses=[dose_ml_im, dose_mg_im],
+    )
+
+    monografia = montar_monografia_medicamento(med)
+    linhas = monografia['resumo_posologia']['tabs'][0]['protocolos'][0]['linhas']
+
+    assert [linha['dose'] for linha in linhas] == ['0,25 - 0,5 mg/animal']
+
+
+def test_monografia_exibe_equivalencia_mg_quando_ml_tem_concentracao_compativel():
+    colirio = _apresentacao('Colírio', '1 mg/mL')
+    colirio.concentracao_valor = 1
+    colirio.concentracao_unidade = 'mg/ml'
+    dose_ml = _dose(33, 'Conjuntiva', '0,25 - 1 ml/animal', 0.25, 1, 'ML_ANIMAL', intervalo_horas=24)
+
+    med = SimpleNamespace(
+        id=65,
+        nome='Dexametasona',
+        classificacao='Anti-inflamatório Esteroidal',
+        principio_ativo='Dexametasona',
+        via_administracao='Oftálmica',
+        apresentacoes=[colirio],
+        doses=[dose_ml],
+    )
+
+    monografia = montar_monografia_medicamento(med)
+    linha = monografia['resumo_posologia']['tabs'][0]['protocolos'][0]['linhas'][0]
+
+    assert linha['dose'] == '0,25 - 1 ml/animal (equiv. 0,25 - 1 mg; 1 mg/mL)'
+
+
 def test_extrair_secoes_vetsmart_prefere_html_sanitizado():
     med = SimpleNamespace(
         conteudo_estruturado={

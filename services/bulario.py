@@ -908,6 +908,42 @@ def _dose_volumetrica_ambigua(medicamento, dose) -> bool:
     return len(_apresentacoes_liquidas_compativeis_com_dose(medicamento, dose)) != 1
 
 
+def _dose_volumetrica_com_equivalencia(medicamento, dose) -> str:
+    texto = _texto_limpo(getattr(dose, "dose", None)) or "—"
+    unidade = (getattr(dose, 'dose_unidade', None) or '').upper()
+    if unidade not in {'ML_ANIMAL', 'ML_KG'}:
+        return texto
+    if _dose_texto_tem_concentracao_explicita(dose):
+        return texto
+    compativeis = _apresentacoes_liquidas_compativeis_com_dose(medicamento, dose)
+    if len(compativeis) != 1:
+        return texto
+    valor, unidade_conc = compativeis[0]
+    dose_min = getattr(dose, 'dose_min', None)
+    dose_max = getattr(dose, 'dose_max', None)
+    if dose_min is None:
+        return texto
+    try:
+        ml_min = float(dose_min)
+        ml_max = float(dose_max) if dose_max is not None else ml_min
+    except (TypeError, ValueError):
+        return texto
+
+    base = unidade_conc.split('/')[0]
+    equiv_min = ml_min * float(valor)
+    equiv_max = ml_max * float(valor)
+    if base == 'g':
+        equiv_min *= 1000
+        equiv_max *= 1000
+        base = 'mg'
+    if equiv_min == equiv_max:
+        equiv_txt = f"{_fmt_apresentacao_label(equiv_min)} {base}"
+    else:
+        equiv_txt = f"{_fmt_apresentacao_label(equiv_min)} - {_fmt_apresentacao_label(equiv_max)} {base}"
+    conc_txt = f"{_fmt_apresentacao_label(float(valor))} {_fmt_unidade_apresentacao(unidade_conc)}"
+    return f"{texto} (equiv. {equiv_txt}; {conc_txt})"
+
+
 def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
     doses = [
         d for d in (getattr(medicamento, "doses", []) or [])
@@ -955,7 +991,7 @@ def construir_posologia_por_especie(medicamento) -> List[Dict[str, Any]]:
                 linhas_norm.append({
                     "faixa_peso": _texto_limpo(getattr(d, "faixa_peso", None)) or "Sem faixa definida",
                     "via": _texto_limpo(getattr(d, "via", None)) or _texto_limpo(getattr(medicamento, "via_administracao", None)) or "—",
-                    "dose": _texto_limpo(getattr(d, "dose", None)) or "—",
+                    "dose": _dose_volumetrica_com_equivalencia(medicamento, d),
                     "frequencia": freq,
                     "duracao": dur,
                     "observacao": _texto_limpo(getattr(d, "observacao", None)),
@@ -1807,11 +1843,15 @@ def _categoria_via_texto(texto: Optional[str]) -> Optional[str]:
     t = _texto_norm(texto)
     if not t:
         return None
-    if any(k in t for k in ('colirio', 'oftalm', 'olho')):
+    tokens = set(re.findall(r'[a-z0-9]+', t))
+    if any(k in t for k in ('colirio', 'oftalm', 'olho', 'conjuntiv')):
         return 'OFTALMICA'
     if any(k in t for k in ('otologic', 'otolog', 'auric', 'ouvido', 'conduto auditivo', 'canal auditivo')):
         return 'OTICA'
-    if any(k in t for k in ('intramus', 'intraven', 'subcut', 'injet', ' parenter')):
+    if (
+        tokens & {'im', 'iv', 'ev', 'sc', 'sq'}
+        or any(k in t for k in ('intramus', 'intraven', 'subcut', 'injet', ' parenter'))
+    ):
         return 'INJETAVEL'
     if any(k in t for k in ('oral', 'capsul', 'comprim', 'tablete', 'drage', 'suspens', 'solucao oral', 'xarope', 'petisco')):
         return 'ORAL'
@@ -1840,12 +1880,12 @@ def _preferencias_via_do_medicamento(medicamento) -> List[str]:
         if cat:
             counts[cat] = counts.get(cat, 0) + 1
 
-    via_medicamento = _categoria_via_texto(getattr(medicamento, 'via_administracao', None))
-    if via_medicamento:
-        counts[via_medicamento] = counts.get(via_medicamento, 0) + 1
-
     if not counts:
-        return []
+        via_medicamento = _categoria_via_texto(getattr(medicamento, 'via_administracao', None))
+        if via_medicamento:
+            counts[via_medicamento] = 1
+        else:
+            return []
 
     maior = max(counts.values())
     return [cat for cat, n in counts.items() if n == maior]
