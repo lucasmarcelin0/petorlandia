@@ -51,8 +51,9 @@
     <section class="info-card">
       <h3>Paciente</h3>
       <ul class="info-list">
-        <li><span>Espécie</span><span>{{ animal.species or '—' }}</span></li>
-        <li><span>Raça</span><span>{{ animal.breed or '—' }}</span></li>
+        <li><span>Nome</span><span>{{ animal.name }}</span></li>
+        {% if animal.species %}<li><span>Espécie</span><span>{{ animal.species }}</span></li>{% endif %}
+        {% if animal.breed %}<li><span>Raça</span><span>{{ animal.breed }}</span></li>{% endif %}
         {% if animal.sex %}<li><span>Sexo</span><span>{{ animal.sex }}</span></li>{% endif %}
         {% if animal.microchip_number %}<li><span>Microchip</span><span>{{ animal.microchip_number }}</span></li>{% endif %}
       </ul>
