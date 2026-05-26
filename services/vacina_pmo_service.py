@@ -29,6 +29,10 @@ DEFAULT_SHEET_URL = (
 )
 DEFAULT_SHEET_RANGE = "A:T"
 
+PMO_VACCINE_FABRICANTE = "Bioraiva Pet (Biogenesis Bago)"
+PMO_VACCINE_LOTE = "Fab. 09/2024 - Val. 09/2026"
+PMO_CAMPAIGN_VET_EMAIL = "lukemarki3@gmail.com"
+
 
 @dataclass
 class PmoSyncResult:
@@ -209,11 +213,16 @@ def _ensure_visit_public_token(visit: PmoVaccinationVisit) -> None:
 
 def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
     if visit.tutor_user_id:
+        user = visit.tutor_user
+        if user and visit.address and not user.address:
+            user.address = visit.address
         return
     phone = visit.phone1 or visit.phone2
     user = _find_user_by_phone(phone)
     if user:
         visit.tutor_user = user
+        if visit.address and not user.address:
+            user.address = visit.address
         return
     normalized_phone = _normalize_login_phone(phone)
     if not normalized_phone:
@@ -223,11 +232,17 @@ def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
         email=_provisional_email(normalized_phone, visit.id),
         phone=normalized_phone,
         role="adotante",
+        address=visit.address or None,
     )
     user.set_password(visit.password)
     db.session.add(user)
     db.session.flush()
     visit.tutor_user = user
+
+
+def _campaign_vet_user_id() -> int | None:
+    vet = User.query.filter(func.lower(User.email) == PMO_CAMPAIGN_VET_EMAIL.lower()).first()
+    return vet.id if vet else None
 
 
 def _species_name(species: str) -> str:
@@ -267,6 +282,7 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
         user_id=visit.tutor_user_id,
         species_id=_species_id(pmo_animal.species),
         status="ativo",
+        modo="adotado",
         description="Cadastro criado automaticamente pela campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
         is_alive=True,
     )
@@ -298,21 +314,31 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
             )
             .first()
         )
+    vet_id = _campaign_vet_user_id()
     if not vaccine:
         vaccine = Vacina(
             animal_id=pmo_animal.animal_id,
             nome="Vacina Antirrabica",
             tipo="Campanha PMO",
-            fabricante="Prefeitura de Orlandia",
+            fabricante=PMO_VACCINE_FABRICANTE,
+            lote=PMO_VACCINE_LOTE,
             doses_totais=1,
             intervalo_dias=365,
             frequencia="Anual",
             aplicada=True,
             aplicada_em=applied_date,
+            aplicada_por=vet_id,
             observacoes="Aplicada na campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
         )
         db.session.add(vaccine)
         db.session.flush()
+    else:
+        if not vaccine.fabricante or vaccine.fabricante == "Prefeitura de Orlandia":
+            vaccine.fabricante = PMO_VACCINE_FABRICANTE
+        if not vaccine.lote:
+            vaccine.lote = PMO_VACCINE_LOTE
+        if vet_id and not vaccine.aplicada_por:
+            vaccine.aplicada_por = vet_id
     pmo_animal.vaccine = vaccine
 
     booster_date = applied_date + timedelta(days=365)
@@ -332,7 +358,7 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
                 animal_id=pmo_animal.animal_id,
                 nome="Reforco Vacina Antirrabica",
                 tipo="Reforco PMO",
-                fabricante="Prefeitura de Orlandia",
+                fabricante=PMO_VACCINE_FABRICANTE,
                 doses_totais=1,
                 intervalo_dias=365,
                 frequencia="Anual",

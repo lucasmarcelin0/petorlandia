@@ -2465,6 +2465,26 @@ class Vacina(db.Model):
     criada_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     data = synonym('aplicada_em')
 
+    lote = db.Column(db.String(64), nullable=True)
+
+    aplicador = db.relationship('User', foreign_keys=[aplicada_por])
+
+    @property
+    def proxima_dose(self):
+        if self.aplicada and self.aplicada_em and self.intervalo_dias:
+            return self.aplicada_em + timedelta(days=self.intervalo_dias)
+        return None
+
+    @property
+    def veterinario(self):
+        vet_user = self.aplicador
+        if not vet_user:
+            return None
+        crmv = getattr(getattr(vet_user, 'veterinario', None), 'crmv', None)
+        if crmv:
+            return f"{vet_user.name} (CRMV {crmv})"
+        return vet_user.name
+
     # Registro de quem cadastrou a vacina
     created_by = db.Column(
         db.Integer,

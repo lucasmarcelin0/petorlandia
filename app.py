@@ -21146,14 +21146,21 @@ def imprimir_vacinas(animal_id):
             clinica = Clinica.query.get_or_404(clinica_id)
     if not clinica and any((vac.tipo or "").startswith("Campanha PMO") for vac in animal.vacinas):
         from types import SimpleNamespace
+        pmo_vac = next(
+            (vac for vac in animal.vacinas if (vac.tipo or "").startswith("Campanha PMO") and vac.aplicador),
+            None,
+        )
+        pmo_vet = pmo_vac.aplicador if pmo_vac else None
         clinica = SimpleNamespace(
             nome="Prefeitura de Orlandia",
             endereco="Campanha municipal de vacinacao antirrabica",
-            telefone=None,
+            telefone=pmo_vet.phone if pmo_vet else None,
             email=None,
             cnpj=None,
             logotipo=None,
         )
+        if not veterinario and pmo_vet:
+            veterinario = pmo_vet
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
     return render_template("orcamentos/imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
