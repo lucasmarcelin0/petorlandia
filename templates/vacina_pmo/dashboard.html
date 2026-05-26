@@ -302,9 +302,8 @@
     const vaccinated = row.animals.filter((animal) => animal.status === 'vacinado');
     const source = vaccinated.length ? vaccinated : row.animals;
     const names = source.length ? source.map((animal) => animal.name).join(', ') : 'seu animal';
-    const certificate = row.certificateUrl || 'LINK_DA_CARTEIRINHA';
-    const evaluation = 'LINK_AVALIACAO_PREFEITURA';
-    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Carteirinha digital: ${certificate}. Primeiro acesso ao PetOrlandia: use seu telefone e a senha provisoria ${row.password}. A raiva e grave, e a vacina anual protege sua familia, seu animal e a cidade. Avalie o atendimento da Prefeitura aqui: ${evaluation}. Reforco previsto para o proximo ano.`;
+    const campaignLink = row.publicUrl || row.certificateUrl || 'LINK_DA_CAMPANHA';
+    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Acesse sua carteirinha digital, orientacoes e avaliacao do atendimento aqui: ${campaignLink}. Primeiro acesso ao PetOrlandia: use seu telefone e a senha provisoria ${row.password}. Reforco previsto para o proximo ano.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
@@ -341,6 +340,7 @@
       shift: row.shift || '',
       password: row.password || makePassword(row.phone1 || row.phone2 || String(index)),
       certificateUrl: row.certificateUrl || '',
+      publicUrl: row.publicUrl || row.certificateUrl || '',
       sourceRow: row.sourceRow || null,
     }));
   }

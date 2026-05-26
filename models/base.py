@@ -2524,9 +2524,15 @@ class PmoVaccinationVisit(db.Model):
     note = db.Column(db.Text, nullable=True)
     password = db.Column(db.String(32), nullable=False)
     certificate_url = db.Column(db.String(500), nullable=True)
+    public_token = db.Column(db.String(96), unique=True, nullable=True, index=True)
+    tutor_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    evaluation_rating = db.Column(db.Integer, nullable=True)
+    evaluation_comment = db.Column(db.Text, nullable=True)
+    evaluated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     synced_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
+    tutor_user = db.relationship('User', foreign_keys=[tutor_user_id])
     animals = db.relationship(
         'PmoVaccinationAnimal',
         backref='visit',

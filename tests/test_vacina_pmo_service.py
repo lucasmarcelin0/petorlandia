@@ -1,9 +1,11 @@
 from services.vacina_pmo_service import (
+    get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
     update_vacina_pmo_animal_status,
 )
+from models import PmoVaccinationVisit
 
 
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
@@ -148,3 +150,48 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert state["rows"][0]["password"] == "PMOA9999"
     assert state["rows"][0]["animals"][0]["status"] == "vacinado"
     assert state["rows"][0]["status"] == "parcial"
+
+
+def test_pmo_public_link_renders_and_records_evaluation(app, client):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "vacinado"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 2,
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+        token = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first().public_token
+
+    response = client.get(f"/vacina-pmo/c/{token}")
+    assert response.status_code == 200
+    assert b"Carteirinha digital da vacina" in response.data
+    assert b"PMOA9999" in response.data
+
+    post = client.post(
+        f"/vacina-pmo/c/{token}",
+        data={"rating": "5", "comment": "Atendimento excelente"},
+    )
+    assert post.status_code == 200
+
+    with app.app_context():
+        visit = get_vacina_pmo_public_visit(token)
+        assert visit.evaluation_rating == 5
+        assert visit.evaluation_comment == "Atendimento excelente"

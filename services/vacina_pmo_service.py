@@ -12,7 +12,8 @@ from datetime import date, datetime
 from typing import Any
 
 from extensions import db
-from models import PmoVaccinationAnimal, PmoVaccinationVisit
+from flask import has_request_context, url_for
+from models import PmoVaccinationAnimal, PmoVaccinationVisit, User
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -70,6 +71,15 @@ def _normalize_phone(value: Any) -> str:
     if not digits.startswith("55"):
         digits = f"55{digits}"
     return digits if len(digits) >= 12 else ""
+
+
+def _normalize_login_phone(value: Any) -> str:
+    digits = _digits(value)
+    if digits.startswith("55") and len(digits) >= 12:
+        digits = digits[2:]
+    elif digits.startswith("0") and len(digits) >= 11:
+        digits = digits[1:]
+    return f"+55{digits}" if digits else ""
 
 
 def _parse_date(value: Any) -> str:
@@ -154,6 +164,57 @@ def _password(seed: str) -> str:
     suffix = (_digits(seed)[-4:] or "0000").rjust(4, "0")
     letter = secrets.choice(string.ascii_uppercase.replace("I", "").replace("O", ""))
     return f"PMO{letter}{suffix}"
+
+
+def _public_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _provisional_email(phone: str, visit_id: int | None = None) -> str:
+    digits = _digits(phone)[-13:] or str(visit_id or secrets.randbelow(999999)).zfill(6)
+    return f"pmo-{digits}@petorlandia.local"
+
+
+def _find_user_by_phone(phone: str) -> User | None:
+    normalized = _normalize_login_phone(phone)
+    if not normalized:
+        return None
+    for user in User.query.filter(User.phone.isnot(None), User.phone != "").all():
+        if _normalize_login_phone(user.phone) == normalized:
+            return user
+    return None
+
+
+def _ensure_visit_public_token(visit: PmoVaccinationVisit) -> None:
+    if visit.public_token:
+        return
+    while True:
+        token = _public_token()
+        if not PmoVaccinationVisit.query.filter_by(public_token=token).first():
+            visit.public_token = token
+            return
+
+
+def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
+    if visit.tutor_user_id:
+        return
+    phone = visit.phone1 or visit.phone2
+    user = _find_user_by_phone(phone)
+    if user:
+        visit.tutor_user = user
+        return
+    normalized_phone = _normalize_login_phone(phone)
+    if not normalized_phone:
+        return
+    user = User(
+        name=visit.tutor_name,
+        email=_provisional_email(normalized_phone, visit.id),
+        phone=normalized_phone,
+        role="adotante",
+    )
+    user.set_password(visit.password)
+    db.session.add(user)
+    visit.tutor_user = user
 
 
 def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
@@ -276,6 +337,10 @@ def infer_visit_status(animals: list[dict[str, Any]] | list[PmoVaccinationAnimal
 
 
 def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
+    _ensure_visit_public_token(visit)
+    public_url = ""
+    if has_request_context():
+        public_url = url_for("vacina_pmo_public", token=visit.public_token, _external=True)
     animals = [
         {
             "id": animal.id,
@@ -300,7 +365,10 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "date": visit.vaccine_date.isoformat() if visit.vaccine_date else "",
         "shift": visit.shift or "",
         "password": visit.password,
-        "certificateUrl": visit.certificate_url or "",
+        "certificateUrl": visit.certificate_url or public_url,
+        "publicUrl": public_url,
+        "evaluationRating": visit.evaluation_rating,
+        "evaluationComment": visit.evaluation_comment or "",
         "sourceRow": visit.source_row,
     }
 
@@ -334,6 +402,11 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
         .order_by(PmoVaccinationVisit.source_row.asc(), PmoVaccinationVisit.id.asc())
         .all()
     )
+    for visit in visits:
+        _ensure_visit_public_token(visit)
+        _ensure_tutor_account(visit)
+    if visits:
+        db.session.commit()
     return {
         "rows": [_serialize_visit(visit) for visit in visits],
         "sheet_gid": sheet_gid or (latest.sheet_gid if latest else ""),
@@ -384,6 +457,8 @@ def persist_vacina_pmo_rows(
         visit.shift = row.get("shift") or ""
         visit.note = row.get("note") or ""
         visit.synced_at = now
+        _ensure_visit_public_token(visit)
+        _ensure_tutor_account(visit)
 
         existing_by_position = {animal.position: animal for animal in visit.animals}
         parsed_animals = row.get("animals") or []
@@ -420,6 +495,24 @@ def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, An
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
     db.session.commit()
     return _serialize_visit(animal.visit)
+
+
+def get_vacina_pmo_public_visit(token: str) -> PmoVaccinationVisit | None:
+    visit = PmoVaccinationVisit.query.filter_by(public_token=token).first()
+    if visit:
+        _ensure_visit_public_token(visit)
+    return visit
+
+
+def save_vacina_pmo_evaluation(token: str, rating: int, comment: str = "") -> PmoVaccinationVisit:
+    visit = PmoVaccinationVisit.query.filter_by(public_token=token).first_or_404()
+    if rating < 1 or rating > 5:
+        raise ValueError("A nota precisa ficar entre 1 e 5.")
+    visit.evaluation_rating = rating
+    visit.evaluation_comment = (comment or "").strip()[:1200]
+    visit.evaluated_at = utcnow()
+    db.session.commit()
+    return visit
 
 
 def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoSyncResult:

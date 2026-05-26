@@ -4047,6 +4047,34 @@ def vacina_pmo():
     return render_template('vacina_pmo/dashboard.html')
 
 
+@app.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
+def vacina_pmo_public(token):
+    from services.vacina_pmo_service import get_vacina_pmo_public_visit, save_vacina_pmo_evaluation
+
+    visit = get_vacina_pmo_public_visit(token)
+    if not visit:
+        abort(404)
+
+    evaluation_saved = False
+    evaluation_error = ""
+    if request.method == 'POST':
+        try:
+            rating = int(request.form.get('rating') or 0)
+            comment = request.form.get('comment') or ""
+            visit = save_vacina_pmo_evaluation(token, rating, comment)
+            evaluation_saved = True
+        except Exception as exc:
+            evaluation_error = str(exc)
+
+    return render_template(
+        'vacina_pmo/public_certificate.html',
+        visit=visit,
+        token=token,
+        evaluation_saved=evaluation_saved,
+        evaluation_error=evaluation_error,
+    )
+
+
 @app.route('/vacina-pmo/sync', methods=['POST'])
 @login_required
 def vacina_pmo_sync():

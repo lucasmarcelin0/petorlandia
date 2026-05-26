@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carteirinha digital - Vacina antirrabica</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5d687a;
+      --line: #dbe3ee;
+      --blue: #0f67ff;
+      --green: #087f5b;
+      --amber: #b7791f;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .topbar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px;
+    }
+
+    .brand {
+      max-width: 980px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.05rem;
+    }
+
+    .brand span:last-child {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .9rem;
+      text-align: right;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 26px 18px 46px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      line-height: 1.08;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.35fr .85fr;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 8px 22px rgba(23, 32, 51, .06);
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1.18rem;
+    }
+
+    .certificate {
+      border-top: 5px solid var(--green);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 72px;
+      background: #fbfdff;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 4px;
+    }
+
+    .value {
+      font-weight: 750;
+    }
+
+    .animal-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .animal {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #ffffff;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: .8rem;
+      font-weight: 700;
+      background: #e6fcf5;
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    .badge.pending {
+      background: #fff8e1;
+      color: var(--amber);
+    }
+
+    .access {
+      display: grid;
+      gap: 10px;
+    }
+
+    .password {
+      display: inline-flex;
+      width: fit-content;
+      border: 1px dashed #94a3b8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      background: #f8fafc;
+    }
+
+    .button {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 42px;
+      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid var(--blue);
+      color: #ffffff;
+      background: var(--blue);
+      text-decoration: none;
+      font-weight: 750;
+    }
+
+    .button.secondary {
+      background: #ffffff;
+      color: var(--blue);
+    }
+
+    .tips {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .tips li {
+      border-left: 4px solid #15aabf;
+      background: #f8fcff;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .stars {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stars label {
+      cursor: pointer;
+    }
+
+    .stars input {
+      position: absolute;
+      opacity: 0;
+    }
+
+    .stars span {
+      display: grid;
+      place-items: center;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      font-weight: 800;
+    }
+
+    .stars input:checked + span {
+      border-color: var(--blue);
+      background: #e8f1ff;
+      color: var(--blue);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font: inherit;
+      resize: vertical;
+    }
+
+    .notice {
+      border-radius: 8px;
+      padding: 12px;
+      background: #e6fcf5;
+      color: #075941;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .error {
+      background: #fff5f5;
+      color: #9b1c1c;
+    }
+
+    @media (max-width: 780px) {
+      .grid,
+      .meta {
+        grid-template-columns: 1fr;
+      }
+
+      .brand {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span>PetOrlandia</span>
+      <span>Prefeitura de Orlandia - Vacina antirrabica</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Carteirinha digital da vacina</h1>
+      <p class="lead">
+        Obrigado por participar da campanha. A vacinacao anual protege seu animal, sua familia e toda a cidade.
+      </p>
+    </section>
+
+    <div class="grid">
+      <section class="card certificate">
+        <h2>Registro da aplicacao</h2>
+        <div class="meta">
+          <div class="item">
+            <span class="label">Tutor</span>
+            <span class="value">{{ visit.tutor_name }}</span>
+          </div>
+          <div class="item">
+            <span class="label">Data</span>
+            <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
+          </div>
+          <div class="item">
+            <span class="label">Endereco</span>
+            <span class="value">{{ visit.address or 'Nao informado' }}</span>
+          </div>
+          <div class="item">
+            <span class="label">Reforco</span>
+            <span class="value">No proximo ano</span>
+          </div>
+        </div>
+
+        <div class="animal-list">
+          {% for animal in visit.animals %}
+            <div class="animal">
+              <div>
+                <strong>{{ animal.name }}</strong>
+                <div class="label">{{ 'Cao' if animal.species == 'cao' else 'Gato' }}</div>
+              </div>
+              <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
+                {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <aside class="card access">
+        <h2>Primeiro acesso</h2>
+        <p class="lead">Entre no PetOrlandia usando seu telefone e esta senha provisoria.</p>
+        <span class="password">{{ visit.password }}</span>
+        <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
+        <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
+      </aside>
+    </div>
+
+    <section class="card" style="margin-top:16px;">
+      <h2>Por que manter a vacina em dia?</h2>
+      <ul class="tips">
+        <li>A raiva e uma doenca grave e pode atingir animais e pessoas.</li>
+        <li>A dose anual ajuda a manter Orlandia protegida.</li>
+        <li>Guarde este link: ele funciona como comprovante digital da campanha.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="avaliar" style="margin-top:16px;">
+      <h2>Avalie o atendimento</h2>
+      {% if evaluation_saved %}
+        <div class="notice">Obrigado. Sua avaliacao foi registrada.</div>
+      {% elif evaluation_error %}
+        <div class="notice error">{{ evaluation_error }}</div>
+      {% elif visit.evaluation_rating %}
+        <div class="notice">Avaliacao ja registrada. Obrigado pela colaboracao.</div>
+      {% endif %}
+
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="stars" aria-label="Nota do atendimento">
+          {% for score in range(1, 6) %}
+            <label>
+              <input type="radio" name="rating" value="{{ score }}" {% if visit.evaluation_rating == score %}checked{% endif %} required>
+              <span>{{ score }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <textarea name="comment" placeholder="Comentario opcional sobre o atendimento">{{ visit.evaluation_comment or '' }}</textarea>
+        <div style="margin-top:12px;">
+          <button class="button" type="submit">Enviar avaliacao</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
