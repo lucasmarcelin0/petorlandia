@@ -60,6 +60,12 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-vacinas-tab" data-bs-toggle="tab" data-bs-target="#section-vacinas" type="button" role="tab" aria-controls="section-vacinas" aria-selected="false">
+        <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-syringe"></i></span>
+        <span class="fw-semibold">Vacinas</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="section-horarios-tab" data-bs-toggle="tab" data-bs-target="#section-horarios" type="button" role="tab" aria-controls="section-horarios" aria-selected="false">
         <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-clock"></i></span>
         <span class="fw-semibold">Horários</span>
@@ -388,6 +394,22 @@
       </div>
     </div>
   </div><!-- /tab-pane section-exames -->
+
+  <!-- ===== Tab: Vacinas ===== -->
+  <div class="tab-pane fade" id="section-vacinas" role="tabpanel" aria-labelledby="section-vacinas-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="consultation-section-heading consultation-section-heading--vacinas mb-4">
+          <span class="consultation-section-heading__icon"><i class="fa-solid fa-syringe"></i></span>
+          <div>
+            <h5 class="mb-0">Vacinas Agendadas</h5>
+            <p class="mb-0 text-muted">Acompanhe doses futuras registradas para os animais.</p>
+          </div>
+        </div>
+        {% include 'partials/vaccine_appointments_table.html' %}
+      </div>
+    </div>
+  </div><!-- /tab-pane section-vacinas -->
 
   <!-- ===== Tab: Horários ===== -->
   <div class="tab-pane fade" id="section-horarios" role="tabpanel" aria-labelledby="section-horarios-tab" tabindex="0">

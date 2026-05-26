@@ -8040,6 +8040,8 @@ def add_animal():
 
 def login_view():
     form = LoginForm()
+    if request.method == 'POST' and not form.login.data and request.form.get('email'):
+        form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
@@ -20965,6 +20967,7 @@ def salvar_vacinas(animal_id):
         return jsonify({"success": False, "error": "Dados incompletos"}), 400
 
     try:
+        animal = Animal.query.get_or_404(animal_id)
         for v in data["vacinas"]:
             aplicada_em_str = v.get("aplicada_em")
             if aplicada_em_str:
@@ -20991,7 +20994,6 @@ def salvar_vacinas(animal_id):
             db.session.add(vacina)
 
         db.session.commit()
-        animal = get_animal_or_404(animal_id)
         historico_html = render_template(
             'partials/historico_vacinas.html',
             animal=animal
@@ -21007,7 +21009,7 @@ def salvar_vacinas(animal_id):
 
 @app.route("/animal/<int:animal_id>/vacinas/imprimir")
 def imprimir_vacinas(animal_id):
-    animal = get_animal_or_404(animal_id)
+    animal = Animal.query.get_or_404(animal_id)
     consulta = animal.consultas[-1] if animal.consultas else None
     veterinario = consulta.veterinario if consulta else None
     if not veterinario and current_user.is_authenticated and getattr(current_user, "worker", None) == "veterinario":
@@ -21033,7 +21035,10 @@ def imprimir_vacinas(animal_id):
 def alterar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
 
-    if not is_veterinarian(current_user):
+    if not (
+        is_veterinarian(current_user, require_membership=False)
+        or getattr(current_user, 'worker', None) == 'veterinario'
+    ):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if vacina.created_by and vacina.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
