@@ -69,7 +69,7 @@ def _normalize_phone(value: Any) -> str:
 
 def _parse_date(value: Any) -> str:
     text = _normalize_text(value)
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
         try:
             return datetime.strptime(text, fmt).date().isoformat()
         except ValueError:

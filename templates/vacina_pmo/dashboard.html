@@ -144,17 +144,20 @@
 
   <div class="pmo-toolbar mb-3">
     <div class="row g-3 align-items-end">
-      <div class="col-md-3 col-xl-2">
-        <label for="pmo-date" class="form-label">Data da campanha</label>
-        <input type="date" id="pmo-date" class="form-control">
-      </div>
-      <div class="col-md-6 col-xl-3">
+      <div class="col-md-7 col-xl-4">
         <label for="pmo-sheet" class="form-label">Aba da planilha</label>
         <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}">
           <option value="">Carregando abas...</option>
         </select>
+        <div class="form-text" id="pmo-sheet-info">Carregando datas disponiveis...</div>
       </div>
-      <div class="col-md-3 col-xl-2">
+      <div class="col-md-5 col-xl-2">
+        <label class="form-label" for="pmo-sync-inline">Sincronizacao</label>
+        <button type="button" class="btn btn-primary w-100" id="pmo-sync-inline">
+          <i class="fas fa-rotate me-1"></i> Sincronizar aba
+        </button>
+      </div>
+      <div class="col-md-4 col-xl-2">
         <label for="pmo-shift" class="form-label">Turno</label>
         <select id="pmo-shift" class="form-select">
           <option value="">Todos</option>
@@ -162,7 +165,7 @@
           <option value="Tarde">Tarde</option>
         </select>
       </div>
-      <div class="col-md-3 col-xl-2">
+      <div class="col-md-4 col-xl-2">
         <label for="pmo-status-filter" class="form-label">Status</label>
         <select id="pmo-status-filter" class="form-select">
           <option value="">Todos</option>
@@ -174,14 +177,9 @@
           <option value="recusou">Recusou</option>
         </select>
       </div>
-      <div class="col-md-3 col-xl-1">
-        <button type="button" class="btn btn-primary w-100" id="pmo-parse">
-          <i class="fas fa-wand-magic-sparkles me-1"></i> Processar lista
-        </button>
-      </div>
-      <div class="col-xl-2">
+      <div class="col-md-4 col-xl-2">
         <div class="small text-muted">
-          Escolha a aba/data ou cole dados manualmente.
+          A data vem do nome da aba. Use os filtros so depois de sincronizar.
         </div>
       </div>
     </div>
@@ -290,8 +288,8 @@
 (() => {
   const rawEl = document.getElementById('pmo-raw');
   const tbody = document.getElementById('pmo-tbody');
-  const dateEl = document.getElementById('pmo-date');
   const sheetEl = document.getElementById('pmo-sheet');
+  const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
   const state = { rows: [] };
@@ -413,7 +411,7 @@
   }
 
   function parseRows() {
-    const fallbackDate = dateEl.value;
+    const fallbackDate = sheetEl.selectedOptions[0]?.dataset.date || '';
     const rows = rawEl.value
       .split(/\n+/)
       .map((line) => line.split('\t'))
@@ -479,26 +477,35 @@
         throw new Error(payload.message || 'Nao foi possivel listar as abas.');
       }
       const sheets = payload.sheets || [];
-      sheetEl.innerHTML = sheets.length
-        ? sheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
+      const sortedSheets = [...sheets].sort((a, b) => {
+        const aDate = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : '';
+        const bDate = /^\d{4}-\d{2}-\d{2}$/.test(b.date || '') ? b.date : '';
+        if (aDate && bDate) return bDate.localeCompare(aDate);
+        if (aDate) return -1;
+        if (bDate) return 1;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
+      sheetEl.innerHTML = sortedSheets.length
+        ? sortedSheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
         : '<option value="">Nenhuma aba encontrada</option>';
-      const selected = sheets.find((sheet) => sheet.title === '28/05/2026') || sheets[0];
+      const selected = sortedSheets[0];
       if (selected) {
         sheetEl.value = selected.gid;
-        if (selected.date && /^\d{4}-\d{2}-\d{2}$/.test(selected.date)) {
-          dateEl.value = selected.date;
-        }
       }
+      sheetInfoEl.textContent = `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
+      sheetInfoEl.textContent = 'Nao foi possivel carregar as abas da planilha.';
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
     }
   }
 
-  async function syncSheet() {
-    const button = document.getElementById('pmo-sync');
+  async function syncSheet(buttonId = 'pmo-sync') {
+    const button = document.getElementById(buttonId);
     const original = button.innerHTML;
+    const otherButton = buttonId === 'pmo-sync' ? document.getElementById('pmo-sync-inline') : document.getElementById('pmo-sync');
     button.disabled = true;
+    if (otherButton) otherButton.disabled = true;
     button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando';
     try {
       const response = await fetch(button.dataset.syncUrl, {
@@ -518,19 +525,22 @@
         throw new Error(payload.message || 'Nao foi possivel sincronizar a planilha.');
       }
       state.rows = normalizeSyncedRows(payload.rows);
+      shiftEl.value = '';
+      statusFilterEl.value = '';
       render();
+      sheetInfoEl.textContent = `Aba ${sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada: ${state.rows.length} visitas.`;
       window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
     } catch (error) {
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
     } finally {
       button.disabled = false;
+      if (otherButton) otherButton.disabled = false;
       button.innerHTML = original;
     }
   }
 
   function rowMatchesFilters(row) {
-    return (!dateEl.value || row.date === dateEl.value)
-      && (!shiftEl.value || row.shift === shiftEl.value)
+    return (!shiftEl.value || row.shift === shiftEl.value)
       && (!statusFilterEl.value || row.status === statusFilterEl.value);
   }
 
@@ -631,9 +641,9 @@
     }
   });
 
-  document.getElementById('pmo-parse').addEventListener('click', parseRows);
   document.getElementById('pmo-parse-secondary').addEventListener('click', parseRows);
-  document.getElementById('pmo-sync').addEventListener('click', syncSheet);
+  document.getElementById('pmo-sync').addEventListener('click', () => syncSheet('pmo-sync'));
+  document.getElementById('pmo-sync-inline').addEventListener('click', () => syncSheet('pmo-sync-inline'));
   document.getElementById('pmo-sample').addEventListener('click', () => {
     rawEl.value = sampleData;
     parseRows();
@@ -644,13 +654,12 @@
     render();
   });
   document.getElementById('pmo-export').addEventListener('click', exportRows);
-  [dateEl, shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
+  [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
   sheetEl.addEventListener('change', () => {
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      dateEl.value = date;
-      render();
-    }
+    sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? `Data selecionada: ${displayDate(date)}. Clique em Sincronizar aba.`
+      : 'Aba selecionada sem data reconhecida. Clique em Sincronizar aba para tentar ler.';
   });
   document.querySelectorAll('[data-shift-shortcut]').forEach((button) => {
     button.addEventListener('click', () => {
