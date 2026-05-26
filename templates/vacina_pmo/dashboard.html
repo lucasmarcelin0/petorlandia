@@ -90,6 +90,28 @@
     min-width: 150px;
   }
 
+  .pmo-animal-list {
+    min-width: 230px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .pmo-animal-item {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) 112px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .pmo-animal-name {
+    font-weight: 600;
+  }
+
+  .pmo-animal-species {
+    color: #64748b;
+    font-size: 0.76rem;
+  }
+
   .pmo-empty {
     min-height: 260px;
     display: grid;
@@ -111,6 +133,9 @@
       <button type="button" class="btn btn-outline-secondary" id="pmo-clear">
         <i class="fas fa-eraser me-1"></i> Limpar
       </button>
+      <button type="button" class="btn btn-primary" id="pmo-sync" data-sync-url="{{ url_for('vacina_pmo_sync') }}">
+        <i class="fas fa-rotate me-1"></i> Sincronizar planilha
+      </button>
       <button type="button" class="btn btn-outline-success" id="pmo-export">
         <i class="fas fa-file-export me-1"></i> Copiar exportacao
       </button>
@@ -122,6 +147,12 @@
       <div class="col-md-3 col-xl-2">
         <label for="pmo-date" class="form-label">Data da campanha</label>
         <input type="date" id="pmo-date" class="form-control">
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <label for="pmo-sheet" class="form-label">Aba da planilha</label>
+        <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}">
+          <option value="">Carregando abas...</option>
+        </select>
       </div>
       <div class="col-md-3 col-xl-2">
         <label for="pmo-shift" class="form-label">Turno</label>
@@ -137,19 +168,20 @@
           <option value="">Todos</option>
           <option value="pendente">Pendente</option>
           <option value="vacinado">Vacinado</option>
+          <option value="parcial">Parcial</option>
           <option value="ausente">Ausente</option>
           <option value="remarcar">Remarcar</option>
           <option value="recusou">Recusou</option>
         </select>
       </div>
-      <div class="col-md-3 col-xl-2">
+      <div class="col-md-3 col-xl-1">
         <button type="button" class="btn btn-primary w-100" id="pmo-parse">
           <i class="fas fa-wand-magic-sparkles me-1"></i> Processar lista
         </button>
       </div>
-      <div class="col-xl-4">
+      <div class="col-xl-2">
         <div class="small text-muted">
-          Cole dados vindos da planilha. Cabecalhos repetidos, totais, perdas, sobras e linhas vazias serao ignorados.
+          Escolha a aba/data ou cole dados manualmente.
         </div>
       </div>
     </div>
@@ -164,13 +196,13 @@
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-stat">
-        <div class="text-muted small">Caes previstos</div>
+        <div class="text-muted small">Caes previstos na lista</div>
         <div class="pmo-stat__value" data-stat="dogs">0</div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-stat">
-        <div class="text-muted small">Gatos previstos</div>
+        <div class="text-muted small">Gatos previstos na lista</div>
         <div class="pmo-stat__value" data-stat="cats">0</div>
       </div>
     </div>
@@ -259,6 +291,7 @@
   const rawEl = document.getElementById('pmo-raw');
   const tbody = document.getElementById('pmo-tbody');
   const dateEl = document.getElementById('pmo-date');
+  const sheetEl = document.getElementById('pmo-sheet');
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
   const state = { rows: [] };
@@ -280,9 +313,11 @@
     return normalizeText(value);
   }
 
-  function parseIntSafe(value) {
-    const parsed = parseInt(String(value || '').replace(/\D+/g, ''), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
+  function parseCount(value) {
+    const text = normalizeText(value);
+    if (!/^\d{1,2}$/.test(text)) return 0;
+    const parsed = parseInt(text, 10);
+    return parsed >= 0 && parsed <= 30 ? parsed : 0;
   }
 
   function onlyDigits(value) {
@@ -311,7 +346,9 @@
 
   function isHeaderOrSummary(cols) {
     const joined = cols.map(normalizeText).join(' ').toLowerCase();
+    const first = normalizeText(cols[0]);
     if (!joined) return true;
+    if (!/[a-zà-ú]/i.test(first)) return true;
     return joined.includes('nome completo do tutor')
       || joined.includes('total de animais')
       || joined.includes('digite o dia')
@@ -330,6 +367,21 @@
       .filter(Boolean);
   }
 
+  function buildAnimalRecords(names, dogs, cats) {
+    const total = Math.max(names.length, dogs + cats);
+    const records = [];
+    for (let index = 0; index < total; index += 1) {
+      const species = index < dogs ? 'cao' : 'gato';
+      const fallback = species === 'cao' ? `Cao ${index + 1}` : `Gato ${index - dogs + 1}`;
+      records.push({
+        name: names[index] || fallback,
+        species,
+        status: 'pendente',
+      });
+    }
+    return records;
+  }
+
   function makePassword(seed) {
     const base = onlyDigits(seed).slice(-4).padStart(4, '0');
     const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -341,10 +393,23 @@
   }
 
   function buildMessage(row, phone) {
-    const names = row.animals.length ? row.animals.join(', ') : 'seu animal';
+    const vaccinated = row.animals.filter((animal) => animal.status === 'vacinado');
+    const source = vaccinated.length ? vaccinated : row.animals;
+    const names = source.length ? source.map((animal) => animal.name).join(', ') : 'seu animal';
     const certificate = row.certificateUrl || 'LINK_DA_CARTEIRINHA';
     const text = `Ola, ${row.tutor}. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Carteirinha digital: ${certificate}. Senha provisoria: ${row.password}. Reforco previsto para o proximo ano.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  }
+
+  function inferVisitStatus(animals) {
+    if (!animals.length) return 'pendente';
+    const statuses = animals.map((animal) => animal.status);
+    if (statuses.every((status) => status === 'vacinado')) return 'vacinado';
+    if (statuses.some((status) => status === 'vacinado')) return 'parcial';
+    if (statuses.every((status) => status === 'ausente')) return 'ausente';
+    if (statuses.every((status) => status === 'recusou')) return 'recusou';
+    if (statuses.some((status) => status === 'remarcar')) return 'remarcar';
+    return 'pendente';
   }
 
   function parseRows() {
@@ -358,6 +423,9 @@
         const phone1 = normalizePhone(cols[5]);
         const phone2 = normalizePhone(cols[6]);
         const date = parseDate(cols[16] || cols[11] || fallbackDate);
+        const dogs = parseCount(cols[7]);
+        const cats = parseCount(cols[8]);
+        const animalNames = splitAnimals(cols[9]);
         return {
           id: `${Date.now()}-${index}`,
           status: 'pendente',
@@ -365,9 +433,9 @@
           address: buildAddress(cols),
           phone1,
           phone2,
-          dogs: parseIntSafe(cols[7]),
-          cats: parseIntSafe(cols[8]),
-          animals: splitAnimals(cols[9]),
+          dogs,
+          cats,
+          animals: buildAnimalRecords(animalNames, dogs, cats),
           note: normalizeText(cols[10]),
           date,
           shift: normalizeShift(cols[17]),
@@ -375,10 +443,89 @@
           certificateUrl: '',
         };
       })
-      .filter((row) => row.tutor && (row.phone1 || row.phone2 || row.address));
+      .filter((row) => row.tutor && (row.phone1 || row.phone2 || row.address) && (row.dogs || row.cats || row.animals.length));
 
     state.rows = rows;
     render();
+  }
+
+  function normalizeSyncedRows(rows) {
+    return (rows || []).map((row, index) => ({
+      id: row.id || `sync-${Date.now()}-${index}`,
+      status: row.status || 'pendente',
+      tutor: row.tutor || '',
+      address: row.address || '',
+      phone1: row.phone1 || '',
+      phone2: row.phone2 || '',
+      dogs: Number(row.dogs) || 0,
+      cats: Number(row.cats) || 0,
+      animals: Array.isArray(row.animals) ? row.animals : [],
+      note: row.note || '',
+      date: row.date || '',
+      shift: row.shift || '',
+      password: row.password || makePassword(row.phone1 || row.phone2 || String(index)),
+      certificateUrl: row.certificateUrl || '',
+      sourceRow: row.sourceRow || null,
+    }));
+  }
+
+  async function loadSheets() {
+    try {
+      const response = await fetch(sheetEl.dataset.sheetsUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Nao foi possivel listar as abas.');
+      }
+      const sheets = payload.sheets || [];
+      sheetEl.innerHTML = sheets.length
+        ? sheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
+        : '<option value="">Nenhuma aba encontrada</option>';
+      const selected = sheets.find((sheet) => sheet.title === '28/05/2026') || sheets[0];
+      if (selected) {
+        sheetEl.value = selected.gid;
+        if (selected.date && /^\d{4}-\d{2}-\d{2}$/.test(selected.date)) {
+          dateEl.value = selected.date;
+        }
+      }
+    } catch (error) {
+      sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    }
+  }
+
+  async function syncSheet() {
+    const button = document.getElementById('pmo-sync');
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando';
+    try {
+      const response = await fetch(button.dataset.syncUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({
+          sheet_gid: sheetEl.value,
+          sheet_title: sheetEl.selectedOptions[0]?.dataset.title || '',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Nao foi possivel sincronizar a planilha.');
+      }
+      state.rows = normalizeSyncedRows(payload.rows);
+      render();
+      window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
+    } catch (error) {
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = original;
+    }
   }
 
   function rowMatchesFilters(row) {
@@ -417,19 +564,30 @@
     }
 
     tbody.innerHTML = visible.map((row) => {
-      const animals = row.animals.length ? row.animals.join(', ') : 'Nomes nao informados';
+      row.status = inferVisitStatus(row.animals);
+      const animals = row.animals.length
+        ? `<div class="pmo-animal-list">${row.animals.map((animal, index) => `
+            <div class="pmo-animal-item">
+              <div>
+                <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
+                <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cao' : 'Gato'}</div>
+              </div>
+              <select class="form-select form-select-sm" data-action="animal-status" data-animal-index="${index}">
+                ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+              </select>
+            </div>
+          `).join('')}</div>`
+        : '<span class="text-muted">Nomes nao informados</span>';
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
         <tr data-id="${row.id}">
           <td>
-            <select class="form-select form-select-sm pmo-status" data-action="status">
-              ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${row.status === status ? 'selected' : ''}>${status}</option>`).join('')}
-            </select>
+            <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
           </td>
           <td><strong>${escapeHtml(row.tutor)}</strong></td>
           <td class="pmo-address">${escapeHtml(row.address)}</td>
-          <td>${escapeHtml(animals)}</td>
+          <td>${animals}</td>
           <td>${row.dogs}</td>
           <td>${row.cats}</td>
           <td>${escapeHtml(displayDate(row.date))}</td>
@@ -444,11 +602,14 @@
   }
 
   function exportRows() {
-    const header = ['status', 'tutor', 'endereco', 'animais', 'caes', 'gatos', 'data', 'turno', 'telefone_1', 'whatsapp_1', 'telefone_2', 'whatsapp_2', 'senha_provisoria', 'observacao'];
+    const header = ['status_visita', 'tutor', 'endereco', 'animais_vacinados', 'animais_pendentes', 'caes_previstos', 'gatos_previstos', 'data', 'turno', 'telefone_1', 'whatsapp_1', 'telefone_2', 'whatsapp_2', 'senha_provisoria', 'observacao'];
     const lines = state.rows.filter(rowMatchesFilters).map((row) => {
+      row.status = inferVisitStatus(row.animals);
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
-      return [row.status, row.tutor, row.address, row.animals.join(', '), row.dogs, row.cats, displayDate(row.date), row.shift, row.phone1, wa1, row.phone2, wa2, row.password, row.note]
+      const vaccinated = row.animals.filter((animal) => animal.status === 'vacinado').map((animal) => animal.name).join(', ');
+      const pending = row.animals.filter((animal) => animal.status !== 'vacinado').map((animal) => `${animal.name} (${animal.status})`).join(', ');
+      return [row.status, row.tutor, row.address, vaccinated, pending, row.dogs, row.cats, displayDate(row.date), row.shift, row.phone1, wa1, row.phone2, wa2, row.password, row.note]
         .map((value) => String(value || '').replace(/\t/g, ' ').replace(/\n/g, ' '))
         .join('\t');
     });
@@ -462,14 +623,17 @@
     const rowEl = event.target.closest('tr[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
-    if (event.target.dataset.action === 'status') {
-      row.status = event.target.value;
-      renderStats(state.rows);
+    if (event.target.dataset.action === 'animal-status') {
+      const animal = row.animals[Number(event.target.dataset.animalIndex)];
+      if (animal) animal.status = event.target.value;
+      row.status = inferVisitStatus(row.animals);
+      render();
     }
   });
 
   document.getElementById('pmo-parse').addEventListener('click', parseRows);
   document.getElementById('pmo-parse-secondary').addEventListener('click', parseRows);
+  document.getElementById('pmo-sync').addEventListener('click', syncSheet);
   document.getElementById('pmo-sample').addEventListener('click', () => {
     rawEl.value = sampleData;
     parseRows();
@@ -481,6 +645,13 @@
   });
   document.getElementById('pmo-export').addEventListener('click', exportRows);
   [dateEl, shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
+  sheetEl.addEventListener('change', () => {
+    const date = sheetEl.selectedOptions[0]?.dataset.date || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      dateEl.value = date;
+      render();
+    }
+  });
   document.querySelectorAll('[data-shift-shortcut]').forEach((button) => {
     button.addEventListener('click', () => {
       shiftEl.value = button.dataset.shiftShortcut;
@@ -488,6 +659,7 @@
     });
   });
 
+  loadSheets();
   render();
 })();
 </script>

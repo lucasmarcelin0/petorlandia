@@ -4047,6 +4047,46 @@ def vacina_pmo():
     return render_template('vacina_pmo/dashboard.html')
 
 
+@app.route('/vacina-pmo/sync', methods=['POST'])
+@login_required
+def vacina_pmo_sync():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import sync_vacina_pmo_sheet
+
+        payload = request.get_json(silent=True) or {}
+        result = sync_vacina_pmo_sheet(
+            sheet_gid=(payload.get('sheet_gid') or '').strip(),
+            sheet_title=(payload.get('sheet_title') or '').strip(),
+        )
+        return jsonify(
+            {
+                'success': True,
+                'rows': result.rows,
+                'spreadsheet_id': result.spreadsheet_id,
+                'sheet_range': result.sheet_range,
+            }
+        )
+    except Exception as exc:
+        current_app.logger.exception("Falha ao sincronizar planilha Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/sheets', methods=['GET'])
+@login_required
+def vacina_pmo_sheets():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import list_vacina_pmo_sheets
+
+        return jsonify({'success': True, 'sheets': list_vacina_pmo_sheets()})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao listar abas da planilha Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 def _user_is_clinic_owner(user=None):
     """Return ``True`` if ``user`` owns at least one clinic."""
 
