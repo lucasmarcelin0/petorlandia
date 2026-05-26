@@ -303,7 +303,8 @@
     const source = vaccinated.length ? vaccinated : row.animals;
     const names = source.length ? source.map((animal) => animal.name).join(', ') : 'seu animal';
     const campaignLink = row.publicUrl || row.certificateUrl || 'LINK_DA_CAMPANHA';
-    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Acesse sua carteirinha digital, orientacoes e avaliacao do atendimento aqui: ${campaignLink}. Primeiro acesso ao PetOrlandia: use seu telefone e a senha provisoria ${row.password}. Reforco previsto para o proximo ano.`;
+    const loginPhone = row.loginPhone || 'seu telefone com DDD';
+    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Acesse sua carteirinha digital, orientacoes e avaliacao do atendimento aqui: ${campaignLink}. Primeiro acesso ao PetOrlandia: no campo e-mail ou celular, digite ${loginPhone}; senha provisoria: ${row.password}. Reforco previsto para o proximo ano.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
@@ -339,6 +340,7 @@
       date: row.date || '',
       shift: row.shift || '',
       password: row.password || makePassword(row.phone1 || row.phone2 || String(index)),
+      loginPhone: row.loginPhone || '',
       certificateUrl: row.certificateUrl || '',
       publicUrl: row.publicUrl || row.certificateUrl || '',
       sourceRow: row.sourceRow || null,

@@ -8,12 +8,13 @@ import secrets
 import string
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from extensions import db
 from flask import has_request_context, url_for
-from models import PmoVaccinationAnimal, PmoVaccinationVisit, User
+from models import Animal, PmoVaccinationAnimal, PmoVaccinationVisit, Species, User, Vacina
+from sqlalchemy import func
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -80,6 +81,17 @@ def _normalize_login_phone(value: Any) -> str:
     elif digits.startswith("0") and len(digits) >= 11:
         digits = digits[1:]
     return f"+55{digits}" if digits else ""
+
+
+def format_pmo_phone_for_login(value: Any) -> str:
+    digits = _digits(value)
+    if digits.startswith("55") and len(digits) >= 12:
+        digits = digits[2:]
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return _normalize_text(value)
 
 
 def _parse_date(value: Any) -> str:
@@ -214,7 +226,128 @@ def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
     )
     user.set_password(visit.password)
     db.session.add(user)
+    db.session.flush()
     visit.tutor_user = user
+
+
+def _species_name(species: str) -> str:
+    return "Gato" if species == "gato" else "Cachorro"
+
+
+def _species_id(species: str) -> int | None:
+    expected = _species_name(species)
+    wanted = _strip_accents(expected).lower()
+    existing = Species.query.all()
+    for row in existing:
+        if _strip_accents(row.name or "").lower() == wanted:
+            return row.id
+    created = Species(name=expected)
+    db.session.add(created)
+    db.session.flush()
+    return created.id
+
+
+def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
+    visit = pmo_animal.visit
+    _ensure_tutor_account(visit)
+    if pmo_animal.animal_id or not visit.tutor_user_id:
+        return
+
+    candidate = (
+        Animal.query.filter_by(user_id=visit.tutor_user_id)
+        .filter(func.lower(Animal.name) == pmo_animal.name.lower())
+        .first()
+    )
+    if candidate:
+        pmo_animal.animal = candidate
+        return
+
+    animal = Animal(
+        name=pmo_animal.name,
+        user_id=visit.tutor_user_id,
+        species_id=_species_id(pmo_animal.species),
+        status="ativo",
+        description="Cadastro criado automaticamente pela campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
+        is_alive=True,
+    )
+    db.session.add(animal)
+    db.session.flush()
+    pmo_animal.animal = animal
+
+
+def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
+    if pmo_animal.status != "vacinado":
+        return
+    _ensure_real_animal(pmo_animal)
+    if not pmo_animal.animal_id:
+        return
+
+    applied_date = pmo_animal.visit.vaccine_date or date.today()
+    if pmo_animal.vaccine_id:
+        vaccine = db.session.get(Vacina, pmo_animal.vaccine_id)
+    else:
+        vaccine = None
+    if not vaccine:
+        vaccine = (
+            Vacina.query.filter_by(
+                animal_id=pmo_animal.animal_id,
+                nome="Vacina Antirrabica",
+                tipo="Campanha PMO",
+                aplicada=True,
+                aplicada_em=applied_date,
+            )
+            .first()
+        )
+    if not vaccine:
+        vaccine = Vacina(
+            animal_id=pmo_animal.animal_id,
+            nome="Vacina Antirrabica",
+            tipo="Campanha PMO",
+            fabricante="Prefeitura de Orlandia",
+            doses_totais=1,
+            intervalo_dias=365,
+            frequencia="Anual",
+            aplicada=True,
+            aplicada_em=applied_date,
+            observacoes="Aplicada na campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
+        )
+        db.session.add(vaccine)
+        db.session.flush()
+    pmo_animal.vaccine = vaccine
+
+    booster_date = applied_date + timedelta(days=365)
+    booster = (
+        Vacina.query.filter_by(
+            animal_id=pmo_animal.animal_id,
+            nome="Reforco Vacina Antirrabica",
+            tipo="Reforco PMO",
+            aplicada=False,
+            aplicada_em=booster_date,
+        )
+        .first()
+    )
+    if not booster:
+        db.session.add(
+            Vacina(
+                animal_id=pmo_animal.animal_id,
+                nome="Reforco Vacina Antirrabica",
+                tipo="Reforco PMO",
+                fabricante="Prefeitura de Orlandia",
+                doses_totais=1,
+                intervalo_dias=365,
+                frequencia="Anual",
+                aplicada=False,
+                aplicada_em=booster_date,
+                observacoes="Reforco anual previsto apos a campanha PMO.",
+            )
+        )
+
+
+def _ensure_visit_records(visit: PmoVaccinationVisit) -> None:
+    _ensure_tutor_account(visit)
+    for pmo_animal in visit.animals:
+        _ensure_real_animal(pmo_animal)
+        _ensure_pmo_vaccine_record(pmo_animal)
 
 
 def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
@@ -344,6 +477,8 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
     animals = [
         {
             "id": animal.id,
+            "animalId": animal.animal_id,
+            "vaccineId": animal.vaccine_id,
             "name": animal.name,
             "species": animal.species,
             "status": animal.status,
@@ -365,6 +500,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "date": visit.vaccine_date.isoformat() if visit.vaccine_date else "",
         "shift": visit.shift or "",
         "password": visit.password,
+        "loginPhone": format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         "certificateUrl": visit.certificate_url or public_url,
         "publicUrl": public_url,
         "evaluationRating": visit.evaluation_rating,
@@ -404,7 +540,7 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
     )
     for visit in visits:
         _ensure_visit_public_token(visit)
-        _ensure_tutor_account(visit)
+        _ensure_visit_records(visit)
     if visits:
         db.session.commit()
     return {
@@ -458,7 +594,6 @@ def persist_vacina_pmo_rows(
         visit.note = row.get("note") or ""
         visit.synced_at = now
         _ensure_visit_public_token(visit)
-        _ensure_tutor_account(visit)
 
         existing_by_position = {animal.position: animal for animal in visit.animals}
         parsed_animals = row.get("animals") or []
@@ -480,6 +615,8 @@ def persist_vacina_pmo_rows(
             if position not in keep_positions:
                 db.session.delete(animal)
 
+        _ensure_visit_records(visit)
+
         saved.append(visit)
 
     db.session.commit()
@@ -493,6 +630,8 @@ def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, An
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     animal.status = status
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
+    _ensure_real_animal(animal)
+    _ensure_pmo_vaccine_record(animal)
     db.session.commit()
     return _serialize_visit(animal.visit)
 
@@ -501,6 +640,8 @@ def get_vacina_pmo_public_visit(token: str) -> PmoVaccinationVisit | None:
     visit = PmoVaccinationVisit.query.filter_by(public_token=token).first()
     if visit:
         _ensure_visit_public_token(visit)
+        _ensure_visit_records(visit)
+        db.session.commit()
     return visit
 
 

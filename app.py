@@ -4049,7 +4049,11 @@ def vacina_pmo():
 
 @app.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
 def vacina_pmo_public(token):
-    from services.vacina_pmo_service import get_vacina_pmo_public_visit, save_vacina_pmo_evaluation
+    from services.vacina_pmo_service import (
+        format_pmo_phone_for_login,
+        get_vacina_pmo_public_visit,
+        save_vacina_pmo_evaluation,
+    )
 
     visit = get_vacina_pmo_public_visit(token)
     if not visit:
@@ -4070,6 +4074,7 @@ def vacina_pmo_public(token):
         'vacina_pmo/public_certificate.html',
         visit=visit,
         token=token,
+        login_phone=format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         evaluation_saved=evaluation_saved,
         evaluation_error=evaluation_error,
     )
@@ -21139,6 +21144,16 @@ def imprimir_vacinas(animal_id):
         clinica_id = request.args.get("clinica_id", type=int)
         if clinica_id:
             clinica = Clinica.query.get_or_404(clinica_id)
+    if not clinica and any((vac.tipo or "").startswith("Campanha PMO") for vac in animal.vacinas):
+        from types import SimpleNamespace
+        clinica = SimpleNamespace(
+            nome="Prefeitura de Orlandia",
+            endereco="Campanha municipal de vacinacao antirrabica",
+            telefone=None,
+            email=None,
+            cnpj=None,
+            logotipo=None,
+        )
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
     return render_template("orcamentos/imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)

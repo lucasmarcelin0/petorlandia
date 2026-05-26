@@ -328,6 +328,9 @@
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
                 {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
               </span>
+              {% if animal.animal_id %}
+                <a class="button secondary" href="{{ url_for('ficha_animal', animal_id=animal.animal_id) }}" style="min-height:34px;padding:6px 10px;">Abrir ficha</a>
+              {% endif %}
             </div>
           {% endfor %}
         </div>
@@ -335,7 +338,13 @@
 
       <aside class="card access">
         <h2>Primeiro acesso</h2>
-        <p class="lead">Entre no PetOrlandia usando seu telefone e esta senha provisoria.</p>
+        <p class="lead">Entre no PetOrlandia usando seu telefone com DDD e esta senha provisoria.</p>
+        <span class="label">Digite no campo e-mail ou celular</span>
+        <span class="password">{{ login_phone or 'Telefone cadastrado' }}</span>
+        {% if login_phone %}
+          <p class="lead" style="font-size:.95rem;">Use o DDD junto com o numero. Esse e o WhatsApp informado na campanha.</p>
+        {% endif %}
+        <span class="label">Senha provisoria</span>
         <span class="password">{{ visit.password }}</span>
         <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>

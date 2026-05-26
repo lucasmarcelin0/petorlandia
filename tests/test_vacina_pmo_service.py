@@ -5,7 +5,7 @@ from services.vacina_pmo_service import (
     persist_vacina_pmo_rows,
     update_vacina_pmo_animal_status,
 )
-from models import PmoVaccinationVisit
+from models import Animal, PmoVaccinationVisit, User, Vacina
 
 
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
@@ -150,6 +150,10 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert state["rows"][0]["password"] == "PMOA9999"
     assert state["rows"][0]["animals"][0]["status"] == "vacinado"
     assert state["rows"][0]["status"] == "parcial"
+    assert Animal.query.filter_by(name="Lua").first() is not None
+    assert Vacina.query.filter_by(nome="Vacina Antirrabica", aplicada=True).first() is not None
+    assert Vacina.query.filter_by(nome="Reforco Vacina Antirrabica", aplicada=False).first() is not None
+    assert User.query.filter_by(phone="+5516999999999").first() is not None
 
 
 def test_pmo_public_link_renders_and_records_evaluation(app, client):
@@ -183,7 +187,9 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
     response = client.get(f"/vacina-pmo/c/{token}")
     assert response.status_code == 200
     assert b"Carteirinha digital da vacina" in response.data
+    assert b"(16) 99999-9999" in response.data
     assert b"PMOA9999" in response.data
+    assert b"Abrir ficha" in response.data
 
     post = client.post(
         f"/vacina-pmo/c/{token}",
