@@ -4039,6 +4039,14 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/vacina-pmo')
+@login_required
+def vacina_pmo():
+    if current_user.role != 'admin':
+        abort(403)
+    return render_template('vacina_pmo/dashboard.html')
+
+
 def _user_is_clinic_owner(user=None):
     """Return ``True`` if ``user`` owns at least one clinic."""
 
