@@ -66,6 +66,8 @@ __all__ = [
     "VetSchedule",
     "PagamentoPlantonista",
     "CoberturaPlantonista",
+    "PmoVaccinationAnimal",
+    "PmoVaccinationVisit",
     "DeliveryRequest",
     "DeliveryResearchContact",
     "Order",

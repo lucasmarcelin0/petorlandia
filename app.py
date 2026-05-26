@@ -4053,19 +4053,27 @@ def vacina_pmo_sync():
     if current_user.role != 'admin':
         abort(403)
     try:
-        from services.vacina_pmo_service import sync_vacina_pmo_sheet
+        from services.vacina_pmo_service import persist_vacina_pmo_rows, sync_vacina_pmo_sheet
 
         payload = request.get_json(silent=True) or {}
         result = sync_vacina_pmo_sheet(
             sheet_gid=(payload.get('sheet_gid') or '').strip(),
             sheet_title=(payload.get('sheet_title') or '').strip(),
         )
+        rows = persist_vacina_pmo_rows(
+            result.rows,
+            spreadsheet_id=result.spreadsheet_id,
+            sheet_gid=result.sheet_gid,
+            sheet_title=result.sheet_title,
+        )
         return jsonify(
             {
                 'success': True,
-                'rows': result.rows,
+                'rows': rows,
                 'spreadsheet_id': result.spreadsheet_id,
                 'sheet_range': result.sheet_range,
+                'sheet_gid': result.sheet_gid,
+                'sheet_title': result.sheet_title,
             }
         )
     except Exception as exc:
@@ -4084,6 +4092,44 @@ def vacina_pmo_sheets():
         return jsonify({'success': True, 'sheets': list_vacina_pmo_sheets()})
     except Exception as exc:
         current_app.logger.exception("Falha ao listar abas da planilha Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/state', methods=['GET'])
+@login_required
+def vacina_pmo_state():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import get_saved_vacina_pmo_rows
+
+        return jsonify(
+            {
+                'success': True,
+                **get_saved_vacina_pmo_rows(
+                    sheet_gid=(request.args.get('sheet_gid') or '').strip(),
+                    sheet_title=(request.args.get('sheet_title') or '').strip(),
+                ),
+            }
+        )
+    except Exception as exc:
+        current_app.logger.exception("Falha ao carregar estado Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/animal/<int:animal_id>/status', methods=['POST'])
+@login_required
+def vacina_pmo_animal_status(animal_id):
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import update_vacina_pmo_animal_status
+
+        payload = request.get_json(silent=True) or {}
+        row = update_vacina_pmo_animal_status(animal_id, (payload.get('status') or '').strip())
+        return jsonify({'success': True, 'row': row})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao salvar status de animal Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 

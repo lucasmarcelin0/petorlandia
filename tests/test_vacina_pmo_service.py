@@ -1,4 +1,9 @@
-from services.vacina_pmo_service import parse_vacina_pmo_rows
+from services.vacina_pmo_service import (
+    get_saved_vacina_pmo_rows,
+    parse_vacina_pmo_rows,
+    persist_vacina_pmo_rows,
+    update_vacina_pmo_animal_status,
+)
 
 
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
@@ -94,3 +99,52 @@ def test_parse_vacina_pmo_rows_splits_partial_house_animals():
         "Gato 1",
         "Gato 2",
     ]
+
+
+def test_pmo_sync_persists_and_preserves_animal_status(app):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 0,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Babi", "species": "cao", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 2,
+    }
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+        first_animal_id = saved[0]["animals"][0]["id"]
+        update_vacina_pmo_animal_status(first_animal_id, "vacinado")
+
+        row["note"] = "observacao atualizada na planilha"
+        row["animals"][0]["status"] = "pendente"
+        persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+
+        state = get_saved_vacina_pmo_rows(sheet_gid="123")
+
+    assert state["rows"][0]["note"] == "observacao atualizada na planilha"
+    assert state["rows"][0]["password"] == "PMOA9999"
+    assert state["rows"][0]["animals"][0]["status"] == "vacinado"
+    assert state["rows"][0]["status"] == "parcial"

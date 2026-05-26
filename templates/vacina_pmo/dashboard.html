@@ -131,7 +131,7 @@
     </div>
     <div class="d-flex flex-wrap gap-2">
       <button type="button" class="btn btn-outline-secondary" id="pmo-clear">
-        <i class="fas fa-eraser me-1"></i> Limpar
+        <i class="fas fa-clock-rotate-left me-1"></i> Recarregar salvo
       </button>
       <button type="button" class="btn btn-primary" id="pmo-sync" data-sync-url="{{ url_for('vacina_pmo_sync') }}">
         <i class="fas fa-rotate me-1"></i> Sincronizar planilha
@@ -146,7 +146,7 @@
     <div class="row g-3 align-items-end">
       <div class="col-md-7 col-xl-4">
         <label for="pmo-sheet" class="form-label">Aba da planilha</label>
-        <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}">
+        <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}">
           <option value="">Carregando abas...</option>
         </select>
         <div class="form-text" id="pmo-sheet-info">Carregando datas disponiveis...</div>
@@ -213,28 +213,7 @@
   </div>
 
   <div class="row g-3">
-    <div class="col-xl-4">
-      <section class="pmo-panel">
-        <div class="pmo-panel__header d-flex align-items-center justify-content-between gap-2">
-          <h2 class="h5 mb-0">Importar lista</h2>
-          <span class="badge text-bg-light border">CSV/planilha</span>
-        </div>
-        <div class="pmo-panel__body">
-          <label for="pmo-raw" class="form-label">Dados colados da planilha</label>
-          <textarea id="pmo-raw" class="form-control pmo-import-textarea" spellcheck="false" placeholder="Cole aqui as linhas copiadas da planilha do dia"></textarea>
-          <div class="d-flex flex-wrap gap-2 mt-3">
-            <button type="button" class="btn btn-primary" id="pmo-parse-secondary">
-              <i class="fas fa-table-list me-1"></i> Montar lista
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="pmo-sample">
-              <i class="fas fa-vial me-1"></i> Carregar exemplo
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <div class="col-xl-8">
+    <div class="col-12">
       <section class="pmo-panel">
         <div class="pmo-panel__header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
           <div>
@@ -286,19 +265,12 @@
 
 <script>
 (() => {
-  const rawEl = document.getElementById('pmo-raw');
   const tbody = document.getElementById('pmo-tbody');
   const sheetEl = document.getElementById('pmo-sheet');
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
   const state = { rows: [] };
-
-  const sampleData = [
-    'Nome completo do tutor\tEndereco\tNumero da casa\tComplemento (Se houver)\tBairro\tTelefone\tTelefone 2 ou recado.\tQuantidade de cachorros para vacinar.\tQuantidade de gatos para vacinar\tNome do(s) animal(is)\tObservacao:\tData Vacina\tCao\tGato\tNome\tColumn 16\tData\tTurno\tWhatsApp 1\tWhatsApp 2',
-    'Maria Silva\tRua 20\t1107\tCasa 73\tJardim Benini\t16999999999\t16988888888\t1\t0\tLuna\tLigar antes de ir\t\t\t\t\t\t28/05/2026\tManha\tWhatsApp 1\tWhatsApp 2',
-    'Joao Souza\tAvenida 21\t2526\t\tConj. Julio Bucci\t16977777777\t\t2\t1\tThor, Mel e Nina\tPortao azul\t\t\t\t\t\t28/05/2026\tTarde\tWhatsApp 1\t',
-  ].join('\n');
 
   function normalizeText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -311,73 +283,13 @@
     return normalizeText(value);
   }
 
-  function parseCount(value) {
-    const text = normalizeText(value);
-    if (!/^\d{1,2}$/.test(text)) return 0;
-    const parsed = parseInt(text, 10);
-    return parsed >= 0 && parsed <= 30 ? parsed : 0;
-  }
-
   function onlyDigits(value) {
     return String(value || '').replace(/\D+/g, '');
-  }
-
-  function normalizePhone(value) {
-    let digits = onlyDigits(value);
-    if (!digits || digits === '0') return '';
-    if (digits.length === 8 || digits.length === 9) digits = '16' + digits;
-    if (!digits.startsWith('55')) digits = '55' + digits;
-    return digits.length >= 12 ? digits : '';
-  }
-
-  function parseDate(value) {
-    const text = normalizeText(value);
-    const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (!match) return text;
-    return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
   }
 
   function displayDate(value) {
     const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
-  }
-
-  function isHeaderOrSummary(cols) {
-    const joined = cols.map(normalizeText).join(' ').toLowerCase();
-    const first = normalizeText(cols[0]);
-    if (!joined) return true;
-    if (!/[a-zà-ú]/i.test(first)) return true;
-    return joined.includes('nome completo do tutor')
-      || joined.includes('total de animais')
-      || joined.includes('digite o dia')
-      || /^(\d+\s*)+$/.test(joined)
-      || joined.includes('perdas')
-      || joined.includes('sobras');
-  }
-
-  function splitAnimals(value) {
-    const text = normalizeText(value);
-    if (!text) return [];
-    return text
-      .replace(/\r/g, '\n')
-      .split(/,|;|\n|\se\s/gi)
-      .map(normalizeText)
-      .filter(Boolean);
-  }
-
-  function buildAnimalRecords(names, dogs, cats) {
-    const total = Math.max(names.length, dogs + cats);
-    const records = [];
-    for (let index = 0; index < total; index += 1) {
-      const species = index < dogs ? 'cao' : 'gato';
-      const fallback = species === 'cao' ? `Cao ${index + 1}` : `Gato ${index - dogs + 1}`;
-      records.push({
-        name: names[index] || fallback,
-        species,
-        status: 'pendente',
-      });
-    }
-    return records;
   }
 
   function makePassword(seed) {
@@ -386,16 +298,13 @@
     return `PMO${letters[Math.floor(Math.random() * letters.length)]}${base}`;
   }
 
-  function buildAddress(cols) {
-    return [cols[1], cols[2], cols[3], cols[4]].map(normalizeText).filter(Boolean).join(', ');
-  }
-
   function buildMessage(row, phone) {
     const vaccinated = row.animals.filter((animal) => animal.status === 'vacinado');
     const source = vaccinated.length ? vaccinated : row.animals;
     const names = source.length ? source.map((animal) => animal.name).join(', ') : 'seu animal';
     const certificate = row.certificateUrl || 'LINK_DA_CARTEIRINHA';
-    const text = `Ola, ${row.tutor}. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Carteirinha digital: ${certificate}. Senha provisoria: ${row.password}. Reforco previsto para o proximo ano.`;
+    const evaluation = 'LINK_AVALIACAO_PREFEITURA';
+    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Carteirinha digital: ${certificate}. Primeiro acesso ao PetOrlandia: use seu telefone e a senha provisoria ${row.password}. A raiva e grave, e a vacina anual protege sua familia, seu animal e a cidade. Avalie o atendimento da Prefeitura aqui: ${evaluation}. Reforco previsto para o proximo ano.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
@@ -410,46 +319,10 @@
     return 'pendente';
   }
 
-  function parseRows() {
-    const fallbackDate = sheetEl.selectedOptions[0]?.dataset.date || '';
-    const rows = rawEl.value
-      .split(/\n+/)
-      .map((line) => line.split('\t'))
-      .filter((cols) => !isHeaderOrSummary(cols))
-      .map((cols, index) => {
-        const tutor = normalizeText(cols[0]);
-        const phone1 = normalizePhone(cols[5]);
-        const phone2 = normalizePhone(cols[6]);
-        const date = parseDate(cols[16] || cols[11] || fallbackDate);
-        const dogs = parseCount(cols[7]);
-        const cats = parseCount(cols[8]);
-        const animalNames = splitAnimals(cols[9]);
-        return {
-          id: `${Date.now()}-${index}`,
-          status: 'pendente',
-          tutor,
-          address: buildAddress(cols),
-          phone1,
-          phone2,
-          dogs,
-          cats,
-          animals: buildAnimalRecords(animalNames, dogs, cats),
-          note: normalizeText(cols[10]),
-          date,
-          shift: normalizeShift(cols[17]),
-          password: makePassword(phone1 || phone2 || String(index)),
-          certificateUrl: '',
-        };
-      })
-      .filter((row) => row.tutor && (row.phone1 || row.phone2 || row.address) && (row.dogs || row.cats || row.animals.length));
-
-    state.rows = rows;
-    render();
-  }
-
   function normalizeSyncedRows(rows) {
     return (rows || []).map((row, index) => ({
       id: row.id || `sync-${Date.now()}-${index}`,
+      visitId: row.visitId || null,
       status: row.status || 'pendente',
       tutor: row.tutor || '',
       address: row.address || '',
@@ -457,7 +330,12 @@
       phone2: row.phone2 || '',
       dogs: Number(row.dogs) || 0,
       cats: Number(row.cats) || 0,
-      animals: Array.isArray(row.animals) ? row.animals : [],
+      animals: Array.isArray(row.animals) ? row.animals.map((animal) => ({
+        id: animal.id || null,
+        name: animal.name || '',
+        species: animal.species || 'cao',
+        status: animal.status || 'pendente',
+      })) : [],
       note: row.note || '',
       date: row.date || '',
       shift: row.shift || '',
@@ -502,13 +380,14 @@
 
   async function syncSheet(buttonId = 'pmo-sync') {
     const button = document.getElementById(buttonId);
+    const syncUrl = document.getElementById('pmo-sync').dataset.syncUrl;
     const original = button.innerHTML;
     const otherButton = buttonId === 'pmo-sync' ? document.getElementById('pmo-sync-inline') : document.getElementById('pmo-sync');
     button.disabled = true;
     if (otherButton) otherButton.disabled = true;
     button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando';
     try {
-      const response = await fetch(button.dataset.syncUrl, {
+      const response = await fetch(syncUrl, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -528,7 +407,7 @@
       shiftEl.value = '';
       statusFilterEl.value = '';
       render();
-      sheetInfoEl.textContent = `Aba ${sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada: ${state.rows.length} visitas.`;
+      sheetInfoEl.textContent = `Aba ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada e salva: ${state.rows.length} visitas.`;
       window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
     } catch (error) {
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
@@ -536,6 +415,55 @@
       button.disabled = false;
       if (otherButton) otherButton.disabled = false;
       button.innerHTML = original;
+    }
+  }
+
+  async function loadSavedState(useSelectedSheet = false) {
+    const params = new URLSearchParams();
+    if (useSelectedSheet) {
+      if (sheetEl.value) params.set('sheet_gid', sheetEl.value);
+      const title = sheetEl.selectedOptions[0]?.dataset.title || '';
+      if (title) params.set('sheet_title', title);
+    }
+    try {
+      const url = `${sheetEl.dataset.stateUrl}${params.toString() ? `?${params}` : ''}`;
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Nao foi possivel carregar o estado salvo.');
+      }
+      if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
+        sheetEl.value = payload.sheet_gid;
+      }
+      state.rows = normalizeSyncedRows(payload.rows || []);
+      render();
+      if (state.rows.length) {
+        sheetInfoEl.textContent = `Estado salvo carregado para ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || 'a aba selecionada'}: ${state.rows.length} visitas.`;
+      }
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  async function saveAnimalStatus(animal, status) {
+    if (!animal.id) return;
+    const response = await fetch(`/vacina-pmo/animal/${animal.id}/status`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ status }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Nao foi possivel salvar a alteracao.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
     }
   }
 
@@ -629,37 +557,38 @@
     });
   }
 
-  tbody.addEventListener('change', (event) => {
+  tbody.addEventListener('change', async (event) => {
     const rowEl = event.target.closest('tr[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
     if (event.target.dataset.action === 'animal-status') {
       const animal = row.animals[Number(event.target.dataset.animalIndex)];
-      if (animal) animal.status = event.target.value;
+      if (animal) {
+        animal.status = event.target.value;
+        try {
+          await saveAnimalStatus(animal, event.target.value);
+        } catch (error) {
+          window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        }
+      }
       row.status = inferVisitStatus(row.animals);
       render();
     }
   });
 
-  document.getElementById('pmo-parse-secondary').addEventListener('click', parseRows);
   document.getElementById('pmo-sync').addEventListener('click', () => syncSheet('pmo-sync'));
   document.getElementById('pmo-sync-inline').addEventListener('click', () => syncSheet('pmo-sync-inline'));
-  document.getElementById('pmo-sample').addEventListener('click', () => {
-    rawEl.value = sampleData;
-    parseRows();
-  });
   document.getElementById('pmo-clear').addEventListener('click', () => {
-    rawEl.value = '';
-    state.rows = [];
-    render();
+    loadSavedState(true);
   });
   document.getElementById('pmo-export').addEventListener('click', exportRows);
   [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
   sheetEl.addEventListener('change', () => {
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
-      ? `Data selecionada: ${displayDate(date)}. Clique em Sincronizar aba.`
-      : 'Aba selecionada sem data reconhecida. Clique em Sincronizar aba para tentar ler.';
+      ? `Data selecionada: ${displayDate(date)}. Carregando estado salvo desta aba...`
+      : 'Aba selecionada sem data reconhecida. Carregando estado salvo desta aba...';
+    loadSavedState(true);
   });
   document.querySelectorAll('[data-shift-shortcut]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -668,7 +597,7 @@
     });
   });
 
-  loadSheets();
+  loadSheets().then(() => loadSavedState(false));
   render();
 })();
 </script>

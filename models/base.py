@@ -2497,6 +2497,62 @@ class Notification(db.Model):
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
 
 
+class PmoVaccinationVisit(db.Model):
+    __tablename__ = 'pmo_vaccination_visit'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'spreadsheet_id',
+            'sheet_gid',
+            'source_row',
+            name='uq_pmo_vaccination_visit_sheet_row',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    spreadsheet_id = db.Column(db.String(128), nullable=False, index=True)
+    sheet_gid = db.Column(db.String(64), nullable=False, index=True)
+    sheet_title = db.Column(db.String(120), nullable=False, index=True)
+    source_row = db.Column(db.Integer, nullable=False)
+    tutor_name = db.Column(db.String(255), nullable=False)
+    address = db.Column(db.String(500), nullable=True)
+    phone1 = db.Column(db.String(32), nullable=True)
+    phone2 = db.Column(db.String(32), nullable=True)
+    dogs = db.Column(db.Integer, nullable=False, default=0)
+    cats = db.Column(db.Integer, nullable=False, default=0)
+    vaccine_date = db.Column(db.Date, nullable=True)
+    shift = db.Column(db.String(30), nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    password = db.Column(db.String(32), nullable=False)
+    certificate_url = db.Column(db.String(500), nullable=True)
+    synced_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    animals = db.relationship(
+        'PmoVaccinationAnimal',
+        backref='visit',
+        cascade='all, delete-orphan',
+        order_by='PmoVaccinationAnimal.position',
+    )
+
+
+class PmoVaccinationAnimal(db.Model):
+    __tablename__ = 'pmo_vaccination_animal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    visit_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pmo_vaccination_visit.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    position = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    species = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default='pendente')
+    vaccinated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class DeliveryResearchContact(db.Model):
     __tablename__ = 'delivery_research_contact'
 
