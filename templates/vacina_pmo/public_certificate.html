@@ -315,6 +315,24 @@
       font-size: .95rem;
     }
 
+    .video-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f172a;
+    }
+
+    .video-frame iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
     .stars {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -534,13 +552,27 @@
       </div>
     </section>
 
+    {% if educational_video.embed_url %}
+      <section class="card" style="margin-top:16px;">
+        <h2>Video educativo</h2>
+        <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Assista a orientacao da campanha antes de guardar sua carteirinha.</p>
+        <div class="video-frame">
+          <iframe
+            src="{{ educational_video.embed_url }}"
+            title="Video educativo da campanha de vacinacao antirrabica"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen></iframe>
+        </div>
+      </section>
+    {% endif %}
+
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>
       {% if evaluation_saved %}
         <div class="notice">Obrigado. Sua avaliacao foi registrada.</div>
       {% elif evaluation_error %}
         <div class="notice error">{{ evaluation_error }}</div>
-      {% elif visit.evaluation_rating %}
+      {% elif evaluation.rating %}
         <div class="notice">Avaliacao ja registrada. Obrigado pela colaboracao.</div>
       {% endif %}
 
@@ -552,7 +584,7 @@
             <div class="stars" aria-label="Satisfacao geral">
               {% for score in range(1, 6) %}
                 <label>
-                  <input type="radio" name="rating" value="{{ score }}" {% if visit.evaluation_rating == score %}checked{% endif %} required>
+                  <input type="radio" name="rating" value="{{ score }}" {% if evaluation.rating == score %}checked{% endif %} required>
                   <span>{{ score }}</span>
                 </label>
               {% endfor %}
@@ -564,7 +596,7 @@
             <div class="stars" aria-label="Cadastro e agendamento">
               {% for score in range(1, 6) %}
                 <label>
-                  <input type="radio" name="registration_rating" value="{{ score }}" {% if visit.evaluation_registration_rating == score %}checked{% endif %}>
+                  <input type="radio" name="registration_rating" value="{{ score }}" {% if evaluation.registration_rating == score %}checked{% endif %}>
                   <span>{{ score }}</span>
                 </label>
               {% endfor %}
@@ -576,7 +608,7 @@
             <div class="stars" aria-label="Atendimento no dia da vacinacao">
               {% for score in range(1, 6) %}
                 <label>
-                  <input type="radio" name="service_rating" value="{{ score }}" {% if visit.evaluation_service_rating == score %}checked{% endif %}>
+                  <input type="radio" name="service_rating" value="{{ score }}" {% if evaluation.service_rating == score %}checked{% endif %}>
                   <span>{{ score }}</span>
                 </label>
               {% endfor %}
@@ -588,7 +620,7 @@
             <div class="stars" aria-label="Informacoes e carteirinha digital">
               {% for score in range(1, 6) %}
                 <label>
-                  <input type="radio" name="information_rating" value="{{ score }}" {% if visit.evaluation_information_rating == score %}checked{% endif %}>
+                  <input type="radio" name="information_rating" value="{{ score }}" {% if evaluation.information_rating == score %}checked{% endif %}>
                   <span>{{ score }}</span>
                 </label>
               {% endfor %}
@@ -600,14 +632,14 @@
             <div class="stars" aria-label="Esta pesquisa foi facil de responder">
               {% for score in range(1, 6) %}
                 <label>
-                  <input type="radio" name="survey_rating" value="{{ score }}" {% if visit.evaluation_survey_rating == score %}checked{% endif %}>
+                  <input type="radio" name="survey_rating" value="{{ score }}" {% if evaluation.survey_rating == score %}checked{% endif %}>
                   <span>{{ score }}</span>
                 </label>
               {% endfor %}
             </div>
           </div>
         </div>
-        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha">{{ visit.evaluation_comment or '' }}</textarea>
+        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha">{{ evaluation.comment or '' }}</textarea>
         <div style="margin-top:12px;">
           <button class="button" type="submit">Enviar avaliacao</button>
         </div>

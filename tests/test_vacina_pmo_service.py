@@ -3,6 +3,7 @@ from services.vacina_pmo_service import (
     get_saved_vacina_pmo_rows,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
+    save_vacina_pmo_evaluation,
     update_vacina_pmo_animal_status,
 )
 from extensions import db
@@ -146,14 +147,16 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
         )
 
         state = get_saved_vacina_pmo_rows(sheet_gid="123")
-        visit = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first()
-        visit.evaluation_rating = 5
-        visit.evaluation_registration_rating = 4
-        visit.evaluation_service_rating = 5
-        visit.evaluation_information_rating = 3
-        visit.evaluation_survey_rating = 4
-        visit.evaluation_comment = "Equipe atenciosa"
-        db.session.commit()
+        token = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first().public_token
+        save_vacina_pmo_evaluation(
+            token,
+            5,
+            "Equipe atenciosa",
+            registration_rating=4,
+            service_rating=5,
+            information_rating=3,
+            survey_rating=4,
+        )
         evaluated_state = get_saved_vacina_pmo_rows(sheet_gid="123")
 
     assert state["rows"][0]["note"] == "observacao atualizada na planilha"
@@ -172,7 +175,8 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
 
 
-def test_pmo_public_link_renders_and_records_evaluation(app, client):
+def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch):
+    monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://youtu.be/abcDEF12345")
     row = {
         "id": "sheet-1",
         "status": "pendente",
@@ -209,6 +213,8 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
     assert b"Comprovante simples para o tutor" in response.data
     assert b"Como usar esta carteirinha" in response.data
     assert b"Quando procurar ajuda" in response.data
+    assert b"Video educativo" in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
 
     post = client.post(
         f"/vacina-pmo/c/{token}",
@@ -231,9 +237,16 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
         assert visit.evaluation_information_rating == 5
         assert visit.evaluation_survey_rating == 4
         assert visit.evaluation_comment == "Atendimento excelente"
+        evaluated_state = get_saved_vacina_pmo_rows(sheet_gid="123")
+        assert evaluated_state["rows"][0]["evaluationRegistrationRating"] == 4
+        assert evaluated_state["rows"][0]["evaluationServiceRating"] == 5
+        assert evaluated_state["rows"][0]["evaluationInformationRating"] == 5
+        assert evaluated_state["rows"][0]["evaluationSurveyRating"] == 4
+        assert evaluated_state["rows"][0]["evaluationComment"] == "Atendimento excelente"
 
 
-def test_pmo_public_pet_card_is_tutor_friendly(app, client):
+def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
+    monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://www.youtube.com/watch?v=abcDEF12345")
     row = {
         "id": "sheet-1",
         "status": "pendente",
@@ -269,6 +282,8 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client):
     assert b"Comprovante digital da campanha" in response.data
     assert b"Proximo reforco" in response.data
     assert b"Imprimir ou salvar PDF" in response.data
+    assert b"Video educativo" in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
     assert b"Abrir ficha clinica" not in response.data
 
 
@@ -296,3 +311,11 @@ def test_login_respects_safe_next_url(app, client):
 
     blocked = client.get("/login?next=https://example.org/phish")
     assert b'name="next" value="/"' in blocked.data
+
+
+def test_pmo_visit_model_includes_evaluation_dimension_columns():
+    columns = {column.name for column in PmoVaccinationVisit.__table__.columns}
+    assert "evaluation_registration_rating" in columns
+    assert "evaluation_service_rating" in columns
+    assert "evaluation_information_rating" in columns
+    assert "evaluation_survey_rating" in columns
