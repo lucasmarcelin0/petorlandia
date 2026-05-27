@@ -119,6 +119,58 @@
     color: #64748b;
     text-align: center;
   }
+
+  .pmo-eval-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .pmo-eval-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8fafc;
+    padding: 12px;
+    min-height: 104px;
+  }
+
+  .pmo-eval-card__score {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .pmo-eval-card__label {
+    color: #64748b;
+    font-size: .78rem;
+    min-height: 34px;
+  }
+
+  .pmo-comment-list {
+    display: grid;
+    gap: 10px;
+    max-height: 240px;
+    overflow: auto;
+  }
+
+  .pmo-comment {
+    border-left: 4px solid #0ea5e9;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  @media (max-width: 1100px) {
+    .pmo-eval-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 576px) {
+    .pmo-eval-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -212,6 +264,33 @@
     </div>
   </div>
 
+  <section class="pmo-panel mb-3" id="pmo-evaluations">
+    <div class="pmo-panel__header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+      <div>
+        <h2 class="h5 mb-0">Avaliacoes dos moradores</h2>
+        <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informacoes e a propria pesquisa.</div>
+      </div>
+      <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
+    </div>
+    <div class="pmo-panel__body">
+      <div class="pmo-eval-grid mb-3" id="pmo-eval-grid"></div>
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <h3 class="h6 mb-2">Comentarios recentes</h3>
+          <div class="pmo-comment-list" id="pmo-eval-comments">
+            <div class="text-muted small">Nenhum comentario registrado para os filtros atuais.</div>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <h3 class="h6 mb-2">Leitura rapida</h3>
+          <div class="small text-muted" id="pmo-eval-insights">
+            As respostas aparecem depois de carregar uma aba com avaliacoes.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="row g-3">
     <div class="col-12">
       <section class="pmo-panel">
@@ -270,7 +349,18 @@
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
+  const evalGridEl = document.getElementById('pmo-eval-grid');
+  const evalSummaryEl = document.querySelector('[data-eval-summary]');
+  const evalCommentsEl = document.getElementById('pmo-eval-comments');
+  const evalInsightsEl = document.getElementById('pmo-eval-insights');
   const state = { rows: [] };
+  const evaluationMetrics = [
+    ['evaluationRating', 'Satisfacao geral'],
+    ['evaluationRegistrationRating', 'Cadastro e agendamento'],
+    ['evaluationServiceRating', 'Atendimento no dia'],
+    ['evaluationInformationRating', 'Informacoes e carteirinha'],
+    ['evaluationSurveyRating', 'Pesquisa'],
+  ];
 
   function normalizeText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -343,6 +433,13 @@
       loginPhone: row.loginPhone || '',
       certificateUrl: row.certificateUrl || '',
       publicUrl: row.publicUrl || row.certificateUrl || '',
+      evaluationRating: row.evaluationRating || null,
+      evaluationRegistrationRating: row.evaluationRegistrationRating || null,
+      evaluationServiceRating: row.evaluationServiceRating || null,
+      evaluationInformationRating: row.evaluationInformationRating || null,
+      evaluationSurveyRating: row.evaluationSurveyRating || null,
+      evaluationComment: row.evaluationComment || '',
+      evaluatedAt: row.evaluatedAt || '',
       sourceRow: row.sourceRow || null,
     }));
   }
@@ -485,6 +582,72 @@
     document.querySelector('[data-stat="links"]').textContent = links;
   }
 
+  function numericRating(value) {
+    const rating = Number(value);
+    return Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : null;
+  }
+
+  function average(values) {
+    const valid = values.map(numericRating).filter((value) => value !== null);
+    if (!valid.length) return null;
+    return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+  }
+
+  function formatScore(value) {
+    return value === null ? '-' : value.toFixed(1).replace('.', ',');
+  }
+
+  function renderEvaluations(rows) {
+    const visible = rows.filter(rowMatchesFilters);
+    const answered = visible.filter((row) => numericRating(row.evaluationRating) !== null);
+    evalSummaryEl.textContent = answered.length
+      ? `${answered.length} resposta${answered.length === 1 ? '' : 's'} de ${visible.length} visitas filtradas`
+      : `0 respostas de ${visible.length} visitas filtradas`;
+
+    evalGridEl.innerHTML = evaluationMetrics.map(([key, label]) => {
+      const values = answered.map((row) => row[key]);
+      const score = average(values);
+      const count = values.map(numericRating).filter((value) => value !== null).length;
+      return `
+        <div class="pmo-eval-card">
+          <div class="pmo-eval-card__label">${escapeHtml(label)}</div>
+          <div class="pmo-eval-card__score">${formatScore(score)}</div>
+          <div class="text-muted small">${count} nota${count === 1 ? '' : 's'}</div>
+        </div>
+      `;
+    }).join('');
+
+    const comments = answered
+      .filter((row) => normalizeText(row.evaluationComment))
+      .sort((a, b) => String(b.evaluatedAt || '').localeCompare(String(a.evaluatedAt || '')))
+      .slice(0, 8);
+    evalCommentsEl.innerHTML = comments.length
+      ? comments.map((row) => `
+          <div class="pmo-comment">
+            <div class="fw-semibold">${escapeHtml(row.tutor || 'Morador')}</div>
+            <div>${escapeHtml(row.evaluationComment)}</div>
+          </div>
+        `).join('')
+      : '<div class="text-muted small">Nenhum comentario registrado para os filtros atuais.</div>';
+
+    const weakest = evaluationMetrics
+      .map(([key, label]) => ({ label, score: average(answered.map((row) => row[key])) }))
+      .filter((item) => item.score !== null)
+      .sort((a, b) => a.score - b.score)[0];
+    const strongest = evaluationMetrics
+      .map(([key, label]) => ({ label, score: average(answered.map((row) => row[key])) }))
+      .filter((item) => item.score !== null)
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (!answered.length) {
+      evalInsightsEl.textContent = 'Ainda nao ha avaliacoes respondidas para a aba e filtros atuais.';
+    } else if (weakest && strongest && weakest.label !== strongest.label) {
+      evalInsightsEl.innerHTML = `Melhor ponto: <strong>${escapeHtml(strongest.label)}</strong> (${formatScore(strongest.score)}). Ponto que merece mais atencao: <strong>${escapeHtml(weakest.label)}</strong> (${formatScore(weakest.score)}).`;
+    } else {
+      evalInsightsEl.innerHTML = `Media geral das respostas: <strong>${formatScore(average(answered.map((row) => row.evaluationRating)))}</strong>.`;
+    }
+  }
+
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, (char) => ({
       '&': '&amp;',
@@ -497,6 +660,7 @@
 
   function render() {
     renderStats(state.rows);
+    renderEvaluations(state.rows);
     const visible = state.rows.filter(rowMatchesFilters);
     if (!visible.length) {
       tbody.innerHTML = '<tr><td colspan="12"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div></td></tr>';

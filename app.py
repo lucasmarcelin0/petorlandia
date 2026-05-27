@@ -4065,7 +4065,15 @@ def vacina_pmo_public(token):
         try:
             rating = int(request.form.get('rating') or 0)
             comment = request.form.get('comment') or ""
-            visit = save_vacina_pmo_evaluation(token, rating, comment)
+            visit = save_vacina_pmo_evaluation(
+                token,
+                rating,
+                comment,
+                registration_rating=request.form.get('registration_rating'),
+                service_rating=request.form.get('service_rating'),
+                information_rating=request.form.get('information_rating'),
+                survey_rating=request.form.get('survey_rating'),
+            )
             evaluation_saved = True
         except Exception as exc:
             evaluation_error = str(exc)

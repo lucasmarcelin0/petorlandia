@@ -146,6 +146,15 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
         )
 
         state = get_saved_vacina_pmo_rows(sheet_gid="123")
+        visit = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first()
+        visit.evaluation_rating = 5
+        visit.evaluation_registration_rating = 4
+        visit.evaluation_service_rating = 5
+        visit.evaluation_information_rating = 3
+        visit.evaluation_survey_rating = 4
+        visit.evaluation_comment = "Equipe atenciosa"
+        db.session.commit()
+        evaluated_state = get_saved_vacina_pmo_rows(sheet_gid="123")
 
     assert state["rows"][0]["note"] == "observacao atualizada na planilha"
     assert state["rows"][0]["password"] == "PMOA9999"
@@ -155,6 +164,12 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert Vacina.query.filter_by(nome="Vacina Antirrabica", aplicada=True).first() is not None
     assert Vacina.query.filter_by(nome="Reforco Vacina Antirrabica", aplicada=False).first() is not None
     assert User.query.filter_by(phone="+5516999999999").first() is not None
+    assert evaluated_state["rows"][0]["evaluationRating"] == 5
+    assert evaluated_state["rows"][0]["evaluationRegistrationRating"] == 4
+    assert evaluated_state["rows"][0]["evaluationServiceRating"] == 5
+    assert evaluated_state["rows"][0]["evaluationInformationRating"] == 3
+    assert evaluated_state["rows"][0]["evaluationSurveyRating"] == 4
+    assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
 
 
 def test_pmo_public_link_renders_and_records_evaluation(app, client):
@@ -197,13 +212,24 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
 
     post = client.post(
         f"/vacina-pmo/c/{token}",
-        data={"rating": "5", "comment": "Atendimento excelente"},
+        data={
+            "rating": "5",
+            "registration_rating": "4",
+            "service_rating": "5",
+            "information_rating": "5",
+            "survey_rating": "4",
+            "comment": "Atendimento excelente",
+        },
     )
     assert post.status_code == 200
 
     with app.app_context():
         visit = get_vacina_pmo_public_visit(token)
         assert visit.evaluation_rating == 5
+        assert visit.evaluation_registration_rating == 4
+        assert visit.evaluation_service_rating == 5
+        assert visit.evaluation_information_rating == 5
+        assert visit.evaluation_survey_rating == 4
         assert visit.evaluation_comment == "Atendimento excelente"
 
 

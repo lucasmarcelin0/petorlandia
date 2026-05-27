@@ -319,7 +319,6 @@
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 8px;
-      margin-bottom: 12px;
     }
 
     .stars label {
@@ -345,6 +344,21 @@
       border-color: var(--blue);
       background: #e8f1ff;
       color: var(--blue);
+    }
+
+    .rating-list {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .rating-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .rating-row strong {
+      font-size: .98rem;
     }
 
     textarea {
@@ -382,6 +396,10 @@
       .brand {
         align-items: flex-start;
         flex-direction: column;
+      }
+
+      .stars {
+        gap: 6px;
       }
 
       .navlinks {
@@ -528,15 +546,68 @@
 
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="stars" aria-label="Nota do atendimento">
-          {% for score in range(1, 6) %}
-            <label>
-              <input type="radio" name="rating" value="{{ score }}" {% if visit.evaluation_rating == score %}checked{% endif %} required>
-              <span>{{ score }}</span>
-            </label>
-          {% endfor %}
+        <div class="rating-list">
+          <div class="rating-row">
+            <strong>Quao satisfeito voce ficou no geral?</strong>
+            <div class="stars" aria-label="Satisfacao geral">
+              {% for score in range(1, 6) %}
+                <label>
+                  <input type="radio" name="rating" value="{{ score }}" {% if visit.evaluation_rating == score %}checked{% endif %} required>
+                  <span>{{ score }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="rating-row">
+            <strong>Cadastro e agendamento</strong>
+            <div class="stars" aria-label="Cadastro e agendamento">
+              {% for score in range(1, 6) %}
+                <label>
+                  <input type="radio" name="registration_rating" value="{{ score }}" {% if visit.evaluation_registration_rating == score %}checked{% endif %}>
+                  <span>{{ score }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="rating-row">
+            <strong>Atendimento no dia da vacinacao</strong>
+            <div class="stars" aria-label="Atendimento no dia da vacinacao">
+              {% for score in range(1, 6) %}
+                <label>
+                  <input type="radio" name="service_rating" value="{{ score }}" {% if visit.evaluation_service_rating == score %}checked{% endif %}>
+                  <span>{{ score }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="rating-row">
+            <strong>Informacoes e carteirinha digital</strong>
+            <div class="stars" aria-label="Informacoes e carteirinha digital">
+              {% for score in range(1, 6) %}
+                <label>
+                  <input type="radio" name="information_rating" value="{{ score }}" {% if visit.evaluation_information_rating == score %}checked{% endif %}>
+                  <span>{{ score }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="rating-row">
+            <strong>Esta pesquisa foi facil de responder?</strong>
+            <div class="stars" aria-label="Esta pesquisa foi facil de responder">
+              {% for score in range(1, 6) %}
+                <label>
+                  <input type="radio" name="survey_rating" value="{{ score }}" {% if visit.evaluation_survey_rating == score %}checked{% endif %}>
+                  <span>{{ score }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
-        <textarea name="comment" placeholder="Comentario opcional sobre o atendimento">{{ visit.evaluation_comment or '' }}</textarea>
+        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha">{{ visit.evaluation_comment or '' }}</textarea>
         <div style="margin-top:12px;">
           <button class="button" type="submit">Enviar avaliacao</button>
         </div>

@@ -534,7 +534,12 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "certificateUrl": visit.certificate_url or public_url,
         "publicUrl": public_url,
         "evaluationRating": visit.evaluation_rating,
+        "evaluationRegistrationRating": visit.evaluation_registration_rating,
+        "evaluationServiceRating": visit.evaluation_service_rating,
+        "evaluationInformationRating": visit.evaluation_information_rating,
+        "evaluationSurveyRating": visit.evaluation_survey_rating,
         "evaluationComment": visit.evaluation_comment or "",
+        "evaluatedAt": visit.evaluated_at.isoformat() if visit.evaluated_at else "",
         "sourceRow": visit.source_row,
     }
 
@@ -675,11 +680,36 @@ def get_vacina_pmo_public_visit(token: str) -> PmoVaccinationVisit | None:
     return visit
 
 
-def save_vacina_pmo_evaluation(token: str, rating: int, comment: str = "") -> PmoVaccinationVisit:
+def _validate_optional_rating(value: Any, label: str) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        rating = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"A nota de {label} precisa ficar entre 1 e 5.")
+    if rating < 1 or rating > 5:
+        raise ValueError(f"A nota de {label} precisa ficar entre 1 e 5.")
+    return rating
+
+
+def save_vacina_pmo_evaluation(
+    token: str,
+    rating: int,
+    comment: str = "",
+    *,
+    registration_rating: int | None = None,
+    service_rating: int | None = None,
+    information_rating: int | None = None,
+    survey_rating: int | None = None,
+) -> PmoVaccinationVisit:
     visit = PmoVaccinationVisit.query.filter_by(public_token=token).first_or_404()
     if rating < 1 or rating > 5:
         raise ValueError("A nota precisa ficar entre 1 e 5.")
     visit.evaluation_rating = rating
+    visit.evaluation_registration_rating = _validate_optional_rating(registration_rating, "cadastro e agendamento")
+    visit.evaluation_service_rating = _validate_optional_rating(service_rating, "atendimento no dia")
+    visit.evaluation_information_rating = _validate_optional_rating(information_rating, "informacoes")
+    visit.evaluation_survey_rating = _validate_optional_rating(survey_rating, "pesquisa")
     visit.evaluation_comment = (comment or "").strip()[:1200]
     visit.evaluated_at = utcnow()
     db.session.commit()
