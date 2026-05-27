@@ -4524,6 +4524,7 @@ def vacina_pmo_solicitar():
         'address_number': _prof_number,
         'address_complement': _prof_complement,
         'address_neighborhood': _prof_neighborhood,
+        'save_address': False,
         'shift': '',
         'note': '',
     }
@@ -4545,6 +4546,7 @@ def vacina_pmo_solicitar():
         form_state['shift'] = (request.form.get('shift') or '').strip()
         form_state['note'] = (request.form.get('note') or '').strip()
         save_address = request.form.get('save_address') == '1'
+        form_state['save_address'] = save_address
         normalized_address = normalize_pmo_request_address(form_state)
         form_state['address_street'] = normalized_address['street']
         form_state['address_number'] = normalized_address['number']
@@ -4552,9 +4554,19 @@ def vacina_pmo_solicitar():
         form_state['address_neighborhood'] = normalized_address['neighborhood']
 
         selected_animals = [a for a in user_animals if a.id in selected_ids]
+        duplicate_cpf = None
+        if form_state['cpf'] and form_state['cpf'] != (current_user.cpf or ''):
+            duplicate_cpf = User.query.filter(User.cpf == form_state['cpf'], User.id != current_user.id).first()
+        duplicate_email = None
+        if form_state['email'] and form_state['email'] != (current_user.email or ''):
+            duplicate_email = User.query.filter(User.email == form_state['email'], User.id != current_user.id).first()
 
         if not selected_animals:
             flash('Selecione ao menos um animal para vacinar.', 'danger')
+        elif duplicate_cpf:
+            flash('Este CPF já está cadastrado em outro tutor. Confira o número informado.', 'danger')
+        elif duplicate_email:
+            flash('Este e-mail já está cadastrado em outro tutor. Confira o e-mail informado.', 'danger')
         elif not form_state['phone']:
             flash('Informe um telefone para contato.', 'danger')
         elif not form_state['address_street'] or not form_state['address_neighborhood']:
@@ -4595,8 +4607,23 @@ def vacina_pmo_solicitar():
                 result = submit_vacina_pmo_request(payload)
 
                 if save_address:
+                    endereco = current_user.endereco or Endereco()
+                    endereco.rua = normalized_address['street'] or None
+                    endereco.numero = normalized_address['number'] or None
+                    endereco.complemento = normalized_address['complement'] or None
+                    endereco.bairro = normalized_address['neighborhood'] or None
+                    if current_user.endereco is None:
+                        db.session.add(endereco)
+                        db.session.flush()
+                        current_user.endereco_id = endereco.id
+                        current_user.endereco = endereco
                     current_user.address = normalized_address['full']
-                    db.session.commit()
+                current_user.name = form_state['tutor'] or current_user.name
+                if form_state['email']:
+                    current_user.email = form_state['email']
+                current_user.phone = form_state['phone'] or current_user.phone
+                current_user.cpf = form_state['cpf'] or current_user.cpf
+                db.session.commit()
 
                 public_token = result.get('public_token')
                 if public_token:
@@ -11772,22 +11799,6 @@ def profile():
         normalized_email = normalize_email(form.email.data)
         normalized_phone = normalize_phone(form.phone.data)
 
-        email_conflict = User.query.filter(
-            func.lower(User.email) == normalized_email,
-            User.id != current_user.id,
-        ).first()
-        if email_conflict:
-            if is_json_request:
-                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
-            flash('Email já está em uso.', 'danger')
-            return redirect(url_for('profile'))
-
-        if normalized_phone and find_users_by_phone(normalized_phone, exclude_user_id=current_user.id):
-            if is_json_request:
-                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}}), 400
-            flash('Celular já está em uso.', 'danger')
-            return redirect(url_for('profile'))
-
         required_address_labels = {
             'cep': 'CEP',
             'rua': 'Rua',
@@ -11805,6 +11816,22 @@ def profile():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
             flash(message, 'warning')
+            return redirect(url_for('profile'))
+
+        email_conflict = User.query.filter(
+            func.lower(User.email) == normalized_email,
+            User.id != current_user.id,
+        ).first()
+        if email_conflict:
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
+            flash('Email já está em uso.', 'danger')
+            return redirect(url_for('profile'))
+
+        if normalized_phone and find_users_by_phone(normalized_phone, exclude_user_id=current_user.id):
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}}), 400
+            flash('Celular já está em uso.', 'danger')
             return redirect(url_for('profile'))
 
         current_user.name = form.name.data

@@ -148,7 +148,8 @@
                 type="checkbox"
                 id="save_address"
                 name="save_address"
-                value="1">
+                value="1"
+                {% if form_state.save_address %}checked{% endif %}>
               <label class="form-check-label small" for="save_address">
                 Salvar este endereço no meu perfil
               </label>
