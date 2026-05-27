@@ -351,11 +351,18 @@
     .stars span {
       display: grid;
       place-items: center;
-      min-height: 42px;
+      min-height: 48px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #ffffff;
       font-weight: 800;
+      font-size: 1.05rem;
+      transition: background .12s, border-color .12s;
+    }
+
+    .stars label:hover span {
+      border-color: #94b4f5;
+      background: #f0f5ff;
     }
 
     .stars input:checked + span {
@@ -364,19 +371,39 @@
       color: var(--blue);
     }
 
+    .stars-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
     .rating-list {
       display: grid;
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 18px;
+      margin-bottom: 16px;
     }
 
     .rating-row {
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
 
     .rating-row strong {
       font-size: .98rem;
+    }
+
+    .rating-row .rating-hint {
+      font-size: .85rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .rating-divider {
+      border: none;
+      border-top: 1px dashed var(--line);
+      margin: 6px 0 2px;
     }
 
     textarea {
@@ -568,8 +595,14 @@
 
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>
+      <p class="lead" style="font-size:.95rem;margin-bottom:16px;">
+        Voce participou da campanha de vacinacao antirrabica da Prefeitura de Orlandia.
+        Sua opiniao leva menos de 1 minuto e ajuda a melhorar a proxima edicao.
+        Use a escala de <strong>1 (pessimo)</strong> a <strong>5 (excelente)</strong>.
+      </p>
+
       {% if evaluation_saved %}
-        <div class="notice">Obrigado. Sua avaliacao foi registrada.</div>
+        <div class="notice">Obrigado! Sua avaliacao foi registrada com sucesso.</div>
       {% elif evaluation_error %}
         <div class="notice error">{{ evaluation_error }}</div>
       {% elif evaluation.rating %}
@@ -579,8 +612,10 @@
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="rating-list">
+
           <div class="rating-row">
-            <strong>Quao satisfeito voce ficou no geral?</strong>
+            <strong>Satisfacao geral com a campanha</strong>
+            <p class="rating-hint">Considerando tudo — inscricao, visita e carteirinha — qual nota voce da para a campanha?</p>
             <div class="stars" aria-label="Satisfacao geral">
               {% for score in range(1, 6) %}
                 <label>
@@ -589,10 +624,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Cadastro e agendamento</strong>
+            <p class="rating-hint">Foi facil se inscrever? O processo de solicitar a visita foi claro e rapido?</p>
             <div class="stars" aria-label="Cadastro e agendamento">
               {% for score in range(1, 6) %}
                 <label>
@@ -601,10 +638,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Atendimento no dia da vacinacao</strong>
+            <p class="rating-hint">Como foi a equipe da prefeitura? Pontualidade, gentileza e cuidado com os animais.</p>
             <div class="stars" aria-label="Atendimento no dia da vacinacao">
               {% for score in range(1, 6) %}
                 <label>
@@ -613,10 +652,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Informacoes e carteirinha digital</strong>
+            <p class="rating-hint">As informacoes sobre a campanha foram claras? A carteirinha digital foi util?</p>
             <div class="stars" aria-label="Informacoes e carteirinha digital">
               {% for score in range(1, 6) %}
                 <label>
@@ -625,11 +666,14 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
+          <hr class="rating-divider">
           <div class="rating-row">
             <strong>Esta pesquisa foi facil de responder?</strong>
-            <div class="stars" aria-label="Esta pesquisa foi facil de responder">
+            <p class="rating-hint">Uma pergunta sobre a propria pesquisa — nao sobre a campanha.</p>
+            <div class="stars" aria-label="Facilidade da pesquisa">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="survey_rating" value="{{ score }}" {% if evaluation.survey_rating == score %}checked{% endif %}>
@@ -637,9 +681,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Dificil</span><span>😊 Muito facil</span></div>
           </div>
+
         </div>
-        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha">{{ evaluation.comment or '' }}</textarea>
+
+        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha (opcional)">{{ evaluation.comment or '' }}</textarea>
         <div style="margin-top:12px;">
           <button class="button" type="submit">Enviar avaliacao</button>
         </div>
