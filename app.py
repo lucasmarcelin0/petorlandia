@@ -4070,12 +4070,13 @@ def vacina_pmo_public(token):
         except Exception as exc:
             evaluation_error = str(exc)
 
-    primary_ficha_url = None
+    primary_pet_card_url = None
     for pmo_animal in visit.animals:
-        if not pmo_animal.animal_id:
-            continue
-        ficha_url = url_for('ficha_animal', animal_id=pmo_animal.animal_id)
-        primary_ficha_url = primary_ficha_url or ficha_url
+        primary_pet_card_url = primary_pet_card_url or url_for(
+            'vacina_pmo_public_pet',
+            token=token,
+            pmo_animal_id=pmo_animal.id,
+        )
 
     return render_template(
         'vacina_pmo/public_certificate.html',
@@ -4084,7 +4085,73 @@ def vacina_pmo_public(token):
         login_phone=format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         evaluation_saved=evaluation_saved,
         evaluation_error=evaluation_error,
-        primary_ficha_url=primary_ficha_url,
+        primary_pet_card_url=primary_pet_card_url,
+    )
+
+
+@app.route('/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>')
+def vacina_pmo_public_pet(token, pmo_animal_id):
+    from services.vacina_pmo_service import get_vacina_pmo_public_visit
+
+    visit = get_vacina_pmo_public_visit(token)
+    if not visit:
+        abort(404)
+
+    pmo_animal = next((item for item in visit.animals if item.id == pmo_animal_id), None)
+    if not pmo_animal:
+        abort(404)
+
+    animal = db.session.get(Animal, pmo_animal.animal_id) if pmo_animal.animal_id else None
+    vaccines = []
+    if animal:
+        vaccines = (
+            Vacina.query.filter_by(animal_id=animal.id)
+            .order_by(Vacina.criada_em.desc())
+            .all()
+        )
+        vaccines = sorted(
+            vaccines,
+            key=lambda item: (bool(item.aplicada), item.aplicada_em or date.min, item.criada_em or datetime.min),
+            reverse=True,
+        )
+
+    campaign_vaccine = None
+    for vaccine in vaccines:
+        if pmo_animal.vaccine_id and vaccine.id == pmo_animal.vaccine_id:
+            campaign_vaccine = vaccine
+            break
+        if not campaign_vaccine and (vaccine.tipo or "").startswith("Campanha PMO"):
+            campaign_vaccine = vaccine
+
+    effective_status = pmo_animal.status
+    if campaign_vaccine and campaign_vaccine.aplicada:
+        effective_status = "vacinado"
+
+    next_booster_date = None
+    if campaign_vaccine and campaign_vaccine.proxima_dose:
+        next_booster_date = campaign_vaccine.proxima_dose
+    elif visit.vaccine_date and effective_status == "vacinado":
+        next_booster_date = visit.vaccine_date + relativedelta(years=1)
+
+    vet_record_url = None
+    if (
+        animal
+        and current_user.is_authenticated
+        and (current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'])
+    ):
+        vet_record_url = url_for('ficha_animal', animal_id=animal.id)
+
+    return render_template(
+        'vacina_pmo/public_pet_card.html',
+        visit=visit,
+        token=token,
+        pmo_animal=pmo_animal,
+        animal=animal,
+        vaccines=vaccines,
+        campaign_vaccine=campaign_vaccine,
+        effective_status=effective_status,
+        next_booster_date=next_booster_date,
+        vet_record_url=vet_record_url,
     )
 
 

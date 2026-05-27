@@ -190,8 +190,8 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
     assert b"Carteirinha digital da vacina" in response.data
     assert b"(16) 99999-9999" in response.data
     assert b"PMOA9999" in response.data
-    assert b"Entrar para abrir ficha" in response.data
-    assert b"/login?next=/animal/" in response.data
+    assert b"Ver carteirinha" in response.data
+    assert b"Comprovante simples para o tutor" in response.data
     assert b"Como usar esta carteirinha" in response.data
     assert b"Quando procurar ajuda" in response.data
 
@@ -205,6 +205,45 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
         visit = get_vacina_pmo_public_visit(token)
         assert visit.evaluation_rating == 5
         assert visit.evaluation_comment == "Atendimento excelente"
+
+
+def test_pmo_public_pet_card_is_tutor_friendly(app, client):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "vacinado"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 2,
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+        visit = PmoVaccinationVisit.query.filter_by(sheet_gid="123").first()
+        token = visit.public_token
+        pmo_animal_id = visit.animals[0].id
+
+    response = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}")
+    assert response.status_code == 200
+    assert b"Carteirinha de Lua" in response.data
+    assert b"Comprovante digital da campanha" in response.data
+    assert b"Proximo reforco" in response.data
+    assert b"Imprimir ou salvar PDF" in response.data
+    assert b"Abrir ficha clinica" not in response.data
 
 
 def test_login_respects_safe_next_url(app, client):
