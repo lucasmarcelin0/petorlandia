@@ -4146,6 +4146,81 @@ def _pmo_status_context(status):
     }
 
 
+def _pmo_booster_countdown_label(next_booster_date):
+    if not next_booster_date:
+        return ""
+    days_remaining = (next_booster_date - date.today()).days
+    if days_remaining > 1:
+        return f"Faltam {days_remaining} dias para o reforco anual."
+    if days_remaining == 1:
+        return "Falta 1 dia para o reforco anual."
+    if days_remaining == 0:
+        return "O reforco anual esta indicado a partir de hoje."
+    if days_remaining == -1:
+        return "O reforco anual venceu ha 1 dia."
+    return f"O reforco anual venceu ha {abs(days_remaining)} dias."
+
+
+def _is_pmo_rabies_vaccine(vaccine):
+    name = (getattr(vaccine, 'nome', '') or '').lower()
+    kind = (getattr(vaccine, 'tipo', '') or '').lower()
+    text = f"{name} {kind}"
+    return any(term in text for term in ('antirrab', 'anti-rab', 'raiva', 'rabic'))
+
+
+def _pmo_animal_booster_guidance(animals):
+    animal_ids = [animal.id for animal in animals if getattr(animal, 'id', None)]
+    if not animal_ids:
+        return {}
+
+    vaccines = (
+        Vacina.query
+        .filter(Vacina.animal_id.in_(animal_ids), Vacina.aplicada.is_(True), Vacina.aplicada_em.isnot(None))
+        .order_by(Vacina.aplicada_em.desc(), Vacina.criada_em.desc())
+        .all()
+    )
+    latest_by_animal = {}
+    for vaccine in vaccines:
+        if vaccine.animal_id in latest_by_animal or not _is_pmo_rabies_vaccine(vaccine):
+            continue
+        latest_by_animal[vaccine.animal_id] = vaccine
+
+    guidance = {}
+    for animal in animals:
+        vaccine = latest_by_animal.get(animal.id)
+        if not vaccine:
+            guidance[animal.id] = {
+                'status': 'unknown',
+                'message': 'Sem registro de vacina antirrabica aplicada no PetOrlandia.',
+                'countdown': '',
+                'last_date': None,
+                'next_date': None,
+            }
+            continue
+        next_booster_date = vaccine.proxima_dose or (vaccine.aplicada_em + relativedelta(years=1))
+        days_remaining = (next_booster_date - date.today()).days
+        if days_remaining > 0:
+            message = (
+                f"{animal.name or 'Este pet'} ja recebeu vacina antirrabica ha menos de 1 ano. "
+                "Normalmente nao e necessario vacinar novamente antes do reforco anual."
+            )
+            status = 'protected'
+        elif days_remaining == 0:
+            message = f"O reforco anual de {animal.name or 'este pet'} esta indicado a partir de hoje."
+            status = 'due'
+        else:
+            message = f"O reforco anual de {animal.name or 'este pet'} esta vencido."
+            status = 'overdue'
+        guidance[animal.id] = {
+            'status': status,
+            'message': message,
+            'countdown': _pmo_booster_countdown_label(next_booster_date),
+            'last_date': vaccine.aplicada_em,
+            'next_date': next_booster_date,
+        }
+    return guidance
+
+
 def _wrap_pmo_pdf_text(text, max_chars):
     words = str(text or '').split()
     lines = []
@@ -4346,16 +4421,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     booster_countdown_label = ""
     if next_booster_date:
         booster_days_remaining = (next_booster_date - date.today()).days
-        if booster_days_remaining > 1:
-            booster_countdown_label = f"Faltam {booster_days_remaining} dias para o reforco anual."
-        elif booster_days_remaining == 1:
-            booster_countdown_label = "Falta 1 dia para o reforco anual."
-        elif booster_days_remaining == 0:
-            booster_countdown_label = "O reforco anual esta indicado a partir de hoje."
-        elif booster_days_remaining == -1:
-            booster_countdown_label = "O reforco anual venceu ha 1 dia."
-        else:
-            booster_countdown_label = f"O reforco anual venceu ha {abs(booster_days_remaining)} dias."
+        booster_countdown_label = _pmo_booster_countdown_label(next_booster_date)
 
     if (request.args.get('format') or '').lower() == 'pdf':
         return _export_vacina_pmo_pet_certificate_pdf(
@@ -4528,6 +4594,7 @@ def vacina_pmo_solicitar():
         'shift': '',
         'note': '',
     }
+    animal_booster_guidance = _pmo_animal_booster_guidance(user_animals)
 
     if request.method == 'POST':
         from services.vacina_pmo_service import submit_vacina_pmo_request
@@ -4658,6 +4725,7 @@ def vacina_pmo_solicitar():
         form_state=form_state,
         historico=historico,
         pmo_protocol_label=_pmo_protocol_label,
+        animal_booster_guidance=animal_booster_guidance,
     )
 
 

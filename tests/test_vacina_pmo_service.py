@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from services.vacina_pmo_service import (
     PMO_REQUEST_HEADERS,
@@ -538,6 +538,46 @@ def test_pmo_request_form_splits_saved_legacy_profile_address(app, client):
     assert b'value="Cond.torino casa 73"' in response.data
     assert b'value="Jardim Benini"' in response.data
     assert b'value="Rua 20, 1107, Cond.torino casa 73, Jardim Benini"' not in response.data
+
+
+def test_pmo_request_form_shows_booster_countdown_before_submission(app, client):
+    with app.app_context():
+        user = User(name="Tutor Reforco", email="tutor-reforco@example.com", phone="+5516999999993")
+        user.set_password("PMOA9993")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        animal = Animal(name="Lunna", user_id=user.id, species=species, status="ativo")
+        db.session.add(animal)
+        db.session.flush()
+        db.session.add(
+            Vacina(
+                animal_id=animal.id,
+                nome="Vacina Antirrabica",
+                tipo="Obrigatoria",
+                aplicada=True,
+                aplicada_em=date.today() - timedelta(days=90),
+                intervalo_dias=365,
+                frequencia="Anual",
+            )
+        )
+        db.session.commit()
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-reforco@example.com",
+            "password": "PMOA9993",
+        },
+    )
+
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b"Lunna ja recebeu vacina antirrabica ha menos de 1 ano" in response.data
+    assert b"Normalmente nao e necessario vacinar novamente antes do reforco anual" in response.data
+    assert b"Faltam" in response.data
+    assert b"Reforco previsto" in response.data
 
 
 def test_pmo_request_form_preserves_all_fields_after_validation_error(app, client):

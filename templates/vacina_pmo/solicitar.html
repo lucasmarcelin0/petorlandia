@@ -172,6 +172,7 @@
           {% for animal in user_animals %}
             {% set selected = animal.id in form_state.animal_ids %}
             {% set species_name = (animal.species.name if animal.species else '') %}
+            {% set booster = animal_booster_guidance.get(animal.id) %}
             <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3"
                    style="cursor:pointer;">
               <input
@@ -187,9 +188,25 @@
                   {% if animal.breed and animal.breed.name %} · {{ animal.breed.name }}{% endif %}
                   {% if animal.sex %} · {{ animal.sex }}{% endif %}
                 </span>
+                {% if booster %}
+                <span class="mt-2 small {% if booster.status == 'protected' %}text-success{% elif booster.status == 'unknown' %}text-muted{% else %}text-warning{% endif %}">
+                  <i class="fa-solid fa-shield-dog me-1"></i>
+                  {{ booster.message }}
+                  {% if booster.countdown %}
+                    <strong>{{ booster.countdown }}</strong>
+                  {% endif %}
+                  {% if booster.next_date %}
+                    Reforco previsto: {{ booster.next_date.strftime('%d/%m/%Y') }}.
+                  {% endif %}
+                </span>
+                {% endif %}
               </span>
             </label>
           {% endfor %}
+        </div>
+        <div class="alert alert-warning small mt-3 mb-0">
+          <i class="fa-solid fa-triangle-exclamation me-1"></i>
+          Se o animal ja recebeu vacina antirrabica ha menos de 1 ano, em geral nao precisa receber outra dose agora. Em caso de duvida, envie a solicitacao e informe a equipe no contato de confirmacao.
         </div>
       </div>
     </div>
