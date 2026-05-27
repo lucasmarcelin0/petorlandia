@@ -874,8 +874,29 @@ def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
         ).execute()
 
 
+def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
+    """Retorna o sheetId (gid) de uma aba pelo título."""
+    try:
+        metadata = (
+            service.spreadsheets()
+            .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+            .execute()
+        )
+        for sheet in metadata.get("sheets", []):
+            props = sheet.get("properties", {})
+            if props.get("title") == title:
+                return str(props.get("sheetId", ""))
+    except Exception:
+        pass
+    return ""
+
+
 def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
-    """Acrescenta uma nova solicitacao do morador na aba de solicitacoes."""
+    """Acrescenta uma nova solicitacao do morador na aba de solicitacoes.
+
+    Além de gravar na planilha, cria um registro local ``PmoVaccinationVisit``
+    vinculado ao usuário para que o histórico fique disponível na plataforma.
+    """
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
@@ -937,8 +958,69 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         .execute()
     )
 
+    updated_range = response.get("updates", {}).get("updatedRange", "")
+
+    # Determina o número da linha inserida para compor o source_row
+    source_row = 0
+    import re as _re
+    m = _re.search(r"!A(\d+)", updated_range)
+    if m:
+        source_row = int(m.group(1))
+
+    # Obtém o gid da aba de solicitações
+    sheet_gid = _get_sheet_gid(service, spreadsheet_id, title)
+
+    # Cria (ou atualiza) o registro local para histórico e protocolo
+    public_token: str | None = None
+    user_id = payload.get("user_id")
+    if source_row and sheet_gid is not None:
+        try:
+            address_parts = filter(None, [
+                _normalize_text(payload.get("address_street")),
+                _normalize_text(payload.get("address_number")),
+                _normalize_text(payload.get("address_complement")),
+                _normalize_text(payload.get("address_neighborhood")),
+            ])
+            full_address = ", ".join(address_parts)
+
+            existing = PmoVaccinationVisit.query.filter_by(
+                spreadsheet_id=spreadsheet_id,
+                sheet_gid=sheet_gid,
+                source_row=source_row,
+            ).first()
+
+            if existing is None:
+                visit = PmoVaccinationVisit(
+                    spreadsheet_id=spreadsheet_id,
+                    sheet_gid=sheet_gid,
+                    sheet_title=title,
+                    source_row=source_row,
+                    tutor_name=_normalize_text(payload.get("tutor")),
+                    address=full_address,
+                    phone1=_normalize_text(payload.get("phone")),
+                    phone2=_normalize_text(payload.get("phone2")),
+                    dogs=int(payload.get("dogs") or 0),
+                    cats=int(payload.get("cats") or 0),
+                    note=observacao,
+                    shift=shift_value,
+                    tutor_user_id=int(user_id) if user_id else None,
+                )
+                _ensure_visit_public_token(visit)
+                db.session.add(visit)
+                db.session.commit()
+                public_token = visit.public_token
+            else:
+                if existing.tutor_user_id is None and user_id:
+                    existing.tutor_user_id = int(user_id)
+                _ensure_visit_public_token(existing)
+                db.session.commit()
+                public_token = existing.public_token
+        except Exception:
+            db.session.rollback()
+
     return {
         "spreadsheet_id": spreadsheet_id,
         "sheet_title": title,
-        "updated_range": response.get("updates", {}).get("updatedRange", ""),
+        "updated_range": updated_range,
+        "public_token": public_token,
     }

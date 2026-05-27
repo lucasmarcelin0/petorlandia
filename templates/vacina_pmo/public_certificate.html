@@ -315,24 +315,6 @@
       font-size: .95rem;
     }
 
-    .video-frame {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-      background: #0f172a;
-    }
-
-    .video-frame iframe {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-    }
-
     .stars {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -551,20 +533,6 @@
         </article>
       </div>
     </section>
-
-    {% if educational_video.embed_url %}
-      <section class="card" style="margin-top:16px;">
-        <h2>Video educativo</h2>
-        <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Assista a orientacao da campanha antes de guardar sua carteirinha.</p>
-        <div class="video-frame">
-          <iframe
-            src="{{ educational_video.embed_url }}"
-            title="Video educativo da campanha de vacinacao antirrabica"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen></iframe>
-        </div>
-      </section>
-    {% endif %}
 
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>

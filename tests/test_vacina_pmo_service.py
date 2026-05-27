@@ -213,8 +213,8 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
     assert b"Comprovante simples para o tutor" in response.data
     assert b"Como usar esta carteirinha" in response.data
     assert b"Quando procurar ajuda" in response.data
-    assert b"Video educativo" in response.data
-    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
+    assert b"Video educativo" not in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" not in response.data
 
     post = client.post(
         f"/vacina-pmo/c/{token}",
@@ -281,10 +281,17 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     assert b"Carteirinha de Lua" in response.data
     assert b"Comprovante digital da campanha" in response.data
     assert b"Proximo reforco" in response.data
-    assert b"Imprimir ou salvar PDF" in response.data
-    assert b"Video educativo" in response.data
-    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
+    assert b"Baixar certificado em PDF" in response.data
+    assert b"Imprimir pagina" in response.data
+    assert b"Video educativo" not in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" not in response.data
     assert b"Abrir ficha clinica" not in response.data
+
+    pdf_response = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}?format=pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.mimetype == "application/pdf"
+    assert pdf_response.headers["Content-Disposition"].startswith("attachment;")
+    assert pdf_response.data.startswith(b"%PDF")
 
 
 def test_login_respects_safe_next_url(app, client):
