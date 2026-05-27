@@ -279,15 +279,21 @@
                   {% endif %}
                 {% endif %}
               </p>
-              {% if visit.vaccine_date %}
+              {% set is_request = visit.sheet_title == 'Solicitacoes' %}
+              {% if visit.vaccine_date and not is_request %}
               <p class="mb-1 text-muted small">
                 <i class="fa-solid fa-calendar-check me-1"></i>
                 Vacinação: {{ visit.vaccine_date.strftime('%d/%m/%Y') }}
               </p>
+              {% elif is_request %}
+              <p class="mb-1 text-muted small">
+                <i class="fa-solid fa-hourglass-half me-1"></i>
+                Solicitacao recebida. A equipe entrara em contato para confirmar a visita.
+              </p>
               {% endif %}
               <p class="mb-0 text-muted small">
                 <i class="fa-solid fa-calendar me-1"></i>
-                Inscrito em {{ visit.synced_at.strftime('%d/%m/%Y às %H:%M') }}
+                Inscrito em {{ (visit.updated_at or visit.synced_at).strftime('%d/%m/%Y às %H:%M') }}
               </p>
             </div>
             <div class="text-end">

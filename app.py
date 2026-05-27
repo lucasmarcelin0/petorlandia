@@ -4300,6 +4300,20 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         next_booster_date = campaign_vaccine.proxima_dose
     elif visit.vaccine_date and effective_status == "vacinado":
         next_booster_date = visit.vaccine_date + relativedelta(years=1)
+    booster_days_remaining = None
+    booster_countdown_label = ""
+    if next_booster_date:
+        booster_days_remaining = (next_booster_date - date.today()).days
+        if booster_days_remaining > 1:
+            booster_countdown_label = f"Faltam {booster_days_remaining} dias para o reforco anual."
+        elif booster_days_remaining == 1:
+            booster_countdown_label = "Falta 1 dia para o reforco anual."
+        elif booster_days_remaining == 0:
+            booster_countdown_label = "O reforco anual esta indicado a partir de hoje."
+        elif booster_days_remaining == -1:
+            booster_countdown_label = "O reforco anual venceu ha 1 dia."
+        else:
+            booster_countdown_label = f"O reforco anual venceu ha {abs(booster_days_remaining)} dias."
 
     if (request.args.get('format') or '').lower() == 'pdf':
         return _export_vacina_pmo_pet_certificate_pdf(
@@ -4320,6 +4334,8 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         campaign_vaccine=campaign_vaccine,
         effective_status=effective_status,
         next_booster_date=next_booster_date,
+        booster_days_remaining=booster_days_remaining,
+        booster_countdown_label=booster_countdown_label,
     )
 
 
@@ -4458,7 +4474,7 @@ def vacina_pmo_solicitar():
     }
 
     if request.method == 'POST':
-        from services.vacina_pmo_service import submit_vacina_pmo_request
+        from services.vacina_pmo_service import normalize_pmo_request_address, submit_vacina_pmo_request
 
         selected_ids = set(request.form.getlist('animal_ids', type=int))
         form_state['animal_ids'] = list(selected_ids)
@@ -4474,6 +4490,11 @@ def vacina_pmo_solicitar():
         form_state['shift'] = (request.form.get('shift') or '').strip()
         form_state['note'] = (request.form.get('note') or '').strip()
         save_address = request.form.get('save_address') == '1'
+        normalized_address = normalize_pmo_request_address(form_state)
+        form_state['address_street'] = normalized_address['street']
+        form_state['address_number'] = normalized_address['number']
+        form_state['address_complement'] = normalized_address['complement']
+        form_state['address_neighborhood'] = normalized_address['neighborhood']
 
         selected_animals = [a for a in user_animals if a.id in selected_ids]
 
@@ -4519,13 +4540,7 @@ def vacina_pmo_solicitar():
                 result = submit_vacina_pmo_request(payload)
 
                 if save_address:
-                    addr_parts = list(filter(None, [
-                        form_state['address_street'],
-                        form_state['address_number'],
-                        form_state['address_complement'],
-                        form_state['address_neighborhood'],
-                    ]))
-                    current_user.address = ', '.join(addr_parts)
+                    current_user.address = normalized_address['full']
                     db.session.commit()
 
                 public_token = result.get('public_token')
@@ -4546,13 +4561,15 @@ def vacina_pmo_solicitar():
                 current_app.logger.exception("Falha ao enviar solicitacao Vacina PMO")
                 flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
 
+    from services.vacina_pmo_service import PMO_REQUEST_SHEET_DEFAULT_TITLE, PMO_REQUEST_SHEET_TITLE_ENV
+    request_sheet_title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
     historico = (
         PmoVaccinationVisit.query
         .filter_by(tutor_user_id=current_user.id)
-        .order_by(PmoVaccinationVisit.synced_at.desc())
+        .filter(PmoVaccinationVisit.sheet_title == request_sheet_title)
+        .order_by(PmoVaccinationVisit.updated_at.desc(), PmoVaccinationVisit.synced_at.desc())
         .all()
     )
-
     return render_template(
         'vacina_pmo/solicitar.html',
         user_animals=user_animals,

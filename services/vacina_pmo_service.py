@@ -891,6 +891,34 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
     return ""
 
 
+def normalize_pmo_request_address(payload: dict[str, Any]) -> dict[str, str]:
+    """Normaliza endereco do formulario, inclusive quando tudo foi colado na rua."""
+    street = _normalize_text(payload.get("address_street"))
+    number = _normalize_text(payload.get("address_number"))
+    complement = _normalize_text(payload.get("address_complement"))
+    neighborhood = _normalize_text(payload.get("address_neighborhood"))
+
+    parts = [_normalize_text(part) for part in street.split(",") if _normalize_text(part)]
+    if len(parts) >= 3 and (not number or not neighborhood):
+        street = parts[0]
+        if not number:
+            number = parts[1]
+        middle = parts[2:]
+        if not neighborhood and middle:
+            neighborhood = middle[-1]
+            middle = middle[:-1]
+        if not complement and middle:
+            complement = ", ".join(middle)
+
+    return {
+        "street": street,
+        "number": number,
+        "complement": complement,
+        "neighborhood": neighborhood,
+        "full": ", ".join(part for part in [street, number, complement, neighborhood] if part),
+    }
+
+
 def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta uma nova solicitacao do morador na aba de solicitacoes.
 
@@ -903,11 +931,13 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("URL/ID da planilha PMO invalido.")
 
     title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+    address = normalize_pmo_request_address(payload)
 
     service = _get_sheets_service_rw()
     _ensure_request_sheet(service, spreadsheet_id, title)
 
-    timestamp = utcnow().astimezone().strftime("%d/%m/%Y %H:%M:%S")
+    submitted_at = utcnow()
+    timestamp = submitted_at.astimezone().strftime("%d/%m/%Y %H:%M:%S")
 
     note_parts: list[str] = []
     shift_value = _normalize_text(payload.get("shift"))
@@ -926,10 +956,10 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
 
     row = [
         _normalize_text(payload.get("tutor")),
-        _normalize_text(payload.get("address_street")),
-        _normalize_text(payload.get("address_number")),
-        _normalize_text(payload.get("address_complement")),
-        _normalize_text(payload.get("address_neighborhood")),
+        address["street"],
+        address["number"],
+        address["complement"],
+        address["neighborhood"],
         _normalize_text(payload.get("phone")),
         _normalize_text(payload.get("phone2")),
         str(int(payload.get("dogs") or 0)),
@@ -975,14 +1005,6 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     user_id = payload.get("user_id")
     if source_row and sheet_gid is not None:
         try:
-            address_parts = filter(None, [
-                _normalize_text(payload.get("address_street")),
-                _normalize_text(payload.get("address_number")),
-                _normalize_text(payload.get("address_complement")),
-                _normalize_text(payload.get("address_neighborhood")),
-            ])
-            full_address = ", ".join(address_parts)
-
             existing = PmoVaccinationVisit.query.filter_by(
                 spreadsheet_id=spreadsheet_id,
                 sheet_gid=sheet_gid,
@@ -996,20 +1018,34 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
                     sheet_title=title,
                     source_row=source_row,
                     tutor_name=_normalize_text(payload.get("tutor")),
-                    address=full_address,
+                    address=address["full"],
                     phone1=_normalize_text(payload.get("phone")),
                     phone2=_normalize_text(payload.get("phone2")),
                     dogs=int(payload.get("dogs") or 0),
                     cats=int(payload.get("cats") or 0),
+                    vaccine_date=None,
                     note=observacao,
                     shift=shift_value,
+                    password=_password(payload.get("phone") or payload.get("phone2") or source_row),
                     tutor_user_id=int(user_id) if user_id else None,
+                    synced_at=submitted_at,
+                    updated_at=submitted_at,
                 )
                 _ensure_visit_public_token(visit)
                 db.session.add(visit)
                 db.session.commit()
                 public_token = visit.public_token
             else:
+                existing.tutor_name = _normalize_text(payload.get("tutor"))
+                existing.address = address["full"]
+                existing.phone1 = _normalize_text(payload.get("phone"))
+                existing.phone2 = _normalize_text(payload.get("phone2"))
+                existing.dogs = int(payload.get("dogs") or 0)
+                existing.cats = int(payload.get("cats") or 0)
+                existing.note = observacao
+                existing.shift = shift_value
+                existing.synced_at = submitted_at
+                existing.updated_at = submitted_at
                 if existing.tutor_user_id is None and user_id:
                     existing.tutor_user_id = int(user_id)
                 _ensure_visit_public_token(existing)
@@ -1023,4 +1059,6 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         "sheet_title": title,
         "updated_range": updated_range,
         "public_token": public_token,
+        "address": address,
+        "submitted_at": submitted_at.isoformat(),
     }

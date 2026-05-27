@@ -175,6 +175,45 @@
       margin-bottom: 4px;
     }
 
+    .booster-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: start;
+      border: 1px solid rgba(8, 127, 91, .22);
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f0fff4, #f8fcff);
+      padding: 16px;
+    }
+
+    .booster-card__icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: #e6fcf5;
+      color: var(--green);
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+
+    .booster-card h2 {
+      margin: 0 0 6px;
+      font-size: 1.12rem;
+    }
+
+    .booster-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .booster-card__warning {
+      margin-top: 8px !important;
+      color: var(--ink) !important;
+      font-weight: 700;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -274,6 +313,19 @@
             <span class="value">{{ campaign_vaccine.lote if campaign_vaccine and campaign_vaccine.lote else 'Registro municipal' }}</span>
           </div>
         </div>
+
+        {% if next_booster_date %}
+        <section class="booster-card" aria-label="Orientacao sobre reforco anual">
+          <div class="booster-card__icon"><i class="fa-solid fa-shield-dog"></i></div>
+          <div>
+            <h2>Contagem para o reforco</h2>
+            <p>{{ booster_countdown_label }}</p>
+            <p class="booster-card__warning">
+              Nao e necessario vacinar {{ pmo_animal.name }} novamente antes de completar 1 ano da dose, salvo orientacao de um medico-veterinario ou do servico publico de saude.
+            </p>
+          </div>
+        </section>
+        {% endif %}
 
         <section>
           <h2 style="margin:0 0 10px;font-size:1.2rem;">Historico simples</h2>
