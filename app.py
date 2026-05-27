@@ -4274,7 +4274,11 @@ def vacina_pmo_solicitar():
     form_state = {
         'animal_ids': [],
         'phone': current_user.phone or '',
-        'address': current_user.address or '',
+        'phone2': '',
+        'address_street': '',
+        'address_number': '',
+        'address_complement': '',
+        'address_neighborhood': '',
         'shift': '',
         'note': '',
     }
@@ -4285,7 +4289,11 @@ def vacina_pmo_solicitar():
         selected_ids = set(request.form.getlist('animal_ids', type=int))
         form_state['animal_ids'] = list(selected_ids)
         form_state['phone'] = (request.form.get('phone') or '').strip()
-        form_state['address'] = (request.form.get('address') or '').strip()
+        form_state['phone2'] = (request.form.get('phone2') or '').strip()
+        form_state['address_street'] = (request.form.get('address_street') or '').strip()
+        form_state['address_number'] = (request.form.get('address_number') or '').strip()
+        form_state['address_complement'] = (request.form.get('address_complement') or '').strip()
+        form_state['address_neighborhood'] = (request.form.get('address_neighborhood') or '').strip()
         form_state['shift'] = (request.form.get('shift') or '').strip()
         form_state['note'] = (request.form.get('note') or '').strip()
 
@@ -4295,8 +4303,8 @@ def vacina_pmo_solicitar():
             flash('Selecione ao menos um animal para vacinar.', 'danger')
         elif not form_state['phone']:
             flash('Informe um telefone para contato.', 'danger')
-        elif not form_state['address']:
-            flash('Informe o endereço onde os animais serão vacinados.', 'danger')
+        elif not form_state['address_street'] or not form_state['address_neighborhood']:
+            flash('Informe rua e bairro onde os animais serão vacinados.', 'danger')
         elif form_state['shift'] not in ('Manha', 'Tarde'):
             flash('Selecione o turno preferencial (Manhã ou Tarde).', 'danger')
         else:
@@ -4315,8 +4323,12 @@ def vacina_pmo_solicitar():
                 'tutor': current_user.name,
                 'cpf': current_user.cpf or '',
                 'phone': form_state['phone'],
+                'phone2': form_state['phone2'],
                 'email': current_user.email,
-                'address': form_state['address'],
+                'address_street': form_state['address_street'],
+                'address_number': form_state['address_number'],
+                'address_complement': form_state['address_complement'],
+                'address_neighborhood': form_state['address_neighborhood'],
                 'dogs': dogs,
                 'cats': cats,
                 'animal_names': ', '.join(names),

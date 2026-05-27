@@ -51,7 +51,7 @@
           </div>
           {% endif %}
           <div class="col-md-6">
-            <label for="phone" class="form-label small fw-semibold">Telefone para contato *</label>
+            <label for="phone" class="form-label small fw-semibold">Telefone *</label>
             <input
               type="tel"
               id="phone"
@@ -61,19 +61,72 @@
               placeholder="(16) 99999-9999"
               required>
           </div>
-          <div class="col-12">
-            <label for="address" class="form-label small fw-semibold">Endereço onde a equipe deve ir *</label>
+          <div class="col-md-6">
+            <label for="phone2" class="form-label small fw-semibold">Telefone 2 ou recado</label>
+            <input
+              type="tel"
+              id="phone2"
+              name="phone2"
+              class="form-control"
+              value="{{ form_state.phone2 }}"
+              placeholder="(16) 99999-9999">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereço da visita
+        </h6>
+        {% if current_user.address %}
+        <p class="text-muted small mb-3">
+          Cadastro atual: <em>{{ current_user.address }}</em>
+        </p>
+        {% endif %}
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label for="address_street" class="form-label small fw-semibold">Endereço (rua / avenida) *</label>
             <input
               type="text"
-              id="address"
-              name="address"
+              id="address_street"
+              name="address_street"
               class="form-control"
-              value="{{ form_state.address }}"
-              placeholder="Rua, número, bairro, complemento"
+              value="{{ form_state.address_street }}"
+              placeholder="Ex.: Rua 28"
               required>
-            <div class="form-text small">
-              Endereço completo para que a equipe da prefeitura possa visitar.
-            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="address_number" class="form-label small fw-semibold">Número da casa</label>
+            <input
+              type="text"
+              id="address_number"
+              name="address_number"
+              class="form-control"
+              value="{{ form_state.address_number }}"
+              placeholder="Ex.: 2416">
+          </div>
+          <div class="col-md-6">
+            <label for="address_complement" class="form-label small fw-semibold">Complemento (se houver)</label>
+            <input
+              type="text"
+              id="address_complement"
+              name="address_complement"
+              class="form-control"
+              value="{{ form_state.address_complement }}"
+              placeholder="Ex.: Casa, Apto 12, fundos">
+          </div>
+          <div class="col-md-6">
+            <label for="address_neighborhood" class="form-label small fw-semibold">Bairro *</label>
+            <input
+              type="text"
+              id="address_neighborhood"
+              name="address_neighborhood"
+              class="form-control"
+              value="{{ form_state.address_neighborhood }}"
+              placeholder="Ex.: Jd. São João"
+              required>
           </div>
         </div>
       </div>

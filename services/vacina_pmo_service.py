@@ -39,21 +39,27 @@ PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
 PMO_REQUEST_SHEET_TITLE_ENV = "PMO_VACCINE_REQUEST_SHEET_TITLE"
 PMO_REQUEST_SHEET_DEFAULT_TITLE = "Solicitacoes"
 PMO_REQUEST_HEADERS = [
-    "Carimbo de data/hora",
-    "Tutor",
-    "CPF",
+    "Nome completo do tutor",
+    "Endereço",
+    "Número da casa",
+    "Complemento (Se houver)",
+    "Bairro",
     "Telefone",
-    "E-mail",
-    "Endereco",
-    "Caes",
-    "Gatos",
-    "Animais",
-    "Observacoes",
-    "Turno preferencial",
-    "ID Usuario PetOrlandia",
+    "Telefone 2 ou recado.",
+    "Quantidade de cachorros para vacinar.",
+    "Quantidade de gatos para vacinar",
+    "Nome do(s) animal(is)",
+    "Observação:",
+    "Data Vacina",
+    "Qtde cachorros vacinados",
+    "Qtde gatos vacinados",
+    "Nome",
+    "Carimbo de data/hora",
     "Origem",
-    "Status",
+    "ID Usuario PetOrlandia",
 ]
+PMO_REQUEST_RANGE_COLS = "A:R"
+PMO_REQUEST_HEADER_RANGE = "A1:R1"
 
 
 @dataclass
@@ -852,7 +858,10 @@ def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
     header_response = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!A1:N1")
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_HEADER_RANGE}",
+        )
         .execute()
     )
     current_header = (header_response.get("values") or [[]])[0]
@@ -878,21 +887,41 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
     _ensure_request_sheet(service, spreadsheet_id, title)
 
     timestamp = utcnow().astimezone().strftime("%d/%m/%Y %H:%M:%S")
+
+    note_parts: list[str] = []
+    shift_value = _normalize_text(payload.get("shift"))
+    if shift_value:
+        note_parts.append(f"Turno preferencial: {shift_value}")
+    user_note = _normalize_text(payload.get("note"))
+    if user_note:
+        note_parts.append(user_note)
+    contact_email = _normalize_text(payload.get("email"))
+    if contact_email:
+        note_parts.append(f"E-mail: {contact_email}")
+    cpf_value = _normalize_text(payload.get("cpf"))
+    if cpf_value:
+        note_parts.append(f"CPF: {cpf_value}")
+    observacao = " | ".join(note_parts)
+
     row = [
-        timestamp,
         _normalize_text(payload.get("tutor")),
-        _normalize_text(payload.get("cpf")),
+        _normalize_text(payload.get("address_street")),
+        _normalize_text(payload.get("address_number")),
+        _normalize_text(payload.get("address_complement")),
+        _normalize_text(payload.get("address_neighborhood")),
         _normalize_text(payload.get("phone")),
-        _normalize_text(payload.get("email")),
-        _normalize_text(payload.get("address")),
+        _normalize_text(payload.get("phone2")),
         str(int(payload.get("dogs") or 0)),
         str(int(payload.get("cats") or 0)),
         _normalize_text(payload.get("animal_names")),
-        _normalize_text(payload.get("note")),
-        _normalize_text(payload.get("shift")),
-        str(payload.get("user_id") or ""),
+        observacao,
+        "",
+        "",
+        "",
+        "",
+        timestamp,
         "PetOrlandia",
-        "Pendente",
+        str(payload.get("user_id") or ""),
     ]
 
     response = (
@@ -900,7 +929,7 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         .values()
         .append(
             spreadsheetId=spreadsheet_id,
-            range=f"{_quote_sheet_title(title)}!A:N",
+            range=f"{_quote_sheet_title(title)}!{PMO_REQUEST_RANGE_COLS}",
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body={"values": [row]},
