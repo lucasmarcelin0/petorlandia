@@ -320,6 +320,31 @@ def test_login_respects_safe_next_url(app, client):
     assert b'name="next" value="/"' in blocked.data
 
 
+def test_login_redirects_pmo_pet_next_to_home(app, client):
+    with app.app_context():
+        user = User(name="Tutor PMO", email="tutor-pmo-next@example.com", phone="+5516999999998")
+        user.set_password("PMOA9998")
+        db.session.add(user)
+        db.session.commit()
+
+    pmo_pet_next = "/vacina-pmo/c/kUvJU6WDQXTq6ozj9GPf9UMi3cTfXSiSNmwknKXbjos/pet/1"
+    login_page = client.get(f"/login?next={pmo_pet_next}")
+    assert login_page.status_code == 200
+    assert b'name="next" value="/"' in login_page.data
+    assert pmo_pet_next.encode() not in login_page.data
+
+    response = client.post(
+        "/login",
+        data={
+            "login": "tutor-pmo-next@example.com",
+            "password": "PMOA9998",
+            "next": pmo_pet_next,
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
 def test_pmo_visit_model_includes_evaluation_dimension_columns():
     columns = {column.name for column in PmoVaccinationVisit.__table__.columns}
     assert "evaluation_registration_rating" in columns

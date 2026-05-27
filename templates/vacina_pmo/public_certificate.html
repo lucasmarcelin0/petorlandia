@@ -1,10 +1,6 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteirinha digital - Vacina antirrabica</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
+{% extends "layout.html" %}
+
+{% block head %}
   <style>
     :root {
       color-scheme: light;
@@ -25,7 +21,7 @@
       box-sizing: border-box;
     }
 
-    body {
+    .pmo-public-page {
       margin: 0;
       font-family: Inter, Arial, sans-serif;
       background: var(--bg);
@@ -33,62 +29,7 @@
       line-height: 1.5;
     }
 
-    .topbar {
-      background: #ffffff;
-      border-bottom: 1px solid var(--line);
-      padding: 10px 18px;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .brand {
-      max-width: 980px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .brandmark {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      font-size: 1.05rem;
-      color: var(--ink);
-      text-decoration: none;
-    }
-
-    .brandmark img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-
-    .navlinks {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .navlinks a,
-    .campaign-label {
-      color: var(--muted);
-      font-weight: 600;
-      font-size: .9rem;
-      text-align: right;
-      text-decoration: none;
-    }
-
-    .navlinks a:hover {
-      color: var(--blue);
-    }
-
-    main {
+    .pmo-public-main {
       max-width: 980px;
       margin: 0 auto;
       padding: 26px 18px 46px;
@@ -438,17 +379,8 @@
         grid-template-columns: 1fr;
       }
 
-      .brand {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
       .stars {
         gap: 6px;
-      }
-
-      .navlinks {
-        justify-content: flex-start;
       }
 
       .animal {
@@ -457,23 +389,11 @@
       }
     }
   </style>
-</head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <a class="brandmark" href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="PetOrlandia">
-        <span>PetOrlandia</span>
-      </a>
-      <nav class="navlinks" aria-label="Navegacao da carteirinha">
-        <span class="campaign-label">Prefeitura de Orlandia - Vacina antirrabica</span>
-        <a href="{{ url_for('login_view') }}">Entrar</a>
-        <a href="#avaliar">Avaliar atendimento</a>
-      </nav>
-    </div>
-  </header>
+{% endblock %}
 
-  <main>
+{% block main %}
+  <div class="pmo-public-page">
+  <div class="pmo-public-main">
     <section class="hero">
       <h1>Carteirinha digital da vacina</h1>
       <p class="lead">
@@ -530,7 +450,7 @@
         {% endif %}
         <span class="label">Senha provisoria</span>
         <span class="password">{{ visit.password }}</span>
-        <a class="button" href="{{ url_for('login_view', next=primary_pet_card_url) if primary_pet_card_url else url_for('login_view') }}">Entrar no PetOrlandia</a>
+        <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
       </aside>
     </div>
@@ -692,6 +612,6 @@
         </div>
       </form>
     </section>
-  </main>
-</body>
-</html>
+  </div>
+  </div>
+{% endblock %}

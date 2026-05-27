@@ -8552,12 +8552,20 @@ def add_animal():
     )
 
 
+def _sanitize_login_next_url(next_url):
+    next_url = next_url or url_for('index')
+    parsed_next = urlparse(next_url)
+    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
+        return url_for('index')
+    if re.fullmatch(r'/vacina-pmo/c/[^/]+/pet/\d+/?', parsed_next.path or ''):
+        return url_for('index')
+    return next_url
+
+
 def login_view():
     form = LoginForm()
     next_url = request.values.get('next') or url_for('index')
-    parsed_next = urlparse(next_url)
-    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
-        next_url = url_for('index')
+    next_url = _sanitize_login_next_url(next_url)
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
         form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
