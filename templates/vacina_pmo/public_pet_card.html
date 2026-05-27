@@ -374,9 +374,6 @@
           <a class="button secondary" href="{{ url_for('vacina_pmo_public', token=token) }}">Voltar para campanha</a>
           <a class="button" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=pmo_animal.id, format='pdf') }}">Baixar certificado em PDF</a>
           <a class="button secondary" href="#top" onclick="window.print(); return false;">Imprimir pagina</a>
-          {% if vet_record_url %}
-            <a class="button secondary" href="{{ vet_record_url }}">Abrir ficha clinica</a>
-          {% endif %}
         </div>
       </div>
     </section>

@@ -213,8 +213,8 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
     assert b"Comprovante simples para o tutor" in response.data
     assert b"Como usar esta carteirinha" in response.data
     assert b"Quando procurar ajuda" in response.data
-    assert b"Video educativo" not in response.data
-    assert b"https://www.youtube.com/embed/abcDEF12345" not in response.data
+    assert b"Video educativo" in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
 
     post = client.post(
         f"/vacina-pmo/c/{token}",

@@ -4051,6 +4051,7 @@ def vacina_pmo():
 def vacina_pmo_public(token):
     from services.vacina_pmo_service import (
         format_pmo_phone_for_login,
+        get_pmo_educational_video,
         get_vacina_pmo_public_visit,
         get_vacina_pmo_evaluation_payload,
         save_vacina_pmo_evaluation,
@@ -4095,6 +4096,7 @@ def vacina_pmo_public(token):
         evaluation_saved=evaluation_saved,
         evaluation_error=evaluation_error,
         evaluation=get_vacina_pmo_evaluation_payload(visit),
+        educational_video=get_pmo_educational_video(),
         primary_pet_card_url=primary_pet_card_url,
     )
 
@@ -4299,14 +4301,6 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     elif visit.vaccine_date and effective_status == "vacinado":
         next_booster_date = visit.vaccine_date + relativedelta(years=1)
 
-    vet_record_url = None
-    if (
-        animal
-        and current_user.is_authenticated
-        and (current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'])
-    ):
-        vet_record_url = url_for('ficha_animal', animal_id=animal.id)
-
     if (request.args.get('format') or '').lower() == 'pdf':
         return _export_vacina_pmo_pet_certificate_pdf(
             visit=visit,
@@ -4326,7 +4320,6 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         campaign_vaccine=campaign_vaccine,
         effective_status=effective_status,
         next_booster_date=next_booster_date,
-        vet_record_url=vet_record_url,
     )
 
 

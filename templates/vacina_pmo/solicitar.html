@@ -22,7 +22,7 @@
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
       <div class="alert alert-{{ category if category != 'message' else 'info' }} small">
-        {{ message }}
+        {{ message | safe }}
       </div>
     {% endfor %}
   {% endwith %}
@@ -30,26 +30,43 @@
   <form method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+    <!-- Dados do tutor -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
-        <h6 class="fw-bold mb-3">
+        <h6 class="fw-bold mb-1">
           <i class="fa-solid fa-user me-2 text-primary"></i>Dados do tutor
         </h6>
+        <p class="text-muted small mb-3">Corrija qualquer campo se necessário antes de enviar.</p>
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label small text-muted">Nome</label>
-            <input type="text" class="form-control" value="{{ current_user.name }}" disabled>
+            <label for="tutor" class="form-label small fw-semibold">Nome completo *</label>
+            <input
+              type="text"
+              id="tutor"
+              name="tutor"
+              class="form-control"
+              value="{{ form_state.tutor }}"
+              required>
           </div>
           <div class="col-md-6">
-            <label class="form-label small text-muted">E-mail</label>
-            <input type="email" class="form-control" value="{{ current_user.email }}" disabled>
+            <label for="email" class="form-label small fw-semibold">E-mail</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              class="form-control"
+              value="{{ form_state.email }}">
           </div>
-          {% if current_user.cpf %}
           <div class="col-md-6">
-            <label class="form-label small text-muted">CPF</label>
-            <input type="text" class="form-control" value="{{ current_user.cpf }}" disabled>
+            <label for="cpf" class="form-label small fw-semibold">CPF</label>
+            <input
+              type="text"
+              id="cpf"
+              name="cpf"
+              class="form-control"
+              value="{{ form_state.cpf }}"
+              placeholder="000.000.000-00">
           </div>
-          {% endif %}
           <div class="col-md-6">
             <label for="phone" class="form-label small fw-semibold">Telefone *</label>
             <input
@@ -75,19 +92,15 @@
       </div>
     </div>
 
+    <!-- Endereço -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
-          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereço da visita
+          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereço
         </h6>
-        {% if current_user.address %}
-        <p class="text-muted small mb-3">
-          Cadastro atual: <em>{{ current_user.address }}</em>
-        </p>
-        {% endif %}
         <div class="row g-3">
           <div class="col-md-8">
-            <label for="address_street" class="form-label small fw-semibold">Endereço (rua / avenida) *</label>
+            <label for="address_street" class="form-label small fw-semibold">Rua / Avenida *</label>
             <input
               type="text"
               id="address_street"
@@ -98,7 +111,7 @@
               required>
           </div>
           <div class="col-md-4">
-            <label for="address_number" class="form-label small fw-semibold">Número da casa</label>
+            <label for="address_number" class="form-label small fw-semibold">Número</label>
             <input
               type="text"
               id="address_number"
@@ -108,7 +121,7 @@
               placeholder="Ex.: 2416">
           </div>
           <div class="col-md-6">
-            <label for="address_complement" class="form-label small fw-semibold">Complemento (se houver)</label>
+            <label for="address_complement" class="form-label small fw-semibold">Complemento</label>
             <input
               type="text"
               id="address_complement"
@@ -128,10 +141,24 @@
               placeholder="Ex.: Jd. São João"
               required>
           </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="save_address"
+                name="save_address"
+                value="1">
+              <label class="form-check-label small" for="save_address">
+                Salvar este endereço no meu perfil
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Animais -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
@@ -166,6 +193,7 @@
       </div>
     </div>
 
+    <!-- Preferência de horário -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
@@ -222,5 +250,70 @@
       </a>
     </div>
   </form>
+
+  <!-- Histórico de inscrições -->
+  {% if historico %}
+  <div class="mb-5">
+    <h5 class="fw-bold mb-3">
+      <i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Histórico de inscrições
+    </h5>
+    <div class="d-flex flex-column gap-3">
+      {% for visit in historico %}
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+              <p class="mb-1 fw-semibold small">
+                <i class="fa-solid fa-location-dot me-1 text-muted"></i>
+                {{ visit.address or '—' }}
+              </p>
+              <p class="mb-1 text-muted small">
+                <i class="fa-solid fa-dog me-1"></i>{{ visit.dogs }} cachorro(s) &nbsp;
+                <i class="fa-solid fa-cat me-1"></i>{{ visit.cats }} gato(s)
+                {% if visit.shift %}
+                  &nbsp;·&nbsp;
+                  {% if visit.shift == 'Manha' %}
+                    <i class="fa-solid fa-sun me-1"></i>Manhã
+                  {% else %}
+                    <i class="fa-solid fa-cloud-sun me-1"></i>Tarde
+                  {% endif %}
+                {% endif %}
+              </p>
+              {% if visit.vaccine_date %}
+              <p class="mb-1 text-muted small">
+                <i class="fa-solid fa-calendar-check me-1"></i>
+                Vacinação: {{ visit.vaccine_date.strftime('%d/%m/%Y') }}
+              </p>
+              {% endif %}
+              <p class="mb-0 text-muted small">
+                <i class="fa-solid fa-calendar me-1"></i>
+                Inscrito em {{ visit.synced_at.strftime('%d/%m/%Y às %H:%M') }}
+              </p>
+            </div>
+            <div class="text-end">
+              {% if visit.public_token %}
+              <span class="badge bg-light text-dark border font-monospace small">
+                {{ visit.public_token }}
+              </span>
+              {% endif %}
+              {% if visit.vaccine_date %}
+              <span class="badge bg-success-subtle text-success mt-1 d-block">Vacinado</span>
+              {% else %}
+              <span class="badge bg-warning-subtle text-warning mt-1 d-block">Aguardando</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if visit.note %}
+          <p class="mb-0 mt-2 text-muted small fst-italic">
+            <i class="fa-solid fa-note-sticky me-1"></i>{{ visit.note }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}
