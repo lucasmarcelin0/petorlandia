@@ -296,6 +296,7 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
     response = client.get(f"/vacina-pmo/c/{token}")
     assert response.status_code == 200
     assert b"Carteirinha digital da vacina" in response.data
+    assert b"Protocolo PMO-" in response.data
     assert b"(16) 99999-9999" in response.data
     assert b"PMOA9999" in response.data
     assert b"Ver carteirinha" in response.data
@@ -369,6 +370,10 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     assert response.status_code == 200
     assert b"Carteirinha de Lua" in response.data
     assert b"Comprovante digital da campanha" in response.data
+    assert b"Status da campanha" in response.data
+    assert b"Dose registrada. Guarde este comprovante" in response.data
+    assert b"Orientacoes depois da vacina" in response.data
+    assert b"mordida ou arranhao" in response.data
     assert b"Proximo reforco" in response.data
     assert b"Contagem para o reforco" in response.data
     assert b"Faltam" in response.data or b"reforco anual esta indicado" in response.data or b"reforco anual venceu" in response.data
@@ -491,8 +496,10 @@ def test_pmo_request_history_shows_only_submitted_requests(app, client):
     response = client.get("/vacina-pmo/solicitar")
 
     assert response.status_code == 200
+    assert b"Confira antes de enviar" in response.data
     assert b"Rua 20, 1107, Cond.torino casa 73, Jardim Benini" in response.data
-    assert b"request-token" in response.data
+    assert b"PMO-" in response.data
+    assert b"Abrir comprovante" in response.data
     assert b"Solicita" in response.data
     assert b"old-campaign-token" not in response.data
     assert b"Registro antigo de campanha" not in response.data

@@ -4087,6 +4087,7 @@ def vacina_pmo_public(token):
             token=token,
             pmo_animal_id=pmo_animal.id,
         )
+    status_labels = _pmo_status_labels()
 
     return render_template(
         'vacina_pmo/public_certificate.html',
@@ -4098,11 +4099,51 @@ def vacina_pmo_public(token):
         evaluation=get_vacina_pmo_evaluation_payload(visit),
         educational_video=get_pmo_educational_video(),
         primary_pet_card_url=primary_pet_card_url,
+        status_labels=status_labels,
+        protocol_label=_pmo_protocol_label(visit),
     )
 
 
 def _format_pmo_certificate_date(value):
     return value.strftime('%d/%m/%Y') if value else 'A confirmar'
+
+
+def _pmo_protocol_label(visit):
+    reference = getattr(visit, 'updated_at', None) or getattr(visit, 'synced_at', None) or date.today()
+    if isinstance(reference, datetime):
+        year = reference.year
+    else:
+        year = getattr(reference, 'year', date.today().year)
+    return f"PMO-{year}-{getattr(visit, 'id', 0):04d}"
+
+
+def _pmo_status_labels():
+    return {
+        'pendente': 'Aguardando visita',
+        'vacinado': 'Vacinado',
+        'ausente': 'Morador ausente',
+        'remarcar': 'Remarcar visita',
+        'recusou': 'Vacina recusada',
+        'parcial': 'Parcialmente vacinado',
+    }
+
+
+def _pmo_status_context(status):
+    labels = _pmo_status_labels()
+    messages = {
+        'vacinado': 'Dose registrada. Guarde este comprovante e acompanhe a data do reforco anual.',
+        'pendente': 'A equipe ainda vai confirmar ou realizar a visita. Mantenha o telefone atualizado.',
+        'ausente': 'A equipe esteve no endereco, mas nao encontrou o morador. Aguarde contato para nova orientacao.',
+        'remarcar': 'Ha uma solicitacao de remarcacao. A equipe devera combinar uma nova tentativa.',
+        'recusou': 'A vacina foi marcada como recusada. Em caso de duvida, procure a equipe da campanha.',
+        'parcial': 'Parte dos animais foi vacinada. Confira a situacao individual de cada pet.',
+    }
+    normalized = status or 'pendente'
+    return {
+        'key': normalized,
+        'label': labels.get(normalized, normalized.capitalize()),
+        'message': messages.get(normalized, 'Acompanhe o status da campanha por este link.'),
+    }
 
 
 def _wrap_pmo_pdf_text(text, max_chars):
@@ -4294,6 +4335,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     effective_status = pmo_animal.status
     if campaign_vaccine and campaign_vaccine.aplicada:
         effective_status = "vacinado"
+    status_context = _pmo_status_context(effective_status)
 
     next_booster_date = None
     if campaign_vaccine and campaign_vaccine.proxima_dose:
@@ -4333,9 +4375,11 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         vaccines=vaccines,
         campaign_vaccine=campaign_vaccine,
         effective_status=effective_status,
+        status_context=status_context,
         next_booster_date=next_booster_date,
         booster_days_remaining=booster_days_remaining,
         booster_countdown_label=booster_countdown_label,
+        protocol_label=_pmo_protocol_label(visit),
     )
 
 
@@ -4575,6 +4619,7 @@ def vacina_pmo_solicitar():
         user_animals=user_animals,
         form_state=form_state,
         historico=historico,
+        pmo_protocol_label=_pmo_protocol_label,
     )
 
 

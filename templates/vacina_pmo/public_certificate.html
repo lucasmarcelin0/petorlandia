@@ -154,6 +154,18 @@
       background: #f8fafc;
     }
 
+    .protocol {
+      display: inline-flex;
+      width: fit-content;
+      border: 1px solid #b7cdfa;
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: #eef5ff;
+      color: var(--blue-dark);
+      font-size: .88rem;
+      font-weight: 800;
+    }
+
     .button {
       display: inline-flex;
       justify-content: center;
@@ -404,6 +416,7 @@
     <div class="grid">
       <section class="card certificate">
         <h2>Registro da aplicacao</h2>
+        <span class="protocol">Protocolo {{ protocol_label }}</span>
         <div class="meta">
           <div class="item">
             <span class="label">Tutor</span>
@@ -431,7 +444,7 @@
                 <div class="label">{{ 'Cao' if animal.species == 'cao' else 'Gato' }}</div>
               </div>
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
-                {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
+                {{ status_labels.get(animal.status, animal.status|capitalize) }}
               </span>
               <a class="button secondary" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>
               <p class="microcopy">Comprovante simples para o tutor, sem abrir a ficha clinica.</p>

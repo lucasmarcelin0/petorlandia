@@ -241,6 +241,24 @@
       </div>
     </div>
 
+    <div class="card border-primary-subtle shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-2">
+          <i class="fa-solid fa-clipboard-check me-2 text-primary"></i>Confira antes de enviar
+        </h6>
+        <p class="text-muted small mb-3">
+          Revise principalmente endereco e telefone. A visita depende desses dados estarem corretos.
+        </p>
+        <div class="small d-grid gap-2" id="pmo-submit-summary">
+          <div><strong>Tutor:</strong> <span data-summary="tutor">-</span></div>
+          <div><strong>Telefone:</strong> <span data-summary="phone">-</span></div>
+          <div><strong>Endereco:</strong> <span data-summary="address">-</span></div>
+          <div><strong>Animais:</strong> <span data-summary="animals">Selecione ao menos um animal.</span></div>
+          <div><strong>Turno:</strong> <span data-summary="shift">-</span></div>
+        </div>
+      </div>
+    </div>
+
     <div class="d-grid gap-2 mb-5">
       <button type="submit" class="btn btn-primary btn-lg rounded-pill">
         <i class="fa-solid fa-paper-plane me-1"></i> Enviar solicitação
@@ -298,11 +316,17 @@
             </div>
             <div class="text-end">
               {% if visit.public_token %}
-              <span class="badge bg-light text-dark border font-monospace small">
-                {{ visit.public_token }}
+              <span class="badge bg-light text-dark border small">
+                {{ pmo_protocol_label(visit) }}
               </span>
+              <a class="btn btn-sm btn-outline-primary d-block mt-2"
+                 href="{{ url_for('vacina_pmo_public', token=visit.public_token) }}">
+                Abrir comprovante
+              </a>
               {% endif %}
-              {% if visit.vaccine_date %}
+              {% if is_request %}
+              <span class="badge bg-primary-subtle text-primary mt-1 d-block">Solicitacao enviada</span>
+              {% elif visit.vaccine_date %}
               <span class="badge bg-success-subtle text-success mt-1 d-block">Vacinado</span>
               {% else %}
               <span class="badge bg-warning-subtle text-warning mt-1 d-block">Aguardando</span>
@@ -322,4 +346,51 @@
   {% endif %}
 
 </div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('form');
+    const summary = {
+      tutor: document.querySelector('[data-summary="tutor"]'),
+      phone: document.querySelector('[data-summary="phone"]'),
+      address: document.querySelector('[data-summary="address"]'),
+      animals: document.querySelector('[data-summary="animals"]'),
+      shift: document.querySelector('[data-summary="shift"]'),
+    };
+
+    const valueOf = (selector) => document.querySelector(selector)?.value.trim() || '';
+    const selectedAnimalNames = () => Array.from(document.querySelectorAll('input[name="animal_ids"]:checked'))
+      .map((input) => input.closest('label')?.querySelector('.fw-semibold')?.textContent.trim())
+      .filter(Boolean);
+
+    function updateSummary() {
+      const addressParts = [
+        valueOf('#address_street'),
+        valueOf('#address_number'),
+        valueOf('#address_complement'),
+        valueOf('#address_neighborhood'),
+      ].filter(Boolean);
+      const animals = selectedAnimalNames();
+      const shift = document.querySelector('input[name="shift"]:checked');
+      summary.tutor.textContent = valueOf('#tutor') || '-';
+      summary.phone.textContent = valueOf('#phone') || '-';
+      summary.address.textContent = addressParts.join(', ') || '-';
+      summary.animals.textContent = animals.length ? animals.join(', ') : 'Selecione ao menos um animal.';
+      summary.shift.textContent = shift ? shift.nextElementSibling.textContent.trim() : '-';
+    }
+
+    document.querySelectorAll('input, textarea').forEach((field) => {
+      field.addEventListener('input', updateSummary);
+      field.addEventListener('change', updateSummary);
+    });
+    form?.addEventListener('submit', (event) => {
+      updateSummary();
+      const animals = selectedAnimalNames();
+      const ok = window.confirm(
+        `Confirmar solicitacao da vacina?\n\nEndereco: ${summary.address.textContent}\nAnimais: ${animals.join(', ') || '-'}\n\nSe estiver tudo certo, clique em OK.`
+      );
+      if (!ok) event.preventDefault();
+    });
+    updateSummary();
+  });
+</script>
 {% endblock %}

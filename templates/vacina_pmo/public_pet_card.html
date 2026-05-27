@@ -214,6 +214,31 @@
       font-weight: 700;
     }
 
+    .status-message,
+    .care-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 14px 16px;
+    }
+
+    .status-message strong,
+    .care-card strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 5px;
+    }
+
+    .care-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .care-list li + li {
+      margin-top: 5px;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -277,7 +302,7 @@
       <div class="content">
         <div class="status">
           <span class="pill {{ '' if effective_status == 'vacinado' else 'pending' }}">
-            {{ 'Vacinado' if effective_status == 'vacinado' else effective_status|capitalize }}
+            {{ status_context.label }}
           </span>
           <span class="subtitle">
             {{ 'Cao' if pmo_animal.species == 'cao' else 'Gato' }} de {{ visit.tutor_name }}
@@ -314,6 +339,12 @@
           </div>
         </div>
 
+        <section class="status-message">
+          <strong>Status da campanha</strong>
+          <p class="subtitle" style="font-size:.95rem;margin:0;">{{ status_context.message }}</p>
+          <p class="subtitle" style="font-size:.9rem;margin-top:8px;">Protocolo {{ protocol_label }}</p>
+        </section>
+
         {% if next_booster_date %}
         <section class="booster-card" aria-label="Orientacao sobre reforco anual">
           <div class="booster-card__icon"><i class="fa-solid fa-shield-dog"></i></div>
@@ -326,6 +357,15 @@
           </div>
         </section>
         {% endif %}
+
+        <section class="care-card">
+          <strong>Orientacoes depois da vacina</strong>
+          <ul class="care-list">
+            <li>Sonolencia leve ou sensibilidade no local da aplicacao pode acontecer no mesmo dia.</li>
+            <li>Procure atendimento se houver inchaco no rosto, vomitos repetidos, falta de ar, fraqueza intensa ou piora importante.</li>
+            <li>Em caso de mordida ou arranhao, lave o local com agua e sabao e procure o servico de saude.</li>
+          </ul>
+        </section>
 
         <section>
           <h2 style="margin:0 0 10px;font-size:1.2rem;">Historico simples</h2>
