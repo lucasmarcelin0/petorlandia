@@ -501,8 +501,43 @@ def test_pmo_request_history_shows_only_submitted_requests(app, client):
     assert b"PMO-" in response.data
     assert b"Abrir comprovante" in response.data
     assert b"Solicita" in response.data
+    assert b"normalmente nao precisa vacinar novamente agora" in response.data
     assert b"old-campaign-token" not in response.data
     assert b"Registro antigo de campanha" not in response.data
+
+
+def test_pmo_request_form_splits_saved_legacy_profile_address(app, client):
+    with app.app_context():
+        user = User(
+            name="Tutor Endereco",
+            email="tutor-endereco@example.com",
+            phone="+5516999999996",
+            address="Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+        )
+        user.set_password("PMOA9996")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        db.session.add(Animal(name="Lunna", user_id=user.id, species=species, status="ativo"))
+        db.session.commit()
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-endereco@example.com",
+            "password": "PMOA9996",
+        },
+    )
+
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b'name="address_street"' in response.data
+    assert b'value="Rua 20"' in response.data
+    assert b'value="1107"' in response.data
+    assert b'value="Cond.torino casa 73"' in response.data
+    assert b'value="Jardim Benini"' in response.data
+    assert b'value="Rua 20, 1107, Cond.torino casa 73, Jardim Benini"' not in response.data
 
 
 def test_pmo_visit_model_includes_evaluation_dimension_columns():

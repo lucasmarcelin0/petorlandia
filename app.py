@@ -4489,6 +4489,8 @@ def vacina_pmo_solicitar():
         return redirect(url_for('add_animal'))
 
     # Pré-preenche endereço do perfil
+    from services.vacina_pmo_service import normalize_pmo_request_address
+
     _prof_street = ''
     _prof_number = ''
     _prof_complement = ''
@@ -4500,7 +4502,16 @@ def vacina_pmo_solicitar():
         _prof_complement = _e.complemento or ''
         _prof_neighborhood = _e.bairro or ''
     elif current_user.address:
-        _prof_street = current_user.address
+        _profile_address = normalize_pmo_request_address({
+            'address_street': current_user.address,
+            'address_number': '',
+            'address_complement': '',
+            'address_neighborhood': '',
+        })
+        _prof_street = _profile_address['street']
+        _prof_number = _profile_address['number']
+        _prof_complement = _profile_address['complement']
+        _prof_neighborhood = _profile_address['neighborhood']
 
     form_state = {
         'animal_ids': [],
@@ -4518,7 +4529,7 @@ def vacina_pmo_solicitar():
     }
 
     if request.method == 'POST':
-        from services.vacina_pmo_service import normalize_pmo_request_address, submit_vacina_pmo_request
+        from services.vacina_pmo_service import submit_vacina_pmo_request
 
         selected_ids = set(request.form.getlist('animal_ids', type=int))
         form_state['animal_ids'] = list(selected_ids)
