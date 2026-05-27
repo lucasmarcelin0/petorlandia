@@ -4070,6 +4070,13 @@ def vacina_pmo_public(token):
         except Exception as exc:
             evaluation_error = str(exc)
 
+    primary_ficha_url = None
+    for pmo_animal in visit.animals:
+        if not pmo_animal.animal_id:
+            continue
+        ficha_url = url_for('ficha_animal', animal_id=pmo_animal.animal_id)
+        primary_ficha_url = primary_ficha_url or ficha_url
+
     return render_template(
         'vacina_pmo/public_certificate.html',
         visit=visit,
@@ -4077,6 +4084,7 @@ def vacina_pmo_public(token):
         login_phone=format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         evaluation_saved=evaluation_saved,
         evaluation_error=evaluation_error,
+        primary_ficha_url=primary_ficha_url,
     )
 
 
@@ -8159,6 +8167,10 @@ def add_animal():
 
 def login_view():
     form = LoginForm()
+    next_url = request.values.get('next') or url_for('index')
+    parsed_next = urlparse(next_url)
+    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
+        next_url = url_for('index')
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
         form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -8169,16 +8181,16 @@ def login_view():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400
             flash(login_error, 'warning')
-            return render_template('auth/login.html', form=form)
+            return render_template('auth/login.html', form=form, next_url=next_url)
 
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             if form.remember.data:
                 session.permanent = True
             if is_json_request:
-                return jsonify({'success': True, 'redirect': url_for('index')})
+                return jsonify({'success': True, 'redirect': next_url})
             flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('index'))
+            return redirect(next_url)
         else:
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': ['E-mail, celular ou senha inválidos.']}, 'message': 'E-mail, celular ou senha inválidos.'}), 400
@@ -8193,7 +8205,7 @@ def login_view():
             errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
         return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o login.'}), 400
 
-    return render_template('auth/login.html', form=form)
+    return render_template('auth/login.html', form=form, next_url=next_url)
 
 
 _OAUTH_PRIVATE_JWK = None

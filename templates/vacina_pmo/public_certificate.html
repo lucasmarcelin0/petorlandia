@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carteirinha digital - Vacina antirrabica</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
   <style>
     :root {
       color-scheme: light;
@@ -11,8 +12,11 @@
       --muted: #5d687a;
       --line: #dbe3ee;
       --blue: #0f67ff;
+      --blue-dark: #174ea6;
       --green: #087f5b;
       --amber: #b7791f;
+      --teal: #15aabf;
+      --rose: #d9480f;
       --bg: #f4f7fb;
       --card: #ffffff;
     }
@@ -32,7 +36,10 @@
     .topbar {
       background: #ffffff;
       border-bottom: 1px solid var(--line);
-      padding: 14px 18px;
+      padding: 10px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
     .brand {
@@ -42,15 +49,43 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      font-weight: 800;
-      font-size: 1.05rem;
     }
 
-    .brand span:last-child {
+    .brandmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .brandmark img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+
+    .navlinks {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .navlinks a,
+    .campaign-label {
       color: var(--muted);
       font-weight: 600;
       font-size: .9rem;
       text-align: right;
+      text-decoration: none;
+    }
+
+    .navlinks a:hover {
+      color: var(--blue);
     }
 
     main {
@@ -63,6 +98,7 @@
       display: grid;
       gap: 14px;
       margin-bottom: 18px;
+      padding-top: 4px;
     }
 
     h1 {
@@ -196,6 +232,49 @@
       color: var(--blue);
     }
 
+    .button.ghost {
+      background: #f8fafc;
+      color: var(--blue-dark);
+      border-color: #b7cdfa;
+    }
+
+    .microcopy {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .flow-step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .step-number {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: #e8f1ff;
+      color: var(--blue-dark);
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
     .tips {
       display: grid;
       gap: 10px;
@@ -205,10 +284,35 @@
     }
 
     .tips li {
-      border-left: 4px solid #15aabf;
+      border-left: 4px solid var(--teal);
       background: #f8fcff;
       border-radius: 6px;
       padding: 10px 12px;
+    }
+
+    .education-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .education-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+    }
+
+    .education-card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .education-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .95rem;
     }
 
     .stars {
@@ -269,11 +373,22 @@
 
     @media (max-width: 780px) {
       .grid,
-      .meta {
+      .meta,
+      .flow,
+      .education-grid {
         grid-template-columns: 1fr;
       }
 
       .brand {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .navlinks {
+        justify-content: flex-start;
+      }
+
+      .animal {
         align-items: flex-start;
         flex-direction: column;
       }
@@ -283,8 +398,15 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <span>PetOrlandia</span>
-      <span>Prefeitura de Orlandia - Vacina antirrabica</span>
+      <a class="brandmark" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="PetOrlandia">
+        <span>PetOrlandia</span>
+      </a>
+      <nav class="navlinks" aria-label="Navegacao da carteirinha">
+        <span class="campaign-label">Prefeitura de Orlandia - Vacina antirrabica</span>
+        <a href="{{ url_for('login_view') }}">Entrar</a>
+        <a href="#avaliar">Avaliar atendimento</a>
+      </nav>
     </div>
   </header>
 
@@ -329,7 +451,9 @@
                 {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
               </span>
               {% if animal.animal_id %}
-                <a class="button secondary" href="{{ url_for('ficha_animal', animal_id=animal.animal_id) }}" style="min-height:34px;padding:6px 10px;">Abrir ficha</a>
+                {% set ficha_url = url_for('ficha_animal', animal_id=animal.animal_id) %}
+                <a class="button ghost" href="{{ url_for('login_view', next=ficha_url) }}" style="min-height:34px;padding:6px 10px;">Entrar para abrir ficha</a>
+                <p class="microcopy">Use o telefone e a senha provisoria ao lado para acessar a ficha completa.</p>
               {% endif %}
             </div>
           {% endfor %}
@@ -346,10 +470,31 @@
         {% endif %}
         <span class="label">Senha provisoria</span>
         <span class="password">{{ visit.password }}</span>
-        <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
+        <a class="button" href="{{ url_for('login_view', next=primary_ficha_url) if primary_ficha_url else url_for('login_view') }}">Entrar no PetOrlandia</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
       </aside>
     </div>
+
+    <section class="card" style="margin-top:16px;">
+      <h2>Como usar esta carteirinha</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <span class="step-number">1</span>
+          <strong>Confira o registro</strong>
+          <span class="label">Nome do tutor, data, endereco e animais vacinados ficam salvos aqui.</span>
+        </div>
+        <div class="flow-step">
+          <span class="step-number">2</span>
+          <strong>Entre no PetOrlandia</strong>
+          <span class="label">Use o telefone com DDD e a senha provisoria para ver a ficha completa.</span>
+        </div>
+        <div class="flow-step">
+          <span class="step-number">3</span>
+          <strong>Guarde o link</strong>
+          <span class="label">Ele funciona como comprovante digital da campanha antirrabica.</span>
+        </div>
+      </div>
+    </section>
 
     <section class="card" style="margin-top:16px;">
       <h2>Por que manter a vacina em dia?</h2>
@@ -358,6 +503,20 @@
         <li>A dose anual ajuda a manter Orlandia protegida.</li>
         <li>Guarde este link: ele funciona como comprovante digital da campanha.</li>
       </ul>
+      <div class="education-grid">
+        <article class="education-card">
+          <strong>Quando procurar ajuda</strong>
+          <p>Alteracao de comportamento, salivacao intensa, dificuldade para engolir ou mordida devem ser avaliadas por servico veterinario.</p>
+        </article>
+        <article class="education-card">
+          <strong>Depois da vacina</strong>
+          <p>Observe seu animal no dia da aplicacao. Pequena sensibilidade local pode acontecer; sinais intensos merecem contato com um profissional.</p>
+        </article>
+        <article class="education-card">
+          <strong>Cuidado coletivo</strong>
+          <p>Manter caes e gatos vacinados reduz o risco para criancas, idosos, vizinhos e equipes que trabalham com animais.</p>
+        </article>
+      </div>
     </section>
 
     <section class="card" id="avaliar" style="margin-top:16px;">

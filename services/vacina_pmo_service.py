@@ -265,6 +265,10 @@ def _species_id(species: str) -> int | None:
 def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     visit = pmo_animal.visit
     _ensure_tutor_account(visit)
+
+    if pmo_animal.animal_id and not db.session.get(Animal, pmo_animal.animal_id):
+        pmo_animal.animal_id = None
+
     if pmo_animal.animal_id or not visit.tutor_user_id:
         return
 

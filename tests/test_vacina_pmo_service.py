@@ -5,6 +5,7 @@ from services.vacina_pmo_service import (
     persist_vacina_pmo_rows,
     update_vacina_pmo_animal_status,
 )
+from extensions import db
 from models import Animal, PmoVaccinationVisit, User, Vacina
 
 
@@ -189,7 +190,10 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
     assert b"Carteirinha digital da vacina" in response.data
     assert b"(16) 99999-9999" in response.data
     assert b"PMOA9999" in response.data
-    assert b"Abrir ficha" in response.data
+    assert b"Entrar para abrir ficha" in response.data
+    assert b"/login?next=/animal/" in response.data
+    assert b"Como usar esta carteirinha" in response.data
+    assert b"Quando procurar ajuda" in response.data
 
     post = client.post(
         f"/vacina-pmo/c/{token}",
@@ -201,3 +205,29 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client):
         visit = get_vacina_pmo_public_visit(token)
         assert visit.evaluation_rating == 5
         assert visit.evaluation_comment == "Atendimento excelente"
+
+
+def test_login_respects_safe_next_url(app, client):
+    with app.app_context():
+        user = User(name="Tutor PMO", email="tutor-pmo@example.com", phone="+5516999999999")
+        user.set_password("PMOA9999")
+        db.session.add(user)
+        db.session.commit()
+
+    login_page = client.get("/login?next=/animal/3070/ficha")
+    assert login_page.status_code == 200
+    assert b'name="next" value="/animal/3070/ficha"' in login_page.data
+
+    response = client.post(
+        "/login",
+        data={
+            "login": "tutor-pmo@example.com",
+            "password": "PMOA9999",
+            "next": "/animal/3070/ficha",
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/animal/3070/ficha")
+
+    blocked = client.get("/login?next=https://example.org/phish")
+    assert b'name="next" value="/"' in blocked.data
