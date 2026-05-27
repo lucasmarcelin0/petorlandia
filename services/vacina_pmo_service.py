@@ -18,6 +18,7 @@ from sqlalchemy import func
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
+    _load_google_credentials_info,
     _resolve_sheet_title_by_gid,
 )
 from time_utils import utcnow
@@ -33,6 +34,26 @@ PMO_VACCINE_FABRICANTE = "Bioraiva Pet (Biogenesis Bago)"
 PMO_VACCINE_LOTE = "Fab. 09/2024 - Val. 09/2026"
 PMO_CAMPAIGN_VET_EMAIL = "lukemarki3@gmail.com"
 PMO_EDUCATIONAL_VIDEO_URL_ENV = "PMO_VACCINE_EDUCATIONAL_VIDEO_URL"
+PMO_DEFAULT_EDUCATIONAL_VIDEO_URL = "https://youtu.be/lLq6ikMRbcc"
+
+PMO_REQUEST_SHEET_TITLE_ENV = "PMO_VACCINE_REQUEST_SHEET_TITLE"
+PMO_REQUEST_SHEET_DEFAULT_TITLE = "Solicitacoes"
+PMO_REQUEST_HEADERS = [
+    "Carimbo de data/hora",
+    "Tutor",
+    "CPF",
+    "Telefone",
+    "E-mail",
+    "Endereco",
+    "Caes",
+    "Gatos",
+    "Animais",
+    "Observacoes",
+    "Turno preferencial",
+    "ID Usuario PetOrlandia",
+    "Origem",
+    "Status",
+]
 
 
 @dataclass
@@ -64,7 +85,7 @@ def _youtube_embed_url(url: str) -> str:
 
 
 def get_pmo_educational_video() -> dict[str, str]:
-    url = os.getenv(PMO_EDUCATIONAL_VIDEO_URL_ENV, "")
+    url = os.getenv(PMO_EDUCATIONAL_VIDEO_URL_ENV, PMO_DEFAULT_EDUCATIONAL_VIDEO_URL)
     embed_url = _youtube_embed_url(url)
     if not embed_url:
         return {"url": "", "embed_url": ""}
@@ -781,3 +802,114 @@ def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoS
         sheet_gid=resolved_gid,
         sheet_title=resolved_title,
     )
+
+
+def _get_sheets_service_rw():
+    """Sheets client with read/write scope for the PMO spreadsheet."""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+    except ImportError as exc:
+        raise RuntimeError(
+            "google-api-python-client nao instalado. "
+            "Execute: pip install google-api-python-client google-auth"
+        ) from exc
+
+    info = _load_google_credentials_info()
+    creds = service_account.Credentials.from_service_account_info(
+        info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+    return build("sheets", "v4", credentials=creds)
+
+
+def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    existing = {
+        sheet["properties"].get("title", ""): sheet["properties"]
+        for sheet in metadata.get("sheets", [])
+    }
+    if title not in existing:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {"addSheet": {"properties": {"title": title}}}
+                ]
+            },
+        ).execute()
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A1",
+            valueInputOption="RAW",
+            body={"values": [PMO_REQUEST_HEADERS]},
+        ).execute()
+        return
+
+    header_response = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!A1:N1")
+        .execute()
+    )
+    current_header = (header_response.get("values") or [[]])[0]
+    if [_normalize_text(item) for item in current_header] != PMO_REQUEST_HEADERS:
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A1",
+            valueInputOption="RAW",
+            body={"values": [PMO_REQUEST_HEADERS]},
+        ).execute()
+
+
+def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
+    """Acrescenta uma nova solicitacao do morador na aba de solicitacoes."""
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO invalido.")
+
+    title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+
+    service = _get_sheets_service_rw()
+    _ensure_request_sheet(service, spreadsheet_id, title)
+
+    timestamp = utcnow().astimezone().strftime("%d/%m/%Y %H:%M:%S")
+    row = [
+        timestamp,
+        _normalize_text(payload.get("tutor")),
+        _normalize_text(payload.get("cpf")),
+        _normalize_text(payload.get("phone")),
+        _normalize_text(payload.get("email")),
+        _normalize_text(payload.get("address")),
+        str(int(payload.get("dogs") or 0)),
+        str(int(payload.get("cats") or 0)),
+        _normalize_text(payload.get("animal_names")),
+        _normalize_text(payload.get("note")),
+        _normalize_text(payload.get("shift")),
+        str(payload.get("user_id") or ""),
+        "PetOrlandia",
+        "Pendente",
+    ]
+
+    response = (
+        service.spreadsheets()
+        .values()
+        .append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(title)}!A:N",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row]},
+        )
+        .execute()
+    )
+
+    return {
+        "spreadsheet_id": spreadsheet_id,
+        "sheet_title": title,
+        "updated_range": response.get("updates", {}).get("updatedRange", ""),
+    }

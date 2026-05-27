@@ -1,0 +1,173 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 720px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <h1 class="h4 fw-bold mb-0">Solicitar vacina antirrábica</h1>
+  </div>
+
+  <div class="alert alert-info small d-flex gap-2 align-items-start">
+    <i class="fa-solid fa-circle-info mt-1"></i>
+    <div>
+      Campanha gratuita da <strong>Prefeitura Municipal de Orlândia</strong>.
+      Preencha os dados abaixo para entrar na lista de visitas domiciliares.
+      A equipe da prefeitura entrará em contato pelo telefone informado para
+      confirmar o dia da vacinação.
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category if category != 'message' else 'info' }} small">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-user me-2 text-primary"></i>Dados do tutor
+        </h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small text-muted">Nome</label>
+            <input type="text" class="form-control" value="{{ current_user.name }}" disabled>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small text-muted">E-mail</label>
+            <input type="email" class="form-control" value="{{ current_user.email }}" disabled>
+          </div>
+          {% if current_user.cpf %}
+          <div class="col-md-6">
+            <label class="form-label small text-muted">CPF</label>
+            <input type="text" class="form-control" value="{{ current_user.cpf }}" disabled>
+          </div>
+          {% endif %}
+          <div class="col-md-6">
+            <label for="phone" class="form-label small fw-semibold">Telefone para contato *</label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              class="form-control"
+              value="{{ form_state.phone }}"
+              placeholder="(16) 99999-9999"
+              required>
+          </div>
+          <div class="col-12">
+            <label for="address" class="form-label small fw-semibold">Endereço onde a equipe deve ir *</label>
+            <input
+              type="text"
+              id="address"
+              name="address"
+              class="form-control"
+              value="{{ form_state.address }}"
+              placeholder="Rua, número, bairro, complemento"
+              required>
+            <div class="form-text small">
+              Endereço completo para que a equipe da prefeitura possa visitar.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-paw me-2 text-primary"></i>Animais para vacinar *
+        </h6>
+        <p class="text-muted small mb-3">
+          Marque todos os pets que devem ser vacinados nesta visita.
+        </p>
+        <div class="d-grid gap-2">
+          {% for animal in user_animals %}
+            {% set selected = animal.id in form_state.animal_ids %}
+            {% set species_name = (animal.species.name if animal.species else '') %}
+            <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3"
+                   style="cursor:pointer;">
+              <input
+                class="form-check-input mt-0"
+                type="checkbox"
+                name="animal_ids"
+                value="{{ animal.id }}"
+                {% if selected %}checked{% endif %}>
+              <span class="d-flex flex-column">
+                <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
+                <span class="text-muted small">
+                  {% if species_name %}{{ species_name }}{% else %}Espécie não informada{% endif %}
+                  {% if animal.breed and animal.breed.name %} · {{ animal.breed.name }}{% endif %}
+                  {% if animal.sex %} · {{ animal.sex }}{% endif %}
+                </span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-clock me-2 text-primary"></i>Preferência de horário *
+        </h6>
+        <div class="row g-2">
+          <div class="col-6">
+            <input
+              type="radio"
+              class="btn-check"
+              name="shift"
+              id="shift-manha"
+              value="Manha"
+              {% if form_state.shift == 'Manha' %}checked{% endif %}
+              required>
+            <label class="btn btn-outline-primary w-100" for="shift-manha">
+              <i class="fa-solid fa-sun me-1"></i> Manhã
+            </label>
+          </div>
+          <div class="col-6">
+            <input
+              type="radio"
+              class="btn-check"
+              name="shift"
+              id="shift-tarde"
+              value="Tarde"
+              {% if form_state.shift == 'Tarde' %}checked{% endif %}>
+            <label class="btn btn-outline-primary w-100" for="shift-tarde">
+              <i class="fa-solid fa-cloud-sun me-1"></i> Tarde
+            </label>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label for="note" class="form-label small fw-semibold">
+            Observações (opcional)
+          </label>
+          <textarea
+            id="note"
+            name="note"
+            class="form-control"
+            rows="3"
+            placeholder="Ex.: Cão grande, melhor avisar antes; portão azul; etc.">{{ form_state.note }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2 mb-5">
+      <button type="submit" class="btn btn-primary btn-lg rounded-pill">
+        <i class="fa-solid fa-paper-plane me-1"></i> Enviar solicitação
+      </button>
+      <a href="{{ url_for('index') }}" class="btn btn-link text-muted">
+        Cancelar
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

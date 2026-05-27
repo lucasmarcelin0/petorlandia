@@ -4254,6 +4254,96 @@ def vacina_pmo_animal_status(animal_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/solicitar', methods=['GET', 'POST'])
+@login_required
+def vacina_pmo_solicitar():
+    user_animals = (
+        Animal.query.filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+
+    if not user_animals:
+        flash(
+            'Você precisa ter ao menos um animal cadastrado para solicitar a vacina antirrábica.',
+            'warning',
+        )
+        return redirect(url_for('add_animal'))
+
+    form_state = {
+        'animal_ids': [],
+        'phone': current_user.phone or '',
+        'address': current_user.address or '',
+        'shift': '',
+        'note': '',
+    }
+
+    if request.method == 'POST':
+        from services.vacina_pmo_service import submit_vacina_pmo_request
+
+        selected_ids = set(request.form.getlist('animal_ids', type=int))
+        form_state['animal_ids'] = list(selected_ids)
+        form_state['phone'] = (request.form.get('phone') or '').strip()
+        form_state['address'] = (request.form.get('address') or '').strip()
+        form_state['shift'] = (request.form.get('shift') or '').strip()
+        form_state['note'] = (request.form.get('note') or '').strip()
+
+        selected_animals = [a for a in user_animals if a.id in selected_ids]
+
+        if not selected_animals:
+            flash('Selecione ao menos um animal para vacinar.', 'danger')
+        elif not form_state['phone']:
+            flash('Informe um telefone para contato.', 'danger')
+        elif not form_state['address']:
+            flash('Informe o endereço onde os animais serão vacinados.', 'danger')
+        elif form_state['shift'] not in ('Manha', 'Tarde'):
+            flash('Selecione o turno preferencial (Manhã ou Tarde).', 'danger')
+        else:
+            dogs = 0
+            cats = 0
+            names = []
+            for animal in selected_animals:
+                names.append(animal.name or 'Sem nome')
+                species_name = (animal.species.name if animal.species else '').lower()
+                if 'gat' in species_name:
+                    cats += 1
+                else:
+                    dogs += 1
+
+            payload = {
+                'tutor': current_user.name,
+                'cpf': current_user.cpf or '',
+                'phone': form_state['phone'],
+                'email': current_user.email,
+                'address': form_state['address'],
+                'dogs': dogs,
+                'cats': cats,
+                'animal_names': ', '.join(names),
+                'note': form_state['note'],
+                'shift': form_state['shift'],
+                'user_id': current_user.id,
+            }
+
+            try:
+                submit_vacina_pmo_request(payload)
+                flash(
+                    'Solicitação enviada para a Prefeitura de Orlândia. '
+                    'A equipe entrará em contato pelo telefone informado para o agendamento.',
+                    'success',
+                )
+                return redirect(url_for('index'))
+            except Exception as exc:
+                current_app.logger.exception("Falha ao enviar solicitacao Vacina PMO")
+                flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
+
+    return render_template(
+        'vacina_pmo/solicitar.html',
+        user_animals=user_animals,
+        form_state=form_state,
+    )
+
+
 def _user_is_clinic_owner(user=None):
     """Return ``True`` if ``user`` owns at least one clinic."""
 
