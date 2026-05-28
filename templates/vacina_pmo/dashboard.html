@@ -610,7 +610,7 @@
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
   const state = { rows: [] };
-  const routeOrigin = 'Vigilância Sanitária de Orlândia, SP';
+  const routeOrigin = 'Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000';
   const evaluationMetrics = [
     ['evaluationRating', 'Satisfação geral'],
     ['evaluationRegistrationRating', 'Cadastro e agendamento'],
@@ -914,9 +914,15 @@
           shift: selectedShift,
         }),
       });
-      const payload = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let payload = {};
+      try {
+        payload = rawText ? JSON.parse(rawText) : {};
+      } catch (parseError) {
+        payload = { message: rawText.slice(0, 240) };
+      }
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || 'Não foi possível otimizar a rota.');
+        throw new Error(payload.message || `Não foi possível otimizar a rota. Código ${response.status}.`);
       }
       state.rows = normalizeSyncedRows(payload.rows || []);
       shiftEl.value = selectedShift;

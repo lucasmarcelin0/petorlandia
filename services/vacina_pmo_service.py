@@ -70,7 +70,7 @@ PMO_NOTE_COLUMN = "K"
 PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
-PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária de Orlândia, SP"
+PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000"
 
 # Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
 PMO_TUTOR_NAME_COLUMN_INDEX = 0
@@ -267,7 +267,10 @@ def _pmo_route_origin_coords() -> tuple[float, float] | None:
         lng = float(os.getenv(PMO_ROUTE_ORIGIN_LNG_ENV, ""))
         return lat, lng
     except ValueError:
-        return _pmo_geocode_address(_pmo_route_origin_address())
+        coords = _pmo_geocode_address(_pmo_route_origin_address())
+        if coords:
+            return coords
+        return geocode_address(cidade="Orlândia", estado="SP")
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
