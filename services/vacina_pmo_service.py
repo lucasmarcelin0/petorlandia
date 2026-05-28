@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import requests
 from extensions import db
 from flask import has_request_context, url_for
 from models import Animal, PmoVaccinationAnimal, PmoVaccinationVisit, Species, User, Vacina
 from sqlalchemy import func
-from helpers import geocode_address
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -71,6 +71,10 @@ PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
 PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000"
+PMO_DEFAULT_ROUTE_ORIGIN_COORDS = (-20.7122478, -47.8838617)
+PMO_ROUTE_GEOCODE_LIMIT_ENV = "PMO_ROUTE_GEOCODE_LIMIT"
+PMO_ROUTE_LAT_COLUMN_INDEX = 18
+PMO_ROUTE_LNG_COLUMN_INDEX = 19
 
 # Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
 PMO_TUTOR_NAME_COLUMN_INDEX = 0
@@ -248,13 +252,67 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     if not normalized:
         return None
     parts = _pmo_address_parts(normalized)
-    return geocode_address(
-        rua=parts["rua"],
-        numero=parts["numero"],
-        bairro=parts["bairro"],
-        cidade="Orlândia",
-        estado="SP",
+    query = ", ".join(
+        part for part in (
+            parts["rua"],
+            parts["numero"],
+            parts["bairro"],
+            "Orlândia",
+            "SP",
+            "Brasil",
+        ) if part
     )
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
+            headers={"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"},
+            timeout=2,
+        )
+        response.raise_for_status()
+        payload = response.json() or []
+        best = payload[0]
+        return float(best["lat"]), float(best["lon"])
+    except (requests.RequestException, IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _pmo_route_geocode_limit() -> int:
+    try:
+        return max(0, int(os.getenv(PMO_ROUTE_GEOCODE_LIMIT_ENV, "18")))
+    except ValueError:
+        return 18
+
+
+def _pmo_float_cell(value: Any) -> float | None:
+    text = _normalize_text(value).replace(",", ".")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _pmo_cached_row_coords(sheet_values: list[list[Any]], source_row: int) -> tuple[float, float] | None:
+    if source_row <= 0 or source_row > len(sheet_values):
+        return None
+    row = sheet_values[source_row - 1]
+    lat = _pmo_float_cell(row[PMO_ROUTE_LAT_COLUMN_INDEX] if len(row) > PMO_ROUTE_LAT_COLUMN_INDEX else "")
+    lng = _pmo_float_cell(row[PMO_ROUTE_LNG_COLUMN_INDEX] if len(row) > PMO_ROUTE_LNG_COLUMN_INDEX else "")
+    if lat is None or lng is None:
+        return None
+    return lat, lng
+
+
+def _pmo_set_row_coords(sheet_values: list[list[Any]], source_row: int, coords: tuple[float, float]) -> None:
+    while len(sheet_values) < source_row:
+        sheet_values.append([])
+    row = sheet_values[source_row - 1]
+    while len(row) <= PMO_ROUTE_LNG_COLUMN_INDEX:
+        row.append("")
+    row[PMO_ROUTE_LAT_COLUMN_INDEX] = f"{coords[0]:.7f}"
+    row[PMO_ROUTE_LNG_COLUMN_INDEX] = f"{coords[1]:.7f}"
 
 
 def _pmo_route_origin_address() -> str:
@@ -267,10 +325,7 @@ def _pmo_route_origin_coords() -> tuple[float, float] | None:
         lng = float(os.getenv(PMO_ROUTE_ORIGIN_LNG_ENV, ""))
         return lat, lng
     except ValueError:
-        coords = _pmo_geocode_address(_pmo_route_origin_address())
-        if coords:
-            return coords
-        return geocode_address(cidade="Orlândia", estado="SP")
+        return PMO_DEFAULT_ROUTE_ORIGIN_COORDS
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -817,20 +872,6 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
     if not origin_coords:
         raise ValueError("Não foi possível localizar a Vigilância Sanitária de Orlândia para iniciar a rota.")
 
-    geocoded: list[tuple[PmoVaccinationVisit, tuple[float, float]]] = []
-    ungeocoded: list[PmoVaccinationVisit] = []
-    for visit in selected:
-        coords = _pmo_geocode_address(visit.address or "")
-        if coords:
-            geocoded.append((visit, coords))
-        else:
-            ungeocoded.append(visit)
-    if not geocoded:
-        raise ValueError("Não foi possível localizar nenhum endereço deste turno.")
-
-    optimized = _nearest_neighbor_route(origin_coords, geocoded) + ungeocoded
-    target_rows = sorted(visit.source_row for visit in selected if visit.source_row)
-
     service = _get_sheets_service_rw()
     range_value = f"{_quote_sheet_title(resolved_title)}!{DEFAULT_SHEET_RANGE}"
     response = (
@@ -840,9 +881,33 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
         .execute()
     )
     sheet_values = response.get("values", [])
+    target_rows = sorted(visit.source_row for visit in selected if visit.source_row)
     needed_rows = max(target_rows)
     while len(sheet_values) < needed_rows:
         sheet_values.append([])
+
+    geocoded: list[tuple[PmoVaccinationVisit, tuple[float, float]]] = []
+    ungeocoded: list[PmoVaccinationVisit] = []
+    geocoded_now = 0
+    geocode_limit = _pmo_route_geocode_limit()
+    for visit in selected:
+        coords = _pmo_cached_row_coords(sheet_values, visit.source_row or 0)
+        if not coords and geocoded_now < geocode_limit:
+            coords = _pmo_geocode_address(visit.address or "")
+            geocoded_now += 1
+            if coords:
+                _pmo_set_row_coords(sheet_values, visit.source_row or 0, coords)
+        if coords:
+            geocoded.append((visit, coords))
+        else:
+            ungeocoded.append(visit)
+    if not geocoded:
+        raise ValueError(
+            "Não foi possível localizar nenhum endereço deste turno rapidamente. "
+            "Confira se os endereços têm rua, número e bairro, e tente novamente em alguns instantes."
+        )
+
+    optimized = _nearest_neighbor_route(origin_coords, geocoded) + ungeocoded
 
     source_rows_by_visit_id = {
         visit.id: list(sheet_values[(visit.source_row or 1) - 1])
@@ -874,6 +939,7 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
         "origin": _pmo_route_origin_address(),
         "optimized_count": len(optimized),
         "unlocated_count": len(ungeocoded),
+        "geocoded_now": geocoded_now,
     }
 
 

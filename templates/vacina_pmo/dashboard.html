@@ -459,21 +459,9 @@
           <i class="fas fa-rotate me-1"></i> Sincronizar aba
         </button>
       </div>
-      <div class="col-md-4 col-xl-2">
-        <label for="pmo-status-filter" class="form-label">Status</label>
-        <select id="pmo-status-filter" class="form-select">
-          <option value="">Todos</option>
-          <option value="pendente">Pendente</option>
-          <option value="vacinado">Vacinado</option>
-          <option value="parcial">Parcial</option>
-          <option value="ausente">Ausente</option>
-          <option value="remarcar">Remarcar</option>
-          <option value="recusou">Recusou</option>
-        </select>
-      </div>
-      <div class="col-md-4 col-xl-2">
+      <div class="col-md-12 col-xl-6">
         <div class="small text-muted">
-          A data vem do nome da aba. Use os filtros só depois de sincronizar.
+          A data vem do nome da aba. Use os filtros da lista depois de sincronizar.
         </div>
       </div>
     </div>
@@ -521,6 +509,18 @@
                 <option value="">Todos</option>
                 <option value="Manha">Manhã</option>
                 <option value="Tarde">Tarde</option>
+              </select>
+            </div>
+            <div>
+              <label for="pmo-status-filter" class="form-label small mb-1">Status</label>
+              <select id="pmo-status-filter" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="vacinado">Vacinado</option>
+                <option value="parcial">Parcial</option>
+                <option value="ausente">Ausente</option>
+                <option value="remarcar">Remarcar</option>
+                <option value="recusou">Recusou</option>
               </select>
             </div>
             <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route" data-route-url="{{ url_for('vacina_pmo_route_optimize') }}">
@@ -916,7 +916,7 @@
       try {
         payload = rawText ? JSON.parse(rawText) : {};
       } catch (parseError) {
-        payload = { message: rawText.slice(0, 240) };
+        payload = { message: readableErrorMessage(rawText).slice(0, 240) };
       }
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `Não foi possível otimizar a rota. Código ${response.status}.`);
@@ -1131,6 +1131,10 @@
       '"': '&quot;',
       "'": '&#039;',
     }[char]));
+  }
+
+  function readableErrorMessage(value) {
+    return normalizeText(String(value || '').replace(/<[^>]+>/g, ' '));
   }
 
   function render() {
