@@ -21,7 +21,7 @@ from services.sfa_service import (
     _load_google_credentials_info,
     _resolve_sheet_title_by_gid,
 )
-from time_utils import utcnow
+from time_utils import now_in_brazil, utcnow
 
 
 DEFAULT_SHEET_URL = (
@@ -63,6 +63,26 @@ PMO_REQUEST_HEADER_RANGE = "A1:R1"
 
 PMO_DOGS_VACCINATED_COLUMN = "M"
 PMO_CATS_VACCINATED_COLUMN = "N"
+PMO_ATTENDED_BY_COLUMN = "O"
+PMO_NOTE_COLUMN = "K"
+
+# Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
+PMO_TUTOR_NAME_COLUMN_INDEX = 0
+
+# Cores claras do painel padrão do Google Sheets para destacar o status da visita
+# diretamente na célula do nome do tutor.
+PMO_STATUS_COLORS: dict[str, dict[str, float]] = {
+    # Vermelho claro: pelo menos um animal recusou a vacina.
+    "recusou": {"red": 0.957, "green": 0.800, "blue": 0.800},
+    # Laranja claro: pelo menos um animal ficou ausente (sem recusas).
+    "ausente": {"red": 0.988, "green": 0.898, "blue": 0.804},
+    # Verde claro: todos os animais foram vacinados.
+    "vacinado": {"red": 0.851, "green": 0.918, "blue": 0.827},
+    # Amarelo claro: vacinação parcial (alguns ainda sem desfecho positivo).
+    "parcial": {"red": 1.000, "green": 0.949, "blue": 0.800},
+}
+# Branco "neutro": usado para limpar a cor de uma célula quando o status volta a pendente.
+PMO_STATUS_CLEAR_COLOR = {"red": 1.0, "green": 1.0, "blue": 1.0}
 
 
 @dataclass
@@ -76,6 +96,34 @@ class PmoSyncResult:
 
 def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _normalize_note_line(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _append_visit_note(visit: PmoVaccinationVisit, line: str) -> None:
+    normalized = _normalize_note_line(line)
+    if not normalized:
+        return
+    current = (visit.note or "").strip()
+    visit.note = f"{current} | {normalized}" if current else normalized
+
+
+def _pmo_event_time_label() -> str:
+    return now_in_brazil().strftime("%H:%M")
+
+
+def _status_note_line(animal: PmoVaccinationAnimal, status: str) -> str:
+    labels = {
+        "pendente": "pendente",
+        "vacinado": "vacinado",
+        "ausente": "ausente",
+        "remarcar": "remarcar",
+        "recusou": "recusou",
+    }
+    label = labels.get(status, status)
+    return f"{_pmo_event_time_label()} - {animal.name}: {label}."
 
 
 def _youtube_embed_url(url: str) -> str:
@@ -474,6 +522,7 @@ def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
                 "password": _password(phone1 or phone2 or str(index)),
                 "certificateUrl": "",
                 "sourceRow": index + 1,
+                "attendedBy": _cell(row, 14),
             }
         )
     return parsed
@@ -603,6 +652,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "loginPhone": format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         "certificateUrl": visit.certificate_url or public_url,
         "publicUrl": public_url,
+        "attendedBy": visit.attended_by or "",
         "evaluationRating": evaluation["rating"],
         "evaluationRegistrationRating": evaluation["registration_rating"],
         "evaluationServiceRating": evaluation["service_rating"],
@@ -697,6 +747,7 @@ def persist_vacina_pmo_rows(
         visit.vaccine_date = _parse_date_object(row.get("date"))
         visit.shift = row.get("shift") or ""
         visit.note = row.get("note") or ""
+        visit.attended_by = (row.get("attendedBy") or "").strip() or None
         visit.synced_at = now
         _ensure_visit_public_token(visit)
 
@@ -784,6 +835,134 @@ def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
 
 
+def write_note_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve a observação acumulada na célula K da linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar observação PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = f"{_quote_sheet_title(title)}!{PMO_NOTE_COLUMN}{visit.source_row}"
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[visit.note or ""]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar observação na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
+def _visit_status_color_key(visit: PmoVaccinationVisit) -> str | None:
+    """Retorna a chave de cor (vermelho, laranja, verde, amarelo) para o status da visita.
+
+    Precedência (do sinal mais "preocupante" para o melhor):
+        recusou > ausente > vacinado (todos) > parcial (algum vacinado) > None
+    Quando nenhuma cor é necessária (pendente/remarcar puro) devolve ``None`` para
+    indicar que a célula deve voltar ao neutro.
+    """
+    statuses = [animal.status for animal in (visit.animals or [])]
+    if not statuses:
+        return None
+    if any(status == "recusou" for status in statuses):
+        return "recusou"
+    if any(status == "ausente" for status in statuses):
+        return "ausente"
+    if all(status == "vacinado" for status in statuses):
+        return "vacinado"
+    if any(status == "vacinado" for status in statuses):
+        return "parcial"
+    return None
+
+
+def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Pinta a célula do nome do tutor (coluna A) conforme o status da visita."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_gid:
+        return False
+    try:
+        sheet_id = int(visit.sheet_gid)
+    except (TypeError, ValueError):
+        return False
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para pintar nome do tutor PMO",
+                exc_info=True,
+            )
+        except Exception:
+            pass
+        return False
+
+    color_key = _visit_status_color_key(visit)
+    color = PMO_STATUS_COLORS.get(color_key) if color_key else PMO_STATUS_CLEAR_COLOR
+
+    try:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=visit.spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "repeatCell": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": visit.source_row - 1,
+                                "endRowIndex": visit.source_row,
+                                "startColumnIndex": PMO_TUTOR_NAME_COLUMN_INDEX,
+                                "endColumnIndex": PMO_TUTOR_NAME_COLUMN_INDEX + 1,
+                            },
+                            "cell": {
+                                "userEnteredFormat": {"backgroundColor": color},
+                            },
+                            "fields": "userEnteredFormat.backgroundColor",
+                        }
+                    }
+                ]
+            },
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao pintar célula do tutor na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
 def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, Any]:
     allowed = {"pendente", "vacinado", "ausente", "remarcar", "recusou"}
     if status not in allowed:
@@ -791,11 +970,87 @@ def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, An
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     animal.status = status
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
+    _append_visit_note(animal.visit, _status_note_line(animal, status))
     _ensure_real_animal(animal)
     _ensure_pmo_vaccine_record(animal)
     db.session.commit()
     write_vaccinated_counts_to_sheet(animal.visit)
+    write_note_to_sheet(animal.visit)
+    write_tutor_name_color_to_sheet(animal.visit)
     return _serialize_visit(animal.visit)
+
+
+def append_vacina_pmo_visit_note(visit_id: int, note: str) -> dict[str, Any]:
+    """Acrescenta uma observação manual sem apagar o histórico anterior."""
+    visit = PmoVaccinationVisit.query.get_or_404(visit_id)
+    normalized = _normalize_note_line(note)
+    if not normalized:
+        raise ValueError("Digite uma observação antes de salvar.")
+    if len(normalized) > 500:
+        raise ValueError("A observação deve ter no máximo 500 caracteres.")
+    _append_visit_note(visit, f"{_pmo_event_time_label()} - {normalized}")
+    db.session.commit()
+    write_note_to_sheet(visit)
+    return _serialize_visit(visit)
+
+
+def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve o nome de quem atendeu (coluna O) na linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar 'atendido por' PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = (
+            f"{_quote_sheet_title(title)}!"
+            f"{PMO_ATTENDED_BY_COLUMN}{visit.source_row}"
+        )
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[visit.attended_by or ""]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar 'atendido por' na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
+def update_vacina_pmo_visit_attended_by(visit_id: int, attended_by: str | None) -> dict[str, Any]:
+    """Atualiza quem atendeu o vacinador na visita e grava na planilha (coluna O)."""
+    visit = PmoVaccinationVisit.query.get_or_404(visit_id)
+    normalized = (attended_by or "").strip()
+    if len(normalized) > 255:
+        raise ValueError("O nome de quem atendeu deve ter no máximo 255 caracteres.")
+    visit.attended_by = normalized or None
+    db.session.commit()
+    write_attended_by_to_sheet(visit)
+    return _serialize_visit(visit)
 
 
 def get_vacina_pmo_public_visit(token: str) -> PmoVaccinationVisit | None:

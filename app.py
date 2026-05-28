@@ -4535,6 +4535,42 @@ def vacina_pmo_animal_status(animal_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
+@login_required
+def vacina_pmo_visit_attended_by(visit_id):
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import update_vacina_pmo_visit_attended_by
+
+        payload = request.get_json(silent=True) or {}
+        row = update_vacina_pmo_visit_attended_by(visit_id, payload.get('attended_by'))
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao salvar 'atendido por' Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/visit/<int:visit_id>/note', methods=['POST'])
+@login_required
+def vacina_pmo_visit_note(visit_id):
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import append_vacina_pmo_visit_note
+
+        payload = request.get_json(silent=True) or {}
+        row = append_vacina_pmo_visit_note(visit_id, payload.get('note'))
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao salvar observação Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/solicitar', methods=['GET', 'POST'])
 @login_required
 def vacina_pmo_solicitar():

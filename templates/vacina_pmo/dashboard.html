@@ -82,6 +82,66 @@
     max-width: 320px;
   }
 
+  .pmo-note-box {
+    display: grid;
+    gap: 6px;
+    min-width: 260px;
+  }
+
+  .pmo-note-text {
+    white-space: pre-wrap;
+    font-size: 0.82rem;
+    line-height: 1.25;
+  }
+
+  .pmo-note-text.is-empty {
+    color: #94a3b8;
+  }
+
+  .pmo-note-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pmo-note-add {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pmo-note-add:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+
+  .pmo-note-form {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pmo-note-input {
+    width: 100%;
+    min-height: 70px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+    resize: vertical;
+  }
+
+  .pmo-note-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+
   .pmo-copy {
     min-width: 112px;
   }
@@ -170,6 +230,83 @@
     .pmo-eval-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  .pmo-attended {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .pmo-attended__link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: #64748b;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 1px dashed #94a3b8;
+  }
+
+  .pmo-attended__link:hover {
+    color: #0f172a;
+    border-bottom-color: #0f172a;
+  }
+
+  .pmo-attended__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #eef2ff;
+    color: #312e81;
+    border-radius: 999px;
+    padding: 2px 8px 2px 10px;
+    font-size: 0.76rem;
+    max-width: 100%;
+  }
+
+  .pmo-attended__chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+
+  .pmo-attended__chip-clear {
+    background: none;
+    border: 0;
+    padding: 0;
+    line-height: 1;
+    color: #4338ca;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .pmo-attended__chip-clear:hover {
+    color: #1e1b4b;
+  }
+
+  .pmo-attended__form {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .pmo-attended__input {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 0.78rem;
+    min-width: 140px;
+    max-width: 180px;
+  }
+
+  .pmo-attended__input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
   }
 </style>
 {% endblock %}
@@ -433,6 +570,7 @@
       loginPhone: row.loginPhone || '',
       certificateUrl: row.certificateUrl || '',
       publicUrl: row.publicUrl || row.certificateUrl || '',
+      attendedBy: row.attendedBy || '',
       evaluationRating: row.evaluationRating || null,
       evaluationRegistrationRating: row.evaluationRegistrationRating || null,
       evaluationServiceRating: row.evaluationServiceRating || null,
@@ -563,7 +701,113 @@
       const updated = normalizeSyncedRows([payload.row])[0];
       const index = state.rows.findIndex((item) => item.id === updated.id);
       if (index >= 0) state.rows[index] = updated;
+      return updated;
     }
+    return null;
+  }
+
+  async function saveVisitNote(row, note) {
+    if (!row.visitId) {
+      throw new Error('Sincronize a aba antes de registrar observações.');
+    }
+    const response = await fetch(`/vacina-pmo/visit/${row.visitId}/note`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ note }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível salvar a observação.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+      return updated;
+    }
+    return null;
+  }
+
+  async function saveAttendedBy(row, attendedBy) {
+    if (!row.visitId) {
+      throw new Error('Sincronize a aba antes de registrar quem atendeu.');
+    }
+    const response = await fetch(`/vacina-pmo/visit/${row.visitId}/attended-by`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ attended_by: attendedBy }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível salvar quem atendeu.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+    }
+  }
+
+  function renderAttendedBy(row) {
+    if (row.editingAttendedBy) {
+      const current = row.attendedBy || '';
+      return `
+        <div class="pmo-attended">
+          <form class="pmo-attended__form" data-action="attended-form" autocomplete="off">
+            <input type="text" class="pmo-attended__input" data-action="attended-input"
+              maxlength="120" placeholder="Nome de quem atendeu" value="${escapeHtml(current)}" aria-label="Nome de quem atendeu">
+          </form>
+        </div>
+      `;
+    }
+    if (row.attendedBy) {
+      return `
+        <div class="pmo-attended">
+          <span class="pmo-attended__chip" title="Atendido por outra pessoa (vai para a coluna Nome da planilha)">
+            <span class="pmo-attended__chip-name">Atendido por: ${escapeHtml(row.attendedBy)}</span>
+            <button type="button" class="pmo-attended__chip-clear" data-action="attended-clear" aria-label="Voltar para tutor atendeu">✕</button>
+          </span>
+        </div>
+      `;
+    }
+    return `
+      <div class="pmo-attended">
+        <button type="button" class="pmo-attended__link" data-action="attended-edit" title="Marcar que outra pessoa atendeu no lugar do tutor (preenche a coluna Nome da planilha)">+ Outra pessoa atendeu?</button>
+      </div>
+    `;
+  }
+
+  function renderNote(row) {
+    if (row.editingNote) {
+      return `
+        <div class="pmo-note-box">
+          <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
+          <form class="pmo-note-form" data-action="note-form">
+            <textarea class="pmo-note-input" data-action="note-input" maxlength="500" placeholder="Escreva uma nova observação"></textarea>
+            <div class="pmo-note-actions">
+              <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-action="note-cancel">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+    return `
+      <div class="pmo-note-box">
+        <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
+        <div class="pmo-note-actions">
+          <button type="button" class="pmo-note-add" data-action="note-edit" title="Adicionar observação" aria-label="Adicionar observação">+</button>
+        </div>
+      </div>
+    `;
   }
 
   function rowMatchesFilters(row) {
@@ -689,7 +933,7 @@
           <td>
             <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
           </td>
-          <td><strong>${escapeHtml(row.tutor)}</strong></td>
+          <td><strong>${escapeHtml(row.tutor)}</strong>${renderAttendedBy(row)}</td>
           <td class="pmo-address">${escapeHtml(row.address)}</td>
           <td>${animals}</td>
           <td>${row.dogs}</td>
@@ -699,7 +943,7 @@
           <td>${wa1 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa1}" target="_blank" rel="noopener">WhatsApp 1</a>` : '<span class="text-muted">-</span>'}</td>
           <td>${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa2}" target="_blank" rel="noopener">WhatsApp 2</a>` : '<span class="text-muted">-</span>'}</td>
           <td><code>${escapeHtml(row.password)}</code></td>
-          <td class="pmo-note">${escapeHtml(row.note || '-')}</td>
+          <td class="pmo-note">${renderNote(row)}</td>
         </tr>
       `;
     }).join('');
@@ -740,6 +984,121 @@
       row.status = inferVisitStatus(row.animals);
       render();
     }
+  });
+
+  async function commitAttendedByEdit(row, value, { silentNoChange = false } = {}) {
+    const trimmed = (value || '').trim();
+    row.editingAttendedBy = false;
+    if (trimmed === (row.attendedBy || '')) {
+      if (silentNoChange) return;
+      render();
+      return;
+    }
+    const previous = row.attendedBy;
+    row.attendedBy = trimmed;
+    render();
+    try {
+      await saveAttendedBy(row, trimmed);
+    } catch (error) {
+      row.attendedBy = previous;
+      render();
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    }
+  }
+
+  tbody.addEventListener('click', (event) => {
+    const rowEl = event.target.closest('tr[data-id]');
+    const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+    if (!row) return;
+    const action = event.target.dataset.action;
+    if (action === 'attended-edit') {
+      state.rows.forEach((other) => { if (other !== row) other.editingAttendedBy = false; });
+      row.editingAttendedBy = true;
+      render();
+      const freshRow = tbody.querySelector(`tr[data-id="${row.id}"]`);
+      const input = freshRow?.querySelector('[data-action="attended-input"]');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    } else if (action === 'attended-clear') {
+      commitAttendedByEdit(row, '');
+    } else if (action === 'note-edit') {
+      state.rows.forEach((other) => { if (other !== row) other.editingNote = false; });
+      row.editingNote = true;
+      render();
+      const freshRow = tbody.querySelector(`tr[data-id="${row.id}"]`);
+      const input = freshRow?.querySelector('[data-action="note-input"]');
+      if (input) input.focus();
+    } else if (action === 'note-cancel') {
+      row.editingNote = false;
+      render();
+    }
+  });
+
+  tbody.addEventListener('submit', (event) => {
+    if (event.target.dataset.action === 'attended-form') {
+      event.preventDefault();
+      const rowEl = event.target.closest('tr[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      const input = event.target.querySelector('[data-action="attended-input"]');
+      if (row && input) commitAttendedByEdit(row, input.value);
+    } else if (event.target.dataset.action === 'note-form') {
+      event.preventDefault();
+      const rowEl = event.target.closest('tr[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      const input = event.target.querySelector('[data-action="note-input"]');
+      if (!row || !input) return;
+      const note = input.value.trim();
+      if (!note) {
+        window.showAppToast ? window.showAppToast('Digite uma observação antes de salvar.', 'warning') : alert('Digite uma observação antes de salvar.');
+        return;
+      }
+      const previous = row.note;
+      row.editingNote = false;
+      render();
+      saveVisitNote(row, note)
+        .then(() => render())
+        .catch((error) => {
+          row.note = previous;
+          row.editingNote = true;
+          render();
+          window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        });
+    }
+  });
+
+  tbody.addEventListener('keydown', (event) => {
+    if (event.target.dataset.action === 'attended-input' && event.key === 'Escape') {
+      event.preventDefault();
+      const rowEl = event.target.closest('tr[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (row) {
+        row.editingAttendedBy = false;
+        render();
+      }
+    } else if (event.target.dataset.action === 'note-input' && event.key === 'Escape') {
+      event.preventDefault();
+      const rowEl = event.target.closest('tr[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (row) {
+        row.editingNote = false;
+        render();
+      }
+    }
+  });
+
+  tbody.addEventListener('focusout', (event) => {
+    if (event.target.dataset.action !== 'attended-input') return;
+    const rowEl = event.target.closest('tr[data-id]');
+    const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+    if (!row || !row.editingAttendedBy) return;
+    // Allow click on neighboring controls (e.g. clear chip) without prematurely losing focus
+    setTimeout(() => {
+      const stillEditing = rowEl.contains(document.activeElement);
+      if (stillEditing) return;
+      commitAttendedByEdit(row, event.target.value, { silentNoChange: true });
+    }, 0);
   });
 
   document.getElementById('pmo-sync').addEventListener('click', () => syncSheet('pmo-sync'));

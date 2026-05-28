@@ -2545,6 +2545,7 @@ class PmoVaccinationVisit(db.Model):
     password = db.Column(db.String(32), nullable=False)
     certificate_url = db.Column(db.String(500), nullable=True)
     public_token = db.Column(db.String(96), unique=True, nullable=True, index=True)
+    attended_by = db.Column(db.String(255), nullable=True)
     tutor_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
     evaluation_rating = db.Column(db.Integer, nullable=True)
     evaluation_registration_rating = db.Column(db.Integer, nullable=True)

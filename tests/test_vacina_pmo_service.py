@@ -2,8 +2,11 @@ from datetime import date, timedelta
 
 from services import vacina_pmo_service
 from services.vacina_pmo_service import (
+    append_vacina_pmo_visit_note,
+    PMO_ATTENDED_BY_COLUMN,
     PMO_CATS_VACCINATED_COLUMN,
     PMO_DOGS_VACCINATED_COLUMN,
+    PMO_NOTE_COLUMN,
     PMO_REQUEST_HEADERS,
     normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
@@ -13,6 +16,7 @@ from services.vacina_pmo_service import (
     save_vacina_pmo_evaluation,
     submit_vacina_pmo_request,
     update_vacina_pmo_animal_status,
+    update_vacina_pmo_visit_attended_by,
 )
 from extensions import db
 from models import Animal, PmoVaccinationVisit, Species, User, Vacina
@@ -21,6 +25,7 @@ from models import Animal, PmoVaccinationVisit, Species, User, Vacina
 class _FakeSheetsService:
     def __init__(self):
         self.updates = []
+        self.batch_updates = []
 
     def spreadsheets(self):
         return self
@@ -36,6 +41,11 @@ class _FakeSheetsService:
             "body": body,
         }
         self.updates.append(call)
+        return self
+
+    def batchUpdate(self, *, spreadsheetId, body):
+        call = {"spreadsheetId": spreadsheetId, "body": body}
+        self.batch_updates.append(call)
         return self
 
     def execute(self):
@@ -801,6 +811,7 @@ def test_update_animal_status_writes_vaccinated_counts_to_source_sheet(app, monk
     monkeypatch.setattr(
         vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
     )
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_event_time_label", lambda: "09:15")
 
     with app.app_context():
         saved = persist_vacina_pmo_rows(
@@ -815,14 +826,18 @@ def test_update_animal_status_writes_vaccinated_counts_to_source_sheet(app, monk
         update_vacina_pmo_animal_status(cao_id, "vacinado")
         update_vacina_pmo_animal_status(gato_id, "vacinado")
 
-    assert len(fake_service.updates) == 2
-    last = fake_service.updates[-1]
-    assert last["spreadsheetId"] == "planilha-pmo"
-    assert last["range"] == (
+    count_updates = [call for call in fake_service.updates if call["range"].endswith(f"{PMO_DOGS_VACCINATED_COLUMN}7:{PMO_CATS_VACCINATED_COLUMN}7")]
+    note_updates = [call for call in fake_service.updates if call["range"].endswith(f"{PMO_NOTE_COLUMN}7")]
+    assert len(count_updates) == 2
+    assert len(note_updates) == 2
+    last_count = count_updates[-1]
+    assert last_count["spreadsheetId"] == "planilha-pmo"
+    assert last_count["range"] == (
         f"'Vacinacao Antirrabica_7'!"
         f"{PMO_DOGS_VACCINATED_COLUMN}7:{PMO_CATS_VACCINATED_COLUMN}7"
     )
-    assert last["body"] == {"values": [[1, 1]]}
+    assert last_count["body"] == {"values": [[1, 1]]}
+    assert note_updates[-1]["body"] == {"values": [["09:15 - Lua: vacinado. | 09:15 - Mia: vacinado."]]}
 
 
 def test_update_animal_status_skips_sheet_write_without_sheet_metadata(app, monkeypatch):
@@ -893,3 +908,344 @@ def test_update_animal_status_swallows_sheet_failures(app, monkeypatch):
         result = update_vacina_pmo_animal_status(animal_id, "vacinado")
 
     assert result["animals"][0]["status"] == "vacinado"
+
+
+def test_append_visit_note_preserves_existing_observation_in_same_cell(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "Portão azul",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 6,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_event_time_label", lambda: "10:40")
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        result = append_vacina_pmo_visit_note(saved[0]["visitId"], " ligar no horário do almoço ")
+
+    assert result["note"] == "Portão azul | 10:40 - ligar no horário do almoço"
+    assert fake_service.updates[-1]["range"] == f"'Vacinacao Antirrabica_7'!{PMO_NOTE_COLUMN}6"
+    assert fake_service.updates[-1]["body"] == {
+        "values": [["Portão azul | 10:40 - ligar no horário do almoço"]]
+    }
+
+
+def test_update_attended_by_writes_name_to_column_o(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 9,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        visit_id = saved[0]["visitId"]
+        result = update_vacina_pmo_visit_attended_by(visit_id, "  João Maria  ")
+
+    assert result["attendedBy"] == "João Maria"
+    assert len(fake_service.updates) == 1
+    update = fake_service.updates[0]
+    assert update["spreadsheetId"] == "planilha-pmo"
+    assert update["range"] == (
+        f"'Vacinacao Antirrabica_7'!{PMO_ATTENDED_BY_COLUMN}9"
+    )
+    assert update["body"] == {"values": [["João Maria"]]}
+
+
+def test_update_attended_by_clears_value_when_empty(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 4,
+        "attendedBy": "Vizinho Pedro",
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        assert saved[0]["attendedBy"] == "Vizinho Pedro"
+        visit_id = saved[0]["visitId"]
+        result = update_vacina_pmo_visit_attended_by(visit_id, "")
+
+    assert result["attendedBy"] == ""
+    visit = PmoVaccinationVisit.query.get(visit_id)
+    assert visit.attended_by is None
+    assert fake_service.updates[-1]["body"] == {"values": [[""]]}
+
+
+def _color_request(body):
+    return body["requests"][0]["repeatCell"]
+
+
+def _color_dict(body):
+    return _color_request(body)["cell"]["userEnteredFormat"]["backgroundColor"]
+
+
+def test_status_color_all_vaccinated_paints_green(app, monkeypatch):
+    from services.vacina_pmo_service import PMO_STATUS_COLORS
+
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 0,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Babi", "species": "cao", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 5,
+    }
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao_5",
+        )
+        ids = [a["id"] for a in saved[0]["animals"]]
+        update_vacina_pmo_animal_status(ids[0], "vacinado")
+        update_vacina_pmo_animal_status(ids[1], "vacinado")
+
+    assert len(fake.batch_updates) == 2
+    last = fake.batch_updates[-1]
+    assert last["spreadsheetId"] == "planilha-pmo"
+    range_ = _color_request(last["body"])["range"]
+    assert range_["sheetId"] == 123
+    assert range_["startRowIndex"] == 4 and range_["endRowIndex"] == 5
+    assert range_["startColumnIndex"] == 0 and range_["endColumnIndex"] == 1
+    assert _color_dict(last["body"]) == PMO_STATUS_COLORS["vacinado"]
+
+
+def test_status_color_partial_paints_yellow(app, monkeypatch):
+    from services.vacina_pmo_service import PMO_STATUS_COLORS
+
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 0,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Babi", "species": "cao", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 6,
+    }
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="321",
+            sheet_title="Vacinacao_6",
+        )
+        first_id = saved[0]["animals"][0]["id"]
+        update_vacina_pmo_animal_status(first_id, "vacinado")
+
+    last = fake.batch_updates[-1]
+    assert _color_dict(last["body"]) == PMO_STATUS_COLORS["parcial"]
+
+
+def test_status_color_recusou_overrides_vaccinated_with_red(app, monkeypatch):
+    from services.vacina_pmo_service import PMO_STATUS_COLORS
+
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 0,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Babi", "species": "cao", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 8,
+    }
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="555",
+            sheet_title="Vacinacao_8",
+        )
+        ids = [a["id"] for a in saved[0]["animals"]]
+        update_vacina_pmo_animal_status(ids[0], "vacinado")
+        update_vacina_pmo_animal_status(ids[1], "recusou")
+
+    last = fake.batch_updates[-1]
+    assert _color_dict(last["body"]) == PMO_STATUS_COLORS["recusou"]
+
+
+def test_status_color_ausente_paints_orange(app, monkeypatch):
+    from services.vacina_pmo_service import PMO_STATUS_COLORS
+
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 11,
+    }
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="777",
+            sheet_title="Vacinacao_11",
+        )
+        update_vacina_pmo_animal_status(saved[0]["animals"][0]["id"], "ausente")
+
+    last = fake.batch_updates[-1]
+    assert _color_dict(last["body"]) == PMO_STATUS_COLORS["ausente"]
+
+
+def test_status_color_back_to_pendente_clears_to_white(app, monkeypatch):
+    from services.vacina_pmo_service import PMO_STATUS_CLEAR_COLOR
+
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 12,
+    }
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="999",
+            sheet_title="Vacinacao_12",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        update_vacina_pmo_animal_status(animal_id, "vacinado")
+        update_vacina_pmo_animal_status(animal_id, "pendente")
+
+    assert _color_dict(fake.batch_updates[-1]["body"]) == PMO_STATUS_CLEAR_COLOR
