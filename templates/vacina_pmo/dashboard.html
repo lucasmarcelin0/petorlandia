@@ -460,14 +460,6 @@
         </button>
       </div>
       <div class="col-md-4 col-xl-2">
-        <label for="pmo-shift" class="form-label">Turno</label>
-        <select id="pmo-shift" class="form-select">
-          <option value="">Todos</option>
-          <option value="Manha">Manhã</option>
-          <option value="Tarde">Tarde</option>
-        </select>
-      </div>
-      <div class="col-md-4 col-xl-2">
         <label for="pmo-status-filter" class="form-label">Status</label>
         <select id="pmo-status-filter" class="form-select">
           <option value="">Todos</option>
@@ -514,34 +506,7 @@
     </div>
   </div>
 
-  <section class="pmo-panel mb-3" id="pmo-evaluations">
-    <div class="pmo-panel__header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
-      <div>
-        <h2 class="h5 mb-0">Avaliações dos moradores</h2>
-        <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informações e a própria pesquisa.</div>
-      </div>
-      <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
-    </div>
-    <div class="pmo-panel__body">
-      <div class="pmo-eval-grid mb-3" id="pmo-eval-grid"></div>
-      <div class="row g-3">
-        <div class="col-lg-7">
-          <h3 class="h6 mb-2">Comentários recentes</h3>
-          <div class="pmo-comment-list" id="pmo-eval-comments">
-            <div class="text-muted small">Nenhum comentário registrado para os filtros atuais.</div>
-          </div>
-        </div>
-        <div class="col-lg-5">
-          <h3 class="h6 mb-2">Leitura rápida</h3>
-          <div class="small text-muted" id="pmo-eval-insights">
-            As respostas aparecem depois de carregar uma aba com avaliações.
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="row g-3">
+  <div class="row g-3 mb-3">
     <div class="col-12">
       <section class="pmo-panel">
         <div class="pmo-panel__header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
@@ -549,14 +514,19 @@
             <h2 class="h5 mb-0">Lista do aplicador</h2>
             <div class="text-muted small">Marque o resultado da visita e copie os links quando a carteirinha estiver gerada.</div>
           </div>
-          <div class="btn-group" role="group" aria-label="Turno rápido">
-            <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="">Todos</button>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Manha">Manhã</button>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Tarde">Tarde</button>
+          <div class="d-flex flex-column flex-sm-row align-items-sm-end gap-2">
+            <div>
+              <label for="pmo-shift" class="form-label small mb-1">Turno</label>
+              <select id="pmo-shift" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                <option value="Manha">Manhã</option>
+                <option value="Tarde">Tarde</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route" data-route-url="{{ url_for('vacina_pmo_route_optimize') }}">
+              <i class="fas fa-route me-1"></i> Otimizar rota
+            </button>
           </div>
-          <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route" data-route-url="{{ url_for('vacina_pmo_route_optimize') }}">
-            <i class="fas fa-route me-1"></i> Otimizar rota
-          </button>
         </div>
         <div class="pmo-table-wrap">
           <table class="table table-hover align-middle pmo-table">
@@ -593,6 +563,33 @@
       </section>
     </div>
   </div>
+
+  <section class="pmo-panel mb-3" id="pmo-evaluations">
+    <div class="pmo-panel__header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+      <div>
+        <h2 class="h5 mb-0">Avaliações dos moradores</h2>
+        <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informações e a própria pesquisa.</div>
+      </div>
+      <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
+    </div>
+    <div class="pmo-panel__body">
+      <div class="pmo-eval-grid mb-3" id="pmo-eval-grid"></div>
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <h3 class="h6 mb-2">Comentários recentes</h3>
+          <div class="pmo-comment-list" id="pmo-eval-comments">
+            <div class="text-muted small">Nenhum comentário registrado para os filtros atuais.</div>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <h3 class="h6 mb-2">Leitura rápida</h3>
+          <div class="small text-muted" id="pmo-eval-insights">
+            As respostas aparecem depois de carregar uma aba com avaliações.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -1346,13 +1343,6 @@
       : 'Aba selecionada sem data reconhecida. Carregando estado salvo desta aba...';
     loadSavedState(true);
   });
-  document.querySelectorAll('[data-shift-shortcut]').forEach((button) => {
-    button.addEventListener('click', () => {
-      shiftEl.value = button.dataset.shiftShortcut;
-      render();
-    });
-  });
-
   loadSheets().then(() => loadSavedState(false));
   render();
 })();
