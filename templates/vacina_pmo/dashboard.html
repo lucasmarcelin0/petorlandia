@@ -74,6 +74,66 @@
     vertical-align: middle;
   }
 
+  .pmo-cards {
+    display: none;
+  }
+
+  .pmo-visit-card {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 12px;
+    background: #ffffff;
+  }
+
+  .pmo-visit-card:last-child {
+    border-bottom: 0;
+  }
+
+  .pmo-card-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .pmo-card-title {
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .pmo-card-address {
+    color: #475569;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    margin-top: 2px;
+  }
+
+  .pmo-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 10px;
+    color: #64748b;
+    font-size: 0.78rem;
+    margin-top: 6px;
+  }
+
+  .pmo-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .pmo-card-actions .btn {
+    flex: 1 1 0;
+    min-height: 34px;
+    padding: 5px 8px;
+  }
+
+  .pmo-card-note {
+    border-top: 1px dashed #e2e8f0;
+    margin-top: 8px;
+    padding-top: 6px;
+  }
+
   .pmo-address {
     max-width: 260px;
   }
@@ -229,6 +289,42 @@
   @media (max-width: 576px) {
     .pmo-eval-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .pmo-table-wrap {
+      display: none;
+    }
+
+    .pmo-cards {
+      display: block;
+    }
+
+    .pmo-panel__header {
+      padding: 12px;
+    }
+
+    .pmo-animal-list {
+      min-width: 0;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .pmo-animal-item {
+      grid-template-columns: minmax(0, 1fr) 118px;
+      gap: 8px;
+    }
+
+    .pmo-note-box {
+      min-width: 0;
+    }
+
+    .pmo-note-text {
+      font-size: 0.78rem;
+      line-height: 1.25;
+      max-height: 2.6rem;
+      overflow: hidden;
     }
   }
 
@@ -456,13 +552,12 @@
                 <th>Turno</th>
                 <th>WhatsApp 1</th>
                 <th>WhatsApp 2</th>
-                <th>Senha</th>
                 <th>Obs.</th>
               </tr>
             </thead>
             <tbody id="pmo-tbody">
               <tr>
-                <td colspan="12">
+                <td colspan="11">
                   <div class="pmo-empty">
                     <div>
                       <i class="fas fa-syringe fa-2x mb-2 text-danger"></i>
@@ -474,6 +569,7 @@
             </tbody>
           </table>
         </div>
+        <div class="pmo-cards" id="pmo-cards"></div>
       </section>
     </div>
   </div>
@@ -482,6 +578,8 @@
 <script>
 (() => {
   const tbody = document.getElementById('pmo-tbody');
+  const cardsEl = document.getElementById('pmo-cards');
+  const listPanel = tbody.closest('.pmo-panel');
   const sheetEl = document.getElementById('pmo-sheet');
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
@@ -789,7 +887,6 @@
     if (row.editingNote) {
       return `
         <div class="pmo-note-box">
-          <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
           <form class="pmo-note-form" data-action="note-form">
             <textarea class="pmo-note-input" data-action="note-input" maxlength="500" placeholder="Escreva uma nova observação"></textarea>
             <div class="pmo-note-actions">
@@ -802,11 +899,62 @@
     }
     return `
       <div class="pmo-note-box">
-        <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
         <div class="pmo-note-actions">
           <button type="button" class="pmo-note-add" data-action="note-edit" title="Adicionar observação" aria-label="Adicionar observação">+</button>
+          <span class="text-muted small">observação</span>
         </div>
       </div>
+    `;
+  }
+
+  function renderAnimalControls(row) {
+    if (!row.animals.length) {
+      return '<span class="text-muted">Nomes não informados</span>';
+    }
+    return row.animals.map((animal, index) => `
+      <div class="pmo-animal-item">
+        <div>
+          <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
+          <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
+        </div>
+        <select class="form-select form-select-sm" data-action="animal-status" data-animal-index="${index}">
+          ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+        </select>
+      </div>
+    `).join('');
+  }
+
+  function renderMobileCard(row) {
+    const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
+    const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
+    return `
+      <article class="pmo-visit-card" data-id="${row.id}">
+        <div class="pmo-card-head">
+          <div>
+            <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
+            <div class="pmo-card-address">${escapeHtml(row.address || 'Endereço não informado')}</div>
+            ${renderAttendedBy(row)}
+          </div>
+          <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
+        </div>
+        <div class="pmo-card-meta">
+          <span>${escapeHtml(displayDate(row.date) || '-')}</span>
+          <span>${escapeHtml(row.shift || '-')}</span>
+          <span>${row.dogs} cão${row.dogs === 1 ? '' : 'es'}</span>
+          <span>${row.cats} gato${row.cats === 1 ? '' : 's'}</span>
+        </div>
+        <div class="pmo-animal-list">
+          ${renderAnimalControls(row)}
+          ${renderNote(row)}
+        </div>
+        <div class="pmo-card-actions">
+          ${wa1 ? `<a class="btn btn-sm btn-outline-success" href="${wa1}" target="_blank" rel="noopener">WhatsApp 1</a>` : ''}
+          ${wa2 ? `<a class="btn btn-sm btn-outline-success" href="${wa2}" target="_blank" rel="noopener">WhatsApp 2</a>` : ''}
+        </div>
+        <div class="pmo-card-note">
+          <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
+        </div>
+      </article>
     `;
   }
 
@@ -907,25 +1055,18 @@
     renderEvaluations(state.rows);
     const visible = state.rows.filter(rowMatchesFilters);
     if (!visible.length) {
-      tbody.innerHTML = '<tr><td colspan="12"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div></td></tr>';
+      cardsEl.innerHTML = '<div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>';
       return;
     }
 
-    tbody.innerHTML = visible.map((row) => {
+    const prepared = visible.map((row) => {
       row.status = inferVisitStatus(row.animals);
-      const animals = row.animals.length
-        ? `<div class="pmo-animal-list">${row.animals.map((animal, index) => `
-            <div class="pmo-animal-item">
-              <div>
-                <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
-                <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
-              </div>
-              <select class="form-select form-select-sm" data-action="animal-status" data-animal-index="${index}">
-                ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
-              </select>
-            </div>
-          `).join('')}</div>`
-        : '<span class="text-muted">Nomes não informados</span>';
+      return row;
+    });
+
+    tbody.innerHTML = prepared.map((row) => {
+      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderNote(row)}</div>`;
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
@@ -942,11 +1083,11 @@
           <td>${escapeHtml(row.shift || '-')}</td>
           <td>${wa1 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa1}" target="_blank" rel="noopener">WhatsApp 1</a>` : '<span class="text-muted">-</span>'}</td>
           <td>${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-copy" href="${wa2}" target="_blank" rel="noopener">WhatsApp 2</a>` : '<span class="text-muted">-</span>'}</td>
-          <td><code>${escapeHtml(row.password)}</code></td>
-          <td class="pmo-note">${renderNote(row)}</td>
+          <td class="pmo-note"><div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div></td>
         </tr>
       `;
     }).join('');
+    cardsEl.innerHTML = prepared.map(renderMobileCard).join('');
   }
 
   function exportRows() {
@@ -967,8 +1108,8 @@
     });
   }
 
-  tbody.addEventListener('change', async (event) => {
-    const rowEl = event.target.closest('tr[data-id]');
+  listPanel.addEventListener('change', async (event) => {
+    const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
     if (event.target.dataset.action === 'animal-status') {
@@ -1006,16 +1147,19 @@
     }
   }
 
-  tbody.addEventListener('click', (event) => {
-    const rowEl = event.target.closest('tr[data-id]');
+  listPanel.addEventListener('click', (event) => {
+    const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
     const action = event.target.dataset.action;
+    const findFreshRow = () => rowEl.classList.contains('pmo-visit-card')
+      ? cardsEl.querySelector(`[data-id="${row.id}"]`)
+      : tbody.querySelector(`tr[data-id="${row.id}"]`);
     if (action === 'attended-edit') {
       state.rows.forEach((other) => { if (other !== row) other.editingAttendedBy = false; });
       row.editingAttendedBy = true;
       render();
-      const freshRow = tbody.querySelector(`tr[data-id="${row.id}"]`);
+      const freshRow = findFreshRow();
       const input = freshRow?.querySelector('[data-action="attended-input"]');
       if (input) {
         input.focus();
@@ -1027,7 +1171,7 @@
       state.rows.forEach((other) => { if (other !== row) other.editingNote = false; });
       row.editingNote = true;
       render();
-      const freshRow = tbody.querySelector(`tr[data-id="${row.id}"]`);
+      const freshRow = findFreshRow();
       const input = freshRow?.querySelector('[data-action="note-input"]');
       if (input) input.focus();
     } else if (action === 'note-cancel') {
@@ -1036,16 +1180,16 @@
     }
   });
 
-  tbody.addEventListener('submit', (event) => {
+  listPanel.addEventListener('submit', (event) => {
     if (event.target.dataset.action === 'attended-form') {
       event.preventDefault();
-      const rowEl = event.target.closest('tr[data-id]');
+      const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       const input = event.target.querySelector('[data-action="attended-input"]');
       if (row && input) commitAttendedByEdit(row, input.value);
     } else if (event.target.dataset.action === 'note-form') {
       event.preventDefault();
-      const rowEl = event.target.closest('tr[data-id]');
+      const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       const input = event.target.querySelector('[data-action="note-input"]');
       if (!row || !input) return;
@@ -1068,10 +1212,10 @@
     }
   });
 
-  tbody.addEventListener('keydown', (event) => {
+  listPanel.addEventListener('keydown', (event) => {
     if (event.target.dataset.action === 'attended-input' && event.key === 'Escape') {
       event.preventDefault();
-      const rowEl = event.target.closest('tr[data-id]');
+      const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       if (row) {
         row.editingAttendedBy = false;
@@ -1079,7 +1223,7 @@
       }
     } else if (event.target.dataset.action === 'note-input' && event.key === 'Escape') {
       event.preventDefault();
-      const rowEl = event.target.closest('tr[data-id]');
+      const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
       if (row) {
         row.editingNote = false;
@@ -1088,9 +1232,9 @@
     }
   });
 
-  tbody.addEventListener('focusout', (event) => {
+  listPanel.addEventListener('focusout', (event) => {
     if (event.target.dataset.action !== 'attended-input') return;
-    const rowEl = event.target.closest('tr[data-id]');
+    const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row || !row.editingAttendedBy) return;
     // Allow click on neighboring controls (e.g. clear chip) without prematurely losing focus
