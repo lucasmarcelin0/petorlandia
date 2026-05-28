@@ -179,7 +179,7 @@
   <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-3 mb-4">
     <div>
       <h1 class="h3 mb-1">Vacina PMO</h1>
-      <p class="text-muted mb-0">Campanha de vacinacao antirrabica com lista do aplicador, carteirinha digital e links de WhatsApp.</p>
+      <p class="text-muted mb-0">Campanha de vacinação antirrábica com lista do aplicador, carteirinha digital e links de WhatsApp.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
       <button type="button" class="btn btn-outline-secondary" id="pmo-clear">
@@ -189,7 +189,7 @@
         <i class="fas fa-rotate me-1"></i> Sincronizar planilha
       </button>
       <button type="button" class="btn btn-outline-success" id="pmo-export">
-        <i class="fas fa-file-export me-1"></i> Copiar exportacao
+        <i class="fas fa-file-export me-1"></i> Copiar exportação
       </button>
     </div>
   </div>
@@ -201,10 +201,10 @@
         <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}">
           <option value="">Carregando abas...</option>
         </select>
-        <div class="form-text" id="pmo-sheet-info">Carregando datas disponiveis...</div>
+        <div class="form-text" id="pmo-sheet-info">Carregando datas disponíveis...</div>
       </div>
       <div class="col-md-5 col-xl-2">
-        <label class="form-label" for="pmo-sync-inline">Sincronizacao</label>
+        <label class="form-label" for="pmo-sync-inline">Sincronização</label>
         <button type="button" class="btn btn-primary w-100" id="pmo-sync-inline">
           <i class="fas fa-rotate me-1"></i> Sincronizar aba
         </button>
@@ -213,7 +213,7 @@
         <label for="pmo-shift" class="form-label">Turno</label>
         <select id="pmo-shift" class="form-select">
           <option value="">Todos</option>
-          <option value="Manha">Manha</option>
+          <option value="Manha">Manhã</option>
           <option value="Tarde">Tarde</option>
         </select>
       </div>
@@ -231,7 +231,7 @@
       </div>
       <div class="col-md-4 col-xl-2">
         <div class="small text-muted">
-          A data vem do nome da aba. Use os filtros so depois de sincronizar.
+          A data vem do nome da aba. Use os filtros só depois de sincronizar.
         </div>
       </div>
     </div>
@@ -246,7 +246,7 @@
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-stat">
-        <div class="text-muted small">Caes previstos na lista</div>
+        <div class="text-muted small">Cães previstos na lista</div>
         <div class="pmo-stat__value" data-stat="dogs">0</div>
       </div>
     </div>
@@ -258,7 +258,7 @@
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-stat">
-        <div class="text-muted small">Links disponiveis</div>
+        <div class="text-muted small">Links disponíveis</div>
         <div class="pmo-stat__value" data-stat="links">0</div>
       </div>
     </div>
@@ -267,8 +267,8 @@
   <section class="pmo-panel mb-3" id="pmo-evaluations">
     <div class="pmo-panel__header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
       <div>
-        <h2 class="h5 mb-0">Avaliacoes dos moradores</h2>
-        <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informacoes e a propria pesquisa.</div>
+        <h2 class="h5 mb-0">Avaliações dos moradores</h2>
+        <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informações e a própria pesquisa.</div>
       </div>
       <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
     </div>
@@ -276,15 +276,15 @@
       <div class="pmo-eval-grid mb-3" id="pmo-eval-grid"></div>
       <div class="row g-3">
         <div class="col-lg-7">
-          <h3 class="h6 mb-2">Comentarios recentes</h3>
+          <h3 class="h6 mb-2">Comentários recentes</h3>
           <div class="pmo-comment-list" id="pmo-eval-comments">
-            <div class="text-muted small">Nenhum comentario registrado para os filtros atuais.</div>
+            <div class="text-muted small">Nenhum comentário registrado para os filtros atuais.</div>
           </div>
         </div>
         <div class="col-lg-5">
-          <h3 class="h6 mb-2">Leitura rapida</h3>
+          <h3 class="h6 mb-2">Leitura rápida</h3>
           <div class="small text-muted" id="pmo-eval-insights">
-            As respostas aparecem depois de carregar uma aba com avaliacoes.
+            As respostas aparecem depois de carregar uma aba com avaliações.
           </div>
         </div>
       </div>
@@ -299,9 +299,9 @@
             <h2 class="h5 mb-0">Lista do aplicador</h2>
             <div class="text-muted small">Marque o resultado da visita e copie os links quando a carteirinha estiver gerada.</div>
           </div>
-          <div class="btn-group" role="group" aria-label="Turno rapido">
+          <div class="btn-group" role="group" aria-label="Turno rápido">
             <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="">Todos</button>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Manha">Manha</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Manha">Manhã</button>
             <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Tarde">Tarde</button>
           </div>
         </div>
@@ -311,9 +311,9 @@
               <tr>
                 <th>Status</th>
                 <th>Tutor</th>
-                <th>Endereco</th>
+                <th>Endereço</th>
                 <th>Animais</th>
-                <th>Caes</th>
+                <th>Cães</th>
                 <th>Gatos</th>
                 <th>Data</th>
                 <th>Turno</th>
@@ -355,10 +355,10 @@
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
   const state = { rows: [] };
   const evaluationMetrics = [
-    ['evaluationRating', 'Satisfacao geral'],
+    ['evaluationRating', 'Satisfação geral'],
     ['evaluationRegistrationRating', 'Cadastro e agendamento'],
     ['evaluationServiceRating', 'Atendimento no dia'],
-    ['evaluationInformationRating', 'Informacoes e carteirinha'],
+    ['evaluationInformationRating', 'Informações e carteirinha'],
     ['evaluationSurveyRating', 'Pesquisa'],
   ];
 
@@ -394,7 +394,7 @@
     const names = source.length ? source.map((animal) => animal.name).join(', ') : 'seu animal';
     const campaignLink = row.publicUrl || row.certificateUrl || 'LINK_DA_CAMPANHA';
     const loginPhone = row.loginPhone || 'seu telefone com DDD';
-    const text = `Ola, ${row.tutor}. Parabens pelo cuidado com a saude publica. A vacina antirrabica de ${names} foi registrada pela Prefeitura de Orlandia. Acesse sua carteirinha digital, orientacoes e avaliacao do atendimento aqui: ${campaignLink}. Primeiro acesso ao PetOrlandia: no campo e-mail ou celular, digite ${loginPhone}; senha provisoria: ${row.password}. Reforco previsto para o proximo ano.`;
+    const text = `Olá, ${row.tutor}. Parabéns pelo cuidado com a saúde pública. A vacina antirrábica de ${names} foi registrada pela Prefeitura de Orlândia. Acesse sua carteirinha digital, orientações e avaliação do atendimento aqui: ${campaignLink}. Primeiro acesso ao PetOrlandia: no campo e-mail ou celular, digite ${loginPhone}; senha provisória: ${row.password}. Reforço previsto para o próximo ano.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
@@ -451,7 +451,7 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || 'Nao foi possivel listar as abas.');
+        throw new Error(payload.message || 'Não foi possível listar as abas.');
       }
       const sheets = payload.sheets || [];
       const sortedSheets = [...sheets].sort((a, b) => {
@@ -472,7 +472,7 @@
       sheetInfoEl.textContent = `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
-      sheetInfoEl.textContent = 'Nao foi possivel carregar as abas da planilha.';
+      sheetInfoEl.textContent = 'Não foi possível carregar as abas da planilha.';
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
     }
   }
@@ -500,7 +500,7 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || 'Nao foi possivel sincronizar a planilha.');
+        throw new Error(payload.message || 'Não foi possível sincronizar a planilha.');
       }
       state.rows = normalizeSyncedRows(payload.rows);
       shiftEl.value = '';
@@ -529,7 +529,7 @@
       const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || 'Nao foi possivel carregar o estado salvo.');
+        throw new Error(payload.message || 'Não foi possível carregar o estado salvo.');
       }
       if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
         sheetEl.value = payload.sheet_gid;
@@ -557,7 +557,7 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.success) {
-      throw new Error(payload.message || 'Nao foi possivel salvar a alteracao.');
+      throw new Error(payload.message || 'Não foi possível salvar a alteração.');
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
@@ -628,7 +628,7 @@
             <div>${escapeHtml(row.evaluationComment)}</div>
           </div>
         `).join('')
-      : '<div class="text-muted small">Nenhum comentario registrado para os filtros atuais.</div>';
+      : '<div class="text-muted small">Nenhum comentário registrado para os filtros atuais.</div>';
 
     const weakest = evaluationMetrics
       .map(([key, label]) => ({ label, score: average(answered.map((row) => row[key])) }))
@@ -640,11 +640,11 @@
       .sort((a, b) => b.score - a.score)[0];
 
     if (!answered.length) {
-      evalInsightsEl.textContent = 'Ainda nao ha avaliacoes respondidas para a aba e filtros atuais.';
+      evalInsightsEl.textContent = 'Ainda não há avaliações respondidas para a aba e filtros atuais.';
     } else if (weakest && strongest && weakest.label !== strongest.label) {
-      evalInsightsEl.innerHTML = `Melhor ponto: <strong>${escapeHtml(strongest.label)}</strong> (${formatScore(strongest.score)}). Ponto que merece mais atencao: <strong>${escapeHtml(weakest.label)}</strong> (${formatScore(weakest.score)}).`;
+      evalInsightsEl.innerHTML = `Melhor ponto: <strong>${escapeHtml(strongest.label)}</strong> (${formatScore(strongest.score)}). Ponto que merece mais atenção: <strong>${escapeHtml(weakest.label)}</strong> (${formatScore(weakest.score)}).`;
     } else {
-      evalInsightsEl.innerHTML = `Media geral das respostas: <strong>${formatScore(average(answered.map((row) => row.evaluationRating)))}</strong>.`;
+      evalInsightsEl.innerHTML = `Média geral das respostas: <strong>${formatScore(average(answered.map((row) => row.evaluationRating)))}</strong>.`;
     }
   }
 
@@ -674,14 +674,14 @@
             <div class="pmo-animal-item">
               <div>
                 <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
-                <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cao' : 'Gato'}</div>
+                <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
               </div>
               <select class="form-select form-select-sm" data-action="animal-status" data-animal-index="${index}">
                 ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
               </select>
             </div>
           `).join('')}</div>`
-        : '<span class="text-muted">Nomes nao informados</span>';
+        : '<span class="text-muted">Nomes não informados</span>';
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
@@ -719,7 +719,7 @@
     });
     const text = [header.join('\t'), ...lines].join('\n');
     navigator.clipboard.writeText(text).then(() => {
-      window.showAppToast ? window.showAppToast('Exportacao copiada para a area de transferencia.', 'success') : alert('Exportacao copiada.');
+      window.showAppToast ? window.showAppToast('Exportação copiada para a área de transferência.', 'success') : alert('Exportação copiada.');
     });
   }
 

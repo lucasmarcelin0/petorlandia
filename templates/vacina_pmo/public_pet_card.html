@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteirinha de {{ pmo_animal.name }} - Vacina antirrabica</title>
+  <title>Carteirinha de {{ pmo_animal.name }} - Vacina antirrábica</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
   <style>
     :root {
@@ -294,7 +294,7 @@
       <div class="hero-band">
         <div>
           <h1>Carteirinha de {{ pmo_animal.name }}</h1>
-          <p class="subtitle">Comprovante digital da campanha municipal de vacinacao antirrabica.</p>
+          <p class="subtitle">Comprovante digital da campanha municipal de vacinação antirrábica.</p>
         </div>
         <div class="seal">
           {% if effective_status == 'vacinado' %}
@@ -311,33 +311,33 @@
             {{ 'Vacinado' if effective_status == 'vacinado' else effective_status|capitalize }}
           </span>
           <span class="subtitle">
-            {{ 'Cao' if pmo_animal.species == 'cao' else 'Gato' }} de {{ visit.tutor_name }}
+            {{ 'Cão' if pmo_animal.species == 'cao' else 'Gato' }} de {{ visit.tutor_name }}
           </span>
         </div>
 
         <div class="details">
           <div class="detail-card">
-            <span class="label">Aplicacao</span>
+            <span class="label">Aplicação</span>
             <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
           </div>
           <div class="detail-card">
             <span class="label">Vacina</span>
-            <span class="value">{{ campaign_vaccine.nome if campaign_vaccine else 'Vacina Antirrabica' }}</span>
+            <span class="value">{{ campaign_vaccine.nome if campaign_vaccine else 'Vacina Antirrábica' }}</span>
           </div>
           <div class="detail-card">
-            <span class="label">Proximo reforco</span>
+            <span class="label">Próximo reforço</span>
             <span class="value">{{ next_booster_date.strftime('%d/%m/%Y') if next_booster_date else 'A confirmar' }}</span>
           </div>
         </div>
 
         <div class="details">
           <div class="detail-card">
-            <span class="label">Endereco informado</span>
-            <span class="value">{{ visit.address or 'Nao informado' }}</span>
+            <span class="label">Endereço informado</span>
+            <span class="value">{{ visit.address or 'Não informado' }}</span>
           </div>
           <div class="detail-card">
             <span class="label">Campanha</span>
-            <span class="value">Prefeitura de Orlandia</span>
+            <span class="value">Prefeitura de Orlândia</span>
           </div>
           <div class="detail-card">
             <span class="label">Lote</span>
@@ -346,7 +346,7 @@
         </div>
 
         <section>
-          <h2 style="margin:0 0 10px;font-size:1.2rem;">Historico simples</h2>
+          <h2 style="margin:0 0 10px;font-size:1.2rem;">Histórico simples</h2>
           <div class="timeline">
             {% if vaccines %}
               {% for vaccine in vaccines[:4] %}
@@ -356,7 +356,7 @@
                     <strong>{{ vaccine.nome }}</strong>
                     <div class="subtitle" style="font-size:.95rem;">
                       {{ vaccine.tipo or 'Registro de vacina' }}
-                      {% if vaccine.proxima_dose %} - reforco em {{ vaccine.proxima_dose.strftime('%d/%m/%Y') }}{% endif %}
+                      {% if vaccine.proxima_dose %} - reforço em {{ vaccine.proxima_dose.strftime('%d/%m/%Y') }}{% endif %}
                     </div>
                   </div>
                 </div>
@@ -380,22 +380,22 @@
           </div>
           <div class="note">
             <strong>Reforce anualmente</strong>
-            A vacina antirrabica deve ser mantida em dia todos os anos.
+            A vacina antirrábica deve ser mantida em dia todos os anos.
           </div>
           <div class="note">
-            <strong>Procure orientacao</strong>
-            Em caso de mordida, comportamento estranho ou salivacao intensa, procure atendimento veterinario.
+            <strong>Procure orientação</strong>
+            Em caso de mordida, comportamento estranho ou salivação intensa, procure atendimento veterinário.
           </div>
         </div>
 
         {% if educational_video.embed_url %}
           <section>
-            <h2 style="margin:0 0 10px;font-size:1.2rem;">Video educativo</h2>
-            <p class="subtitle" style="font-size:.95rem;margin-bottom:12px;">Orientacao rapida sobre a campanha e os cuidados depois da vacina.</p>
+            <h2 style="margin:0 0 10px;font-size:1.2rem;">Vídeo educativo</h2>
+            <p class="subtitle" style="font-size:.95rem;margin-bottom:12px;">Orientação rápida sobre a campanha e os cuidados depois da vacina.</p>
             <div class="video-frame">
               <iframe
                 src="{{ educational_video.embed_url }}"
-                title="Video educativo da campanha de vacinacao antirrabica"
+                title="Vídeo educativo da campanha de vacinação antirrábica"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen></iframe>
             </div>
@@ -406,7 +406,7 @@
           <a class="button secondary" href="{{ url_for('vacina_pmo_public', token=token) }}">Voltar para campanha</a>
           <a class="button" href="#top" onclick="window.print(); return false;">Imprimir ou salvar PDF</a>
           {% if vet_record_url %}
-            <a class="button secondary" href="{{ vet_record_url }}">Abrir ficha clinica</a>
+            <a class="button secondary" href="{{ vet_record_url }}">Abrir ficha clínica</a>
           {% endif %}
         </div>
       </div>

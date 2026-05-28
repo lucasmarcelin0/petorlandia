@@ -56,10 +56,13 @@ PMO_REQUEST_HEADERS = [
     "Nome",
     "Carimbo de data/hora",
     "Origem",
-    "ID Usuario PetOrlandia",
+    "ID Usuário PetOrlandia",
 ]
 PMO_REQUEST_RANGE_COLS = "A:R"
 PMO_REQUEST_HEADER_RANGE = "A1:R1"
+
+PMO_DOGS_VACCINATED_COLUMN = "M"
+PMO_CATS_VACCINATED_COLUMN = "N"
 
 
 @dataclass
@@ -338,7 +341,7 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
         species_id=_species_id(pmo_animal.species),
         status="ativo",
         modo="adotado",
-        description="Cadastro criado automaticamente pela campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
+        description="Cadastro criado automaticamente pela campanha de vacinação antirrábica da Prefeitura de Orlândia.",
         is_alive=True,
     )
     db.session.add(animal)
@@ -360,12 +363,12 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
         vaccine = None
     if not vaccine:
         vaccine = (
-            Vacina.query.filter_by(
-                animal_id=pmo_animal.animal_id,
-                nome="Vacina Antirrabica",
-                tipo="Campanha PMO",
-                aplicada=True,
-                aplicada_em=applied_date,
+            Vacina.query.filter(
+                Vacina.animal_id == pmo_animal.animal_id,
+                Vacina.nome.in_(["Vacina Antirrábica", "Vacina Antirrabica"]),
+                Vacina.tipo == "Campanha PMO",
+                Vacina.aplicada.is_(True),
+                Vacina.aplicada_em == applied_date,
             )
             .first()
         )
@@ -373,7 +376,7 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
     if not vaccine:
         vaccine = Vacina(
             animal_id=pmo_animal.animal_id,
-            nome="Vacina Antirrabica",
+            nome="Vacina Antirrábica",
             tipo="Campanha PMO",
             fabricante=PMO_VACCINE_FABRICANTE,
             lote=PMO_VACCINE_LOTE,
@@ -383,12 +386,13 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
             aplicada=True,
             aplicada_em=applied_date,
             aplicada_por=vet_id,
-            observacoes="Aplicada na campanha de vacinacao antirrabica da Prefeitura de Orlandia.",
+            observacoes="Aplicada na campanha de vacinação antirrábica da Prefeitura de Orlândia.",
         )
         db.session.add(vaccine)
         db.session.flush()
     else:
-        if not vaccine.fabricante or vaccine.fabricante == "Prefeitura de Orlandia":
+        vaccine.nome = "Vacina Antirrábica"
+        if not vaccine.fabricante or vaccine.fabricante in {"Prefeitura de Orlandia", "Prefeitura de Orlândia"}:
             vaccine.fabricante = PMO_VACCINE_FABRICANTE
         if not vaccine.lote:
             vaccine.lote = PMO_VACCINE_LOTE
@@ -398,12 +402,12 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
 
     booster_date = applied_date + timedelta(days=365)
     booster = (
-        Vacina.query.filter_by(
-            animal_id=pmo_animal.animal_id,
-            nome="Reforco Vacina Antirrabica",
-            tipo="Reforco PMO",
-            aplicada=False,
-            aplicada_em=booster_date,
+        Vacina.query.filter(
+            Vacina.animal_id == pmo_animal.animal_id,
+            Vacina.nome.in_(["Reforço Vacina Antirrábica", "Reforco Vacina Antirrabica"]),
+            Vacina.tipo.in_(["Reforço PMO", "Reforco PMO"]),
+            Vacina.aplicada.is_(False),
+            Vacina.aplicada_em == booster_date,
         )
         .first()
     )
@@ -411,17 +415,20 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
         db.session.add(
             Vacina(
                 animal_id=pmo_animal.animal_id,
-                nome="Reforco Vacina Antirrabica",
-                tipo="Reforco PMO",
+                nome="Reforço Vacina Antirrábica",
+                tipo="Reforço PMO",
                 fabricante=PMO_VACCINE_FABRICANTE,
                 doses_totais=1,
                 intervalo_dias=365,
                 frequencia="Anual",
                 aplicada=False,
                 aplicada_em=booster_date,
-                observacoes="Reforco anual previsto apos a campanha PMO.",
+                observacoes="Reforço anual previsto após a campanha PMO.",
             )
         )
+    else:
+        booster.nome = "Reforço Vacina Antirrábica"
+        booster.tipo = "Reforço PMO"
 
 
 def _ensure_visit_records(visit: PmoVaccinationVisit) -> None:
@@ -491,7 +498,7 @@ def _resolve_sheet_target(
 ) -> tuple[str, str, str, str]:
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
-        raise RuntimeError("URL/ID da planilha PMO invalido.")
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
 
     gid = sheet_gid or os.getenv("PMO_VACCINE_SHEET_GID", "") or _extract_gid(sheet_url)
     title = sheet_title or os.getenv("PMO_VACCINE_SHEET_TITLE", "")
@@ -508,7 +515,7 @@ def list_vacina_pmo_sheets() -> list[dict[str, Any]]:
     service = _get_sheets_service()
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
-        raise RuntimeError("URL/ID da planilha PMO invalido.")
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
@@ -721,16 +728,73 @@ def persist_vacina_pmo_rows(
     return [_serialize_visit(visit) for visit in saved]
 
 
+def _count_vaccinated_by_species(visit: PmoVaccinationVisit) -> tuple[int, int]:
+    dogs = sum(1 for animal in visit.animals if animal.species == "cao" and animal.status == "vacinado")
+    cats = sum(1 for animal in visit.animals if animal.species == "gato" and animal.status == "vacinado")
+    return dogs, cats
+
+
+def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve as quantidades vacinadas (M=cães, N=gatos) na linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+
+    dogs_vac, cats_vac = _count_vaccinated_by_species(visit)
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar contagens PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = (
+            f"{_quote_sheet_title(title)}!"
+            f"{PMO_DOGS_VACCINATED_COLUMN}{visit.source_row}:"
+            f"{PMO_CATS_VACCINATED_COLUMN}{visit.source_row}"
+        )
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[dogs_vac, cats_vac]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar contagens de vacinados na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
 def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, Any]:
     allowed = {"pendente", "vacinado", "ausente", "remarcar", "recusou"}
     if status not in allowed:
-        raise ValueError("Status invalido.")
+        raise ValueError("Status inválido.")
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     animal.status = status
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
     _ensure_real_animal(animal)
     _ensure_pmo_vaccine_record(animal)
     db.session.commit()
+    write_vaccinated_counts_to_sheet(animal.visit)
     return _serialize_visit(animal.visit)
 
 
@@ -770,7 +834,7 @@ def save_vacina_pmo_evaluation(
         raise ValueError("A nota precisa ficar entre 1 e 5.")
     registration_rating = _validate_optional_rating(registration_rating, "cadastro e agendamento")
     service_rating = _validate_optional_rating(service_rating, "atendimento no dia")
-    information_rating = _validate_optional_rating(information_rating, "informacoes")
+    information_rating = _validate_optional_rating(information_rating, "informações")
     survey_rating = _validate_optional_rating(survey_rating, "pesquisa")
     visit.evaluation_rating = rating
     visit.evaluation_registration_rating = registration_rating
@@ -875,11 +939,11 @@ def _ensure_request_sheet(service, spreadsheet_id: str, title: str) -> None:
 
 
 def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
-    """Acrescenta uma nova solicitacao do morador na aba de solicitacoes."""
+    """Acrescenta uma nova solicitação do morador na aba de solicitações."""
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
-        raise RuntimeError("URL/ID da planilha PMO invalido.")
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
 
     title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
 

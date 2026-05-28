@@ -4346,7 +4346,7 @@ def vacina_pmo_solicitar():
                 )
                 return redirect(url_for('index'))
             except Exception as exc:
-                current_app.logger.exception("Falha ao enviar solicitacao Vacina PMO")
+                current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
                 flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
 
     return render_template(
@@ -21346,8 +21346,8 @@ def imprimir_vacinas(animal_id):
         )
         pmo_vet = pmo_vac.aplicador if pmo_vac else None
         clinica = SimpleNamespace(
-            nome="Prefeitura de Orlandia",
-            endereco="Campanha municipal de vacinacao antirrabica",
+            nome="Prefeitura de Orlândia",
+            endereco="Campanha municipal de vacinação antirrábica",
             telefone=pmo_vet.phone if pmo_vet else None,
             email=None,
             cnpj=None,

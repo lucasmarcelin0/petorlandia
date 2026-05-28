@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteirinha digital - Vacina antirrabica</title>
+  <title>Carteirinha digital - Vacina antirrábica</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
   <style>
     :root {
@@ -438,8 +438,8 @@
         <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="PetOrlandia">
         <span>PetOrlandia</span>
       </a>
-      <nav class="navlinks" aria-label="Navegacao da carteirinha">
-        <span class="campaign-label">Prefeitura de Orlandia - Vacina antirrabica</span>
+      <nav class="navlinks" aria-label="Navegação da carteirinha">
+        <span class="campaign-label">Prefeitura de Orlândia - Vacina antirrábica</span>
         <a href="{{ url_for('login_view') }}">Entrar</a>
         <a href="#avaliar">Avaliar atendimento</a>
       </nav>
@@ -450,13 +450,13 @@
     <section class="hero">
       <h1>Carteirinha digital da vacina</h1>
       <p class="lead">
-        Obrigado por participar da campanha. A vacinacao anual protege seu animal, sua familia e toda a cidade.
+        Obrigado por participar da campanha. A vacinação anual protege seu animal, sua família e toda a cidade.
       </p>
     </section>
 
     <div class="grid">
       <section class="card certificate">
-        <h2>Registro da aplicacao</h2>
+        <h2>Registro da aplicação</h2>
         <div class="meta">
           <div class="item">
             <span class="label">Tutor</span>
@@ -467,12 +467,12 @@
             <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
           </div>
           <div class="item">
-            <span class="label">Endereco</span>
-            <span class="value">{{ visit.address or 'Nao informado' }}</span>
+            <span class="label">Endereço</span>
+            <span class="value">{{ visit.address or 'Não informado' }}</span>
           </div>
           <div class="item">
-            <span class="label">Reforco</span>
-            <span class="value">No proximo ano</span>
+            <span class="label">Reforço</span>
+            <span class="value">No próximo ano</span>
           </div>
         </div>
 
@@ -481,13 +481,13 @@
             <div class="animal">
               <div>
                 <strong>{{ animal.name }}</strong>
-                <div class="label">{{ 'Cao' if animal.species == 'cao' else 'Gato' }}</div>
+                <div class="label">{{ 'Cão' if animal.species == 'cao' else 'Gato' }}</div>
               </div>
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
                 {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
               </span>
               <a class="button secondary" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>
-              <p class="microcopy">Comprovante simples para o tutor, sem abrir a ficha clinica.</p>
+              <p class="microcopy">Comprovante simples para o tutor, sem abrir a ficha clínica.</p>
             </div>
           {% endfor %}
         </div>
@@ -495,13 +495,13 @@
 
       <aside class="card access">
         <h2>Acesso opcional</h2>
-        <p class="lead">Se quiser entrar na sua conta PetOrlandia, use seu telefone com DDD e esta senha provisoria.</p>
+        <p class="lead">Se quiser entrar na sua conta PetOrlandia, use seu telefone com DDD e esta senha provisória.</p>
         <span class="label">Digite no campo e-mail ou celular</span>
         <span class="password">{{ login_phone or 'Telefone cadastrado' }}</span>
         {% if login_phone %}
-          <p class="lead" style="font-size:.95rem;">Use o DDD junto com o numero. Esse e o WhatsApp informado na campanha.</p>
+          <p class="lead" style="font-size:.95rem;">Use o DDD junto com o número. Esse é o WhatsApp informado na campanha.</p>
         {% endif %}
-        <span class="label">Senha provisoria</span>
+        <span class="label">Senha provisória</span>
         <span class="password">{{ visit.password }}</span>
         <a class="button" href="{{ url_for('login_view', next=primary_pet_card_url) if primary_pet_card_url else url_for('login_view') }}">Entrar no PetOrlandia</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
@@ -514,7 +514,7 @@
         <div class="flow-step">
           <span class="step-number">1</span>
           <strong>Confira o registro</strong>
-          <span class="label">Nome do tutor, data, endereco e animais vacinados ficam salvos aqui.</span>
+          <span class="label">Nome do tutor, data, endereço e animais vacinados ficam salvos aqui.</span>
         </div>
         <div class="flow-step">
           <span class="step-number">2</span>
@@ -524,7 +524,7 @@
         <div class="flow-step">
           <span class="step-number">3</span>
           <strong>Guarde o link</strong>
-          <span class="label">Ele funciona como comprovante digital da campanha antirrabica.</span>
+          <span class="label">Ele funciona como comprovante digital da campanha antirrábica.</span>
         </div>
       </div>
     </section>
@@ -532,34 +532,34 @@
     <section class="card" style="margin-top:16px;">
       <h2>Por que manter a vacina em dia?</h2>
       <ul class="tips">
-        <li>A raiva e uma doenca grave e pode atingir animais e pessoas.</li>
-        <li>A dose anual ajuda a manter Orlandia protegida.</li>
+        <li>A raiva é uma doença grave e pode atingir animais e pessoas.</li>
+        <li>A dose anual ajuda a manter Orlândia protegida.</li>
         <li>Guarde este link: ele funciona como comprovante digital da campanha.</li>
       </ul>
       <div class="education-grid">
         <article class="education-card">
           <strong>Quando procurar ajuda</strong>
-          <p>Alteracao de comportamento, salivacao intensa, dificuldade para engolir ou mordida devem ser avaliadas por servico veterinario.</p>
+          <p>Alteração de comportamento, salivação intensa, dificuldade para engolir ou mordida devem ser avaliadas por serviço veterinário.</p>
         </article>
         <article class="education-card">
           <strong>Depois da vacina</strong>
-          <p>Observe seu animal no dia da aplicacao. Pequena sensibilidade local pode acontecer; sinais intensos merecem contato com um profissional.</p>
+          <p>Observe seu animal no dia da aplicação. Pequena sensibilidade local pode acontecer; sinais intensos merecem contato com um profissional.</p>
         </article>
         <article class="education-card">
           <strong>Cuidado coletivo</strong>
-          <p>Manter caes e gatos vacinados reduz o risco para criancas, idosos, vizinhos e equipes que trabalham com animais.</p>
+          <p>Manter cães e gatos vacinados reduz o risco para crianças, idosos, vizinhos e equipes que trabalham com animais.</p>
         </article>
       </div>
     </section>
 
     {% if educational_video.embed_url %}
       <section class="card" style="margin-top:16px;">
-        <h2>Video educativo</h2>
-        <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Assista a orientacao da campanha antes de guardar sua carteirinha.</p>
+        <h2>Vídeo educativo</h2>
+        <p class="lead" style="font-size:.95rem;margin-bottom:12px;">Assista à orientação da campanha antes de guardar sua carteirinha.</p>
         <div class="video-frame">
           <iframe
             src="{{ educational_video.embed_url }}"
-            title="Video educativo da campanha de vacinacao antirrabica"
+            title="Vídeo educativo da campanha de vacinação antirrábica"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowfullscreen></iframe>
         </div>
@@ -569,19 +569,19 @@
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>
       {% if evaluation_saved %}
-        <div class="notice">Obrigado. Sua avaliacao foi registrada.</div>
+        <div class="notice">Obrigado. Sua avaliação foi registrada.</div>
       {% elif evaluation_error %}
         <div class="notice error">{{ evaluation_error }}</div>
       {% elif evaluation.rating %}
-        <div class="notice">Avaliacao ja registrada. Obrigado pela colaboracao.</div>
+        <div class="notice">Avaliação já registrada. Obrigado pela colaboração.</div>
       {% endif %}
 
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="rating-list">
           <div class="rating-row">
-            <strong>Quao satisfeito voce ficou no geral?</strong>
-            <div class="stars" aria-label="Satisfacao geral">
+            <strong>Quão satisfeito você ficou no geral?</strong>
+            <div class="stars" aria-label="Satisfação geral">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="rating" value="{{ score }}" {% if evaluation.rating == score %}checked{% endif %} required>
@@ -604,8 +604,8 @@
           </div>
 
           <div class="rating-row">
-            <strong>Atendimento no dia da vacinacao</strong>
-            <div class="stars" aria-label="Atendimento no dia da vacinacao">
+            <strong>Atendimento no dia da vacinação</strong>
+            <div class="stars" aria-label="Atendimento no dia da vacinação">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="service_rating" value="{{ score }}" {% if evaluation.service_rating == score %}checked{% endif %}>
@@ -616,8 +616,8 @@
           </div>
 
           <div class="rating-row">
-            <strong>Informacoes e carteirinha digital</strong>
-            <div class="stars" aria-label="Informacoes e carteirinha digital">
+            <strong>Informações e carteirinha digital</strong>
+            <div class="stars" aria-label="Informações e carteirinha digital">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="information_rating" value="{{ score }}" {% if evaluation.information_rating == score %}checked{% endif %}>
@@ -628,8 +628,8 @@
           </div>
 
           <div class="rating-row">
-            <strong>Esta pesquisa foi facil de responder?</strong>
-            <div class="stars" aria-label="Esta pesquisa foi facil de responder">
+            <strong>Esta pesquisa foi fácil de responder?</strong>
+            <div class="stars" aria-label="Esta pesquisa foi fácil de responder">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="survey_rating" value="{{ score }}" {% if evaluation.survey_rating == score %}checked{% endif %}>
@@ -639,9 +639,9 @@
             </div>
           </div>
         </div>
-        <textarea name="comment" placeholder="Elogios, duvidas ou sugestoes sobre a campanha">{{ evaluation.comment or '' }}</textarea>
+        <textarea name="comment" placeholder="Elogios, dúvidas ou sugestões sobre a campanha">{{ evaluation.comment or '' }}</textarea>
         <div style="margin-top:12px;">
-          <button class="button" type="submit">Enviar avaliacao</button>
+          <button class="button" type="submit">Enviar avaliação</button>
         </div>
       </form>
     </section>

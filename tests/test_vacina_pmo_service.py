@@ -1,4 +1,7 @@
+from services import vacina_pmo_service
 from services.vacina_pmo_service import (
+    PMO_CATS_VACCINATED_COLUMN,
+    PMO_DOGS_VACCINATED_COLUMN,
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
     parse_vacina_pmo_rows,
@@ -8,6 +11,30 @@ from services.vacina_pmo_service import (
 )
 from extensions import db
 from models import Animal, PmoVaccinationVisit, User, Vacina
+
+
+class _FakeSheetsService:
+    def __init__(self):
+        self.updates = []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    def update(self, *, spreadsheetId, range, valueInputOption, body):
+        call = {
+            "spreadsheetId": spreadsheetId,
+            "range": range,
+            "valueInputOption": valueInputOption,
+            "body": body,
+        }
+        self.updates.append(call)
+        return self
+
+    def execute(self):
+        return {}
 
 
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
@@ -164,8 +191,8 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert state["rows"][0]["animals"][0]["status"] == "vacinado"
     assert state["rows"][0]["status"] == "parcial"
     assert Animal.query.filter_by(name="Lua").first() is not None
-    assert Vacina.query.filter_by(nome="Vacina Antirrabica", aplicada=True).first() is not None
-    assert Vacina.query.filter_by(nome="Reforco Vacina Antirrabica", aplicada=False).first() is not None
+    assert Vacina.query.filter_by(nome="Vacina Antirrábica", aplicada=True).first() is not None
+    assert Vacina.query.filter_by(nome="Reforço Vacina Antirrábica", aplicada=False).first() is not None
     assert User.query.filter_by(phone="+5516999999999").first() is not None
     assert evaluated_state["rows"][0]["evaluationRating"] == 5
     assert evaluated_state["rows"][0]["evaluationRegistrationRating"] == 4
@@ -319,3 +346,124 @@ def test_pmo_visit_model_includes_evaluation_dimension_columns():
     assert "evaluation_service_rating" in columns
     assert "evaluation_information_rating" in columns
     assert "evaluation_survey_rating" in columns
+
+
+def test_update_animal_status_writes_vaccinated_counts_to_source_sheet(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 2,
+        "cats": 1,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Babi", "species": "cao", "status": "pendente"},
+            {"name": "Mia", "species": "gato", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 7,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        cao_id = next(a["id"] for a in saved[0]["animals"] if a["species"] == "cao")
+        gato_id = next(a["id"] for a in saved[0]["animals"] if a["species"] == "gato")
+
+        update_vacina_pmo_animal_status(cao_id, "vacinado")
+        update_vacina_pmo_animal_status(gato_id, "vacinado")
+
+    assert len(fake_service.updates) == 2
+    last = fake_service.updates[-1]
+    assert last["spreadsheetId"] == "planilha-pmo"
+    assert last["range"] == (
+        f"'Vacinacao Antirrabica_7'!"
+        f"{PMO_DOGS_VACCINATED_COLUMN}7:{PMO_CATS_VACCINATED_COLUMN}7"
+    )
+    assert last["body"] == {"values": [[1, 1]]}
+
+
+def test_update_animal_status_skips_sheet_write_without_sheet_metadata(app, monkeypatch):
+    visit = PmoVaccinationVisit(
+        spreadsheet_id="",
+        sheet_gid="",
+        sheet_title="",
+        source_row=0,
+        tutor_name="Sem planilha",
+        password="PMOX0000",
+    )
+    db.session.add(visit)
+    db.session.flush()
+    from models import PmoVaccinationAnimal
+
+    animal = PmoVaccinationAnimal(
+        visit=visit, position=1, name="Rex", species="cao", status="pendente"
+    )
+    db.session.add(animal)
+    db.session.commit()
+
+    called = {"count": 0}
+
+    def fake_service():
+        called["count"] += 1
+        return _FakeSheetsService()
+
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", fake_service)
+
+    with app.app_context():
+        update_vacina_pmo_animal_status(animal.id, "vacinado")
+
+    assert called["count"] == 0
+
+
+def test_update_animal_status_swallows_sheet_failures(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 5,
+    }
+
+    def broken_service():
+        raise RuntimeError("sheets indisponivel")
+
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", broken_service)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        result = update_vacina_pmo_animal_status(animal_id, "vacinado")
+
+    assert result["animals"][0]["status"] == "vacinado"
