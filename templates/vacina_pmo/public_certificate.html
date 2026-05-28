@@ -1,10 +1,6 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteirinha digital - Vacina antirrábica</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
+{% extends "layout.html" %}
+
+{% block head %}
   <style>
     :root {
       color-scheme: light;
@@ -25,7 +21,7 @@
       box-sizing: border-box;
     }
 
-    body {
+    .pmo-public-page {
       margin: 0;
       font-family: Inter, Arial, sans-serif;
       background: var(--bg);
@@ -33,62 +29,7 @@
       line-height: 1.5;
     }
 
-    .topbar {
-      background: #ffffff;
-      border-bottom: 1px solid var(--line);
-      padding: 10px 18px;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .brand {
-      max-width: 980px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .brandmark {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      font-size: 1.05rem;
-      color: var(--ink);
-      text-decoration: none;
-    }
-
-    .brandmark img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-
-    .navlinks {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .navlinks a,
-    .campaign-label {
-      color: var(--muted);
-      font-weight: 600;
-      font-size: .9rem;
-      text-align: right;
-      text-decoration: none;
-    }
-
-    .navlinks a:hover {
-      color: var(--blue);
-    }
-
-    main {
+    .pmo-public-main {
       max-width: 980px;
       margin: 0 auto;
       padding: 26px 18px 46px;
@@ -211,6 +152,18 @@
       font-weight: 800;
       letter-spacing: .04em;
       background: #f8fafc;
+    }
+
+    .protocol {
+      display: inline-flex;
+      width: fit-content;
+      border: 1px solid #b7cdfa;
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: #eef5ff;
+      color: var(--blue-dark);
+      font-size: .88rem;
+      font-weight: 800;
     }
 
     .button {
@@ -351,11 +304,18 @@
     .stars span {
       display: grid;
       place-items: center;
-      min-height: 42px;
+      min-height: 48px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #ffffff;
       font-weight: 800;
+      font-size: 1.05rem;
+      transition: background .12s, border-color .12s;
+    }
+
+    .stars label:hover span {
+      border-color: #94b4f5;
+      background: #f0f5ff;
     }
 
     .stars input:checked + span {
@@ -364,19 +324,39 @@
       color: var(--blue);
     }
 
+    .stars-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
     .rating-list {
       display: grid;
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 18px;
+      margin-bottom: 16px;
     }
 
     .rating-row {
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
 
     .rating-row strong {
       font-size: .98rem;
+    }
+
+    .rating-row .rating-hint {
+      font-size: .85rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .rating-divider {
+      border: none;
+      border-top: 1px dashed var(--line);
+      margin: 6px 0 2px;
     }
 
     textarea {
@@ -411,17 +391,8 @@
         grid-template-columns: 1fr;
       }
 
-      .brand {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
       .stars {
         gap: 6px;
-      }
-
-      .navlinks {
-        justify-content: flex-start;
       }
 
       .animal {
@@ -430,23 +401,11 @@
       }
     }
   </style>
-</head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <a class="brandmark" href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="PetOrlandia">
-        <span>PetOrlandia</span>
-      </a>
-      <nav class="navlinks" aria-label="Navegação da carteirinha">
-        <span class="campaign-label">Prefeitura de Orlândia - Vacina antirrábica</span>
-        <a href="{{ url_for('login_view') }}">Entrar</a>
-        <a href="#avaliar">Avaliar atendimento</a>
-      </nav>
-    </div>
-  </header>
+{% endblock %}
 
-  <main>
+{% block main %}
+  <div class="pmo-public-page">
+  <div class="pmo-public-main">
     <section class="hero">
       <h1>Carteirinha digital da vacina</h1>
       <p class="lead">
@@ -457,6 +416,7 @@
     <div class="grid">
       <section class="card certificate">
         <h2>Registro da aplicação</h2>
+        <span class="protocol">Protocolo {{ protocol_label }}</span>
         <div class="meta">
           <div class="item">
             <span class="label">Tutor</span>
@@ -484,7 +444,7 @@
                 <div class="label">{{ 'Cão' if animal.species == 'cao' else 'Gato' }}</div>
               </div>
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
-                {{ 'Vacinado' if animal.status == 'vacinado' else animal.status|capitalize }}
+                {{ status_labels.get(animal.status, animal.status|capitalize) }}
               </span>
               <a class="button secondary" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>
               <p class="microcopy">Comprovante simples para o tutor, sem abrir a ficha clínica.</p>
@@ -503,7 +463,7 @@
         {% endif %}
         <span class="label">Senha provisória</span>
         <span class="password">{{ visit.password }}</span>
-        <a class="button" href="{{ url_for('login_view', next=primary_pet_card_url) if primary_pet_card_url else url_for('login_view') }}">Entrar no PetOrlandia</a>
+        <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
       </aside>
     </div>
@@ -568,8 +528,14 @@
 
     <section class="card" id="avaliar" style="margin-top:16px;">
       <h2>Avalie o atendimento</h2>
+      <p class="lead" style="font-size:.95rem;margin-bottom:16px;">
+        Voce participou da campanha de vacinacao antirrabica da Prefeitura de Orlandia.
+        Sua opiniao leva menos de 1 minuto e ajuda a melhorar a proxima edicao.
+        Use a escala de <strong>1 (pessimo)</strong> a <strong>5 (excelente)</strong>.
+      </p>
+
       {% if evaluation_saved %}
-        <div class="notice">Obrigado. Sua avaliação foi registrada.</div>
+        <div class="notice">Obrigado! Sua avaliação foi registrada com sucesso.</div>
       {% elif evaluation_error %}
         <div class="notice error">{{ evaluation_error }}</div>
       {% elif evaluation.rating %}
@@ -579,8 +545,10 @@
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="rating-list">
+
           <div class="rating-row">
-            <strong>Quão satisfeito você ficou no geral?</strong>
+            <strong>Satisfação geral com a campanha</strong>
+            <p class="rating-hint">Considerando tudo — inscrição, visita e carteirinha — qual nota você dá para a campanha?</p>
             <div class="stars" aria-label="Satisfação geral">
               {% for score in range(1, 6) %}
                 <label>
@@ -589,10 +557,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Cadastro e agendamento</strong>
+            <p class="rating-hint">Foi facil se inscrever? O processo de solicitar a visita foi claro e rapido?</p>
             <div class="stars" aria-label="Cadastro e agendamento">
               {% for score in range(1, 6) %}
                 <label>
@@ -601,10 +571,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Atendimento no dia da vacinação</strong>
+            <p class="rating-hint">Como foi a equipe da prefeitura? Pontualidade, gentileza e cuidado com os animais.</p>
             <div class="stars" aria-label="Atendimento no dia da vacinação">
               {% for score in range(1, 6) %}
                 <label>
@@ -613,10 +585,12 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
           <div class="rating-row">
             <strong>Informações e carteirinha digital</strong>
+            <p class="rating-hint">As informações sobre a campanha foram claras? A carteirinha digital foi útil?</p>
             <div class="stars" aria-label="Informações e carteirinha digital">
               {% for score in range(1, 6) %}
                 <label>
@@ -625,11 +599,14 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Pessimo</span><span>😊 Excelente</span></div>
           </div>
 
+          <hr class="rating-divider">
           <div class="rating-row">
             <strong>Esta pesquisa foi fácil de responder?</strong>
-            <div class="stars" aria-label="Esta pesquisa foi fácil de responder">
+            <p class="rating-hint">Uma pergunta sobre a própria pesquisa — não sobre a campanha.</p>
+            <div class="stars" aria-label="Facilidade da pesquisa">
               {% for score in range(1, 6) %}
                 <label>
                   <input type="radio" name="survey_rating" value="{{ score }}" {% if evaluation.survey_rating == score %}checked{% endif %}>
@@ -637,14 +614,17 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="stars-scale"><span>😞 Dificil</span><span>😊 Muito facil</span></div>
           </div>
+
         </div>
-        <textarea name="comment" placeholder="Elogios, dúvidas ou sugestões sobre a campanha">{{ evaluation.comment or '' }}</textarea>
+
+        <textarea name="comment" placeholder="Elogios, dúvidas ou sugestões sobre a campanha (opcional)">{{ evaluation.comment or '' }}</textarea>
         <div style="margin-top:12px;">
           <button class="button" type="submit">Enviar avaliação</button>
         </div>
       </form>
     </section>
-  </main>
-</body>
-</html>
+  </div>
+  </div>
+{% endblock %}

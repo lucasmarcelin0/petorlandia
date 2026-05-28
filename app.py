@@ -4087,6 +4087,7 @@ def vacina_pmo_public(token):
             token=token,
             pmo_animal_id=pmo_animal.id,
         )
+    status_labels = _pmo_status_labels()
 
     return render_template(
         'vacina_pmo/public_certificate.html',
@@ -4098,12 +4099,283 @@ def vacina_pmo_public(token):
         evaluation=get_vacina_pmo_evaluation_payload(visit),
         educational_video=get_pmo_educational_video(),
         primary_pet_card_url=primary_pet_card_url,
+        status_labels=status_labels,
+        protocol_label=_pmo_protocol_label(visit),
+    )
+
+
+def _format_pmo_certificate_date(value):
+    return value.strftime('%d/%m/%Y') if value else 'A confirmar'
+
+
+def _pmo_protocol_label(visit):
+    reference = getattr(visit, 'updated_at', None) or getattr(visit, 'synced_at', None) or date.today()
+    if isinstance(reference, datetime):
+        year = reference.year
+    else:
+        year = getattr(reference, 'year', date.today().year)
+    return f"PMO-{year}-{getattr(visit, 'id', 0):04d}"
+
+
+def _pmo_status_labels():
+    return {
+        'pendente': 'Aguardando visita',
+        'vacinado': 'Vacinado',
+        'ausente': 'Morador ausente',
+        'remarcar': 'Remarcar visita',
+        'recusou': 'Vacina recusada',
+        'parcial': 'Parcialmente vacinado',
+    }
+
+
+def _pmo_status_context(status):
+    labels = _pmo_status_labels()
+    messages = {
+        'vacinado': 'Dose registrada. Guarde este comprovante e acompanhe a data do reforco anual.',
+        'pendente': 'A equipe ainda vai confirmar ou realizar a visita. Mantenha o telefone atualizado.',
+        'ausente': 'A equipe esteve no endereco, mas nao encontrou o morador. Aguarde contato para nova orientacao.',
+        'remarcar': 'Ha uma solicitacao de remarcacao. A equipe devera combinar uma nova tentativa.',
+        'recusou': 'A vacina foi marcada como recusada. Em caso de duvida, procure a equipe da campanha.',
+        'parcial': 'Parte dos animais foi vacinada. Confira a situacao individual de cada pet.',
+    }
+    normalized = status or 'pendente'
+    return {
+        'key': normalized,
+        'label': labels.get(normalized, normalized.capitalize()),
+        'message': messages.get(normalized, 'Acompanhe o status da campanha por este link.'),
+    }
+
+
+def _pmo_booster_countdown_label(next_booster_date):
+    if not next_booster_date:
+        return ""
+    days_remaining = (next_booster_date - date.today()).days
+    if days_remaining > 1:
+        return f"Faltam {days_remaining} dias para o reforco anual."
+    if days_remaining == 1:
+        return "Falta 1 dia para o reforco anual."
+    if days_remaining == 0:
+        return "O reforco anual esta indicado a partir de hoje."
+    if days_remaining == -1:
+        return "O reforco anual venceu ha 1 dia."
+    return f"O reforco anual venceu ha {abs(days_remaining)} dias."
+
+
+def _is_pmo_rabies_vaccine(vaccine):
+    name = (getattr(vaccine, 'nome', '') or '').lower()
+    kind = (getattr(vaccine, 'tipo', '') or '').lower()
+    text = f"{name} {kind}"
+    return any(term in text for term in ('antirrab', 'anti-rab', 'raiva', 'rabic'))
+
+
+def _pmo_animal_booster_guidance(animals):
+    animal_ids = [animal.id for animal in animals if getattr(animal, 'id', None)]
+    if not animal_ids:
+        return {}
+
+    vaccines = (
+        Vacina.query
+        .filter(Vacina.animal_id.in_(animal_ids), Vacina.aplicada.is_(True), Vacina.aplicada_em.isnot(None))
+        .order_by(Vacina.aplicada_em.desc(), Vacina.criada_em.desc())
+        .all()
+    )
+    latest_by_animal = {}
+    for vaccine in vaccines:
+        if vaccine.animal_id in latest_by_animal or not _is_pmo_rabies_vaccine(vaccine):
+            continue
+        latest_by_animal[vaccine.animal_id] = vaccine
+
+    guidance = {}
+    for animal in animals:
+        vaccine = latest_by_animal.get(animal.id)
+        if not vaccine:
+            guidance[animal.id] = {
+                'status': 'unknown',
+                'message': 'Sem registro de vacina antirrabica aplicada no PetOrlandia.',
+                'countdown': '',
+                'last_date': None,
+                'next_date': None,
+            }
+            continue
+        next_booster_date = vaccine.proxima_dose or (vaccine.aplicada_em + relativedelta(years=1))
+        days_remaining = (next_booster_date - date.today()).days
+        if days_remaining > 0:
+            message = (
+                f"{animal.name or 'Este pet'} ja recebeu vacina antirrabica ha menos de 1 ano. "
+                "Normalmente nao e necessario vacinar novamente antes do reforco anual."
+            )
+            status = 'protected'
+        elif days_remaining == 0:
+            message = f"O reforco anual de {animal.name or 'este pet'} esta indicado a partir de hoje."
+            status = 'due'
+        else:
+            message = f"O reforco anual de {animal.name or 'este pet'} esta vencido."
+            status = 'overdue'
+        guidance[animal.id] = {
+            'status': status,
+            'message': message,
+            'countdown': _pmo_booster_countdown_label(next_booster_date),
+            'last_date': vaccine.aplicada_em,
+            'next_date': next_booster_date,
+        }
+    return guidance
+
+
+def _wrap_pmo_pdf_text(text, max_chars):
+    words = str(text or '').split()
+    lines = []
+    current = ''
+    for word in words:
+        candidate = f'{current} {word}'.strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word[:max_chars]
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _pmo_pdf_text(value):
+    text = str(value or '')
+    replacements = {
+        'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+        'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
+        'é': 'e', 'ê': 'e', 'É': 'E', 'Ê': 'E',
+        'í': 'i', 'Í': 'I',
+        'ó': 'o', 'õ': 'o', 'ô': 'o', 'Ó': 'O', 'Õ': 'O', 'Ô': 'O',
+        'ú': 'u', 'Ú': 'U',
+        'ç': 'c', 'Ç': 'C',
+        '–': '-', '—': '-', '“': '"', '”': '"', '’': "'",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+
+def _pmo_pdf_escape(value):
+    text = _pmo_pdf_text(value)
+    return text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def _build_simple_pmo_pdf(lines):
+    objects = []
+
+    def add_object(payload):
+        objects.append(payload)
+        return len(objects)
+
+    content = '\n'.join(lines).encode('latin-1', 'ignore')
+    catalog_id = add_object('<< /Type /Catalog /Pages 2 0 R >>')
+    pages_id = add_object('<< /Type /Pages /Kids [3 0 R] /Count 1 >>')
+    page_id = add_object('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>')
+    font_regular_id = add_object('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    font_bold_id = add_object('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
+    content_id = add_object(f'<< /Length {len(content)} >>\nstream\n{content.decode("latin-1")}\nendstream')
+
+    assert (catalog_id, pages_id, page_id, font_regular_id, font_bold_id, content_id) == (1, 2, 3, 4, 5, 6)
+
+    pdf = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for index, payload in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f'{index} 0 obj\n{payload}\nendobj\n'.encode('latin-1', 'ignore'))
+    xref_offset = len(pdf)
+    pdf.extend(f'xref\n0 {len(objects) + 1}\n0000000000 65535 f \n'.encode('ascii'))
+    for offset in offsets[1:]:
+        pdf.extend(f'{offset:010d} 00000 n \n'.encode('ascii'))
+    pdf.extend(
+        (
+            f'trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n'
+            f'startxref\n{xref_offset}\n%%EOF\n'
+        ).encode('ascii')
+    )
+    return bytes(pdf)
+
+
+def _export_vacina_pmo_pet_certificate_pdf(
+    *,
+    visit,
+    pmo_animal,
+    campaign_vaccine,
+    effective_status,
+    next_booster_date,
+):
+    vaccine_name = campaign_vaccine.nome if campaign_vaccine else 'Vacina Antirrabica'
+    vaccine_lot = campaign_vaccine.lote if campaign_vaccine and campaign_vaccine.lote else 'Registro municipal'
+    vaccine_maker = campaign_vaccine.fabricante if campaign_vaccine and campaign_vaccine.fabricante else 'Campanha PMO'
+    applied_at = campaign_vaccine.aplicada_em if campaign_vaccine and campaign_vaccine.aplicada_em else visit.vaccine_date
+    species = 'Cao' if pmo_animal.species == 'cao' else 'Gato'
+    statement = (
+        f'Certificamos que o animal {pmo_animal.name}, sob responsabilidade de {visit.tutor_name}, '
+        f'consta como {effective_status} na campanha municipal de vacinacao antirrabica. '
+        'Este documento pode ser apresentado como comprovante para guarda pessoal do tutor.'
+    )
+
+    lines = [
+        'q 0.929 0.957 1 rg 0 638 595 204 re f Q',
+        'q 0.906 0.973 0.961 rg 421 662 104 104 re f Q',
+        'q 0.078 0.129 0.239 rg BT /F2 23 Tf 52 760 Td (Certificado de Vacinacao Antirrabica) Tj ET Q',
+        'q 0.365 0.408 0.478 rg BT /F1 11 Tf 52 738 Td (Campanha municipal de vacinacao - Prefeitura de Orlandia) Tj ET Q',
+        'q 0.031 0.498 0.357 rg 52 682 146 30 re f Q',
+        f'q 1 1 1 rg BT /F2 10 Tf 87 692 Td ({"VACINADO" if effective_status == "vacinado" else _pmo_pdf_escape(effective_status.upper())}) Tj ET Q',
+        'q 1 1 1 rg 52 510 491 126 re f Q',
+        'q 0.859 0.890 0.933 RG 52 510 491 126 re S Q',
+        f'q 0.078 0.129 0.239 rg BT /F2 18 Tf 76 598 Td ({_pmo_pdf_escape(pmo_animal.name)}) Tj ET Q',
+        f'q 0.365 0.408 0.478 rg BT /F1 10 Tf 76 578 Td ({_pmo_pdf_escape(f"{species} registrado para {visit.tutor_name}")}) Tj ET Q',
+    ]
+
+    field_rows = [
+        [('Data da aplicacao', _format_pmo_certificate_date(applied_at)), ('Vacina', vaccine_name), ('Fabricante', vaccine_maker)],
+        [('Lote', vaccine_lot), ('Proximo reforco', _format_pmo_certificate_date(next_booster_date)), ('Endereco', visit.address or 'Nao informado')],
+    ]
+    x_positions = [76, 250, 392]
+    y_positions = [552, 519]
+    for row_index, row in enumerate(field_rows):
+        for col_index, (label, value) in enumerate(row):
+            x = x_positions[col_index]
+            y = y_positions[row_index]
+            lines.append(f'q 0.365 0.408 0.478 rg BT /F2 7.8 Tf {x} {y} Td ({_pmo_pdf_escape(label.upper())}) Tj ET Q')
+            for line_index, text_line in enumerate(_wrap_pmo_pdf_text(value, 24)):
+                lines.append(f'q 0.078 0.129 0.239 rg BT /F2 9.2 Tf {x} {y - 13 - (line_index * 10)} Td ({_pmo_pdf_escape(text_line)}) Tj ET Q')
+
+    lines.extend([
+        'q 0.078 0.129 0.239 rg BT /F2 13 Tf 52 466 Td (Declaracao) Tj ET Q',
+        'q 0.859 0.890 0.933 RG 136 470 m 543 470 l S Q',
+        'q 0.984 0.992 1 rg 52 356 491 82 re f Q',
+        'q 0.859 0.890 0.933 RG 52 356 491 82 re S Q',
+    ])
+    statement_y = 414
+    for line_index, text_line in enumerate(_wrap_pmo_pdf_text(statement, 86)):
+        lines.append(f'q 0.078 0.129 0.239 rg BT /F1 10.5 Tf 76 {statement_y - (line_index * 15)} Td ({_pmo_pdf_escape(text_line)}) Tj ET Q')
+
+    lines.extend([
+        'q 0.859 0.890 0.933 RG 70 258 m 250 258 l S Q',
+        'q 0.859 0.890 0.933 RG 345 258 m 525 258 l S Q',
+        'q 0.365 0.408 0.478 rg BT /F1 9 Tf 100 242 Td (Responsavel pela campanha) Tj ET Q',
+        'q 0.365 0.408 0.478 rg BT /F1 9 Tf 391 242 Td (Tutor responsavel) Tj ET Q',
+        'q 0.059 0.404 1 rg 52 60 491 34 re f Q',
+        'q 1 1 1 rg BT /F2 8.5 Tf 70 73 Td (PetOrlandia - Carteirinha digital da campanha PMO) Tj ET Q',
+        f'q 1 1 1 rg BT /F1 8.5 Tf 416 73 Td ({_pmo_pdf_escape(f"Emitido em {date.today().strftime("%d/%m/%Y")}")}) Tj ET Q',
+    ])
+
+    pdf_bytes = _build_simple_pmo_pdf(lines)
+    buffer = BytesIO(pdf_bytes)
+
+    safe_name = re.sub(r'[^A-Za-z0-9_-]+', '-', pmo_animal.name or 'pet').strip('-') or 'pet'
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'certificado-vacina-antirrabica-{safe_name}.pdf',
     )
 
 
 @app.route('/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>')
 def vacina_pmo_public_pet(token, pmo_animal_id):
-    from services.vacina_pmo_service import get_pmo_educational_video, get_vacina_pmo_public_visit
+    from services.vacina_pmo_service import get_vacina_pmo_public_visit
 
     visit = get_vacina_pmo_public_visit(token)
     if not visit:
@@ -4138,20 +4410,27 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     effective_status = pmo_animal.status
     if campaign_vaccine and campaign_vaccine.aplicada:
         effective_status = "vacinado"
+    status_context = _pmo_status_context(effective_status)
 
     next_booster_date = None
     if campaign_vaccine and campaign_vaccine.proxima_dose:
         next_booster_date = campaign_vaccine.proxima_dose
     elif visit.vaccine_date and effective_status == "vacinado":
         next_booster_date = visit.vaccine_date + relativedelta(years=1)
+    booster_days_remaining = None
+    booster_countdown_label = ""
+    if next_booster_date:
+        booster_days_remaining = (next_booster_date - date.today()).days
+        booster_countdown_label = _pmo_booster_countdown_label(next_booster_date)
 
-    vet_record_url = None
-    if (
-        animal
-        and current_user.is_authenticated
-        and (current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'])
-    ):
-        vet_record_url = url_for('ficha_animal', animal_id=animal.id)
+    if (request.args.get('format') or '').lower() == 'pdf':
+        return _export_vacina_pmo_pet_certificate_pdf(
+            visit=visit,
+            pmo_animal=pmo_animal,
+            campaign_vaccine=campaign_vaccine,
+            effective_status=effective_status,
+            next_booster_date=next_booster_date,
+        )
 
     return render_template(
         'vacina_pmo/public_pet_card.html',
@@ -4162,9 +4441,11 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         vaccines=vaccines,
         campaign_vaccine=campaign_vaccine,
         effective_status=effective_status,
+        status_context=status_context,
         next_booster_date=next_booster_date,
-        educational_video=get_pmo_educational_video(),
-        vet_record_url=vet_record_url,
+        booster_days_remaining=booster_days_remaining,
+        booster_countdown_label=booster_countdown_label,
+        protocol_label=_pmo_protocol_label(visit),
     )
 
 
@@ -4257,6 +4538,8 @@ def vacina_pmo_animal_status(animal_id):
 @app.route('/vacina-pmo/solicitar', methods=['GET', 'POST'])
 @login_required
 def vacina_pmo_solicitar():
+    from models import PmoVaccinationVisit
+
     user_animals = (
         Animal.query.filter_by(user_id=current_user.id)
         .filter(Animal.removido_em.is_(None))
@@ -4271,23 +4554,56 @@ def vacina_pmo_solicitar():
         )
         return redirect(url_for('add_animal'))
 
+    # Pré-preenche endereço do perfil
+    from services.vacina_pmo_service import normalize_pmo_request_address
+
+    _prof_street = ''
+    _prof_number = ''
+    _prof_complement = ''
+    _prof_neighborhood = ''
+    if current_user.endereco:
+        _e = current_user.endereco
+        _prof_street = _e.rua or ''
+        _prof_number = _e.numero or ''
+        _prof_complement = _e.complemento or ''
+        _prof_neighborhood = _e.bairro or ''
+    elif current_user.address:
+        _profile_address = normalize_pmo_request_address({
+            'address_street': current_user.address,
+            'address_number': '',
+            'address_complement': '',
+            'address_neighborhood': '',
+        })
+        _prof_street = _profile_address['street']
+        _prof_number = _profile_address['number']
+        _prof_complement = _profile_address['complement']
+        _prof_neighborhood = _profile_address['neighborhood']
+
     form_state = {
         'animal_ids': [],
+        'tutor': current_user.name or '',
+        'email': current_user.email or '',
+        'cpf': current_user.cpf or '',
         'phone': current_user.phone or '',
         'phone2': '',
-        'address_street': '',
-        'address_number': '',
-        'address_complement': '',
-        'address_neighborhood': '',
+        'address_street': _prof_street,
+        'address_number': _prof_number,
+        'address_complement': _prof_complement,
+        'address_neighborhood': _prof_neighborhood,
+        'save_address': False,
         'shift': '',
         'note': '',
     }
+    animal_booster_guidance = _pmo_animal_booster_guidance(user_animals)
 
     if request.method == 'POST':
         from services.vacina_pmo_service import submit_vacina_pmo_request
 
         selected_ids = set(request.form.getlist('animal_ids', type=int))
         form_state['animal_ids'] = list(selected_ids)
+        form_state['tutor'] = (request.form.get('tutor') or '').strip() or current_user.name
+        form_state['email'] = (request.form.get('email') or '').strip() or current_user.email
+        form_state['cpf'] = (request.form.get('cpf') or '').strip() or (current_user.cpf or '')
         form_state['phone'] = (request.form.get('phone') or '').strip()
         form_state['phone2'] = (request.form.get('phone2') or '').strip()
         form_state['address_street'] = (request.form.get('address_street') or '').strip()
@@ -4296,11 +4612,28 @@ def vacina_pmo_solicitar():
         form_state['address_neighborhood'] = (request.form.get('address_neighborhood') or '').strip()
         form_state['shift'] = (request.form.get('shift') or '').strip()
         form_state['note'] = (request.form.get('note') or '').strip()
+        save_address = request.form.get('save_address') == '1'
+        form_state['save_address'] = save_address
+        normalized_address = normalize_pmo_request_address(form_state)
+        form_state['address_street'] = normalized_address['street']
+        form_state['address_number'] = normalized_address['number']
+        form_state['address_complement'] = normalized_address['complement']
+        form_state['address_neighborhood'] = normalized_address['neighborhood']
 
         selected_animals = [a for a in user_animals if a.id in selected_ids]
+        duplicate_cpf = None
+        if form_state['cpf'] and form_state['cpf'] != (current_user.cpf or ''):
+            duplicate_cpf = User.query.filter(User.cpf == form_state['cpf'], User.id != current_user.id).first()
+        duplicate_email = None
+        if form_state['email'] and form_state['email'] != (current_user.email or ''):
+            duplicate_email = User.query.filter(User.email == form_state['email'], User.id != current_user.id).first()
 
         if not selected_animals:
             flash('Selecione ao menos um animal para vacinar.', 'danger')
+        elif duplicate_cpf:
+            flash('Este CPF já está cadastrado em outro tutor. Confira o número informado.', 'danger')
+        elif duplicate_email:
+            flash('Este e-mail já está cadastrado em outro tutor. Confira o e-mail informado.', 'danger')
         elif not form_state['phone']:
             flash('Informe um telefone para contato.', 'danger')
         elif not form_state['address_street'] or not form_state['address_neighborhood']:
@@ -4320,11 +4653,11 @@ def vacina_pmo_solicitar():
                     dogs += 1
 
             payload = {
-                'tutor': current_user.name,
-                'cpf': current_user.cpf or '',
+                'tutor': form_state['tutor'],
+                'cpf': form_state['cpf'],
                 'phone': form_state['phone'],
                 'phone2': form_state['phone2'],
-                'email': current_user.email,
+                'email': form_state['email'],
                 'address_street': form_state['address_street'],
                 'address_number': form_state['address_number'],
                 'address_complement': form_state['address_complement'],
@@ -4338,21 +4671,61 @@ def vacina_pmo_solicitar():
             }
 
             try:
-                submit_vacina_pmo_request(payload)
-                flash(
-                    'Solicitação enviada para a Prefeitura de Orlândia. '
-                    'A equipe entrará em contato pelo telefone informado para o agendamento.',
-                    'success',
-                )
-                return redirect(url_for('index'))
+                result = submit_vacina_pmo_request(payload)
+
+                if save_address:
+                    endereco = current_user.endereco or Endereco()
+                    endereco.rua = normalized_address['street'] or None
+                    endereco.numero = normalized_address['number'] or None
+                    endereco.complemento = normalized_address['complement'] or None
+                    endereco.bairro = normalized_address['neighborhood'] or None
+                    if current_user.endereco is None:
+                        db.session.add(endereco)
+                        db.session.flush()
+                        current_user.endereco_id = endereco.id
+                        current_user.endereco = endereco
+                    current_user.address = normalized_address['full']
+                current_user.name = form_state['tutor'] or current_user.name
+                if form_state['email']:
+                    current_user.email = form_state['email']
+                current_user.phone = form_state['phone'] or current_user.phone
+                current_user.cpf = form_state['cpf'] or current_user.cpf
+                db.session.commit()
+
+                public_token = result.get('public_token')
+                if public_token:
+                    flash(
+                        f'Solicitação enviada! Protocolo: <strong>{public_token}</strong>. '
+                        'A equipe da prefeitura entrará em contato pelo telefone informado.',
+                        'success',
+                    )
+                else:
+                    flash(
+                        'Solicitação enviada para a Prefeitura de Orlândia. '
+                        'A equipe entrará em contato pelo telefone informado para o agendamento.',
+                        'success',
+                    )
+                return redirect(url_for('vacina_pmo_solicitar'))
             except Exception as exc:
                 current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
                 flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
 
+    from services.vacina_pmo_service import PMO_REQUEST_SHEET_DEFAULT_TITLE, PMO_REQUEST_SHEET_TITLE_ENV
+    request_sheet_title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
+    historico = (
+        PmoVaccinationVisit.query
+        .filter_by(tutor_user_id=current_user.id)
+        .filter(PmoVaccinationVisit.sheet_title == request_sheet_title)
+        .order_by(PmoVaccinationVisit.updated_at.desc(), PmoVaccinationVisit.synced_at.desc())
+        .all()
+    )
     return render_template(
         'vacina_pmo/solicitar.html',
         user_animals=user_animals,
         form_state=form_state,
+        historico=historico,
+        pmo_protocol_label=_pmo_protocol_label,
+        animal_booster_guidance=animal_booster_guidance,
     )
 
 
@@ -8347,12 +8720,20 @@ def add_animal():
     )
 
 
+def _sanitize_login_next_url(next_url):
+    next_url = next_url or url_for('index')
+    parsed_next = urlparse(next_url)
+    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
+        return url_for('index')
+    if re.fullmatch(r'/vacina-pmo/c/[^/]+/pet/\d+/?', parsed_next.path or ''):
+        return url_for('index')
+    return next_url
+
+
 def login_view():
     form = LoginForm()
     next_url = request.values.get('next') or url_for('index')
-    parsed_next = urlparse(next_url)
-    if parsed_next.netloc or (parsed_next.scheme and parsed_next.scheme not in ('http', 'https')):
-        next_url = url_for('index')
+    next_url = _sanitize_login_next_url(next_url)
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
         form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -11486,22 +11867,6 @@ def profile():
         normalized_email = normalize_email(form.email.data)
         normalized_phone = normalize_phone(form.phone.data)
 
-        email_conflict = User.query.filter(
-            func.lower(User.email) == normalized_email,
-            User.id != current_user.id,
-        ).first()
-        if email_conflict:
-            if is_json_request:
-                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
-            flash('Email já está em uso.', 'danger')
-            return redirect(url_for('profile'))
-
-        if normalized_phone and find_users_by_phone(normalized_phone, exclude_user_id=current_user.id):
-            if is_json_request:
-                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}}), 400
-            flash('Celular já está em uso.', 'danger')
-            return redirect(url_for('profile'))
-
         required_address_labels = {
             'cep': 'CEP',
             'rua': 'Rua',
@@ -11519,6 +11884,22 @@ def profile():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
             flash(message, 'warning')
+            return redirect(url_for('profile'))
+
+        email_conflict = User.query.filter(
+            func.lower(User.email) == normalized_email,
+            User.id != current_user.id,
+        ).first()
+        if email_conflict:
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
+            flash('Email já está em uso.', 'danger')
+            return redirect(url_for('profile'))
+
+        if normalized_phone and find_users_by_phone(normalized_phone, exclude_user_id=current_user.id):
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}}), 400
+            flash('Celular já está em uso.', 'danger')
             return redirect(url_for('profile'))
 
         current_user.name = form.name.data

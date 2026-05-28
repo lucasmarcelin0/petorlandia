@@ -1,16 +1,21 @@
+from datetime import date, timedelta
+
 from services import vacina_pmo_service
 from services.vacina_pmo_service import (
     PMO_CATS_VACCINATED_COLUMN,
     PMO_DOGS_VACCINATED_COLUMN,
+    PMO_REQUEST_HEADERS,
+    normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
     save_vacina_pmo_evaluation,
+    submit_vacina_pmo_request,
     update_vacina_pmo_animal_status,
 )
 from extensions import db
-from models import Animal, PmoVaccinationVisit, User, Vacina
+from models import Animal, PmoVaccinationVisit, Species, User, Vacina
 
 
 class _FakeSheetsService:
@@ -93,6 +98,21 @@ def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
     assert parsed[0]["date"] == "2026-05-28"
     assert parsed[0]["shift"] == "Manha"
     assert parsed[0]["animals"] == [{"name": "Lunna", "species": "cao", "status": "pendente"}]
+
+
+def test_normalize_pmo_request_address_splits_pasted_full_address():
+    normalized = normalize_pmo_request_address({
+        "address_street": "Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+        "address_number": "",
+        "address_complement": "",
+        "address_neighborhood": "",
+    })
+
+    assert normalized["street"] == "Rua 20"
+    assert normalized["number"] == "1107"
+    assert normalized["complement"] == "Cond.torino casa 73"
+    assert normalized["neighborhood"] == "Jardim Benini"
+    assert normalized["full"] == "Rua 20, 1107, Cond.torino casa 73, Jardim Benini"
 
 
 def test_parse_vacina_pmo_rows_splits_partial_house_animals():
@@ -202,6 +222,75 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
 
 
+def test_submit_vacina_pmo_request_creates_local_pending_request(app, monkeypatch):
+    class FakeExecute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    class FakeSheetsService:
+        def __init__(self):
+            self.appended_body = None
+
+        def spreadsheets(self):
+            return self
+
+        def values(self):
+            return self
+
+        def get(self, **kwargs):
+            if kwargs.get("fields") == "sheets.properties":
+                return FakeExecute({"sheets": [{"properties": {"title": "Solicitacoes", "sheetId": 321}}]})
+            return FakeExecute({"values": [PMO_REQUEST_HEADERS]})
+
+        def update(self, **kwargs):
+            return FakeExecute({})
+
+        def batchUpdate(self, **kwargs):
+            return FakeExecute({})
+
+        def append(self, **kwargs):
+            self.appended_body = kwargs["body"]
+            return FakeExecute({"updates": {"updatedRange": "'Solicitacoes'!A2:R2"}})
+
+    fake_service = FakeSheetsService()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        user = User(name="Bruno Henrique", email="bruno-pmo@example.com", phone="+5516999999999")
+        user.set_password("PMOA9999")
+        db.session.add(user)
+        db.session.commit()
+
+        result = submit_vacina_pmo_request({
+            "tutor": "Bruno Henrique",
+            "phone": "(16) 99999-9999",
+            "address_street": "Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+            "address_number": "",
+            "address_complement": "",
+            "address_neighborhood": "",
+            "dogs": 1,
+            "cats": 0,
+            "animal_names": "Lunna",
+            "shift": "Manha",
+            "note": "Remarcar visita",
+            "user_id": user.id,
+        })
+
+        visit = PmoVaccinationVisit.query.filter_by(tutor_user_id=user.id, sheet_title="Solicitacoes").one()
+
+    appended = fake_service.appended_body["values"][0]
+    assert appended[1:5] == ["Rua 20", "1107", "Cond.torino casa 73", "Jardim Benini"]
+    assert appended[7:10] == ["1", "0", "Lunna"]
+    assert result["public_token"]
+    assert visit.address == "Rua 20, 1107, Cond.torino casa 73, Jardim Benini"
+    assert visit.vaccine_date is None
+    assert visit.public_token == result["public_token"]
+
+
 def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch):
     monkeypatch.setenv("PMO_VACCINE_EDUCATIONAL_VIDEO_URL", "https://youtu.be/abcDEF12345")
     row = {
@@ -234,6 +323,7 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
     response = client.get(f"/vacina-pmo/c/{token}")
     assert response.status_code == 200
     assert b"Carteirinha digital da vacina" in response.data
+    assert b"Protocolo PMO-" in response.data
     assert b"(16) 99999-9999" in response.data
     assert b"PMOA9999" in response.data
     assert b"Ver carteirinha" in response.data
@@ -307,11 +397,25 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     assert response.status_code == 200
     assert b"Carteirinha de Lua" in response.data
     assert b"Comprovante digital da campanha" in response.data
+    assert b"Status da campanha" in response.data
+    assert b"Dose registrada. Guarde este comprovante" in response.data
+    assert b"Orientacoes depois da vacina" in response.data
+    assert b"mordida ou arranhao" in response.data
     assert b"Proximo reforco" in response.data
-    assert b"Imprimir ou salvar PDF" in response.data
-    assert b"Video educativo" in response.data
-    assert b"https://www.youtube.com/embed/abcDEF12345" in response.data
+    assert b"Contagem para o reforco" in response.data
+    assert b"Faltam" in response.data or b"reforco anual esta indicado" in response.data or b"reforco anual venceu" in response.data
+    assert b"Nao e necessario vacinar Lua novamente antes de completar 1 ano da dose" in response.data
+    assert b"Baixar certificado em PDF" in response.data
+    assert b"Imprimir pagina" in response.data
+    assert b"Video educativo" not in response.data
+    assert b"https://www.youtube.com/embed/abcDEF12345" not in response.data
     assert b"Abrir ficha clinica" not in response.data
+
+    pdf_response = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}?format=pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.mimetype == "application/pdf"
+    assert pdf_response.headers["Content-Disposition"].startswith("attachment;")
+    assert pdf_response.data.startswith(b"%PDF")
 
 
 def test_login_respects_safe_next_url(app, client):
@@ -338,6 +442,328 @@ def test_login_respects_safe_next_url(app, client):
 
     blocked = client.get("/login?next=https://example.org/phish")
     assert b'name="next" value="/"' in blocked.data
+
+
+def test_login_redirects_pmo_pet_next_to_home(app, client):
+    with app.app_context():
+        user = User(name="Tutor PMO", email="tutor-pmo-next@example.com", phone="+5516999999998")
+        user.set_password("PMOA9998")
+        db.session.add(user)
+        db.session.commit()
+
+    pmo_pet_next = "/vacina-pmo/c/kUvJU6WDQXTq6ozj9GPf9UMi3cTfXSiSNmwknKXbjos/pet/1"
+    login_page = client.get(f"/login?next={pmo_pet_next}")
+    assert login_page.status_code == 200
+    assert b'name="next" value="/"' in login_page.data
+    assert pmo_pet_next.encode() not in login_page.data
+
+    response = client.post(
+        "/login",
+        data={
+            "login": "tutor-pmo-next@example.com",
+            "password": "PMOA9998",
+            "next": pmo_pet_next,
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
+def test_pmo_request_history_shows_only_submitted_requests(app, client):
+    with app.app_context():
+        user = User(name="Tutor Historico", email="tutor-historico@example.com", phone="+5516999999997")
+        user.set_password("PMOA9997")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        animal = Animal(name="Lunna", user_id=user.id, species=species, status="ativo")
+        old_campaign = PmoVaccinationVisit(
+            spreadsheet_id="campaign-sheet",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+            source_row=2,
+            tutor_name=user.name,
+            address="Rua antiga",
+            phone1=user.phone,
+            dogs=1,
+            cats=0,
+            vaccine_date=date(2026, 5, 28),
+            password="PMOA9997",
+            public_token="old-campaign-token",
+            tutor_user_id=user.id,
+            note="Registro antigo de campanha",
+        )
+        request_visit = PmoVaccinationVisit(
+            spreadsheet_id="request-sheet",
+            sheet_gid="321",
+            sheet_title="Solicitacoes",
+            source_row=3,
+            tutor_name=user.name,
+            address="Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+            phone1=user.phone,
+            dogs=1,
+            cats=0,
+            vaccine_date=None,
+            shift="Manha",
+            password="PMOA9997",
+            public_token="request-token",
+            tutor_user_id=user.id,
+            note="Solicitacao nova",
+        )
+        db.session.add_all([animal, old_campaign, request_visit])
+        db.session.commit()
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-historico@example.com",
+            "password": "PMOA9997",
+        },
+    )
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b"Confira antes de enviar" in response.data
+    assert b"Rua 20, 1107, Cond.torino casa 73, Jardim Benini" in response.data
+    assert b"PMO-" in response.data
+    assert b"Abrir comprovante" in response.data
+    assert b"Solicita" in response.data
+    assert b"normalmente nao precisa vacinar novamente agora" in response.data
+    assert b"old-campaign-token" not in response.data
+    assert b"Registro antigo de campanha" not in response.data
+
+
+def test_pmo_request_form_splits_saved_legacy_profile_address(app, client):
+    with app.app_context():
+        user = User(
+            name="Tutor Endereco",
+            email="tutor-endereco@example.com",
+            phone="+5516999999996",
+            address="Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+        )
+        user.set_password("PMOA9996")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        db.session.add(Animal(name="Lunna", user_id=user.id, species=species, status="ativo"))
+        db.session.commit()
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-endereco@example.com",
+            "password": "PMOA9996",
+        },
+    )
+
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b'name="address_street"' in response.data
+    assert b'value="Rua 20"' in response.data
+    assert b'value="1107"' in response.data
+    assert b'value="Cond.torino casa 73"' in response.data
+    assert b'value="Jardim Benini"' in response.data
+    assert b'value="Rua 20, 1107, Cond.torino casa 73, Jardim Benini"' not in response.data
+
+
+def test_pmo_request_form_shows_booster_countdown_before_submission(app, client):
+    with app.app_context():
+        user = User(name="Tutor Reforco", email="tutor-reforco@example.com", phone="+5516999999993")
+        user.set_password("PMOA9993")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        animal = Animal(name="Lunna", user_id=user.id, species=species, status="ativo")
+        db.session.add(animal)
+        db.session.flush()
+        db.session.add(
+            Vacina(
+                animal_id=animal.id,
+                nome="Vacina Antirrabica",
+                tipo="Obrigatoria",
+                aplicada=True,
+                aplicada_em=date.today() - timedelta(days=90),
+                intervalo_dias=365,
+                frequencia="Anual",
+            )
+        )
+        db.session.commit()
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-reforco@example.com",
+            "password": "PMOA9993",
+        },
+    )
+
+    response = client.get("/vacina-pmo/solicitar")
+
+    assert response.status_code == 200
+    assert b"Lunna ja recebeu vacina antirrabica ha menos de 1 ano" in response.data
+    assert b"Normalmente nao e necessario vacinar novamente antes do reforco anual" in response.data
+    assert b"Faltam" in response.data
+    assert b"Reforco previsto" in response.data
+
+
+def test_pmo_request_form_preserves_all_fields_after_validation_error(app, client):
+    with app.app_context():
+        user = User(name="Tutor Campos", email="tutor-campos@example.com", phone="")
+        user.set_password("PMOA9995")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        animal = Animal(name="Lunna", user_id=user.id, species=species, status="ativo")
+        db.session.add(animal)
+        db.session.commit()
+        animal_id = animal.id
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-campos@example.com",
+            "password": "PMOA9995",
+        },
+    )
+
+    response = client.post(
+        "/vacina-pmo/solicitar",
+        data={
+            "animal_ids": [str(animal_id)],
+            "tutor": "Tutor Campos Atualizado",
+            "email": "campos.novo@example.com",
+            "cpf": "33333333334",
+            "phone": "(16) 99999-1111",
+            "phone2": "(16) 98888-2222",
+            "address_street": "Rua 20, 1107, Cond.torino casa 73, Jardim Benini",
+            "address_number": "",
+            "address_complement": "",
+            "address_neighborhood": "",
+            "save_address": "1",
+            "shift": "",
+            "note": "Portao azul, chamar no interfone",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"turno preferencial" in response.data
+    assert b'value="Tutor Campos Atualizado"' in response.data
+    assert b'value="campos.novo@example.com"' in response.data
+    assert b'value="33333333334"' in response.data
+    assert b'value="(16) 99999-1111"' in response.data
+    assert b'value="(16) 98888-2222"' in response.data
+    assert b'value="Rua 20"' in response.data
+    assert b'value="1107"' in response.data
+    assert b'value="Cond.torino casa 73"' in response.data
+    assert b'value="Jardim Benini"' in response.data
+    assert b"Portao azul, chamar no interfone" in response.data
+    assert b'name="save_address"' in response.data
+    assert b"checked" in response.data
+
+
+def test_pmo_request_success_syncs_profile_fields_and_structured_address(app, client, monkeypatch):
+    class FakeExecute:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    class FakeSheetsService:
+        def __init__(self):
+            self.appended_body = None
+
+        def spreadsheets(self):
+            return self
+
+        def values(self):
+            return self
+
+        def get(self, **kwargs):
+            if kwargs.get("fields") == "sheets.properties":
+                return FakeExecute({"sheets": [{"properties": {"title": "Solicitacoes", "sheetId": 321}}]})
+            return FakeExecute({"values": [PMO_REQUEST_HEADERS]})
+
+        def update(self, **kwargs):
+            return FakeExecute({})
+
+        def batchUpdate(self, **kwargs):
+            return FakeExecute({})
+
+        def append(self, **kwargs):
+            self.appended_body = kwargs["body"]
+            return FakeExecute({"updates": {"updatedRange": "'Solicitacoes'!A2:R2"}})
+
+    fake_service = FakeSheetsService()
+    monkeypatch.setattr("services.vacina_pmo_service._get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.setenv("PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/test-sheet-id/edit")
+
+    with app.app_context():
+        user = User(name="Tutor Antigo", email="tutor-sync@example.com", phone="")
+        user.set_password("PMOA9994")
+        species = Species(name="Cachorro")
+        db.session.add_all([user, species])
+        db.session.flush()
+        animal = Animal(name="Lunna", user_id=user.id, species=species, status="ativo")
+        db.session.add(animal)
+        db.session.commit()
+        user_id = user.id
+        animal_id = animal.id
+
+    client.post(
+        "/login",
+        data={
+            "login": "tutor-sync@example.com",
+            "password": "PMOA9994",
+        },
+    )
+    response = client.post(
+        "/vacina-pmo/solicitar",
+        data={
+            "animal_ids": [str(animal_id)],
+            "tutor": "Tutor Novo",
+            "email": "tutor-sync-novo@example.com",
+            "cpf": "33333333335",
+            "phone": "(16) 99999-3333",
+            "phone2": "(16) 98888-4444",
+            "address_street": "Rua 20",
+            "address_number": "1107",
+            "address_complement": "Cond.torino casa 73",
+            "address_neighborhood": "Jardim Benini",
+            "save_address": "1",
+            "shift": "Manha",
+            "note": "Portao azul",
+        },
+    )
+
+    assert response.status_code == 302
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        visit = PmoVaccinationVisit.query.filter_by(tutor_user_id=user_id, sheet_title="Solicitacoes").one()
+
+        assert user.name == "Tutor Novo"
+        assert user.email == "tutor-sync-novo@example.com"
+        assert user.cpf == "33333333335"
+        assert user.phone == "(16) 99999-3333"
+        assert user.address == "Rua 20, 1107, Cond.torino casa 73, Jardim Benini"
+        assert user.endereco is not None
+        assert user.endereco.rua == "Rua 20"
+        assert user.endereco.numero == "1107"
+        assert user.endereco.complemento == "Cond.torino casa 73"
+        assert user.endereco.bairro == "Jardim Benini"
+        assert visit.tutor_name == "Tutor Novo"
+        assert visit.phone1 == "(16) 99999-3333"
+        assert visit.phone2 == "(16) 98888-4444"
+        assert visit.address == "Rua 20, 1107, Cond.torino casa 73, Jardim Benini"
+        assert "CPF: 33333333335" in visit.note
+        assert fake_service.appended_body["values"][0][1:5] == [
+            "Rua 20",
+            "1107",
+            "Cond.torino casa 73",
+            "Jardim Benini",
+        ]
 
 
 def test_pmo_visit_model_includes_evaluation_dimension_columns():

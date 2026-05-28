@@ -1,10 +1,6 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carteirinha de {{ pmo_animal.name }} - Vacina antirrábica</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
+{% extends "layout.html" %}
+
+{% block head %}
   <style>
     :root {
       color-scheme: light;
@@ -21,7 +17,7 @@
 
     * { box-sizing: border-box; }
 
-    body {
+    .pmo-pet-page {
       margin: 0;
       min-height: 100vh;
       font-family: Inter, Arial, sans-serif;
@@ -32,47 +28,7 @@
       line-height: 1.5;
     }
 
-    .topbar {
-      background: rgba(255, 255, 255, .94);
-      border-bottom: 1px solid var(--line);
-      padding: 10px 18px;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .brand {
-      max-width: 920px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .brandmark {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--ink);
-      font-weight: 800;
-      text-decoration: none;
-    }
-
-    .brandmark img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-
-    .toplink {
-      color: var(--muted);
-      font-weight: 700;
-      font-size: .92rem;
-      text-decoration: none;
-    }
-
-    main {
+    .pmo-pet-main {
       max-width: 920px;
       margin: 0 auto;
       padding: 24px 18px 46px;
@@ -219,22 +175,68 @@
       margin-bottom: 4px;
     }
 
-    .video-frame {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      overflow: hidden;
-      background: #0f172a;
+    .booster-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: start;
+      border: 1px solid rgba(8, 127, 91, .22);
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f0fff4, #f8fcff);
+      padding: 16px;
     }
 
-    .video-frame iframe {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
+    .booster-card__icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: #e6fcf5;
+      color: var(--green);
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+
+    .booster-card h2 {
+      margin: 0 0 6px;
+      font-size: 1.12rem;
+    }
+
+    .booster-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .booster-card__warning {
+      margin-top: 8px !important;
+      color: var(--ink) !important;
+      font-weight: 700;
+    }
+
+    .status-message,
+    .care-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 14px 16px;
+    }
+
+    .status-message strong,
+    .care-card strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 5px;
+    }
+
+    .care-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .care-list li + li {
+      margin-top: 5px;
     }
 
     .actions {
@@ -277,19 +279,11 @@
       }
     }
   </style>
-</head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <a class="brandmark" href="{{ url_for('vacina_pmo_public', token=token) }}">
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="PetOrlandia">
-        <span>PetOrlandia</span>
-      </a>
-      <a class="toplink" href="{{ url_for('vacina_pmo_public', token=token) }}">Voltar</a>
-    </div>
-  </header>
+{% endblock %}
 
-  <main>
+{% block main %}
+  <div class="pmo-pet-page">
+  <div class="pmo-pet-main">
     <section class="hero-card">
       <div class="hero-band">
         <div>
@@ -308,7 +302,7 @@
       <div class="content">
         <div class="status">
           <span class="pill {{ '' if effective_status == 'vacinado' else 'pending' }}">
-            {{ 'Vacinado' if effective_status == 'vacinado' else effective_status|capitalize }}
+            {{ status_context.label }}
           </span>
           <span class="subtitle">
             {{ 'Cão' if pmo_animal.species == 'cao' else 'Gato' }} de {{ visit.tutor_name }}
@@ -344,6 +338,34 @@
             <span class="value">{{ campaign_vaccine.lote if campaign_vaccine and campaign_vaccine.lote else 'Registro municipal' }}</span>
           </div>
         </div>
+
+        <section class="status-message">
+          <strong>Status da campanha</strong>
+          <p class="subtitle" style="font-size:.95rem;margin:0;">{{ status_context.message }}</p>
+          <p class="subtitle" style="font-size:.9rem;margin-top:8px;">Protocolo {{ protocol_label }}</p>
+        </section>
+
+        {% if next_booster_date %}
+        <section class="booster-card" aria-label="Orientacao sobre reforco anual">
+          <div class="booster-card__icon"><i class="fa-solid fa-shield-dog"></i></div>
+          <div>
+            <h2>Contagem para o reforco</h2>
+            <p>{{ booster_countdown_label }}</p>
+            <p class="booster-card__warning">
+              Nao e necessario vacinar {{ pmo_animal.name }} novamente antes de completar 1 ano da dose, salvo orientacao de um medico-veterinario ou do servico publico de saude.
+            </p>
+          </div>
+        </section>
+        {% endif %}
+
+        <section class="care-card">
+          <strong>Orientacoes depois da vacina</strong>
+          <ul class="care-list">
+            <li>Sonolencia leve ou sensibilidade no local da aplicacao pode acontecer no mesmo dia.</li>
+            <li>Procure atendimento se houver inchaco no rosto, vomitos repetidos, falta de ar, fraqueza intensa ou piora importante.</li>
+            <li>Em caso de mordida ou arranhao, lave o local com agua e sabao e procure o servico de saude.</li>
+          </ul>
+        </section>
 
         <section>
           <h2 style="margin:0 0 10px;font-size:1.2rem;">Histórico simples</h2>
@@ -404,13 +426,10 @@
 
         <div class="actions">
           <a class="button secondary" href="{{ url_for('vacina_pmo_public', token=token) }}">Voltar para campanha</a>
-          <a class="button" href="#top" onclick="window.print(); return false;">Imprimir ou salvar PDF</a>
-          {% if vet_record_url %}
-            <a class="button secondary" href="{{ vet_record_url }}">Abrir ficha clínica</a>
-          {% endif %}
+          <a class="button" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=pmo_animal.id, format='pdf') }}">Baixar certificado em PDF</a>
         </div>
       </div>
     </section>
-  </main>
-</body>
-</html>
+  </div>
+  </div>
+{% endblock %}
