@@ -310,7 +310,7 @@
         </div>
 
         <div class="details">
-          <div class="detail-card">
+          <div class="detail-card" aria-label="Proximo reforco">
             <span class="label">Aplicação</span>
             <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
           </div>
@@ -427,6 +427,7 @@
         <div class="actions">
           <a class="button secondary" href="{{ url_for('vacina_pmo_public', token=token) }}">Voltar para campanha</a>
           <a class="button" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=pmo_animal.id, format='pdf') }}">Baixar certificado em PDF</a>
+          <button type="button" class="button secondary" onclick="window.print()">Imprimir pagina</button>
         </div>
       </div>
     </section>

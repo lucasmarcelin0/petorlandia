@@ -79,13 +79,17 @@
   }
 
   .pmo-visit-card {
-    border-bottom: 1px solid #e5e7eb;
-    padding: 10px 12px;
+    position: relative;
+    border: 1px solid #d6dde8;
+    border-left: 4px solid #2563eb;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    padding: 10px 12px 10px 10px;
     background: #ffffff;
   }
 
-  .pmo-visit-card:last-child {
-    border-bottom: 0;
+  .pmo-visit-card + .pmo-visit-card {
+    margin-top: 10px;
   }
 
   .pmo-card-head {
@@ -105,6 +109,17 @@
     font-size: 0.82rem;
     line-height: 1.25;
     margin-top: 2px;
+  }
+
+  .pmo-card-address .btn,
+  .pmo-address .btn {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .pmo-card-meta {
@@ -299,6 +314,8 @@
 
     .pmo-cards {
       display: block;
+      background: #f1f5f9;
+      padding: 10px;
     }
 
     .pmo-panel__header {
@@ -537,6 +554,9 @@
             <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Manha">Manhã</button>
             <button type="button" class="btn btn-sm btn-outline-primary" data-shift-shortcut="Tarde">Tarde</button>
           </div>
+          <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route" data-route-url="{{ url_for('vacina_pmo_route_optimize') }}">
+            <i class="fas fa-route me-1"></i> Otimizar rota
+          </button>
         </div>
         <div class="pmo-table-wrap">
           <table class="table table-hover align-middle pmo-table">
@@ -584,11 +604,13 @@
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
+  const optimizeRouteBtn = document.getElementById('pmo-optimize-route');
   const evalGridEl = document.getElementById('pmo-eval-grid');
   const evalSummaryEl = document.querySelector('[data-eval-summary]');
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
   const state = { rows: [] };
+  const routeOrigin = 'Vigilância Sanitária de Orlândia, SP';
   const evaluationMetrics = [
     ['evaluationRating', 'Satisfação geral'],
     ['evaluationRegistrationRating', 'Cadastro e agendamento'],
@@ -615,6 +637,21 @@
   function displayDate(value) {
     const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+  }
+
+  function googleMapsUrl(row) {
+    const destination = normalizeText(row.address);
+    if (!destination) return '';
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(`${destination}, Orlândia, SP`)}`;
+  }
+
+  function renderAddress(row, compact = false) {
+    const mapsUrl = googleMapsUrl(row);
+    const label = escapeHtml(row.address || 'Endereço não informado');
+    const mapLink = mapsUrl
+      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="Abrir rota no Google Maps" aria-label="Abrir rota no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
+      : '';
+    return `<div class="d-flex align-items-start gap-2"><span>${label}</span>${mapLink}</div>`;
   }
 
   function makePassword(seed) {
@@ -854,6 +891,49 @@
     }
   }
 
+  async function optimizeRoute() {
+    const selectedShift = normalizeShift(shiftEl.value);
+    if (!['Manha', 'Tarde'].includes(selectedShift)) {
+      window.showAppToast ? window.showAppToast('Escolha Manhã ou Tarde no filtro de turno antes de otimizar.', 'warning') : alert('Escolha Manhã ou Tarde no filtro de turno antes de otimizar.');
+      return;
+    }
+    const original = optimizeRouteBtn.innerHTML;
+    optimizeRouteBtn.disabled = true;
+    optimizeRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Otimizando';
+    try {
+      const response = await fetch(optimizeRouteBtn.dataset.routeUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({
+          sheet_gid: sheetEl.value,
+          sheet_title: sheetEl.selectedOptions[0]?.dataset.title || '',
+          shift: selectedShift,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível otimizar a rota.');
+      }
+      state.rows = normalizeSyncedRows(payload.rows || []);
+      shiftEl.value = selectedShift;
+      statusFilterEl.value = '';
+      render();
+      const missed = Number(payload.unlocated_count || 0);
+      const suffix = missed ? ` ${missed} endereço${missed === 1 ? '' : 's'} ficou${missed === 1 ? '' : 'ram'} no final por falta de localização.` : '';
+      sheetInfoEl.textContent = `Rota do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} otimizada na planilha.${suffix}`;
+      window.showAppToast ? window.showAppToast(`Rota otimizada e salva na planilha.${suffix}`, missed ? 'warning' : 'success') : alert('Rota otimizada e salva na planilha.');
+    } catch (error) {
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    } finally {
+      optimizeRouteBtn.disabled = false;
+      optimizeRouteBtn.innerHTML = original;
+    }
+  }
+
   function renderAttendedBy(row) {
     if (row.editingAttendedBy) {
       const current = row.attendedBy || '';
@@ -932,7 +1012,7 @@
         <div class="pmo-card-head">
           <div>
             <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
-            <div class="pmo-card-address">${escapeHtml(row.address || 'Endereço não informado')}</div>
+            <div class="pmo-card-address">${renderAddress(row, true)}</div>
             ${renderAttendedBy(row)}
           </div>
           <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
@@ -1075,7 +1155,7 @@
             <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
           </td>
           <td><strong>${escapeHtml(row.tutor)}</strong>${renderAttendedBy(row)}</td>
-          <td class="pmo-address">${escapeHtml(row.address)}</td>
+          <td class="pmo-address">${renderAddress(row)}</td>
           <td>${animals}</td>
           <td>${row.dogs}</td>
           <td>${row.cats}</td>
@@ -1251,6 +1331,7 @@
     loadSavedState(true);
   });
   document.getElementById('pmo-export').addEventListener('click', exportRows);
+  optimizeRouteBtn.addEventListener('click', optimizeRoute);
   [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
   sheetEl.addEventListener('change', () => {
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';

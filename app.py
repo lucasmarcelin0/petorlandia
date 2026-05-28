@@ -4445,6 +4445,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         next_booster_date=next_booster_date,
         booster_days_remaining=booster_days_remaining,
         booster_countdown_label=booster_countdown_label,
+        educational_video={"url": "", "embed_url": ""},
         protocol_label=_pmo_protocol_label(visit),
     )
 
@@ -4516,6 +4517,28 @@ def vacina_pmo_state():
         )
     except Exception as exc:
         current_app.logger.exception("Falha ao carregar estado Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/route/optimize', methods=['POST'])
+@login_required
+def vacina_pmo_route_optimize():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import optimize_vacina_pmo_route
+
+        payload = request.get_json(silent=True) or {}
+        result = optimize_vacina_pmo_route(
+            sheet_gid=(payload.get('sheet_gid') or '').strip(),
+            sheet_title=(payload.get('sheet_title') or '').strip(),
+            shift=(payload.get('shift') or '').strip(),
+        )
+        return jsonify({'success': True, **result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao otimizar rota Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 

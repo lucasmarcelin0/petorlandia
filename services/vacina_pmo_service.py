@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import math
 import secrets
 import string
 import unicodedata
@@ -15,6 +16,7 @@ from extensions import db
 from flask import has_request_context, url_for
 from models import Animal, PmoVaccinationAnimal, PmoVaccinationVisit, Species, User, Vacina
 from sqlalchemy import func
+from helpers import geocode_address
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -65,6 +67,10 @@ PMO_DOGS_VACCINATED_COLUMN = "M"
 PMO_CATS_VACCINATED_COLUMN = "N"
 PMO_ATTENDED_BY_COLUMN = "O"
 PMO_NOTE_COLUMN = "K"
+PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
+PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
+PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
+PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária de Orlândia, SP"
 
 # Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
 PMO_TUTOR_NAME_COLUMN_INDEX = 0
@@ -225,6 +231,73 @@ def _normalize_shift(value: Any) -> str:
     if text.startswith("tar"):
         return "Tarde"
     return _normalize_text(value)
+
+
+def _pmo_address_parts(address: str) -> dict[str, str]:
+    parts = [_normalize_text(part) for part in str(address or "").split(",") if _normalize_text(part)]
+    return {
+        "rua": parts[0] if len(parts) > 0 else "",
+        "numero": parts[1] if len(parts) > 1 else "",
+        "complemento": parts[2] if len(parts) > 2 else "",
+        "bairro": parts[-1] if len(parts) > 3 else (parts[2] if len(parts) == 3 else ""),
+    }
+
+
+def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
+    normalized = _normalize_text(address)
+    if not normalized:
+        return None
+    parts = _pmo_address_parts(normalized)
+    return geocode_address(
+        rua=parts["rua"],
+        numero=parts["numero"],
+        bairro=parts["bairro"],
+        cidade="Orlândia",
+        estado="SP",
+    )
+
+
+def _pmo_route_origin_address() -> str:
+    return _normalize_text(os.getenv(PMO_ROUTE_ORIGIN_ADDRESS_ENV)) or PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS
+
+
+def _pmo_route_origin_coords() -> tuple[float, float] | None:
+    try:
+        lat = float(os.getenv(PMO_ROUTE_ORIGIN_LAT_ENV, ""))
+        lng = float(os.getenv(PMO_ROUTE_ORIGIN_LNG_ENV, ""))
+        return lat, lng
+    except ValueError:
+        return _pmo_geocode_address(_pmo_route_origin_address())
+
+
+def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    lat1, lon1 = math.radians(a[0]), math.radians(a[1])
+    lat2, lon2 = math.radians(b[0]), math.radians(b[1])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    value = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
+    return 6371.0 * 2 * math.asin(math.sqrt(value))
+
+
+def _nearest_neighbor_route(
+    origin: tuple[float, float],
+    items: list[tuple[PmoVaccinationVisit, tuple[float, float]]],
+) -> list[PmoVaccinationVisit]:
+    remaining = items[:]
+    current = origin
+    ordered: list[PmoVaccinationVisit] = []
+    while remaining:
+        next_index, (visit, coords) = min(
+            enumerate(remaining),
+            key=lambda item: (_haversine_km(current, item[1][1]), item[1][0].source_row or 0, item[1][0].id),
+        )
+        ordered.append(visit)
+        current = coords
+        remaining.pop(next_index)
+    return ordered
 
 
 def _is_summary_or_header(row: list[Any]) -> bool:
@@ -703,6 +776,101 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
         "sheet_gid": sheet_gid or (latest.sheet_gid if latest else ""),
         "sheet_title": sheet_title or (latest.sheet_title if latest else ""),
         "spreadsheet_id": visits[0].spreadsheet_id if visits else "",
+    }
+
+
+def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
+    normalized_shift = _normalize_shift(shift)
+    if normalized_shift not in {"Manha", "Tarde"}:
+        raise ValueError("Escolha o turno Manhã ou Tarde antes de otimizar a rota.")
+
+    latest = None
+    if not sheet_gid and not sheet_title:
+        latest = PmoVaccinationVisit.query.order_by(PmoVaccinationVisit.updated_at.desc()).first()
+        if latest:
+            sheet_gid = latest.sheet_gid
+            sheet_title = latest.sheet_title
+
+    visits = (
+        _query_sheet_visits(sheet_gid=sheet_gid, sheet_title=sheet_title)
+        .order_by(PmoVaccinationVisit.source_row.asc(), PmoVaccinationVisit.id.asc())
+        .all()
+    )
+    selected = [
+        visit
+        for visit in visits
+        if _normalize_shift(visit.shift) == normalized_shift and visit.source_row and visit.source_row > 1
+    ]
+    if len(selected) < 2:
+        raise ValueError("Este turno precisa de pelo menos dois endereços sincronizados para otimizar.")
+
+    spreadsheet_id = selected[0].spreadsheet_id
+    resolved_gid = sheet_gid or selected[0].sheet_gid
+    resolved_title = sheet_title or selected[0].sheet_title
+    if not spreadsheet_id or not resolved_title:
+        raise ValueError("Sincronize a aba antes de otimizar a rota.")
+
+    origin_coords = _pmo_route_origin_coords()
+    if not origin_coords:
+        raise ValueError("Não foi possível localizar a Vigilância Sanitária de Orlândia para iniciar a rota.")
+
+    geocoded: list[tuple[PmoVaccinationVisit, tuple[float, float]]] = []
+    ungeocoded: list[PmoVaccinationVisit] = []
+    for visit in selected:
+        coords = _pmo_geocode_address(visit.address or "")
+        if coords:
+            geocoded.append((visit, coords))
+        else:
+            ungeocoded.append(visit)
+    if not geocoded:
+        raise ValueError("Não foi possível localizar nenhum endereço deste turno.")
+
+    optimized = _nearest_neighbor_route(origin_coords, geocoded) + ungeocoded
+    target_rows = sorted(visit.source_row for visit in selected if visit.source_row)
+
+    service = _get_sheets_service_rw()
+    range_value = f"{_quote_sheet_title(resolved_title)}!{DEFAULT_SHEET_RANGE}"
+    response = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=range_value)
+        .execute()
+    )
+    sheet_values = response.get("values", [])
+    needed_rows = max(target_rows)
+    while len(sheet_values) < needed_rows:
+        sheet_values.append([])
+
+    source_rows_by_visit_id = {
+        visit.id: list(sheet_values[(visit.source_row or 1) - 1])
+        for visit in selected
+    }
+    for destination_row, visit in zip(target_rows, optimized):
+        sheet_values[destination_row - 1] = source_rows_by_visit_id.get(visit.id, [])
+
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_value,
+        valueInputOption="USER_ENTERED",
+        body={"values": sheet_values},
+    ).execute()
+
+    for visit in selected:
+        visit.source_row = -visit.id
+    db.session.flush()
+    for destination_row, visit in zip(target_rows, optimized):
+        visit.source_row = destination_row
+        visit.sheet_title = resolved_title
+        visit.sheet_gid = resolved_gid
+    db.session.commit()
+
+    state = get_saved_vacina_pmo_rows(sheet_gid=resolved_gid, sheet_title=resolved_title)
+    return {
+        **state,
+        "shift": normalized_shift,
+        "origin": _pmo_route_origin_address(),
+        "optimized_count": len(optimized),
+        "unlocated_count": len(ungeocoded),
     }
 
 

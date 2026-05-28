@@ -11,6 +11,7 @@ from services.vacina_pmo_service import (
     normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
+    optimize_vacina_pmo_route,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
     save_vacina_pmo_evaluation,
@@ -23,9 +24,10 @@ from models import Animal, PmoVaccinationVisit, Species, User, Vacina
 
 
 class _FakeSheetsService:
-    def __init__(self):
+    def __init__(self, sheet_values=None):
         self.updates = []
         self.batch_updates = []
+        self.sheet_values = sheet_values or []
 
     def spreadsheets(self):
         return self
@@ -41,7 +43,12 @@ class _FakeSheetsService:
             "body": body,
         }
         self.updates.append(call)
+        if range.endswith("!A:T"):
+            self.sheet_values = body.get("values", [])
         return self
+
+    def get(self, *, spreadsheetId, range, **kwargs):
+        return _FakeSheetsExecute({"values": self.sheet_values})
 
     def batchUpdate(self, *, spreadsheetId, body):
         call = {"spreadsheetId": spreadsheetId, "body": body}
@@ -50,6 +57,14 @@ class _FakeSheetsService:
 
     def execute(self):
         return {}
+
+
+class _FakeSheetsExecute:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def execute(self):
+        return self.payload
 
 
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
@@ -230,6 +245,112 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationInformationRating"] == 3
     assert evaluated_state["rows"][0]["evaluationSurveyRating"] == 4
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
+
+
+def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkeypatch):
+    rows = [
+        {
+            "id": "sheet-1",
+            "status": "pendente",
+            "tutor": "Tutor Longe",
+            "address": "Rua Longe, 30, Centro",
+            "phone1": "5516999999991",
+            "phone2": "",
+            "dogs": 1,
+            "cats": 0,
+            "animals": [{"name": "Longe", "species": "cao", "status": "pendente"}],
+            "note": "",
+            "date": "2026-05-28",
+            "shift": "Manha",
+            "password": "PMOA9991",
+            "certificateUrl": "",
+            "sourceRow": 2,
+        },
+        {
+            "id": "sheet-2",
+            "status": "pendente",
+            "tutor": "Tutor Perto",
+            "address": "Rua Perto, 10, Centro",
+            "phone1": "5516999999992",
+            "phone2": "",
+            "dogs": 1,
+            "cats": 0,
+            "animals": [{"name": "Perto", "species": "cao", "status": "pendente"}],
+            "note": "",
+            "date": "2026-05-28",
+            "shift": "Manha",
+            "password": "PMOA9992",
+            "certificateUrl": "",
+            "sourceRow": 3,
+        },
+        {
+            "id": "sheet-3",
+            "status": "pendente",
+            "tutor": "Tutor Meio",
+            "address": "Rua Meio, 20, Centro",
+            "phone1": "5516999999993",
+            "phone2": "",
+            "dogs": 1,
+            "cats": 0,
+            "animals": [{"name": "Meio", "species": "cao", "status": "pendente"}],
+            "note": "",
+            "date": "2026-05-28",
+            "shift": "Manha",
+            "password": "PMOA9993",
+            "certificateUrl": "",
+            "sourceRow": 4,
+        },
+        {
+            "id": "sheet-4",
+            "status": "pendente",
+            "tutor": "Tutor Tarde",
+            "address": "Rua Tarde, 40, Centro",
+            "phone1": "5516999999994",
+            "phone2": "",
+            "dogs": 1,
+            "cats": 0,
+            "animals": [{"name": "Tarde", "species": "cao", "status": "pendente"}],
+            "note": "",
+            "date": "2026-05-28",
+            "shift": "Tarde",
+            "password": "PMOA9994",
+            "certificateUrl": "",
+            "sourceRow": 5,
+        },
+    ]
+    fake_service = _FakeSheetsService([
+        ["Nome completo do tutor", "Endereço"],
+        ["Tutor Longe", "Rua Longe", "30", "", "Centro"],
+        ["Tutor Perto", "Rua Perto", "10", "", "Centro"],
+        ["Tutor Meio", "Rua Meio", "20", "", "Centro"],
+        ["Tutor Tarde", "Rua Tarde", "40", "", "Centro"],
+    ])
+    coords = {
+        "Rua Perto, 10, Centro": (0.0, 1.0),
+        "Rua Meio, 20, Centro": (0.0, 2.0),
+        "Rua Longe, 30, Centro": (0.0, 3.0),
+    }
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_route_origin_coords", lambda: (0.0, 0.0))
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_geocode_address", lambda address: coords.get(address))
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            rows,
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="28/05/2026",
+        )
+        result = optimize_vacina_pmo_route(sheet_gid="123", sheet_title="28/05/2026", shift="Manhã")
+
+    morning = [row["tutor"] for row in result["rows"] if row["shift"] == "Manha"]
+    assert morning == ["Tutor Perto", "Tutor Meio", "Tutor Longe"]
+    assert result["optimized_count"] == 3
+    assert result["unlocated_count"] == 0
+    assert fake_service.sheet_values[1][0] == "Tutor Perto"
+    assert fake_service.sheet_values[2][0] == "Tutor Meio"
+    assert fake_service.sheet_values[3][0] == "Tutor Longe"
+    assert fake_service.sheet_values[4][0] == "Tutor Tarde"
 
 
 def test_submit_vacina_pmo_request_creates_local_pending_request(app, monkeypatch):
