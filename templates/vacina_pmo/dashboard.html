@@ -523,8 +523,17 @@
                 <option value="recusou">Recusou</option>
               </select>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route" data-route-url="{{ url_for('vacina_pmo_route_optimize') }}">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="pmo-open-next-route">
+              <i class="fas fa-location-arrow me-1"></i> Próximo
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route"
+              data-preview-url="{{ url_for('vacina_pmo_route_preview') }}"
+              data-route-url="{{ url_for('vacina_pmo_route_optimize') }}"
+              data-undo-url="{{ url_for('vacina_pmo_route_undo') }}">
               <i class="fas fa-route me-1"></i> Otimizar rota
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pmo-undo-route">
+              <i class="fas fa-rotate-left me-1"></i> Desfazer
             </button>
           </div>
         </div>
@@ -602,12 +611,13 @@
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
   const optimizeRouteBtn = document.getElementById('pmo-optimize-route');
+  const undoRouteBtn = document.getElementById('pmo-undo-route');
+  const openNextRouteBtn = document.getElementById('pmo-open-next-route');
   const evalGridEl = document.getElementById('pmo-eval-grid');
   const evalSummaryEl = document.querySelector('[data-eval-summary]');
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
   const state = { rows: [] };
-  const routeOrigin = 'Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000';
   const evaluationMetrics = [
     ['evaluationRating', 'Satisfação geral'],
     ['evaluationRegistrationRating', 'Cadastro e agendamento'],
@@ -639,7 +649,7 @@
   function googleMapsUrl(row) {
     const destination = normalizeText(row.address);
     if (!destination) return '';
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(`${destination}, Orlândia, SP`)}`;
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${destination}, Orlândia, SP`)}&travelmode=driving`;
   }
 
   function renderAddress(row, compact = false) {
@@ -888,6 +898,51 @@
     }
   }
 
+  async function postJson(url, body) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify(body),
+    });
+    const rawText = await response.text();
+    let payload = {};
+    try {
+      payload = rawText ? JSON.parse(rawText) : {};
+    } catch (parseError) {
+      payload = { message: readableErrorMessage(rawText).slice(0, 240) };
+    }
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || `Não foi possível concluir a operação. Código ${response.status}.`);
+    }
+    return payload;
+  }
+
+  function routeRequestBody(selectedShift) {
+    return {
+      sheet_gid: sheetEl.value,
+      sheet_title: sheetEl.selectedOptions[0]?.dataset.title || '',
+      shift: selectedShift,
+    };
+  }
+
+  function routePreviewText(payload) {
+    const rows = (payload.preview || []).slice(0, 30).map((item) => (
+      `${item.order}. ${item.tutor} - ${item.address}${item.located ? '' : ' (sem localização, fica no final)'}`
+    ));
+    const extra = (payload.preview || []).length > rows.length
+      ? `\n... mais ${(payload.preview || []).length - rows.length} visitas`
+      : '';
+    const missed = Number(payload.unlocated_count || 0);
+    const warning = missed
+      ? `\n\nAtenção: ${missed} endereço${missed === 1 ? '' : 's'} não foi localizado${missed === 1 ? '' : 's'} e ficará${missed === 1 ? '' : 'ão'} no final.`
+      : '';
+    return `Prévia da rota ${payload.shift === 'Manha' ? 'Manhã' : 'Tarde'}:\n\n${rows.join('\n')}${extra}${warning}\n\nAplicar esta ordem na planilha?`;
+  }
+
   async function optimizeRoute() {
     const selectedShift = normalizeShift(shiftEl.value);
     if (!['Manha', 'Tarde'].includes(selectedShift)) {
@@ -896,31 +951,13 @@
     }
     const original = optimizeRouteBtn.innerHTML;
     optimizeRouteBtn.disabled = true;
-    optimizeRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Otimizando';
+    optimizeRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Calculando';
     try {
-      const response = await fetch(optimizeRouteBtn.dataset.routeUrl, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
-        },
-        body: JSON.stringify({
-          sheet_gid: sheetEl.value,
-          sheet_title: sheetEl.selectedOptions[0]?.dataset.title || '',
-          shift: selectedShift,
-        }),
-      });
-      const rawText = await response.text();
-      let payload = {};
-      try {
-        payload = rawText ? JSON.parse(rawText) : {};
-      } catch (parseError) {
-        payload = { message: readableErrorMessage(rawText).slice(0, 240) };
-      }
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.message || `Não foi possível otimizar a rota. Código ${response.status}.`);
-      }
+      const body = routeRequestBody(selectedShift);
+      const preview = await postJson(optimizeRouteBtn.dataset.previewUrl, body);
+      if (!window.confirm(routePreviewText(preview))) return;
+      optimizeRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Aplicando';
+      const payload = await postJson(optimizeRouteBtn.dataset.routeUrl, body);
       state.rows = normalizeSyncedRows(payload.rows || []);
       shiftEl.value = selectedShift;
       statusFilterEl.value = '';
@@ -935,6 +972,42 @@
       optimizeRouteBtn.disabled = false;
       optimizeRouteBtn.innerHTML = original;
     }
+  }
+
+  async function undoRoute() {
+    const selectedShift = normalizeShift(shiftEl.value);
+    if (!['Manha', 'Tarde'].includes(selectedShift)) {
+      window.showAppToast ? window.showAppToast('Escolha Manhã ou Tarde antes de desfazer.', 'warning') : alert('Escolha Manhã ou Tarde antes de desfazer.');
+      return;
+    }
+    if (!window.confirm(`Desfazer a última otimização do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} nesta aba?`)) return;
+    const original = undoRouteBtn.innerHTML;
+    undoRouteBtn.disabled = true;
+    undoRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Desfazendo';
+    try {
+      const payload = await postJson(optimizeRouteBtn.dataset.undoUrl, routeRequestBody(selectedShift));
+      state.rows = normalizeSyncedRows(payload.rows || []);
+      shiftEl.value = selectedShift;
+      render();
+      sheetInfoEl.textContent = `Última otimização do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} desfeita.`;
+      window.showAppToast ? window.showAppToast('Última otimização desfeita.', 'success') : alert('Última otimização desfeita.');
+    } catch (error) {
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    } finally {
+      undoRouteBtn.disabled = false;
+      undoRouteBtn.innerHTML = original;
+    }
+  }
+
+  function openNextRoute() {
+    const next = state.rows
+      .filter(rowMatchesFilters)
+      .find((row) => ['pendente', 'remarcar', 'ausente', 'parcial'].includes(inferVisitStatus(row.animals)) && googleMapsUrl(row));
+    if (!next) {
+      window.showAppToast ? window.showAppToast('Nenhum próximo endereço visível para abrir.', 'warning') : alert('Nenhum próximo endereço visível para abrir.');
+      return;
+    }
+    window.open(googleMapsUrl(next), '_blank', 'noopener');
   }
 
   function renderAttendedBy(row) {
@@ -1339,6 +1412,8 @@
   });
   document.getElementById('pmo-export').addEventListener('click', exportRows);
   optimizeRouteBtn.addEventListener('click', optimizeRoute);
+  undoRouteBtn.addEventListener('click', undoRoute);
+  openNextRouteBtn.addEventListener('click', openNextRoute);
   [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
   sheetEl.addEventListener('change', () => {
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';

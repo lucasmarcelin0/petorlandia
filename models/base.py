@@ -2589,6 +2589,24 @@ class PmoVaccinationAnimal(db.Model):
     vaccine = db.relationship('Vacina', foreign_keys=[vaccine_id])
 
 
+class PmoRouteOptimizationBackup(db.Model):
+    __tablename__ = 'pmo_route_optimization_backup'
+
+    id = db.Column(db.Integer, primary_key=True)
+    spreadsheet_id = db.Column(db.String(128), nullable=False, index=True)
+    sheet_gid = db.Column(db.String(64), nullable=False, index=True)
+    sheet_title = db.Column(db.String(120), nullable=False, index=True)
+    shift = db.Column(db.String(30), nullable=False, index=True)
+    source_rows_json = db.Column(db.Text, nullable=False)
+    before_values_json = db.Column(db.Text, nullable=False)
+    after_values_json = db.Column(db.Text, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    undone_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+
 class DeliveryResearchContact(db.Model):
     __tablename__ = 'delivery_research_contact'
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import math
+import json
 import secrets
 import string
 import unicodedata
@@ -15,7 +16,15 @@ from typing import Any
 import requests
 from extensions import db
 from flask import has_request_context, url_for
-from models import Animal, PmoVaccinationAnimal, PmoVaccinationVisit, Species, User, Vacina
+from models import (
+    Animal,
+    PmoRouteOptimizationBackup,
+    PmoVaccinationAnimal,
+    PmoVaccinationVisit,
+    Species,
+    User,
+    Vacina,
+)
 from sqlalchemy import func
 from services.sfa_service import (
     _extract_google_sheet_id,
@@ -73,11 +82,10 @@ PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
 PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000"
 PMO_DEFAULT_ROUTE_ORIGIN_COORDS = (-20.7122478, -47.8838617)
 PMO_ROUTE_GEOCODE_LIMIT_ENV = "PMO_ROUTE_GEOCODE_LIMIT"
-PMO_ROUTE_LAT_COLUMN_INDEX = 18
-PMO_ROUTE_LNG_COLUMN_INDEX = 19
 
 # Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
 PMO_TUTOR_NAME_COLUMN_INDEX = 0
+_PMO_ROUTE_COORDS_CACHE: dict[str, tuple[float, float]] = {}
 
 # Cores claras do painel padrão do Google Sheets para destacar o status da visita
 # diretamente na célula do nome do tutor.
@@ -251,6 +259,9 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     normalized = _normalize_text(address)
     if not normalized:
         return None
+    cache_key = _strip_accents(normalized).lower()
+    if cache_key in _PMO_ROUTE_COORDS_CACHE:
+        return _PMO_ROUTE_COORDS_CACHE[cache_key]
     parts = _pmo_address_parts(normalized)
     query = ", ".join(
         part for part in (
@@ -272,7 +283,9 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
         response.raise_for_status()
         payload = response.json() or []
         best = payload[0]
-        return float(best["lat"]), float(best["lon"])
+        coords = float(best["lat"]), float(best["lon"])
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
     except (requests.RequestException, IndexError, KeyError, TypeError, ValueError):
         return None
 
@@ -282,37 +295,6 @@ def _pmo_route_geocode_limit() -> int:
         return max(0, int(os.getenv(PMO_ROUTE_GEOCODE_LIMIT_ENV, "18")))
     except ValueError:
         return 18
-
-
-def _pmo_float_cell(value: Any) -> float | None:
-    text = _normalize_text(value).replace(",", ".")
-    if not text:
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
-def _pmo_cached_row_coords(sheet_values: list[list[Any]], source_row: int) -> tuple[float, float] | None:
-    if source_row <= 0 or source_row > len(sheet_values):
-        return None
-    row = sheet_values[source_row - 1]
-    lat = _pmo_float_cell(row[PMO_ROUTE_LAT_COLUMN_INDEX] if len(row) > PMO_ROUTE_LAT_COLUMN_INDEX else "")
-    lng = _pmo_float_cell(row[PMO_ROUTE_LNG_COLUMN_INDEX] if len(row) > PMO_ROUTE_LNG_COLUMN_INDEX else "")
-    if lat is None or lng is None:
-        return None
-    return lat, lng
-
-
-def _pmo_set_row_coords(sheet_values: list[list[Any]], source_row: int, coords: tuple[float, float]) -> None:
-    while len(sheet_values) < source_row:
-        sheet_values.append([])
-    row = sheet_values[source_row - 1]
-    while len(row) <= PMO_ROUTE_LNG_COLUMN_INDEX:
-        row.append("")
-    row[PMO_ROUTE_LAT_COLUMN_INDEX] = f"{coords[0]:.7f}"
-    row[PMO_ROUTE_LNG_COLUMN_INDEX] = f"{coords[1]:.7f}"
 
 
 def _pmo_route_origin_address() -> str:
@@ -837,7 +819,37 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
     }
 
 
-def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
+def _route_preview_item(visit: PmoVaccinationVisit, coords: tuple[float, float] | None, order: int) -> dict[str, Any]:
+    return {
+        "visitId": visit.id,
+        "sourceRow": visit.source_row,
+        "order": order,
+        "tutor": visit.tutor_name or "",
+        "address": visit.address or "",
+        "shift": visit.shift or "",
+        "located": bool(coords),
+    }
+
+
+def _sync_visit_source_rows_after_route(
+    *,
+    spreadsheet_id: str,
+    sheet_gid: str,
+    sheet_title: str,
+    assignments: list[tuple[PmoVaccinationVisit, int]],
+) -> None:
+    for visit, _row in assignments:
+        visit.source_row = -visit.id
+    db.session.flush()
+    for visit, source_row in assignments:
+        visit.source_row = source_row
+        visit.sheet_title = sheet_title
+        visit.sheet_gid = sheet_gid
+        visit.spreadsheet_id = spreadsheet_id
+    db.session.commit()
+
+
+def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
     normalized_shift = _normalize_shift(shift)
     if normalized_shift not in {"Manha", "Tarde"}:
         raise ValueError("Escolha o turno Manhã ou Tarde antes de otimizar a rota.")
@@ -854,26 +866,14 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
         .order_by(PmoVaccinationVisit.source_row.asc(), PmoVaccinationVisit.id.asc())
         .all()
     )
-    selected = [
-        visit
-        for visit in visits
-        if _normalize_shift(visit.shift) == normalized_shift and visit.source_row and visit.source_row > 1
-    ]
-    if len(selected) < 2:
-        raise ValueError("Este turno precisa de pelo menos dois endereços sincronizados para otimizar.")
-
-    spreadsheet_id = selected[0].spreadsheet_id
-    resolved_gid = sheet_gid or selected[0].sheet_gid
-    resolved_title = sheet_title or selected[0].sheet_title
+    spreadsheet_id = visits[0].spreadsheet_id if visits else ""
+    resolved_gid = sheet_gid or (visits[0].sheet_gid if visits else "")
+    resolved_title = sheet_title or (visits[0].sheet_title if visits else "")
     if not spreadsheet_id or not resolved_title:
         raise ValueError("Sincronize a aba antes de otimizar a rota.")
 
-    origin_coords = _pmo_route_origin_coords()
-    if not origin_coords:
-        raise ValueError("Não foi possível localizar a Vigilância Sanitária de Orlândia para iniciar a rota.")
-
     service = _get_sheets_service_rw()
-    range_value = f"{_quote_sheet_title(resolved_title)}!{DEFAULT_SHEET_RANGE}"
+    range_value = f"{_quote_sheet_title(resolved_title)}!A:R"
     response = (
         service.spreadsheets()
         .values()
@@ -881,6 +881,26 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
         .execute()
     )
     sheet_values = response.get("values", [])
+    parsed_rows_by_source = {
+        int(row["sourceRow"]): row
+        for row in parse_vacina_pmo_rows(sheet_values)
+        if int(row.get("sourceRow") or 0) > 0
+    }
+    selected = [
+        visit
+        for visit in visits
+        if visit.source_row
+        and visit.source_row > 1
+        and visit.source_row in parsed_rows_by_source
+        and _normalize_shift(parsed_rows_by_source[visit.source_row].get("shift")) == normalized_shift
+    ]
+    if len(selected) < 2:
+        raise ValueError("Este turno precisa de pelo menos dois endereços sincronizados para otimizar.")
+
+    origin_coords = _pmo_route_origin_coords()
+    if not origin_coords:
+        raise ValueError("Não foi possível localizar a Vigilância Sanitária de Orlândia para iniciar a rota.")
+
     target_rows = sorted(visit.source_row for visit in selected if visit.source_row)
     needed_rows = max(target_rows)
     while len(sheet_values) < needed_rows:
@@ -891,12 +911,10 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
     geocoded_now = 0
     geocode_limit = _pmo_route_geocode_limit()
     for visit in selected:
-        coords = _pmo_cached_row_coords(sheet_values, visit.source_row or 0)
-        if not coords and geocoded_now < geocode_limit:
+        coords = None
+        if geocoded_now < geocode_limit:
             coords = _pmo_geocode_address(visit.address or "")
             geocoded_now += 1
-            if coords:
-                _pmo_set_row_coords(sheet_values, visit.source_row or 0, coords)
         if coords:
             geocoded.append((visit, coords))
         else:
@@ -908,38 +926,172 @@ def optimize_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shi
         )
 
     optimized = _nearest_neighbor_route(origin_coords, geocoded) + ungeocoded
+    return {
+        "normalized_shift": normalized_shift,
+        "spreadsheet_id": spreadsheet_id,
+        "sheet_gid": resolved_gid,
+        "sheet_title": resolved_title,
+        "service": service,
+        "sheet_values": sheet_values,
+        "selected": selected,
+        "target_rows": target_rows,
+        "optimized": optimized,
+        "coords_by_visit_id": {visit.id: coords for visit, coords in geocoded},
+        "unlocated_count": len(ungeocoded),
+        "geocoded_now": geocoded_now,
+    }
+
+
+def preview_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
+    context = _pmo_route_context(sheet_gid=sheet_gid, sheet_title=sheet_title, shift=shift)
+    coords_by_visit_id = context["coords_by_visit_id"]
+    return {
+        "sheet_gid": context["sheet_gid"],
+        "sheet_title": context["sheet_title"],
+        "spreadsheet_id": context["spreadsheet_id"],
+        "shift": context["normalized_shift"],
+        "origin": _pmo_route_origin_address(),
+        "optimized_count": len(context["optimized"]),
+        "unlocated_count": context["unlocated_count"],
+        "geocoded_now": context["geocoded_now"],
+        "preview": [
+            _route_preview_item(visit, coords_by_visit_id.get(visit.id), index)
+            for index, visit in enumerate(context["optimized"], start=1)
+        ],
+    }
+
+
+def optimize_vacina_pmo_route(
+    *,
+    sheet_gid: str = "",
+    sheet_title: str = "",
+    shift: str = "",
+    created_by_id: int | None = None,
+) -> dict[str, Any]:
+    context = _pmo_route_context(sheet_gid=sheet_gid, sheet_title=sheet_title, shift=shift)
+    spreadsheet_id = context["spreadsheet_id"]
+    resolved_gid = context["sheet_gid"]
+    resolved_title = context["sheet_title"]
+    service = context["service"]
+    sheet_values = context["sheet_values"]
+    selected = context["selected"]
+    target_rows = context["target_rows"]
+    optimized = context["optimized"]
 
     source_rows_by_visit_id = {
         visit.id: list(sheet_values[(visit.source_row or 1) - 1])
         for visit in selected
     }
+    before_values = [list(sheet_values[row - 1]) for row in target_rows]
     for destination_row, visit in zip(target_rows, optimized):
         sheet_values[destination_row - 1] = source_rows_by_visit_id.get(visit.id, [])
+    after_values = [list(sheet_values[row - 1]) for row in target_rows]
 
-    service.spreadsheets().values().update(
-        spreadsheetId=spreadsheet_id,
-        range=range_value,
-        valueInputOption="USER_ENTERED",
-        body={"values": sheet_values},
-    ).execute()
-
-    for visit in selected:
-        visit.source_row = -visit.id
+    backup = PmoRouteOptimizationBackup(
+        spreadsheet_id=spreadsheet_id,
+        sheet_gid=resolved_gid,
+        sheet_title=resolved_title,
+        shift=context["normalized_shift"],
+        source_rows_json=json.dumps(target_rows, ensure_ascii=False),
+        before_values_json=json.dumps(before_values, ensure_ascii=False),
+        after_values_json=json.dumps(after_values, ensure_ascii=False),
+        created_by_id=created_by_id,
+    )
+    db.session.add(backup)
     db.session.flush()
-    for destination_row, visit in zip(target_rows, optimized):
-        visit.source_row = destination_row
-        visit.sheet_title = resolved_title
-        visit.sheet_gid = resolved_gid
-    db.session.commit()
+
+    for destination_row in target_rows:
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(resolved_title)}!A{destination_row}:R{destination_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [sheet_values[destination_row - 1]]},
+        ).execute()
+
+    _sync_visit_source_rows_after_route(
+        spreadsheet_id=spreadsheet_id,
+        sheet_gid=resolved_gid,
+        sheet_title=resolved_title,
+        assignments=list(zip(optimized, target_rows)),
+    )
 
     state = get_saved_vacina_pmo_rows(sheet_gid=resolved_gid, sheet_title=resolved_title)
     return {
         **state,
-        "shift": normalized_shift,
+        "shift": context["normalized_shift"],
         "origin": _pmo_route_origin_address(),
         "optimized_count": len(optimized),
-        "unlocated_count": len(ungeocoded),
-        "geocoded_now": geocoded_now,
+        "unlocated_count": context["unlocated_count"],
+        "geocoded_now": context["geocoded_now"],
+        "backup_id": backup.id,
+    }
+
+
+def undo_last_vacina_pmo_route_optimization(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
+    normalized_shift = _normalize_shift(shift)
+    query = PmoRouteOptimizationBackup.query.filter(PmoRouteOptimizationBackup.undone_at.is_(None))
+    if sheet_gid:
+        query = query.filter(PmoRouteOptimizationBackup.sheet_gid == sheet_gid)
+    if sheet_title:
+        query = query.filter(PmoRouteOptimizationBackup.sheet_title == sheet_title)
+    if normalized_shift:
+        query = query.filter(PmoRouteOptimizationBackup.shift == normalized_shift)
+    backup = query.order_by(PmoRouteOptimizationBackup.created_at.desc(), PmoRouteOptimizationBackup.id.desc()).first()
+    if not backup:
+        raise ValueError("Não há otimização recente para desfazer neste turno.")
+
+    source_rows = json.loads(backup.source_rows_json)
+    before_values = json.loads(backup.before_values_json)
+    service = _get_sheets_service_rw()
+    for source_row, row_values in zip(source_rows, before_values):
+        service.spreadsheets().values().update(
+            spreadsheetId=backup.spreadsheet_id,
+            range=f"{_quote_sheet_title(backup.sheet_title)}!A{source_row}:R{source_row}",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row_values]},
+        ).execute()
+
+    parsed_by_source = {
+        int(row["sourceRow"]): row
+        for row in parse_vacina_pmo_rows(before_values)
+        if int(row.get("sourceRow") or 0) > 0
+    }
+    assignments: list[tuple[PmoVaccinationVisit, int]] = []
+    candidates = (
+        _query_sheet_visits(sheet_gid=backup.sheet_gid, sheet_title=backup.sheet_title, spreadsheet_id=backup.spreadsheet_id)
+        .all()
+    )
+    for offset, source_row in enumerate(source_rows):
+        row_values = before_values[offset]
+        parsed = parse_vacina_pmo_rows([row_values])
+        if not parsed:
+            continue
+        row = parsed[0]
+        match = next(
+            (
+                visit for visit in candidates
+                if _normalize_text(visit.tutor_name) == _normalize_text(row.get("tutor"))
+                and _normalize_text(visit.address) == _normalize_text(row.get("address"))
+            ),
+            None,
+        )
+        if match:
+            assignments.append((match, int(source_row)))
+    if assignments:
+        _sync_visit_source_rows_after_route(
+            spreadsheet_id=backup.spreadsheet_id,
+            sheet_gid=backup.sheet_gid,
+            sheet_title=backup.sheet_title,
+            assignments=assignments,
+        )
+
+    backup.undone_at = utcnow()
+    db.session.commit()
+    state = get_saved_vacina_pmo_rows(sheet_gid=backup.sheet_gid, sheet_title=backup.sheet_title)
+    return {
+        **state,
+        "shift": backup.shift,
+        "undone_backup_id": backup.id,
     }
 
 

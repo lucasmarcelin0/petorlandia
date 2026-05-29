@@ -4533,12 +4533,57 @@ def vacina_pmo_route_optimize():
             sheet_gid=(payload.get('sheet_gid') or '').strip(),
             sheet_title=(payload.get('sheet_title') or '').strip(),
             shift=(payload.get('shift') or '').strip(),
+            created_by_id=current_user.id,
         )
         return jsonify({'success': True, **result})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
         current_app.logger.exception("Falha ao otimizar rota Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/route/preview', methods=['POST'])
+@login_required
+def vacina_pmo_route_preview():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import preview_vacina_pmo_route
+
+        payload = request.get_json(silent=True) or {}
+        result = preview_vacina_pmo_route(
+            sheet_gid=(payload.get('sheet_gid') or '').strip(),
+            sheet_title=(payload.get('sheet_title') or '').strip(),
+            shift=(payload.get('shift') or '').strip(),
+        )
+        return jsonify({'success': True, **result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao pré-visualizar rota Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/route/undo', methods=['POST'])
+@login_required
+def vacina_pmo_route_undo():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import undo_last_vacina_pmo_route_optimization
+
+        payload = request.get_json(silent=True) or {}
+        result = undo_last_vacina_pmo_route_optimization(
+            sheet_gid=(payload.get('sheet_gid') or '').strip(),
+            sheet_title=(payload.get('sheet_title') or '').strip(),
+            shift=(payload.get('shift') or '').strip(),
+        )
+        return jsonify({'success': True, **result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao desfazer rota Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 

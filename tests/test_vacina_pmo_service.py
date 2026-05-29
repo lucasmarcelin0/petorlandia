@@ -12,15 +12,17 @@ from services.vacina_pmo_service import (
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
     optimize_vacina_pmo_route,
+    preview_vacina_pmo_route,
     parse_vacina_pmo_rows,
     persist_vacina_pmo_rows,
     save_vacina_pmo_evaluation,
     submit_vacina_pmo_request,
+    undo_last_vacina_pmo_route_optimization,
     update_vacina_pmo_animal_status,
     update_vacina_pmo_visit_attended_by,
 )
 from extensions import db
-from models import Animal, PmoVaccinationVisit, Species, User, Vacina
+from models import Animal, PmoRouteOptimizationBackup, PmoVaccinationVisit, Species, User, Vacina
 
 
 class _FakeSheetsService:
@@ -45,9 +47,21 @@ class _FakeSheetsService:
         self.updates.append(call)
         if range.endswith("!A:T"):
             self.sheet_values = body.get("values", [])
+        else:
+            import re
+
+            match = re.search(r"!A(\d+):R\1$", range)
+            if match:
+                row_number = int(match.group(1))
+                while len(self.sheet_values) < row_number:
+                    self.sheet_values.append([])
+                current_tail = self.sheet_values[row_number - 1][18:]
+                self.sheet_values[row_number - 1] = (body.get("values") or [[]])[0] + current_tail
         return self
 
     def get(self, *, spreadsheetId, range, **kwargs):
+        if range.endswith("!A:R"):
+            return _FakeSheetsExecute({"values": [row[:18] for row in self.sheet_values]})
         return _FakeSheetsExecute({"values": self.sheet_values})
 
     def batchUpdate(self, *, spreadsheetId, body):
@@ -318,12 +332,16 @@ def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkey
             "sourceRow": 5,
         },
     ]
+    def sheet_row(tutor, street, number, neighborhood, animal, date, shift, tail):
+        row = [tutor, street, number, "", neighborhood, "16999999999", "", 1, 0, animal, "", "", "", "", "", "", date, shift]
+        return row + tail
+
     fake_service = _FakeSheetsService([
         ["Nome completo do tutor", "Endereço"],
-        ["Tutor Longe", "Rua Longe", "30", "", "Centro"],
-        ["Tutor Perto", "Rua Perto", "10", "", "Centro"],
-        ["Tutor Meio", "Rua Meio", "20", "", "Centro"],
-        ["Tutor Tarde", "Rua Tarde", "40", "", "Centro"],
+        sheet_row("Tutor Longe", "Rua Longe", "30", "Centro", "Longe", "28/05/2026", "Manhã", ["whatsapp-longe-1", "whatsapp-longe-2"]),
+        sheet_row("Tutor Perto", "Rua Perto", "10", "Centro", "Perto", "28/05/2026", "Manhã", ["whatsapp-perto-1", "whatsapp-perto-2"]),
+        sheet_row("Tutor Meio", "Rua Meio", "20", "Centro", "Meio", "28/05/2026", "Manhã", ["whatsapp-meio-1", "whatsapp-meio-2"]),
+        sheet_row("Tutor Tarde", "Rua Tarde", "40", "Centro", "Tarde", "28/05/2026", "Tarde", ["whatsapp-tarde-1", "whatsapp-tarde-2"]),
     ])
     coords = {
         "Rua Perto, 10, Centro": (0.0, 1.0),
@@ -341,6 +359,10 @@ def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkey
             sheet_gid="123",
             sheet_title="28/05/2026",
         )
+        preview = preview_vacina_pmo_route(sheet_gid="123", sheet_title="28/05/2026", shift="Manhã")
+        assert [item["tutor"] for item in preview["preview"]] == ["Tutor Perto", "Tutor Meio", "Tutor Longe"]
+        assert fake_service.updates == []
+
         result = optimize_vacina_pmo_route(sheet_gid="123", sheet_title="28/05/2026", shift="Manhã")
 
     morning = [row["tutor"] for row in result["rows"] if row["shift"] == "Manha"]
@@ -351,6 +373,23 @@ def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkey
     assert fake_service.sheet_values[2][0] == "Tutor Meio"
     assert fake_service.sheet_values[3][0] == "Tutor Longe"
     assert fake_service.sheet_values[4][0] == "Tutor Tarde"
+    assert fake_service.sheet_values[1][18:] == ["whatsapp-longe-1", "whatsapp-longe-2"]
+    assert fake_service.sheet_values[2][18:] == ["whatsapp-perto-1", "whatsapp-perto-2"]
+    assert fake_service.sheet_values[3][18:] == ["whatsapp-meio-1", "whatsapp-meio-2"]
+    assert fake_service.sheet_values[4][18:] == ["whatsapp-tarde-1", "whatsapp-tarde-2"]
+    assert all(not update["range"].endswith("!A:T") for update in fake_service.updates)
+
+    with app.app_context():
+        backup = PmoRouteOptimizationBackup.query.filter_by(sheet_gid="123", shift="Manha").first()
+        assert backup is not None
+        undo = undo_last_vacina_pmo_route_optimization(sheet_gid="123", sheet_title="28/05/2026", shift="Manhã")
+
+    morning_after_undo = [row["tutor"] for row in undo["rows"] if row["shift"] == "Manha"]
+    assert morning_after_undo == ["Tutor Longe", "Tutor Perto", "Tutor Meio"]
+    assert fake_service.sheet_values[1][0] == "Tutor Longe"
+    assert fake_service.sheet_values[2][0] == "Tutor Perto"
+    assert fake_service.sheet_values[3][0] == "Tutor Meio"
+    assert fake_service.sheet_values[1][18:] == ["whatsapp-longe-1", "whatsapp-longe-2"]
 
 
 def test_submit_vacina_pmo_request_creates_local_pending_request(app, monkeypatch):
