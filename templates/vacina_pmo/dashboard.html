@@ -838,14 +838,10 @@
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
-  function onTheWayPhone(row) {
-    return row.phone1 || row.phone2 || '';
-  }
-
-  function renderOnTheWayButton(row) {
-    const url = buildOnTheWayMessage(row);
+  function renderOnTheWayButton(row, phone, label = 'A caminho') {
+    const url = buildOnTheWayMessage(row, phone);
     if (!url) return '';
-    return `<a class="btn btn-sm btn-success pmo-onway-btn" href="${url}" target="_blank" rel="noopener" title="Avisar que estamos a caminho" aria-label="Avisar pelo WhatsApp que estamos a caminho"><i class="fab fa-whatsapp"></i>A caminho</a>`;
+    return `<a class="btn btn-sm btn-success pmo-onway-btn" href="${url}" target="_blank" rel="noopener" title="Avisar que estamos a caminho" aria-label="Avisar pelo WhatsApp que estamos a caminho"><i class="fab fa-whatsapp"></i>${escapeHtml(label)}</a>`;
   }
 
   const STATUS_META = {
@@ -868,8 +864,7 @@
     return { total, done, pct };
   }
 
-  function buildOnTheWayMessage(row) {
-    const phone = onTheWayPhone(row);
+  function buildOnTheWayMessage(row, phone) {
     if (!phone) return '';
     const names = row.animals.length ? row.animals.map((animal) => animal.name).join(', ') : 'seu animal';
     const text = `Olá, ${row.tutor}! Aqui é a equipe de vacinação antirrábica da Prefeitura de Orlândia. A sua casa é a próxima da nossa rota e já estamos a caminho. Por favor, mantenha ${names} por perto e contido(s) para facilitar a vacinação. Até já!`;
@@ -1307,7 +1302,8 @@
           ${renderNote(row)}
         </div>
         <div class="pmo-card-actions">
-          ${renderOnTheWayButton(row)}
+          ${row.phone1 ? renderOnTheWayButton(row, row.phone1, row.phone2 ? 'A caminho 1' : 'A caminho') : ''}
+          ${row.phone2 ? renderOnTheWayButton(row, row.phone2, row.phone1 ? 'A caminho 2' : 'A caminho') : ''}
           ${wa1 ? `<a class="btn btn-sm btn-outline-success pmo-wa-btn" href="${wa1}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp 1</a>` : ''}
           ${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-wa-btn" href="${wa2}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp 2</a>` : ''}
         </div>
