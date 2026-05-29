@@ -150,7 +150,45 @@
   }
 
   .pmo-address {
-    max-width: 260px;
+    max-width: 300px;
+  }
+
+  .pmo-address-text {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1e293b;
+  }
+
+  /* Cores de status no seletor da lista de animais */
+  .pmo-status-select {
+    font-weight: 600;
+  }
+
+  .pmo-status-select[data-status="pendente"] {
+    background-color: #ffffff;
+    color: #1e293b;
+  }
+
+  .pmo-status-select[data-status="vacinado"] {
+    background-color: #d8edd3;
+    color: #14532d;
+  }
+
+  .pmo-status-select[data-status="remarcar"] {
+    background-color: #fff2cc;
+    color: #854d0e;
+  }
+
+  .pmo-status-select[data-status="ausente"],
+  .pmo-status-select[data-status="recusou"] {
+    background-color: #f4cccc;
+    color: #991b1b;
+  }
+
+  .pmo-status-select option {
+    background-color: #ffffff;
+    color: #1e293b;
   }
 
   .pmo-note {
@@ -658,7 +696,8 @@
     const mapLink = mapsUrl
       ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="Abrir rota no Google Maps" aria-label="Abrir rota no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
       : '';
-    return `<div class="d-flex align-items-start gap-2"><span>${label}</span>${mapLink}</div>`;
+    const textClass = compact ? '' : ' class="pmo-address-text"';
+    return `<div class="d-flex align-items-start gap-2"><span${textClass}>${label}</span>${mapLink}</div>`;
   }
 
   function makePassword(seed) {
@@ -1073,7 +1112,7 @@
           <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
         </div>
-        <select class="form-select form-select-sm" data-action="animal-status" data-animal-index="${index}">
+        <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
           ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
         </select>
       </div>
@@ -1276,6 +1315,7 @@
       const animal = row.animals[Number(event.target.dataset.animalIndex)];
       if (animal) {
         animal.status = event.target.value;
+        event.target.dataset.status = event.target.value;
         try {
           await saveAnimalStatus(animal, event.target.value);
         } catch (error) {
