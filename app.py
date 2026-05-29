@@ -4119,7 +4119,7 @@ def _pmo_protocol_label(visit):
 
 def _pmo_status_labels():
     return {
-        'pendente': 'Aguardando visita',
+        'pendente': 'Vacinação pendente',
         'vacinado': 'Vacinado',
         'ausente': 'Morador ausente',
         'remarcar': 'Remarcar visita',
