@@ -191,6 +191,27 @@ def test_parse_vacina_pmo_rows_splits_partial_house_animals():
     ]
 
 
+def test_pmo_address_queries_try_google_like_variants():
+    queries = vacina_pmo_service._pmo_address_queries(
+        "Avenida H 792 - (Avenida 23 205 - antigo), 792, Casa da esquina, Gruta"
+    )
+
+    joined = "\n".join(queries)
+    assert "Orlândia, SP, Brasil" in joined
+    assert "Gruta" in joined
+    assert "Avenida H 792" in joined
+    assert any("Gruta, Orlândia" in query for query in queries)
+
+
+def test_pmo_extract_best_nominatim_coords_prefers_orlandia_bounds():
+    payload = [
+        {"lat": "-23.55", "lon": "-46.63", "display_name": "Rua 1, São Paulo, Brasil"},
+        {"lat": "-20.7166", "lon": "-47.8614", "display_name": "Rua 1, Orlândia, São Paulo, Brasil"},
+    ]
+
+    assert vacina_pmo_service._pmo_extract_best_nominatim_coords(payload) == (-20.7166, -47.8614)
+
+
 def test_pmo_sync_persists_and_preserves_animal_status(app):
     row = {
         "id": "sheet-1",

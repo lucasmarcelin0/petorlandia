@@ -82,6 +82,13 @@ PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
 PMO_DEFAULT_ROUTE_ORIGIN_ADDRESS = "Vigilância Sanitária Municipal, Rua Um, 17, Centro, Orlândia, SP, 14620-000"
 PMO_DEFAULT_ROUTE_ORIGIN_COORDS = (-20.7122478, -47.8838617)
 PMO_ROUTE_GEOCODE_LIMIT_ENV = "PMO_ROUTE_GEOCODE_LIMIT"
+PMO_ROUTE_GEOCODE_VARIANTS_ENV = "PMO_ROUTE_GEOCODE_VARIANTS"
+PMO_ORLANDIA_BOUNDS = {
+    "min_lat": -20.86,
+    "max_lat": -20.55,
+    "min_lng": -48.08,
+    "max_lng": -47.68,
+}
 
 # Índice 0-based da coluna A (nome do tutor) para a API de formatação do Sheets.
 PMO_TUTOR_NAME_COLUMN_INDEX = 0
@@ -255,6 +262,85 @@ def _pmo_address_parts(address: str) -> dict[str, str]:
     }
 
 
+def _pmo_clean_address_fragment(value: str) -> str:
+    text = _normalize_text(value)
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"\b(antigo|nova|novo)\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+-\s+", " ", text)
+    text = re.sub(r"\bR\.\s*", "Rua ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bAv\.\s*", "Avenida ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bAl\.\s*", "Alameda ", text, flags=re.IGNORECASE)
+    return _normalize_text(text)
+
+
+def _pmo_unique_queries(queries: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for query in queries:
+        normalized = _normalize_text(query)
+        if not normalized:
+            continue
+        key = _strip_accents(normalized).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(normalized)
+    return unique
+
+
+def _pmo_route_geocode_variants() -> int:
+    try:
+        return max(1, int(os.getenv(PMO_ROUTE_GEOCODE_VARIANTS_ENV, "5")))
+    except ValueError:
+        return 5
+
+
+def _pmo_address_queries(address: str) -> list[str]:
+    normalized = _pmo_clean_address_fragment(address)
+    parts = _pmo_address_parts(normalized)
+    street = _pmo_clean_address_fragment(parts["rua"])
+    number = _pmo_clean_address_fragment(parts["numero"])
+    neighborhood = _pmo_clean_address_fragment(parts["bairro"])
+    street_no_number = _normalize_text(re.sub(r"\b\d+[A-Za-z]?\b", " ", street))
+    city = "Orlândia, SP, Brasil"
+    return _pmo_unique_queries([
+        f"{normalized}, {city}",
+        ", ".join(part for part in (street, number, neighborhood, city) if part),
+        ", ".join(part for part in (street, number, city) if part),
+        ", ".join(part for part in (street_no_number, number, neighborhood, city) if part),
+        ", ".join(part for part in (street_no_number, neighborhood, city) if part),
+        ", ".join(part for part in (street, neighborhood, city) if part),
+        ", ".join(part for part in (neighborhood, city) if part),
+    ])
+
+
+def _pmo_coords_in_orlandia(coords: tuple[float, float]) -> bool:
+    lat, lng = coords
+    return (
+        PMO_ORLANDIA_BOUNDS["min_lat"] <= lat <= PMO_ORLANDIA_BOUNDS["max_lat"]
+        and PMO_ORLANDIA_BOUNDS["min_lng"] <= lng <= PMO_ORLANDIA_BOUNDS["max_lng"]
+    )
+
+
+def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[float, float] | None:
+    for item in payload:
+        try:
+            coords = float(item["lat"]), float(item["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        display = _strip_accents(str(item.get("display_name") or "")).lower()
+        if "orlandia" in display and _pmo_coords_in_orlandia(coords):
+            return coords
+    for item in payload:
+        try:
+            coords = float(item["lat"]), float(item["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if _pmo_coords_in_orlandia(coords):
+            return coords
+    return None
+
+
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     normalized = _normalize_text(address)
     if not normalized:
@@ -262,32 +348,23 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     cache_key = _strip_accents(normalized).lower()
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
-    parts = _pmo_address_parts(normalized)
-    query = ", ".join(
-        part for part in (
-            parts["rua"],
-            parts["numero"],
-            parts["bairro"],
-            "Orlândia",
-            "SP",
-            "Brasil",
-        ) if part
-    )
-    try:
-        response = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
-            headers={"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"},
-            timeout=2,
-        )
-        response.raise_for_status()
-        payload = response.json() or []
-        best = payload[0]
-        coords = float(best["lat"]), float(best["lon"])
-        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
-        return coords
-    except (requests.RequestException, IndexError, KeyError, TypeError, ValueError):
-        return None
+    session = requests.Session()
+    session.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
+    for query in _pmo_address_queries(normalized)[:_pmo_route_geocode_variants()]:
+        try:
+            response = session.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": query, "format": "json", "limit": 3, "countrycodes": "br"},
+                timeout=2,
+            )
+            response.raise_for_status()
+            coords = _pmo_extract_best_nominatim_coords(response.json() or [])
+        except (requests.RequestException, ValueError):
+            coords = None
+        if coords:
+            _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+            return coords
+    return None
 
 
 def _pmo_route_geocode_limit() -> int:
