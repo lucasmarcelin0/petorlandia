@@ -99,9 +99,28 @@
     align-items: start;
   }
 
+  .pmo-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
   .pmo-card-title {
     font-weight: 800;
     line-height: 1.15;
+  }
+
+  .pmo-onway-btn {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1rem;
   }
 
   .pmo-card-address {
@@ -717,6 +736,24 @@
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   }
 
+  function onTheWayPhone(row) {
+    return row.phone1 || row.phone2 || '';
+  }
+
+  function renderOnTheWayButton(row) {
+    const url = buildOnTheWayMessage(row);
+    if (!url) return '';
+    return `<a class="btn btn-sm btn-success pmo-onway-btn" href="${url}" target="_blank" rel="noopener" title="Avisar que estamos a caminho" aria-label="Avisar pelo WhatsApp que estamos a caminho"><i class="fab fa-whatsapp"></i></a>`;
+  }
+
+  function buildOnTheWayMessage(row) {
+    const phone = onTheWayPhone(row);
+    if (!phone) return '';
+    const names = row.animals.length ? row.animals.map((animal) => animal.name).join(', ') : 'seu animal';
+    const text = `Olá, ${row.tutor}! Aqui é a equipe de vacinação antirrábica da Prefeitura de Orlândia. A sua casa é a próxima da nossa rota e já estamos a caminho. Por favor, mantenha ${names} por perto e contido(s) para facilitar a vacinação. Até já!`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  }
+
   function inferVisitStatus(animals) {
     if (!animals.length) return 'pendente';
     const statuses = animals.map((animal) => animal.status);
@@ -1127,7 +1164,10 @@
       <article class="pmo-visit-card" data-id="${row.id}">
         <div class="pmo-card-head">
           <div>
-            <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
+            <div class="pmo-card-title-row">
+              <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
+              ${renderOnTheWayButton(row)}
+            </div>
             <div class="pmo-card-address">${renderAddress(row, true)}</div>
             ${renderAttendedBy(row)}
           </div>
