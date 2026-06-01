@@ -12115,6 +12115,55 @@ def meus_animais():
     return redirect(url_for('list_animals'))
 
 
+def _build_animals_pmo_dates(animals):
+    animal_ids = [animal.id for animal in animals if animal.id]
+    if not animal_ids:
+        return {}
+
+    pmo_animals = (
+        PmoVaccinationAnimal.query
+        .options(
+            joinedload(PmoVaccinationAnimal.visit),
+            joinedload(PmoVaccinationAnimal.vaccine),
+        )
+        .filter(PmoVaccinationAnimal.animal_id.in_(animal_ids))
+        .all()
+    )
+
+    pmo_dates = {}
+    for pmo_animal in pmo_animals:
+        visit = pmo_animal.visit
+        if not visit:
+            continue
+
+        info = pmo_dates.setdefault(
+            pmo_animal.animal_id,
+            {
+                'requested_date': None,
+                'vaccinated_date': None,
+            },
+        )
+
+        requested_date = getattr(visit, 'requested_date', None)
+        if requested_date and (
+            info['requested_date'] is None or requested_date < info['requested_date']
+        ):
+            info['requested_date'] = requested_date
+
+        vaccinated_date = None
+        if pmo_animal.vaccine and pmo_animal.vaccine.aplicada_em:
+            vaccinated_date = pmo_animal.vaccine.aplicada_em.date()
+        elif pmo_animal.status == 'vacinado':
+            vaccinated_date = visit.vaccine_date
+
+        if vaccinated_date and (
+            info['vaccinated_date'] is None or vaccinated_date > info['vaccinated_date']
+        ):
+            info['vaccinated_date'] = vaccinated_date
+
+    return pmo_dates
+
+
 @app.route('/animals')
 def list_animals():
     page = request.args.get('page', 1, type=int)
@@ -12196,6 +12245,7 @@ def list_animals():
     query = query.order_by(Animal.date_added.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     animals = pagination.items
+    pmo_dates = _build_animals_pmo_dates(animals)
 
     try:
         species_list = list_species()
@@ -12219,6 +12269,7 @@ def list_animals():
         age=age,
         name=name_query,
         tutor_name=tutor_name_query,
+        pmo_dates=pmo_dates,
         is_admin=_is_admin(),
         show_all=show_all
     )

@@ -2539,6 +2539,7 @@ class PmoVaccinationVisit(db.Model):
     phone2 = db.Column(db.String(32), nullable=True)
     dogs = db.Column(db.Integer, nullable=False, default=0)
     cats = db.Column(db.Integer, nullable=False, default=0)
+    requested_date = db.Column(db.Date, nullable=True)
     vaccine_date = db.Column(db.Date, nullable=True)
     shift = db.Column(db.String(30), nullable=True)
     note = db.Column(db.Text, nullable=True)

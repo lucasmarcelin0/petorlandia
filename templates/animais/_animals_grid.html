@@ -4,6 +4,7 @@
     {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] and animal.owner != current_user %}
       {# pula esse animal #}
     {% else %}
+      {% set pmo_date_info = pmo_dates.get(animal.id) if pmo_dates is defined else none %}
       {# renderiza normalmente #}
       <div class="col" id="animal-card-{{ animal.id }}">
         <div class="card h-100 shadow-sm border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %} overflow-hidden">
@@ -24,6 +25,12 @@
                 </h5>
                 {% if animal.date_added %}
                 <p class="text-muted small mb-0">Adicionado em {{ animal.date_added.strftime('%d/%m/%Y') }}</p>
+                {% endif %}
+                {% if pmo_date_info and pmo_date_info.requested_date %}
+                <p class="text-muted small mb-0">Vacina solicitada em {{ pmo_date_info.requested_date.strftime('%d/%m/%Y') }}</p>
+                {% endif %}
+                {% if pmo_date_info and pmo_date_info.vaccinated_date %}
+                <p class="text-muted small mb-0">Vacinado em {{ pmo_date_info.vaccinated_date.strftime('%d/%m/%Y') }}</p>
                 {% endif %}
               </div>
               {% if animal.modo == 'adotado' %}

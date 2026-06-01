@@ -191,6 +191,41 @@ def test_parse_vacina_pmo_rows_splits_partial_house_animals():
     ]
 
 
+def test_parse_vacina_pmo_rows_reads_request_date_column():
+    rows = [
+        [
+            "5/29/2026",
+            "Leni Maria Mendes",
+            "Alameda 22",
+            "1921",
+            "",
+            "Jardim sao Joao",
+            "16994597803",
+            "16993080634",
+            "2",
+            "0",
+            "Luther e bela",
+            "Eles nao sao bravo mas exige focinheira",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "5/29/2026",
+            "Manha",
+        ],
+    ]
+
+    parsed = parse_vacina_pmo_rows(rows)
+
+    assert len(parsed) == 1
+    assert parsed[0]["tutor"] == "Leni Maria Mendes"
+    assert parsed[0]["requestedDate"] == "2026-05-29"
+    assert parsed[0]["date"] == "2026-05-29"
+    assert parsed[0]["dogs"] == 2
+    assert [animal["name"] for animal in parsed[0]["animals"]] == ["Luther", "bela"]
+
+
 def test_pmo_address_queries_try_google_like_variants():
     queries = vacina_pmo_service._pmo_address_queries(
         "Avenida H 792 - (Avenida 23 205 - antigo), 792, Casa da esquina, Gruta"
@@ -227,6 +262,7 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
             {"name": "Babi", "species": "cao", "status": "pendente"},
         ],
         "note": "",
+        "requestedDate": "2026-05-25",
         "date": "2026-05-28",
         "shift": "Manha",
         "password": "PMOA9999",
@@ -267,6 +303,7 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
         evaluated_state = get_saved_vacina_pmo_rows(sheet_gid="123")
 
     assert state["rows"][0]["note"] == "observacao atualizada na planilha"
+    assert state["rows"][0]["requestedDate"] == "2026-05-25"
     assert state["rows"][0]["password"] == "PMOA9999"
     assert state["rows"][0]["animals"][0]["status"] == "vacinado"
     assert state["rows"][0]["status"] == "parcial"

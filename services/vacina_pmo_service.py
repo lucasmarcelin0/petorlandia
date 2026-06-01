@@ -227,7 +227,7 @@ def format_pmo_phone_for_login(value: Any) -> str:
 
 def _parse_date(value: Any) -> str:
     text = _normalize_text(value)
-    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
         try:
             return datetime.strptime(text, fmt).date().isoformat()
         except ValueError:
@@ -423,6 +423,8 @@ def _is_summary_or_header(row: list[Any]) -> bool:
     first = values[0] if values else ""
     if not joined:
         return True
+    if _parse_date_object(first) and len(values) > 1:
+        first = values[1]
     if not re.search(r"[a-zA-ZÀ-ú]", first):
         return True
     return any(
@@ -466,6 +468,10 @@ def _build_animals(names: list[str], dogs: int, cats: int) -> list[dict[str, str
 
 def _cell(row: list[Any], index: int) -> str:
     return _normalize_text(row[index]) if len(row) > index else ""
+
+
+def _row_column_offset(row: list[Any]) -> int:
+    return 1 if _parse_date_object(_cell(row, 0)) and _cell(row, 1) else 0
 
 
 def _password(seed: str) -> str:
@@ -723,14 +729,23 @@ def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
         if _is_summary_or_header(row):
             continue
 
-        tutor = _cell(row, 0)
-        phone1 = _normalize_phone(_cell(row, 5))
-        phone2 = _normalize_phone(_cell(row, 6))
-        dogs = _parse_count(_cell(row, 7))
-        cats = _parse_count(_cell(row, 8))
-        animals = _build_animals(_split_animals(_cell(row, 9)), dogs, cats)
+        offset = _row_column_offset(row)
+        requested_date = _parse_date(_cell(row, 0)) if offset else None
+        tutor = _cell(row, 0 + offset)
+        phone1 = _normalize_phone(_cell(row, 5 + offset))
+        phone2 = _normalize_phone(_cell(row, 6 + offset))
+        dogs = _parse_count(_cell(row, 7 + offset))
+        cats = _parse_count(_cell(row, 8 + offset))
+        animals = _build_animals(_split_animals(_cell(row, 9 + offset)), dogs, cats)
         address = ", ".join(
-            item for item in (_cell(row, 1), _cell(row, 2), _cell(row, 3), _cell(row, 4)) if item
+            item
+            for item in (
+                _cell(row, 1 + offset),
+                _cell(row, 2 + offset),
+                _cell(row, 3 + offset),
+                _cell(row, 4 + offset),
+            )
+            if item
         )
 
         if not tutor or not (phone1 or phone2 or address) or not (dogs or cats or animals):
@@ -747,13 +762,14 @@ def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
                 "dogs": dogs,
                 "cats": cats,
                 "animals": animals,
-                "note": _cell(row, 10),
-                "date": _parse_date(_cell(row, 16) or _cell(row, 11)),
-                "shift": _normalize_shift(_cell(row, 17)),
+                "note": _cell(row, 10 + offset),
+                "requestedDate": requested_date,
+                "date": _parse_date(_cell(row, 16 + offset) or _cell(row, 11 + offset)),
+                "shift": _normalize_shift(_cell(row, 17 + offset)),
                 "password": _password(phone1 or phone2 or str(index)),
                 "certificateUrl": "",
                 "sourceRow": index + 1,
-                "attendedBy": _cell(row, 14),
+                "attendedBy": _cell(row, 14 + offset),
             }
         )
     return parsed
@@ -877,6 +893,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "cats": visit.cats or 0,
         "animals": animals,
         "note": visit.note or "",
+        "requestedDate": visit.requested_date.isoformat() if visit.requested_date else "",
         "date": visit.vaccine_date.isoformat() if visit.vaccine_date else "",
         "shift": visit.shift or "",
         "password": visit.password,
@@ -1264,6 +1281,7 @@ def persist_vacina_pmo_rows(
         visit.phone2 = phone2
         visit.dogs = int(row.get("dogs") or 0)
         visit.cats = int(row.get("cats") or 0)
+        visit.requested_date = _parse_date_object(row.get("requestedDate"))
         visit.vaccine_date = _parse_date_object(row.get("date"))
         visit.shift = row.get("shift") or ""
         visit.note = row.get("note") or ""
@@ -1866,6 +1884,7 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
                     phone2=_normalize_text(payload.get("phone2")),
                     dogs=int(payload.get("dogs") or 0),
                     cats=int(payload.get("cats") or 0),
+                    requested_date=submitted_at.date(),
                     vaccine_date=None,
                     note=observacao,
                     shift=shift_value,
@@ -1885,6 +1904,7 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
                 existing.phone2 = _normalize_text(payload.get("phone2"))
                 existing.dogs = int(payload.get("dogs") or 0)
                 existing.cats = int(payload.get("cats") or 0)
+                existing.requested_date = submitted_at.date()
                 existing.note = observacao
                 existing.shift = shift_value
                 existing.synced_at = submitted_at

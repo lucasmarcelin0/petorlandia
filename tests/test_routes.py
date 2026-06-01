@@ -25,13 +25,15 @@ from models import (
     Endereco,
     SavedAddress,
     AnimalDocumento,
+    PmoVaccinationAnimal,
+    PmoVaccinationVisit,
     Veterinario,
     VeterinarianMembership,
     Clinica,
     Orcamento,
 )
 from flask import abort, url_for
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import quote, parse_qs, urlparse
 
@@ -615,6 +617,62 @@ def test_animals_page_filters_by_tutor_name(app):
         body = response.get_data(as_text=True)
         assert 'Rex' in body
         assert 'Nina' not in body
+
+
+def test_animals_page_shows_pmo_request_and_vaccination_dates(app, monkeypatch):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        tutor = User(name='Ana PMO', email='ana-pmo@test')
+        tutor.set_password('x')
+        db.session.add(tutor)
+        db.session.flush()
+
+        animal = Animal(name='Lilica', modo='adotado', user_id=tutor.id)
+        db.session.add(animal)
+        db.session.flush()
+
+        visit = PmoVaccinationVisit(
+            spreadsheet_id='sheet-pmo',
+            sheet_gid='123',
+            sheet_title='29/05/2026',
+            source_row=189,
+            tutor_name='Ana PMO',
+            address='Rua 1',
+            dogs=1,
+            cats=0,
+            requested_date=date(2026, 5, 25),
+            vaccine_date=date(2026, 5, 29),
+            password='PMOA0000',
+        )
+        db.session.add(visit)
+        db.session.flush()
+
+        db.session.add(
+            PmoVaccinationAnimal(
+                visit_id=visit.id,
+                animal_id=animal.id,
+                name='Lilica',
+                species='cao',
+                position=1,
+                status='vacinado',
+            )
+        )
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: tutor)
+
+        response = client.get('/animals?modo=adotado&tutor_name=Ana')
+
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert 'Lilica' in body
+        assert 'Vacina solicitada em 25/05/2026' in body
+        assert 'Vacinado em 29/05/2026' in body
 
 
 def test_payment_status_updates_from_api(monkeypatch, app):
