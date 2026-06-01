@@ -13,6 +13,10 @@ def main() -> None:
         for sheet in list_vacina_pmo_sheets():
             title = sheet.get("title") or ""
             gid = sheet.get("gid") or ""
+            normalized_title = title.strip().lower()
+            if normalized_title in {"controle de doses", "padrão", "padrao", "copia"}:
+                print(f"PULOU {title}: aba auxiliar")
+                continue
             try:
                 result = sync_vacina_pmo_sheet(sheet_gid=gid, sheet_title=title)
                 saved = persist_vacina_pmo_rows(

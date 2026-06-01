@@ -433,6 +433,10 @@ def _is_summary_or_header(row: list[Any]) -> bool:
             "nome completo do tutor",
             "total de animais",
             "digite o dia",
+            "doses utilizadas",
+            "cachorros:",
+            "gatos:",
+            "column 1",
             "perdas",
             "sobras",
         )
