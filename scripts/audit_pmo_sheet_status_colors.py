@@ -2,11 +2,14 @@ import argparse
 import os
 import re
 import sys
+import time
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from typing import Any
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from googleapiclient.errors import HttpError
 
 from app import app
 from extensions import db
@@ -103,15 +106,26 @@ def _fetch_sheet_rows(service, spreadsheet_id: str, sheet_title: str, sheet_gid:
     title = sheet_title
     if not title and sheet_gid:
         title = _resolve_sheet_title_by_gid(service, spreadsheet_id, sheet_gid)
-    metadata = (
-        service.spreadsheets()
-        .get(
-            spreadsheetId=spreadsheet_id,
-            ranges=[f"'{title}'!A:T"],
-            includeGridData=True,
-        )
-        .execute()
-    )
+    last_error = None
+    for attempt in range(4):
+        try:
+            metadata = (
+                service.spreadsheets()
+                .get(
+                    spreadsheetId=spreadsheet_id,
+                    ranges=[f"'{title}'!A:T"],
+                    includeGridData=True,
+                )
+                .execute()
+            )
+            break
+        except HttpError as exc:
+            last_error = exc
+            if exc.resp.status not in {429, 500, 502, 503, 504} or attempt == 3:
+                raise
+            time.sleep(2 * (attempt + 1))
+    else:
+        raise last_error
     sheets = metadata.get("sheets", [])
     if not sheets:
         return []
@@ -250,8 +264,8 @@ def main() -> None:
                             _ensure_pmo_vaccine_record(animal)
                     summary["atualizado"] += 1
 
-        if args.apply:
-            db.session.commit()
+            if args.apply:
+                db.session.commit()
 
         print("RESUMO")
         for key, value in sorted(summary.items()):
