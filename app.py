@@ -12152,7 +12152,8 @@ def _build_animals_pmo_dates(animals):
 
         vaccinated_date = None
         if pmo_animal.vaccine and pmo_animal.vaccine.aplicada_em:
-            vaccinated_date = pmo_animal.vaccine.aplicada_em.date()
+            applied_at = pmo_animal.vaccine.aplicada_em
+            vaccinated_date = applied_at.date() if hasattr(applied_at, 'date') else applied_at
         elif pmo_animal.status == 'vacinado':
             vaccinated_date = visit.vaccine_date
 

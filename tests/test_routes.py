@@ -27,6 +27,7 @@ from models import (
     AnimalDocumento,
     PmoVaccinationAnimal,
     PmoVaccinationVisit,
+    Vacina,
     Veterinario,
     VeterinarianMembership,
     Clinica,
@@ -652,9 +653,22 @@ def test_animals_page_shows_pmo_request_and_vaccination_dates(app, monkeypatch):
         db.session.flush()
 
         db.session.add(
+            Vacina(
+                animal_id=animal.id,
+                nome='Vacina Antirrabica',
+                tipo='Campanha PMO',
+                aplicada=True,
+                aplicada_em=date(2026, 5, 29),
+            )
+        )
+        db.session.flush()
+        vaccine = Vacina.query.filter_by(animal_id=animal.id).first()
+
+        db.session.add(
             PmoVaccinationAnimal(
                 visit_id=visit.id,
                 animal_id=animal.id,
+                vaccine_id=vaccine.id,
                 name='Lilica',
                 species='cao',
                 position=1,
