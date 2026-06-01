@@ -81,15 +81,42 @@
   .pmo-visit-card {
     position: relative;
     border: 1px solid #d6dde8;
-    border-left: 4px solid #2563eb;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-    padding: 10px 12px 10px 10px;
+    border-left: 5px solid #2563eb;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.07);
+    padding: 14px 16px 14px 14px;
     background: #ffffff;
+    transition: box-shadow 0.18s ease, transform 0.12s ease, border-color 0.18s ease;
+  }
+
+  .pmo-visit-card:active {
+    transform: scale(0.995);
+  }
+
+  .pmo-visit-card[data-status="vacinado"] {
+    border-left-color: #16a34a;
+    background: #f7fcf8;
+  }
+
+  .pmo-visit-card[data-status="parcial"] {
+    border-left-color: #d97706;
+  }
+
+  .pmo-visit-card[data-status="pendente"] {
+    border-left-color: #2563eb;
+  }
+
+  .pmo-visit-card[data-status="remarcar"] {
+    border-left-color: #ea580c;
+  }
+
+  .pmo-visit-card[data-status="ausente"],
+  .pmo-visit-card[data-status="recusou"] {
+    border-left-color: #dc2626;
   }
 
   .pmo-visit-card + .pmo-visit-card {
-    margin-top: 10px;
+    margin-top: 12px;
   }
 
   .pmo-card-head {
@@ -99,28 +126,48 @@
     align-items: start;
   }
 
-  .pmo-card-title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  .pmo-card-headmain {
+    min-width: 0;
   }
 
   .pmo-card-title {
     font-weight: 800;
+    font-size: 1.02rem;
     line-height: 1.15;
   }
 
+  .pmo-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    background: #e2e8f0;
+    color: #334155;
+  }
+
+  .pmo-status-badge i {
+    font-size: 0.82rem;
+  }
+
+  .pmo-status-badge[data-status="vacinado"] { background: #dcfce7; color: #15803d; }
+  .pmo-status-badge[data-status="parcial"] { background: #fef3c7; color: #b45309; }
+  .pmo-status-badge[data-status="pendente"] { background: #e2e8f0; color: #334155; }
+  .pmo-status-badge[data-status="remarcar"] { background: #ffedd5; color: #c2410c; }
+  .pmo-status-badge[data-status="ausente"],
+  .pmo-status-badge[data-status="recusou"] { background: #fee2e2; color: #b91c1c; }
+
+  .pmo-wa-btn,
   .pmo-onway-btn {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
-    padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    font-size: 1rem;
+    gap: 6px;
+    font-weight: 600;
   }
 
   .pmo-card-address {
@@ -145,22 +192,73 @@
   .pmo-card-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px 10px;
-    color: #64748b;
-    font-size: 0.78rem;
-    margin-top: 6px;
+    gap: 6px;
+    margin-top: 10px;
   }
+
+  .pmo-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .pmo-meta-chip i {
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .pmo-meta-chip--progress {
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .pmo-meta-chip--progress i { color: #2563eb; }
+
+  .pmo-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .pmo-progress__bar {
+    height: 100%;
+    border-radius: inherit;
+    background: #2563eb;
+    transition: width 0.3s ease;
+  }
+
+  .pmo-progress__bar[data-status="vacinado"] { background: #16a34a; }
+  .pmo-progress__bar[data-status="parcial"] { background: #d97706; }
+  .pmo-progress__bar[data-status="remarcar"] { background: #ea580c; }
+  .pmo-progress__bar[data-status="ausente"],
+  .pmo-progress__bar[data-status="recusou"] { background: #dc2626; }
 
   .pmo-card-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 12px;
   }
 
   .pmo-card-actions .btn {
     flex: 1 1 0;
-    min-height: 34px;
-    padding: 5px 8px;
+    min-width: 120px;
+    min-height: 44px;
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+
+  .pmo-card-actions .btn:active {
+    transform: scale(0.97);
   }
 
   .pmo-card-note {
@@ -238,12 +336,16 @@
   }
 
   .pmo-note-add {
-    width: 28px;
-    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
     border: 1px solid #cbd5e1;
     border-radius: 999px;
     background: #ffffff;
     color: #0f172a;
+    font-size: 1.1rem;
     font-weight: 800;
     line-height: 1;
     cursor: pointer;
@@ -743,7 +845,27 @@
   function renderOnTheWayButton(row) {
     const url = buildOnTheWayMessage(row);
     if (!url) return '';
-    return `<a class="btn btn-sm btn-success pmo-onway-btn" href="${url}" target="_blank" rel="noopener" title="Avisar que estamos a caminho" aria-label="Avisar pelo WhatsApp que estamos a caminho"><i class="fab fa-whatsapp"></i></a>`;
+    return `<a class="btn btn-sm btn-success pmo-onway-btn" href="${url}" target="_blank" rel="noopener" title="Avisar que estamos a caminho" aria-label="Avisar pelo WhatsApp que estamos a caminho"><i class="fab fa-whatsapp"></i>A caminho</a>`;
+  }
+
+  const STATUS_META = {
+    vacinado: { label: 'Vacinado', icon: 'fa-circle-check' },
+    parcial: { label: 'Parcial', icon: 'fa-circle-half-stroke' },
+    pendente: { label: 'Pendente', icon: 'fa-clock' },
+    remarcar: { label: 'Remarcar', icon: 'fa-calendar-xmark' },
+    ausente: { label: 'Ausente', icon: 'fa-house-circle-xmark' },
+    recusou: { label: 'Recusou', icon: 'fa-ban' },
+  };
+
+  function statusMeta(status) {
+    return STATUS_META[status] || { label: status || '-', icon: 'fa-circle' };
+  }
+
+  function vaccinationProgress(row) {
+    const total = row.animals.length;
+    const done = row.animals.filter((animal) => animal.status === 'vacinado').length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return { total, done, pct };
   }
 
   function buildOnTheWayMessage(row) {
@@ -1160,32 +1282,34 @@
   function renderMobileCard(row) {
     const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
     const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
+    const status = statusMeta(row.status);
+    const progress = vaccinationProgress(row);
     return `
-      <article class="pmo-visit-card" data-id="${row.id}">
+      <article class="pmo-visit-card" data-id="${row.id}" data-status="${row.status}">
         <div class="pmo-card-head">
-          <div>
-            <div class="pmo-card-title-row">
-              <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
-              ${renderOnTheWayButton(row)}
-            </div>
+          <div class="pmo-card-headmain">
+            <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
             <div class="pmo-card-address">${renderAddress(row, true)}</div>
             ${renderAttendedBy(row)}
           </div>
-          <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
+          <span class="pmo-status-badge" data-status="${row.status}"><i class="fas ${status.icon}"></i>${escapeHtml(status.label)}</span>
         </div>
         <div class="pmo-card-meta">
-          <span>${escapeHtml(displayDate(row.date) || '-')}</span>
-          <span>${escapeHtml(row.shift || '-')}</span>
-          <span>${row.dogs} cão${row.dogs === 1 ? '' : 'es'}</span>
-          <span>${row.cats} gato${row.cats === 1 ? '' : 's'}</span>
+          <span class="pmo-meta-chip"><i class="fas fa-calendar-day"></i>${escapeHtml(displayDate(row.date) || '-')}</span>
+          <span class="pmo-meta-chip"><i class="fas fa-clock"></i>${escapeHtml(row.shift || '-')}</span>
+          <span class="pmo-meta-chip"><i class="fas fa-dog"></i>${row.dogs}</span>
+          <span class="pmo-meta-chip"><i class="fas fa-cat"></i>${row.cats}</span>
+          ${progress.total ? `<span class="pmo-meta-chip pmo-meta-chip--progress"><i class="fas fa-syringe"></i>${progress.done}/${progress.total}</span>` : ''}
         </div>
+        ${progress.total ? `<div class="pmo-progress" role="progressbar" aria-valuenow="${progress.done}" aria-valuemin="0" aria-valuemax="${progress.total}" aria-label="Animais vacinados nesta visita"><div class="pmo-progress__bar" data-status="${row.status}" style="width:${progress.pct}%"></div></div>` : ''}
         <div class="pmo-animal-list">
           ${renderAnimalControls(row)}
           ${renderNote(row)}
         </div>
         <div class="pmo-card-actions">
-          ${wa1 ? `<a class="btn btn-sm btn-outline-success" href="${wa1}" target="_blank" rel="noopener">WhatsApp 1</a>` : ''}
-          ${wa2 ? `<a class="btn btn-sm btn-outline-success" href="${wa2}" target="_blank" rel="noopener">WhatsApp 2</a>` : ''}
+          ${renderOnTheWayButton(row)}
+          ${wa1 ? `<a class="btn btn-sm btn-outline-success pmo-wa-btn" href="${wa1}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp 1</a>` : ''}
+          ${wa2 ? `<a class="btn btn-sm btn-outline-success pmo-wa-btn" href="${wa2}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i>WhatsApp 2</a>` : ''}
         </div>
         <div class="pmo-card-note">
           <div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div>
