@@ -591,6 +591,32 @@ def test_admin_toggle_all_animals(monkeypatch, app):
         assert b'Adopted' in resp2.data
 
 
+def test_animals_page_filters_by_tutor_name(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        maria = User(name='Maria Tutora', email='maria-tutora@test')
+        maria.set_password('x')
+        joao = User(name='Joao Tutor', email='joao-tutor@test')
+        joao.set_password('x')
+        db.session.add_all([maria, joao])
+        db.session.flush()
+        rex = Animal(name='Rex', modo='doa\u00e7\u00e3o', user_id=maria.id)
+        nina = Animal(name='Nina', modo='doa\u00e7\u00e3o', user_id=joao.id)
+        db.session.add_all([rex, nina])
+        db.session.commit()
+
+        response = client.get('/animals?tutor_name=Maria')
+
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert 'Rex' in body
+        assert 'Nina' not in body
+
+
 def test_payment_status_updates_from_api(monkeypatch, app):
     client = app.test_client()
 

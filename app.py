@@ -12126,6 +12126,7 @@ def list_animals():
     age = request.args.get('age')
     show_all = _is_admin() and request.args.get('show_all') == '1'
     name_query = request.args.get('name')
+    tutor_name_query = (request.args.get('tutor_name') or '').strip()
 
     # Base query: ignora animais removidos e sem responsável cadastrado
     query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
@@ -12181,6 +12182,10 @@ def list_animals():
         query = query.filter(Animal.age.ilike(f"{age}%"))
     if name_query:
         query = query.filter(Animal.name.ilike(f"%{name_query}%"))
+    if tutor_name_query:
+        query = query.join(User, Animal.user_id == User.id).filter(
+            User.name.ilike(f"%{tutor_name_query}%")
+        )
 
     # Ordenação e paginação
     query = query.options(
@@ -12213,6 +12218,7 @@ def list_animals():
         sex=sex,
         age=age,
         name=name_query,
+        tutor_name=tutor_name_query,
         is_admin=_is_admin(),
         show_all=show_all
     )
