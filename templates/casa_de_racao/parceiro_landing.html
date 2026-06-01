@@ -1,5 +1,8 @@
 {% extends "layout.html" %}
 {% block main %}
+{% set product_intent = product_intent|default(false) %}
+{% set onboarding_next = url_for('minha_casa_de_racao', next='produtos') if product_intent else url_for('minha_casa_de_racao') %}
+{% set share_endpoint = 'parceiro_loja_produtos_landing' if product_intent else 'parceiro_loja_landing' %}
 <div class="container py-5" style="max-width: 680px;">
 
   <div class="text-center mb-5">
@@ -40,11 +43,11 @@
 
   <!-- CTA -->
   <div class="d-grid gap-2 mb-4">
-    <a href="{{ url_for('register') }}?next={{ url_for('minha_casa_de_racao') }}"
+    <a href="{{ url_for('register') }}?next={{ onboarding_next|urlencode }}"
        class="btn btn-primary btn-lg">
       Quero vender na PetOrlândia
     </a>
-    <a href="{{ url_for('login_view') }}?next={{ url_for('minha_casa_de_racao') }}"
+    <a href="{{ url_for('login_view') }}?next={{ onboarding_next|urlencode }}"
        class="btn btn-outline-secondary">
       Já tenho conta — entrar
     </a>
@@ -69,7 +72,7 @@
         integrity="sha512-FNK4h8E1IHNB7MG8bCv+MNmhk4GYFrn8l/EHFp8YPlIB9KxQ3K5kXjP4EV8TUO1DkPNIHuOxcmFnlFCqN+qg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-  const url = window.location.origin + '{{ url_for("parceiro_loja_landing") }}';
+  const url = window.location.origin + '{{ url_for(share_endpoint) }}';
   document.getElementById('page-url').textContent = url;
   new QRious({
     element: document.getElementById('qrcode'),

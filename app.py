@@ -15225,13 +15225,31 @@ def parceiro_loja_landing():
         if casa:
             return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
         return redirect(url_for('minha_casa_de_racao'))
-    return render_template('casa_de_racao/parceiro_landing.html')
+    return render_template('casa_de_racao/parceiro_landing.html', product_intent=False)
+
+
+def _casa_de_racao_product_onboarding_target(casa):
+    if casa.status == 'pendente' and not _is_admin():
+        return url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos'
+    return url_for('casa_de_racao_produtos', casa_id=casa.id)
+
+
+def parceiro_loja_produtos_landing():
+    if current_user.is_authenticated:
+        casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
+        if casa:
+            return redirect(_casa_de_racao_product_onboarding_target(casa))
+        return redirect(url_for('minha_casa_de_racao', next='produtos'))
+    return render_template('casa_de_racao/parceiro_landing.html', product_intent=True)
 
 
 @login_required
 def minha_casa_de_racao():
+    wants_products = request.args.get('next') == 'produtos'
     casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
     if casa:
+        if wants_products:
+            return redirect(_casa_de_racao_product_onboarding_target(casa))
         return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
 
     form = CasaDeRacaoForm()
@@ -15268,6 +15286,8 @@ def minha_casa_de_racao():
             'Cadastro enviado! Aguarde a aprovação do administrador para começar a vender.',
             'success',
         )
+        if wants_products:
+            return redirect(_casa_de_racao_product_onboarding_target(nova_casa))
         return redirect(url_for('casa_de_racao_dashboard', casa_id=nova_casa.id))
     return render_template('casa_de_racao/create.html', form=form, editing=False)
 

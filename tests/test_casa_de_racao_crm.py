@@ -61,6 +61,39 @@ def test_feed_store_owner_can_create_tutor_and_animal(app, client, monkeypatch):
         assert animal.added_by_id == owner.id
 
 
+def test_feed_store_product_onboarding_link_routes_existing_store(app, client, monkeypatch):
+    with app.app_context():
+        owner, casa = _create_owner_and_store(email="lojista-produtos@example.com")
+        _login(monkeypatch, owner)
+
+        resp = client.get("/parceiros/loja/produtos")
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/casa-de-racao/{casa.id}/produtos")
+
+
+def test_feed_store_product_onboarding_keeps_next_after_store_creation(app, client, monkeypatch):
+    with app.app_context():
+        owner = User(name="Novo Lojista", email="novo-lojista-produtos@example.com")
+        owner.set_password("x")
+        db.session.add(owner)
+        db.session.commit()
+        _login(monkeypatch, owner)
+
+        resp = client.post(
+            "/minha-casa-de-racao?next=produtos",
+            data={
+                "nome": "Racoes Produtos",
+                "modo_entrega": "plataforma",
+            },
+            follow_redirects=False,
+        )
+
+        casa = CasaDeRacao.query.filter_by(owner_id=owner.id).one()
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith(f"/casa-de-racao/{casa.id}#produtos")
+
+
 def test_feed_store_tutor_form_keeps_address_without_cep(app, client, monkeypatch):
     with app.app_context():
         owner, casa = _create_owner_and_store(email="lojista-endereco@example.com")
