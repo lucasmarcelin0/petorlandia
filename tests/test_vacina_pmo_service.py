@@ -282,6 +282,67 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
 
 
+def test_pmo_sync_relinks_when_sheet_row_changes_tutor_and_animals(app):
+    first_row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Ana Carolina Pereira",
+        "address": "Cond. Paris, 6, Jardim Morada do Sol",
+        "phone1": "5516992978934",
+        "phone2": "5516999678334",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lilica", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-30",
+        "shift": "Manha",
+        "password": "PMOA8934",
+        "certificateUrl": "",
+        "sourceRow": 4,
+    }
+    changed_row = {
+        **first_row,
+        "tutor": "Elis Regina Sestari",
+        "phone1": "5516981436364",
+        "phone2": "5516981436364",
+        "dogs": 0,
+        "cats": 2,
+        "animals": [
+            {"name": "Pretinho", "species": "gato", "status": "pendente"},
+            {"name": "Th\u00e9o", "species": "gato", "status": "pendente"},
+        ],
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [first_row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="30/05/2026",
+        )
+        ana = User.query.filter_by(name="Ana Carolina Pereira").one()
+        assert [animal.name for animal in ana.animals] == ["Lilica"]
+
+        persist_vacina_pmo_rows(
+            [changed_row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="123",
+            sheet_title="30/05/2026",
+        )
+
+        ana_animals = [animal.name for animal in ana.animals]
+        elis = User.query.filter_by(name="Elis Regina Sestari").one()
+        elis_animals = sorted(animal.name for animal in elis.animals)
+        visit = PmoVaccinationVisit.query.filter_by(source_row=4).one()
+        visit_tutor_name = visit.tutor_user.name
+        linked_tutor_names = [animal.animal.owner.name for animal in visit.animals]
+
+    assert ana_animals == ["Lilica"]
+    assert elis_animals == ["Pretinho", "Th\u00e9o"]
+    assert visit_tutor_name == "Elis Regina Sestari"
+    assert linked_tutor_names == ["Elis Regina Sestari", "Elis Regina Sestari"]
+
+
 def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkeypatch):
     rows = [
         {

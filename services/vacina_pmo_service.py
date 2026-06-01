@@ -676,6 +676,47 @@ def _ensure_visit_records(visit: PmoVaccinationVisit) -> None:
         _ensure_pmo_vaccine_record(pmo_animal)
 
 
+def _visit_identity_changed(
+    visit: PmoVaccinationVisit,
+    *,
+    tutor_name: str,
+    phone1: str,
+    phone2: str,
+) -> bool:
+    old_phones = {
+        _normalize_login_phone(value)
+        for value in (visit.phone1, visit.phone2)
+        if _normalize_login_phone(value)
+    }
+    new_phones = {
+        _normalize_login_phone(value)
+        for value in (phone1, phone2)
+        if _normalize_login_phone(value)
+    }
+    if old_phones and new_phones:
+        return old_phones.isdisjoint(new_phones)
+    old_name = _strip_accents(visit.tutor_name or "").casefold().strip()
+    new_name = _strip_accents(tutor_name or "").casefold().strip()
+    return bool(old_name and new_name and old_name != new_name)
+
+
+def _pmo_animal_identity_changed(
+    animal: PmoVaccinationAnimal,
+    *,
+    name: str,
+    species: str,
+) -> bool:
+    old_name = _strip_accents(animal.name or "").casefold().strip()
+    new_name = _strip_accents(name or "").casefold().strip()
+    return bool(old_name and new_name and old_name != new_name) or animal.species != species
+
+
+def _clear_pmo_animal_links(animal: PmoVaccinationAnimal) -> None:
+    animal.animal_id = None
+    animal.vaccine_id = None
+    animal.vaccinated_at = None
+
+
 def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
     parsed: list[dict[str, Any]] = []
     for index, row in enumerate(values):
@@ -1203,11 +1244,24 @@ def persist_vacina_pmo_rows(
             )
             db.session.add(visit)
 
+        tutor_name = row.get("tutor") or ""
+        phone1 = row.get("phone1") or ""
+        phone2 = row.get("phone2") or ""
+        if visit.id and _visit_identity_changed(
+            visit,
+            tutor_name=tutor_name,
+            phone1=phone1,
+            phone2=phone2,
+        ):
+            visit.tutor_user_id = None
+            for pmo_animal in visit.animals:
+                _clear_pmo_animal_links(pmo_animal)
+
         visit.sheet_title = sheet_title
-        visit.tutor_name = row.get("tutor") or ""
+        visit.tutor_name = tutor_name
         visit.address = row.get("address") or ""
-        visit.phone1 = row.get("phone1") or ""
-        visit.phone2 = row.get("phone2") or ""
+        visit.phone1 = phone1
+        visit.phone2 = phone2
         visit.dogs = int(row.get("dogs") or 0)
         visit.cats = int(row.get("cats") or 0)
         visit.vaccine_date = _parse_date_object(row.get("date"))
@@ -1222,6 +1276,8 @@ def persist_vacina_pmo_rows(
         keep_positions = set()
         for position, animal_data in enumerate(parsed_animals, start=1):
             animal = existing_by_position.get(position)
+            name = animal_data.get("name") or f"Animal {position}"
+            species = animal_data.get("species") or "cao"
             if not animal:
                 animal = PmoVaccinationAnimal(
                     visit=visit,
@@ -1229,8 +1285,10 @@ def persist_vacina_pmo_rows(
                     status=animal_data.get("status") or "pendente",
                 )
                 db.session.add(animal)
-            animal.name = animal_data.get("name") or f"Animal {position}"
-            animal.species = animal_data.get("species") or "cao"
+            elif _pmo_animal_identity_changed(animal, name=name, species=species):
+                _clear_pmo_animal_links(animal)
+            animal.name = name
+            animal.species = species
             keep_positions.add(position)
 
         for position, animal in list(existing_by_position.items()):
