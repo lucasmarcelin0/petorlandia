@@ -968,6 +968,37 @@ class GroomingSubscribeForm(FlaskForm):
     submit = SubmitField('Assinar plano')
 
 
+class AppointmentRequestForm(FlaskForm):
+    """Solicitação de agendamento pelo tutor — sem acesso à agenda do profissional."""
+
+    animal_id = SelectField('Pet', coerce=int, validators=[DataRequired()], validate_choice=False)
+    kind = SelectField(
+        'Tipo de atendimento',
+        choices=[('consulta', 'Consulta'), ('exame', 'Exame'), ('vacina', 'Vacina')],
+        default='consulta',
+        validators=[DataRequired()],
+    )
+    mode = SelectField(
+        'Local',
+        choices=[('clinica', 'Na clínica'), ('domicilio', 'A domicílio')],
+        default='clinica',
+        validators=[DataRequired()],
+    )
+    preferred_date = DateField('Data preferida', format='%Y-%m-%d', validators=[DataRequired()])
+    preferred_time = TimeField('Horário preferido (opcional)', format='%H:%M', validators=[Optional()])
+    notes = TextAreaField('Observações (opcional)', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Enviar solicitação')
+
+
+class AppointmentRequestResponseForm(FlaskForm):
+    """Resposta do profissional a uma solicitação (confirmar/recusar)."""
+
+    date = DateField('Data', format='%Y-%m-%d', validators=[Optional()])
+    time = TimeField('Horário', format='%H:%M', validators=[Optional()])
+    response_note = TextAreaField('Mensagem ao tutor (opcional)', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Confirmar')
+
+
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 

@@ -1667,6 +1667,8 @@ from forms import (
     AnimalForm,
     AppointmentDeleteForm,
     AppointmentForm,
+    AppointmentRequestForm,
+    AppointmentRequestResponseForm,
     CartAddressForm,
     ChangePasswordForm,
     ClinicAddSpecialistForm,
@@ -18921,6 +18923,242 @@ def veterinarios():
     )
 
 
+@app.route('/veterinario/<int:veterinario_id>/solicitar', methods=['GET', 'POST'])
+@login_required
+def solicitar_agendamento(veterinario_id):
+    """Tutor cria uma solicitação de agendamento (sem ver a agenda do profissional)."""
+    from models import Veterinario, Animal, AppointmentRequest, Message
+
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+    if request.method == 'GET':
+        return _render_vet_public_profile(veterinario)
+
+    animals = (
+        Animal.query
+        .filter(Animal.user_id == current_user.id, Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+    form = AppointmentRequestForm()
+    form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+    if not animals:
+        flash('Cadastre um pet antes de solicitar um agendamento.', 'warning')
+        return redirect(url_for('vet_detail', veterinario_id=veterinario_id))
+
+    if not form.validate_on_submit():
+        flash('Verifique os campos da solicitação.', 'warning')
+        return redirect(url_for('vet_detail', veterinario_id=veterinario_id))
+
+    animal = next((a for a in animals if a.id == form.animal_id.data), None)
+    if animal is None:
+        flash('Selecione um pet válido.', 'warning')
+        return redirect(url_for('vet_detail', veterinario_id=veterinario_id))
+
+    req = AppointmentRequest(
+        tutor_id=current_user.id,
+        animal_id=animal.id,
+        veterinario_id=veterinario.id,
+        clinica_id=veterinario.clinica_id,
+        kind=form.kind.data,
+        mode=form.mode.data,
+        preferred_date=form.preferred_date.data,
+        preferred_time=form.preferred_time.data,
+        notes=(form.notes.data or '').strip() or None,
+        status='pending',
+    )
+    db.session.add(req)
+
+    quando = req.preferred_date.strftime('%d/%m/%Y')
+    if req.preferred_time:
+        quando += f" às {req.preferred_time.strftime('%H:%M')}"
+    db.session.add(Message(
+        sender_id=current_user.id,
+        receiver_id=veterinario.user_id,
+        animal_id=animal.id,
+        content=(
+            f"Nova solicitação de {req.kind_label.lower()} ({req.mode_label.lower()}) "
+            f"para {animal.name}. Preferência: {quando}."
+            + (f" Obs.: {req.notes}" if req.notes else "")
+        ),
+    ))
+    db.session.commit()
+    flash('Solicitação enviada! O profissional vai confirmar e você será avisado.', 'success')
+    return redirect(url_for('minhas_solicitacoes'))
+
+
+@app.route('/minhas-solicitacoes')
+@login_required
+def minhas_solicitacoes():
+    """Lista as solicitações de agendamento do tutor logado, com status."""
+    from models import AppointmentRequest
+
+    solicitacoes = (
+        AppointmentRequest.query
+        .filter_by(tutor_id=current_user.id)
+        .order_by(AppointmentRequest.created_at.desc())
+        .all()
+    )
+    return render_template('agendamentos/minhas_solicitacoes.html', solicitacoes=solicitacoes)
+
+
+@app.route('/solicitacoes/<int:request_id>/cancelar', methods=['POST'])
+@login_required
+def cancelar_solicitacao(request_id):
+    from models import AppointmentRequest
+
+    req = AppointmentRequest.query.get_or_404(request_id)
+    if req.tutor_id != current_user.id:
+        abort(403)
+    if req.status == 'pending':
+        req.status = 'cancelled'
+        req.responded_at = utcnow()
+        db.session.commit()
+        flash('Solicitação cancelada.', 'info')
+    return redirect(url_for('minhas_solicitacoes'))
+
+
+@app.route('/solicitacoes-recebidas')
+@login_required
+def solicitacoes_recebidas():
+    """Caixa de entrada do profissional: solicitações a confirmar/recusar."""
+    from models import AppointmentRequest
+
+    vet = getattr(current_user, 'veterinario', None)
+    if vet is None and current_user.role != 'admin':
+        abort(403)
+
+    query = AppointmentRequest.query
+    if current_user.role != 'admin':
+        query = query.filter_by(veterinario_id=vet.id)
+    solicitacoes = query.order_by(
+        AppointmentRequest.status != 'pending',
+        AppointmentRequest.created_at.desc(),
+    ).all()
+    response_form = AppointmentRequestResponseForm()
+    return render_template(
+        'agendamentos/solicitacoes_recebidas.html',
+        solicitacoes=solicitacoes,
+        response_form=response_form,
+    )
+
+
+def _appointment_request_within_vet_schedule(veterinario_id, scheduled_date, scheduled_time):
+    weekday_names = {
+        0: {"segunda", "segunda feira"},
+        1: {"terca", "terca feira"},
+        2: {"quarta", "quarta feira"},
+        3: {"quinta", "quinta feira"},
+        4: {"sexta", "sexta feira"},
+        5: {"sabado"},
+        6: {"domingo"},
+    }
+    allowed_names = weekday_names.get(scheduled_date.weekday(), set())
+    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    for horario in horarios:
+        dia = unicodedata.normalize("NFKD", (horario.dia_semana or "").lower())
+        dia = "".join(ch for ch in dia if not unicodedata.combining(ch))
+        dia = re.sub(r"[^a-z]+", " ", dia).strip()
+        if dia not in allowed_names:
+            continue
+        if not (horario.hora_inicio <= scheduled_time < horario.hora_fim):
+            continue
+        if (
+            horario.intervalo_inicio
+            and horario.intervalo_fim
+            and horario.intervalo_inicio <= scheduled_time < horario.intervalo_fim
+        ):
+            continue
+        return True
+    return False
+
+
+@app.route('/solicitacoes/<int:request_id>/responder', methods=['POST'])
+@login_required
+def responder_solicitacao(request_id):
+    """Profissional confirma (gera Appointment) ou recusa uma solicitação."""
+    from models import AppointmentRequest, Appointment, Message
+
+    req = AppointmentRequest.query.get_or_404(request_id)
+    vet = getattr(current_user, 'veterinario', None)
+    is_owner_vet = vet is not None and vet.id == req.veterinario_id
+    if not (is_owner_vet or current_user.role == 'admin'):
+        abort(403)
+    if req.status != 'pending':
+        flash('Esta solicitação já foi respondida.', 'info')
+        return redirect(url_for('solicitacoes_recebidas'))
+
+    form = AppointmentRequestResponseForm()
+    if not form.validate_on_submit():
+        flash('Verifique os campos da resposta.', 'warning')
+        return redirect(url_for('solicitacoes_recebidas'))
+
+    action = request.form.get('action', 'confirm')
+    note = (form.response_note.data or '').strip() or None
+
+    if action == 'decline':
+        req.status = 'declined'
+        req.response_note = note
+        req.responded_at = utcnow()
+        db.session.add(Message(
+            sender_id=current_user.id,
+            receiver_id=req.tutor_id,
+            animal_id=req.animal_id,
+            content=(
+                f"Sua solicitação de {req.kind_label.lower()} para {req.animal.name} "
+                f"não pôde ser atendida." + (f" {note}" if note else "")
+            ),
+        ))
+        db.session.commit()
+        flash('Solicitação recusada e tutor avisado.', 'info')
+        return redirect(url_for('solicitacoes_recebidas'))
+
+    # Confirmação: cria o Appointment real no horário definido pelo profissional.
+    confirm_date = form.date.data or req.preferred_date
+    confirm_time = form.time.data or req.preferred_time
+    if not confirm_time:
+        flash('Defina um horário para confirmar o agendamento.', 'warning')
+        return redirect(url_for('solicitacoes_recebidas'))
+
+    if not _appointment_request_within_vet_schedule(req.veterinario_id, confirm_date, confirm_time):
+        flash('Escolha um horário dentro da carga horária cadastrada do veterinário.', 'warning')
+        return redirect(url_for('solicitacoes_recebidas'))
+
+    scheduled_local = datetime.combine(confirm_date, confirm_time)
+    scheduled_at = normalize_to_utc(scheduled_local)
+
+    appt = Appointment(
+        animal_id=req.animal_id,
+        tutor_id=req.tutor_id,
+        veterinario_id=req.veterinario_id,
+        clinica_id=req.clinica_id,
+        scheduled_at=scheduled_at,
+        status='scheduled',
+        kind=req.kind,
+        notes=req.notes,
+        created_by=current_user.id,
+    )
+    db.session.add(appt)
+    db.session.flush()
+
+    req.status = 'confirmed'
+    req.response_note = note
+    req.appointment_id = appt.id
+    req.responded_at = utcnow()
+    db.session.add(Message(
+        sender_id=current_user.id,
+        receiver_id=req.tutor_id,
+        animal_id=req.animal_id,
+        content=(
+            f"Seu {req.kind_label.lower()} para {req.animal.name} foi confirmado para "
+            f"{scheduled_local.strftime('%d/%m/%Y %H:%M')}." + (f" {note}" if note else "")
+        ),
+    ))
+    db.session.commit()
+    flash('Agendamento confirmado e tutor avisado.', 'success')
+    return redirect(url_for('solicitacoes_recebidas'))
+
+
 def _veterinarian_activity_kind_label(kind):
     labels = {
         'appointment': 'Agendamento',
@@ -19326,10 +19564,66 @@ def _export_veterinarian_activity_pdf(veterinario, activities, summary, start_da
     )
 
 
+def _user_is_clinic_professional(veterinario_id=None):
+    """True quando o usuário logado é profissional (admin/vet/colaborador).
+
+    Apenas profissionais enxergam a página de gestão do veterinário (com agenda
+    e dados internos). Tutores e visitantes recebem o perfil público.
+    """
+    if not current_user.is_authenticated:
+        return False
+    if current_user.role == 'admin':
+        return True
+    if getattr(current_user, 'worker', None) in ('veterinario', 'colaborador'):
+        return True
+    own_vet = getattr(current_user, 'veterinario', None)
+    if own_vet is not None and veterinario_id is not None and getattr(own_vet, 'id', None) == veterinario_id:
+        return True
+    try:
+        if is_veterinarian(current_user):
+            return True
+    except Exception:
+        # Falha ao avaliar perfil → trata como não-profissional (perfil público, fail-safe).
+        pass
+    return False
+
+
+def _render_vet_public_profile(veterinario):
+    """Perfil público do veterinário, voltado ao tutor — sem expor a agenda."""
+    from models import Animal
+
+    form = AppointmentRequestForm()
+    animals = []
+    if current_user.is_authenticated:
+        animals = (
+            Animal.query
+            .filter(Animal.user_id == current_user.id, Animal.removido_em.is_(None))
+            .order_by(Animal.name)
+            .all()
+        )
+    form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+    end = getattr(veterinario.user, 'endereco', None)
+    cidade = end.cidade.strip() if end and end.cidade else None
+
+    return render_template(
+        'veterinarios/vet_public.html',
+        veterinario=veterinario,
+        form=form,
+        animals=animals,
+        cidade=cidade,
+    )
+
+
 def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
     veterinario = Veterinario.query.get_or_404(veterinario_id)
+
+    # Privacidade: tutores/visitantes nunca veem a agenda nem dados internos.
+    if not _user_is_clinic_professional(veterinario_id):
+        return _render_vet_public_profile(veterinario)
+
     calendar_access_scope = get_calendar_access_scope(current_user)
     horarios = (
         VetSchedule.query.filter_by(veterinario_id=veterinario_id)

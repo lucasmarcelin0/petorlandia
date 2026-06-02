@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container my-4" style="max-width: 720px;">
+  <a href="{{ url_for('veterinarios') }}" class="btn btn-link px-0 mb-2 text-decoration-none">
+    <i class="fa-solid fa-arrow-left me-1"></i> Voltar aos veterinários
+  </a>
+
+  <!-- Perfil público (somente informações públicas) -->
+  <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3">
+        {% if veterinario.user.profile_photo %}
+        <img src="{{ veterinario.user.profile_photo }}" alt="{{ veterinario.user.name }}"
+             class="rounded-circle" style="width:72px;height:72px;object-fit:cover;border:2px solid #eef0f5;">
+        {% else %}
+        <span class="rounded-circle d-inline-flex align-items-center justify-content-center"
+              style="width:72px;height:72px;background:#eef2ff;color:#4e73df;font-size:1.8rem;">
+          <i class="fa-solid fa-user-doctor"></i>
+        </span>
+        {% endif %}
+        <div class="min-w-0">
+          <h1 class="h4 fw-bold mb-1">{{ veterinario.user.name }}</h1>
+          <div class="text-muted small">
+            {% if veterinario.crmv %}<span class="me-3"><i class="fa-solid fa-id-card me-1 text-primary"></i>CRMV {{ veterinario.crmv }}{% if veterinario.crmv_estado %}/{{ veterinario.crmv_estado }}{% endif %}</span>{% endif %}
+            <span><i class="fa-solid fa-location-dot me-1 text-primary"></i>{{ cidade or 'Cidade não informada' }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if veterinario.specialties %}
+      <div class="mt-3">
+        {% for s in veterinario.specialties %}
+        <span class="badge rounded-pill" style="background:#eef2ff;color:#3d5bd6;font-weight:600;">{{ s.nome }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- Solicitação de agendamento -->
+  <div class="card border-0 shadow-sm" style="border-radius:16px;">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-1"><i class="fa-solid fa-calendar-plus me-2 text-primary"></i>Solicitar agendamento</h2>
+      <p class="text-muted small">
+        Envie sua preferência de data e horário. O profissional confirma e você é avisado —
+        nenhuma informação da agenda é exibida aqui.
+      </p>
+
+      {% if not animals %}
+      <div class="alert alert-warning mb-0">
+        Você ainda não tem um pet cadastrado.
+        <a href="{{ url_for('novo_animal') }}" class="alert-link">Cadastrar pet</a> para solicitar.
+      </div>
+      {% else %}
+      <form method="post" action="{{ url_for('solicitar_agendamento', veterinario_id=veterinario.id) }}">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            {{ form.animal_id.label(class="form-label fw-semibold") }}
+            {{ form.animal_id(class="form-select") }}
+          </div>
+          <div class="col-12 col-md-6">
+            {{ form.kind.label(class="form-label fw-semibold") }}
+            {{ form.kind(class="form-select") }}
+          </div>
+          <div class="col-12 col-md-6">
+            {{ form.mode.label(class="form-label fw-semibold") }}
+            {{ form.mode(class="form-select") }}
+          </div>
+          <div class="col-6 col-md-3">
+            {{ form.preferred_date.label(class="form-label fw-semibold") }}
+            {{ form.preferred_date(class="form-control", type="date") }}
+          </div>
+          <div class="col-6 col-md-3">
+            {{ form.preferred_time.label(class="form-label fw-semibold") }}
+            {{ form.preferred_time(class="form-control", type="time") }}
+          </div>
+          <div class="col-12">
+            {{ form.notes.label(class="form-label fw-semibold") }}
+            {{ form.notes(class="form-control", rows=3, placeholder="Ex.: sintomas, vacina desejada, melhor período...") }}
+          </div>
+        </div>
+        <div class="d-flex justify-content-end mt-3">
+          {{ form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="text-center mt-3">
+    <a href="{{ url_for('minhas_solicitacoes') }}" class="text-decoration-none">
+      <i class="fa-solid fa-list-check me-1"></i> Ver minhas solicitações
+    </a>
+  </div>
+</div>
+{% endblock %}

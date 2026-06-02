@@ -152,6 +152,17 @@
               {% endif %}
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('solicitacoes_recebidas') }}">
+              <i class="fas fa-inbox me-1 text-primary"></i> Solicitações
+            </a>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('minhas_solicitacoes') }}">
+              <i class="fas fa-list-check me-1 text-primary"></i> Minhas solicitações
+            </a>
+          </li>
           {% endif %}
 
           <li class="nav-item position-relative">

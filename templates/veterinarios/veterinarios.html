@@ -69,9 +69,10 @@
             {% if cidade %}{{ cidade }}{% else %}Cidade não informada{% endif %}
           </div>
 
-          <a href="{{ url_for('vet_detail', veterinario_id=v.id) }}"
-             class="btn btn-primary w-100 mt-auto">
-            Ver perfil e agendar <i class="fa-solid fa-arrow-right ms-1"></i>
+          <a href="{{ url_for('solicitar_agendamento', veterinario_id=v.id) }}"
+             class="btn btn-primary w-100 mt-auto"
+             aria-label="Solicitar consulta com {{ v.user.name }}">
+            Solicitar consulta <i class="fa-solid fa-calendar-plus ms-1"></i>
           </a>
         </div>
       </div>

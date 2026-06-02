@@ -2056,6 +2056,83 @@ class ExamAppointment(db.Model):
             return 'Prazo expirado'
         return 'Aguardando aceitação'
 
+
+class AppointmentRequest(db.Model):
+    """Solicitação de agendamento feita pelo tutor, sem expor a agenda do profissional.
+
+    O tutor envia data/horário preferidos e o profissional confirma (gerando um
+    ``Appointment`` real) ou recusa. Isola o fluxo pedido→confirmação para
+    consultas, exames e vacinas, sem tocar na agenda existente — o tutor nunca
+    vê compromissos de outros pacientes nem dados internos da clínica.
+    """
+    __tablename__ = 'appointment_request'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(
+        db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    animal_id = db.Column(
+        db.Integer, db.ForeignKey('animal.id', ondelete='CASCADE'), nullable=False
+    )
+    veterinario_id = db.Column(
+        db.Integer, db.ForeignKey('veterinario.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+
+    kind = db.Column(db.String(20), nullable=False, default='consulta')   # consulta/exame/vacina
+    mode = db.Column(db.String(20), nullable=False, default='clinica')    # clinica/domicilio
+    preferred_date = db.Column(db.Date, nullable=False)
+    preferred_time = db.Column(db.Time, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+    response_note = db.Column(db.Text, nullable=True)
+    appointment_id = db.Column(
+        db.Integer, db.ForeignKey('appointment.id', ondelete='SET NULL'), nullable=True
+    )
+
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    responded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    tutor = db.relationship(
+        'User', foreign_keys=[tutor_id],
+        backref=db.backref('appointment_requests', cascade='all, delete-orphan'),
+    )
+    animal = db.relationship(
+        'Animal', backref=db.backref('appointment_requests', cascade='all, delete-orphan'),
+    )
+    veterinario = db.relationship(
+        'Veterinario', backref=db.backref('appointment_requests', cascade='all, delete-orphan'),
+    )
+    clinica = db.relationship('Clinica')
+    appointment = db.relationship('Appointment', foreign_keys=[appointment_id])
+
+    KIND_LABELS = {'consulta': 'Consulta', 'exame': 'Exame', 'vacina': 'Vacina'}
+    MODE_LABELS = {'clinica': 'Na clínica', 'domicilio': 'A domicílio'}
+    STATUS_LABELS = {
+        'pending': 'Aguardando confirmação',
+        'confirmed': 'Confirmado',
+        'declined': 'Recusado',
+        'cancelled': 'Cancelado',
+    }
+
+    @property
+    def kind_label(self):
+        return self.KIND_LABELS.get(self.kind, self.kind)
+
+    @property
+    def mode_label(self):
+        return self.MODE_LABELS.get(self.mode, self.mode)
+
+    @property
+    def status_display(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def is_pending(self):
+        return self.status == 'pending'
+
+
 # Associação many-to-many entre eventos e colaboradores
 EventoColaboradores = db.Table(
     'evento_colaboradores',

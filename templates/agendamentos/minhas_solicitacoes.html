@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+
+{% set status_class = {
+  'pending': 'warning', 'confirmed': 'success', 'declined': 'danger', 'cancelled': 'secondary'
+} %}
+
+{% block main %}
+<div class="container my-4" style="max-width: 820px;">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 fw-bold mb-0"><i class="fa-solid fa-list-check me-2 text-primary"></i>Minhas solicitações</h1>
+    <a href="{{ url_for('veterinarios') }}" class="btn btn-outline-primary btn-sm">
+      <i class="fa-solid fa-plus me-1"></i> Nova solicitação
+    </a>
+  </div>
+
+  {% if solicitacoes %}
+  <div class="vstack gap-3">
+    {% for s in solicitacoes %}
+    <div class="card border-0 shadow-sm" style="border-radius:14px;">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div class="min-w-0">
+            <h2 class="h6 fw-bold mb-1">
+              {{ s.kind_label }} · {{ s.animal.name }}
+            </h2>
+            <div class="text-muted small">
+              <i class="fa-solid fa-user-doctor me-1"></i>{{ s.veterinario.user.name }}
+              <span class="mx-1">·</span>
+              <i class="fa-solid fa-location-dot me-1"></i>{{ s.mode_label }}
+            </div>
+            <div class="text-muted small mt-1">
+              <i class="fa-regular fa-calendar me-1"></i>
+              Preferência: {{ s.preferred_date.strftime('%d/%m/%Y') }}{% if s.preferred_time %} às {{ s.preferred_time.strftime('%H:%M') }}{% endif %}
+            </div>
+            {% if s.status == 'confirmed' and s.appointment %}
+            <div class="text-success small mt-1 fw-semibold">
+              <i class="fa-solid fa-circle-check me-1"></i>
+              Confirmado para {{ s.appointment.scheduled_at.strftime('%d/%m/%Y %H:%M') }}
+            </div>
+            {% endif %}
+            {% if s.response_note %}
+            <div class="small mt-1"><i class="fa-solid fa-comment-dots me-1 text-muted"></i>{{ s.response_note }}</div>
+            {% endif %}
+          </div>
+          <span class="badge bg-{{ status_class.get(s.status, 'secondary') }} flex-shrink-0">{{ s.status_display }}</span>
+        </div>
+
+        {% if s.status == 'pending' %}
+        <form method="post" action="{{ url_for('cancelar_solicitacao', request_id=s.id) }}" class="text-end mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger btn-sm"
+                  onclick="return confirm('Cancelar esta solicitação?');">
+            <i class="fa-solid fa-xmark me-1"></i> Cancelar
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="fa-regular fa-calendar-xmark display-4"></i>
+    <p class="mt-3 mb-3 fs-5">Você ainda não fez nenhuma solicitação.</p>
+    <a href="{{ url_for('veterinarios') }}" class="btn btn-primary">Encontrar um veterinário</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
