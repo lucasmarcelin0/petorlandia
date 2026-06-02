@@ -1,14 +1,109 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container mt-4">
-  <h2>Veterinários</h2>
-  <ul class="list-unstyled">
+<div class="container my-4">
+  <div class="text-center mb-4">
+    <h1 class="fw-bold mb-1 text-primary">
+      <i class="fa-solid fa-user-doctor me-2"></i> Veterinários
+    </h1>
+    <p class="text-muted mb-0">Encontre profissionais perto de você para agendar atendimento.</p>
+  </div>
+
+  <!-- Filtro por cidade -->
+  {% if cidades %}
+  <form method="get" class="row justify-content-center g-2 mb-4">
+    <div class="col-12 col-sm-8 col-md-5 col-lg-4">
+      <div class="input-group shadow-sm">
+        <span class="input-group-text bg-white"><i class="fa-solid fa-location-dot text-primary"></i></span>
+        <select name="cidade" class="form-select" onchange="this.form.submit()">
+          <option value="" {% if not selected_cidade %}selected{% endif %}>Todas as cidades</option>
+          {% for c in cidades %}
+          <option value="{{ c }}" {% if selected_cidade == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if user_cidade and selected_cidade == user_cidade %}
+      <div class="form-text text-center">
+        Mostrando veterinários da sua cidade ({{ user_cidade }}).
+        <a href="{{ url_for('veterinarios', cidade='') }}">Ver todas</a>
+      </div>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+
+  <!-- Cards -->
+  {% if veterinarios %}
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 g-md-4">
     {% for v in veterinarios %}
-      <li><a href="{{ url_for('vet_detail', veterinario_id=v.id) }}">{{ v.user.name }}</a></li>
-    {% else %}
-      <li>Nenhum veterinário cadastrado.</li>
+    {% set cidade = vet_city(v) %}
+    <div class="col">
+      <div class="card vet-card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            {% if v.user.profile_photo %}
+            <img src="{{ v.user.profile_photo }}" alt="{{ v.user.name }}" class="vet-avatar">
+            {% else %}
+            <span class="vet-avatar vet-avatar--placeholder">
+              <i class="fa-solid fa-user-doctor"></i>
+            </span>
+            {% endif %}
+            <div class="min-w-0">
+              <h2 class="h6 fw-bold mb-0 text-truncate">{{ v.user.name }}</h2>
+              {% if v.crmv %}
+              <div class="text-muted small">CRMV {{ v.crmv }}{% if v.crmv_estado %}/{{ v.crmv_estado }}{% endif %}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if v.specialties %}
+          <div class="mb-2">
+            {% for s in v.specialties %}
+            <span class="badge rounded-pill vet-badge">{{ s.nome }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="text-muted small mb-3">
+            <i class="fa-solid fa-location-dot me-1"></i>
+            {% if cidade %}{{ cidade }}{% else %}Cidade não informada{% endif %}
+          </div>
+
+          <a href="{{ url_for('vet_detail', veterinario_id=v.id) }}"
+             class="btn btn-primary w-100 mt-auto">
+            Ver perfil e agendar <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="fa-regular fa-face-frown-open display-4"></i>
+    <p class="mt-3 mb-1 fs-5">
+      {% if selected_cidade %}
+        Nenhum veterinário encontrado em {{ selected_cidade }}.
+      {% else %}
+        Nenhum veterinário cadastrado.
+      {% endif %}
+    </p>
+    {% if selected_cidade %}
+    <a href="{{ url_for('veterinarios', cidade='') }}" class="btn btn-outline-primary mt-2">Ver todas as cidades</a>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
+
+<style>
+  .vet-card { border:none; border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,.06);
+              transition:transform .2s ease, box-shadow .2s ease; }
+  .vet-card:hover { transform:translateY(-4px); box-shadow:0 12px 26px rgba(0,0,0,.12); }
+  .vet-avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; flex:0 0 auto;
+                border:2px solid #eef0f5; }
+  .vet-avatar--placeholder { display:inline-flex; align-items:center; justify-content:center;
+                background:#eef2ff; color:#4e73df; font-size:1.6rem; }
+  .vet-badge { background:#eef2ff; color:#3d5bd6; font-weight:600; font-size:.72rem; }
+  .min-w-0 { min-width:0; }
+</style>
 {% endblock %}

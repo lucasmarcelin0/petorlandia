@@ -18875,8 +18875,50 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
 
 
 def veterinarios():
-    veterinarios = Veterinario.query.all()
-    return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
+    vets = (
+        Veterinario.query
+        .join(User, Veterinario.user_id == User.id)
+        .options(
+            db.joinedload(Veterinario.user).joinedload(User.endereco),
+            db.selectinload(Veterinario.specialties),
+        )
+        .order_by(User.name)
+        .all()
+    )
+
+    def vet_city(v):
+        end = getattr(v.user, 'endereco', None)
+        return end.cidade.strip() if end and end.cidade else None
+
+    cidades = sorted({c for v in vets if (c := vet_city(v))})
+
+    user_cidade = None
+    if current_user.is_authenticated and getattr(current_user, 'endereco', None):
+        user_cidade = (current_user.endereco.cidade or '').strip() or None
+
+    selected = request.args.get('cidade')
+    if selected is None:
+        # Sem filtro explícito: prioriza a cidade do usuário logado, se houver vets nela.
+        selected = user_cidade if user_cidade in cidades else ''
+    selected = (selected or '').strip()
+
+    if selected:
+        filtrados = [v for v in vets if vet_city(v) == selected]
+    else:
+        # "Todas as cidades": mesma cidade do usuário primeiro.
+        filtrados = sorted(
+            vets,
+            key=lambda v: (vet_city(v) != user_cidade, (v.user.name or '').lower()),
+        )
+
+    return render_template(
+        'veterinarios/veterinarios.html',
+        veterinarios=filtrados,
+        cidades=cidades,
+        selected_cidade=selected,
+        user_cidade=user_cidade,
+        vet_city=vet_city,
+    )
 
 
 def _veterinarian_activity_kind_label(kind):
