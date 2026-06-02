@@ -326,9 +326,13 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
                         "note": _build_note(visit, matches),
                         "userEnteredFormat": {
                             "backgroundColor": STATUS_COLORS.get(status, PMO_STATUS_CLEAR_COLOR),
+                            "numberFormat": {
+                                "type": "DATE_TIME",
+                                "pattern": "dd/MM/yyyy HH:mm:ss",
+                            },
                         },
                     },
-                    "fields": "note,userEnteredFormat.backgroundColor",
+                    "fields": "note,userEnteredFormat.backgroundColor,userEnteredFormat.numberFormat",
                 }
             }
         )
