@@ -31,8 +31,9 @@ from services.vacina_pmo_service import (
 MASTER_SHEET_TITLE = "Vacinação 2026"
 TIMESTAMP_COLUMN_INDEX = 0
 STATUS_LINK_COLUMN_INDEX = 12
-LEGEND_START_COLUMN_INDEX = 16
-LEGEND_END_COLUMN_INDEX = 19
+LEGEND_START_COLUMN_INDEX = 13
+LEGEND_END_COLUMN_INDEX = 16
+PMO_ACTIVE_FLOW_COLOR = {"red": 0.788, "green": 0.855, "blue": 0.973}
 DATED_SHEET_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\s*$")
 AUXILIARY_TITLES = {
     "controle de doses",
@@ -57,6 +58,7 @@ STATUS_LABELS = {
     "ausente": "Ausente",
     "pendente": "Pendente",
     "agendado": "Agendado",
+    "fluxo_ativo": "Fluxo ativo",
     "perdeu_contato": "Perdeu contato",
     "reagendar": "Reagendar",
 }
@@ -68,7 +70,8 @@ STATUS_COLORS = {
     "ausente": PMO_STATUS_COLORS["ausente"],
     "pendente": PMO_STATUS_CLEAR_COLOR,
     "sem_registro": PMO_STATUS_CLEAR_COLOR,
-    "agendado": PMO_STATUS_CLEAR_COLOR,
+    "agendado": PMO_ACTIVE_FLOW_COLOR,
+    "fluxo_ativo": PMO_ACTIVE_FLOW_COLOR,
     "perdeu_contato": PMO_STATUS_COLORS["parcial"],
     "reagendar": PMO_STATUS_CLEAR_COLOR,
 }
@@ -77,7 +80,8 @@ LEGEND_ROWS = [
     ("Verde", "Coluna M", "Vacinado confirmado."),
     ("Vermelho", "Coluna M / Encaixes", "Cancelado/recusou. Não foi e não será feito."),
     ("Amarelo", "Coluna M / Encaixes", "Atenção: parcial, remarcar ou perdeu contato com o tutor."),
-    ("Branco", "Coluna M", "Ainda precisa de acompanhamento: agendado, pendente, reagendar ou sem registro."),
+    ("Azul claro", "Coluna M", "Já está no fluxo normal: agendado ou em Inscrição a agendar."),
+    ("Branco", "Coluna M", "Ainda precisa de acompanhamento: pendente, reagendar ou sem registro."),
     ("Azul", "Somente Encaixes", "Voltou para reagendamento. Na coluna M deve aparecer o destino real ou Reagendar."),
 ]
 LEGEND_SWATCH_COLORS = [
@@ -85,8 +89,9 @@ LEGEND_SWATCH_COLORS = [
     PMO_STATUS_COLORS["vacinado"],
     PMO_STATUS_COLORS["recusou"],
     PMO_STATUS_COLORS["parcial"],
+    PMO_ACTIVE_FLOW_COLOR,
     PMO_STATUS_CLEAR_COLOR,
-    {"red": 0.788, "green": 0.855, "blue": 0.973},
+    PMO_ACTIVE_FLOW_COLOR,
 ]
 
 
@@ -172,6 +177,10 @@ def _should_sync_sheet(title: str) -> bool:
 
 def _is_encaixes(visit: PmoVaccinationVisit) -> bool:
     return _normalize_text_key(visit.sheet_title or "") == "encaixes"
+
+
+def _is_inscricao_a_agendar(visit: PmoVaccinationVisit) -> bool:
+    return _normalize_text_key(visit.sheet_title or "") == "inscricao a agendar"
 
 
 def _retry_execute(request, *, attempts: int = 4):
@@ -282,7 +291,7 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
     contextual_statuses = [_display_status_key(visit) for visit in matches]
     if any(status == "vacinado" for status in statuses):
         return "vacinado"
-    for status in ("recusou", "perdeu_contato", "reagendar"):
+    for status in ("recusou", "perdeu_contato", "fluxo_ativo", "reagendar"):
         if status in contextual_statuses:
             return status
     return "pendente"
@@ -290,6 +299,8 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
 
 def _display_status_key(visit: PmoVaccinationVisit) -> str:
     status = infer_visit_status(visit.animals)
+    if _is_inscricao_a_agendar(visit) and status == "pendente":
+        return "fluxo_ativo"
     if not _is_encaixes(visit):
         return status
     if status == "recusou":
