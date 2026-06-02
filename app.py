@@ -25624,6 +25624,23 @@ def servicos():
     return render_template('servicos.html')
 
 
+@app.route('/servicos/exames')
+@login_required
+def servicos_exames():
+    """Escolha de pet para servicos de exames, restrita ao tutor logado."""
+    animals = (
+        Animal.query
+        .options(
+            selectinload(Animal.species),
+            selectinload(Animal.breed),
+        )
+        .filter(Animal.user_id == current_user.id)
+        .order_by(Animal.date_added.desc(), Animal.name.asc())
+        .all()
+    )
+    return render_template('servicos_exames.html', animals=animals)
+
+
 @login_required
 def loja():
     pagamento_pendente = None
