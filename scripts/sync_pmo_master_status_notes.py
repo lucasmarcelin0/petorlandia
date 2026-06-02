@@ -31,6 +31,8 @@ from services.vacina_pmo_service import (
 MASTER_SHEET_TITLE = "Vacinação 2026"
 TIMESTAMP_COLUMN_INDEX = 0
 STATUS_LINK_COLUMN_INDEX = 12
+LEGEND_START_COLUMN_INDEX = 16
+LEGEND_END_COLUMN_INDEX = 19
 DATED_SHEET_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\s*$")
 AUXILIARY_TITLES = {
     "controle de doses",
@@ -70,6 +72,22 @@ STATUS_COLORS = {
     "perdeu_contato": PMO_STATUS_COLORS["parcial"],
     "reagendar": PMO_STATUS_CLEAR_COLOR,
 }
+LEGEND_ROWS = [
+    ("Cor", "Onde aparece", "Significado"),
+    ("Verde", "Coluna M", "Vacinado confirmado."),
+    ("Vermelho", "Coluna M / Encaixes", "Cancelado/recusou. Não foi e não será feito."),
+    ("Amarelo", "Coluna M / Encaixes", "Atenção: parcial, remarcar ou perdeu contato com o tutor."),
+    ("Branco", "Coluna M", "Ainda precisa de acompanhamento: agendado, pendente, reagendar ou sem registro."),
+    ("Azul", "Somente Encaixes", "Voltou para reagendamento. Na coluna M deve aparecer o destino real ou Reagendar."),
+]
+LEGEND_SWATCH_COLORS = [
+    None,
+    PMO_STATUS_COLORS["vacinado"],
+    PMO_STATUS_COLORS["recusou"],
+    PMO_STATUS_COLORS["parcial"],
+    PMO_STATUS_CLEAR_COLOR,
+    {"red": 0.788, "green": 0.855, "blue": 0.973},
+]
 
 
 def _strip_accents(value: str) -> str:
@@ -381,8 +399,80 @@ def _build_note(master_visit: PmoVaccinationVisit, matches: list[PmoVaccinationV
     return "\n".join(lines)
 
 
-def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], match_map: dict[int, list[PmoVaccinationVisit]]):
+def _build_legend_requests(sheet_id: int) -> list[dict[str, Any]]:
+    rows = []
+    for row_index, legend_row in enumerate(LEGEND_ROWS):
+        values = []
+        for text in legend_row:
+            cell = {
+                "userEnteredValue": {"stringValue": text},
+                "userEnteredFormat": {
+                    "wrapStrategy": "WRAP",
+                    "verticalAlignment": "MIDDLE",
+                },
+            }
+            if row_index == 0:
+                cell["userEnteredFormat"]["textFormat"] = {"bold": True}
+                cell["userEnteredFormat"]["backgroundColor"] = {"red": 0.851, "green": 0.918, "blue": 0.827}
+            values.append(cell)
+        rows.append({"values": values})
+
     requests = [
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": LEGEND_START_COLUMN_INDEX,
+                    "endIndex": LEGEND_END_COLUMN_INDEX,
+                },
+                "properties": {"pixelSize": 190},
+                "fields": "pixelSize",
+            }
+        },
+        {
+            "updateCells": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": len(LEGEND_ROWS),
+                    "startColumnIndex": LEGEND_START_COLUMN_INDEX,
+                    "endColumnIndex": LEGEND_END_COLUMN_INDEX,
+                },
+                "rows": rows,
+                "fields": (
+                    "userEnteredValue,"
+                    "userEnteredFormat.backgroundColor,"
+                    "userEnteredFormat.textFormat,"
+                    "userEnteredFormat.verticalAlignment,"
+                    "userEnteredFormat.wrapStrategy"
+                ),
+            }
+        },
+    ]
+    for row_index, color in enumerate(LEGEND_SWATCH_COLORS):
+        if row_index == 0 or color is None:
+            continue
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": row_index,
+                        "endRowIndex": row_index + 1,
+                        "startColumnIndex": LEGEND_START_COLUMN_INDEX,
+                        "endColumnIndex": LEGEND_START_COLUMN_INDEX + 1,
+                    },
+                    "cell": {"userEnteredFormat": {"backgroundColor": color}},
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            }
+        )
+    return requests
+
+
+def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], match_map: dict[int, list[PmoVaccinationVisit]]):
+    requests = _build_legend_requests(sheet_id) + [
         {
             "updateDimensionProperties": {
                 "range": {
