@@ -30,7 +30,11 @@ from services.vacina_pmo_service import (
 
 
 DATED_SHEET_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\s*$")
-SKIP_TITLES = {"controle de doses", "solicitacoes", "agendadas", "encaixes", "inscrição a agendar", "inscricao a agendar", "padrão", "padrao", "copia", "interesse vacina", "teste do bot"}
+SKIP_TITLES = {"controle de doses", "solicitacoes", "agendadas", "inscrição a agendar", "inscricao a agendar", "padrão", "padrao", "copia", "interesse vacina", "teste do bot"}
+ENCAIXES_BLUE_COLORS = {
+    (0.788, 0.855, 0.973),
+    (0.643, 0.761, 0.957),
+}
 
 
 def _color_tuple(color: dict[str, Any] | None) -> tuple[float, float, float] | None:
@@ -70,6 +74,21 @@ def _nearest_known_status(color: dict[str, Any] | None) -> str | None:
             best_distance = distance
             best_status = status
     return best_status if best_distance <= 0.0005 else None
+
+
+def _encaixes_status(color: dict[str, Any] | None) -> str | None:
+    current = _color_tuple(color)
+    if not current:
+        return None
+    if current == (1.0, 0.0, 0.0):
+        return "recusou"
+    if current == (1.0, 1.0, 0.0):
+        return "ausente"
+    if current in ENCAIXES_BLUE_COLORS:
+        return "remarcar"
+    if current == (0.0, 1.0, 0.0):
+        return "vacinado"
+    return None
 
 
 def _sheet_date(title: str) -> date | None:
@@ -135,14 +154,16 @@ def _fetch_sheet_rows(service, spreadsheet_id: str, sheet_title: str, sheet_gid:
     return [row.get("values", []) for row in data[0].get("rowData", [])]
 
 
-def _status_from_row(row: list[Any], row_values: list[str], offset: int) -> str | None:
+def _status_from_row(row: list[Any], row_values: list[str], offset: int, sheet_title: str) -> str | None:
     color_indexes = [0 + offset, 0]
     for index in color_indexes:
-        status = _nearest_known_status(_cell_color(row, index))
+        color = _cell_color(row, index)
+        status = _encaixes_status(color) if sheet_title.strip().lower() == "encaixes" else _nearest_known_status(color)
         if status:
             return status
     for cell_index in range(min(len(row), 20)):
-        status = _nearest_known_status(_cell_color(row, cell_index))
+        color = _cell_color(row, cell_index)
+        status = _encaixes_status(color) if sheet_title.strip().lower() == "encaixes" else _nearest_known_status(color)
         if status:
             return status
     return None
@@ -164,6 +185,8 @@ def _apply_row_status(visit: PmoVaccinationVisit, sheet_status: str, row_values:
             wanted_status = "vacinado"
         elif sheet_status in {"recusou", "ausente"}:
             wanted_status = "recusou" if sheet_status == "recusou" else "ausente"
+        elif sheet_status == "remarcar":
+            wanted_status = "remarcar"
         elif sheet_status == "parcial":
             if remaining_by_species.get(animal.species, 0) > 0:
                 wanted_status = "vacinado"
@@ -196,6 +219,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Atualiza os status no banco.")
     parser.add_argument("--limit-sheets", type=int, default=0)
+    parser.add_argument("--sheet-title", default="", help="Audita apenas uma aba específica.")
+    parser.add_argument("--skip-sync", action="store_true", help="Usa os registros já salvos e lê apenas as cores da planilha.")
     args = parser.parse_args()
 
     with app.app_context():
@@ -206,24 +231,33 @@ def main() -> None:
 
         summary = Counter()
         examples = defaultdict(list)
-        sheets = [
-            sheet for sheet in list_vacina_pmo_sheets()
-            if DATED_SHEET_RE.match(sheet.get("title") or "")
-            and (sheet.get("title") or "").strip().lower() not in SKIP_TITLES
-        ]
+        requested_title = args.sheet_title.strip().lower()
+        sheets = []
+        for sheet in list_vacina_pmo_sheets():
+            title = sheet.get("title") or ""
+            normalized_title = title.strip().lower()
+            if requested_title:
+                if normalized_title == requested_title:
+                    sheets.append(sheet)
+                continue
+            if normalized_title in SKIP_TITLES:
+                continue
+            if DATED_SHEET_RE.match(title or "") or normalized_title == "encaixes":
+                sheets.append(sheet)
         if args.limit_sheets:
             sheets = sheets[:args.limit_sheets]
 
         for sheet in sheets:
             title = sheet.get("title") or ""
             gid = sheet.get("gid") or ""
-            sync_result = sync_vacina_pmo_sheet(sheet_gid=gid, sheet_title=title)
-            persist_vacina_pmo_rows(
-                sync_result.rows,
-                spreadsheet_id=sync_result.spreadsheet_id,
-                sheet_gid=sync_result.sheet_gid,
-                sheet_title=sync_result.sheet_title,
-            )
+            if not args.skip_sync:
+                sync_result = sync_vacina_pmo_sheet(sheet_gid=gid, sheet_title=title)
+                persist_vacina_pmo_rows(
+                    sync_result.rows,
+                    spreadsheet_id=sync_result.spreadsheet_id,
+                    sheet_gid=sync_result.sheet_gid,
+                    sheet_title=sync_result.sheet_title,
+                )
             rows = _fetch_sheet_rows(service, spreadsheet_id, title, gid)
             visits = {
                 visit.source_row: visit
@@ -238,7 +272,7 @@ def main() -> None:
                 row = rows[source_row - 1]
                 row_values = _row_values(row)
                 offset = _row_column_offset(row_values)
-                sheet_status = _status_from_row(row, row_values, offset)
+                sheet_status = _status_from_row(row, row_values, offset, title)
                 if not sheet_status:
                     summary["sem_cor"] += 1
                     continue

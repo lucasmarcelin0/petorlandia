@@ -30,7 +30,7 @@ from services.vacina_pmo_service import (
 
 MASTER_SHEET_TITLE = "Vacinação 2026"
 TIMESTAMP_COLUMN_INDEX = 0
-STATUS_LINK_COLUMN_INDEX = 20
+STATUS_LINK_COLUMN_INDEX = 12
 DATED_SHEET_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\s*$")
 AUXILIARY_TITLES = {
     "controle de doses",
@@ -54,6 +54,10 @@ STATUS_LABELS = {
     "recusou": "Cancelado/recusou",
     "ausente": "Ausente",
     "pendente": "Pendente",
+    "agendado": "Agendado",
+    "perdeu_contato": "Perdeu contato",
+    "encaminhado": "Encaminhado",
+    "reagendar": "Reagendar",
 }
 STATUS_COLORS = {
     "vacinado": PMO_STATUS_COLORS["vacinado"],
@@ -63,6 +67,10 @@ STATUS_COLORS = {
     "ausente": PMO_STATUS_COLORS["ausente"],
     "pendente": PMO_STATUS_CLEAR_COLOR,
     "sem_registro": PMO_STATUS_CLEAR_COLOR,
+    "agendado": {"red": 0.788, "green": 0.855, "blue": 0.973},
+    "perdeu_contato": PMO_STATUS_COLORS["parcial"],
+    "encaminhado": {"red": 0.788, "green": 0.855, "blue": 0.973},
+    "reagendar": PMO_STATUS_CLEAR_COLOR,
 }
 
 
@@ -144,6 +152,10 @@ def _should_sync_sheet(title: str) -> bool:
     if normalized in AUXILIARY_TITLES:
         return False
     return title == MASTER_SHEET_TITLE or DATED_SHEET_RE.match(title or "") or normalized in TRACKED_NON_DATE_TITLES
+
+
+def _is_encaixes(visit: PmoVaccinationVisit) -> bool:
+    return _normalize_text_key(visit.sheet_title or "") == "encaixes"
 
 
 def _retry_execute(request, *, attempts: int = 4):
@@ -238,18 +250,39 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
         for visit in matches
         if _parse_date_object((visit.sheet_title or "").strip())
     ]
-    status_pool = dated_statuses or statuses
-    if any(status == "vacinado" for status in status_pool):
+    if dated_statuses:
+        if any(status == "vacinado" for status in dated_statuses):
+            return "vacinado"
+        if any(status == "parcial" for status in dated_statuses):
+            return "parcial"
+        if any(status == "remarcar" for status in dated_statuses):
+            return "remarcar"
+        if any(status == "recusou" for status in dated_statuses):
+            return "recusou"
+        if any(status == "ausente" for status in dated_statuses):
+            return "ausente"
+        if any(status == "pendente" for status in dated_statuses):
+            return "agendado"
+    contextual_statuses = [_display_status_key(visit) for visit in matches]
+    if any(status == "vacinado" for status in statuses):
         return "vacinado"
-    if any(status == "parcial" for status in status_pool):
-        return "parcial"
-    if any(status == "remarcar" for status in status_pool):
-        return "remarcar"
-    if any(status == "recusou" for status in status_pool):
-        return "recusou"
-    if any(status == "ausente" for status in status_pool):
-        return "ausente"
+    for status in ("recusou", "perdeu_contato", "encaminhado", "reagendar"):
+        if status in contextual_statuses:
+            return status
     return "pendente"
+
+
+def _display_status_key(visit: PmoVaccinationVisit) -> str:
+    status = infer_visit_status(visit.animals)
+    if not _is_encaixes(visit):
+        return status
+    if status == "recusou":
+        return "recusou"
+    if status in {"ausente", "parcial"}:
+        return "perdeu_contato"
+    if status in {"remarcar", "vacinado"}:
+        return "encaminhado"
+    return "reagendar"
 
 
 def _visit_sheet_url(visit: PmoVaccinationVisit) -> str:
@@ -263,7 +296,7 @@ def _visit_sheet_url(visit: PmoVaccinationVisit) -> str:
 
 
 def _visit_line(visit: PmoVaccinationVisit) -> str:
-    status = infer_visit_status(visit.animals)
+    status = _display_status_key(visit)
     row_label = f"linha {visit.source_row}" if visit.source_row else "linha ?"
     animals = "; ".join(
         f"{animal.name}: {STATUS_LABELS.get(animal.status or 'pendente', animal.status or 'pendente')}"
@@ -286,7 +319,7 @@ def _status_link_cell(matches: list[PmoVaccinationVisit]) -> tuple[str, list[dic
     text_parts = [STATUS_LABELS.get(overall, overall)]
     runs: list[dict[str, Any]] = []
     for visit in matches[:8]:
-        status = infer_visit_status(visit.animals)
+        status = _display_status_key(visit)
         row_label = f"linha {visit.source_row}" if visit.source_row else "linha ?"
         date_label = f" - {visit.vaccine_date.strftime('%d/%m/%Y')}" if visit.vaccine_date else ""
         text_parts.append("\n")
