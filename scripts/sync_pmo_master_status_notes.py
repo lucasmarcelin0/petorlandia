@@ -56,7 +56,6 @@ STATUS_LABELS = {
     "pendente": "Pendente",
     "agendado": "Agendado",
     "perdeu_contato": "Perdeu contato",
-    "encaminhado": "Encaminhado",
     "reagendar": "Reagendar",
 }
 STATUS_COLORS = {
@@ -67,9 +66,8 @@ STATUS_COLORS = {
     "ausente": PMO_STATUS_COLORS["ausente"],
     "pendente": PMO_STATUS_CLEAR_COLOR,
     "sem_registro": PMO_STATUS_CLEAR_COLOR,
-    "agendado": {"red": 0.788, "green": 0.855, "blue": 0.973},
+    "agendado": PMO_STATUS_CLEAR_COLOR,
     "perdeu_contato": PMO_STATUS_COLORS["parcial"],
-    "encaminhado": {"red": 0.788, "green": 0.855, "blue": 0.973},
     "reagendar": PMO_STATUS_CLEAR_COLOR,
 }
 
@@ -266,7 +264,7 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
     contextual_statuses = [_display_status_key(visit) for visit in matches]
     if any(status == "vacinado" for status in statuses):
         return "vacinado"
-    for status in ("recusou", "perdeu_contato", "encaminhado", "reagendar"):
+    for status in ("recusou", "perdeu_contato", "reagendar"):
         if status in contextual_statuses:
             return status
     return "pendente"
@@ -281,7 +279,7 @@ def _display_status_key(visit: PmoVaccinationVisit) -> str:
     if status in {"ausente", "parcial"}:
         return "perdeu_contato"
     if status in {"remarcar", "vacinado"}:
-        return "encaminhado"
+        return "reagendar"
     return "reagendar"
 
 
