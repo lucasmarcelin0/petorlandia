@@ -30,6 +30,7 @@ from services.vacina_pmo_service import (
 
 MASTER_SHEET_TITLE = "Vacinação 2026"
 TIMESTAMP_COLUMN_INDEX = 0
+STATUS_LINK_COLUMN_INDEX = 20
 DATED_SHEET_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4}\s*$")
 AUXILIARY_TITLES = {
     "controle de doses",
@@ -271,14 +272,44 @@ def _visit_line(visit: PmoVaccinationVisit) -> str:
     date_label = ""
     if visit.vaccine_date:
         date_label = f" em {visit.vaccine_date.strftime('%d/%m/%Y')}"
-    line = (
+    return (
         f"- {visit.sheet_title} ({row_label}): "
         f"{STATUS_LABELS.get(status, status)}{date_label}. Pets: {animals}"
     )
-    url = _visit_sheet_url(visit)
-    if url:
-        line = f"{line}\n  Abrir linha: {url}"
-    return line
+
+
+def _status_link_cell(matches: list[PmoVaccinationVisit]) -> tuple[str, list[dict[str, Any]]]:
+    overall = _overall_status(matches)
+    if not matches:
+        return STATUS_LABELS.get(overall, "Sem registro"), []
+
+    text_parts = [STATUS_LABELS.get(overall, overall)]
+    runs: list[dict[str, Any]] = []
+    for visit in matches[:8]:
+        status = infer_visit_status(visit.animals)
+        row_label = f"linha {visit.source_row}" if visit.source_row else "linha ?"
+        date_label = f" - {visit.vaccine_date.strftime('%d/%m/%Y')}" if visit.vaccine_date else ""
+        text_parts.append("\n")
+        start_index = sum(len(part) for part in text_parts)
+        sheet_label = visit.sheet_title or "Aba"
+        text_parts.append(sheet_label)
+        url = _visit_sheet_url(visit)
+        if url:
+            runs.append(
+                {
+                    "startIndex": start_index,
+                    "format": {
+                        "link": {"uri": url},
+                        "foregroundColor": {"red": 0.0, "green": 0.0, "blue": 0.8},
+                        "underline": True,
+                    },
+                }
+            )
+            runs.append({"startIndex": start_index + len(sheet_label), "format": {}})
+        text_parts.append(f" ({row_label}): {STATUS_LABELS.get(status, status)}{date_label}")
+    if len(matches) > 8:
+        text_parts.append(f"\n+{len(matches) - 8} outros")
+    return "".join(text_parts), runs
 
 
 def _build_note(master_visit: PmoVaccinationVisit, matches: list[PmoVaccinationVisit]) -> str:
@@ -320,12 +351,45 @@ def _build_note(master_visit: PmoVaccinationVisit, matches: list[PmoVaccinationV
 
 
 def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], match_map: dict[int, list[PmoVaccinationVisit]]):
-    requests = []
+    requests = [
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": STATUS_LINK_COLUMN_INDEX,
+                    "endIndex": STATUS_LINK_COLUMN_INDEX + 1,
+                },
+                "properties": {"pixelSize": 260},
+                "fields": "pixelSize",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": STATUS_LINK_COLUMN_INDEX,
+                    "endColumnIndex": STATUS_LINK_COLUMN_INDEX + 1,
+                },
+                "cell": {
+                    "userEnteredValue": {"stringValue": "Status PMO"},
+                    "userEnteredFormat": {
+                        "textFormat": {"bold": True},
+                        "backgroundColor": {"red": 0.851, "green": 0.918, "blue": 0.827},
+                    },
+                },
+                "fields": "userEnteredValue,userEnteredFormat.textFormat,userEnteredFormat.backgroundColor",
+            }
+        },
+    ]
     for visit in master_visits:
         if not visit.source_row or visit.source_row <= 0:
             continue
         matches = match_map.get(visit.id, [])
         status = _overall_status(matches)
+        status_text, status_runs = _status_link_cell(matches)
         requests.append(
             {
                 "repeatCell": {
@@ -347,6 +411,30 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
                         },
                     },
                     "fields": "note,userEnteredFormat.backgroundColor,userEnteredFormat.numberFormat",
+                }
+            }
+        )
+        status_cell = {
+            "userEnteredValue": {"stringValue": status_text},
+            "userEnteredFormat": {
+                "backgroundColor": STATUS_COLORS.get(status, PMO_STATUS_CLEAR_COLOR),
+                "wrapStrategy": "WRAP",
+            },
+        }
+        if status_runs:
+            status_cell["textFormatRuns"] = status_runs
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": visit.source_row - 1,
+                        "endRowIndex": visit.source_row,
+                        "startColumnIndex": STATUS_LINK_COLUMN_INDEX,
+                        "endColumnIndex": STATUS_LINK_COLUMN_INDEX + 1,
+                    },
+                    "cell": status_cell,
+                    "fields": "userEnteredValue,textFormatRuns,userEnteredFormat.backgroundColor,userEnteredFormat.wrapStrategy",
                 }
             }
         )
