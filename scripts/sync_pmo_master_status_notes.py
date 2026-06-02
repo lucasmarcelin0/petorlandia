@@ -100,6 +100,32 @@ def _name_key(visit: PmoVaccinationVisit) -> str:
     return _normalize_text_key(visit.tutor_name or "")
 
 
+def _name_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in _normalize_text_key(value).split()
+        if len(token) >= 3
+    }
+
+
+def _names_compatible(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -> bool:
+    left_key = _name_key(left)
+    right_key = _name_key(right)
+    if not left_key or not right_key:
+        return False
+    if left_key == right_key:
+        return True
+    if left_key in right_key or right_key in left_key:
+        return True
+    left_tokens = _name_tokens(left.tutor_name or "")
+    right_tokens = _name_tokens(right.tutor_name or "")
+    if not left_tokens or not right_tokens:
+        return False
+    overlap = len(left_tokens & right_tokens)
+    smaller = min(len(left_tokens), len(right_tokens))
+    return smaller >= 2 and (overlap / smaller) >= 0.75
+
+
 def _animal_names(visit: PmoVaccinationVisit) -> str:
     names = [animal.name for animal in visit.animals if animal.name]
     return ", ".join(names) if names else "sem pets na linha"
@@ -192,7 +218,9 @@ def _matching_visits(
             matches[visit.id] = visit
     for key in _phone_keys(master_visit):
         for visit in by_phone.get(key, []):
-            matches[visit.id] = visit
+            same_user = bool(master_visit.tutor_user_id) and visit.tutor_user_id == master_visit.tutor_user_id
+            if same_user or _names_compatible(master_visit, visit):
+                matches[visit.id] = visit
     name_key = _name_key(master_visit)
     if name_key:
         for visit in by_name.get(name_key, []):
