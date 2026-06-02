@@ -47,9 +47,7 @@
 </section>
 
 <!-- Categorias -->
-{% set cat_list = categories if categories is defined else
-  (products | map(attribute='category') | select | unique | list) %}
-{% if cat_list and cat_list|length > 0 %}
+{% if categories %}
 <section class="mb-3">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <h2 class="h5 m-0 text-secondary">
@@ -61,14 +59,11 @@
   </div>
 
   <div class="chips-scroll py-1" id="chipsScroll">
-    {% set current_cat = request.args.get('category') %}
-    {% for cat in cat_list %}
-      {% if cat %}
-      <button class="chip {% if current_cat == cat %}chip-active{% endif %}"
-              data-category="{{ cat|e }}">
-        <i class="fa-solid fa-tag me-1"></i>{{ cat }}
+    {% for cat in categories %}
+      <button class="chip {% if selected_category == cat.value %}chip-active{% endif %}"
+              data-category="{{ cat.value }}">
+        <i class="fa-solid {{ cat.icon }} me-1"></i>{{ cat.label }}
       </button>
-      {% endif %}
     {% endfor %}
   </div>
 

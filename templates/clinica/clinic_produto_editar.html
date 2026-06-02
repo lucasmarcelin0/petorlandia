@@ -35,6 +35,12 @@
         </div>
 
         <div class="mb-3">
+          {{ form.category.label(class="form-label fw-semibold") }}
+          {{ form.category(class="form-select") }}
+          <div class="form-text">Define em qual filtro o produto aparece na loja.</div>
+        </div>
+
+        <div class="mb-3">
           {{ form.mp_category_id.label(class="form-label fw-semibold") }}
           {{ form.mp_category_id(class="form-control", placeholder="Ex: food, health, pet_supplies") }}
         </div>

@@ -40,6 +40,7 @@ try:
 except ImportError:
     from .document_utils import format_cnpj, only_digits
 from models import PLANTONISTA_ESCALA_STATUS_CHOICES
+from models import PRODUCT_CATEGORY_CHOICES
 
 
 class ResetPasswordRequestForm(FlaskForm):
@@ -771,11 +772,25 @@ class EditAddressForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
-class ProductUpdateForm(FlaskForm):
+class _ProductCategoryChoicesMixin:
+    """Popula o select de categoria da loja dinamicamente a partir do banco.
+
+    As choices vêm de ``product_category_choices()``, que cai para a lista
+    semente caso a tabela ainda não exista — assim o formulário nunca quebra.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if hasattr(self, "category"):
+            from models import product_category_choices
+            self.category.choices = product_category_choices()
+
+
+class ProductUpdateForm(_ProductCategoryChoicesMixin, FlaskForm):
     name = StringField('Nome', validators=[DataRequired()])
     description = TextAreaField('Descrição')
     price = DecimalField('Preço', validators=[DataRequired()])
     stock = IntegerField('Estoque', validators=[DataRequired()])
+    category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria MP', validators=[Optional(), Length(max=50)])
     ncm = StringField('NCM', validators=[Optional(), Length(max=10)])
     cfop = StringField('CFOP', validators=[Optional(), Length(max=10)])
@@ -801,12 +816,13 @@ class OrcamentoForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
-class ClinicProductForm(FlaskForm):
+class ClinicProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário usado pelo dono da clínica para publicar um produto na loja."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
     price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     image_upload = FileField('Imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     # Quantidade inicial quando não há item de estoque vinculado
     quantity = IntegerField('Quantidade em estoque', validators=[Optional(), NumberRange(min=0)], default=0)
@@ -816,12 +832,13 @@ class ClinicProductForm(FlaskForm):
     submit = SubmitField('Publicar na loja')
 
 
-class ClinicProductEditForm(FlaskForm):
+class ClinicProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário de edição de produto da clínica."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
     price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     image_upload = FileField('Nova imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Salvar alterações')
 
@@ -881,7 +898,7 @@ class CasaDeRacaoForm(FlaskForm):
         field.data = format_cnpj(field.data)
 
 
-class CasaDeRacaoProductForm(FlaskForm):
+class CasaDeRacaoProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário para publicar um produto da casa de ração na loja."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
@@ -891,11 +908,12 @@ class CasaDeRacaoProductForm(FlaskForm):
         'Imagem',
         validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
     )
+    category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Publicar na loja')
 
 
-class CasaDeRacaoProductEditForm(FlaskForm):
+class CasaDeRacaoProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário de edição de produto da casa de ração."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
@@ -905,6 +923,7 @@ class CasaDeRacaoProductEditForm(FlaskForm):
         'Nova imagem',
         validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
     )
+    category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Salvar alterações')
 

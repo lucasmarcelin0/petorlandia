@@ -125,6 +125,7 @@ from models import (
     get_clinica_field,
 )
 from models import CasaDeRacao, CasaDeRacaoHorario  # noqa: E402
+from models import get_active_product_categories  # noqa: E402
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
     get_nfse_cancel_rules,
@@ -15374,6 +15375,7 @@ def casa_de_racao_dashboard(casa_id):
                     price=float(product_form.price.data),
                     stock=product_form.stock.data or 0,
                     image_url=image_url,
+                    category=(product_form.category.data or None),
                     mp_category_id=(product_form.mp_category_id.data or 'others').strip(),
                     status='active',
                 )
@@ -15760,6 +15762,7 @@ def casa_de_racao_produtos(casa_id):
             price=float(form.price.data),
             stock=form.stock.data or 0,
             image_url=image_url,
+            category=(form.category.data or None),
             mp_category_id=(form.mp_category_id.data or 'others').strip(),
             status='active',
         )
@@ -15783,6 +15786,7 @@ def casa_produto_editar(casa_id, product_id):
         product.description = form.description.data or None
         product.price = float(form.price.data)
         product.stock = form.stock.data or 0
+        product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
         if form.image_upload.data:
             file = form.image_upload.data
@@ -17696,6 +17700,7 @@ def clinic_loja_produtos(clinica_id):
             price=float(form.price.data),
             stock=inv_item.quantity,
             image_url=image_url,
+            category=(form.category.data or None),
             mp_category_id=(form.mp_category_id.data or 'others').strip(),
             status='active',
         )
@@ -17723,6 +17728,7 @@ def clinic_produto_editar(clinica_id, product_id):
         product.name = form.name.data
         product.description = form.description.data or None
         product.price = float(form.price.data)
+        product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
         if form.image_upload.data:
             file = form.image_upload.data
@@ -25193,7 +25199,7 @@ from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-def _build_loja_query(search_term: str, filtro: str, vendedor: str = ''):
+def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categoria: str = ''):
     from sqlalchemy import and_
     query = (
         Product.query
@@ -25223,6 +25229,9 @@ def _build_loja_query(search_term: str, filtro: str, vendedor: str = ''):
             query = query.filter(Product.casa_de_racao_id == rid)
         except ValueError:
             pass
+
+    if categoria:
+        query = query.filter(Product.category == categoria)
 
     if filtro == "lowStock":
         query = query.filter(Product.stock < 5)
@@ -25267,6 +25276,18 @@ def _get_vendedores_ativos():
     return vendedores
 
 
+@app.route('/servicos')
+@login_required
+def servicos():
+    """Central de Serviços: agendamentos e solicitações em um só lugar.
+
+    Separa os serviços (que têm fluxo de *agendamento*) da Loja (que é só
+    compra). Reúne o que antes ficava solto na home — vacina PMO e banho &
+    tosa — junto de consultas, exames e pet sitter.
+    """
+    return render_template('servicos.html')
+
+
 @login_required
 def loja():
     pagamento_pendente = None
@@ -25279,10 +25300,11 @@ def loja():
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
     vendedor = request.args.get("vendedor", "").strip()
+    categoria = request.args.get("category", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor)
+    query = _build_loja_query(search_term, filtro, vendedor, categoria)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -25303,6 +25325,8 @@ def loja():
         minha_clinica=minha_clinica,
         vendedores=vendedores,
         selected_vendedor=vendedor,
+        categories=get_active_product_categories(),
+        selected_category=categoria,
     )
 
 
@@ -25311,10 +25335,11 @@ def loja_data():
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
     vendedor = request.args.get("vendedor", "").strip()
+    categoria = request.args.get("category", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor)
+    query = _build_loja_query(search_term, filtro, vendedor, categoria)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -25365,6 +25390,7 @@ def produto_detail(product_id):
             product.description = update_form.description.data
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
+            product.category = update_form.category.data or None
             product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
             product.ncm = (update_form.ncm.data or "").strip() or None
             product.cfop = (update_form.cfop.data or "").strip() or None

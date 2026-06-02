@@ -2728,6 +2728,109 @@ class Favorite(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
 
 # Loja virtual
+# Categorias da Loja — lista fixa controlada usada nos filtros/chips e nos
+# formulários de produto. Cada item tem o valor persistido (slug estável), o
+# rótulo exibido e um ícone Font Awesome para os chips.
+PRODUCT_CATEGORIES = [
+    {"value": "racao",       "label": "Ração",            "icon": "fa-bowl-food"},
+    {"value": "petisco",     "label": "Petiscos",         "icon": "fa-bone"},
+    {"value": "brinquedo",   "label": "Brinquedos",       "icon": "fa-baseball"},
+    {"value": "higiene",     "label": "Higiene & Beleza", "icon": "fa-pump-soap"},
+    {"value": "acessorio",   "label": "Acessórios",       "icon": "fa-tag"},
+    {"value": "medicamento", "label": "Medicamentos",     "icon": "fa-pills"},
+]
+PRODUCT_CATEGORY_VALUES = [c["value"] for c in PRODUCT_CATEGORIES]
+PRODUCT_CATEGORY_LABELS = {c["value"]: c["label"] for c in PRODUCT_CATEGORIES}
+# Opções para SelectField, com entrada vazia para "sem categoria".
+PRODUCT_CATEGORY_CHOICES = [("", "— Sem categoria —")] + [
+    (c["value"], c["label"]) for c in PRODUCT_CATEGORIES
+]
+
+
+class ProductCategory(db.Model):
+    """Categoria de produto da Loja — gerenciável pelo admin.
+
+    Substitui a antiga lista fixa em código: novas categorias podem ser
+    adicionadas conforme a necessidade pelo painel administrativo. A constante
+    ``PRODUCT_CATEGORIES`` permanece apenas como semente inicial desta tabela
+    (e como fallback caso a tabela ainda não exista / esteja vazia).
+    """
+    __tablename__ = "product_category"
+
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(40), unique=True, nullable=False)
+    label = db.Column(db.String(60), nullable=False)
+    icon = db.Column(db.String(40), default="fa-tag")
+    position = db.Column(db.Integer, default=0)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+
+    @property
+    def value(self):
+        """Alias usado pelos templates de chips (mesma semântica do slug)."""
+        return self.slug
+
+    def __str__(self):
+        return self.label or self.slug
+
+    def __repr__(self):
+        return f"<ProductCategory {self.slug}>"
+
+
+def _seed_product_categories():
+    """Categorias semente como objetos transitórios (não persistidos).
+
+    Usado como fallback quando a tabela ``product_category`` ainda não existe
+    (antes da migração) ou está vazia, garantindo que a Loja nunca quebre.
+    """
+    return [
+        ProductCategory(slug=c["value"], label=c["label"], icon=c["icon"],
+                        position=i, active=True)
+        for i, c in enumerate(PRODUCT_CATEGORIES)
+    ]
+
+
+def get_active_product_categories():
+    """Categorias ativas, ordenadas para exibição (chips/select)."""
+    try:
+        cats = (
+            ProductCategory.query
+            .filter_by(active=True)
+            .order_by(ProductCategory.position, ProductCategory.label)
+            .all()
+        )
+    except Exception:
+        # Tabela ainda não migrada: desfaz a transação abortada e usa a semente.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        cats = []
+    return cats or _seed_product_categories()
+
+
+def product_category_choices():
+    """Choices para SelectField, com entrada vazia para 'sem categoria'."""
+    return [("", "— Sem categoria —")] + [
+        (c.slug, c.label) for c in get_active_product_categories()
+    ]
+
+
+def product_category_map():
+    """Mapa slug -> ProductCategory, cacheado por requisição (evita N+1)."""
+    from flask import g, has_request_context
+    if has_request_context():
+        cached = getattr(g, "_product_category_map", None)
+        if cached is not None:
+            return cached
+    mapping = {c.slug: c for c in get_active_product_categories()}
+    if has_request_context():
+        try:
+            g._product_category_map = mapping
+        except Exception:
+            pass
+    return mapping
+
+
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -2735,6 +2838,8 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     stock = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(200))
+    # Categoria de exibição na Loja (filtros/chips). Ver PRODUCT_CATEGORIES.
+    category = db.Column(db.String(40), index=True)
     mp_category_id = db.Column(db.String(50), default="others")
     ncm = db.Column(db.String(10))
     cfop = db.Column(db.String(10))
@@ -2765,6 +2870,20 @@ class Product(db.Model):
         back_populates="product",
         cascade="all, delete-orphan"
     )
+
+    @property
+    def category_label(self):
+        """Rótulo de exibição da categoria (ex.: 'racao' -> 'Ração')."""
+        if not self.category:
+            return None
+        cat = product_category_map().get(self.category)
+        return cat.label if cat else None
+
+    @property
+    def category_icon(self):
+        """Ícone Font Awesome da categoria, com fallback genérico."""
+        cat = product_category_map().get(self.category) if self.category else None
+        return cat.icon if cat else "fa-tag"
 
     def __repr__(self):
         return f"{self.name} (R$ {self.price})"

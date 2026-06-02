@@ -69,6 +69,7 @@ try:
         ProtocoloClinicoRetorno,
         AuditoriaSugestaoClinica,
         Product,
+        ProductCategory,
         Order,
         OrderItem,
         DeliveryRequest,
@@ -119,6 +120,7 @@ except ImportError:
         ProtocoloClinicoRetorno,
         AuditoriaSugestaoClinica,
         Product,
+        ProductCategory,
         Order,
         OrderItem,
         DeliveryRequest,
@@ -924,6 +926,26 @@ class BreedAdminView(MyModelView):
 
 
 
+class ProductCategoryAdmin(MyModelView):
+    """Gerencia as categorias da Loja (filtros/chips). Adicione conforme a necessidade."""
+    column_list = ['label', 'slug', 'icon', 'position', 'active']
+    form_columns = ['label', 'slug', 'icon', 'position', 'active']
+    column_default_sort = ('position', False)
+    column_editable_list = ['label', 'position', 'active']
+    column_labels = {
+        'label': 'Nome',
+        'slug': 'Identificador',
+        'icon': 'Ícone (Font Awesome)',
+        'position': 'Ordem',
+        'active': 'Ativa',
+    }
+    form_args = {
+        'slug': {'description': 'Sem espaços/acentos (ex.: racao, brinquedo). Não altere depois de criada — produtos guardam este valor.'},
+        'icon': {'description': 'Classe Font Awesome (ex.: fa-bone, fa-pills, fa-tag).'},
+        'position': {'description': 'Ordem de exibição dos chips (menor primeiro).'},
+    }
+
+
 class ProductAdmin(MyModelView):
     form_extra_fields = {
         'image_upload': FileField('Imagem')
@@ -1344,6 +1366,11 @@ def init_admin(app):
         Product, db.session,
         name='Produtos', category='Loja',
         menu_icon_type='fa', menu_icon_value='fa-box-open'
+    ))
+    admin.add_view(ProductCategoryAdmin(
+        ProductCategory, db.session,
+        name='Categorias', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-tags'
     ))
     admin.add_view(CasaDeRacaoAdminView(
         CasaDeRacao, db.session,

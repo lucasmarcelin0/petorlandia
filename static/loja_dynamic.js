@@ -226,11 +226,19 @@ function initDynamicProducts(){
     fetchProducts(params);
   });
 
-  document.querySelectorAll('.chip[data-category]').forEach(chip => {
+  const allChips = () => document.querySelectorAll('.chip[data-category]');
+  allChips().forEach(chip => {
     chip.addEventListener('click', e => {
       e.preventDefault();
       const params = new URLSearchParams(new FormData(form));
-      params.set('category', chip.dataset.category);
+      const wasActive = chip.classList.contains('chip-active');
+      allChips().forEach(c => c.classList.remove('chip-active'));
+      if(wasActive){
+        params.delete('category');           // clicar no chip ativo limpa o filtro
+      } else {
+        chip.classList.add('chip-active');
+        params.set('category', chip.dataset.category);
+      }
       params.set('page', 1);
       fetchProducts(params);
     });
@@ -239,6 +247,7 @@ function initDynamicProducts(){
     btn.addEventListener('click', e => {
       e.preventDefault();
       const params = new URLSearchParams(new FormData(form));
+      allChips().forEach(c => c.classList.remove('chip-active'));
       params.delete('category');
       params.set('page', 1);
       fetchProducts(params);
