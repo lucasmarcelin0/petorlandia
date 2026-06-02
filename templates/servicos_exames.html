@@ -64,6 +64,11 @@
           <span class="badge rounded-pill text-bg-primary mb-2">{{ selected_animal.name }}</span>
           <h2 class="h4 fw-bold mb-1">Exames dispon&iacute;veis</h2>
           <p class="text-muted mb-0">Escolha o exame para abrir os hor&aacute;rios de agendamento.</p>
+          {% if selected_city %}
+          <p class="text-muted small mb-0">
+            Profissionais filtrados por cidade: <strong>{{ selected_city }}</strong>.
+          </p>
+          {% endif %}
         </div>
         <a href="{{ url_for('ficha_animal', animal_id=selected_animal.id) }}"
            class="btn btn-outline-secondary rounded-pill">
@@ -162,6 +167,11 @@
             </option>
             {% endfor %}
           </select>
+          {% if not especialistas %}
+          <div class="form-text text-danger">
+            Nenhum profissional publicado{% if selected_city %} em {{ selected_city }}{% endif %} para agendamento de exames.
+          </div>
+          {% endif %}
         </div>
         <div class="row g-3">
           <div class="col-sm-6">

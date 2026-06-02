@@ -1726,6 +1726,8 @@ class Veterinario(db.Model):
     crmv = db.Column(db.String(20), nullable=False)
     crmv_estado = db.Column(db.String(2), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
+    public_profile_type = db.Column(db.String(20), nullable=False, default='profissional')
+    public_visible = db.Column(db.Boolean, nullable=False, default=True)
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
     specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')

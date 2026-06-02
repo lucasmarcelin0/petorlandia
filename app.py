@@ -1789,6 +1789,39 @@ def current_user_clinic_id():
     return current_user.clinica_id
 
 
+def _normalize_public_text(value):
+    normalized = (value or '').strip().lower()
+    if not normalized:
+        return ''
+    normalized = unicodedata.normalize('NFKD', normalized)
+    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r'\s+', ' ', normalized)
+
+
+def _vet_public_city(vet):
+    end = getattr(getattr(vet, 'user', None), 'endereco', None)
+    return (end.cidade or '').strip() if end and end.cidade else None
+
+
+def _is_public_veterinarian(vet):
+    profile_type = _normalize_public_text(getattr(vet, 'public_profile_type', None) or 'profissional')
+    return bool(getattr(vet, 'public_visible', True)) and profile_type == 'profissional'
+
+
+def _public_veterinarians_query():
+    return (
+        Veterinario.query
+        .join(User, Veterinario.user_id == User.id)
+        .options(
+            db.joinedload(Veterinario.user).joinedload(User.endereco),
+            db.selectinload(Veterinario.specialties),
+        )
+        .filter(Veterinario.public_visible.is_(True))
+        .filter(Veterinario.public_profile_type == 'profissional')
+        .order_by(User.name)
+    )
+
+
 FISCAL_UF_CODES = {
     "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
     "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
@@ -18877,20 +18910,10 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
 
 
 def veterinarios():
-    vets = (
-        Veterinario.query
-        .join(User, Veterinario.user_id == User.id)
-        .options(
-            db.joinedload(Veterinario.user).joinedload(User.endereco),
-            db.selectinload(Veterinario.specialties),
-        )
-        .order_by(User.name)
-        .all()
-    )
+    vets = _public_veterinarians_query().all()
 
     def vet_city(v):
-        end = getattr(v.user, 'endereco', None)
-        return end.cidade.strip() if end and end.cidade else None
+        return _vet_public_city(v)
 
     cidades = sorted({c for v in vets if (c := vet_city(v))})
 
@@ -18905,7 +18928,8 @@ def veterinarios():
     selected = (selected or '').strip()
 
     if selected:
-        filtrados = [v for v in vets if vet_city(v) == selected]
+        selected_key = _normalize_public_text(selected)
+        filtrados = [v for v in vets if _normalize_public_text(vet_city(v)) == selected_key]
     else:
         # "Todas as cidades": mesma cidade do usuário primeiro.
         filtrados = sorted(
@@ -18930,6 +18954,8 @@ def solicitar_agendamento(veterinario_id):
     from models import Veterinario, Animal, AppointmentRequest, Message
 
     veterinario = Veterinario.query.get_or_404(veterinario_id)
+    if not _is_public_veterinarian(veterinario):
+        abort(404)
     if request.method == 'GET':
         return _render_vet_public_profile(veterinario)
 
@@ -25658,13 +25684,19 @@ def servicos_exames():
                 exames = ordenar_por_species_scope(exames, scope_alvo)
         except Exception:
             current_app.logger.exception("Erro ao ordenar exames por especie para servicos/exames")
-        especialistas = (
-            Veterinario.query
-            .options(selectinload(Veterinario.user), selectinload(Veterinario.specialties))
-            .join(User)
-            .order_by(User.name)
-            .all()
-        )
+        selected_city = None
+        if getattr(selected_animal, 'owner', None) and getattr(selected_animal.owner, 'endereco', None):
+            selected_city = (selected_animal.owner.endereco.cidade or '').strip() or None
+        if not selected_city and getattr(current_user, 'endereco', None):
+            selected_city = (current_user.endereco.cidade or '').strip() or None
+
+        especialistas = _public_veterinarians_query().all()
+        if selected_city:
+            selected_city_key = _normalize_public_text(selected_city)
+            especialistas = [
+                vet for vet in especialistas
+                if _normalize_public_text(_vet_public_city(vet)) == selected_city_key
+            ]
 
     return render_template(
         'servicos_exames.html',
@@ -25672,6 +25704,7 @@ def servicos_exames():
         selected_animal=selected_animal,
         exames=exames,
         especialistas=especialistas,
+        selected_city=selected_city if selected_animal else None,
     )
 
 
@@ -29892,6 +29925,18 @@ def schedule_exam(animal_id):
     vet = Veterinario.query.get(specialist_id)
     animal = Animal.query.get_or_404(animal_id)
     same_user = vet and vet.user_id == current_user.id
+    if not vet:
+        abort(404)
+    if not same_user:
+        if not _is_public_veterinarian(vet):
+            abort(404)
+        animal_city = None
+        if getattr(animal, 'owner', None) and getattr(animal.owner, 'endereco', None):
+            animal_city = (animal.owner.endereco.cidade or '').strip() or None
+        if not animal_city and getattr(current_user, 'endereco', None):
+            animal_city = (current_user.endereco.cidade or '').strip() or None
+        if animal_city and _normalize_public_text(_vet_public_city(vet)) != _normalize_public_text(animal_city):
+            abort(404)
     if animal.user_id != current_user.id and not same_user:
         animal = get_animal_or_404(animal_id)
     appt = ExamAppointment(
