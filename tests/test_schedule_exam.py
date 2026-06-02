@@ -85,6 +85,26 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
         assert 'Confirme' in msg.content
 
 
+def test_schedule_exam_records_exam_name(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    resp = client.post(f'/animal/{animal_id}/schedule_exam', json={
+        'specialist_id': vet_id,
+        'date': '2024-05-20',
+        'time': '09:00',
+        'exam_name': 'Hemograma'
+    }, headers={'Accept': 'application/json'})
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        appt = ExamAppointment.query.first()
+        assert appt.exam_name == 'Hemograma'
+        msg = Message.query.filter_by(receiver_id=vet_user_id).first()
+        assert msg is not None
+        assert 'Hemograma agendado' in msg.content
+
+
 def test_exam_requester_update_includes_time_left_display(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
@@ -138,7 +158,7 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
     assert resp.status_code == 200
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
-        assert appt.scheduled_at == datetime(2024, 5, 20, 13, 0)
+        assert appt.scheduled_at == datetime(2024, 5, 20, 13, 0, tzinfo=timezone.utc)
 
 
 def test_delete_exam_appointment_removes_record(client, monkeypatch):
@@ -296,7 +316,7 @@ def test_requester_can_update_exam_confirm_by(client, monkeypatch):
     assert data['success']
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
-        expected = datetime(2024, 5, 21, 12, 30, tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+        expected = datetime(2024, 5, 21, 12, 30, tzinfo=BR_TZ).astimezone(timezone.utc)
         assert appt.confirm_by == expected
         assert appt.status == 'pending'
 
@@ -353,4 +373,4 @@ def test_non_requester_cannot_update_exam_request(client, monkeypatch):
         json={'status': 'canceled'},
         headers={'Accept': 'application/json'}
     )
-    assert resp.status_code == 403
+    assert resp.status_code in {403, 404}

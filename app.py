@@ -25638,7 +25638,41 @@ def servicos_exames():
         .order_by(Animal.date_added.desc(), Animal.name.asc())
         .all()
     )
-    return render_template('servicos_exames.html', animals=animals)
+    selected_animal_id = request.args.get('animal_id', type=int)
+    selected_animal = None
+    exames = []
+    especialistas = []
+
+    if selected_animal_id:
+        selected_animal = next((animal for animal in animals if animal.id == selected_animal_id), None)
+        if not selected_animal:
+            abort(404)
+
+    if selected_animal:
+        exames = ExameModelo.query.order_by(ExameModelo.nome).limit(80).all()
+        try:
+            from services.species_ranking import resolver_species_scope_do_animal, ordenar_por_species_scope
+
+            scope_alvo = resolver_species_scope_do_animal(selected_animal.id)
+            if scope_alvo:
+                exames = ordenar_por_species_scope(exames, scope_alvo)
+        except Exception:
+            current_app.logger.exception("Erro ao ordenar exames por especie para servicos/exames")
+        especialistas = (
+            Veterinario.query
+            .options(selectinload(Veterinario.user), selectinload(Veterinario.specialties))
+            .join(User)
+            .order_by(User.name)
+            .all()
+        )
+
+    return render_template(
+        'servicos_exames.html',
+        animals=animals,
+        selected_animal=selected_animal,
+        exames=exames,
+        especialistas=especialistas,
+    )
 
 
 @login_required
@@ -29831,8 +29865,11 @@ def schedule_exam(animal_id):
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
     time_str = data.get('time')
+    exam_name = (data.get('exam_name') or '').strip()
     if not all([specialist_id, date_str, time_str]):
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+    if len(exam_name) > 120:
+        return jsonify({'success': False, 'message': 'Nome do exame muito longo.'}), 400
     scheduled_at_local = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
     scheduled_at = normalize_to_utc(scheduled_at_local)
     # Ensure requested time falls within the veterinarian's available schedule
@@ -29853,18 +29890,22 @@ def schedule_exam(animal_id):
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
         }), 400
     vet = Veterinario.query.get(specialist_id)
-    animal = Animal.query.get(animal_id)
+    animal = Animal.query.get_or_404(animal_id)
     same_user = vet and vet.user_id == current_user.id
+    if animal.user_id != current_user.id and not same_user:
+        animal = get_animal_or_404(animal_id)
     appt = ExamAppointment(
         animal_id=animal_id,
         specialist_id=specialist_id,
         requester_id=current_user.id,
+        exam_name=exam_name or None,
         scheduled_at=scheduled_at,
         status='confirmed' if same_user else 'pending',
     )
     if vet and animal:
+        exam_label = exam_name or 'Exame'
         evento = AgendaEvento(
-            titulo=f"Exame de {animal.name}",
+            titulo=f"{exam_label} de {animal.name}",
             inicio=scheduled_at,
             fim=scheduled_at + duration,
             responsavel_id=vet.user_id,
@@ -29878,7 +29919,7 @@ def schedule_exam(animal_id):
                 receiver_id=vet.user_id,
                 animal_id=animal_id,
                 content=(
-                    f"Exame agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
+                    f"{exam_label} agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
                     f"Confirme até {confirm_by_local.strftime('%H:%M') if confirm_by_local else 'N/A'}"
                 ),
             )
@@ -30027,7 +30068,8 @@ def update_exam_appointment_requester(appointment_id):
     time_left_seconds = None
     time_left_display = None
     if appt.confirm_by:
-        time_left = appt.confirm_by - now
+        comparable_now = now.replace(tzinfo=None) if appt.confirm_by.tzinfo is None else now
+        time_left = appt.confirm_by - comparable_now
         time_left_seconds = time_left.total_seconds()
         if time_left_seconds > 0 and style.get('show_time_left'):
             time_left_display = format_timedelta(time_left)

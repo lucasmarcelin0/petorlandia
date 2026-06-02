@@ -2022,6 +2022,7 @@ class ExamAppointment(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     specialist_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
     requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    exam_name = db.Column(db.String(120))
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
     request_time = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
@@ -2043,6 +2044,8 @@ class ExamAppointment(db.Model):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not self.request_time:
+            self.request_time = utcnow()
         if not self.confirm_by:
             self.confirm_by = (self.request_time or utcnow()) + timedelta(hours=2)
 
@@ -2052,8 +2055,12 @@ class ExamAppointment(db.Model):
             return 'Aceito'
         if self.status == 'canceled':
             return 'Cancelado'
-        if self.confirm_by and utcnow() > self.confirm_by:
-            return 'Prazo expirado'
+        if self.confirm_by:
+            now = utcnow()
+            if self.confirm_by.tzinfo is None:
+                now = now.replace(tzinfo=None)
+            if now > self.confirm_by:
+                return 'Prazo expirado'
         return 'Aguardando aceitação'
 
 

@@ -8,10 +8,10 @@
         <i class="fa-solid fa-arrow-left me-1"></i> Voltar aos servi&ccedil;os
       </a>
       <h1 class="fw-bold mb-2 text-primary">
-        <i class="fa-solid fa-microscope me-2"></i> Escolha o pet
+        <i class="fa-solid fa-microscope me-2"></i> Agendar exame
       </h1>
-      <p class="text-muted mb-0" style="max-width: 720px;">
-        Selecione um dos seus pets cadastrados para acompanhar ou iniciar o fluxo de exames.
+      <p class="text-muted mb-0" style="max-width: 760px;">
+        Escolha o pet, selecione um exame dispon&iacute;vel e marque um hor&aacute;rio com um profissional.
       </p>
     </div>
     <a href="{{ url_for('novo_animal') }}" class="btn btn-primary rounded-pill">
@@ -21,95 +21,416 @@
 </section>
 
 {% if animals %}
-<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-1">
-  {% for animal in animals %}
-  <div class="col">
-    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden service-pet-card">
-      <div class="service-pet-card__media">
-        {% if animal.image %}
-        <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}" loading="lazy">
-        {% else %}
-        <div class="service-pet-card__placeholder" aria-hidden="true">
-          <i class="fa-solid fa-paw"></i>
-        </div>
-        {% endif %}
+<div class="row g-4 mt-1">
+  <div class="col-12 col-xl-4">
+    <div class="service-panel">
+      <div class="service-panel__header">
+        <h2 class="h5 fw-bold mb-1">Seus pets</h2>
+        <p class="text-muted small mb-0">Somente animais vinculados ao seu cadastro.</p>
       </div>
-      <div class="card-body d-flex flex-column gap-3 p-4">
-        <div>
-          <h2 class="h5 fw-bold mb-1">{{ animal.name or 'Pet sem nome' }}</h2>
-          <p class="text-muted small mb-0">
-            {{ animal.species or 'Esp&eacute;cie n&atilde;o informada' }}
-            {% if animal.breed %}&bull; {{ animal.breed }}{% endif %}
-          </p>
-        </div>
-        {% if animal.age_display or animal.sex %}
-        <div class="d-flex flex-wrap gap-2 text-muted small">
-          {% if animal.age_display %}
-          <span><i class="fa-solid fa-hourglass-half me-1"></i>{{ animal.age_display }}</span>
+      <div class="d-grid gap-3">
+        {% for animal in animals %}
+        {% set is_selected = selected_animal and selected_animal.id == animal.id %}
+        <a href="{{ url_for('servicos_exames', animal_id=animal.id) }}"
+           class="service-pet-select {% if is_selected %}is-selected{% endif %}">
+          <div class="service-pet-select__avatar">
+            {% if animal.image %}
+            <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}" loading="lazy">
+            {% else %}
+            <i class="fa-solid fa-paw" aria-hidden="true"></i>
+            {% endif %}
+          </div>
+          <div class="flex-fill min-w-0">
+            <div class="fw-bold text-truncate">{{ animal.name or 'Pet sem nome' }}</div>
+            <div class="text-muted small text-truncate">
+              {{ animal.species or 'Esp&eacute;cie n&atilde;o informada' }}
+              {% if animal.breed %}&bull; {{ animal.breed }}{% endif %}
+            </div>
+          </div>
+          {% if is_selected %}
+          <i class="fa-solid fa-check text-primary" aria-hidden="true"></i>
           {% endif %}
-          {% if animal.sex %}
-          <span><i class="fa-solid fa-venus-mars me-1"></i>{{ animal.sex }}</span>
-          {% endif %}
-        </div>
-        {% endif %}
-        <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}"
-           class="btn btn-primary rounded-pill mt-auto">
-          Abrir ficha do pet <i class="fa-solid fa-arrow-right ms-1"></i>
         </a>
+        {% endfor %}
       </div>
     </div>
   </div>
-  {% endfor %}
+
+  <div class="col-12 col-xl-8">
+    {% if selected_animal %}
+    <div class="service-panel">
+      <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3 mb-4">
+        <div>
+          <span class="badge rounded-pill text-bg-primary mb-2">{{ selected_animal.name }}</span>
+          <h2 class="h4 fw-bold mb-1">Exames dispon&iacute;veis</h2>
+          <p class="text-muted mb-0">Escolha o exame para abrir os hor&aacute;rios de agendamento.</p>
+        </div>
+        <a href="{{ url_for('ficha_animal', animal_id=selected_animal.id) }}"
+           class="btn btn-outline-secondary rounded-pill">
+          <i class="fa-solid fa-clipboard-list me-1"></i> Ver ficha
+        </a>
+      </div>
+
+      {% if exames %}
+      <div id="exam-feedback" class="alert d-none" role="status"></div>
+      <div class="row row-cols-1 row-cols-md-2 g-3">
+        {% for exame in exames %}
+        <div class="col">
+          <div class="exam-option-card">
+            <div class="d-flex align-items-start gap-3">
+              <div class="exam-option-card__icon">
+                <i class="fa-solid fa-vial"></i>
+              </div>
+              <div class="flex-fill">
+                <h3 class="h6 fw-bold mb-1">{{ exame.nome }}</h3>
+                {% if exame.justificativa %}
+                <p class="text-muted small mb-3">{{ exame.justificativa }}</p>
+                {% else %}
+                <p class="text-muted small mb-3">Exame dispon&iacute;vel para solicita&ccedil;&atilde;o.</p>
+                {% endif %}
+                <button type="button"
+                        class="btn btn-primary rounded-pill w-100"
+                        data-open-exam-schedule
+                        data-exam-name="{{ exame.nome }}">
+                  Agendar este exame <i class="fa-solid fa-calendar-plus ms-1"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="alert alert-light border mb-0">
+        Nenhum exame cadastrado no cat&aacute;logo ainda.
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="service-panel mt-4">
+      <div id="historico-agendamentos">
+        {% set appointments = selected_animal.exam_appointments %}
+        {% include 'partials/historico_exam_appointments.html' %}
+      </div>
+    </div>
+    {% else %}
+    <div class="service-panel service-panel--empty">
+      <div class="display-6 text-primary mb-3">
+        <i class="fa-solid fa-paw"></i>
+      </div>
+      <h2 class="h4 fw-bold">Escolha um pet para ver os exames</h2>
+      <p class="text-muted mb-0">Depois da escolha, os exames dispon&iacute;veis aparecem aqui com a op&ccedil;&atilde;o de agendar.</p>
+    </div>
+    {% endif %}
+  </div>
 </div>
 {% else %}
-<div class="card border-0 shadow-sm rounded-4 mt-4">
-  <div class="card-body text-center py-5">
-    <div class="display-6 text-primary mb-3">
-      <i class="fa-solid fa-paw"></i>
-    </div>
-    <h2 class="h4 fw-bold">Nenhum pet cadastrado ainda</h2>
-    <p class="text-muted mx-auto" style="max-width: 560px;">
-      Cadastre seu pet para solicitar servi&ccedil;os e acompanhar exames, vacinas e hist&oacute;rico.
-    </p>
-    <a href="{{ url_for('novo_animal') }}" class="btn btn-primary rounded-pill">
-      <i class="fa-solid fa-plus me-1"></i> Cadastrar meu pet
-    </a>
+<div class="service-panel service-panel--empty mt-4">
+  <div class="display-6 text-primary mb-3">
+    <i class="fa-solid fa-paw"></i>
+  </div>
+  <h2 class="h4 fw-bold">Nenhum pet cadastrado ainda</h2>
+  <p class="text-muted mx-auto" style="max-width: 560px;">
+    Cadastre seu pet para solicitar servi&ccedil;os e acompanhar exames, vacinas e hist&oacute;rico.
+  </p>
+  <a href="{{ url_for('novo_animal') }}" class="btn btn-primary rounded-pill">
+    <i class="fa-solid fa-plus me-1"></i> Cadastrar meu pet
+  </a>
+</div>
+{% endif %}
+
+{% if selected_animal %}
+<div class="modal fade" id="examScheduleModal" tabindex="-1" aria-labelledby="examScheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" id="exam-schedule-form">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="examScheduleModalLabel">Agendar exame</h5>
+          <p class="text-muted small mb-0" data-selected-exam-label></p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="exam-name" name="exam_name">
+        <div class="mb-3">
+          <label class="form-label" for="exam-specialist">Profissional</label>
+          <select class="form-select" id="exam-specialist" required>
+            <option value="">Selecione...</option>
+            {% for vet in especialistas %}
+            <option value="{{ vet.id }}">
+              {{ vet.user.name }}{% if vet.specialties %} - {{ vet.specialties|map(attribute='nome')|join(', ') }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label" for="exam-date">Data</label>
+            <input type="date" class="form-control" id="exam-date" required>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="exam-time">Hor&aacute;rio</label>
+            <select class="form-select" id="exam-time" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-text mt-2">Os hor&aacute;rios exibidos seguem a carga hor&aacute;ria do profissional para exames.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">
+          Agendar exame <i class="fa-solid fa-calendar-check ms-1"></i>
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 {% endif %}
 
 <style>
-  .service-pet-card {
-    transition: transform .2s ease, box-shadow .2s ease;
+  .service-panel {
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 18px;
+    box-shadow: 0 8px 26px rgba(15, 23, 42, .06);
+    padding: 1.25rem;
   }
-  .service-pet-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 26px rgba(15, 23, 42, .12) !important;
+  .service-panel__header {
+    margin-bottom: 1rem;
   }
-  .service-pet-card__media {
-    height: 180px;
-    background: linear-gradient(135deg, rgba(13, 110, 253, .12), rgba(25, 135, 84, .12));
+  .service-panel--empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+  }
+  .service-pet-select {
     display: flex;
     align-items: center;
-    justify-content: center;
-  }
-  .service-pet-card__media img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .service-pet-card__placeholder {
-    width: 88px;
-    height: 88px;
-    border-radius: 999px;
+    gap: .85rem;
+    padding: .9rem;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 14px;
+    color: inherit;
+    text-decoration: none;
     background: #fff;
+  }
+  .service-pet-select:hover,
+  .service-pet-select.is-selected {
+    border-color: rgba(13, 110, 253, .45);
+    background: rgba(13, 110, 253, .04);
+    color: inherit;
+    text-decoration: none;
+  }
+  .service-pet-select__avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(13, 110, 253, .12), rgba(25, 135, 84, .12));
     color: #0d6efd;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+    flex: 0 0 auto;
+    overflow: hidden;
+  }
+  .service-pet-select__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .exam-option-card {
+    height: 100%;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 14px;
+    padding: 1rem;
+    background: #fff;
+  }
+  .exam-option-card__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(13, 110, 253, .1);
+    color: #0d6efd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
   }
 </style>
+
+{% if selected_animal %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const modalEl = document.getElementById('examScheduleModal');
+  const modal = modalEl && window.bootstrap ? new bootstrap.Modal(modalEl) : null;
+  const form = document.getElementById('exam-schedule-form');
+  const examNameInput = document.getElementById('exam-name');
+  const examLabel = document.querySelector('[data-selected-exam-label]');
+  const specialistSelect = document.getElementById('exam-specialist');
+  const dateInput = document.getElementById('exam-date');
+  const timeSelect = document.getElementById('exam-time');
+  const feedback = document.getElementById('exam-feedback');
+
+  function showFeedback(message, type = 'success') {
+    if (!feedback) return;
+    feedback.className = `alert alert-${type}`;
+    feedback.textContent = message;
+  }
+
+  function resetTimes(message = 'Selecione...') {
+    if (!timeSelect) return;
+    timeSelect.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = message;
+    timeSelect.appendChild(option);
+  }
+
+  async function loadTimes() {
+    const vetId = specialistSelect?.value || '';
+    const date = dateInput?.value || '';
+    resetTimes(vetId && date ? 'Carregando...' : 'Selecione...');
+    if (!vetId || !date) return;
+    try {
+      const response = await fetch(`/api/specialist/${vetId}/available_times?date=${encodeURIComponent(date)}&kind=exame`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error('Erro ao carregar horarios');
+      const times = await response.json();
+      resetTimes(times.length ? 'Selecione...' : 'Sem horarios disponiveis');
+      times.forEach(time => {
+        const option = document.createElement('option');
+        option.value = time;
+        option.textContent = time;
+        timeSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error(error);
+      resetTimes('Erro ao carregar');
+    }
+  }
+
+  document.querySelectorAll('[data-open-exam-schedule]').forEach(button => {
+    button.addEventListener('click', () => {
+      const examName = button.dataset.examName || '';
+      examNameInput.value = examName;
+      if (examLabel) {
+        examLabel.textContent = examName ? `${examName} para {{ selected_animal.name }}` : '{{ selected_animal.name }}';
+      }
+      resetTimes();
+      modal?.show();
+    });
+  });
+
+  specialistSelect?.addEventListener('change', loadTimes);
+  dateInput?.addEventListener('change', loadTimes);
+
+  form?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const payload = {
+      specialist_id: specialistSelect.value,
+      date: dateInput.value,
+      time: timeSelect.value,
+      exam_name: examNameInput.value,
+    };
+    if (!payload.specialist_id || !payload.date || !payload.time) {
+      showFeedback('Selecione profissional, data e horario.', 'warning');
+      return;
+    }
+    try {
+      const response = await fetch('{{ url_for("schedule_exam", animal_id=selected_animal.id) }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        showFeedback(data.message || 'Erro ao agendar exame.', 'danger');
+        return;
+      }
+      const hist = document.getElementById('historico-agendamentos');
+      if (hist && data.html) {
+        hist.innerHTML = data.html;
+      }
+      showFeedback('Exame agendado. Aguarde a confirmacao do profissional.');
+      form.reset();
+      resetTimes();
+      modal?.hide();
+    } catch (error) {
+      console.error(error);
+      showFeedback('Erro ao agendar exame.', 'danger');
+    }
+  });
+
+  window.deletarAgendamentoExame = async function (id) {
+    if (!window.confirm('Excluir este agendamento?')) return;
+    const response = await fetch(`/exam_appointment/${id}/delete`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
+      credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      showFeedback(data.message || 'Erro ao excluir agendamento.', 'danger');
+      return;
+    }
+    const hist = document.getElementById('historico-agendamentos');
+    if (hist && data.html) {
+      hist.innerHTML = data.html;
+    }
+    showFeedback('Agendamento excluido.');
+  };
+
+  window.editarAgendamentoExame = function (id) {
+    const item = document.getElementById(`exam-appt-${id}`);
+    item?.querySelector('.exam-view')?.classList.add('d-none');
+    item?.querySelector('.exam-edit-form')?.classList.remove('d-none');
+  };
+
+  window.cancelarEdicaoExame = function (id) {
+    const item = document.getElementById(`exam-appt-${id}`);
+    item?.querySelector('.exam-edit-form')?.classList.add('d-none');
+    item?.querySelector('.exam-view')?.classList.remove('d-none');
+  };
+
+  window.salvarAgendamentoExame = async function (event, id) {
+    event.preventDefault();
+    const editForm = event.currentTarget;
+    const payload = {
+      date: editForm.querySelector('[name="date"]')?.value || '',
+      time: editForm.querySelector('[name="time"]')?.value || '',
+      specialist_id: editForm.querySelector('[name="specialist_id"]')?.value || '',
+    };
+    const response = await fetch(`/exam_appointment/${id}/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      showFeedback(data.message || 'Erro ao atualizar agendamento.', 'danger');
+      return;
+    }
+    const hist = document.getElementById('historico-agendamentos');
+    if (hist && data.html) {
+      hist.innerHTML = data.html;
+    }
+    showFeedback('Agendamento atualizado.');
+  };
+});
+</script>
+{% endif %}
 
 {% endblock %}
