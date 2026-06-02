@@ -251,6 +251,16 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
     return "pendente"
 
 
+def _visit_sheet_url(visit: PmoVaccinationVisit) -> str:
+    spreadsheet_id = visit.spreadsheet_id or _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    if not spreadsheet_id or not visit.sheet_gid or not visit.source_row:
+        return ""
+    return (
+        f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+        f"#gid={visit.sheet_gid}&range=A{visit.source_row}"
+    )
+
+
 def _visit_line(visit: PmoVaccinationVisit) -> str:
     status = infer_visit_status(visit.animals)
     row_label = f"linha {visit.source_row}" if visit.source_row else "linha ?"
@@ -261,10 +271,14 @@ def _visit_line(visit: PmoVaccinationVisit) -> str:
     date_label = ""
     if visit.vaccine_date:
         date_label = f" em {visit.vaccine_date.strftime('%d/%m/%Y')}"
-    return (
+    line = (
         f"- {visit.sheet_title} ({row_label}): "
         f"{STATUS_LABELS.get(status, status)}{date_label}. Pets: {animals}"
     )
+    url = _visit_sheet_url(visit)
+    if url:
+        line = f"{line}\n  Abrir linha: {url}"
+    return line
 
 
 def _build_note(master_visit: PmoVaccinationVisit, matches: list[PmoVaccinationVisit]) -> str:
