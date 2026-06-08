@@ -443,19 +443,47 @@ def _is_summary_or_header(row: list[Any]) -> bool:
     )
 
 
+# Separadores que delimitam animais diferentes: vírgula, ponto e vírgula, quebra
+# de linha e a conjunção " e ".  Cada um deve ser IGNORADO quando aparece dentro de
+# parênteses, pois os tutores escrevem descrições como "Branca (mais nova e braba)" —
+# sem isso o "e"/vírgula da descrição quebra um nome em vários animais fantasmas.
+_ANIMAL_SEPARATOR_RE = re.compile(r",|;|\n|\se\s", re.IGNORECASE)
+
+
 def _split_animals(value: Any) -> list[str]:
     text = _normalize_text(value)
     if not text:
         return []
-    return [
-        _normalize_text(item)
-        for item in re.split(r",|;|\n|\se\s", text, flags=re.IGNORECASE)
-        if _normalize_text(item)
-    ]
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            match = _ANIMAL_SEPARATOR_RE.match(text, i)
+            if match:
+                parts.append(text[start:i])
+                i = match.end()
+                start = i
+                continue
+        i += 1
+    parts.append(text[start:])
+    return [_normalize_text(part) for part in parts if _normalize_text(part)]
 
 
 def _build_animals(names: list[str], dogs: int, cats: int) -> list[dict[str, str]]:
-    total = max(len(names), dogs + cats)
+    # As quantidades de cães/gatos vêm de colunas próprias da planilha e são a
+    # contagem AUTORITATIVA de animais. Só usamos o número de nomes encontrados no
+    # texto livre quando nenhuma quantidade foi informada — assim uma descrição
+    # bagunçada nunca infla a contagem de animais (o que deixaria pets fantasmas
+    # presos em "pendente" e marcaria a visita inteira como "parcial").
+    count = dogs + cats
+    total = count if count > 0 else len(names)
     animals: list[dict[str, str]] = []
     for index in range(total):
         species = "cao" if index < dogs else "gato"

@@ -191,6 +191,77 @@ def test_parse_vacina_pmo_rows_splits_partial_house_animals():
     ]
 
 
+def test_parse_vacina_pmo_rows_does_not_split_conjunction_inside_description():
+    # Regressão: a tutora descreveu os 2 gatos como
+    # "Branca (mais nova e braba) Princesa (mais velha e calma)". O " e " dentro
+    # dos parênteses NÃO pode virar separador, ou apareceriam 3 animais fantasmas
+    # e a visita ficaria "parcial" (amarela) mesmo todos vacinados.
+    rows = [
+        [
+            "Dulcineia Alves da Silva Pereira",
+            "Avenida D.",
+            "1384",
+            "Casa.",
+            "Jardim Boa Vista",
+            "99998-4368",
+            "99998-0634",
+            "0",
+            "2",
+            "Branca (mais nova e braba) Princesa (mais velha e calma)",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "03/06/2026",
+            "Tarde",
+        ],
+    ]
+
+    parsed = parse_vacina_pmo_rows(rows)
+
+    assert len(parsed) == 1
+    assert parsed[0]["dogs"] == 0
+    assert parsed[0]["cats"] == 2
+    # A contagem oficial (2 gatos) manda: exatamente 2 animais, sem fantasmas.
+    assert len(parsed[0]["animals"]) == 2
+    assert all(animal["species"] == "gato" for animal in parsed[0]["animals"])
+
+
+def test_parse_vacina_pmo_rows_caps_animals_to_official_count():
+    # Mesmo que o texto livre produza nomes demais (vírgula dentro da descrição),
+    # a quantidade informada na planilha limita o número de animais.
+    rows = [
+        [
+            "Fulano de Tal",
+            "Rua X",
+            "10",
+            "",
+            "Centro",
+            "16999990000",
+            "",
+            "1",
+            "0",
+            "Rex, o grande, valente",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "01/06/2026",
+            "Manhã",
+        ],
+    ]
+
+    parsed = parse_vacina_pmo_rows(rows)
+
+    assert len(parsed) == 1
+    assert len(parsed[0]["animals"]) == 1
+    assert parsed[0]["animals"][0]["species"] == "cao"
+
+
 def test_parse_vacina_pmo_rows_reads_request_date_column():
     rows = [
         [
