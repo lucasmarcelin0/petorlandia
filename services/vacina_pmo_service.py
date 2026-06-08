@@ -81,10 +81,11 @@ PMO_NOTE_COLUMN = "K"
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
 PMO_MASTER_SHEET_TITLE = os.getenv("PMO_VACCINE_MASTER_SHEET_TITLE", "Vacinação 2026")
 
-# Limite da coluna pmo_vaccination_animal.name (varchar 120). Cadastros com muitos
-# nomes em texto livre podem gerar um "nome" gigante; truncamos para não estourar o
-# banco e derrubar a sincronização inteira.
-PMO_ANIMAL_NAME_MAX = 120
+# Limite de nome de animal. O cadastro flui para duas colunas: pmo_vaccination_animal.name
+# (varchar 120) e animal.name (varchar 100). Usamos o menor (100) para caber em ambas.
+# Cadastros com muitos nomes em texto livre geram um "nome" gigante; truncar evita
+# estourar o banco e derrubar a sincronização inteira.
+PMO_ANIMAL_NAME_MAX = 100
 PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
@@ -658,7 +659,7 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
         return
 
     animal = Animal(
-        name=pmo_animal.name,
+        name=(pmo_animal.name or "")[:PMO_ANIMAL_NAME_MAX],
         user_id=visit.tutor_user_id,
         species_id=_species_id(pmo_animal.species),
         status="ativo",

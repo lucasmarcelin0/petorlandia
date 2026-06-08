@@ -1764,7 +1764,7 @@ def test_build_animals_truncates_overlong_name_to_db_limit():
     animals = vacina_pmo_service._build_animals([long_name], 0, 1)
 
     assert len(animals) == 1
-    assert len(animals[0]["name"]) <= 120
+    assert len(animals[0]["name"]) <= vacina_pmo_service.PMO_ANIMAL_NAME_MAX
 
 
 def test_pmo_is_master_sheet_matches_ignoring_accent_and_case():
