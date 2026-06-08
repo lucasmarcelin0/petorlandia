@@ -3247,6 +3247,38 @@ def _get_veterinarian_membership_price() -> Decimal:
     return VeterinarianSettings.membership_price_amount()
 
 
+def _format_brl_price(value) -> str | None:
+    if value is None:
+        return None
+    try:
+        amount = Decimal(value).quantize(Decimal('0.01'))
+    except Exception:  # noqa: BLE001
+        return None
+    return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _public_pricing_config() -> dict:
+    trial_days = int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30)
+    show_price = bool(current_app.config.get('EXIBIR_PRECO_NO_CONVITE_CLINICA', True))
+    price = None
+    formatted_price = None
+    try:
+        price = _get_veterinarian_membership_price()
+        formatted_price = _format_brl_price(price)
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning("Falha ao carregar pricing publico: %s", exc)
+        show_price = False
+
+    return {
+        'trial_dias_clinica': trial_days,
+        'preco_mensal_clinica': float(price) if price is not None else None,
+        'preco_formatado': formatted_price,
+        'moeda': 'BRL',
+        'exibir_preco_no_convite_clinica': bool(show_price and formatted_price),
+        'fonte': 'site_public_pricing',
+    }
+
+
 def _resolve_membership_from_payment(payment):
     external = getattr(payment, 'external_reference', '') or ''
     match = re.match(r'vet-membership-(\d+)', external)
@@ -4565,6 +4597,47 @@ def vacina_pmo_criar_dia():
     except Exception as exc:
         current_app.logger.exception("Falha ao criar dia de vacinação Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+import threading as _pmo_threading
+_pmo_status_sync_lock = _pmo_threading.Lock()
+
+
+@app.route('/vacina-pmo/webhook/atualizar-status', methods=['POST', 'GET'])
+@csrf.exempt
+def vacina_pmo_status_webhook():
+    """Dispara a sincronização completa de status (Vacinação 2026) em background.
+
+    Protegido por token (env PMO_SYNC_WEBHOOK_TOKEN) para ser chamado pelo Apps
+    Script da planilha. Retorna na hora; o trabalho pesado roda numa thread, então
+    não estoura o timeout do Heroku nem do UrlFetchApp.
+    """
+    import hmac
+
+    expected = os.getenv('PMO_SYNC_WEBHOOK_TOKEN', '').strip()
+    provided = (request.args.get('token') or request.headers.get('X-PMO-Token') or '').strip()
+    if not expected or not provided or not hmac.compare_digest(provided, expected):
+        abort(403)
+
+    if not _pmo_status_sync_lock.acquire(blocking=False):
+        return jsonify({
+            'success': True,
+            'running': True,
+            'message': 'Uma sincronização de status já está em andamento.',
+        })
+
+    def _job():
+        try:
+            from scripts.sync_pmo_full_status import run_pmo_full_sync
+            result = run_pmo_full_sync(apply=True, skip_sheet_sync=False)
+            app.logger.info('[PMO webhook] Sincronização de status concluída: %s', result)
+        except Exception:
+            app.logger.exception('[PMO webhook] Falha na sincronização de status')
+        finally:
+            _pmo_status_sync_lock.release()
+
+    _pmo_threading.Thread(target=_job, name='pmo-status-sync', daemon=True).start()
+    return jsonify({'success': True, 'message': 'Atualização de status iniciada.'})
 
 
 @app.route('/vacina-pmo/sheets', methods=['GET'])
@@ -10857,6 +10930,43 @@ def _integration_find_or_create_external_clinic(user: User, clinic_data: dict):
     return clinic, True
 
 
+def _integration_ensure_clinic_admin_user(clinic: Clinica, *, email: str | None = None, phone: str | None = None, name: str | None = None):
+    email = (email or clinic.email or '').strip().lower()
+    phone = (phone or clinic.telefone or '').strip() or None
+    if clinic.owner_id:
+        owner = db.session.get(User, clinic.owner_id)
+        if owner:
+            if phone and not owner.phone:
+                owner.phone = phone
+                db.session.add(owner)
+            return owner, False
+
+    owner = User.query.filter(func.lower(User.email) == email).first() if email else None
+    created = False
+    if not owner and email:
+        owner = User(
+            name=(name or clinic.nome or 'Administrador da clinica').strip(),
+            email=email,
+            phone=phone,
+            role='adotante',
+            worker='colaborador',
+            clinica_id=clinic.id,
+        )
+        owner.set_password(secrets.token_urlsafe(16))
+        db.session.add(owner)
+        db.session.flush()
+        created = True
+    if owner:
+        if not owner.clinica_id:
+            owner.clinica_id = clinic.id
+        if phone and not owner.phone:
+            owner.phone = phone
+        clinic.owner_id = owner.id
+        db.session.add_all([owner, clinic])
+        db.session.flush()
+    return owner, created
+
+
 def _integration_find_or_create_tutor_for_clinic(user: User, clinic: Clinica, tutor_data: dict):
     tutor = _integration_find_existing_tutor(clinic.id, tutor_data)
     created = False
@@ -12439,6 +12549,70 @@ def _external_onboarding_url(invite):
     return url_for('external_onboarding_invite', token=invite.token, _external=True)
 
 
+def _external_invite_exame_imagem(invite):
+    if not invite or not getattr(invite, 'exame_id', None):
+        return None
+    return ExameImagem.query.filter_by(exame_solicitado_id=invite.exame_id).first()
+
+
+def _external_invite_document_url(invite, exame_imagem=None):
+    exame_imagem = exame_imagem or _external_invite_exame_imagem(invite)
+    if exame_imagem and exame_imagem.arquivo_pdf_url:
+        return exame_imagem.arquivo_pdf_url
+    if invite and invite.exame and invite.exame.laudo_url:
+        return invite.exame.laudo_url
+    return None
+
+
+def _invite_missing_fields(invite, exame_imagem=None):
+    missing = []
+    if not getattr(invite, 'tutor_id', None):
+        missing.append('tutor_id')
+    if not getattr(invite, 'animal_id', None):
+        missing.append('animal_id')
+    if not getattr(invite, 'exame_id', None):
+        missing.append('exame_id')
+    if invite and invite.invite_type == 'clinic' and not getattr(invite, 'clinica_id', None):
+        missing.append('clinica_id')
+    if not _external_invite_document_url(invite, exame_imagem):
+        missing.append('laudo_url')
+    return missing
+
+
+def _invite_payload(invite, *, pricing=None):
+    exame_imagem = _external_invite_exame_imagem(invite)
+    document_url = _external_invite_document_url(invite, exame_imagem)
+    missing = _invite_missing_fields(invite, exame_imagem)
+    base = {
+        'url': _external_onboarding_url(invite),
+        'expires_at': _integration_format_datetime(invite.expires_at) if invite else None,
+        'dados_faltantes': missing,
+    }
+    if invite and invite.invite_type == 'clinic':
+        pricing = pricing or _public_pricing_config()
+        payload = {
+            **base,
+            'tipo_convite': 'trial_clinica_exame',
+            'trial_dias': pricing.get('trial_dias_clinica'),
+            'pricing_source': pricing.get('fonte'),
+            'permite_visualizar_exame': True,
+            'clinica_id': invite.clinica_id,
+            'exame_id': invite.exame_id,
+        }
+        if pricing.get('exibir_preco_no_convite_clinica') and pricing.get('preco_formatado'):
+            payload['preco_formatado'] = pricing.get('preco_formatado')
+        return payload
+    return {
+        **base,
+        'tipo_convite': 'acesso_tutor_laudo',
+        'tutor_paga': False,
+        'permite_visualizar_laudo': True,
+        'tutor_id': getattr(invite, 'tutor_id', None),
+        'animal_id': getattr(invite, 'animal_id', None),
+        'exame_id': getattr(invite, 'exame_id', None),
+    }
+
+
 def _mcp_laudo_volante_widget_html():
     return """
 <main class="po-widget">
@@ -13550,6 +13724,12 @@ def mcp_server():
                     return _mcp_err(req_id, -32602, 'Informe clinica_id ou nome_clinica.')
                 if not (tool_args.get('email') or tool_args.get('telefone') or clinic.email or clinic.telefone):
                     return _mcp_err(req_id, -32602, 'Informe email ou telefone para enviar o primeiro acesso da clinica.')
+                _integration_ensure_clinic_admin_user(
+                    clinic,
+                    email=tool_args.get('email'),
+                    phone=tool_args.get('telefone'),
+                    name=tool_args.get('nome_responsavel') or tool_args.get('responsavel_nome'),
+                )
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
                 invite = _create_external_onboarding_invite('clinic', user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
             else:
@@ -13562,7 +13742,8 @@ def mcp_server():
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
                 invite = _create_external_onboarding_invite('tutor', user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), message='Acesso restrito a ficha do proprio animal.')
             db.session.commit()
-            return _mcp_ok(req_id, _mcp_json_content({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite)}}))
+            convite = {'token': invite.token if invite else None, **_invite_payload(invite)}
+            return _mcp_ok(req_id, _mcp_json_content({'convite': convite}))
 
         if tool_name == 'abrir_importador_laudo_volante':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
@@ -17072,12 +17253,30 @@ def external_onboarding_invite(token):
     referrer = invite.referrer_vet.user if invite.referrer_vet and invite.referrer_vet.user else invite.created_by
     register_url = url_for('register', next=request.path)
     login_url = url_for('login_view', next=request.path)
+    exame_imagem = _external_invite_exame_imagem(invite)
+    document_url = _external_invite_document_url(invite, exame_imagem)
+    tutor_can_view = bool(
+        invite.invite_type == 'tutor'
+        and not expired
+        and document_url
+        and (
+            (exame_imagem and exame_imagem.liberado_para_tutor)
+            or not exame_imagem
+        )
+    )
+    clinic_can_view = bool(invite.invite_type == 'clinic' and not expired and document_url)
+    pricing = _public_pricing_config() if invite.invite_type == 'clinic' else None
     if current_user.is_authenticated and not invite.used_at:
         invite.used_at = datetime.now(BR_TZ)
         db.session.commit()
     return render_template(
         'clinica/external_onboarding_invite.html',
         invite=invite,
+        exame_imagem=exame_imagem,
+        document_url=document_url,
+        tutor_can_view=tutor_can_view,
+        clinic_can_view=clinic_can_view,
+        pricing=pricing,
         expired=expired,
         referrer=referrer,
         register_url=register_url,
@@ -31300,12 +31499,18 @@ def api_integrations_generate_clinic_first_access_invite():
             raise ValueError('Informe clinica_id ou nome_clinica.')
         if not (payload.get('email') or payload.get('telefone') or clinic.email or clinic.telefone):
             raise ValueError('Informe email ou telefone para enviar o primeiro acesso da clinica.')
+        _integration_ensure_clinic_admin_user(
+            clinic,
+            email=payload.get('email'),
+            phone=payload.get('telefone'),
+            name=payload.get('nome_responsavel') or payload.get('responsavel_nome'),
+        )
         exame = db.session.get(ExameImagem, int(payload.get('exame_id'))) if payload.get('exame_id') else None
         invite = _create_external_onboarding_invite('clinic', auth_user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
         db.session.commit()
     except ValueError as exc:
         return _integration_error('invalid_clinic_invite_payload', str(exc), 400)
-    return _integration_ok({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite), 'expires_at': _integration_format_datetime(invite.expires_at) if invite else None}}, 201)
+    return _integration_ok({'convite': {'token': invite.token if invite else None, **_invite_payload(invite)}}, 201)
 
 
 @csrf.exempt
@@ -31331,7 +31536,7 @@ def api_integrations_generate_tutor_access_invite():
         db.session.commit()
     except ValueError as exc:
         return _integration_error('invalid_tutor_invite_payload', str(exc), 400)
-    return _integration_ok({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite), 'expires_at': _integration_format_datetime(invite.expires_at) if invite else None}}, 201)
+    return _integration_ok({'convite': {'token': invite.token if invite else None, **_invite_payload(invite)}}, 201)
 
 
 @integration_bearer_required('clinical_summary:read', 'exams:read')
@@ -31556,6 +31761,14 @@ def api_integrations_openapi():
         },
         'security': [{'PetOrlandiaOAuth': ['profile']}],
         'paths': {
+            '/api/public/pricing': {
+                'get': {
+                    'operationId': 'obterPricingPublicoPetOrlandia',
+                    'summary': 'Obter configuracao publica central de planos e precos',
+                    'security': [],
+                    'responses': {'200': ok_response('Pricing publico obtido.')},
+                }
+            },
             '/api/integrations/me': {
                 'get': {
                     'operationId': 'obterPerfilPetOrlandia',
@@ -31968,6 +32181,10 @@ def api_my_pets():
         .all()
     )
     return jsonify([_serialize_calendar_pet(p) for p in pets])
+
+
+def api_public_pricing():
+    return jsonify(_public_pricing_config())
 
 
 @login_required
