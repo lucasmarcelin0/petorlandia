@@ -76,6 +76,8 @@ Todos exigem `Authorization: Bearer <token>`.
 - `cadastrar_tutor_e_pets`
 - `registrar_consulta_clinica`
 - `registrar_bloco_exames`
+- `abrir_importador_laudo_volante`
+- `importar_laudo_volante`
 - `agendar_consulta`
 - `agendar_retorno`
 
@@ -152,6 +154,16 @@ Exemplos de uso:
 - Colaboradores veem apenas dados da própria clínica.
 - Tutores veem apenas animais vinculados à própria conta.
 - Quando um animal não está dentro do escopo acessível, a integração retorna erro de não encontrado no contexto da integração.
+
+## Importação de laudos com anexos do ChatGPT
+
+A tool `importar_laudo_volante` aceita três caminhos para o laudo, nesta ordem de preferência:
+
+1. `laudo_arquivo`: referência de arquivo autorizada pelo ChatGPT com `download_url`, `file_id`, `mime_type` e `file_name`. O PetOrlândia baixa o arquivo e salva uma cópia em `laudos_exames`.
+2. `laudo_texto`: texto integral ou resumo fiel extraído do laudo. Este é o fallback recomendado quando o ChatGPT não conseguir propagar o anexo.
+3. `laudo_url`: URL pública `http/https` do arquivo. Caminhos locais do sandbox do ChatGPT, como `/mnt/data/...`, são ignorados e não são persistidos no prontuário.
+
+O painel `abrir_importador_laudo_volante` também expõe seleção/upload de arquivo quando o runtime do ChatGPT disponibilizar `window.openai.selectFiles`, `window.openai.uploadFile` e `window.openai.getFileDownloadUrl`.
 
 ## Limitações desta versão
 

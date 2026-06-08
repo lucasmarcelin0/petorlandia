@@ -48,9 +48,11 @@ def _load_secret_key(project_root: Optional[Path] = None) -> str:
 
 class Config:
     SECRET_KEY = _load_secret_key()
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI",
-        "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
+    # Lido exclusivamente da variável de ambiente (setada no Heroku em produção).
+    # Sem ela (dev/local/CI), cai para um SQLite local — nunca uma credencial de
+    # produção embutida no código.
+    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or (
+        f"sqlite:///{(PROJECT_ROOT / 'petorlandia_dev.db').as_posix()}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool
@@ -72,7 +74,12 @@ class Config:
     OAUTH_REFRESH_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_REFRESH_TOKEN_EXPIRES_IN", "2592000"))
     OAUTH_ALLOWED_SCOPES = os.environ.get(
         "OAUTH_ALLOWED_SCOPES",
-        "openid profile email pets:read appointments:read tutors:write pets:write",
+        (
+            "openid profile email pets:read pets:write appointments:read appointments:write "
+            "tutors:read tutors:write consultations:read consultations:write "
+            "prescriptions:read exams:read exams:write vaccines:read "
+            "clinical_summary:read handoff:read tutor_guidance:generate"
+        ),
     )
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)
@@ -89,6 +96,8 @@ class Config:
     MAIL_USERNAME = _env_optional("MAIL_USERNAME")
     MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
     _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")
+    SUPPORT_EMAIL = _env_optional("SUPPORT_EMAIL") or _mail_sender_email
+    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE")
     MAIL_DEFAULT_SENDER = (
         (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
         if _mail_sender_email

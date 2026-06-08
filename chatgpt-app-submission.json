@@ -1,0 +1,332 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "PetOrlandia",
+    "subtitle": "Gestao veterinaria",
+    "description": "PetOrlandia ajuda veterinarios e equipes clinicas a consultar pets, agenda e pendencias, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "listar_meus_pets": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves pets accessible to the authenticated PetOrlandia user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_agendamentos": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves appointments accessible to the authenticated PetOrlandia user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "interpretar_mensagem_livre_atendimento": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only parses provided text into a draft and does not save data.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "assistente_operacional_veterinario": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Can create or update private PetOrlandia records after explicit confirmation.",
+        "open_world_justification": "Writes only inside the authenticated user's PetOrlandia clinical workspace.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "cadastrar_tutor_e_pets": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or reuses private tutor and pet records and may create initial consultations.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "registrar_consulta_clinica": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or updates a private clinical consultation in PetOrlandia.",
+        "open_world_justification": "Writes only inside the PetOrlandia clinical record system.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "registrar_bloco_exames": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a private exam block and exam items for a patient.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "abrir_importador_laudo_volante": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only renders a review widget and returns the draft for user confirmation.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "importar_laudo_volante": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or reuses private clinic, tutor, animal, and completed exam records in PetOrlandia.",
+        "open_world_justification": "Writes only inside PetOrlandia and records internal notifications.",
+        "destructive_justification": "Requires explicit confirmation and does not delete records or publish externally."
+      }
+    },
+    "agendar_consulta": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a private clinical appointment for an accessible patient.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "agendar_retorno": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a private return appointment from an existing consultation.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "obter_resumo_clinico_animal": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves and summarizes clinical data accessible to the authenticated user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_agenda_do_dia": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves daily appointments and related clinical flags.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_pendencias_clinicas": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves vaccines, returns, and exam pendencies in the user's accessible scope.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_vacinas_pendentes": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves pending vaccine data in the user's accessible scope.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_exames_pendentes": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves pending exam requests and appointments in the user's accessible scope.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_retornos_pendentes": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves future return appointments in the user's accessible scope.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "gerar_orientacao_tutor": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only generates a draft from existing PetOrlandia clinical data without saving it.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "gerar_handoff_clinico": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only generates a handoff draft from existing PetOrlandia clinical data without saving it.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "List pets available to the authenticated user.",
+      "user_prompt": "Liste meus pets cadastrados no PetOrlandia.",
+      "file_attachment_urls": null,
+      "tools_triggered": "listar_meus_pets",
+      "expected_output": "Returns the user's accessible pets with identifying clinical details such as name, species, breed, sex, age, and weight.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Review the veterinarian's appointments for the current day.",
+      "user_prompt": "Quais pacientes tenho hoje e quais pendencias clinicas aparecem para eles?",
+      "file_attachment_urls": null,
+      "tools_triggered": "listar_agenda_do_dia",
+      "expected_output": "Returns today's accessible appointments with patient names and summarized pending vaccines, returns, or exams.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Generate a clinical summary for a patient.",
+      "user_prompt": "Resuma o historico clinico da Luna.",
+      "file_attachment_urls": null,
+      "tools_triggered": "obter_resumo_clinico_animal",
+      "expected_output": "Returns a structured clinical summary for the matched animal, including recent consultations, prescriptions, exams, and pendencies.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create tutor and pet records only after explicit confirmation.",
+      "user_prompt": "Cadastre o tutor Joao, telefone 16999990000, com a pet Mel, cadela, e confirme a gravacao.",
+      "file_attachment_urls": null,
+      "tools_triggered": "cadastrar_tutor_e_pets",
+      "expected_output": "Creates or reuses the tutor and pet records and reports what was created or reused.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Import a mobile ultrasound report from a pasted report text.",
+      "user_prompt": "Importe este laudo de ultrassom para a clinica Alfa, tutor Maria, paciente Nina, e confirme a gravacao: conclusao sem alteracoes relevantes.",
+      "file_attachment_urls": null,
+      "tools_triggered": "importar_laudo_volante",
+      "expected_output": "Creates or reuses the clinic, tutor, animal, and completed exam record, then returns the recommended next action and message for the clinic.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Open the visual review panel before importing a report.",
+      "user_prompt": "Abra o painel para eu revisar o laudo volante da Nina antes de gravar.",
+      "file_attachment_urls": null,
+      "tools_triggered": "abrir_importador_laudo_volante",
+      "expected_output": "Renders the review widget with clinic, tutor, animal, exam, report text, and missing fields to confirm.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Schedule a return from an existing consultation.",
+      "user_prompt": "Agende retorno da consulta 123 para 2026-06-15 as 14:00 e confirme a gravacao.",
+      "file_attachment_urls": null,
+      "tools_triggered": "agendar_retorno",
+      "expected_output": "Creates a return appointment if the consultation is accessible and the requested time is valid.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for unrelated general veterinary advice.",
+      "user_prompt": "Meu cachorro esta tossindo, o que pode ser?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked unless the user asks to use PetOrlandia data or record something in PetOrlandia.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not write without explicit confirmation.",
+      "user_prompt": "Anote uma consulta da Luna com suspeita de dermatite.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The assistant should ask for confirmation or missing details before using any write tool.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for unrelated personal calendar requests.",
+      "user_prompt": "Marque uma reuniao com meu contador amanha as 9h.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because the request is outside PetOrlandia clinical workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not import unreachable local file paths.",
+      "user_prompt": "Importe o laudo que esta em /mnt/data/laudo.pdf.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The assistant should request a supported ChatGPT file attachment, public URL, or pasted report text instead of relying on a local sandbox path.",
+      "expected_output_url": null
+    }
+  ]
+}

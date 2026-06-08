@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="description" content="Termos de uso do PetOrlandia.">
+{% endblock %}
+
+{% block main %}
+<section class="py-4 py-lg-5">
+  <div class="mx-auto" style="max-width: 920px;">
+    <span class="text-uppercase text-muted small fw-semibold">PetOrlandia</span>
+    <h1 class="mt-2 mb-3">Termos de uso</h1>
+    <p class="text-muted">Ultima atualizacao: 8 de junho de 2026.</p>
+
+    <div class="vstack gap-4">
+      <section>
+        <h2 class="h4">Uso do servico</h2>
+        <p>
+          O PetOrlandia oferece ferramentas para organizacao de rotinas
+          veterinarias, agenda, prontuarios, exames, comunicacao, apoio
+          administrativo e integracoes autorizadas, incluindo o app no ChatGPT.
+          O usuario deve usar o servico apenas para fins licitos e com dados que
+          esteja autorizado a tratar.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Responsabilidade profissional</h2>
+        <p>
+          O PetOrlandia nao substitui avaliacao, diagnostico ou atendimento
+          veterinario presencial quando necessario. Registros, resumos,
+          orientacoes e handoffs devem ser revisados por profissional habilitado
+          antes de orientar condutas clinicas.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Conta, acesso e autorizacao</h2>
+        <p>
+          O usuario e responsavel por proteger sua conta e por autorizar apenas
+          acessos necessarios. Contas veterinarias podem ter permissoes de escrita
+          clinica. Contas sem perfil veterinario podem ser impedidas de autorizar
+          escopos de escrita.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">App no ChatGPT</h2>
+        <p>
+          Ao conectar o PetOrlandia ao ChatGPT, o usuario autoriza o acesso por
+          OAuth dentro dos escopos aprovados. Acoes de escrita exigem confirmacao
+          explicita antes de gravar dados no PetOrlandia.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Privacidade e suporte</h2>
+        <p>
+          O tratamento de dados segue a politica de privacidade. Para duvidas,
+          problemas de acesso ou pedidos relacionados a dados, use o canal de
+          suporte publico.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-outline-primary" href="{{ url_for('privacy') }}">Politica de privacidade</a>
+          <a class="btn btn-outline-secondary" href="{{ url_for('support') }}">Suporte</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+{% endblock %}

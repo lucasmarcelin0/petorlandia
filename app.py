@@ -243,8 +243,8 @@ CORS(app, resources={
     r"/mcp": {
         "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["WWW-Authenticate"],
+        "allow_headers": ["Content-Type", "Authorization", "Mcp-Session-Id", "MCP-Protocol-Version"],
+        "expose_headers": ["WWW-Authenticate", "Mcp-Session-Id"],
     },
 })
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
@@ -4073,6 +4073,35 @@ def painel_dashboard():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+
+@app.route('/support')
+def support():
+    return render_template(
+        'support.html',
+        support_email=app.config.get('SUPPORT_EMAIL'),
+        support_phone=app.config.get('SUPPORT_PHONE'),
+    )
+
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+
+@app.route('/.well-known/openai-apps-challenge')
+def openai_apps_challenge():
+    token = (app.config.get('OPENAI_APPS_CHALLENGE_TOKEN') or os.environ.get('OPENAI_APPS_CHALLENGE_TOKEN') or '').strip()
+    if not token:
+        abort(404)
+    response = make_response(token)
+    response.mimetype = 'text/plain'
+    return response
 
 
 @app.route('/vacina-pmo')
@@ -8874,6 +8903,7 @@ def login_view():
     form = LoginForm()
     next_url = request.values.get('next') or url_for('index')
     next_url = _sanitize_login_next_url(next_url)
+    oauth_login_flow = urlparse(next_url).path == '/oauth/authorize'
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
         form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -8884,7 +8914,12 @@ def login_view():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400
             flash(login_error, 'warning')
-            return render_template('auth/login.html', form=form, next_url=next_url)
+            return render_template(
+                'auth/login.html',
+                form=form,
+                next_url=next_url,
+                oauth_login_flow=oauth_login_flow,
+            )
 
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
@@ -8908,7 +8943,12 @@ def login_view():
             errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
         return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o login.'}), 400
 
-    return render_template('auth/login.html', form=form, next_url=next_url)
+    return render_template(
+        'auth/login.html',
+        form=form,
+        next_url=next_url,
+        oauth_login_flow=oauth_login_flow,
+    )
 
 
 _OAUTH_PRIVATE_JWK = None
@@ -9017,18 +9057,8 @@ def _oauth_allowed_scopes() -> set[str]:
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
 
 
-def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
-    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
-    if not requested:
-        requested = {'openid', 'profile', 'email'}
-
-    allowed = _oauth_allowed_scopes()
-    if client:
-        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
-
-    if not requested.issubset(allowed):
-        raise ValueError('Requested scope is not allowed.')
-
+def _oauth_order_scopes(scopes: Iterable[str]) -> str:
+    requested = {item.strip() for item in scopes if item and item.strip()}
     scope_order = [
         'openid',
         'profile',
@@ -9051,6 +9081,31 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
     ordered_scopes = [scope for scope in scope_order if scope in requested]
     ordered_scopes.extend(sorted(requested.difference(set(scope_order))))
     return ' '.join(ordered_scopes)
+
+
+def _oauth_veterinarian_write_scopes() -> set[str]:
+    return {
+        'tutors:write',
+        'pets:write',
+        'appointments:write',
+        'consultations:write',
+        'exams:write',
+    }
+
+
+def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
+    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
+    if not requested:
+        requested = {'openid', 'profile', 'email'}
+
+    allowed = _oauth_allowed_scopes()
+    if client:
+        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
+
+    if not requested.issubset(allowed):
+        raise ValueError('Requested scope is not allowed.')
+
+    return _oauth_order_scopes(requested)
 
 
 def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool:
@@ -10684,6 +10739,269 @@ def _integration_create_exam_block(user: User, animal: Animal, payload: dict):
     return bloco
 
 
+def _integration_find_or_create_external_clinic(user: User, clinic_data: dict):
+    clinic_name = (clinic_data.get('nome') or clinic_data.get('name') or '').strip()
+    if not clinic_name:
+        raise ValueError('Informe o nome da clinica solicitante.')
+
+    email = (clinic_data.get('email') or '').strip().lower() or None
+    phone = (clinic_data.get('telefone') or clinic_data.get('phone') or '').strip() or None
+    cnpj = (clinic_data.get('cnpj') or '').strip() or None
+
+    query = Clinica.query.filter(func.lower(Clinica.nome) == clinic_name.lower())
+    if cnpj:
+        existing = query.filter(Clinica.cnpj == cnpj).first()
+        if existing:
+            return existing, False
+    existing = query.first()
+    if existing:
+        updated = False
+        if email and not existing.email:
+            existing.email = email
+            updated = True
+        if phone and not existing.telefone:
+            existing.telefone = phone
+            updated = True
+        if updated:
+            db.session.add(existing)
+            db.session.flush()
+        return existing, False
+
+    clinic = Clinica(
+        nome=clinic_name,
+        email=email,
+        telefone=phone,
+        cnpj=cnpj,
+        endereco=(clinic_data.get('endereco') or clinic_data.get('address') or '').strip() or None,
+    )
+    db.session.add(clinic)
+    db.session.flush()
+
+    return clinic, True
+
+
+def _integration_find_or_create_tutor_for_clinic(user: User, clinic: Clinica, tutor_data: dict):
+    tutor = _integration_find_existing_tutor(clinic.id, tutor_data)
+    created = False
+    provisional_email = False
+    if tutor:
+        return tutor, created, provisional_email
+
+    tutor_email = (tutor_data.get('email') or '').strip().lower()
+    if not tutor_email:
+        tutor_email = _integration_generate_provisional_email(tutor_data.get('nome') or tutor_data.get('name') or 'tutor')
+        provisional_email = True
+
+    tutor = User(
+        name=(tutor_data.get('nome') or tutor_data.get('name') or '').strip() or 'Tutor sem nome',
+        email=tutor_email,
+        phone=(tutor_data.get('telefone') or tutor_data.get('phone') or '').strip() or None,
+        address=(tutor_data.get('endereco') or tutor_data.get('address') or '').strip() or None,
+        cpf=(tutor_data.get('cpf') or '').strip() or None,
+        role='adotante',
+        clinica_id=clinic.id,
+        added_by=user,
+        is_private=True,
+    )
+    tutor.set_password(secrets.token_urlsafe(16))
+    db.session.add(tutor)
+    db.session.flush()
+    return tutor, True, provisional_email
+
+
+def _integration_find_or_create_pet_for_tutor(user: User, clinic: Clinica, tutor: User, pet_data: dict):
+    pet = _integration_find_existing_pet(tutor.id, pet_data)
+    if pet:
+        if not pet.clinica_id:
+            pet.clinica_id = clinic.id
+            db.session.add(pet)
+            db.session.flush()
+        return pet, False
+
+    species = _integration_resolve_species(pet_data.get('especie') or pet_data.get('species'))
+    breed = _integration_resolve_breed(species, pet_data.get('raca') or pet_data.get('breed'))
+    pet = Animal(
+        name=(pet_data.get('nome') or pet_data.get('name') or '').strip() or 'Pet sem nome',
+        species_id=species.id if species else None,
+        breed_id=breed.id if breed else None,
+        sex=(pet_data.get('sexo') or pet_data.get('sex') or '').strip() or None,
+        age=(pet_data.get('idade') or pet_data.get('age') or '').strip() or None,
+        user_id=tutor.id,
+        added_by_id=user.id,
+        clinica_id=clinic.id,
+        status='disponível',
+        modo='adotado',
+        is_alive=True,
+    )
+    db.session.add(pet)
+    db.session.flush()
+    return pet, True
+
+
+def _integration_import_mobile_exam_report(user: User, payload: dict):
+    clinic_data = payload.get('clinica') or {}
+    tutor_data = payload.get('tutor') or {}
+    animal_data = payload.get('animal') or payload.get('pet') or {}
+    exam_data = payload.get('exame') or {}
+
+    if not tutor_data:
+        raise ValueError('Informe os dados do tutor/responsavel extraidos do laudo.')
+    if not animal_data:
+        raise ValueError('Informe os dados do animal extraidos do laudo.')
+
+    clinic, clinic_created = _integration_find_or_create_external_clinic(user, clinic_data)
+    tutor, tutor_created, tutor_provisional_email = _integration_find_or_create_tutor_for_clinic(user, clinic, tutor_data)
+    animal, animal_created = _integration_find_or_create_pet_for_tutor(user, clinic, tutor, animal_data)
+
+    report_text = (payload.get('laudo_texto') or payload.get('texto_laudo') or '').strip()
+    conclusion = (exam_data.get('conclusao') or payload.get('conclusao') or '').strip()
+    findings = (exam_data.get('achados') or payload.get('achados') or '').strip()
+    result_parts = [part for part in [conclusion, findings, report_text] if part]
+    result_text = '\n\n'.join(result_parts) or None
+
+    laudo_url = (payload.get('laudo_url') or '').strip()
+    laudo_filename = (payload.get('laudo_filename') or payload.get('nome_arquivo') or '').strip() or None
+    laudo_file_ref = _mcp_extract_file_reference(payload, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file')
+    laudo_file_status = 'sem_arquivo'
+    if laudo_file_ref:
+        laudo_url, uploaded_filename = _integration_download_and_store_laudo_file(laudo_file_ref)
+        laudo_filename = uploaded_filename or laudo_filename
+        laudo_file_status = 'arquivo_salvo'
+    elif laudo_url and _is_local_chatgpt_file_path(laudo_url):
+        # ChatGPT can surface attachments as local sandbox paths (for example /mnt/data/*.pdf).
+        # Those paths are not reachable by PetOrlandia's server; keep the structured import
+        # working from the extracted text/data and explicitly avoid persisting the bad path.
+        laudo_url = None
+        laudo_filename = laudo_filename or os.path.basename(payload.get('laudo_url') or '') or None
+        laudo_file_status = 'caminho_local_ignorado'
+    elif laudo_url:
+        parsed_laudo_url = urlparse(laudo_url)
+        if parsed_laudo_url.scheme not in {'http', 'https'} or not parsed_laudo_url.netloc:
+            raise ValueError('laudo_url deve ser uma URL http/https publica. Para anexos do ChatGPT, use laudo_arquivo ou cole o texto integral.')
+        laudo_file_status = 'url_registrada'
+
+    performed_at = None
+    performed_at_raw = exam_data.get('data') or payload.get('data_exame')
+    if performed_at_raw:
+        parsed_date = _integration_parse_flexible_date(str(performed_at_raw))
+        if not parsed_date:
+            raise ValueError('Data do exame invalida. Use YYYY-MM-DD ou DD/MM/YYYY.')
+        performed_at = datetime.combine(parsed_date, time.min)
+
+    bloco = BlocoExames(
+        animal_id=animal.id,
+        observacoes_gerais=(payload.get('observacoes_gerais') or 'Laudo importado via conector ChatGPT.').strip(),
+    )
+    db.session.add(bloco)
+    db.session.flush()
+
+    exam = ExameSolicitado(
+        bloco_id=bloco.id,
+        nome=(exam_data.get('nome') or exam_data.get('tipo') or 'Ultrassonografia').strip(),
+        justificativa=(exam_data.get('justificativa') or '').strip() or None,
+        status='concluido',
+        resultado=result_text,
+        performed_at=performed_at or datetime.now(BR_TZ),
+        laudo_url=laudo_url or None,
+        laudo_filename=laudo_filename,
+        laudo_uploaded_at=datetime.now(BR_TZ) if laudo_url else None,
+        laudo_message=(payload.get('mensagem_clinica') or '').strip() or None,
+    )
+    db.session.add(exam)
+    db.session.flush()
+
+    animal_name = animal.name or 'paciente'
+    clinic_message = (
+        (payload.get('mensagem_clinica') or '').strip()
+        or f'Laudo de {exam.nome} do paciente {animal_name} importado pelo ultrassonografista volante.'
+    )
+    notification_message = (
+        f'{clinic_message}\n\n'
+        f'Paciente: {animal_name}\n'
+        f'Tutor: {tutor.name}\n'
+        f'Exame: {exam.nome}'
+    )
+
+    if _ensure_clinic_notifications_table():
+        db.session.add(
+            ClinicNotification(
+                clinic_id=clinic.id,
+                title='Novo laudo recebido pelo PetOrlândia',
+                message=notification_message,
+                type='success',
+                month=datetime.now(BR_TZ).date().replace(day=1),
+            )
+        )
+
+    if clinic.owner_id:
+        db.session.add(
+            Notification(
+                user_id=clinic.owner_id,
+                message=notification_message,
+                channel='app',
+                kind='exam_report',
+            )
+        )
+
+    clinic_id = clinic.id
+    clinic_name = clinic.nome
+    clinic_owner_id = clinic.owner_id
+    tutor_id = tutor.id
+    tutor_name = tutor.name
+    animal_id = animal.id
+    animal_name = animal.name
+    exam_id = exam.id
+    exam_name = exam.nome
+    exam_status = exam.status
+    exam_laudo_url = exam.laudo_url
+    exam_laudo_filename = exam.laudo_filename
+    bloco_id = bloco.id
+    db.session.commit()
+
+    clinic_url = None
+    animal_url = None
+    if has_request_context():
+        clinic_url = url_for('clinic_detail', clinica_id=clinic_id, _external=True)
+        animal_url = url_for('ficha_animal', animal_id=animal_id, _external=True)
+
+    return {
+        'clinica': {
+            'id': clinic_id,
+            'nome': clinic_name,
+            'criada_agora': clinic_created,
+            'tem_dono_cadastrado': bool(clinic_owner_id),
+            'url': clinic_url,
+        },
+        'tutor': {
+            'id': tutor_id,
+            'nome': tutor_name,
+            'criado_agora': tutor_created,
+            'email_provisorio': tutor_provisional_email,
+        },
+        'animal': {
+            'id': animal_id,
+            'nome': animal_name,
+            'criado_agora': animal_created,
+            'url': animal_url,
+        },
+        'exame': {
+            'bloco_id': bloco_id,
+            'exame_id': exam_id,
+            'nome': exam_name,
+            'status': exam_status,
+            'laudo_url': exam_laudo_url,
+            'laudo_filename': exam_laudo_filename,
+            'arquivo_status': laudo_file_status,
+        },
+        'proxima_acao_recomendada': (
+            'Enviar o link da clinica para o dono fazer o primeiro acesso.'
+            if not clinic_owner_id else
+            'Avisar o dono da clinica para abrir a notificacao no PetOrlandia.'
+        ),
+        'mensagem_sugerida_para_clinica': notification_message,
+    }
+
+
 def _integration_schedule_consulta(user: User, animal: Animal, payload: dict):
     if not has_veterinarian_profile(user):
         raise PermissionError('Somente contas veterinárias podem agendar consultas via ChatGPT.')
@@ -10854,6 +11172,18 @@ def oauth_authorize():
     if not current_user.is_authenticated:
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
+
+    requested_scope_set = set(requested_scopes)
+    if requested_scope_set.intersection(_oauth_veterinarian_write_scopes()) and not has_veterinarian_profile(current_user):
+        return render_template(
+            'auth/oauth_veterinarian_required.html',
+            client=client,
+            current_account=current_user,
+            requested_scopes=requested_scopes,
+            error_message='Esta conexao pede permissoes de escrita clinica e exige uma conta veterinaria.',
+            switch_account_url=url_for('logout'),
+            continue_url=request.url,
+        ), 403
 
     if request.method == 'POST':
         if request.form.get('consent_action') != 'approve':
@@ -11086,8 +11416,8 @@ def oauth_dynamic_client_registration():
     if token_endpoint_auth_method not in {'none', 'client_secret_post', 'client_secret_basic'}:
         return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
 
-    requested_scope = str(payload.get('scope') or 'openid profile email').strip()
-    scope = _oauth_normalize_scope(requested_scope)
+    requested_scope = str(payload.get('scope') or '').strip()
+    scope = _oauth_normalize_scope(requested_scope) if requested_scope else _oauth_order_scopes(_oauth_allowed_scopes())
     if not scope:
         return _oauth_error_response('invalid_scope', 'No valid scope was requested.')
 
@@ -11247,7 +11577,508 @@ def _mcp_err_with_data(req_id, code, message, data):
 
 
 def _mcp_json_content(payload):
-    return {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
+    result = {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
+    if isinstance(payload, dict):
+        result['structuredContent'] = payload
+    return result
+
+
+def _mcp_annotations(read_only: bool, *, destructive: bool = False, open_world: bool = False, idempotent: bool | None = None):
+    annotations = {
+        'readOnlyHint': read_only,
+        'destructiveHint': destructive,
+        'openWorldHint': open_world,
+    }
+    if idempotent is not None:
+        annotations['idempotentHint'] = idempotent
+    return annotations
+
+
+def _mcp_object_output_schema(description: str | None = None):
+    schema = {
+        'type': 'object',
+        'additionalProperties': True,
+    }
+    if description:
+        schema['description'] = description
+    return schema
+
+
+def _mcp_array_output_schema(property_name: str, item_description: str):
+    return {
+        'type': 'object',
+        'properties': {
+            property_name: {
+                'type': 'array',
+                'description': item_description,
+                'items': {'type': 'object', 'additionalProperties': True},
+            },
+        },
+        'required': [property_name],
+        'additionalProperties': True,
+    }
+
+
+MCP_TOOL_DESCRIPTOR_DEFAULTS = {
+    'listar_meus_pets': {
+        'title': 'Listar meus pets',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('pets', 'Pets acessiveis ao usuario autenticado.'),
+    },
+    'listar_agendamentos': {
+        'title': 'Listar agendamentos',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('agendamentos', 'Agendamentos acessiveis ao usuario autenticado.'),
+    },
+    'interpretar_mensagem_livre_atendimento': {
+        'title': 'Interpretar mensagem livre',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Rascunho operacional extraido de mensagens livres.'),
+    },
+    'assistente_operacional_veterinario': {
+        'title': 'Assistente operacional veterinario',
+        'scopes': ['profile', 'tutors:write', 'pets:write', 'appointments:write', 'consultations:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Plano operacional e eventual resultado de execucao confirmada.'),
+    },
+    'cadastrar_tutor_e_pets': {
+        'title': 'Cadastrar tutor e pets',
+        'scopes': ['tutors:write', 'pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Tutor e pets criados ou reaproveitados no PetOrlandia.'),
+    },
+    'registrar_consulta_clinica': {
+        'title': 'Registrar consulta clinica',
+        'scopes': ['consultations:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Consulta clinica criada ou atualizada no PetOrlandia.'),
+    },
+    'registrar_bloco_exames': {
+        'title': 'Registrar bloco de exames',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Bloco de exames criado para o paciente.'),
+    },
+    'abrir_importador_laudo_volante': {
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+    },
+    'importar_laudo_volante': {
+        'scopes': ['tutors:write', 'pets:write', 'exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+    },
+    'agendar_consulta': {
+        'title': 'Agendar consulta',
+        'scopes': ['appointments:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Consulta, retorno ou compromisso clinico agendado.'),
+    },
+    'agendar_retorno': {
+        'title': 'Agendar retorno',
+        'scopes': ['appointments:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Retorno agendado a partir de uma consulta existente.'),
+    },
+    'obter_resumo_clinico_animal': {
+        'title': 'Obter resumo clinico do animal',
+        'scopes': ['clinical_summary:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Resumo clinico estruturado do paciente.'),
+    },
+    'listar_agenda_do_dia': {
+        'title': 'Listar agenda do dia',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Agenda diaria com pendencias clinicas resumidas.'),
+    },
+    'listar_pendencias_clinicas': {
+        'title': 'Listar pendencias clinicas',
+        'scopes': ['appointments:read', 'exams:read', 'vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Pendencias clinicas do escopo acessivel.'),
+    },
+    'listar_vacinas_pendentes': {
+        'title': 'Listar vacinas pendentes',
+        'scopes': ['vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Vacinas atrasadas e proximas vacinas.'),
+    },
+    'listar_exames_pendentes': {
+        'title': 'Listar exames pendentes',
+        'scopes': ['exams:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Exames solicitados ou agendados ainda em aberto.'),
+    },
+    'listar_retornos_pendentes': {
+        'title': 'Listar retornos pendentes',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Retornos futuros relacionados a consultas.'),
+    },
+    'gerar_orientacao_tutor': {
+        'title': 'Gerar orientacao ao tutor',
+        'scopes': ['tutor_guidance:generate'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Rascunho deterministico de orientacao ao tutor.'),
+    },
+    'gerar_handoff_clinico': {
+        'title': 'Gerar handoff clinico',
+        'scopes': ['handoff:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Handoff clinico resumido para outro profissional.'),
+    },
+}
+
+
+def _mcp_finalize_tool_descriptors(tools: list[dict]) -> list[dict]:
+    for tool in tools:
+        defaults = MCP_TOOL_DESCRIPTOR_DEFAULTS.get(tool.get('name'), {})
+        title = defaults.get('title')
+        if title:
+            tool.setdefault('title', title)
+
+        default_annotations = defaults.get('annotations') or _mcp_annotations(False, idempotent=False)
+        annotations = {**default_annotations, **(tool.get('annotations') or {})}
+        for key in ('readOnlyHint', 'destructiveHint', 'openWorldHint'):
+            annotations.setdefault(key, default_annotations[key])
+        tool['annotations'] = annotations
+
+        tool.setdefault('outputSchema', defaults.get('outputSchema') or _mcp_object_output_schema())
+
+        scopes = defaults.get('scopes') or []
+        if scopes:
+            security_schemes = [{'type': 'oauth2', 'scopes': scopes}]
+            tool.setdefault('securitySchemes', security_schemes)
+            meta = tool.setdefault('_meta', {})
+            meta.setdefault('securitySchemes', security_schemes)
+
+    return tools
+
+
+LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v1.html'
+MAX_MCP_LAUDO_FILE_BYTES = 25 * 1024 * 1024
+MCP_FILE_REFERENCE_SCHEMA = {
+    'type': 'object',
+    'description': (
+        'Arquivo do laudo autorizado pelo ChatGPT. Use este campo para anexos; '
+        'nao envie caminhos locais como /mnt/data/arquivo.pdf.'
+    ),
+    'properties': {
+        'download_url': {'type': 'string', 'description': 'URL temporaria HTTPS autorizada pelo ChatGPT.'},
+        'file_id': {'type': 'string', 'description': 'ID do arquivo no ChatGPT.'},
+        'mime_type': {'type': 'string'},
+        'file_name': {'type': 'string'},
+    },
+    'required': ['download_url', 'file_id'],
+}
+
+
+def _is_local_chatgpt_file_path(value: str) -> bool:
+    raw = (value or '').strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    return (
+        lowered.startswith('/mnt/data/')
+        or lowered.startswith('/tmp/')
+        or lowered.startswith('file:')
+        or re.match(r'^[a-z]:\\', raw, flags=re.IGNORECASE) is not None
+    )
+
+
+def _mcp_extract_file_reference(payload: dict, *field_names: str) -> dict | None:
+    for field_name in field_names:
+        value = payload.get(field_name)
+        if isinstance(value, dict) and value.get('download_url') and value.get('file_id'):
+            return value
+    return None
+
+
+def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
+    download_url = (file_ref.get('download_url') or '').strip()
+    parsed = urlparse(download_url)
+    if parsed.scheme != 'https' or not parsed.netloc:
+        raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.')
+
+    original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo-chatgpt.pdf').strip()
+    safe_name = secure_filename(original_name) or 'laudo-chatgpt.pdf'
+    try:
+        response = requests.get(download_url, timeout=20, stream=True)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise ValueError('Nao foi possivel baixar o arquivo autorizado pelo ChatGPT. Cole o texto integral do laudo e tente novamente.') from exc
+
+    content = BytesIO()
+    total = 0
+    for chunk in response.iter_content(chunk_size=1024 * 1024):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > MAX_MCP_LAUDO_FILE_BYTES:
+            raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.')
+        content.write(chunk)
+    content.seek(0)
+
+    storage = FileStorage(
+        stream=content,
+        filename=safe_name,
+        content_type=(file_ref.get('mime_type') or 'application/octet-stream'),
+    )
+    stored_url = upload_to_s3(storage, f"{uuid.uuid4().hex}_{safe_name}", folder='laudos_exames')
+    if not stored_url:
+        raise ValueError('Nao foi possivel salvar o arquivo do laudo. Cole o texto integral e tente novamente.')
+    return stored_url, safe_name
+
+
+def _mcp_laudo_volante_widget_html():
+    return """
+<main class="po-widget">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">PetOrlandia</p>
+      <h1>Revisar laudo volante</h1>
+    </div>
+    <span id="status-pill" class="pill">Rascunho</span>
+  </section>
+
+  <section class="grid">
+    <article>
+      <span>Clinica</span>
+      <strong id="clinica-nome">-</strong>
+      <small id="clinica-contato"></small>
+    </article>
+    <article>
+      <span>Tutor</span>
+      <strong id="tutor-nome">-</strong>
+      <small id="tutor-contato"></small>
+    </article>
+    <article>
+      <span>Animal</span>
+      <strong id="animal-nome">-</strong>
+      <small id="animal-detalhes"></small>
+    </article>
+    <article>
+      <span>Exame</span>
+      <strong id="exame-nome">-</strong>
+      <small id="exame-data"></small>
+    </article>
+  </section>
+
+  <label class="field">
+    <span>Mensagem para a clinica</span>
+    <textarea id="mensagem" rows="3"></textarea>
+  </label>
+
+  <label class="field">
+    <span>Resumo do laudo</span>
+    <textarea id="laudo" rows="7"></textarea>
+  </label>
+
+  <section class="file-tools">
+    <div>
+      <strong>Anexo do laudo</strong>
+      <small id="arquivo-status">Opcional. Se o ChatGPT nao conseguir enviar o PDF, cole o texto integral acima.</small>
+    </div>
+    <input id="arquivo-upload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>
+    <button id="selecionar-arquivo" type="button" class="secondary">Selecionar/enviar arquivo</button>
+  </section>
+
+  <section id="missing" class="missing" hidden></section>
+
+  <footer>
+    <button id="confirmar" type="button">Confirmar e gravar no PetOrlandia</button>
+    <p id="feedback"></p>
+  </footer>
+</main>
+
+<style>
+  :root {
+    color: #0f172a;
+    background: #f8fafc;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .po-widget { padding: 18px; max-width: 760px; margin: 0 auto; }
+  .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .eyebrow { margin: 0 0 4px; font-size: 12px; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0; }
+  h1 { margin: 0; font-size: 24px; line-height: 1.15; }
+  .pill { flex: none; border: 1px solid #99f6e4; color: #0f766e; background: #ecfeff; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 800; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  article { border: 1px solid #dbe3ea; background: #ffffff; border-radius: 8px; padding: 12px; min-height: 86px; }
+  article span, .field span { display: block; color: #64748b; font-size: 12px; font-weight: 800; margin-bottom: 6px; }
+  article strong { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+  article small { display: block; margin-top: 6px; color: #475569; line-height: 1.35; overflow-wrap: anywhere; }
+  .field { display: block; margin: 12px 0; }
+  textarea { width: 100%; resize: vertical; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; line-height: 1.45; background: #ffffff; color: #0f172a; }
+  textarea:focus { outline: 3px solid #bbf7d0; border-color: #059669; }
+  .file-tools { border: 1px dashed #99f6e4; background: #f0fdfa; border-radius: 8px; padding: 11px 12px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .file-tools strong { display: block; color: #0f766e; font-size: 13px; }
+  .file-tools small { display: block; color: #475569; margin-top: 3px; line-height: 1.35; }
+  .missing { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; border-radius: 8px; padding: 11px 12px; margin: 12px 0; line-height: 1.4; }
+  footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  button { border: 0; border-radius: 8px; background: #10b981; color: white; padding: 12px 16px; font-weight: 900; cursor: pointer; }
+  button.secondary { background: #0f766e; padding: 10px 12px; }
+  button:disabled { cursor: not-allowed; background: #94a3b8; }
+  #feedback { margin: 0; color: #334155; font-size: 13px; }
+  @media (max-width: 560px) {
+    .po-widget { padding: 14px; }
+    .hero { align-items: flex-start; flex-direction: column; }
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 21px; }
+    button { width: 100%; }
+  }
+</style>
+
+<script>
+  const fields = {
+    clinicaNome: document.getElementById("clinica-nome"),
+    clinicaContato: document.getElementById("clinica-contato"),
+    tutorNome: document.getElementById("tutor-nome"),
+    tutorContato: document.getElementById("tutor-contato"),
+    animalNome: document.getElementById("animal-nome"),
+    animalDetalhes: document.getElementById("animal-detalhes"),
+    exameNome: document.getElementById("exame-nome"),
+    exameData: document.getElementById("exame-data"),
+    mensagem: document.getElementById("mensagem"),
+    laudo: document.getElementById("laudo"),
+    missing: document.getElementById("missing"),
+    feedback: document.getElementById("feedback"),
+    fileStatus: document.getElementById("arquivo-status"),
+    fileInput: document.getElementById("arquivo-upload"),
+    fileButton: document.getElementById("selecionar-arquivo"),
+    button: document.getElementById("confirmar"),
+    pill: document.getElementById("status-pill")
+  };
+
+  let currentDraft = {};
+  let selectedFileRef = null;
+  const text = (value) => value == null || value === "" ? "-" : String(value);
+  const compact = (items) => items.filter(Boolean).join(" - ");
+
+  function render(output) {
+    currentDraft = output?.rascunho || output || {};
+    const clinica = currentDraft.clinica || {};
+    const tutor = currentDraft.tutor || {};
+    const animal = currentDraft.animal || {};
+    const exame = currentDraft.exame || {};
+    fields.clinicaNome.textContent = text(clinica.nome);
+    fields.clinicaContato.textContent = compact([clinica.email, clinica.telefone, clinica.cnpj]);
+    fields.tutorNome.textContent = text(tutor.nome);
+    fields.tutorContato.textContent = compact([tutor.telefone, tutor.email]);
+    fields.animalNome.textContent = text(animal.nome);
+    fields.animalDetalhes.textContent = compact([animal.especie, animal.raca, animal.sexo, animal.idade]);
+    fields.exameNome.textContent = text(exame.nome || exame.tipo);
+    fields.exameData.textContent = text(exame.data || currentDraft.data_exame);
+    fields.mensagem.value = currentDraft.mensagem_clinica || "Laudo finalizado e disponivel no PetOrlandia.";
+    fields.laudo.value = currentDraft.laudo_texto || exame.conclusao || exame.achados || "";
+    selectedFileRef = currentDraft.laudo_arquivo || currentDraft.arquivo_laudo || null;
+    fields.fileStatus.textContent = selectedFileRef?.file_name
+      ? "Arquivo autorizado pelo ChatGPT: " + selectedFileRef.file_name
+      : (currentDraft.laudo_filename ? "Arquivo informado: " + currentDraft.laudo_filename : "Opcional. Se o ChatGPT nao conseguir enviar o PDF, cole o texto integral acima.");
+
+    const missing = output?.campos_a_confirmar || [];
+    fields.missing.hidden = missing.length === 0;
+    fields.missing.textContent = missing.length ? "Conferir antes de gravar: " + missing.join(", ") : "";
+    fields.pill.textContent = missing.length ? "Conferir dados" : "Pronto para gravar";
+  }
+
+  async function selectOrUploadFile() {
+    try {
+      if (window.openai?.selectFiles) {
+        const files = await window.openai.selectFiles();
+        const file = files?.[0];
+        if (file?.fileId) {
+          const downloadUrlResult = await window.openai.getFileDownloadUrl({ fileId: file.fileId });
+          selectedFileRef = {
+            file_id: file.fileId,
+            file_name: file.fileName,
+            mime_type: file.mimeType,
+            download_url: typeof downloadUrlResult === "string" ? downloadUrlResult : (downloadUrlResult?.download_url || downloadUrlResult?.url)
+          };
+          fields.fileStatus.textContent = "Arquivo autorizado pelo ChatGPT: " + (file.fileName || file.fileId);
+          return;
+        }
+      }
+      fields.fileInput.click();
+    } catch (error) {
+      fields.fileStatus.textContent = error?.message || "Nao foi possivel selecionar o arquivo. Cole o texto integral do laudo.";
+    }
+  }
+
+  async function uploadPickedFile(event) {
+    const file = event.target.files?.[0];
+    if (!file || !window.openai?.uploadFile || !window.openai?.getFileDownloadUrl) {
+      fields.fileStatus.textContent = "Upload de arquivo indisponivel neste ChatGPT. Cole o texto integral do laudo.";
+      return;
+    }
+    fields.fileStatus.textContent = "Enviando arquivo ao ChatGPT...";
+    try {
+      const uploaded = await window.openai.uploadFile(file);
+      const fileId = uploaded?.fileId || uploaded?.file_id;
+      const downloadUrlResult = await window.openai.getFileDownloadUrl({ fileId });
+      selectedFileRef = {
+        file_id: fileId,
+        file_name: file.name,
+        mime_type: file.type,
+        download_url: typeof downloadUrlResult === "string" ? downloadUrlResult : (downloadUrlResult?.download_url || downloadUrlResult?.url)
+      };
+      fields.fileStatus.textContent = "Arquivo autorizado pelo ChatGPT: " + file.name;
+    } catch (error) {
+      fields.fileStatus.textContent = error?.message || "Nao foi possivel enviar o arquivo. Cole o texto integral do laudo.";
+    }
+  }
+
+  async function confirmImport() {
+    if (!window.openai?.callTool) {
+      fields.feedback.textContent = "Abra este painel dentro do ChatGPT para gravar.";
+      return;
+    }
+    fields.button.disabled = true;
+    fields.feedback.textContent = "Gravando no PetOrlandia...";
+    try {
+      const args = {
+        ...currentDraft,
+        laudo_texto: fields.laudo.value,
+        mensagem_clinica: fields.mensagem.value,
+        confirmar_gravacao: "sim"
+      };
+      if (selectedFileRef?.download_url && selectedFileRef?.file_id) {
+        args.laudo_arquivo = selectedFileRef;
+      }
+      const result = await window.openai.callTool("importar_laudo_volante", args);
+      const payload = result?.structuredContent || result;
+      fields.feedback.textContent = payload?.exame?.exame_id
+        ? "Laudo gravado. A clinica ja pode acessar o resultado."
+        : "Solicitacao enviada. Confira a resposta no chat.";
+      fields.pill.textContent = "Gravado";
+    } catch (error) {
+      fields.feedback.textContent = error?.message || "Nao foi possivel gravar agora.";
+      fields.button.disabled = false;
+    }
+  }
+
+  fields.fileButton.addEventListener("click", selectOrUploadFile);
+  fields.fileInput.addEventListener("change", uploadPickedFile);
+  fields.button.addEventListener("click", confirmImport);
+  render(window.openai?.toolOutput || {});
+  window.addEventListener("openai:set_globals", (event) => {
+    render(event.detail?.globals?.toolOutput || window.openai?.toolOutput || {});
+  }, { passive: true });
+</script>
+""".strip()
+
+
+def _mcp_laudo_volante_widget_resource():
+    return {
+        'uri': LAUDO_VOLANTE_WIDGET_URI,
+        'name': 'Revisar laudo volante',
+        'description': 'Painel para revisar e confirmar laudo de ultrassonografista volante.',
+        'mimeType': 'text/html;profile=mcp-app',
+    }
 
 
 def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
@@ -11319,6 +12150,9 @@ def _mcp_unauthorized():
 def mcp_server():
     """MCP server — handles GET (capability probe) and POST (JSON-RPC) from Claude/ChatGPT."""
 
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
     # ── GET: unauthenticated capability probe or SSE handshake ───────────────
     # Claude may send a plain GET before OAuth to verify server existence.
     # Return a JSON description (no auth required) so discovery succeeds.
@@ -11359,12 +12193,48 @@ def mcp_server():
         return _mcp_ok(req_id, {
             'protocolVersion': '2024-11-05',
             'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
-            'capabilities': {'tools': {}},
+            'capabilities': {'tools': {}, 'resources': {}},
         })
 
     # ── notifications/initialized (client ack — no response body needed) ─────
     if method in ('notifications/initialized', 'initialized'):
         return ('', 204)
+
+    if method == 'resources/list':
+        return _mcp_ok(req_id, {'resources': [_mcp_laudo_volante_widget_resource()]})
+
+    if method == 'resources/read':
+        uri = str(params.get('uri') or '').strip()
+        if uri != LAUDO_VOLANTE_WIDGET_URI:
+            return _mcp_err(req_id, -32004, f'Resource not found: {uri}')
+        return _mcp_ok(req_id, {
+            'contents': [
+                {
+                    **_mcp_laudo_volante_widget_resource(),
+                    'text': _mcp_laudo_volante_widget_html(),
+                    '_meta': {
+                        'ui': {
+                            'prefersBorder': True,
+                            'domain': _oauth_issuer(),
+                            'csp': {
+                                'connectDomains': [],
+                                'resourceDomains': [],
+                            },
+                        },
+                        'openai/widgetDescription': (
+                            'Painel para revisar clinica, tutor, animal e laudo antes de gravar '
+                            'o exame no PetOrlandia.'
+                        ),
+                        'openai/widgetPrefersBorder': True,
+                        'openai/widgetDomain': _oauth_issuer(),
+                        'openai/widgetCSP': {
+                            'connect_domains': [],
+                            'resource_domains': [],
+                        },
+                    },
+                }
+            ]
+        })
 
     # ── tools/list ───────────────────────────────────────────────────────────
     if method == 'tools/list':
@@ -11493,6 +12363,98 @@ def mcp_server():
                 },
             },
             {
+                'name': 'abrir_importador_laudo_volante',
+                'title': 'Abrir importador de laudo volante',
+                'description': (
+                    'Use this when o ultrassonografista colou um laudo ou informou os dados extraidos '
+                    'e quer revisar visualmente clinica, tutor, animal, exame e mensagem antes de gravar. '
+                    'Esta tool apenas renderiza o painel; para gravar, use importar_laudo_volante apos confirmacao.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object'},
+                        'tutor': {'type': 'object'},
+                        'animal': {'type': 'object'},
+                        'exame': {'type': 'object'},
+                        'laudo_texto': {'type': 'string'},
+                        'laudo_url': {'type': 'string'},
+                        'laudo_filename': {'type': 'string'},
+                        'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
+                        'mensagem_clinica': {'type': 'string'},
+                        'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
+                    },
+                    'required': [],
+                },
+                'outputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'rascunho': {'type': 'object'},
+                        'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
+                    },
+                },
+                'annotations': {
+                    'readOnlyHint': True,
+                    'destructiveHint': False,
+                    'openWorldHint': False,
+                    'idempotentHint': True,
+                },
+                '_meta': {
+                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
+                    'openai/outputTemplate': LAUDO_VOLANTE_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/fileParams': ['laudo_arquivo'],
+                    'openai/toolInvocation/invoking': 'Abrindo revisao do laudo...',
+                    'openai/toolInvocation/invoked': 'Revisao do laudo pronta.',
+                },
+            },
+            {
+                'name': 'importar_laudo_volante',
+                'description': (
+                    'Use quando um ultrassonografista volante enviar ou colar um laudo no ChatGPT. '
+                    'A tool cria ou reaproveita clinica, tutor e animal, registra o exame como concluido '
+                    'e prepara a notificacao para a clinica acessar o PetOrlandia.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object', 'description': 'Clinica solicitante: nome, email, telefone e endereco quando houver.'},
+                        'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email e endereco quando houver.'},
+                        'animal': {'type': 'object', 'description': 'Paciente: nome, especie, raca, sexo e idade quando houver.'},
+                        'exame': {'type': 'object', 'description': 'Dados do exame: nome/tipo, data, achados, conclusao e justificativa.'},
+                        'laudo_texto': {'type': 'string', 'description': 'Texto integral ou resumo fiel do laudo. Preferencial quando o anexo do ChatGPT falhar.'},
+                        'laudo_url': {'type': 'string', 'description': 'URL publica http/https do arquivo. Nao envie caminhos locais como /mnt/data; para anexos use laudo_arquivo.'},
+                        'laudo_filename': {'type': 'string', 'description': 'Nome do arquivo do laudo quando houver link.'},
+                        'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
+                        'mensagem_clinica': {'type': 'string', 'description': 'Mensagem curta e cordial para a clinica.'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['clinica', 'tutor', 'animal', 'exame', 'confirmar_gravacao'],
+                },
+                'outputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object'},
+                        'tutor': {'type': 'object'},
+                        'animal': {'type': 'object'},
+                        'exame': {'type': 'object'},
+                        'proxima_acao_recomendada': {'type': 'string'},
+                        'mensagem_sugerida_para_clinica': {'type': 'string'},
+                    },
+                },
+                'annotations': {
+                    'readOnlyHint': False,
+                    'destructiveHint': False,
+                    'openWorldHint': False,
+                    'idempotentHint': False,
+                },
+                '_meta': {
+                    'openai/fileParams': ['laudo_arquivo'],
+                    'openai/toolInvocation/invoking': 'Importando laudo...',
+                    'openai/toolInvocation/invoked': 'Laudo importado.',
+                },
+            },
+            {
                 'name': 'agendar_consulta',
                 'description': (
                     'Agenda consulta, vacina, retorno ou outro compromisso clínico para um animal.'
@@ -11611,7 +12573,7 @@ def mcp_server():
                 },
             },
         ]
-        return _mcp_ok(req_id, {'tools': tools})
+        return _mcp_ok(req_id, {'tools': _mcp_finalize_tool_descriptors(tools)})
 
     # ── tools/call ───────────────────────────────────────────────────────────
     if method == 'tools/call':
@@ -11619,9 +12581,11 @@ def mcp_server():
         tool_args = params.get('arguments') or {}
 
         if tool_name == 'listar_meus_pets':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
             animals = (
-                Animal.query
-                .filter_by(user_id=user.id, removido_em=None)
+                _integration_accessible_animals_query(user)
                 .order_by(Animal.name)
                 .all()
             )
@@ -11641,11 +12605,16 @@ def mcp_server():
                     'peso_kg': a.peso,
                     'nascimento': a.date_of_birth.isoformat() if a.date_of_birth else None,
                 })
-            text = json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'
-            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+            return _mcp_ok(req_id, {
+                'structuredContent': {'pets': pets},
+                'content': [{'type': 'text', 'text': json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'}],
+            })
 
         if tool_name == 'listar_agendamentos':
-            q = Appointment.query.filter_by(tutor_id=user.id)
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')
+            if scope_error:
+                return scope_error
+            q = _integration_accessible_appointments_query(user)
             status_filter = str(tool_args.get('status', '') or '').strip()
             if status_filter:
                 q = q.filter(Appointment.status == status_filter)
@@ -11661,8 +12630,10 @@ def mcp_server():
                 }
                 for a in appts
             ]
-            text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
-            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+            return _mcp_ok(req_id, {
+                'structuredContent': {'agendamentos': data_out},
+                'content': [{'type': 'text', 'text': json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'}],
+            })
 
         if tool_name == 'interpretar_mensagem_livre_atendimento':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
@@ -11796,6 +12767,60 @@ def mcp_server():
                 'observacoes_gerais': bloco.observacoes_gerais,
                 'total_exames': len(bloco.exames or []),
             }))
+
+        if tool_name == 'abrir_importador_laudo_volante':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            draft = {
+                'clinica': tool_args.get('clinica') or {},
+                'tutor': tool_args.get('tutor') or {},
+                'animal': tool_args.get('animal') or {},
+                'exame': tool_args.get('exame') or {},
+                'laudo_texto': tool_args.get('laudo_texto') or '',
+                'laudo_url': tool_args.get('laudo_url') or '',
+                'laudo_filename': tool_args.get('laudo_filename') or '',
+                'laudo_arquivo': _mcp_extract_file_reference(tool_args, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file'),
+                'mensagem_clinica': (
+                    tool_args.get('mensagem_clinica')
+                    or 'Laudo finalizado e disponivel no PetOrlandia.'
+                ),
+            }
+            missing_fields = tool_args.get('campos_a_confirmar') or []
+            response_payload = {
+                'rascunho': draft,
+                'campos_a_confirmar': missing_fields if isinstance(missing_fields, list) else [],
+            }
+            return _mcp_ok(req_id, {
+                'structuredContent': response_payload,
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': 'Abrindo painel para revisar o laudo antes de gravar no PetOrlandia.',
+                    }
+                ],
+                '_meta': {
+                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
+                },
+            })
+
+        if tool_name == 'importar_laudo_volante':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write', 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            try:
+                result = _integration_import_mobile_exam_report(user, tool_args)
+            except ValueError as exc:
+                db.session.rollback()
+                return _mcp_err(req_id, -32602, str(exc))
+            response = _mcp_json_content(result)
+            response['structuredContent'] = result
+            return _mcp_ok(req_id, response)
 
         if tool_name == 'agendar_consulta':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:write')
@@ -23396,37 +24421,144 @@ def atualizar_realizacao_exames(bloco_id):
     if not (is_veterinarian(current_user) or worker == 'colaborador' or current_user.role == 'admin'):
         return jsonify({'success': False, 'message': 'Apenas profissionais da clinica podem registrar realizacao de exames.'}), 403
 
-    dados = request.get_json(silent=True) or {}
-    existentes = {e.id: e for e in bloco.exames}
+    if request.form or request.files:
+        dados = json.loads(request.form.get('payload') or '{}')
+    else:
+        dados = request.get_json(silent=True) or {}
+
+    existentes = {
+        e.id: e
+        for e in ExameSolicitado.query.filter_by(bloco_id=bloco.id).all()
+    }
+    exames_relacionados = {e.id: e for e in bloco.exames}
     allowed_statuses = {'pendente', 'concluido', 'cancelado'}
+    notificacao_solicitada = bool(dados.get('notificar_solicitante'))
+    mensagem_laudo = (dados.get('mensagem_laudo') or '').strip()
+    exames_concluidos = []
+    updates_exames = []
 
     for ex_json in dados.get('exames', []):
-        ex_id = ex_json.get('id')
+        try:
+            ex_id = int(ex_json.get('id'))
+        except (TypeError, ValueError):
+            continue
         exame = existentes.get(ex_id)
         if not exame:
+            exame = ExameSolicitado.query.filter_by(id=ex_id, bloco_id=bloco.id).first()
+        if not exame:
             continue
+        exames_para_atualizar = [exame]
+        exame_relacionado = exames_relacionados.get(ex_id)
+        if exame_relacionado is not None and exame_relacionado is not exame:
+            exames_para_atualizar.append(exame_relacionado)
 
         status = (ex_json.get('status') or 'pendente').strip().lower()
         if status not in allowed_statuses:
             status = 'pendente'
-        exame.status = status
-        exame.resultado = (ex_json.get('resultado') or '').strip() or None
+        resultado = (ex_json.get('resultado') or '').strip() or None
+        for exame_alvo in exames_para_atualizar:
+            exame_alvo.status = status
+            exame_alvo.resultado = resultado
+            if mensagem_laudo:
+                exame_alvo.laudo_message = mensagem_laudo
 
         performed_at_str = (ex_json.get('performed_at') or '').strip()
         if performed_at_str:
             try:
-                exame.performed_at = datetime.fromisoformat(performed_at_str)
+                performed_at = datetime.fromisoformat(performed_at_str)
             except ValueError:
                 return jsonify({'success': False, 'message': 'Data de realizacao invalida.'}), 400
         else:
-            exame.performed_at = None
+            performed_at = None
+        for exame_alvo in exames_para_atualizar:
+            exame_alvo.performed_at = performed_at
 
-    db.session.commit()
+        arquivo_laudo = request.files.get(f'laudo_{ex_id}')
+        if arquivo_laudo and arquivo_laudo.filename:
+            original_filename = secure_filename(arquivo_laudo.filename)
+            _, ext = os.path.splitext(original_filename)
+            filename = f"{uuid.uuid4().hex}{ext.lower()}"
+            laudo_url = upload_to_s3(arquivo_laudo, filename, folder='laudos_exames')
+            if not laudo_url:
+                return jsonify({'success': False, 'message': 'Nao foi possivel enviar o arquivo do laudo.'}), 500
+            exame.laudo_url = laudo_url
+            exame.laudo_filename = original_filename
+            exame.laudo_uploaded_at = datetime.now(BR_TZ)
+            for exame_alvo in exames_para_atualizar:
+                exame_alvo.laudo_url = laudo_url
+                exame_alvo.laudo_filename = original_filename
+                exame_alvo.laudo_uploaded_at = exame.laudo_uploaded_at
 
+        updates_exames.append({
+            'status': exame.status,
+            'resultado': exame.resultado,
+            'performed_at': exame.performed_at,
+            'laudo_url': exame.laudo_url,
+            'laudo_filename': exame.laudo_filename,
+            'laudo_uploaded_at': exame.laudo_uploaded_at,
+            'laudo_message': exame.laudo_message,
+            'exame_id': ex_id,
+            'bloco_id': bloco.id,
+        })
+
+        if exame.status == 'concluido' and (exame.resultado or exame.laudo_url):
+            exames_concluidos.append(exame)
+
+    if notificacao_solicitada and exames_concluidos:
+        clinica = getattr(bloco.animal, 'clinica', None)
+        clinic_id = getattr(bloco.animal, 'clinica_id', None)
+        animal_nome = getattr(bloco.animal, 'name', 'paciente') or 'paciente'
+        exames_nomes = ', '.join(ex.nome for ex in exames_concluidos[:3])
+        if len(exames_concluidos) > 3:
+            exames_nomes = f"{exames_nomes} e mais {len(exames_concluidos) - 3}"
+        texto_base = mensagem_laudo or 'O laudo do exame ja esta disponivel no historico de exames.'
+        aviso = f"{texto_base} Paciente: {animal_nome}. Exame(s): {exames_nomes}."
+
+        if clinic_id and _ensure_clinic_notifications_table():
+            db.session.add(
+                ClinicNotification(
+                    clinic_id=clinic_id,
+                    title='Laudo de exame disponivel',
+                    message=aviso,
+                    type='info',
+                    month=datetime.now(BR_TZ).date().replace(day=1),
+                )
+            )
+
+        clinic_owner_id = getattr(clinica, 'owner_id', None)
+        if clinic_owner_id:
+            db.session.add(
+                Notification(
+                    user_id=clinic_owner_id,
+                    message=aviso,
+                    channel='app',
+                    kind='exam_report',
+                )
+            )
+
+    db.session.flush()
     historico_html = render_template(
         'partials/historico_exames.html',
         animal=bloco.animal
     )
+    for update_params in updates_exames:
+        db.session.execute(
+            text(
+                """
+                UPDATE exame_solicitado
+                   SET status = :status,
+                       resultado = :resultado,
+                       performed_at = :performed_at,
+                       laudo_url = :laudo_url,
+                       laudo_filename = :laudo_filename,
+                       laudo_uploaded_at = :laudo_uploaded_at,
+                       laudo_message = :laudo_message
+                 WHERE id = :exame_id AND bloco_id = :bloco_id
+                """
+            ),
+            update_params,
+        )
+    db.session.commit()
     return jsonify(success=True, html=historico_html)
 
 

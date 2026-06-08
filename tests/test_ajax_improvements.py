@@ -1,10 +1,13 @@
 import os
 import pathlib
 import sys
+import json
 
 import pytest
 from datetime import datetime, timedelta, date
+from io import BytesIO
 import flask_login.utils as login_utils
+from sqlalchemy import text
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -220,6 +223,63 @@ def test_ficha_animal_ajax_sections(client, monkeypatch):
     assert history_data['success'] is True
     assert 'Prescrições' in history_data['html']
     assert 'Vacinas Aplicadas' in history_data['html']
+
+
+def test_realizacao_exames_accepts_laudo_upload_and_notifies(client, monkeypatch):
+    with flask_app.app_context():
+        admin, tutor, vet_user, vet, animal, clinic = create_basic_clinic_data()
+        clinic.owner_id = admin.id
+        bloco = BlocoExames(id=1, animal_id=animal.id)
+        exame_solicitado = ExameSolicitado(
+            id=1,
+            bloco=bloco,
+            nome='Ultrassonografia abdominal',
+        )
+        db.session.add_all([bloco, exame_solicitado])
+        db.session.commit()
+        vet_id = vet_user.id
+    login(monkeypatch, vet_id)
+
+    payload = {
+        'exames': [{
+            'id': 1,
+            'status': 'concluido',
+            'resultado': 'Sem alteracoes relevantes.',
+            'performed_at': '2026-06-07',
+        }],
+        'notificar_solicitante': True,
+        'mensagem_laudo': 'Laudo finalizado e anexado.',
+    }
+    response = client.post(
+        '/bloco_exames/1/realizacao',
+        data={
+            'payload': json.dumps(payload),
+            'laudo_1': (BytesIO(b'%PDF-1.4 laudo'), 'laudo abdominal.pdf'),
+        },
+        headers={'Accept': 'application/json'},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+    assert 'laudo_abdominal.pdf' in data['html']
+    assert 'Concluido' in data['html']
+    with flask_app.app_context():
+        row = db.session.execute(
+            text("select status, laudo_url, laudo_filename, laudo_message from exame_solicitado where id = 1")
+        ).one()
+        assert row.status == 'concluido'
+        assert row.laudo_url
+        assert row.laudo_filename == 'laudo_abdominal.pdf'
+        assert row.laudo_message == 'Laudo finalizado e anexado.'
+        clinic_notifications = db.session.execute(
+            text("select count(*) from clinic_notifications where clinic_id = 1")
+        ).scalar_one()
+        user_notifications = db.session.execute(
+            text("select count(*) from notification where user_id = 1 and kind = 'exam_report'")
+        ).scalar_one()
+        assert clinic_notifications == 1
+        assert user_notifications == 1
 
 
 def test_mensagens_admin_ajax(client, monkeypatch):

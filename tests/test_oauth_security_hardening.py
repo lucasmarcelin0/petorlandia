@@ -219,7 +219,7 @@ def test_refresh_rotation_and_reuse_detection_revokes_family(app, client):
             redirect_uri='https://client.example/callback',
             scope='openid profile email',
             state='xyz',
-            code_challenge='Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            code_challenge='iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             code_challenge_method='S256',
             expires_at=utcnow() + timedelta(minutes=5),
         )

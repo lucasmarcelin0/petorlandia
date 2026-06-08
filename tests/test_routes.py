@@ -124,6 +124,44 @@ def test_index_page(app):
     assert response.status_code == 200
 
 
+def test_public_privacy_page(app):
+    client = app.test_client()
+    response = client.get('/privacy')
+    assert response.status_code == 200
+    assert b'Politica de privacidade' in response.data
+
+
+def test_public_support_page(app):
+    app.config['SUPPORT_EMAIL'] = 'support@example.com'
+    client = app.test_client()
+    response = client.get('/support')
+    assert response.status_code == 200
+    assert b'support@example.com' in response.data
+
+
+def test_public_terms_page(app):
+    client = app.test_client()
+    response = client.get('/terms')
+    assert response.status_code == 200
+    assert b'Termos de uso' in response.data
+
+
+def test_openai_apps_challenge_uses_configured_token(app):
+    app.config['OPENAI_APPS_CHALLENGE_TOKEN'] = 'challenge-token'
+    client = app.test_client()
+    response = client.get('/.well-known/openai-apps-challenge')
+    assert response.status_code == 200
+    assert response.text == 'challenge-token'
+    assert response.mimetype == 'text/plain'
+
+
+def test_openai_apps_challenge_404_when_unconfigured(app):
+    app.config['OPENAI_APPS_CHALLENGE_TOKEN'] = ''
+    client = app.test_client()
+    response = client.get('/.well-known/openai-apps-challenge')
+    assert response.status_code == 404
+
+
 def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     client = app.test_client()
     response = client.get('/.well-known/oauth-authorization-server')
@@ -173,7 +211,7 @@ def test_dynamic_registration_supports_client_secret_basic(app):
             'redirect_uri': 'https://client.example/callback',
             'scope': 'openid profile email',
             'state': 'state-basic',
-            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             'code_challenge_method': 'S256',
             'consent_action': 'approve',
             'consent_scopes': ['openid', 'profile', 'email'],
@@ -197,6 +235,29 @@ def test_dynamic_registration_supports_client_secret_basic(app):
 
     assert token_response.status_code == 200
     assert token_response.get_json()['token_type'] == 'Bearer'
+
+
+def test_dynamic_registration_without_scope_defaults_to_allowed_app_scopes(app):
+    client = app.test_client()
+
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'ChatGPT',
+            'redirect_uris': ['https://chatgpt.com/connector/oauth/test'],
+            'token_endpoint_auth_method': 'none',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+        },
+    )
+
+    assert registration.status_code == 201
+    payload = registration.get_json()
+    scope_set = set(payload['scope'].split())
+    assert {'openid', 'profile', 'email'}.issubset(scope_set)
+    assert {'pets:read', 'appointments:read', 'consultations:write', 'tutor_guidance:generate'}.issubset(scope_set)
+
+
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
     client = app.test_client()
 

@@ -47,10 +47,21 @@
               {{ (exame.status or 'pendente')|replace('_', ' ')|capitalize }}
             </span>
           </div>
-          {% if exame.resultado or exame.performed_at %}
+          {% if exame.resultado or exame.performed_at or exame.laudo_url %}
           <div class="mt-2 small">
             {% if exame.resultado %}<div><strong>Resultado:</strong> {{ exame.resultado }}</div>{% endif %}
             {% if exame.performed_at %}<div><strong>Realizado em:</strong> {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>{% endif %}
+            {% if exame.laudo_url %}
+            <div>
+              <strong>Laudo:</strong>
+              <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">
+                {{ exame.laudo_filename or 'Abrir laudo' }}
+              </a>
+              {% if exame.laudo_uploaded_at %}
+              <span class="text-muted">({{ exame.laudo_uploaded_at|format_datetime_brazil('%d/%m/%Y %H:%M') }})</span>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
           {% endif %}
         </li>
@@ -133,12 +144,37 @@
               <textarea class="form-control exame-resultado" rows="2">{{ exame.resultado or '' }}</textarea>
             </div>
             <div class="mb-2">
+              <label class="form-label">Arquivo do laudo</label>
+              <input type="file" class="form-control exame-laudo" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx">
+              {% if exame.laudo_url %}
+              <div class="form-text">
+                Laudo atual:
+                <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">{{ exame.laudo_filename or 'Abrir laudo' }}</a>
+              </div>
+              {% else %}
+              <div class="form-text">Envie o PDF, imagem ou documento do laudo final.</div>
+              {% endif %}
+            </div>
+            <div class="mb-2">
               <label class="form-label">Data de realizacao</label>
               <input type="date" class="form-control exame-performed_at" value="{{ exame.performed_at.date() if exame.performed_at else '' }}">
             </div>
           </div>
         </div>
         {% endfor %}
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" value="1" id="notificar-laudo-{{ bloco.id }}">
+            <label class="form-check-label" for="notificar-laudo-{{ bloco.id }}">
+              Avisar a clinica/veterinario solicitante que o laudo esta pronto
+            </label>
+          </div>
+          <label class="form-label" for="mensagem-laudo-{{ bloco.id }}">Mensagem do ultrassonografista</label>
+          <textarea id="mensagem-laudo-{{ bloco.id }}" class="form-control" rows="2" placeholder="Ex.: Laudo finalizado e anexado."></textarea>
+        </div>
       </div>
 
       <div class="d-flex gap-2">
@@ -293,20 +329,32 @@ function salvarSolicitacaoExames(blocoId) {
 
 function salvarRealizacaoExames(blocoId) {
   const exames = [];
+  const formData = new FormData();
 
   document.querySelectorAll(`#exames-realizacao-container-${blocoId} .exame-realizacao-card`).forEach(card => {
+    const id = Number(card.dataset.id);
+    const laudoInput = card.querySelector('.exame-laudo');
+    if (laudoInput?.files?.length) {
+      formData.append(`laudo_${id}`, laudoInput.files[0]);
+    }
     exames.push({
-      id: Number(card.dataset.id),
+      id,
       status: card.querySelector('.exame-status')?.value || 'pendente',
       resultado: card.querySelector('.exame-resultado')?.value.trim() || '',
       performed_at: card.querySelector('.exame-performed_at')?.value || ''
     });
   });
 
+  formData.append('payload', JSON.stringify({
+    exames,
+    notificar_solicitante: document.getElementById(`notificar-laudo-${blocoId}`)?.checked || false,
+    mensagem_laudo: document.getElementById(`mensagem-laudo-${blocoId}`)?.value.trim() || ''
+  }));
+
   fetch(`/bloco_exames/${blocoId}/realizacao`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-    body: JSON.stringify({ exames })
+    headers: { 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: formData
   })
     .then(async res => {
       const data = await res.json();

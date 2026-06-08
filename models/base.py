@@ -2343,6 +2343,10 @@ class ExameSolicitado(db.Model):
     status = db.Column(db.String(20), default='pendente')
     resultado = db.Column(db.Text, nullable=True)
     performed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    laudo_url = db.Column(db.String(500), nullable=True)
+    laudo_filename = db.Column(db.String(255), nullable=True)
+    laudo_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    laudo_message = db.Column(db.Text, nullable=True)
 
 
 class ProtocoloClinico(db.Model):

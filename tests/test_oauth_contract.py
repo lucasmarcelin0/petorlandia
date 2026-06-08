@@ -41,7 +41,7 @@ def test_authorization_code_pkce_contract(app, client):
             'scope': 'openid profile email',
             'state': 'state-123',
             'nonce': 'nonce-123',
-            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             'code_challenge_method': 'S256',
             'consent_action': 'approve',
             'consent_scopes': ['openid', 'profile', 'email'],
@@ -96,6 +96,28 @@ def test_authorize_requires_state(app, client):
     assert response.get_json()['error_description'] == 'state is required.'
 
 
+def test_authorize_get_renders_consent_screen(app, client):
+    user_id = _seed_user_and_client(app, client_id='screen-client')
+    _login(client, user_id)
+
+    response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'screen-client',
+            'redirect_uri': 'https://client.example/callback',
+            'scope': 'openid profile email',
+            'state': 'screen-state',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'S256',
+        },
+    )
+
+    assert response.status_code == 200
+    assert b'Autorizar acesso' in response.data
+    assert b'name="consent_action"' in response.data
+
+
 def test_token_rejects_invalid_redirect_uri_and_unknown_client(app, client):
     user_id = _seed_user_and_client(app, client_id='error-client')
     _login(client, user_id)
@@ -108,7 +130,7 @@ def test_token_rejects_invalid_redirect_uri_and_unknown_client(app, client):
             'redirect_uri': 'https://client.example/callback',
             'scope': 'openid profile email',
             'state': 'state-error',
-            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             'code_challenge_method': 'S256',
             'consent_action': 'approve',
             'consent_scopes': ['openid', 'profile', 'email'],
@@ -156,7 +178,7 @@ def test_oidc_claims_are_emitted_in_id_token_and_userinfo(app, client):
             'scope': 'openid profile email',
             'state': 'state-claims',
             'nonce': 'nonce-claims',
-            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             'code_challenge_method': 'S256',
             'consent_action': 'approve',
             'consent_scopes': ['openid', 'profile', 'email'],
