@@ -1659,3 +1659,40 @@ def test_pmo_color_is_white():
     assert vacina_pmo_service._pmo_color_is_white(None) is True
     assert vacina_pmo_service._pmo_color_is_white({"red": 0.95, "green": 0.95, "blue": 0.95}) is True
     assert vacina_pmo_service._pmo_color_is_white({"red": 0.851, "green": 0.918, "blue": 0.827}) is False
+
+
+class _FakeMetaService:
+    def __init__(self, titles):
+        self.titles = titles
+
+    def spreadsheets(self):
+        return self
+
+    def get(self, *, spreadsheetId, fields):
+        self._payload = {"sheets": [{"properties": {"title": t}} for t in self.titles]}
+        return self
+
+    def execute(self):
+        return self._payload
+
+
+def test_resolve_pmo_sheet_title_is_tolerant_to_case_accent_spaces():
+    svc = _FakeMetaService(["Inscrições  a Agendar ", "padrão", "Agendadas"])
+
+    assert (
+        vacina_pmo_service._resolve_pmo_sheet_title(svc, "X", "inscrições a agendar")
+        == "Inscrições  a Agendar "
+    )
+    assert vacina_pmo_service._resolve_pmo_sheet_title(svc, "X", "PADRAO") == "padrão"
+
+
+def test_resolve_pmo_sheet_title_lists_available_tabs_on_failure():
+    import pytest
+
+    svc = _FakeMetaService(["Respostas ao formulário", "Agendadas"])
+    with pytest.raises(ValueError) as exc:
+        vacina_pmo_service._resolve_pmo_sheet_title(svc, "X", "inscrições a agendar")
+
+    message = str(exc.value)
+    assert "Respostas ao formulário" in message
+    assert "Agendadas" in message

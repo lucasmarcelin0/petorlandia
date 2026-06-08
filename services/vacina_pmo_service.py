@@ -1815,19 +1815,49 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
 
 # ——— Criação do "dia de vacinação" ————————————————————————————————————————
 
+def _pmo_normalize_title(value: Any) -> str:
+    """Normaliza um título de aba: sem acento, minúsculo, espaços colapsados."""
+    text = _strip_accents(_normalize_text(value)).lower()
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _resolve_pmo_sheet_title(service, spreadsheet_id: str, wanted: str) -> str:
-    """Acha o título real de uma aba ignorando acentos/maiúsculas."""
+    """Acha o título real de uma aba de forma tolerante.
+
+    Ordem de tentativa: igualdade normalizada (sem acento/maiúscula/espaços
+    repetidos) → todas as palavras procuradas presentes na aba → substring em
+    qualquer direção. Se nada casar, lista as abas disponíveis no erro.
+    """
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
         .execute()
     )
-    target = _strip_accents(wanted).strip().lower()
-    for sheet in metadata.get("sheets", []):
-        title = sheet.get("properties", {}).get("title", "")
-        if _strip_accents(title).strip().lower() == target:
+    titles = [
+        sheet.get("properties", {}).get("title", "")
+        for sheet in metadata.get("sheets", [])
+        if sheet.get("properties", {}).get("title")
+    ]
+    target = _pmo_normalize_title(wanted)
+
+    for title in titles:  # 1) igualdade normalizada
+        if _pmo_normalize_title(title) == target:
             return title
-    raise ValueError(f"Não encontrei a aba '{wanted}' na planilha PMO.")
+
+    target_tokens = set(target.split())
+    for title in titles:  # 2) todas as palavras procuradas presentes na aba
+        if target_tokens and target_tokens.issubset(set(_pmo_normalize_title(title).split())):
+            return title
+
+    for title in titles:  # 3) substring em qualquer direção
+        normalized = _pmo_normalize_title(title)
+        if target and (target in normalized or normalized in target):
+            return title
+
+    disponiveis = ", ".join(f"'{title}'" for title in titles) or "(nenhuma)"
+    raise ValueError(
+        f"Não encontrei a aba '{wanted}' na planilha PMO. Abas disponíveis: {disponiveis}."
+    )
 
 
 def _pmo_color_is_white(color: dict[str, float] | None) -> bool:
