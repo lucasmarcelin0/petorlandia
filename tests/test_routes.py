@@ -124,6 +124,21 @@ def test_index_page(app):
     assert response.status_code == 200
 
 
+def test_public_privacy_page(app):
+    client = app.test_client()
+    response = client.get('/privacy')
+    assert response.status_code == 200
+    assert b'Politica de privacidade' in response.data
+
+
+def test_public_support_page(app):
+    app.config['SUPPORT_EMAIL'] = 'support@example.com'
+    client = app.test_client()
+    response = client.get('/support')
+    assert response.status_code == 200
+    assert b'support@example.com' in response.data
+
+
 def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     client = app.test_client()
     response = client.get('/.well-known/oauth-authorization-server')
@@ -173,7 +188,7 @@ def test_dynamic_registration_supports_client_secret_basic(app):
             'redirect_uri': 'https://client.example/callback',
             'scope': 'openid profile email',
             'state': 'state-basic',
-            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
             'code_challenge_method': 'S256',
             'consent_action': 'approve',
             'consent_scopes': ['openid', 'profile', 'email'],

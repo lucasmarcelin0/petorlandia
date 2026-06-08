@@ -243,8 +243,8 @@ CORS(app, resources={
     r"/mcp": {
         "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["WWW-Authenticate"],
+        "allow_headers": ["Content-Type", "Authorization", "Mcp-Session-Id", "MCP-Protocol-Version"],
+        "expose_headers": ["WWW-Authenticate", "Mcp-Session-Id"],
     },
 })
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
@@ -4073,6 +4073,20 @@ def painel_dashboard():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+
+@app.route('/support')
+def support():
+    return render_template(
+        'support.html',
+        support_email=app.config.get('SUPPORT_EMAIL'),
+        support_phone=app.config.get('SUPPORT_PHONE'),
+    )
 
 
 @app.route('/vacina-pmo')
@@ -8874,6 +8888,7 @@ def login_view():
     form = LoginForm()
     next_url = request.values.get('next') or url_for('index')
     next_url = _sanitize_login_next_url(next_url)
+    oauth_login_flow = urlparse(next_url).path == '/oauth/authorize'
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
         form.login.data = request.form.get('email')
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -8884,7 +8899,12 @@ def login_view():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400
             flash(login_error, 'warning')
-            return render_template('auth/login.html', form=form, next_url=next_url)
+            return render_template(
+                'auth/login.html',
+                form=form,
+                next_url=next_url,
+                oauth_login_flow=oauth_login_flow,
+            )
 
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
@@ -8908,7 +8928,12 @@ def login_view():
             errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
         return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o login.'}), 400
 
-    return render_template('auth/login.html', form=form, next_url=next_url)
+    return render_template(
+        'auth/login.html',
+        form=form,
+        next_url=next_url,
+        oauth_login_flow=oauth_login_flow,
+    )
 
 
 _OAUTH_PRIVATE_JWK = None
@@ -9015,6 +9040,16 @@ def _oauth_allowed_scopes() -> set[str]:
         ),
     )
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
+
+
+def _oauth_veterinarian_write_scopes() -> set[str]:
+    return {
+        'tutors:write',
+        'pets:write',
+        'appointments:write',
+        'consultations:write',
+        'exams:write',
+    }
 
 
 def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
@@ -11118,6 +11153,18 @@ def oauth_authorize():
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
 
+    requested_scope_set = set(requested_scopes)
+    if requested_scope_set.intersection(_oauth_veterinarian_write_scopes()) and not has_veterinarian_profile(current_user):
+        return render_template(
+            'auth/oauth_veterinarian_required.html',
+            client=client,
+            current_account=current_user,
+            requested_scopes=requested_scopes,
+            error_message='Esta conexao pede permissoes de escrita clinica e exige uma conta veterinaria.',
+            switch_account_url=url_for('logout'),
+            continue_url=request.url,
+        ), 403
+
     if request.method == 'POST':
         if request.form.get('consent_action') != 'approve':
             query = urlencode({'error': 'access_denied', 'state': state})
@@ -11510,7 +11557,185 @@ def _mcp_err_with_data(req_id, code, message, data):
 
 
 def _mcp_json_content(payload):
-    return {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
+    result = {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
+    if isinstance(payload, dict):
+        result['structuredContent'] = payload
+    return result
+
+
+def _mcp_annotations(read_only: bool, *, destructive: bool = False, open_world: bool = False, idempotent: bool | None = None):
+    annotations = {
+        'readOnlyHint': read_only,
+        'destructiveHint': destructive,
+        'openWorldHint': open_world,
+    }
+    if idempotent is not None:
+        annotations['idempotentHint'] = idempotent
+    return annotations
+
+
+def _mcp_object_output_schema(description: str | None = None):
+    schema = {
+        'type': 'object',
+        'additionalProperties': True,
+    }
+    if description:
+        schema['description'] = description
+    return schema
+
+
+def _mcp_array_output_schema(property_name: str, item_description: str):
+    return {
+        'type': 'object',
+        'properties': {
+            property_name: {
+                'type': 'array',
+                'description': item_description,
+                'items': {'type': 'object', 'additionalProperties': True},
+            },
+        },
+        'required': [property_name],
+        'additionalProperties': True,
+    }
+
+
+MCP_TOOL_DESCRIPTOR_DEFAULTS = {
+    'listar_meus_pets': {
+        'title': 'Listar meus pets',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('pets', 'Pets acessiveis ao usuario autenticado.'),
+    },
+    'listar_agendamentos': {
+        'title': 'Listar agendamentos',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('agendamentos', 'Agendamentos acessiveis ao usuario autenticado.'),
+    },
+    'interpretar_mensagem_livre_atendimento': {
+        'title': 'Interpretar mensagem livre',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Rascunho operacional extraido de mensagens livres.'),
+    },
+    'assistente_operacional_veterinario': {
+        'title': 'Assistente operacional veterinario',
+        'scopes': ['profile', 'tutors:write', 'pets:write', 'appointments:write', 'consultations:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Plano operacional e eventual resultado de execucao confirmada.'),
+    },
+    'cadastrar_tutor_e_pets': {
+        'title': 'Cadastrar tutor e pets',
+        'scopes': ['tutors:write', 'pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Tutor e pets criados ou reaproveitados no PetOrlandia.'),
+    },
+    'registrar_consulta_clinica': {
+        'title': 'Registrar consulta clinica',
+        'scopes': ['consultations:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Consulta clinica criada ou atualizada no PetOrlandia.'),
+    },
+    'registrar_bloco_exames': {
+        'title': 'Registrar bloco de exames',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Bloco de exames criado para o paciente.'),
+    },
+    'abrir_importador_laudo_volante': {
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+    },
+    'importar_laudo_volante': {
+        'scopes': ['tutors:write', 'pets:write', 'exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+    },
+    'agendar_consulta': {
+        'title': 'Agendar consulta',
+        'scopes': ['appointments:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Consulta, retorno ou compromisso clinico agendado.'),
+    },
+    'agendar_retorno': {
+        'title': 'Agendar retorno',
+        'scopes': ['appointments:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Retorno agendado a partir de uma consulta existente.'),
+    },
+    'obter_resumo_clinico_animal': {
+        'title': 'Obter resumo clinico do animal',
+        'scopes': ['clinical_summary:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Resumo clinico estruturado do paciente.'),
+    },
+    'listar_agenda_do_dia': {
+        'title': 'Listar agenda do dia',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Agenda diaria com pendencias clinicas resumidas.'),
+    },
+    'listar_pendencias_clinicas': {
+        'title': 'Listar pendencias clinicas',
+        'scopes': ['appointments:read', 'exams:read', 'vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Pendencias clinicas do escopo acessivel.'),
+    },
+    'listar_vacinas_pendentes': {
+        'title': 'Listar vacinas pendentes',
+        'scopes': ['vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Vacinas atrasadas e proximas vacinas.'),
+    },
+    'listar_exames_pendentes': {
+        'title': 'Listar exames pendentes',
+        'scopes': ['exams:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Exames solicitados ou agendados ainda em aberto.'),
+    },
+    'listar_retornos_pendentes': {
+        'title': 'Listar retornos pendentes',
+        'scopes': ['appointments:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Retornos futuros relacionados a consultas.'),
+    },
+    'gerar_orientacao_tutor': {
+        'title': 'Gerar orientacao ao tutor',
+        'scopes': ['tutor_guidance:generate'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Rascunho deterministico de orientacao ao tutor.'),
+    },
+    'gerar_handoff_clinico': {
+        'title': 'Gerar handoff clinico',
+        'scopes': ['handoff:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Handoff clinico resumido para outro profissional.'),
+    },
+}
+
+
+def _mcp_finalize_tool_descriptors(tools: list[dict]) -> list[dict]:
+    for tool in tools:
+        defaults = MCP_TOOL_DESCRIPTOR_DEFAULTS.get(tool.get('name'), {})
+        title = defaults.get('title')
+        if title:
+            tool.setdefault('title', title)
+
+        default_annotations = defaults.get('annotations') or _mcp_annotations(False, idempotent=False)
+        annotations = {**default_annotations, **(tool.get('annotations') or {})}
+        for key in ('readOnlyHint', 'destructiveHint', 'openWorldHint'):
+            annotations.setdefault(key, default_annotations[key])
+        tool['annotations'] = annotations
+
+        tool.setdefault('outputSchema', defaults.get('outputSchema') or _mcp_object_output_schema())
+
+        scopes = defaults.get('scopes') or []
+        if scopes:
+            security_schemes = [{'type': 'oauth2', 'scopes': scopes}]
+            tool.setdefault('securitySchemes', security_schemes)
+            meta = tool.setdefault('_meta', {})
+            meta.setdefault('securitySchemes', security_schemes)
+
+    return tools
 
 
 LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v1.html'
@@ -11723,7 +11948,7 @@ def _mcp_laudo_volante_widget_html():
     fields.clinicaNome.textContent = text(clinica.nome);
     fields.clinicaContato.textContent = compact([clinica.email, clinica.telefone, clinica.cnpj]);
     fields.tutorNome.textContent = text(tutor.nome);
-    fields.tutorContato.textContent = compact([tutor.telefone, tutor.email, tutor.cpf]);
+    fields.tutorContato.textContent = compact([tutor.telefone, tutor.email]);
     fields.animalNome.textContent = text(animal.nome);
     fields.animalDetalhes.textContent = compact([animal.especie, animal.raca, animal.sexo, animal.idade]);
     fields.exameNome.textContent = text(exame.nome || exame.tipo);
@@ -11905,6 +12130,9 @@ def _mcp_unauthorized():
 def mcp_server():
     """MCP server — handles GET (capability probe) and POST (JSON-RPC) from Claude/ChatGPT."""
 
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
     # ── GET: unauthenticated capability probe or SSE handshake ───────────────
     # Claude may send a plain GET before OAuth to verify server existence.
     # Return a JSON description (no auth required) so discovery succeeds.
@@ -11967,6 +12195,7 @@ def mcp_server():
                     '_meta': {
                         'ui': {
                             'prefersBorder': True,
+                            'domain': _oauth_issuer(),
                             'csp': {
                                 'connectDomains': [],
                                 'resourceDomains': [],
@@ -11977,6 +12206,11 @@ def mcp_server():
                             'o exame no PetOrlandia.'
                         ),
                         'openai/widgetPrefersBorder': True,
+                        'openai/widgetDomain': _oauth_issuer(),
+                        'openai/widgetCSP': {
+                            'connect_domains': [],
+                            'resource_domains': [],
+                        },
                     },
                 }
             ]
@@ -12164,8 +12398,8 @@ def mcp_server():
                 'inputSchema': {
                     'type': 'object',
                     'properties': {
-                        'clinica': {'type': 'object', 'description': 'Clinica solicitante: nome, email, telefone, cnpj e endereco quando houver.'},
-                        'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email, cpf e endereco quando houver.'},
+                        'clinica': {'type': 'object', 'description': 'Clinica solicitante: nome, email, telefone e endereco quando houver.'},
+                        'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email e endereco quando houver.'},
                         'animal': {'type': 'object', 'description': 'Paciente: nome, especie, raca, sexo e idade quando houver.'},
                         'exame': {'type': 'object', 'description': 'Dados do exame: nome/tipo, data, achados, conclusao e justificativa.'},
                         'laudo_texto': {'type': 'string', 'description': 'Texto integral ou resumo fiel do laudo. Preferencial quando o anexo do ChatGPT falhar.'},
@@ -12191,7 +12425,7 @@ def mcp_server():
                 'annotations': {
                     'readOnlyHint': False,
                     'destructiveHint': False,
-                    'openWorldHint': True,
+                    'openWorldHint': False,
                     'idempotentHint': False,
                 },
                 '_meta': {
@@ -12319,7 +12553,7 @@ def mcp_server():
                 },
             },
         ]
-        return _mcp_ok(req_id, {'tools': tools})
+        return _mcp_ok(req_id, {'tools': _mcp_finalize_tool_descriptors(tools)})
 
     # ── tools/call ───────────────────────────────────────────────────────────
     if method == 'tools/call':
@@ -12327,9 +12561,11 @@ def mcp_server():
         tool_args = params.get('arguments') or {}
 
         if tool_name == 'listar_meus_pets':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
             animals = (
-                Animal.query
-                .filter_by(user_id=user.id, removido_em=None)
+                _integration_accessible_animals_query(user)
                 .order_by(Animal.name)
                 .all()
             )
@@ -12349,11 +12585,16 @@ def mcp_server():
                     'peso_kg': a.peso,
                     'nascimento': a.date_of_birth.isoformat() if a.date_of_birth else None,
                 })
-            text = json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'
-            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+            return _mcp_ok(req_id, {
+                'structuredContent': {'pets': pets},
+                'content': [{'type': 'text', 'text': json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'}],
+            })
 
         if tool_name == 'listar_agendamentos':
-            q = Appointment.query.filter_by(tutor_id=user.id)
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')
+            if scope_error:
+                return scope_error
+            q = _integration_accessible_appointments_query(user)
             status_filter = str(tool_args.get('status', '') or '').strip()
             if status_filter:
                 q = q.filter(Appointment.status == status_filter)
@@ -12369,8 +12610,10 @@ def mcp_server():
                 }
                 for a in appts
             ]
-            text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
-            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+            return _mcp_ok(req_id, {
+                'structuredContent': {'agendamentos': data_out},
+                'content': [{'type': 'text', 'text': json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'}],
+            })
 
         if tool_name == 'interpretar_mensagem_livre_atendimento':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')

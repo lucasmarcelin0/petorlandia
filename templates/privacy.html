@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="description" content="Politica de privacidade do PetOrlandia.">
+{% endblock %}
+
+{% block main %}
+<section class="py-4 py-lg-5">
+  <div class="mx-auto" style="max-width: 920px;">
+    <span class="text-uppercase text-muted small fw-semibold">PetOrlandia</span>
+    <h1 class="mt-2 mb-3">Politica de privacidade</h1>
+    <p class="text-muted">Ultima atualizacao: 8 de junho de 2026.</p>
+
+    <div class="vstack gap-4">
+      <section>
+        <h2 class="h4">Dados que tratamos</h2>
+        <p>
+          O PetOrlandia trata dados de conta, contato, clinicas, equipes, tutores,
+          pets, agenda, historico clinico veterinario, exames, prescricoes,
+          orcamentos, pagamentos, mensagens e registros operacionais necessarios
+          para prestar o servico.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Uso do app no ChatGPT</h2>
+        <p>
+          Quando o usuario conecta o PetOrlandia ao ChatGPT, o acesso acontece por
+          OAuth e escopos autorizados. O ChatGPT pode solicitar ao PetOrlandia
+          apenas as informacoes necessarias para responder ao pedido do usuario ou
+          executar uma acao confirmada, como consultar agenda, resumir um historico
+          clinico ou registrar um atendimento.
+        </p>
+        <p>
+          Ferramentas de escrita exigem confirmacao explicita antes de gravar
+          dados. O PetOrlandia nao deve receber ou reconstruir todo o historico da
+          conversa; o tratamento se limita aos trechos, anexos e comandos
+          compartilhados pelo usuario ou pelo cliente autorizado.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Finalidades</h2>
+        <p>
+          Usamos os dados para autenticar usuarios, operar prontuarios e agendas,
+          apoiar fluxos clinicos e administrativos, registrar consentimentos,
+          prevenir abusos, manter seguranca, prestar suporte e cumprir obrigacoes
+          legais ou contratuais.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Compartilhamento</h2>
+        <p>
+          Dados podem ser compartilhados com clinicas, profissionais e equipes que
+          tenham permissao no PetOrlandia, alem de provedores tecnicos necessarios
+          para hospedagem, e-mail, pagamentos, mensagens, armazenamento, seguranca
+          e integracoes autorizadas, incluindo o ChatGPT quando o usuario conecta o
+          app. Nao vendemos dados pessoais.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Retencao e seguranca</h2>
+        <p>
+          Mantemos dados pelo tempo necessario para operar a conta, preservar
+          registros clinicos e administrativos, atender obrigacoes legais e resolver
+          disputas. Aplicamos controles de acesso, isolamento por escopo, logs de
+          seguranca e boas praticas de protecao de credenciais.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="h4">Direitos e contato</h2>
+        <p>
+          Usuarios podem solicitar acesso, correcao, exportacao, restricao ou
+          exclusao de dados quando aplicavel. Para pedidos de privacidade ou
+          duvidas sobre o tratamento de dados, use a pagina de suporte.
+        </p>
+        <a class="btn btn-outline-primary" href="{{ url_for('support') }}">Abrir suporte</a>
+      </section>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -76,7 +76,9 @@ class Config:
         "OAUTH_ALLOWED_SCOPES",
         (
             "openid profile email pets:read pets:write appointments:read appointments:write "
-            "tutors:read tutors:write exams:read exams:write clinical:read clinical:write"
+            "tutors:read tutors:write consultations:read consultations:write "
+            "prescriptions:read exams:read exams:write vaccines:read "
+            "clinical_summary:read handoff:read tutor_guidance:generate"
         ),
     )
 
@@ -94,6 +96,8 @@ class Config:
     MAIL_USERNAME = _env_optional("MAIL_USERNAME")
     MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
     _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")
+    SUPPORT_EMAIL = _env_optional("SUPPORT_EMAIL") or _mail_sender_email
+    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE")
     MAIL_DEFAULT_SENDER = (
         (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
         if _mail_sender_email

@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="description" content="Suporte publico do PetOrlandia.">
+{% endblock %}
+
+{% block main %}
+<section class="py-4 py-lg-5">
+  <div class="mx-auto" style="max-width: 920px;">
+    <span class="text-uppercase text-muted small fw-semibold">PetOrlandia</span>
+    <h1 class="mt-2 mb-3">Suporte</h1>
+    <p class="lead">
+      Use este canal para ajuda com conta, conexao com ChatGPT, privacidade,
+      seguranca, erros de integracao e revisao de acesso.
+    </p>
+
+    <div class="row g-3 my-4">
+      <div class="col-md-6">
+        <div class="border rounded-3 p-3 h-100 bg-white">
+          <h2 class="h5">E-mail</h2>
+          {% if support_email %}
+          <p class="mb-2"><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+          {% else %}
+          <p class="mb-2 text-muted">Configure SUPPORT_EMAIL em producao antes da submissao publica.</p>
+          {% endif %}
+          <p class="small text-muted mb-0">Inclua o e-mail da conta, horario aproximado e uma descricao curta do problema.</p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="border rounded-3 p-3 h-100 bg-white">
+          <h2 class="h5">Telefone ou WhatsApp</h2>
+          {% if support_phone %}
+          <p class="mb-2">{{ support_phone }}</p>
+          {% else %}
+          <p class="mb-2 text-muted">Configure SUPPORT_PHONE se houver atendimento por telefone.</p>
+          {% endif %}
+          <p class="small text-muted mb-0">Nao envie senhas, codigos de MFA ou dados de pagamento por mensagem.</p>
+        </div>
+      </div>
+    </div>
+
+    <section class="mb-4">
+      <h2 class="h4">Suporte para revisao do app ChatGPT</h2>
+      <p>
+        Revisores podem usar este canal para reportar falhas no endpoint MCP,
+        OAuth, widgets, casos de teste, permissoes ou credenciais demonstrativas
+        fornecidas no formulario de submissao.
+      </p>
+    </section>
+
+    <section class="mb-4">
+      <h2 class="h4">Emergencias clinicas</h2>
+      <p>
+        O PetOrlandia nao substitui atendimento veterinario de emergencia. Em
+        situacoes urgentes, procure diretamente uma clinica, hospital veterinario
+        ou profissional responsavel pelo animal.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="h4">Privacidade</h2>
+      <p>
+        Para pedidos de acesso, correcao, exclusao ou restricao de dados, informe
+        a conta afetada e o tipo de solicitacao.
+      </p>
+      <a class="btn btn-outline-primary" href="{{ url_for('privacy') }}">Ver politica de privacidade</a>
+    </section>
+  </div>
+</section>
+{% endblock %}

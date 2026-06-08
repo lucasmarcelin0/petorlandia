@@ -1071,6 +1071,36 @@ def test_mcp_laudo_volante_widget_contract(app, client):
         json={"jsonrpc": "2.0", "id": 52, "method": "tools/list", "params": {}},
     )
     tools = tools_response.get_json()["result"]["tools"]
+    assert tools
+    for tool in tools:
+        annotations = tool.get("annotations") or {}
+        assert isinstance(annotations.get("readOnlyHint"), bool), tool["name"]
+        assert isinstance(annotations.get("destructiveHint"), bool), tool["name"]
+        assert isinstance(annotations.get("openWorldHint"), bool), tool["name"]
+        assert tool.get("outputSchema", {}).get("type") == "object", tool["name"]
+        if tool["name"] in {
+            "listar_meus_pets",
+            "listar_agendamentos",
+            "interpretar_mensagem_livre_atendimento",
+            "assistente_operacional_veterinario",
+            "cadastrar_tutor_e_pets",
+            "registrar_consulta_clinica",
+            "registrar_bloco_exames",
+            "abrir_importador_laudo_volante",
+            "importar_laudo_volante",
+            "agendar_consulta",
+            "agendar_retorno",
+            "obter_resumo_clinico_animal",
+            "listar_agenda_do_dia",
+            "listar_pendencias_clinicas",
+            "listar_vacinas_pendentes",
+            "listar_exames_pendentes",
+            "listar_retornos_pendentes",
+            "gerar_orientacao_tutor",
+            "gerar_handoff_clinico",
+        }:
+            assert tool.get("securitySchemes"), tool["name"]
+            assert tool.get("_meta", {}).get("securitySchemes"), tool["name"]
     render_tool = next(tool for tool in tools if tool["name"] == "abrir_importador_laudo_volante")
     assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
     assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v1.html"
@@ -1098,6 +1128,8 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert 'window.openai.selectFiles' in resource["text"]
     assert 'window.openai.uploadFile' in resource["text"]
     assert resource["_meta"]["ui"]["prefersBorder"] is True
+    assert resource["_meta"]["ui"]["domain"]
+    assert resource["_meta"]["openai/widgetDomain"] == resource["_meta"]["ui"]["domain"]
 
     render_response = client.post(
         "/mcp",
