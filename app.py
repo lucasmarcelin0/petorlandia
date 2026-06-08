@@ -9114,6 +9114,19 @@ def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool
         return False
 
     for allowed_uri in client.redirect_uri_list():
+        if allowed_uri in {
+            'https://chatgpt.com/aip/*/oauth/callback',
+            'https://chat.openai.com/aip/*/oauth/callback',
+        }:
+            if (
+                parsed.scheme == 'https'
+                and parsed.netloc in {'chatgpt.com', 'chat.openai.com'}
+                and re.fullmatch(r'/aip/[^/]+/oauth/callback', parsed.path or '')
+                and not parsed.params
+                and not parsed.query
+            ):
+                return True
+            continue
         if '*' in allowed_uri:
             continue
         if redirect_uri == allowed_uri:
