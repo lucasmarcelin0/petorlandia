@@ -1,7 +1,7 @@
 """add exame imagem flow
 
 Revision ID: 0b6d9e3f4a12
-Revises: fb8c2d1e4a6f
+Revises: e2a7c4d9f6b1
 Create Date: 2026-06-08 10:00:00.000000
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0b6d9e3f4a12"
-down_revision = "fb8c2d1e4a6f"
+down_revision = "e2a7c4d9f6b1"
 branch_labels = None
 depends_on = None
 
