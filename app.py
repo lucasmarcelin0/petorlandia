@@ -14321,6 +14321,10 @@ def mcp_protected_resource_metadata():
         'resource': f'{issuer}/mcp',
         'authorization_servers': [issuer],
         'bearer_methods_supported': ['header'],
+        # RFC 9728 §2: the scopes a client must request to access this resource.
+        # Without this, MCP clients (ChatGPT/Claude) only request the default
+        # OIDC scopes and never obtain pets:read / exams:write / etc.
+        'scopes_supported': _oauth_order_scopes(_oauth_allowed_scopes()).split(),
         'resource_documentation': f'{issuer}/mcp',
     })
 

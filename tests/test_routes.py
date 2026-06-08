@@ -173,6 +173,23 @@ def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     assert 'client_secret_basic' in payload['token_endpoint_auth_methods_supported']
 
 
+def test_protected_resource_metadata_advertises_clinical_scopes(app):
+    """MCP clients (ChatGPT/Claude) read scopes_supported from the protected
+    resource metadata to decide which scopes to request. Without the clinical
+    scopes here, only openid/profile/email are ever granted."""
+    client = app.test_client()
+    response = client.get('/.well-known/oauth-protected-resource')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload['resource'].endswith('/mcp')
+    scopes = payload.get('scopes_supported')
+    assert isinstance(scopes, list)
+    for required in ('openid', 'pets:read', 'exams:write', 'appointments:read'):
+        assert required in scopes
+
+
 
 
 def test_dynamic_registration_supports_client_secret_basic(app):
