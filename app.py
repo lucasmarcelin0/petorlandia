@@ -4094,6 +4094,16 @@ def terms():
     return render_template('terms.html')
 
 
+@app.route('/.well-known/openai-apps-challenge')
+def openai_apps_challenge():
+    token = (app.config.get('OPENAI_APPS_CHALLENGE_TOKEN') or os.environ.get('OPENAI_APPS_CHALLENGE_TOKEN') or '').strip()
+    if not token:
+        abort(404)
+    response = make_response(token)
+    response.mimetype = 'text/plain'
+    return response
+
+
 @app.route('/vacina-pmo')
 @login_required
 def vacina_pmo():

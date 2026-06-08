@@ -146,6 +146,22 @@ def test_public_terms_page(app):
     assert b'Termos de uso' in response.data
 
 
+def test_openai_apps_challenge_uses_configured_token(app):
+    app.config['OPENAI_APPS_CHALLENGE_TOKEN'] = 'challenge-token'
+    client = app.test_client()
+    response = client.get('/.well-known/openai-apps-challenge')
+    assert response.status_code == 200
+    assert response.text == 'challenge-token'
+    assert response.mimetype == 'text/plain'
+
+
+def test_openai_apps_challenge_404_when_unconfigured(app):
+    app.config['OPENAI_APPS_CHALLENGE_TOKEN'] = ''
+    client = app.test_client()
+    response = client.get('/.well-known/openai-apps-challenge')
+    assert response.status_code == 404
+
+
 def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     client = app.test_client()
     response = client.get('/.well-known/oauth-authorization-server')
