@@ -80,6 +80,11 @@ PMO_NOTE_COLUMN = "K"
 # Aba mestre de status (mantida pelo sync agendado). O app NUNCA deve escrever
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
 PMO_MASTER_SHEET_TITLE = os.getenv("PMO_VACCINE_MASTER_SHEET_TITLE", "Vacinação 2026")
+
+# Limite da coluna pmo_vaccination_animal.name (varchar 120). Cadastros com muitos
+# nomes em texto livre podem gerar um "nome" gigante; truncamos para não estourar o
+# banco e derrubar a sincronização inteira.
+PMO_ANIMAL_NAME_MAX = 120
 PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
@@ -531,7 +536,7 @@ def _build_animals(names: list[str], dogs: int, cats: int) -> list[dict[str, str
         fallback = f"Cao {index + 1}" if species == "cao" else f"Gato {index - dogs + 1}"
         animals.append(
             {
-                "name": names[index] if index < len(names) else fallback,
+                "name": (names[index] if index < len(names) else fallback)[:PMO_ANIMAL_NAME_MAX],
                 "species": species,
                 "status": "pendente",
             }
@@ -1367,7 +1372,7 @@ def persist_vacina_pmo_rows(
         keep_positions = set()
         for position, animal_data in enumerate(parsed_animals, start=1):
             animal = existing_by_position.get(position)
-            name = animal_data.get("name") or f"Animal {position}"
+            name = (animal_data.get("name") or f"Animal {position}")[:PMO_ANIMAL_NAME_MAX]
             species = animal_data.get("species") or "cao"
             if not animal:
                 animal = PmoVaccinationAnimal(

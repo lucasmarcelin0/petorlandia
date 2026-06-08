@@ -1755,6 +1755,18 @@ def test_plan_pmo_day_groups_condo_units_despite_messy_complement():
     assert sorted(h["sourceRow"] for h in condo_units) == [1, 2, 3]
 
 
+def test_build_animals_truncates_overlong_name_to_db_limit():
+    # Regressão: cadastro com muitos nomes em texto livre (todos entre parênteses)
+    # virava um único nome gigante e estourava o varchar(120), derrubando o sync.
+    long_name = "(" + ", ".join(f"Bicho{i}" for i in range(40)) + ") gatos e cães"
+    assert len(long_name) > 120
+
+    animals = vacina_pmo_service._build_animals([long_name], 0, 1)
+
+    assert len(animals) == 1
+    assert len(animals[0]["name"]) <= 120
+
+
 def test_pmo_is_master_sheet_matches_ignoring_accent_and_case():
     assert vacina_pmo_service._pmo_is_master_sheet("Vacinação 2026")
     assert vacina_pmo_service._pmo_is_master_sheet("vacinacao 2026")
