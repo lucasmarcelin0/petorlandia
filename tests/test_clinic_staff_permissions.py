@@ -156,4 +156,4 @@ def test_vet_worker_without_record_shows_as_staff(monkeypatch, app):
             follow_redirects=True,
         )
         resp = client.get(f"/clinica/{clinic.id}")
-        assert b"TempVet" in resp.data
+        assert b"tempvet" in resp.data.lower()

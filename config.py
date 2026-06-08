@@ -48,9 +48,11 @@ def _load_secret_key(project_root: Optional[Path] = None) -> str:
 
 class Config:
     SECRET_KEY = _load_secret_key()
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI",
-        "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
+    # Lido exclusivamente da variável de ambiente (setada no Heroku em produção).
+    # Sem ela (dev/local/CI), cai para um SQLite local — nunca uma credencial de
+    # produção embutida no código.
+    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or (
+        f"sqlite:///{(PROJECT_ROOT / 'petorlandia_dev.db').as_posix()}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool

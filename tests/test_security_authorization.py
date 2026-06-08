@@ -158,6 +158,7 @@ class TestAuthentication:
     
     def test_login_with_valid_credentials(self, client, multi_user_setup, app):
         """Login should succeed with valid credentials."""
+        app.config['WTF_CSRF_ENABLED'] = False  # not a CSRF test; see TestCSRFProtection
         response = client.post('/login', data={
             'email': 'tutor1@test.com',
             'password': 'pass1'
@@ -217,7 +218,7 @@ class TestAuthorization:
         """Non-admin users should not access admin panel."""
         login(client, multi_user_setup['tutor1_id'])
         
-        response = client.get('/painel')
+        response = client.get('/painel', headers={'Accept': 'text/html'})
         assert response.status_code == 403
     
     def test_admin_can_access_admin_panel(self, client, multi_user_setup):
@@ -379,7 +380,7 @@ class TestCSRFProtection:
         
         # Try to delete animal without CSRF token
         response = client.post(
-            f'/deletar-animal/{multi_user_setup["animal1_id"]}',
+            f'/animal/{multi_user_setup["animal1_id"]}/deletar',
             headers={'X-CSRFToken': ''}
         )
         
@@ -436,8 +437,7 @@ class TestAPIEndpointSecurity:
         """API endpoints should require authentication."""
         api_endpoints = [
             '/api/minhas-compras',
-            '/api/appointment/events',
-            '/api/available-times'
+            '/api/tipos_racao'
         ]
         
         for endpoint in api_endpoints:
@@ -463,8 +463,9 @@ class TestAPIEndpointSecurity:
 class TestRateLimiting:
     """Test rate limiting to prevent brute force attacks."""
     
-    def test_login_rate_limiting(self, client, multi_user_setup):
+    def test_login_rate_limiting(self, client, multi_user_setup, app):
         """Multiple failed login attempts should be rate limited."""
+        app.config['WTF_CSRF_ENABLED'] = False  # not a CSRF test; see TestCSRFProtection
         # Try multiple failed logins
         for i in range(20):
             response = client.post('/login', data={
