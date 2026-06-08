@@ -10804,6 +10804,27 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     result_parts = [part for part in [conclusion, findings, report_text] if part]
     result_text = '\n\n'.join(result_parts) or None
 
+    laudo_url = (payload.get('laudo_url') or '').strip()
+    laudo_filename = (payload.get('laudo_filename') or payload.get('nome_arquivo') or '').strip() or None
+    laudo_file_ref = _mcp_extract_file_reference(payload, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file')
+    laudo_file_status = 'sem_arquivo'
+    if laudo_file_ref:
+        laudo_url, uploaded_filename = _integration_download_and_store_laudo_file(laudo_file_ref)
+        laudo_filename = uploaded_filename or laudo_filename
+        laudo_file_status = 'arquivo_salvo'
+    elif laudo_url and _is_local_chatgpt_file_path(laudo_url):
+        # ChatGPT can surface attachments as local sandbox paths (for example /mnt/data/*.pdf).
+        # Those paths are not reachable by PetOrlandia's server; keep the structured import
+        # working from the extracted text/data and explicitly avoid persisting the bad path.
+        laudo_url = None
+        laudo_filename = laudo_filename or os.path.basename(payload.get('laudo_url') or '') or None
+        laudo_file_status = 'caminho_local_ignorado'
+    elif laudo_url:
+        parsed_laudo_url = urlparse(laudo_url)
+        if parsed_laudo_url.scheme not in {'http', 'https'} or not parsed_laudo_url.netloc:
+            raise ValueError('laudo_url deve ser uma URL http/https publica. Para anexos do ChatGPT, use laudo_arquivo ou cole o texto integral.')
+        laudo_file_status = 'url_registrada'
+
     performed_at = None
     performed_at_raw = exam_data.get('data') or payload.get('data_exame')
     if performed_at_raw:
@@ -10826,9 +10847,9 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
         status='concluido',
         resultado=result_text,
         performed_at=performed_at or datetime.now(BR_TZ),
-        laudo_url=(payload.get('laudo_url') or '').strip() or None,
-        laudo_filename=(payload.get('laudo_filename') or payload.get('nome_arquivo') or '').strip() or None,
-        laudo_uploaded_at=datetime.now(BR_TZ) if payload.get('laudo_url') else None,
+        laudo_url=laudo_url or None,
+        laudo_filename=laudo_filename,
+        laudo_uploaded_at=datetime.now(BR_TZ) if laudo_url else None,
         laudo_message=(payload.get('mensagem_clinica') or '').strip() or None,
     )
     db.session.add(exam)
@@ -10878,6 +10899,7 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     exam_name = exam.nome
     exam_status = exam.status
     exam_laudo_url = exam.laudo_url
+    exam_laudo_filename = exam.laudo_filename
     bloco_id = bloco.id
     db.session.commit()
 
@@ -10913,6 +10935,8 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             'nome': exam_name,
             'status': exam_status,
             'laudo_url': exam_laudo_url,
+            'laudo_filename': exam_laudo_filename,
+            'arquivo_status': laudo_file_status,
         },
         'proxima_acao_recomendada': (
             'Enviar o link da clinica para o dono fazer o primeiro acesso.'
@@ -11490,6 +11514,78 @@ def _mcp_json_content(payload):
 
 
 LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v1.html'
+MAX_MCP_LAUDO_FILE_BYTES = 25 * 1024 * 1024
+MCP_FILE_REFERENCE_SCHEMA = {
+    'type': 'object',
+    'description': (
+        'Arquivo do laudo autorizado pelo ChatGPT. Use este campo para anexos; '
+        'nao envie caminhos locais como /mnt/data/arquivo.pdf.'
+    ),
+    'properties': {
+        'download_url': {'type': 'string', 'description': 'URL temporaria HTTPS autorizada pelo ChatGPT.'},
+        'file_id': {'type': 'string', 'description': 'ID do arquivo no ChatGPT.'},
+        'mime_type': {'type': 'string'},
+        'file_name': {'type': 'string'},
+    },
+    'required': ['download_url', 'file_id'],
+}
+
+
+def _is_local_chatgpt_file_path(value: str) -> bool:
+    raw = (value or '').strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    return (
+        lowered.startswith('/mnt/data/')
+        or lowered.startswith('/tmp/')
+        or lowered.startswith('file:')
+        or re.match(r'^[a-z]:\\', raw, flags=re.IGNORECASE) is not None
+    )
+
+
+def _mcp_extract_file_reference(payload: dict, *field_names: str) -> dict | None:
+    for field_name in field_names:
+        value = payload.get(field_name)
+        if isinstance(value, dict) and value.get('download_url') and value.get('file_id'):
+            return value
+    return None
+
+
+def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
+    download_url = (file_ref.get('download_url') or '').strip()
+    parsed = urlparse(download_url)
+    if parsed.scheme != 'https' or not parsed.netloc:
+        raise ValueError('Arquivo do laudo recebeu download_url invalido. Se necessario, cole o texto integral do laudo.')
+
+    original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo-chatgpt.pdf').strip()
+    safe_name = secure_filename(original_name) or 'laudo-chatgpt.pdf'
+    try:
+        response = requests.get(download_url, timeout=20, stream=True)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise ValueError('Nao foi possivel baixar o arquivo autorizado pelo ChatGPT. Cole o texto integral do laudo e tente novamente.') from exc
+
+    content = BytesIO()
+    total = 0
+    for chunk in response.iter_content(chunk_size=1024 * 1024):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > MAX_MCP_LAUDO_FILE_BYTES:
+            raise ValueError('Arquivo do laudo excede 25 MB. Cole o texto integral do laudo ou envie um arquivo menor.')
+        content.write(chunk)
+    content.seek(0)
+
+    storage = FileStorage(
+        stream=content,
+        filename=safe_name,
+        content_type=(file_ref.get('mime_type') or 'application/octet-stream'),
+    )
+    stored_url = upload_to_s3(storage, f"{uuid.uuid4().hex}_{safe_name}", folder='laudos_exames')
+    if not stored_url:
+        raise ValueError('Nao foi possivel salvar o arquivo do laudo. Cole o texto integral e tente novamente.')
+    return stored_url, safe_name
 
 
 def _mcp_laudo_volante_widget_html():
@@ -11536,6 +11632,15 @@ def _mcp_laudo_volante_widget_html():
     <textarea id="laudo" rows="7"></textarea>
   </label>
 
+  <section class="file-tools">
+    <div>
+      <strong>Anexo do laudo</strong>
+      <small id="arquivo-status">Opcional. Se o ChatGPT nao conseguir enviar o PDF, cole o texto integral acima.</small>
+    </div>
+    <input id="arquivo-upload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>
+    <button id="selecionar-arquivo" type="button" class="secondary">Selecionar/enviar arquivo</button>
+  </section>
+
   <section id="missing" class="missing" hidden></section>
 
   <footer>
@@ -11565,9 +11670,13 @@ def _mcp_laudo_volante_widget_html():
   .field { display: block; margin: 12px 0; }
   textarea { width: 100%; resize: vertical; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; line-height: 1.45; background: #ffffff; color: #0f172a; }
   textarea:focus { outline: 3px solid #bbf7d0; border-color: #059669; }
+  .file-tools { border: 1px dashed #99f6e4; background: #f0fdfa; border-radius: 8px; padding: 11px 12px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .file-tools strong { display: block; color: #0f766e; font-size: 13px; }
+  .file-tools small { display: block; color: #475569; margin-top: 3px; line-height: 1.35; }
   .missing { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; border-radius: 8px; padding: 11px 12px; margin: 12px 0; line-height: 1.4; }
   footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   button { border: 0; border-radius: 8px; background: #10b981; color: white; padding: 12px 16px; font-weight: 900; cursor: pointer; }
+  button.secondary { background: #0f766e; padding: 10px 12px; }
   button:disabled { cursor: not-allowed; background: #94a3b8; }
   #feedback { margin: 0; color: #334155; font-size: 13px; }
   @media (max-width: 560px) {
@@ -11593,11 +11702,15 @@ def _mcp_laudo_volante_widget_html():
     laudo: document.getElementById("laudo"),
     missing: document.getElementById("missing"),
     feedback: document.getElementById("feedback"),
+    fileStatus: document.getElementById("arquivo-status"),
+    fileInput: document.getElementById("arquivo-upload"),
+    fileButton: document.getElementById("selecionar-arquivo"),
     button: document.getElementById("confirmar"),
     pill: document.getElementById("status-pill")
   };
 
   let currentDraft = {};
+  let selectedFileRef = null;
   const text = (value) => value == null || value === "" ? "-" : String(value);
   const compact = (items) => items.filter(Boolean).join(" - ");
 
@@ -11617,11 +11730,61 @@ def _mcp_laudo_volante_widget_html():
     fields.exameData.textContent = text(exame.data || currentDraft.data_exame);
     fields.mensagem.value = currentDraft.mensagem_clinica || "Laudo finalizado e disponivel no PetOrlandia.";
     fields.laudo.value = currentDraft.laudo_texto || exame.conclusao || exame.achados || "";
+    selectedFileRef = currentDraft.laudo_arquivo || currentDraft.arquivo_laudo || null;
+    fields.fileStatus.textContent = selectedFileRef?.file_name
+      ? "Arquivo autorizado pelo ChatGPT: " + selectedFileRef.file_name
+      : (currentDraft.laudo_filename ? "Arquivo informado: " + currentDraft.laudo_filename : "Opcional. Se o ChatGPT nao conseguir enviar o PDF, cole o texto integral acima.");
 
     const missing = output?.campos_a_confirmar || [];
     fields.missing.hidden = missing.length === 0;
     fields.missing.textContent = missing.length ? "Conferir antes de gravar: " + missing.join(", ") : "";
     fields.pill.textContent = missing.length ? "Conferir dados" : "Pronto para gravar";
+  }
+
+  async function selectOrUploadFile() {
+    try {
+      if (window.openai?.selectFiles) {
+        const files = await window.openai.selectFiles();
+        const file = files?.[0];
+        if (file?.fileId) {
+          const downloadUrlResult = await window.openai.getFileDownloadUrl({ fileId: file.fileId });
+          selectedFileRef = {
+            file_id: file.fileId,
+            file_name: file.fileName,
+            mime_type: file.mimeType,
+            download_url: typeof downloadUrlResult === "string" ? downloadUrlResult : (downloadUrlResult?.download_url || downloadUrlResult?.url)
+          };
+          fields.fileStatus.textContent = "Arquivo autorizado pelo ChatGPT: " + (file.fileName || file.fileId);
+          return;
+        }
+      }
+      fields.fileInput.click();
+    } catch (error) {
+      fields.fileStatus.textContent = error?.message || "Nao foi possivel selecionar o arquivo. Cole o texto integral do laudo.";
+    }
+  }
+
+  async function uploadPickedFile(event) {
+    const file = event.target.files?.[0];
+    if (!file || !window.openai?.uploadFile || !window.openai?.getFileDownloadUrl) {
+      fields.fileStatus.textContent = "Upload de arquivo indisponivel neste ChatGPT. Cole o texto integral do laudo.";
+      return;
+    }
+    fields.fileStatus.textContent = "Enviando arquivo ao ChatGPT...";
+    try {
+      const uploaded = await window.openai.uploadFile(file);
+      const fileId = uploaded?.fileId || uploaded?.file_id;
+      const downloadUrlResult = await window.openai.getFileDownloadUrl({ fileId });
+      selectedFileRef = {
+        file_id: fileId,
+        file_name: file.name,
+        mime_type: file.type,
+        download_url: typeof downloadUrlResult === "string" ? downloadUrlResult : (downloadUrlResult?.download_url || downloadUrlResult?.url)
+      };
+      fields.fileStatus.textContent = "Arquivo autorizado pelo ChatGPT: " + file.name;
+    } catch (error) {
+      fields.fileStatus.textContent = error?.message || "Nao foi possivel enviar o arquivo. Cole o texto integral do laudo.";
+    }
   }
 
   async function confirmImport() {
@@ -11638,9 +11801,12 @@ def _mcp_laudo_volante_widget_html():
         mensagem_clinica: fields.mensagem.value,
         confirmar_gravacao: "sim"
       };
+      if (selectedFileRef?.download_url && selectedFileRef?.file_id) {
+        args.laudo_arquivo = selectedFileRef;
+      }
       const result = await window.openai.callTool("importar_laudo_volante", args);
       const payload = result?.structuredContent || result;
-      fields.feedback.textContent = payload?.exame?.id
+      fields.feedback.textContent = payload?.exame?.exame_id
         ? "Laudo gravado. A clinica ja pode acessar o resultado."
         : "Solicitacao enviada. Confira a resposta no chat.";
       fields.pill.textContent = "Gravado";
@@ -11650,6 +11816,8 @@ def _mcp_laudo_volante_widget_html():
     }
   }
 
+  fields.fileButton.addEventListener("click", selectOrUploadFile);
+  fields.fileInput.addEventListener("change", uploadPickedFile);
   fields.button.addEventListener("click", confirmImport);
   render(window.openai?.toolOutput || {});
   window.addEventListener("openai:set_globals", (event) => {
@@ -11958,6 +12126,7 @@ def mcp_server():
                         'laudo_texto': {'type': 'string'},
                         'laudo_url': {'type': 'string'},
                         'laudo_filename': {'type': 'string'},
+                        'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
                         'mensagem_clinica': {'type': 'string'},
                         'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
                     },
@@ -11979,6 +12148,8 @@ def mcp_server():
                 '_meta': {
                     'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
                     'openai/outputTemplate': LAUDO_VOLANTE_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/fileParams': ['laudo_arquivo'],
                     'openai/toolInvocation/invoking': 'Abrindo revisao do laudo...',
                     'openai/toolInvocation/invoked': 'Revisao do laudo pronta.',
                 },
@@ -11997,13 +12168,36 @@ def mcp_server():
                         'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email, cpf e endereco quando houver.'},
                         'animal': {'type': 'object', 'description': 'Paciente: nome, especie, raca, sexo e idade quando houver.'},
                         'exame': {'type': 'object', 'description': 'Dados do exame: nome/tipo, data, achados, conclusao e justificativa.'},
-                        'laudo_texto': {'type': 'string', 'description': 'Texto integral ou resumo fiel do laudo.'},
-                        'laudo_url': {'type': 'string', 'description': 'Link do arquivo do laudo quando houver.'},
+                        'laudo_texto': {'type': 'string', 'description': 'Texto integral ou resumo fiel do laudo. Preferencial quando o anexo do ChatGPT falhar.'},
+                        'laudo_url': {'type': 'string', 'description': 'URL publica http/https do arquivo. Nao envie caminhos locais como /mnt/data; para anexos use laudo_arquivo.'},
                         'laudo_filename': {'type': 'string', 'description': 'Nome do arquivo do laudo quando houver link.'},
+                        'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
                         'mensagem_clinica': {'type': 'string', 'description': 'Mensagem curta e cordial para a clinica.'},
                         'confirmar_gravacao': {'type': 'string'},
                     },
                     'required': ['clinica', 'tutor', 'animal', 'exame', 'confirmar_gravacao'],
+                },
+                'outputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object'},
+                        'tutor': {'type': 'object'},
+                        'animal': {'type': 'object'},
+                        'exame': {'type': 'object'},
+                        'proxima_acao_recomendada': {'type': 'string'},
+                        'mensagem_sugerida_para_clinica': {'type': 'string'},
+                    },
+                },
+                'annotations': {
+                    'readOnlyHint': False,
+                    'destructiveHint': False,
+                    'openWorldHint': True,
+                    'idempotentHint': False,
+                },
+                '_meta': {
+                    'openai/fileParams': ['laudo_arquivo'],
+                    'openai/toolInvocation/invoking': 'Importando laudo...',
+                    'openai/toolInvocation/invoked': 'Laudo importado.',
                 },
             },
             {
@@ -12323,6 +12517,7 @@ def mcp_server():
                 'laudo_texto': tool_args.get('laudo_texto') or '',
                 'laudo_url': tool_args.get('laudo_url') or '',
                 'laudo_filename': tool_args.get('laudo_filename') or '',
+                'laudo_arquivo': _mcp_extract_file_reference(tool_args, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file'),
                 'mensagem_clinica': (
                     tool_args.get('mensagem_clinica')
                     or 'Laudo finalizado e disponivel no PetOrlandia.'
