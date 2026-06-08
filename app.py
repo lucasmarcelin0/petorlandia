@@ -9057,28 +9057,8 @@ def _oauth_allowed_scopes() -> set[str]:
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
 
 
-def _oauth_veterinarian_write_scopes() -> set[str]:
-    return {
-        'tutors:write',
-        'pets:write',
-        'appointments:write',
-        'consultations:write',
-        'exams:write',
-    }
-
-
-def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
-    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
-    if not requested:
-        requested = {'openid', 'profile', 'email'}
-
-    allowed = _oauth_allowed_scopes()
-    if client:
-        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
-
-    if not requested.issubset(allowed):
-        raise ValueError('Requested scope is not allowed.')
-
+def _oauth_order_scopes(scopes: Iterable[str]) -> str:
+    requested = {item.strip() for item in scopes if item and item.strip()}
     scope_order = [
         'openid',
         'profile',
@@ -9101,6 +9081,31 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
     ordered_scopes = [scope for scope in scope_order if scope in requested]
     ordered_scopes.extend(sorted(requested.difference(set(scope_order))))
     return ' '.join(ordered_scopes)
+
+
+def _oauth_veterinarian_write_scopes() -> set[str]:
+    return {
+        'tutors:write',
+        'pets:write',
+        'appointments:write',
+        'consultations:write',
+        'exams:write',
+    }
+
+
+def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
+    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
+    if not requested:
+        requested = {'openid', 'profile', 'email'}
+
+    allowed = _oauth_allowed_scopes()
+    if client:
+        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
+
+    if not requested.issubset(allowed):
+        raise ValueError('Requested scope is not allowed.')
+
+    return _oauth_order_scopes(requested)
 
 
 def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool:
@@ -11411,8 +11416,8 @@ def oauth_dynamic_client_registration():
     if token_endpoint_auth_method not in {'none', 'client_secret_post', 'client_secret_basic'}:
         return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
 
-    requested_scope = str(payload.get('scope') or 'openid profile email').strip()
-    scope = _oauth_normalize_scope(requested_scope)
+    requested_scope = str(payload.get('scope') or '').strip()
+    scope = _oauth_normalize_scope(requested_scope) if requested_scope else _oauth_order_scopes(_oauth_allowed_scopes())
     if not scope:
         return _oauth_error_response('invalid_scope', 'No valid scope was requested.')
 

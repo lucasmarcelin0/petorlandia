@@ -235,6 +235,29 @@ def test_dynamic_registration_supports_client_secret_basic(app):
 
     assert token_response.status_code == 200
     assert token_response.get_json()['token_type'] == 'Bearer'
+
+
+def test_dynamic_registration_without_scope_defaults_to_allowed_app_scopes(app):
+    client = app.test_client()
+
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'ChatGPT',
+            'redirect_uris': ['https://chatgpt.com/connector/oauth/test'],
+            'token_endpoint_auth_method': 'none',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+        },
+    )
+
+    assert registration.status_code == 201
+    payload = registration.get_json()
+    scope_set = set(payload['scope'].split())
+    assert {'openid', 'profile', 'email'}.issubset(scope_set)
+    assert {'pets:read', 'appointments:read', 'consultations:write', 'tutor_guidance:generate'}.issubset(scope_set)
+
+
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
     client = app.test_client()
 
