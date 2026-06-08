@@ -116,8 +116,8 @@ PMO_TEMPLATE_SHEET_DEFAULT_TITLE = "padrão"
 PMO_SCHEDULE_SOURCE_SHEET_TITLE_ENV = "PMO_VACCINE_SCHEDULE_SOURCE_SHEET_TITLE"
 PMO_SCHEDULE_SOURCE_SHEET_DEFAULT_TITLE = "Inscrição a agendar"
 
-# Célula-mestra onde a data do dia é gravada na aba nova.
-PMO_DATE_MASTER_CELL = "Q12"
+# Célula-mestra (verde) onde a data do dia é gravada na aba nova.
+PMO_DATE_MASTER_CELL = "Q13"
 # Colunas copiadas de cada casa (A..K) da "inscrições a agendar" para a aba do dia.
 PMO_SCHEDULE_SOURCE_COLUMNS = 11  # A..K
 
@@ -1964,8 +1964,22 @@ def _pmo_empty_shift_slots(values: list[list[Any]], shift: str) -> list[int]:
     return slots
 
 
+def _pmo_template_insert_index(service, spreadsheet_id: str, template_title: str) -> int:
+    """Índice para inserir a aba nova logo à direita da modelo 'Padrão'."""
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    for sheet in metadata.get("sheets", []):
+        props = sheet.get("properties", {})
+        if props.get("title") == template_title:
+            return int(props.get("index", 0)) + 1
+    return 0
+
+
 def _pmo_duplicate_template(
-    service, spreadsheet_id: str, template_gid: int, new_title: str
+    service, spreadsheet_id: str, template_gid: int, new_title: str, insert_index: int
 ) -> int:
     response = (
         service.spreadsheets()
@@ -1976,7 +1990,7 @@ def _pmo_duplicate_template(
                     {
                         "duplicateSheet": {
                             "sourceSheetId": template_gid,
-                            "insertSheetIndex": 0,
+                            "insertSheetIndex": insert_index,
                             "newSheetName": new_title,
                         }
                     }
@@ -2096,15 +2110,18 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     if not manha and not tarde:
         raise ValueError("Nenhuma casa nova para agendar (todas já estão pintadas).")
 
+    insert_index = _pmo_template_insert_index(service, spreadsheet_id, template_title)
     new_gid = _pmo_duplicate_template(
-        service, spreadsheet_id, int(template_gid), date_label
+        service, spreadsheet_id, int(template_gid), date_label, insert_index
     )
     new_tab = _quote_sheet_title(date_label)
 
+    # RAW: grava a data como texto literal "DD/MM/AAAA"; assim o Google não a
+    # reinterpreta pelo locale da planilha (que trocava dia/mês).
     service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"{new_tab}!{PMO_DATE_MASTER_CELL}",
-        valueInputOption="USER_ENTERED",
+        valueInputOption="RAW",
         body={"values": [[date_label]]},
     ).execute()
 

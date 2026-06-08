@@ -773,7 +773,7 @@
       </div>
       <div class="modal-body">
         <label class="form-label" for="pmo-create-day-date">Data do dia de vacinação</label>
-        <input type="date" class="form-control" id="pmo-create-day-date">
+        <input type="text" class="form-control" id="pmo-create-day-date" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" autocomplete="off">
         <div class="form-text">
           Duplica a aba <strong>padrão</strong>, grava a data em Q12 e distribui as próximas casas ainda não
           agendadas da <strong>inscrições a agendar</strong> entre manhã (verde) e tarde (azul).
@@ -1031,13 +1031,15 @@
 
     trigger.addEventListener('click', () => {
       feedbackEl.textContent = '';
-      dateEl.value = sheetEl.selectedOptions[0]?.dataset.date || '';
+      dateEl.value = '';
       modal.show();
+      setTimeout(() => dateEl.focus(), 200);
     });
 
     confirmBtn.addEventListener('click', async () => {
-      if (!dateEl.value) {
-        feedbackEl.textContent = 'Escolha uma data primeiro.';
+      const dateValue = dateEl.value.trim();
+      if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateValue)) {
+        feedbackEl.textContent = 'Digite a data no formato DD/MM/AAAA (ex.: 10/06/2026).';
         return;
       }
       const original = confirmBtn.innerHTML;
@@ -1051,7 +1053,7 @@
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
           },
-          body: JSON.stringify({ date: dateEl.value }),
+          body: JSON.stringify({ date: dateValue }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) {
