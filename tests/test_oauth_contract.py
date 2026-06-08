@@ -96,6 +96,28 @@ def test_authorize_requires_state(app, client):
     assert response.get_json()['error_description'] == 'state is required.'
 
 
+def test_authorize_get_renders_consent_screen(app, client):
+    user_id = _seed_user_and_client(app, client_id='screen-client')
+    _login(client, user_id)
+
+    response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'screen-client',
+            'redirect_uri': 'https://client.example/callback',
+            'scope': 'openid profile email',
+            'state': 'screen-state',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'S256',
+        },
+    )
+
+    assert response.status_code == 200
+    assert b'Autorizar acesso' in response.data
+    assert b'name="consent_action"' in response.data
+
+
 def test_token_rejects_invalid_redirect_uri_and_unknown_client(app, client):
     user_id = _seed_user_and_client(app, client_id='error-client')
     _login(client, user_id)
