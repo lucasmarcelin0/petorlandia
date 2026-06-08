@@ -10,6 +10,7 @@ Use estes valores no Platform Dashboard para enviar o PetOrlandia para revisao.
 - Company URL: `https://www.petorlandia.com.br/`
 - Privacy policy URL: `https://www.petorlandia.com.br/privacy`
 - Support URL: `https://www.petorlandia.com.br/support`
+- Terms of Service URL: `https://www.petorlandia.com.br/terms`
 - App icon: `https://www.petorlandia.com.br/static/chatgpt_app_icon.png`
 - Submission import file: `chatgpt-app-submission.json`
 

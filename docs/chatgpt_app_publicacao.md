@@ -101,6 +101,7 @@ Antes de submeter para o publico:
 - Company URL: `https://www.petorlandia.com.br/`
 - Privacy policy URL: `https://www.petorlandia.com.br/privacy`
 - Support URL: `https://www.petorlandia.com.br/support`
+- Terms of Service URL: `https://www.petorlandia.com.br/terms`
 - Import JSON: `chatgpt-app-submission.json`
 
 ## Riscos antes da revisao publica

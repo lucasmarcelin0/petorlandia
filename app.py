@@ -4089,6 +4089,11 @@ def support():
     )
 
 
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+
 @app.route('/vacina-pmo')
 @login_required
 def vacina_pmo():
