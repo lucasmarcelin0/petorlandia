@@ -12177,6 +12177,26 @@ def _mcp_extract_file_reference(payload: dict, *field_names: str) -> dict | None
     return None
 
 
+def _integration_extract_pdf_file_reference(payload: dict) -> dict | None:
+    file_ref = _mcp_extract_file_reference(payload, 'arquivo_pdf', 'laudo_arquivo', 'arquivo_laudo', 'attachment_id')
+    if file_ref:
+        return file_ref
+
+    attachment_id = payload.get('attachment_id')
+    download_url = (payload.get('download_url') or payload.get('url') or '').strip()
+    if isinstance(attachment_id, str) and attachment_id.strip().lower().startswith('https://') and not download_url:
+        download_url = attachment_id.strip()
+    if attachment_id and download_url:
+        return {
+            'file_id': str(attachment_id),
+            'download_url': download_url,
+            'mime_type': payload.get('mime_type') or 'application/pdf',
+            'file_name': payload.get('file_name') or payload.get('filename') or 'laudo.pdf',
+            'size': payload.get('size'),
+        }
+    return None
+
+
 def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | None, str | None]:
     download_url = (file_ref.get('download_url') or '').strip()
     parsed = urlparse(download_url)
@@ -12365,7 +12385,7 @@ def _integration_create_exame_imagem(user: User, payload: dict):
 
 def _integration_store_exame_pdf(user: User, exame: ExameImagem, file_ref: dict):
     if not file_ref:
-        raise ValueError('Informe arquivo_pdf como anexo autorizado do ChatGPT.')
+        raise ValueError('Informe attachment_id/arquivo_pdf como anexo autorizado do ChatGPT com download_url temporaria.')
     mime_type = (file_ref.get('mime_type') or '').strip().lower()
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo.pdf').strip()
     if mime_type and mime_type != 'application/pdf':
@@ -12404,6 +12424,7 @@ def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = 
     can_pdf = bool(exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
     return {
         'id': exame.id,
+        'documento_id': exame.documento_id,
         'animal_id': exame.animal_id,
         'tutor_id': exame.tutor_id,
         'clinica_requisitante_id': exame.clinica_requisitante_id,
@@ -12426,6 +12447,85 @@ def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = 
         'created_at': _integration_format_datetime(exame.created_at),
         'updated_at': _integration_format_datetime(exame.updated_at),
     }
+
+
+def _integration_document_matches_exam(documento: AnimalDocumento, exame: ExameImagem) -> bool:
+    haystack = _integration_normalize_match_text(
+        ' '.join([
+            documento.filename or '',
+            documento.descricao or '',
+        ])
+    )
+    candidates = [
+        exame.tipo_exame,
+        exame.titulo,
+        getattr(exame.exame_solicitado, 'nome', None),
+    ]
+    for candidate in candidates:
+        normalized = _integration_normalize_match_text(candidate)
+        if normalized and normalized in haystack:
+            return True
+    return False
+
+
+def _integration_link_document_to_exam(exame: ExameImagem, documento: AnimalDocumento):
+    changed = False
+    if not exame.documento_id:
+        exame.documento_id = documento.id
+        changed = True
+    if not exame.arquivo_pdf_url:
+        exame.arquivo_pdf_url = documento.file_url
+        changed = True
+    if not exame.arquivo_pdf_filename:
+        exame.arquivo_pdf_filename = documento.filename
+        changed = True
+    if not exame.arquivo_pdf_content_type and (documento.filename or '').lower().endswith('.pdf'):
+        exame.arquivo_pdf_content_type = 'application/pdf'
+        changed = True
+    if changed:
+        db.session.add(exame)
+    return changed
+
+
+def _integration_reconcile_exam_documents(animal: Animal, exames: list[ExameImagem]) -> bool:
+    if not animal or not exames:
+        return False
+    unlinked = [exame for exame in exames if not exame.documento_id or not exame.arquivo_pdf_url]
+    if not unlinked:
+        return False
+
+    docs = (
+        AnimalDocumento.query
+        .filter_by(animal_id=animal.id)
+        .order_by(AnimalDocumento.uploaded_at.desc(), AnimalDocumento.id.desc())
+        .all()
+    )
+    if not docs:
+        return False
+
+    changed = False
+    for exame in unlinked:
+        document = None
+        if exame.documento_id:
+            document = next((doc for doc in docs if doc.id == exame.documento_id), None)
+        if not document:
+            document = next((doc for doc in docs if _integration_document_matches_exam(doc, exame)), None)
+        if not document and len(docs) == 1 and len(exames) == 1:
+            document = docs[0]
+        if document:
+            changed = _integration_link_document_to_exam(exame, document) or changed
+    if changed:
+        db.session.flush()
+    return changed
+
+
+def _integration_find_exame_by_documento(documento: AnimalDocumento, user: User):
+    exame = ExameImagem.query.filter_by(documento_id=documento.id).first()
+    if exame:
+        return exame
+    exames = _integration_list_exame_imagem_history(user, documento.animal)
+    _integration_reconcile_exam_documents(documento.animal, exames)
+    return ExameImagem.query.filter_by(documento_id=documento.id).first()
 
 
 def _integration_release_exame_imagem(user: User, payload: dict, *, target: str):
@@ -12546,6 +12646,8 @@ def _create_external_onboarding_invite(invite_type: str, user: User, *, clinic=N
 def _external_onboarding_url(invite):
     if not invite or not has_request_context():
         return None
+    if getattr(invite, 'invite_type', None) == 'clinic':
+        return url_for('external_clinic_first_access_invite', token=invite.token, _external=True)
     return url_for('external_onboarding_invite', token=invite.token, _external=True)
 
 
@@ -13150,8 +13252,8 @@ def mcp_server():
             {
                 'name': 'anexar_pdf_exame_imagem',
                 'description': 'Anexa PDF autorizado pelo ChatGPT ao exame de imagem.',
-                'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA, 'attachment_id': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'arquivo_pdf', 'confirmar_gravacao']},
-                '_meta': {'openai/fileParams': ['arquivo_pdf']},
+                'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'attachment_id': {'oneOf': [{'type': 'string'}, MCP_FILE_REFERENCE_SCHEMA]}, 'download_url': {'type': 'string'}, 'file_name': {'type': 'string'}, 'mime_type': {'type': 'string'}, 'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'attachment_id', 'confirmar_gravacao']},
+                '_meta': {'openai/fileParams': ['attachment_id', 'arquivo_pdf']},
             },
             {'name': 'liberar_exame_para_clinica', 'description': 'Libera exame para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'clinica_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'clinica_id', 'confirmar_gravacao']}},
             {'name': 'liberar_exame_para_tutor', 'description': 'Libera exame para o tutor vinculado.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'tutor_id', 'confirmar_gravacao']}},
@@ -13624,7 +13726,7 @@ def mcp_server():
             if getattr(user, 'role', '') != 'admin' and exame.profissional_id != user.id:
                 return _mcp_err(req_id, -32003, 'Somente o profissional criador pode anexar PDF.')
             try:
-                result = _integration_store_exame_pdf(user, exame, _mcp_extract_file_reference(tool_args, 'arquivo_pdf', 'laudo_arquivo', 'arquivo_laudo'))
+                result = _integration_store_exame_pdf(user, exame, _integration_extract_pdf_file_reference(tool_args))
             except ValueError as exc:
                 return _mcp_err(req_id, -32602, str(exc))
             return _mcp_ok(req_id, _mcp_json_content({'exame': result}))
@@ -13652,11 +13754,13 @@ def mcp_server():
             if not animal:
                 return _mcp_err(req_id, -32004, 'Animal nao encontrado no escopo disponivel.')
             exames_imagem = _integration_list_exame_imagem_history(user, animal)
+            if _integration_reconcile_exam_documents(animal, exames_imagem):
+                db.session.commit()
             result = {
                 'animal': _serialize_calendar_pet(animal),
                 'exames': [_integration_serialize_exame_imagem(exame, user) for exame in exames_imagem],
                 'pdfs_disponiveis': [
-                    {'exame_id': exame.id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
+                    {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
                     for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(user, exame)
                 ],
             }
@@ -13669,12 +13773,17 @@ def mcp_server():
             exame = None
             if tool_args.get('exame_id'):
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id') or 0))
+                if exame:
+                    _integration_reconcile_exam_documents(exame.animal, [exame])
             elif tool_args.get('documento_id'):
-                exame = ExameImagem.query.filter_by(documento_id=int(tool_args.get('documento_id') or 0)).first()
+                documento = db.session.get(AnimalDocumento, int(tool_args.get('documento_id') or 0))
+                if documento:
+                    exame = _integration_find_exame_by_documento(documento, user)
             if not exame:
                 return _mcp_err(req_id, -32004, 'Documento clinico nao encontrado.')
             if not _integration_user_can_access_exame_imagem(user, exame):
                 return _mcp_err(req_id, -32003, 'Sem permissao para acessar este documento.')
+            db.session.commit()
             return _mcp_ok(req_id, _mcp_json_content({'documento': _integration_serialize_exame_imagem(exame, user), 'url_temporaria': exame.arquivo_pdf_url}))
 
         if tool_name == 'buscar_ou_criar_clinica_requisitante':
@@ -17282,6 +17391,14 @@ def external_onboarding_invite(token):
         register_url=register_url,
         login_url=login_url,
     )
+
+
+def external_clinic_first_access_invite(token):
+    _ensure_external_onboarding_invite_table()
+    invite = ExternalOnboardingInvite.query.filter_by(token=token).first_or_404()
+    if invite.invite_type != 'clinic':
+        abort(404)
+    return external_onboarding_invite(token)
 
 
 def minha_clinica():
@@ -31435,7 +31552,7 @@ def api_integrations_attach_exame_imagem_pdf():
         return _integration_error('exame_imagem_not_found', 'Exame de imagem nao encontrado.', 404)
     if getattr(auth_user, 'role', '') != 'admin' and exame.profissional_id != auth_user.id:
         return _integration_error('exame_imagem_forbidden', 'Somente o profissional criador pode anexar PDF.', 403)
-    file_ref = _mcp_extract_file_reference(payload, 'arquivo_pdf', 'laudo_arquivo', 'arquivo_laudo')
+    file_ref = _integration_extract_pdf_file_reference(payload)
     try:
         result = _integration_store_exame_pdf(auth_user, exame, file_ref)
     except ValueError as exc:
@@ -31546,6 +31663,8 @@ def api_integrations_list_animal_medical_history():
     if not animal:
         return _integration_error('animal_not_found', 'Animal not found within the accessible integration scope.', 404)
     exames_imagem = _integration_list_exame_imagem_history(auth_user, animal)
+    if _integration_reconcile_exam_documents(animal, exames_imagem):
+        db.session.commit()
     allowed_document_ids = {exame.documento_id for exame in exames_imagem if exame.documento_id}
     documentos_query = AnimalDocumento.query.filter_by(animal_id=animal.id)
     if (getattr(auth_user, 'role', '') or '').lower() != 'admin':
@@ -31562,7 +31681,7 @@ def api_integrations_list_animal_medical_history():
             for d in documentos_query.order_by(AnimalDocumento.uploaded_at.desc()).limit(20).all()
         ],
         'pdfs_disponiveis': [
-            {'exame_id': exame.id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
+            {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
             for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(auth_user, exame)
         ],
     })
@@ -31574,8 +31693,12 @@ def api_integrations_get_clinical_document():
     exame = None
     if request.args.get('exame_id'):
         exame = db.session.get(ExameImagem, int(request.args.get('exame_id') or 0))
+        if exame:
+            _integration_reconcile_exam_documents(exame.animal, [exame])
     elif request.args.get('documento_id'):
-        exame = ExameImagem.query.filter_by(documento_id=int(request.args.get('documento_id') or 0)).first()
+        documento = db.session.get(AnimalDocumento, int(request.args.get('documento_id') or 0))
+        if documento:
+            exame = _integration_find_exame_by_documento(documento, auth_user)
     if not exame:
         return _integration_error('document_not_found', 'Documento clinico nao encontrado.', 404)
     if not _integration_user_can_access_exame_imagem(auth_user, exame):
@@ -31588,6 +31711,8 @@ def api_integrations_get_clinical_document():
             ip_address=request.headers.get('X-Forwarded-For', request.remote_addr),
             user_agent=(request.headers.get('User-Agent') or '')[:255],
         ))
+        db.session.commit()
+    else:
         db.session.commit()
     return _integration_ok({'documento': _integration_serialize_exame_imagem(exame, auth_user), 'url_temporaria': exame.arquivo_pdf_url})
 
@@ -32051,10 +32176,13 @@ def api_integrations_openapi():
                         'properties': {
                             'exame_id': {'type': 'integer'},
                             'arquivo_pdf': {'type': 'object'},
-                            'attachment_id': {'type': 'string'},
+                            'attachment_id': {'oneOf': [{'type': 'string'}, {'type': 'object'}]},
+                            'download_url': {'type': 'string'},
+                            'file_name': {'type': 'string'},
+                            'mime_type': {'type': 'string'},
                             'confirmar_gravacao': write_confirmation,
                         },
-                        'required': ['exame_id', 'arquivo_pdf', 'confirmar_gravacao'],
+                        'required': ['exame_id', 'attachment_id', 'confirmar_gravacao'],
                     }),
                     'responses': {'200': ok_response('PDF anexado.')},
                 }

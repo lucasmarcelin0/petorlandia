@@ -9,6 +9,7 @@ def get_blueprint():
     bp.add_url_rule("/clinicas", view_func=lazy_view("clinicas"))
     bp.add_url_rule("/parceiros/clinica", view_func=lazy_view("parceiro_clinica_landing"))
     bp.add_url_rule("/acesso-laudo/<string:token>", view_func=lazy_view("external_onboarding_invite"))
+    bp.add_url_rule("/primeiro-acesso-clinica/<string:token>", view_func=lazy_view("external_clinic_first_access_invite"))
     bp.add_url_rule(
         "/minha-clinica",
         view_func=lazy_view("minha_clinica"),

@@ -1,25 +1,30 @@
 {% extends "layout.html" %}
 
-{% block title %}Acesso ao laudo | PetOrlandia{% endblock %}
+{% block title %}Acesso ao laudo | PetOrlândia{% endblock %}
 
 {% block main %}
+{% set animal_nome = invite.animal.name if invite.animal else 'pet' %}
+{% set tutor_nome = invite.tutor.name if invite.tutor else 'tutor' %}
+{% set tipo_exame = (exame_imagem.tipo_exame if exame_imagem else (invite.exame.nome if invite.exame else 'exame')) %}
+{% set clinica_nome = invite.clinica.nome if invite.clinica else 'sua clinica' %}
+
 <div class="py-5" style="max-width: 920px;">
   <section class="mb-4">
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
       <div>
-        <p class="text-uppercase text-muted fw-semibold mb-2" style="letter-spacing:.04em;">PetOrlandia</p>
+        <p class="text-uppercase text-muted fw-semibold mb-2" style="letter-spacing:.04em;">PetOrlândia</p>
         <h1 class="h2 mb-2">
           {% if invite.invite_type == 'clinic' %}
-            Acesso inicial da clinica {{ invite.clinica.nome if invite.clinica else '' }}
+            Sua clínica recebeu um exame no PetOrlândia
           {% else %}
-            Acesso do tutor ao laudo
+            O laudo do {{ animal_nome }} foi liberado para você
           {% endif %}
         </h1>
         <p class="lead text-muted mb-0">
-          {% if referrer %}
-            {{ referrer.name }} compartilhou este acesso para acompanhar o laudo pelo PetOrlandia.
+          {% if invite.invite_type == 'clinic' %}
+            A clínica {{ clinica_nome }} recebeu um laudo de {{ tipo_exame }} vinculado ao paciente {{ animal_nome }}.
           {% else %}
-            Este acesso foi liberado para acompanhar um laudo pelo PetOrlandia.
+            Olá, {{ tutor_nome }}. A clínica liberou o laudo de {{ tipo_exame }} do {{ animal_nome }} para você acessar com segurança.
           {% endif %}
         </p>
       </div>
@@ -41,45 +46,70 @@
     <div class="col-md-6">
       <div class="border rounded p-3 h-100">
         <div class="text-muted small mb-1">Paciente</div>
-        <div class="fw-semibold">{{ invite.animal.name if invite.animal else 'Nao informado' }}</div>
+        <div class="fw-semibold">{{ animal_nome }}</div>
         {% if invite.tutor %}
-          <div class="small text-muted mt-1">Tutor: {{ invite.tutor.name }}</div>
+          <div class="small text-muted mt-1">Tutor: {{ tutor_nome }}</div>
         {% endif %}
       </div>
     </div>
     <div class="col-md-6">
       <div class="border rounded p-3 h-100">
         <div class="text-muted small mb-1">Exame</div>
-        <div class="fw-semibold">{{ invite.exame.nome if invite.exame else 'Laudo recebido' }}</div>
-        {% if invite.exame and invite.exame.performed_at %}
+        <div class="fw-semibold">{{ tipo_exame }}</div>
+        {% if exame_imagem and exame_imagem.data_exame %}
+          <div class="small text-muted mt-1">Realizado em {{ exame_imagem.data_exame.strftime('%d/%m/%Y') }}</div>
+        {% elif invite.exame and invite.exame.performed_at %}
           <div class="small text-muted mt-1">Realizado em {{ invite.exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>
         {% endif %}
       </div>
     </div>
   </section>
 
-  {% if invite.message %}
-    <section class="border-start border-4 border-primary ps-3 mb-4">
-      <div class="text-muted small mb-1">Mensagem</div>
-      <p class="mb-0" style="white-space: pre-line;">{{ invite.message }}</p>
+  {% if invite.invite_type == 'clinic' %}
+    <section class="mb-4">
+      <p class="mb-3">
+        Com o PetOrlândia, sua clínica organiza fichas dos pacientes, histórico médico, exames, laudos em PDF, orientações para tutores, retornos, agenda, equipe e acesso seguro para tutores.
+      </p>
+      <p class="fw-semibold mb-2">Ative gratuitamente o painel da sua clínica por {{ pricing.trial_dias_clinica if pricing else 30 }} dias.</p>
+      {% if pricing and pricing.exibir_preco_no_convite_clinica and pricing.preco_formatado %}
+        <p class="text-muted mb-0">Depois do período gratuito, continue usando por {{ pricing.preco_formatado }}/mês.</p>
+      {% else %}
+        <p class="text-muted mb-0">Consulte as condições atuais no site do PetOrlândia.</p>
+      {% endif %}
     </section>
+
+    <div class="d-flex flex-wrap gap-2">
+      {% if clinic_can_view %}
+        <a class="btn btn-primary" href="{{ document_url }}" target="_blank" rel="noopener">Ver exame recebido</a>
+      {% else %}
+        <button class="btn btn-primary" type="button" disabled>Ver exame recebido</button>
+      {% endif %}
+      <a class="btn btn-outline-primary" href="{{ register_url }}">Ativar painel gratuito por 30 dias</a>
+      <a class="btn btn-outline-secondary" href="{{ login_url }}">Já tenho conta</a>
+    </div>
+  {% else %}
+    <section class="mb-4">
+      <p class="mb-3">
+        Você pode visualizar o laudo agora. Também pode criar seu acesso gratuito para acompanhar a ficha digital do {{ animal_nome }} e usar outros recursos do PetOrlândia.
+      </p>
+      <p class="mb-3">
+        Com seu acesso gratuito, você pode consultar exames e laudos liberados pela clínica, receber orientações, organizar o histórico médico do seu pet e acessar documentos importantes quando precisar.
+      </p>
+      <p class="fw-semibold mb-3">O acesso do tutor é gratuito.</p>
+      <div class="alert alert-info mb-0">
+        Este laudo deve ser interpretado pelo médico veterinário responsável, junto com o exame clínico e os demais exames do pet.
+      </div>
+    </section>
+
+    <div class="d-flex flex-wrap gap-2">
+      {% if tutor_can_view %}
+        <a class="btn btn-primary" href="{{ document_url }}" target="_blank" rel="noopener">Ver laudo agora</a>
+      {% else %}
+        <button class="btn btn-primary" type="button" disabled>Ver laudo agora</button>
+      {% endif %}
+      <a class="btn btn-outline-primary" href="{{ register_url }}">Criar meu acesso gratuito</a>
+      <a class="btn btn-outline-secondary" href="{{ login_url }}">Já tenho conta</a>
+    </div>
   {% endif %}
-
-  <section class="mb-4">
-    <h2 class="h5">Como acessar pela primeira vez</h2>
-    <ol class="mb-0">
-      <li>Crie sua conta ou entre com uma conta existente.</li>
-      <li>Depois de entrar, mantenha este link aberto para a equipe localizar o laudo.</li>
-      <li>A clinica pode centralizar proximos laudos, pacientes e historico pelo PetOrlandia.</li>
-    </ol>
-  </section>
-
-  <div class="d-flex flex-wrap gap-2">
-    <a class="btn btn-primary" href="{{ register_url }}">Criar conta</a>
-    <a class="btn btn-outline-primary" href="{{ login_url }}">Ja tenho conta</a>
-    {% if invite.exame and invite.exame.laudo_url %}
-      <a class="btn btn-outline-secondary" href="{{ invite.exame.laudo_url }}" target="_blank" rel="noopener">Abrir PDF do laudo</a>
-    {% endif %}
-  </div>
 </div>
 {% endblock %}

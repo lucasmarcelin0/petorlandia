@@ -20,6 +20,7 @@ from models import (
     User,
     Vacina,
     Veterinario,
+    VeterinarianSettings,
 )
 from time_utils import utcnow
 
@@ -242,6 +243,322 @@ def test_image_exam_flow_releases_pdf_to_clinic_and_tutor_only(app, client):
         headers=_auth_header(tutor_token),
     )
     assert forbidden_other_pet.status_code == 404
+
+
+def test_attach_image_exam_pdf_accepts_attachment_id_contract(app, client, monkeypatch):
+    app_module = sys.modules[app.import_name]
+
+    class FakeDownloadResponse:
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size=1024 * 1024):
+            yield b"%PDF-1.4\nlaudo sid"
+
+    def fake_get(url, timeout=20, stream=True):
+        assert url == "https://files.example.test/sid.pdf"
+        return FakeDownloadResponse()
+
+    def fake_upload(file_storage, filename, folder="uploads"):
+        assert folder == "laudos_exames"
+        assert filename.endswith("sid.pdf")
+        return "/static/uploads/laudos_exames/sid.pdf"
+
+    monkeypatch.setattr(app_module.requests, "get", fake_get)
+    monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
+
+    with app.app_context():
+        clinic = Clinica(nome="Angrisano")
+        tutor = User(name="Rosa", email="rosa-attach@example.com", role="adotante")
+        tutor.set_password("secret123")
+        vet_user = User(name="Ultra Attach", email="ultra-attach@example.com", role="veterinario", worker="veterinario")
+        vet_user.set_password("secret123")
+        db.session.add_all([clinic, tutor, vet_user])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=vet_user.id, crmv="12345-SP", clinica_id=clinic.id))
+        sid = Animal(name="Sid", user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add(sid)
+        db.session.flush()
+        exame = ExameImagem(
+            animal_id=sid.id,
+            tutor_id=tutor.id,
+            clinica_requisitante_id=clinic.id,
+            profissional_id=vet_user.id,
+            tipo_exame="Ultrassonografia Abdominal",
+            titulo="Ultrassonografia Abdominal",
+            status="finalizado",
+        )
+        db.session.add(exame)
+        db.session.commit()
+        token_value = _create_token(vet_user.id, scope="profile exams:write exams:read")
+        exame_id = exame.id
+
+    response = client.post(
+        "/api/integrations/image-exams/pdf",
+        headers=_auth_header(token_value),
+        json={
+            "exame_id": exame_id,
+            "attachment_id": {
+                "download_url": "https://files.example.test/sid.pdf",
+                "file_id": "file_sid_pdf",
+                "mime_type": "application/pdf",
+                "file_name": "sid.pdf",
+            },
+            "confirmar_gravacao": "sim",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()["data"]["exame"]
+    assert payload["documento_id"]
+    assert payload["arquivo_pdf_filename"] == "sid.pdf"
+    assert payload["pdf_disponivel"] is True
+
+
+def test_medical_history_reconciles_existing_document_with_image_exam(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Angrisano")
+        tutor = User(name="Rosa", email="rosa-reconcile@example.com", role="adotante")
+        tutor.set_password("secret123")
+        vet_user = User(name="Ultra Reconcile", email="ultra-reconcile@example.com", role="veterinario", worker="veterinario")
+        vet_user.set_password("secret123")
+        db.session.add_all([clinic, tutor, vet_user])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=vet_user.id, crmv="12345-SP", clinica_id=clinic.id))
+        sid = Animal(name="Sid", user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add(sid)
+        db.session.flush()
+        documento = AnimalDocumento(
+            animal_id=sid.id,
+            veterinario_id=vet_user.id,
+            filename="Ultrassom_SID_Rosa.pdf",
+            file_url="/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf",
+            descricao="Laudo anexado ao exame: Ultrassonografia Abdominal",
+        )
+        exame = ExameImagem(
+            animal_id=sid.id,
+            tutor_id=tutor.id,
+            clinica_requisitante_id=clinic.id,
+            profissional_id=vet_user.id,
+            tipo_exame="Ultrassonografia Abdominal",
+            titulo="Ultrassonografia Abdominal",
+            status="liberado_para_tutor",
+            liberado_para_tutor=True,
+        )
+        db.session.add_all([documento, exame])
+        db.session.commit()
+        token_value = _create_token(tutor.id, scope="profile exams:read clinical_summary:read")
+        sid_id = sid.id
+        documento_id = documento.id
+        exame_id = exame.id
+
+    history = client.get(
+        f"/api/integrations/medical-history?animal_id={sid_id}",
+        headers=_auth_header(token_value),
+    )
+
+    assert history.status_code == 200
+    payload = history.get_json()["data"]
+    serialized_exam = payload["exames"][0]
+    assert serialized_exam["id"] == exame_id
+    assert serialized_exam["documento_id"] == documento_id
+    assert serialized_exam["arquivo_pdf_filename"] == "Ultrassom_SID_Rosa.pdf"
+    assert serialized_exam["pdf_disponivel"] is True
+    assert serialized_exam["pdf_url"]
+    assert payload["pdfs_disponiveis"][0]["documento_id"] == documento_id
+
+    by_document = client.get(
+        f"/api/integrations/clinical-document?documento_id={documento_id}",
+        headers=_auth_header(token_value),
+    )
+    assert by_document.status_code == 200
+    by_document_payload = by_document.get_json()["data"]
+    assert by_document_payload["documento"]["id"] == exame_id
+    assert by_document_payload["documento"]["documento_id"] == documento_id
+    assert by_document_payload["url_temporaria"] == "/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf"
+
+    by_exam = client.get(
+        f"/api/integrations/clinical-document?exame_id={exame_id}",
+        headers=_auth_header(token_value),
+    )
+    assert by_exam.status_code == 200
+    assert by_exam.get_json()["data"]["url_temporaria"] == "/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf"
+
+
+def test_public_pricing_uses_central_veterinarian_settings(app, client):
+    with app.app_context():
+        db.session.add(VeterinarianSettings(membership_price="87.50"))
+        db.session.commit()
+
+    response = client.get("/api/public/pricing")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["trial_dias_clinica"] == 30
+    assert payload["preco_mensal_clinica"] == 87.5
+    assert payload["preco_formatado"] == "R$ 87,50"
+    assert payload["exibir_preco_no_convite_clinica"] is True
+    assert payload["fonte"] == "site_public_pricing"
+
+
+def test_external_tutor_invite_shows_report_without_price_trial_or_required_signup(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Angrisano")
+        tutor = User(name="Rosa", email="rosa-invite@example.com", role="adotante")
+        tutor.set_password("secret123")
+        vet_user = User(name="Ultra", email="ultra-invite@example.com", role="veterinario", worker="veterinario")
+        vet_user.set_password("secret123")
+        db.session.add_all([clinic, tutor, vet_user])
+        db.session.flush()
+        vet = Veterinario(user_id=vet_user.id, crmv="12345-SP", clinica_id=clinic.id)
+        sid = Animal(name="Sid", user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add_all([vet, sid])
+        db.session.flush()
+        bloco = BlocoExames(animal_id=sid.id)
+        db.session.add(bloco)
+        db.session.flush()
+        solicitado = ExameSolicitado(
+            bloco_id=bloco.id,
+            nome="Ultrassonografia abdominal",
+            status="concluido",
+            laudo_url="/static/uploads/laudos_exames/sid.pdf",
+        )
+        db.session.add(solicitado)
+        db.session.flush()
+        exame = ExameImagem(
+            animal_id=sid.id,
+            tutor_id=tutor.id,
+            clinica_requisitante_id=clinic.id,
+            profissional_id=vet_user.id,
+            exame_solicitado_id=solicitado.id,
+            tipo_exame="Ultrassonografia abdominal",
+            titulo="Ultrassonografia abdominal",
+            status="liberado_para_tutor",
+            liberado_para_clinica=True,
+            liberado_para_tutor=True,
+            arquivo_pdf_url="/static/uploads/laudos_exames/sid.pdf",
+            arquivo_pdf_filename="sid.pdf",
+        )
+        db.session.add(exame)
+        db.session.commit()
+        token_value = _create_token(vet_user.id, scope="profile exams:write")
+        tutor_id = tutor.id
+        sid_id = sid.id
+        exame_id = exame.id
+
+    invite_response = client.post(
+        "/api/integrations/tutor-access-invites",
+        headers=_auth_header(token_value),
+        json={
+            "tutor_id": tutor_id,
+            "animal_id": sid_id,
+            "exame_id": exame_id,
+            "confirmar_gravacao": "sim",
+        },
+    )
+    assert invite_response.status_code == 201
+    convite = invite_response.get_json()["data"]["convite"]
+    assert convite["tipo_convite"] == "acesso_tutor_laudo"
+    assert convite["tutor_paga"] is False
+    assert convite["permite_visualizar_laudo"] is True
+    assert convite["tutor_id"] == tutor_id
+    assert convite["animal_id"] == sid_id
+    assert convite["exame_id"]
+    assert "/acesso-laudo/" in convite["url"]
+
+    response = client.get(f"/acesso-laudo/{convite['token']}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "O laudo do Sid foi liberado para você" in html
+    assert "Ver laudo agora" in html
+    assert "Criar meu acesso gratuito" in html
+    assert "O acesso do tutor é gratuito." in html
+    assert "/static/uploads/laudos_exames/sid.pdf" in html
+    assert "30 dias" not in html
+    assert "R$" not in html
+    assert "Crie sua conta para acessar o laudo" not in html
+    assert "Cadastre-se para liberar o exame" not in html
+
+
+def test_external_clinic_invite_shows_trial_and_central_price(app, client):
+    with app.app_context():
+        db.session.add(VeterinarianSettings(membership_price="91.25"))
+        clinic = Clinica(nome="Angrisano", email="angrisano@example.com")
+        tutor = User(name="Rosa", email="rosa-clinic-invite@example.com", role="adotante")
+        tutor.set_password("secret123")
+        vet_user = User(name="Ultra", email="ultra-clinic-invite@example.com", role="veterinario", worker="veterinario")
+        vet_user.set_password("secret123")
+        db.session.add_all([clinic, tutor, vet_user])
+        db.session.flush()
+        vet = Veterinario(user_id=vet_user.id, crmv="12345-SP", clinica_id=clinic.id)
+        sid = Animal(name="Sid", user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add_all([vet, sid])
+        db.session.flush()
+        bloco = BlocoExames(animal_id=sid.id)
+        db.session.add(bloco)
+        db.session.flush()
+        solicitado = ExameSolicitado(
+            bloco_id=bloco.id,
+            nome="Ultrassonografia abdominal",
+            status="concluido",
+            laudo_url="/static/uploads/laudos_exames/sid.pdf",
+        )
+        db.session.add(solicitado)
+        db.session.flush()
+        exame = ExameImagem(
+            animal_id=sid.id,
+            tutor_id=tutor.id,
+            clinica_requisitante_id=clinic.id,
+            profissional_id=vet_user.id,
+            exame_solicitado_id=solicitado.id,
+            tipo_exame="Ultrassonografia abdominal",
+            titulo="Ultrassonografia abdominal",
+            status="liberado_para_clinica",
+            liberado_para_clinica=True,
+            arquivo_pdf_url="/static/uploads/laudos_exames/sid.pdf",
+            arquivo_pdf_filename="sid.pdf",
+        )
+        db.session.add(exame)
+        db.session.commit()
+        token_value = _create_token(vet_user.id, scope="profile exams:write")
+        clinic_id = clinic.id
+        exame_id = exame.id
+
+    invite_response = client.post(
+        "/api/integrations/clinic-first-access-invites",
+        headers=_auth_header(token_value),
+        json={
+            "clinica_id": clinic_id,
+            "exame_id": exame_id,
+            "confirmar_gravacao": "sim",
+        },
+    )
+    assert invite_response.status_code == 201
+    convite = invite_response.get_json()["data"]["convite"]
+    assert convite["tipo_convite"] == "trial_clinica_exame"
+    assert convite["trial_dias"] == 30
+    assert convite["pricing_source"] == "site_public_pricing"
+    assert convite["preco_formatado"] == "R$ 91,25"
+    assert convite["permite_visualizar_exame"] is True
+    assert convite["clinica_id"] == clinic_id
+    assert convite["exame_id"]
+    assert "/primeiro-acesso-clinica/" in convite["url"]
+    with app.app_context():
+        assert Clinica.query.count() == 1
+        linked_clinic = db.session.get(Clinica, clinic_id)
+        assert linked_clinic.owner_id is not None
+        assert User.query.filter_by(email="angrisano@example.com").count() == 1
+
+    response = client.get(f"/primeiro-acesso-clinica/{convite['token']}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Sua clínica recebeu um exame no PetOrlândia" in html
+    assert "Ver exame recebido" in html
+    assert "Ativar painel gratuito por 30 dias" in html
+    assert "R$ 91,25/mês" in html
+    assert "Criar meu acesso gratuito" not in html
 
 
 def test_integrations_clinical_endpoints_for_veterinarian(app, client):

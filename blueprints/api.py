@@ -129,6 +129,10 @@ def get_blueprint():
         view_func=lazy_view("api_minhas_compras"),
     )
     bp.add_url_rule(
+        "/api/public/pricing",
+        view_func=lazy_view("api_public_pricing"),
+    )
+    bp.add_url_rule(
         "/api/integrations/me",
         view_func=lazy_view("api_integrations_me"),
     )
