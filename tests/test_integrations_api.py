@@ -1057,6 +1057,7 @@ def test_mcp_importar_laudo_volante_creates_clinic_patient_and_exam(app, client)
     assert result["clinica"]["nome"] == "Clinica Parceira do Laudo"
     assert result["animal"]["nome"] == "Luna"
     assert result["exame"]["status"] == "concluido"
+    assert result["exame"]["data_realizacao"] == "2026-06-07"
     assert result["exame"]["arquivo_status"] == "sem_arquivo"
     assert "Laudo finalizado" in result["mensagem_sugerida_para_clinica"]
     assert payload["result"]["structuredContent"]["animal"]["nome"] == "Luna"

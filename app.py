@@ -10917,7 +10917,7 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
         parsed_date = _integration_parse_flexible_date(str(performed_at_raw))
         if not parsed_date:
             raise ValueError('Data do exame invalida. Use YYYY-MM-DD ou DD/MM/YYYY.')
-        performed_at = datetime.combine(parsed_date, time.min)
+        performed_at = datetime.combine(parsed_date, time(12, 0), tzinfo=BR_TZ)
 
     bloco = BlocoExames(
         animal_id=animal.id,
@@ -10984,6 +10984,7 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     exam_id = exam.id
     exam_name = exam.nome
     exam_status = exam.status
+    exam_performed_at = exam.performed_at
     exam_laudo_url = exam.laudo_url
     exam_laudo_filename = exam.laudo_filename
     bloco_id = bloco.id
@@ -11020,6 +11021,7 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             'exame_id': exam_id,
             'nome': exam_name,
             'status': exam_status,
+            'data_realizacao': exam_performed_at.astimezone(BR_TZ).date().isoformat() if exam_performed_at else None,
             'laudo_url': exam_laudo_url,
             'laudo_filename': exam_laudo_filename,
             'arquivo_status': laudo_file_status,
