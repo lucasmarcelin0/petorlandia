@@ -1029,6 +1029,18 @@
     if (!trigger || !modalEl || !confirmBtn || !window.bootstrap) return;
     const modal = new bootstrap.Modal(modalEl);
 
+    // Máscara: digita só os números e as barras aparecem sozinhas (DD/MM/AAAA).
+    dateEl.addEventListener('input', () => {
+      const digits = dateEl.value.replace(/\D/g, '').slice(0, 8);
+      let out = digits;
+      if (digits.length > 4) {
+        out = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+      } else if (digits.length > 2) {
+        out = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+      }
+      dateEl.value = out;
+    });
+
     trigger.addEventListener('click', () => {
       feedbackEl.textContent = '';
       dateEl.value = '';
