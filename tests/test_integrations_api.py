@@ -844,6 +844,153 @@ def test_mcp_registration_tool_requires_veterinarian_profile(app, client):
     assert "veterinarian accounts" in payload["error"]["message"]
 
 
+def test_mcp_importar_laudo_volante_creates_clinic_patient_and_exam(app, client):
+    with app.app_context():
+        professional = User(
+            name="Dr. Ultra",
+            email="ultra-volante@example.com",
+            role="veterinario",
+            worker="veterinario",
+        )
+        professional.set_password("secret123")
+        db.session.add(professional)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-US-1"))
+        db.session.commit()
+
+        token_value = _create_token(
+            professional.id,
+            scope="profile tutors:write pets:write exams:write",
+        )
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 41,
+            "method": "tools/call",
+            "params": {
+                "name": "importar_laudo_volante",
+                "arguments": {
+                    "confirmar_gravacao": "sim",
+                    "clinica": {
+                        "nome": "Clinica Parceira do Laudo",
+                        "email": "contato@parceira.example",
+                    },
+                    "tutor": {
+                        "nome": "Marina Tutora",
+                        "telefone": "16999990000",
+                    },
+                    "animal": {
+                        "nome": "Luna",
+                        "especie": "canina",
+                        "sexo": "Femea",
+                    },
+                    "exame": {
+                        "nome": "Ultrassonografia abdominal",
+                        "data": "2026-06-07",
+                        "conclusao": "Sem alteracoes relevantes.",
+                    },
+                    "laudo_texto": "Laudo completo: estruturas abdominais preservadas.",
+                    "mensagem_clinica": "Laudo finalizado e disponivel no PetOrlandia.",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    result = json.loads(payload["result"]["content"][0]["text"])
+    assert result["clinica"]["criada_agora"] is True
+    assert result["clinica"]["nome"] == "Clinica Parceira do Laudo"
+    assert result["animal"]["nome"] == "Luna"
+    assert result["exame"]["status"] == "concluido"
+    assert "Laudo finalizado" in result["mensagem_sugerida_para_clinica"]
+    assert payload["result"]["structuredContent"]["animal"]["nome"] == "Luna"
+
+
+def test_mcp_laudo_volante_widget_contract(app, client):
+    with app.app_context():
+        professional = User(
+            name="Dra. Widget",
+            email="widget-laudo@example.com",
+            role="veterinario",
+            worker="veterinario",
+        )
+        professional.set_password("secret123")
+        db.session.add(professional)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-WIDGET"))
+        db.session.commit()
+
+        token_value = _create_token(
+            professional.id,
+            scope="profile tutors:write pets:write exams:write",
+        )
+
+    headers = {"Authorization": f"Bearer {token_value}"}
+
+    initialize = client.post(
+        "/mcp",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 51, "method": "initialize", "params": {}},
+    )
+    assert initialize.status_code == 200
+    assert "resources" in initialize.get_json()["result"]["capabilities"]
+
+    tools_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 52, "method": "tools/list", "params": {}},
+    )
+    tools = tools_response.get_json()["result"]["tools"]
+    render_tool = next(tool for tool in tools if tool["name"] == "abrir_importador_laudo_volante")
+    assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
+    assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v1.html"
+    assert render_tool["annotations"]["readOnlyHint"] is True
+
+    resource_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 53,
+            "method": "resources/read",
+            "params": {"uri": "ui://petorlandia/laudo-volante-v1.html"},
+        },
+    )
+    resource = resource_response.get_json()["result"]["contents"][0]
+    assert resource["mimeType"] == "text/html;profile=mcp-app"
+    assert 'window.openai.callTool("importar_laudo_volante"' in resource["text"]
+    assert resource["_meta"]["ui"]["prefersBorder"] is True
+
+    render_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 54,
+            "method": "tools/call",
+            "params": {
+                "name": "abrir_importador_laudo_volante",
+                "arguments": {
+                    "clinica": {"nome": "Clinica Visual"},
+                    "tutor": {"nome": "Tutor Visual"},
+                    "animal": {"nome": "Nina", "especie": "felina"},
+                    "exame": {"nome": "Ultrassonografia abdominal"},
+                    "laudo_texto": "Achados sem alteracoes relevantes.",
+                    "campos_a_confirmar": ["telefone do tutor"],
+                },
+            },
+        },
+    )
+    render_payload = render_response.get_json()["result"]
+    assert render_payload["structuredContent"]["rascunho"]["animal"]["nome"] == "Nina"
+    assert render_payload["structuredContent"]["campos_a_confirmar"] == ["telefone do tutor"]
+    assert render_payload["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
+
+
 def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):
     with app.app_context():
         clinic = Clinica(nome="Clinica ChatGPT")

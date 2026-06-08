@@ -76,6 +76,8 @@ Todos exigem `Authorization: Bearer <token>`.
 - `cadastrar_tutor_e_pets`
 - `registrar_consulta_clinica`
 - `registrar_bloco_exames`
+- `abrir_importador_laudo_volante`
+- `importar_laudo_volante`
 - `agendar_consulta`
 - `agendar_retorno`
 

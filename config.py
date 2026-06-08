@@ -72,7 +72,10 @@ class Config:
     OAUTH_REFRESH_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_REFRESH_TOKEN_EXPIRES_IN", "2592000"))
     OAUTH_ALLOWED_SCOPES = os.environ.get(
         "OAUTH_ALLOWED_SCOPES",
-        "openid profile email pets:read appointments:read tutors:write pets:write",
+        (
+            "openid profile email pets:read pets:write appointments:read appointments:write "
+            "tutors:read tutors:write exams:read exams:write clinical:read clinical:write"
+        ),
     )
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)

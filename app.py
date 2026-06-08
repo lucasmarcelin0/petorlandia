@@ -10684,6 +10684,245 @@ def _integration_create_exam_block(user: User, animal: Animal, payload: dict):
     return bloco
 
 
+def _integration_find_or_create_external_clinic(user: User, clinic_data: dict):
+    clinic_name = (clinic_data.get('nome') or clinic_data.get('name') or '').strip()
+    if not clinic_name:
+        raise ValueError('Informe o nome da clinica solicitante.')
+
+    email = (clinic_data.get('email') or '').strip().lower() or None
+    phone = (clinic_data.get('telefone') or clinic_data.get('phone') or '').strip() or None
+    cnpj = (clinic_data.get('cnpj') or '').strip() or None
+
+    query = Clinica.query.filter(func.lower(Clinica.nome) == clinic_name.lower())
+    if cnpj:
+        existing = query.filter(Clinica.cnpj == cnpj).first()
+        if existing:
+            return existing, False
+    existing = query.first()
+    if existing:
+        updated = False
+        if email and not existing.email:
+            existing.email = email
+            updated = True
+        if phone and not existing.telefone:
+            existing.telefone = phone
+            updated = True
+        if updated:
+            db.session.add(existing)
+            db.session.flush()
+        return existing, False
+
+    clinic = Clinica(
+        nome=clinic_name,
+        email=email,
+        telefone=phone,
+        cnpj=cnpj,
+        endereco=(clinic_data.get('endereco') or clinic_data.get('address') or '').strip() or None,
+    )
+    db.session.add(clinic)
+    db.session.flush()
+
+    return clinic, True
+
+
+def _integration_find_or_create_tutor_for_clinic(user: User, clinic: Clinica, tutor_data: dict):
+    tutor = _integration_find_existing_tutor(clinic.id, tutor_data)
+    created = False
+    provisional_email = False
+    if tutor:
+        return tutor, created, provisional_email
+
+    tutor_email = (tutor_data.get('email') or '').strip().lower()
+    if not tutor_email:
+        tutor_email = _integration_generate_provisional_email(tutor_data.get('nome') or tutor_data.get('name') or 'tutor')
+        provisional_email = True
+
+    tutor = User(
+        name=(tutor_data.get('nome') or tutor_data.get('name') or '').strip() or 'Tutor sem nome',
+        email=tutor_email,
+        phone=(tutor_data.get('telefone') or tutor_data.get('phone') or '').strip() or None,
+        address=(tutor_data.get('endereco') or tutor_data.get('address') or '').strip() or None,
+        cpf=(tutor_data.get('cpf') or '').strip() or None,
+        role='adotante',
+        clinica_id=clinic.id,
+        added_by=user,
+        is_private=True,
+    )
+    tutor.set_password(secrets.token_urlsafe(16))
+    db.session.add(tutor)
+    db.session.flush()
+    return tutor, True, provisional_email
+
+
+def _integration_find_or_create_pet_for_tutor(user: User, clinic: Clinica, tutor: User, pet_data: dict):
+    pet = _integration_find_existing_pet(tutor.id, pet_data)
+    if pet:
+        if not pet.clinica_id:
+            pet.clinica_id = clinic.id
+            db.session.add(pet)
+            db.session.flush()
+        return pet, False
+
+    species = _integration_resolve_species(pet_data.get('especie') or pet_data.get('species'))
+    breed = _integration_resolve_breed(species, pet_data.get('raca') or pet_data.get('breed'))
+    pet = Animal(
+        name=(pet_data.get('nome') or pet_data.get('name') or '').strip() or 'Pet sem nome',
+        species_id=species.id if species else None,
+        breed_id=breed.id if breed else None,
+        sex=(pet_data.get('sexo') or pet_data.get('sex') or '').strip() or None,
+        age=(pet_data.get('idade') or pet_data.get('age') or '').strip() or None,
+        user_id=tutor.id,
+        added_by_id=user.id,
+        clinica_id=clinic.id,
+        status='disponível',
+        modo='adotado',
+        is_alive=True,
+    )
+    db.session.add(pet)
+    db.session.flush()
+    return pet, True
+
+
+def _integration_import_mobile_exam_report(user: User, payload: dict):
+    clinic_data = payload.get('clinica') or {}
+    tutor_data = payload.get('tutor') or {}
+    animal_data = payload.get('animal') or payload.get('pet') or {}
+    exam_data = payload.get('exame') or {}
+
+    if not tutor_data:
+        raise ValueError('Informe os dados do tutor/responsavel extraidos do laudo.')
+    if not animal_data:
+        raise ValueError('Informe os dados do animal extraidos do laudo.')
+
+    clinic, clinic_created = _integration_find_or_create_external_clinic(user, clinic_data)
+    tutor, tutor_created, tutor_provisional_email = _integration_find_or_create_tutor_for_clinic(user, clinic, tutor_data)
+    animal, animal_created = _integration_find_or_create_pet_for_tutor(user, clinic, tutor, animal_data)
+
+    report_text = (payload.get('laudo_texto') or payload.get('texto_laudo') or '').strip()
+    conclusion = (exam_data.get('conclusao') or payload.get('conclusao') or '').strip()
+    findings = (exam_data.get('achados') or payload.get('achados') or '').strip()
+    result_parts = [part for part in [conclusion, findings, report_text] if part]
+    result_text = '\n\n'.join(result_parts) or None
+
+    performed_at = None
+    performed_at_raw = exam_data.get('data') or payload.get('data_exame')
+    if performed_at_raw:
+        parsed_date = _integration_parse_flexible_date(str(performed_at_raw))
+        if not parsed_date:
+            raise ValueError('Data do exame invalida. Use YYYY-MM-DD ou DD/MM/YYYY.')
+        performed_at = datetime.combine(parsed_date, time.min)
+
+    bloco = BlocoExames(
+        animal_id=animal.id,
+        observacoes_gerais=(payload.get('observacoes_gerais') or 'Laudo importado via conector ChatGPT.').strip(),
+    )
+    db.session.add(bloco)
+    db.session.flush()
+
+    exam = ExameSolicitado(
+        bloco_id=bloco.id,
+        nome=(exam_data.get('nome') or exam_data.get('tipo') or 'Ultrassonografia').strip(),
+        justificativa=(exam_data.get('justificativa') or '').strip() or None,
+        status='concluido',
+        resultado=result_text,
+        performed_at=performed_at or datetime.now(BR_TZ),
+        laudo_url=(payload.get('laudo_url') or '').strip() or None,
+        laudo_filename=(payload.get('laudo_filename') or payload.get('nome_arquivo') or '').strip() or None,
+        laudo_uploaded_at=datetime.now(BR_TZ) if payload.get('laudo_url') else None,
+        laudo_message=(payload.get('mensagem_clinica') or '').strip() or None,
+    )
+    db.session.add(exam)
+    db.session.flush()
+
+    animal_name = animal.name or 'paciente'
+    clinic_message = (
+        (payload.get('mensagem_clinica') or '').strip()
+        or f'Laudo de {exam.nome} do paciente {animal_name} importado pelo ultrassonografista volante.'
+    )
+    notification_message = (
+        f'{clinic_message}\n\n'
+        f'Paciente: {animal_name}\n'
+        f'Tutor: {tutor.name}\n'
+        f'Exame: {exam.nome}'
+    )
+
+    if _ensure_clinic_notifications_table():
+        db.session.add(
+            ClinicNotification(
+                clinic_id=clinic.id,
+                title='Novo laudo recebido pelo PetOrlândia',
+                message=notification_message,
+                type='success',
+                month=datetime.now(BR_TZ).date().replace(day=1),
+            )
+        )
+
+    if clinic.owner_id:
+        db.session.add(
+            Notification(
+                user_id=clinic.owner_id,
+                message=notification_message,
+                channel='app',
+                kind='exam_report',
+            )
+        )
+
+    clinic_id = clinic.id
+    clinic_name = clinic.nome
+    clinic_owner_id = clinic.owner_id
+    tutor_id = tutor.id
+    tutor_name = tutor.name
+    animal_id = animal.id
+    animal_name = animal.name
+    exam_id = exam.id
+    exam_name = exam.nome
+    exam_status = exam.status
+    exam_laudo_url = exam.laudo_url
+    bloco_id = bloco.id
+    db.session.commit()
+
+    clinic_url = None
+    animal_url = None
+    if has_request_context():
+        clinic_url = url_for('clinic_detail', clinica_id=clinic_id, _external=True)
+        animal_url = url_for('ficha_animal', animal_id=animal_id, _external=True)
+
+    return {
+        'clinica': {
+            'id': clinic_id,
+            'nome': clinic_name,
+            'criada_agora': clinic_created,
+            'tem_dono_cadastrado': bool(clinic_owner_id),
+            'url': clinic_url,
+        },
+        'tutor': {
+            'id': tutor_id,
+            'nome': tutor_name,
+            'criado_agora': tutor_created,
+            'email_provisorio': tutor_provisional_email,
+        },
+        'animal': {
+            'id': animal_id,
+            'nome': animal_name,
+            'criado_agora': animal_created,
+            'url': animal_url,
+        },
+        'exame': {
+            'bloco_id': bloco_id,
+            'exame_id': exam_id,
+            'nome': exam_name,
+            'status': exam_status,
+            'laudo_url': exam_laudo_url,
+        },
+        'proxima_acao_recomendada': (
+            'Enviar o link da clinica para o dono fazer o primeiro acesso.'
+            if not clinic_owner_id else
+            'Avisar o dono da clinica para abrir a notificacao no PetOrlandia.'
+        ),
+        'mensagem_sugerida_para_clinica': notification_message,
+    }
+
+
 def _integration_schedule_consulta(user: User, animal: Animal, payload: dict):
     if not has_veterinarian_profile(user):
         raise PermissionError('Somente contas veterinárias podem agendar consultas via ChatGPT.')
@@ -11250,6 +11489,185 @@ def _mcp_json_content(payload):
     return {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False, indent=2)}]}
 
 
+LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v1.html'
+
+
+def _mcp_laudo_volante_widget_html():
+    return """
+<main class="po-widget">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">PetOrlandia</p>
+      <h1>Revisar laudo volante</h1>
+    </div>
+    <span id="status-pill" class="pill">Rascunho</span>
+  </section>
+
+  <section class="grid">
+    <article>
+      <span>Clinica</span>
+      <strong id="clinica-nome">-</strong>
+      <small id="clinica-contato"></small>
+    </article>
+    <article>
+      <span>Tutor</span>
+      <strong id="tutor-nome">-</strong>
+      <small id="tutor-contato"></small>
+    </article>
+    <article>
+      <span>Animal</span>
+      <strong id="animal-nome">-</strong>
+      <small id="animal-detalhes"></small>
+    </article>
+    <article>
+      <span>Exame</span>
+      <strong id="exame-nome">-</strong>
+      <small id="exame-data"></small>
+    </article>
+  </section>
+
+  <label class="field">
+    <span>Mensagem para a clinica</span>
+    <textarea id="mensagem" rows="3"></textarea>
+  </label>
+
+  <label class="field">
+    <span>Resumo do laudo</span>
+    <textarea id="laudo" rows="7"></textarea>
+  </label>
+
+  <section id="missing" class="missing" hidden></section>
+
+  <footer>
+    <button id="confirmar" type="button">Confirmar e gravar no PetOrlandia</button>
+    <p id="feedback"></p>
+  </footer>
+</main>
+
+<style>
+  :root {
+    color: #0f172a;
+    background: #f8fafc;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .po-widget { padding: 18px; max-width: 760px; margin: 0 auto; }
+  .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .eyebrow { margin: 0 0 4px; font-size: 12px; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0; }
+  h1 { margin: 0; font-size: 24px; line-height: 1.15; }
+  .pill { flex: none; border: 1px solid #99f6e4; color: #0f766e; background: #ecfeff; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 800; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  article { border: 1px solid #dbe3ea; background: #ffffff; border-radius: 8px; padding: 12px; min-height: 86px; }
+  article span, .field span { display: block; color: #64748b; font-size: 12px; font-weight: 800; margin-bottom: 6px; }
+  article strong { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+  article small { display: block; margin-top: 6px; color: #475569; line-height: 1.35; overflow-wrap: anywhere; }
+  .field { display: block; margin: 12px 0; }
+  textarea { width: 100%; resize: vertical; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; line-height: 1.45; background: #ffffff; color: #0f172a; }
+  textarea:focus { outline: 3px solid #bbf7d0; border-color: #059669; }
+  .missing { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; border-radius: 8px; padding: 11px 12px; margin: 12px 0; line-height: 1.4; }
+  footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  button { border: 0; border-radius: 8px; background: #10b981; color: white; padding: 12px 16px; font-weight: 900; cursor: pointer; }
+  button:disabled { cursor: not-allowed; background: #94a3b8; }
+  #feedback { margin: 0; color: #334155; font-size: 13px; }
+  @media (max-width: 560px) {
+    .po-widget { padding: 14px; }
+    .hero { align-items: flex-start; flex-direction: column; }
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 21px; }
+    button { width: 100%; }
+  }
+</style>
+
+<script>
+  const fields = {
+    clinicaNome: document.getElementById("clinica-nome"),
+    clinicaContato: document.getElementById("clinica-contato"),
+    tutorNome: document.getElementById("tutor-nome"),
+    tutorContato: document.getElementById("tutor-contato"),
+    animalNome: document.getElementById("animal-nome"),
+    animalDetalhes: document.getElementById("animal-detalhes"),
+    exameNome: document.getElementById("exame-nome"),
+    exameData: document.getElementById("exame-data"),
+    mensagem: document.getElementById("mensagem"),
+    laudo: document.getElementById("laudo"),
+    missing: document.getElementById("missing"),
+    feedback: document.getElementById("feedback"),
+    button: document.getElementById("confirmar"),
+    pill: document.getElementById("status-pill")
+  };
+
+  let currentDraft = {};
+  const text = (value) => value == null || value === "" ? "-" : String(value);
+  const compact = (items) => items.filter(Boolean).join(" - ");
+
+  function render(output) {
+    currentDraft = output?.rascunho || output || {};
+    const clinica = currentDraft.clinica || {};
+    const tutor = currentDraft.tutor || {};
+    const animal = currentDraft.animal || {};
+    const exame = currentDraft.exame || {};
+    fields.clinicaNome.textContent = text(clinica.nome);
+    fields.clinicaContato.textContent = compact([clinica.email, clinica.telefone, clinica.cnpj]);
+    fields.tutorNome.textContent = text(tutor.nome);
+    fields.tutorContato.textContent = compact([tutor.telefone, tutor.email, tutor.cpf]);
+    fields.animalNome.textContent = text(animal.nome);
+    fields.animalDetalhes.textContent = compact([animal.especie, animal.raca, animal.sexo, animal.idade]);
+    fields.exameNome.textContent = text(exame.nome || exame.tipo);
+    fields.exameData.textContent = text(exame.data || currentDraft.data_exame);
+    fields.mensagem.value = currentDraft.mensagem_clinica || "Laudo finalizado e disponivel no PetOrlandia.";
+    fields.laudo.value = currentDraft.laudo_texto || exame.conclusao || exame.achados || "";
+
+    const missing = output?.campos_a_confirmar || [];
+    fields.missing.hidden = missing.length === 0;
+    fields.missing.textContent = missing.length ? "Conferir antes de gravar: " + missing.join(", ") : "";
+    fields.pill.textContent = missing.length ? "Conferir dados" : "Pronto para gravar";
+  }
+
+  async function confirmImport() {
+    if (!window.openai?.callTool) {
+      fields.feedback.textContent = "Abra este painel dentro do ChatGPT para gravar.";
+      return;
+    }
+    fields.button.disabled = true;
+    fields.feedback.textContent = "Gravando no PetOrlandia...";
+    try {
+      const args = {
+        ...currentDraft,
+        laudo_texto: fields.laudo.value,
+        mensagem_clinica: fields.mensagem.value,
+        confirmar_gravacao: "sim"
+      };
+      const result = await window.openai.callTool("importar_laudo_volante", args);
+      const payload = result?.structuredContent || result;
+      fields.feedback.textContent = payload?.exame?.id
+        ? "Laudo gravado. A clinica ja pode acessar o resultado."
+        : "Solicitacao enviada. Confira a resposta no chat.";
+      fields.pill.textContent = "Gravado";
+    } catch (error) {
+      fields.feedback.textContent = error?.message || "Nao foi possivel gravar agora.";
+      fields.button.disabled = false;
+    }
+  }
+
+  fields.button.addEventListener("click", confirmImport);
+  render(window.openai?.toolOutput || {});
+  window.addEventListener("openai:set_globals", (event) => {
+    render(event.detail?.globals?.toolOutput || window.openai?.toolOutput || {});
+  }, { passive: true });
+</script>
+""".strip()
+
+
+def _mcp_laudo_volante_widget_resource():
+    return {
+        'uri': LAUDO_VOLANTE_WIDGET_URI,
+        'name': 'Revisar laudo volante',
+        'description': 'Painel para revisar e confirmar laudo de ultrassonografista volante.',
+        'mimeType': 'text/html;profile=mcp-app',
+    }
+
+
 def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
     required_scope_set = {scope for scope in required_scopes if scope}
     missing_scopes = sorted(required_scope_set.difference(token_scope_set))
@@ -11359,12 +11777,42 @@ def mcp_server():
         return _mcp_ok(req_id, {
             'protocolVersion': '2024-11-05',
             'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
-            'capabilities': {'tools': {}},
+            'capabilities': {'tools': {}, 'resources': {}},
         })
 
     # ── notifications/initialized (client ack — no response body needed) ─────
     if method in ('notifications/initialized', 'initialized'):
         return ('', 204)
+
+    if method == 'resources/list':
+        return _mcp_ok(req_id, {'resources': [_mcp_laudo_volante_widget_resource()]})
+
+    if method == 'resources/read':
+        uri = str(params.get('uri') or '').strip()
+        if uri != LAUDO_VOLANTE_WIDGET_URI:
+            return _mcp_err(req_id, -32004, f'Resource not found: {uri}')
+        return _mcp_ok(req_id, {
+            'contents': [
+                {
+                    **_mcp_laudo_volante_widget_resource(),
+                    'text': _mcp_laudo_volante_widget_html(),
+                    '_meta': {
+                        'ui': {
+                            'prefersBorder': True,
+                            'csp': {
+                                'connectDomains': [],
+                                'resourceDomains': [],
+                            },
+                        },
+                        'openai/widgetDescription': (
+                            'Painel para revisar clinica, tutor, animal e laudo antes de gravar '
+                            'o exame no PetOrlandia.'
+                        ),
+                        'openai/widgetPrefersBorder': True,
+                    },
+                }
+            ]
+        })
 
     # ── tools/list ───────────────────────────────────────────────────────────
     if method == 'tools/list':
@@ -11490,6 +11938,72 @@ def mcp_server():
                         'confirmar_gravacao': {'type': 'string'},
                     },
                     'required': ['exames', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'abrir_importador_laudo_volante',
+                'title': 'Abrir importador de laudo volante',
+                'description': (
+                    'Use this when o ultrassonografista colou um laudo ou informou os dados extraidos '
+                    'e quer revisar visualmente clinica, tutor, animal, exame e mensagem antes de gravar. '
+                    'Esta tool apenas renderiza o painel; para gravar, use importar_laudo_volante apos confirmacao.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object'},
+                        'tutor': {'type': 'object'},
+                        'animal': {'type': 'object'},
+                        'exame': {'type': 'object'},
+                        'laudo_texto': {'type': 'string'},
+                        'laudo_url': {'type': 'string'},
+                        'laudo_filename': {'type': 'string'},
+                        'mensagem_clinica': {'type': 'string'},
+                        'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
+                    },
+                    'required': [],
+                },
+                'outputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'rascunho': {'type': 'object'},
+                        'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
+                    },
+                },
+                'annotations': {
+                    'readOnlyHint': True,
+                    'destructiveHint': False,
+                    'openWorldHint': False,
+                    'idempotentHint': True,
+                },
+                '_meta': {
+                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
+                    'openai/outputTemplate': LAUDO_VOLANTE_WIDGET_URI,
+                    'openai/toolInvocation/invoking': 'Abrindo revisao do laudo...',
+                    'openai/toolInvocation/invoked': 'Revisao do laudo pronta.',
+                },
+            },
+            {
+                'name': 'importar_laudo_volante',
+                'description': (
+                    'Use quando um ultrassonografista volante enviar ou colar um laudo no ChatGPT. '
+                    'A tool cria ou reaproveita clinica, tutor e animal, registra o exame como concluido '
+                    'e prepara a notificacao para a clinica acessar o PetOrlandia.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'clinica': {'type': 'object', 'description': 'Clinica solicitante: nome, email, telefone, cnpj e endereco quando houver.'},
+                        'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email, cpf e endereco quando houver.'},
+                        'animal': {'type': 'object', 'description': 'Paciente: nome, especie, raca, sexo e idade quando houver.'},
+                        'exame': {'type': 'object', 'description': 'Dados do exame: nome/tipo, data, achados, conclusao e justificativa.'},
+                        'laudo_texto': {'type': 'string', 'description': 'Texto integral ou resumo fiel do laudo.'},
+                        'laudo_url': {'type': 'string', 'description': 'Link do arquivo do laudo quando houver.'},
+                        'laudo_filename': {'type': 'string', 'description': 'Nome do arquivo do laudo quando houver link.'},
+                        'mensagem_clinica': {'type': 'string', 'description': 'Mensagem curta e cordial para a clinica.'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['clinica', 'tutor', 'animal', 'exame', 'confirmar_gravacao'],
                 },
             },
             {
@@ -11796,6 +12310,59 @@ def mcp_server():
                 'observacoes_gerais': bloco.observacoes_gerais,
                 'total_exames': len(bloco.exames or []),
             }))
+
+        if tool_name == 'abrir_importador_laudo_volante':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            draft = {
+                'clinica': tool_args.get('clinica') or {},
+                'tutor': tool_args.get('tutor') or {},
+                'animal': tool_args.get('animal') or {},
+                'exame': tool_args.get('exame') or {},
+                'laudo_texto': tool_args.get('laudo_texto') or '',
+                'laudo_url': tool_args.get('laudo_url') or '',
+                'laudo_filename': tool_args.get('laudo_filename') or '',
+                'mensagem_clinica': (
+                    tool_args.get('mensagem_clinica')
+                    or 'Laudo finalizado e disponivel no PetOrlandia.'
+                ),
+            }
+            missing_fields = tool_args.get('campos_a_confirmar') or []
+            response_payload = {
+                'rascunho': draft,
+                'campos_a_confirmar': missing_fields if isinstance(missing_fields, list) else [],
+            }
+            return _mcp_ok(req_id, {
+                'structuredContent': response_payload,
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': 'Abrindo painel para revisar o laudo antes de gravar no PetOrlandia.',
+                    }
+                ],
+                '_meta': {
+                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
+                },
+            })
+
+        if tool_name == 'importar_laudo_volante':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write', 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            try:
+                result = _integration_import_mobile_exam_report(user, tool_args)
+            except ValueError as exc:
+                db.session.rollback()
+                return _mcp_err(req_id, -32602, str(exc))
+            response = _mcp_json_content(result)
+            response['structuredContent'] = result
+            return _mcp_ok(req_id, response)
 
         if tool_name == 'agendar_consulta':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:write')
@@ -23396,37 +23963,144 @@ def atualizar_realizacao_exames(bloco_id):
     if not (is_veterinarian(current_user) or worker == 'colaborador' or current_user.role == 'admin'):
         return jsonify({'success': False, 'message': 'Apenas profissionais da clinica podem registrar realizacao de exames.'}), 403
 
-    dados = request.get_json(silent=True) or {}
-    existentes = {e.id: e for e in bloco.exames}
+    if request.form or request.files:
+        dados = json.loads(request.form.get('payload') or '{}')
+    else:
+        dados = request.get_json(silent=True) or {}
+
+    existentes = {
+        e.id: e
+        for e in ExameSolicitado.query.filter_by(bloco_id=bloco.id).all()
+    }
+    exames_relacionados = {e.id: e for e in bloco.exames}
     allowed_statuses = {'pendente', 'concluido', 'cancelado'}
+    notificacao_solicitada = bool(dados.get('notificar_solicitante'))
+    mensagem_laudo = (dados.get('mensagem_laudo') or '').strip()
+    exames_concluidos = []
+    updates_exames = []
 
     for ex_json in dados.get('exames', []):
-        ex_id = ex_json.get('id')
+        try:
+            ex_id = int(ex_json.get('id'))
+        except (TypeError, ValueError):
+            continue
         exame = existentes.get(ex_id)
         if not exame:
+            exame = ExameSolicitado.query.filter_by(id=ex_id, bloco_id=bloco.id).first()
+        if not exame:
             continue
+        exames_para_atualizar = [exame]
+        exame_relacionado = exames_relacionados.get(ex_id)
+        if exame_relacionado is not None and exame_relacionado is not exame:
+            exames_para_atualizar.append(exame_relacionado)
 
         status = (ex_json.get('status') or 'pendente').strip().lower()
         if status not in allowed_statuses:
             status = 'pendente'
-        exame.status = status
-        exame.resultado = (ex_json.get('resultado') or '').strip() or None
+        resultado = (ex_json.get('resultado') or '').strip() or None
+        for exame_alvo in exames_para_atualizar:
+            exame_alvo.status = status
+            exame_alvo.resultado = resultado
+            if mensagem_laudo:
+                exame_alvo.laudo_message = mensagem_laudo
 
         performed_at_str = (ex_json.get('performed_at') or '').strip()
         if performed_at_str:
             try:
-                exame.performed_at = datetime.fromisoformat(performed_at_str)
+                performed_at = datetime.fromisoformat(performed_at_str)
             except ValueError:
                 return jsonify({'success': False, 'message': 'Data de realizacao invalida.'}), 400
         else:
-            exame.performed_at = None
+            performed_at = None
+        for exame_alvo in exames_para_atualizar:
+            exame_alvo.performed_at = performed_at
 
-    db.session.commit()
+        arquivo_laudo = request.files.get(f'laudo_{ex_id}')
+        if arquivo_laudo and arquivo_laudo.filename:
+            original_filename = secure_filename(arquivo_laudo.filename)
+            _, ext = os.path.splitext(original_filename)
+            filename = f"{uuid.uuid4().hex}{ext.lower()}"
+            laudo_url = upload_to_s3(arquivo_laudo, filename, folder='laudos_exames')
+            if not laudo_url:
+                return jsonify({'success': False, 'message': 'Nao foi possivel enviar o arquivo do laudo.'}), 500
+            exame.laudo_url = laudo_url
+            exame.laudo_filename = original_filename
+            exame.laudo_uploaded_at = datetime.now(BR_TZ)
+            for exame_alvo in exames_para_atualizar:
+                exame_alvo.laudo_url = laudo_url
+                exame_alvo.laudo_filename = original_filename
+                exame_alvo.laudo_uploaded_at = exame.laudo_uploaded_at
 
+        updates_exames.append({
+            'status': exame.status,
+            'resultado': exame.resultado,
+            'performed_at': exame.performed_at,
+            'laudo_url': exame.laudo_url,
+            'laudo_filename': exame.laudo_filename,
+            'laudo_uploaded_at': exame.laudo_uploaded_at,
+            'laudo_message': exame.laudo_message,
+            'exame_id': ex_id,
+            'bloco_id': bloco.id,
+        })
+
+        if exame.status == 'concluido' and (exame.resultado or exame.laudo_url):
+            exames_concluidos.append(exame)
+
+    if notificacao_solicitada and exames_concluidos:
+        clinica = getattr(bloco.animal, 'clinica', None)
+        clinic_id = getattr(bloco.animal, 'clinica_id', None)
+        animal_nome = getattr(bloco.animal, 'name', 'paciente') or 'paciente'
+        exames_nomes = ', '.join(ex.nome for ex in exames_concluidos[:3])
+        if len(exames_concluidos) > 3:
+            exames_nomes = f"{exames_nomes} e mais {len(exames_concluidos) - 3}"
+        texto_base = mensagem_laudo or 'O laudo do exame ja esta disponivel no historico de exames.'
+        aviso = f"{texto_base} Paciente: {animal_nome}. Exame(s): {exames_nomes}."
+
+        if clinic_id and _ensure_clinic_notifications_table():
+            db.session.add(
+                ClinicNotification(
+                    clinic_id=clinic_id,
+                    title='Laudo de exame disponivel',
+                    message=aviso,
+                    type='info',
+                    month=datetime.now(BR_TZ).date().replace(day=1),
+                )
+            )
+
+        clinic_owner_id = getattr(clinica, 'owner_id', None)
+        if clinic_owner_id:
+            db.session.add(
+                Notification(
+                    user_id=clinic_owner_id,
+                    message=aviso,
+                    channel='app',
+                    kind='exam_report',
+                )
+            )
+
+    db.session.flush()
     historico_html = render_template(
         'partials/historico_exames.html',
         animal=bloco.animal
     )
+    for update_params in updates_exames:
+        db.session.execute(
+            text(
+                """
+                UPDATE exame_solicitado
+                   SET status = :status,
+                       resultado = :resultado,
+                       performed_at = :performed_at,
+                       laudo_url = :laudo_url,
+                       laudo_filename = :laudo_filename,
+                       laudo_uploaded_at = :laudo_uploaded_at,
+                       laudo_message = :laudo_message
+                 WHERE id = :exame_id AND bloco_id = :bloco_id
+                """
+            ),
+            update_params,
+        )
+    db.session.commit()
     return jsonify(success=True, html=historico_html)
 
 
