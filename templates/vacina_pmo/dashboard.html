@@ -1059,7 +1059,8 @@
         if (!response.ok || !payload.success) {
           throw new Error(payload.message || 'Não foi possível criar o dia de vacinação.');
         }
-        const msg = `Aba "${payload.sheetTitle}" criada: manhã ${payload.morning.houses} casas / ${payload.morning.animals} animais, tarde ${payload.afternoon.houses} casas / ${payload.afternoon.animals} animais.`;
+        const condoInfo = payload.condo ? ` Condomínio ${payload.condo} (${payload.condoUnits} unid.) na manhã.` : '';
+        const msg = `Aba "${payload.sheetTitle}" criada: manhã ${payload.morning.houses} casas / ${payload.morning.animals} animais, tarde ${payload.afternoon.houses} casas / ${payload.afternoon.animals} animais.${condoInfo}`;
         window.showAppToast ? window.showAppToast(msg, 'success') : alert(msg);
         modal.hide();
         loadSheets();

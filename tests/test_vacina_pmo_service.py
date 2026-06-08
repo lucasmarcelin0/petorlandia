@@ -1696,3 +1696,60 @@ def test_resolve_pmo_sheet_title_lists_available_tabs_on_failure():
     message = str(exc.value)
     assert "Respostas ao formulário" in message
     assert "Agendadas" in message
+
+
+def _pmo_house(source_row, *, endereco="", complemento="", dogs=1, cats=0):
+    cells = [""] * 11
+    cells[1] = endereco      # B
+    cells[3] = complemento   # D
+    return {"sourceRow": source_row, "dogs": dogs, "cats": cats, "cells": cells}
+
+
+def test_pmo_is_condo_detects_keyword_in_complement():
+    assert vacina_pmo_service._pmo_is_condo(_pmo_house(1, complemento="Condomínio Torino"))
+    assert vacina_pmo_service._pmo_is_condo(_pmo_house(2, complemento="A - Condominio Quebec Casa 182"))
+    assert not vacina_pmo_service._pmo_is_condo(_pmo_house(3, complemento="Casa"))
+    assert not vacina_pmo_service._pmo_is_condo(_pmo_house(4, complemento=""))
+
+
+def test_plan_pmo_day_groups_first_condo_in_morning_and_skips_others():
+    houses = [
+        _pmo_house(1, endereco="Rua 20 - 1107", complemento="Condomínio Torino"),
+        _pmo_house(2, endereco="Rua 20 - 1107", complemento="Condomínio Torino"),
+        _pmo_house(3, endereco="Rua 20 - 1107", complemento="Condomínio Torino"),
+        _pmo_house(4, endereco="Rua 20 955A", complemento="Condomínio Quebec"),
+        _pmo_house(5, endereco="Rua 20 955A", complemento="Condomínio Quebec"),
+        _pmo_house(6, complemento="Casa"),
+        _pmo_house(7),
+        _pmo_house(8),
+        _pmo_house(9),
+        _pmo_house(10),
+        _pmo_house(11),
+        _pmo_house(12),
+    ]
+
+    plan = vacina_pmo_service.plan_pmo_day(houses)
+
+    assert plan["condo"] == "Torino"
+    manha_src = [h["sourceRow"] for h in plan["Manha"]]
+    tarde_src = [h["sourceRow"] for h in plan["Tarde"]]
+    # As 3 unidades do Torino abrem a manhã, juntas.
+    assert manha_src[:3] == [1, 2, 3]
+    # O outro condomínio (Quebec, linhas 4 e 5) fica de fora do dia.
+    assert 4 not in manha_src + tarde_src
+    assert 5 not in manha_src + tarde_src
+
+
+def test_plan_pmo_day_groups_condo_units_despite_messy_complement():
+    houses = [
+        _pmo_house(1, endereco="Rua 20 955A ", complemento="Condomínio Quebec. Casa 87"),
+        _pmo_house(2, endereco="Rua 20 955A", complemento="A - Condominio Quebec Casa 182"),
+        _pmo_house(3, endereco="rua 20 955a", complemento="Condomínio Quebec  - Casa 85"),
+        _pmo_house(4, complemento="Casa"),
+    ]
+
+    plan = vacina_pmo_service.plan_pmo_day(houses)
+
+    assert plan["condo"] == "Quebec"
+    condo_units = [h for h in plan["Manha"] if vacina_pmo_service._pmo_is_condo(h)]
+    assert sorted(h["sourceRow"] for h in condo_units) == [1, 2, 3]

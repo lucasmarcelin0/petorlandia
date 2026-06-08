@@ -1910,19 +1910,51 @@ def _pmo_scheduled_source_rows(
     return _pmo_scheduled_rows_from_backgrounds(backgrounds)
 
 
-def distribute_pmo_houses(houses: list[dict[str, Any]]) -> dict[str, Any]:
+def _pmo_house_animals(house: dict[str, Any]) -> int:
+    return int(house.get("dogs") or 0) + int(house.get("cats") or 0)
+
+
+def _pmo_is_condo(house: dict[str, Any]) -> bool:
+    """True quando o complemento (coluna D) marca um condomínio."""
+    cells = house.get("cells") or []
+    complement = cells[3] if len(cells) > 3 else ""
+    return "condominio" in _strip_accents(_normalize_text(complement)).lower()
+
+
+def _pmo_condo_key(house: dict[str, Any]) -> str:
+    """Chave que agrupa unidades do mesmo condomínio (endereço da coluna B)."""
+    cells = house.get("cells") or []
+    return _pmo_normalize_title(cells[1]) if len(cells) > 1 else ""
+
+
+def _pmo_condo_label(house: dict[str, Any]) -> str:
+    """Nome amigável do condomínio (ex.: 'Torino') extraído do complemento."""
+    cells = house.get("cells") or []
+    complement = _normalize_text(cells[3] if len(cells) > 3 else "")
+    match = re.search(r"condom[ií]nios?\s+([0-9A-Za-zÀ-ú.\-]+)", complement, re.IGNORECASE)
+    if match:
+        return match.group(1).strip(" .-")
+    return complement
+
+
+def distribute_pmo_houses(
+    houses: list[dict[str, Any]],
+    *,
+    seed_morning: list[dict[str, Any]] | None = None,
+    condo_name: str = "",
+) -> dict[str, Any]:
     """Distribui casas (na ordem recebida) entre manhã e tarde respeitando as metas.
 
-    Cada casa preenche a manhã primeiro, até atingir o mínimo de casas e o alvo de
-    animais; o excedente vai para a tarde até bater o total do dia. Nunca passa do
-    máximo de cada turno (limitado pelas 9 linhas do modelo).
+    ``seed_morning`` (ex.: as unidades de um condomínio) já entram na manhã antes de
+    completar com as demais casas; elas podem ultrapassar o máximo do turno, pois o
+    condomínio deve ficar todo junto num turno só.
     """
-    manha: list[dict[str, Any]] = []
+    manha: list[dict[str, Any]] = list(seed_morning or [])
     tarde: list[dict[str, Any]] = []
-    manha_animals = 0
+    manha_animals = sum(_pmo_house_animals(h) for h in manha)
     tarde_animals = 0
     for house in houses:
-        animals = int(house.get("dogs") or 0) + int(house.get("cats") or 0)
+        animals = _pmo_house_animals(house)
         if len(manha) < PMO_MORNING_MAX_HOUSES and (
             len(manha) < PMO_MORNING_MIN_HOUSES
             or manha_animals + animals <= PMO_MORNING_TARGET_ANIMALS
@@ -1943,7 +1975,28 @@ def distribute_pmo_houses(houses: list[dict[str, Any]]) -> dict[str, Any]:
         "Tarde": tarde,
         "manha_animals": manha_animals,
         "tarde_animals": tarde_animals,
+        "condo": condo_name,
     }
+
+
+def plan_pmo_day(houses: list[dict[str, Any]]) -> dict[str, Any]:
+    """Monta o dia escolhendo (no máximo) um condomínio + casas avulsas.
+
+    Pega o primeiro condomínio na ordem de proximidade, coloca todas as suas
+    unidades juntas na manhã e completa o dia com casas fora de condomínio. Os
+    demais condomínios ficam para outros dias. Sem condomínio, distribui normal.
+    """
+    chosen_key = next((_pmo_condo_key(h) for h in houses if _pmo_is_condo(h)), "")
+    condo_units = (
+        [h for h in houses if _pmo_is_condo(h) and _pmo_condo_key(h) == chosen_key]
+        if chosen_key
+        else []
+    )
+    avulsas = [h for h in houses if not _pmo_is_condo(h)]
+    condo_label = _pmo_condo_label(condo_units[0]) if condo_units else ""
+    return distribute_pmo_houses(
+        avulsas, seed_morning=condo_units, condo_name=condo_label
+    )
 
 
 def _pmo_empty_shift_slots(values: list[list[Any]], shift: str) -> list[int]:
@@ -2035,6 +2088,67 @@ def _pmo_paint_source_rows(
         ).execute()
 
 
+def _pmo_insert_cloned_rows(
+    service, spreadsheet_id: str, sheet_gid: int, after_row: int, template_row: int, count: int
+) -> bool:
+    """Insere ``count`` linhas logo após ``after_row``, clonando ``template_row``.
+
+    Usado quando um condomínio tem mais unidades do que as vagas do turno: as novas
+    linhas herdam o formato e copiam as fórmulas/marcadores (coluna R) da linha
+    modelo, virando vagas válidas do mesmo turno. Best-effort: devolve False se falhar.
+    """
+    if count <= 0:
+        return True
+    try:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "insertDimension": {
+                            "range": {
+                                "sheetId": sheet_gid,
+                                "dimension": "ROWS",
+                                "startIndex": after_row,
+                                "endIndex": after_row + count,
+                            },
+                            "inheritFromBefore": True,
+                        }
+                    },
+                    {
+                        "copyPaste": {
+                            "source": {
+                                "sheetId": sheet_gid,
+                                "startRowIndex": template_row - 1,
+                                "endRowIndex": template_row,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 18,
+                            },
+                            "destination": {
+                                "sheetId": sheet_gid,
+                                "startRowIndex": after_row,
+                                "endRowIndex": after_row + count,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 18,
+                            },
+                            "pasteType": "PASTE_NORMAL",
+                        }
+                    },
+                ]
+            },
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao inserir linhas extras para condomínio PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
 def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     """Cria a aba de um novo dia de vacinação a partir do modelo "padrão".
 
@@ -2105,7 +2219,7 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
             }
         )
 
-    plan = distribute_pmo_houses(houses)
+    plan = plan_pmo_day(houses)
     manha, tarde = plan["Manha"], plan["Tarde"]
     if not manha and not tarde:
         raise ValueError("Nenhuma casa nova para agendar (todas já estão pintadas).")
@@ -2135,6 +2249,29 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     manha_slots = _pmo_empty_shift_slots(new_values, "Manha")
     tarde_slots = _pmo_empty_shift_slots(new_values, "Tarde")
 
+    # Condomínio maior que o turno: insere linhas extras (clonando a última vaga)
+    # para caber tudo junto na manhã, e relê as vagas (os índices mudam).
+    manha_extra = len(manha) - len(manha_slots)
+    if manha_extra > 0 and manha_slots:
+        inserted = _pmo_insert_cloned_rows(
+            service,
+            spreadsheet_id,
+            int(new_gid),
+            after_row=manha_slots[-1],
+            template_row=manha_slots[-1],
+            count=manha_extra,
+        )
+        if inserted:
+            new_values = (
+                service.spreadsheets()
+                .values()
+                .get(spreadsheetId=spreadsheet_id, range=f"{new_tab}!A:R")
+                .execute()
+                .get("values", [])
+            )
+            manha_slots = _pmo_empty_shift_slots(new_values, "Manha")
+            tarde_slots = _pmo_empty_shift_slots(new_values, "Tarde")
+
     data_updates = []
     for house, rownum in zip(manha, manha_slots):
         cells = (house["cells"] + [""] * PMO_SCHEDULE_SOURCE_COLUMNS)[:PMO_SCHEDULE_SOURCE_COLUMNS]
@@ -2161,6 +2298,10 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
         "spreadsheetId": spreadsheet_id,
         "morning": {"houses": placed_manha, "animals": plan["manha_animals"]},
         "afternoon": {"houses": placed_tarde, "animals": plan["tarde_animals"]},
+        "condo": plan.get("condo") or "",
+        "condoUnits": len(
+            [h for h in manha if _pmo_is_condo(h)]
+        ),
         "leftover": (len(manha) - placed_manha) + (len(tarde) - placed_tarde),
     }
 
