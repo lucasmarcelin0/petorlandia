@@ -339,6 +339,7 @@ def test_integrations_openapi_contract_exposes_chatgpt_actions(app, client):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["openapi"] == "3.1.0"
+    assert isinstance(payload["components"]["schemas"], dict)
     assert "PetOrlandiaOAuth" in payload["components"]["securitySchemes"]
     scopes = payload["components"]["securitySchemes"]["PetOrlandiaOAuth"]["flows"]["authorizationCode"]["scopes"]
     assert isinstance(scopes["profile"], str)

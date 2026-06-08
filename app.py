@@ -30463,6 +30463,7 @@ def api_integrations_openapi():
         },
         'servers': [{'url': issuer}],
         'components': {
+            'schemas': {},
             'securitySchemes': {
                 'PetOrlandiaOAuth': {
                     'type': 'oauth2',
