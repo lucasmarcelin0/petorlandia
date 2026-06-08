@@ -333,6 +333,156 @@ def test_integrations_clinical_summary_respects_clinic_scope(app, client):
     assert response.get_json()["error"]["code"] == "animal_not_found"
 
 
+def test_integrations_openapi_contract_exposes_chatgpt_actions(app, client):
+    response = client.get("/api/integrations/openapi.json")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["openapi"] == "3.1.0"
+    assert "PetOrlandiaOAuth" in payload["components"]["securitySchemes"]
+    scopes = payload["components"]["securitySchemes"]["PetOrlandiaOAuth"]["flows"]["authorizationCode"]["scopes"]
+    assert isinstance(scopes["profile"], str)
+    assert "/api/integrations/tutors-with-pets" in payload["paths"]
+    create_registration = payload["paths"]["/api/integrations/tutors-with-pets"]["post"]
+    assert create_registration["x-openai-isConsequential"] is True
+    assert create_registration["operationId"] == "cadastrarTutorEPetsPetOrlandia"
+
+
+def test_integrations_rest_write_requires_explicit_confirmation(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Clinica REST Confirmacao")
+        db.session.add(clinic)
+        db.session.flush()
+        vet_user = User(
+            name="Dra. REST",
+            email="rest-confirmacao@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=clinic.id,
+        )
+        vet_user.set_password("secret123")
+        db.session.add(vet_user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=vet_user.id, crmv="CRMV-REST", clinica_id=clinic.id))
+        db.session.commit()
+        token_value = _create_token(vet_user.id, scope="tutors:write pets:write")
+
+    response = client.post(
+        "/api/integrations/tutors-with-pets",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "tutor": {"nome": "Tutor Sem Confirmacao"},
+            "pets": [{"nome": "Nina"}],
+        },
+    )
+
+    assert response.status_code == 409
+    payload = response.get_json()
+    assert payload["error"]["code"] == "confirmation_required"
+
+
+def test_integrations_rest_write_routes_create_records(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Clinica REST Actions")
+        db.session.add(clinic)
+        db.session.flush()
+
+        vet_user = User(
+            name="Dra. Actions",
+            email="actions-rest@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=clinic.id,
+        )
+        vet_user.set_password("secret123")
+        db.session.add(vet_user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=vet_user.id, crmv="CRMV-ACTIONS", clinica_id=clinic.id))
+        db.session.commit()
+
+        token_value = _create_token(
+            vet_user.id,
+            scope="profile tutors:write pets:write consultations:write exams:write appointments:write pets:read",
+        )
+
+    headers = {"Authorization": f"Bearer {token_value}"}
+    registration = client.post(
+        "/api/integrations/tutors-with-pets",
+        headers=headers,
+        json={
+            "confirmar_gravacao": "sim",
+            "tutor": {"nome": "Marcia Cliente", "telefone": "16999990000"},
+            "pets": [{"nome": "Lili", "especie": "gato"}],
+            "observacao_clinica": "Apetite reduzido.",
+        },
+    )
+
+    assert registration.status_code == 201
+    animal_id = registration.get_json()["data"]["pets"][0]["id"]
+
+    consultation = client.post(
+        "/api/integrations/consultations",
+        headers=headers,
+        json={
+            "confirmar_gravacao": "sim",
+            "animal_id": animal_id,
+            "queixa_principal": "Apatia",
+            "diagnostico": "Suspeita gastrointestinal",
+            "conduta": "Observacao e dieta leve",
+            "finalizar": True,
+        },
+    )
+    assert consultation.status_code == 201
+    consulta_id = consultation.get_json()["data"]["consulta_id"]
+
+    exam_block = client.post(
+        "/api/integrations/exam-blocks",
+        headers=headers,
+        json={
+            "confirmar_gravacao": "sim",
+            "animal_id": animal_id,
+            "exames": [{"nome": "Hemograma", "status": "pendente"}],
+        },
+    )
+    assert exam_block.status_code == 201
+    assert exam_block.get_json()["data"]["total_exames"] == 1
+
+    appointment = client.post(
+        "/api/integrations/appointments",
+        headers=headers,
+        json={
+            "confirmar_gravacao": "sim",
+            "animal_id": animal_id,
+            "data": (utcnow() + timedelta(days=2)).date().isoformat(),
+            "hora": "09:30",
+            "tipo": "consulta",
+            "motivo": "Reavaliacao",
+        },
+    )
+    assert appointment.status_code == 201
+
+    return_appointment = client.post(
+        "/api/integrations/returns",
+        headers=headers,
+        json={
+            "confirmar_gravacao": "sim",
+            "consulta_id": consulta_id,
+            "data": (utcnow() + timedelta(days=7)).date().isoformat(),
+            "hora": "10:00",
+            "motivo": "Retorno clinico",
+        },
+    )
+    assert return_appointment.status_code == 201
+
+    with app.app_context():
+        tutor = User.query.filter_by(name="Marcia Cliente").one()
+        pet = Animal.query.filter_by(id=animal_id).one()
+        assert pet.user_id == tutor.id
+        assert Consulta.query.filter_by(id=consulta_id, animal_id=animal_id).one().status == "finalizada"
+        assert ExameSolicitado.query.count() == 1
+        assert Appointment.query.filter_by(animal_id=animal_id).count() >= 2
+
+
 def test_mcp_clinical_tools_return_structured_payload(app, client):
     with app.app_context():
         clinic = Clinica(nome="Clinica MCP Operacional")

@@ -30093,6 +30093,600 @@ def api_integrations_handoff(animal_id):
     return _integration_ok(_integration_build_handoff(auth_user, animal, consulta_id=consulta_id))
 
 
+def _integration_request_json():
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return None, _integration_error(
+            'invalid_json',
+            'Request body must be valid JSON.',
+            400,
+        )
+    if not isinstance(payload, dict):
+        return None, _integration_error(
+            'invalid_json',
+            'Request body must be a JSON object.',
+            400,
+        )
+    return payload, None
+
+
+def _integration_confirmation_error(payload: dict):
+    confirmed = str(payload.get('confirmar_gravacao') or '').strip().lower()
+    if confirmed in {'sim', 's', 'yes', 'true', '1'}:
+        return None
+    return _integration_error(
+        'confirmation_required',
+        'Esta acao grava dados no PetOrlandia e exige confirmar_gravacao="sim".',
+        409,
+        required_field='confirmar_gravacao',
+        required_value='sim',
+    )
+
+
+def _integration_professional_error(auth_user: User, *, veterinarian_only: bool = False):
+    if veterinarian_only:
+        allowed = has_veterinarian_profile(auth_user)
+        message = 'Somente contas veterinarias podem executar esta acao.'
+    else:
+        allowed = has_professional_access(auth_user)
+        message = 'Somente contas profissionais podem executar esta acao.'
+    if allowed:
+        return None
+    return _integration_error('professional_account_required', message, 403)
+
+
+@csrf.exempt
+@integration_bearer_required('profile')
+def api_integrations_interpret_intake():
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    try:
+        return _integration_ok(_integration_extract_freeform_intake(payload))
+    except ValueError as exc:
+        return _integration_error('invalid_intake_payload', str(exc), 400)
+
+
+@csrf.exempt
+@integration_bearer_required('profile')
+def api_integrations_operational_assistant():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+
+    try:
+        planning = _integration_infer_assistant_action(auth_user, payload)
+    except ValueError as exc:
+        return _integration_error('invalid_assistant_payload', str(exc), 400)
+
+    confirmed = str(payload.get('confirmar_gravacao') or '').strip().lower() in {'sim', 's', 'yes', 'true', '1'}
+    response_payload = {
+        **planning,
+        'executado': False,
+        'requer_confirmacao': True,
+        'confirmacao_necessaria': 'confirmar_gravacao="sim"',
+    }
+    if not confirmed:
+        return _integration_ok(response_payload)
+
+    action_scopes = {
+        'cadastrar_tutor_e_pets': {'tutors:write', 'pets:write'},
+        'agendar_consulta': {'appointments:write'},
+        'registrar_consulta_clinica': {'consultations:write'},
+    }.get(planning.get('acao_sugerida'), set())
+    granted_scopes = set(g.integration_auth.get('scopes') or [])
+    missing_scopes = sorted(action_scopes.difference(granted_scopes))
+    if missing_scopes:
+        return _integration_error(
+            'insufficient_scope',
+            'Access token does not grant the required scope for the inferred action.',
+            403,
+            missing_scopes=missing_scopes,
+        )
+
+    try:
+        result = _integration_execute_assistant_action(auth_user, planning)
+    except PermissionError as exc:
+        return _integration_error('professional_account_required', str(exc), 403)
+    except ValueError as exc:
+        return _integration_error('assistant_action_incomplete', str(exc), 400)
+
+    response_payload['executado'] = True
+    response_payload['resultado_execucao'] = result
+    return _integration_ok(response_payload)
+
+
+@csrf.exempt
+@integration_bearer_required('tutors:write', 'pets:write')
+def api_integrations_create_tutor_and_pets():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+
+    tutor_data = payload.get('tutor') or {}
+    pets_data = payload.get('pets') or []
+    if not isinstance(tutor_data, dict) or not isinstance(pets_data, list) or not tutor_data or not pets_data:
+        return _integration_error(
+            'invalid_registration_payload',
+            'Informe tutor e ao menos um pet para cadastro.',
+            400,
+        )
+
+    try:
+        result = _integration_create_or_reuse_tutor_and_pets(
+            auth_user,
+            tutor_data,
+            pets_data,
+            observacao_clinica=payload.get('observacao_clinica'),
+            disponibilidade=payload.get('disponibilidade'),
+        )
+    except ValueError as exc:
+        return _integration_error('invalid_registration_payload', str(exc), 400)
+    return _integration_ok(result, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('consultations:write')
+def api_integrations_create_or_update_consultation():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+
+    animal = _mcp_find_animal_for_tool(auth_user, payload)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+        )
+
+    try:
+        consulta = _integration_upsert_consulta(auth_user, animal, payload)
+    except ValueError as exc:
+        return _integration_error('invalid_consultation_payload', str(exc), 400)
+    return _integration_ok({
+        'consulta_id': consulta.id,
+        'animal_id': consulta.animal_id,
+        'status': consulta.status,
+        'queixa_principal': consulta.queixa_principal,
+        'conduta': consulta.conduta,
+    }, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_create_exam_block():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+
+    animal = _mcp_find_animal_for_tool(auth_user, payload)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+        )
+
+    try:
+        bloco = _integration_create_exam_block(auth_user, animal, payload)
+    except ValueError as exc:
+        return _integration_error('invalid_exam_block_payload', str(exc), 400)
+    return _integration_ok({
+        'bloco_id': bloco.id,
+        'animal_id': animal.id,
+        'total_exames': len(payload.get('exames') or []),
+    }, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('appointments:write')
+def api_integrations_create_appointment():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+
+    animal = _mcp_find_animal_for_tool(auth_user, payload)
+    if not animal:
+        return _integration_error(
+            'animal_not_found',
+            'Animal not found within the accessible integration scope.',
+            404,
+        )
+    try:
+        appointment = _integration_schedule_consulta(auth_user, animal, payload)
+    except PermissionError as exc:
+        return _integration_error('professional_account_required', str(exc), 403)
+    except ValueError as exc:
+        return _integration_error('invalid_appointment_payload', str(exc), 400)
+
+    return _integration_ok({
+        'appointment_id': appointment.id,
+        'animal_id': appointment.animal_id,
+        'tipo': appointment.kind,
+        'status': appointment.status,
+        'scheduled_at': _integration_format_datetime(appointment.scheduled_at),
+    }, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('appointments:write')
+def api_integrations_create_return_appointment():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+
+    consulta_id = payload.get('consulta_id')
+    try:
+        consulta_id_int = int(consulta_id)
+    except (TypeError, ValueError):
+        return _integration_error('invalid_return_payload', 'consulta_id deve ser numerico.', 400)
+
+    clinic_id = _integration_user_clinic_id(auth_user)
+    consulta = (
+        _integration_accessible_consultas_query(auth_user, clinic_id=clinic_id)
+        .filter(Consulta.id == consulta_id_int)
+        .first()
+    )
+    if not consulta:
+        return _integration_error(
+            'consultation_not_found',
+            'Consulta nao encontrada no escopo disponivel para este usuario.',
+            404,
+        )
+
+    try:
+        result = schedule_return_appointment(
+            consulta=consulta,
+            actor_id=auth_user.id,
+            actor_vet_id=getattr(getattr(auth_user, 'veterinario', None), 'id', None),
+            payload=ReturnAppointmentDTO(
+                date=_integration_parse_date_arg(payload.get('data')),
+                time=_integration_parse_time_arg(payload.get('hora')),
+                veterinarian_id=int(payload.get('veterinario_id') or auth_user.veterinario.id),
+                reason=(payload.get('motivo') or '').strip() or None,
+            ),
+        )
+    except ValueError as exc:
+        return _integration_error('invalid_return_payload', str(exc), 400)
+    if not result.success:
+        return _integration_error('return_schedule_unavailable', result.message, 409)
+
+    appointment = (
+        Appointment.query
+        .filter_by(consulta_id=consulta.id, kind='retorno')
+        .order_by(Appointment.created_at.desc(), Appointment.id.desc())
+        .first()
+    )
+    if not appointment:
+        return _integration_error('return_schedule_unknown', result.message, 500)
+
+    return _integration_ok({
+        'appointment_id': appointment.id,
+        'consulta_id': consulta.id,
+        'animal_id': appointment.animal_id,
+        'status': appointment.status,
+        'scheduled_at': _integration_format_datetime(appointment.scheduled_at),
+    }, 201)
+
+
+def api_integrations_openapi():
+    issuer = _oauth_issuer()
+    scopes = {
+        scope: scope
+        for scope in sorted(_oauth_allowed_scopes())
+    }
+    write_confirmation = {
+        'type': 'string',
+        'description': 'Obrigatorio para acoes que gravam dados. Use exatamente "sim" apos confirmacao explicita do usuario.',
+        'enum': ['sim'],
+    }
+
+    def ok_response(description='Resposta padrao da integracao.'):
+        return {
+            'description': description,
+            'content': {
+                'application/json': {
+                    'schema': {
+                        'type': 'object',
+                        'properties': {'data': {'type': 'object'}},
+                    }
+                }
+            },
+        }
+
+    def json_body(schema):
+        return {
+            'required': True,
+            'content': {
+                'application/json': {
+                    'schema': schema,
+                }
+            },
+        }
+
+    spec = {
+        'openapi': '3.1.0',
+        'info': {
+            'title': 'PetOrlandia ChatGPT Actions',
+            'version': '1.0.0',
+            'description': (
+                'Actions para usar o PetOrlandia no ChatGPT com OAuth. '
+                'Acoes de escrita exigem confirmar_gravacao="sim".'
+            ),
+        },
+        'servers': [{'url': issuer}],
+        'components': {
+            'securitySchemes': {
+                'PetOrlandiaOAuth': {
+                    'type': 'oauth2',
+                    'flows': {
+                        'authorizationCode': {
+                            'authorizationUrl': f'{issuer}/oauth/authorize',
+                            'tokenUrl': f'{issuer}/oauth/token',
+                            'scopes': scopes,
+                        }
+                    },
+                }
+            }
+        },
+        'security': [{'PetOrlandiaOAuth': ['profile']}],
+        'paths': {
+            '/api/integrations/me': {
+                'get': {
+                    'operationId': 'obterPerfilPetOrlandia',
+                    'summary': 'Obter perfil conectado',
+                    'security': [{'PetOrlandiaOAuth': ['profile']}],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/pets': {
+                'get': {
+                    'operationId': 'listarPetsPetOrlandia',
+                    'summary': 'Listar pets acessiveis',
+                    'security': [{'PetOrlandiaOAuth': ['pets:read']}],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/appointments': {
+                'get': {
+                    'operationId': 'listarAgendamentosPetOrlandia',
+                    'summary': 'Listar agendamentos acessiveis',
+                    'security': [{'PetOrlandiaOAuth': ['appointments:read']}],
+                    'responses': {'200': ok_response()},
+                },
+                'post': {
+                    'operationId': 'agendarConsultaPetOrlandia',
+                    'summary': 'Agendar consulta, vacina ou retorno para um pet',
+                    'description': 'Acao consequencial. Confirme com o usuario antes de enviar.',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['appointments:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'animal_id': {'type': 'integer'},
+                            'nome_animal': {'type': 'string'},
+                            'veterinario_id': {'type': 'integer'},
+                            'data': {'type': 'string', 'format': 'date'},
+                            'hora': {'type': 'string', 'description': 'HH:MM'},
+                            'tipo': {'type': 'string'},
+                            'motivo': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['data', 'hora', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Agendamento criado.')},
+                },
+            },
+            '/api/integrations/clinical-summary/{animal_id}': {
+                'get': {
+                    'operationId': 'obterResumoClinicoPetOrlandia',
+                    'summary': 'Obter resumo clinico de um animal',
+                    'security': [{'PetOrlandiaOAuth': ['clinical_summary:read']}],
+                    'parameters': [{'name': 'animal_id', 'in': 'path', 'required': True, 'schema': {'type': 'integer'}}],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/today-agenda': {
+                'get': {
+                    'operationId': 'listarAgendaDoDiaPetOrlandia',
+                    'summary': 'Listar agenda do dia',
+                    'security': [{'PetOrlandiaOAuth': ['appointments:read']}],
+                    'parameters': [{'name': 'date', 'in': 'query', 'required': False, 'schema': {'type': 'string', 'format': 'date'}}],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/clinical-pendencies': {
+                'get': {
+                    'operationId': 'listarPendenciasClinicasPetOrlandia',
+                    'summary': 'Listar pendencias clinicas',
+                    'security': [{'PetOrlandiaOAuth': ['appointments:read', 'exams:read', 'vaccines:read']}],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/tutor-guidance/{animal_id}': {
+                'get': {
+                    'operationId': 'gerarOrientacaoTutorPetOrlandia',
+                    'summary': 'Gerar orientacao ao tutor',
+                    'security': [{'PetOrlandiaOAuth': ['tutor_guidance:generate']}],
+                    'parameters': [
+                        {'name': 'animal_id', 'in': 'path', 'required': True, 'schema': {'type': 'integer'}},
+                        {'name': 'consulta_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
+                    ],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/handoff/{animal_id}': {
+                'get': {
+                    'operationId': 'gerarHandoffClinicoPetOrlandia',
+                    'summary': 'Gerar handoff clinico',
+                    'security': [{'PetOrlandiaOAuth': ['handoff:read']}],
+                    'parameters': [
+                        {'name': 'animal_id', 'in': 'path', 'required': True, 'schema': {'type': 'integer'}},
+                        {'name': 'consulta_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
+                    ],
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/intake/interpret': {
+                'post': {
+                    'operationId': 'interpretarMensagemLivrePetOrlandia',
+                    'summary': 'Interpretar mensagem livre sem gravar dados',
+                    'security': [{'PetOrlandiaOAuth': ['profile']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'texto': {'type': 'string'},
+                            'mensagens': {'type': 'array', 'items': {'type': 'object'}},
+                        },
+                    }),
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/assistant': {
+                'post': {
+                    'operationId': 'assistenteOperacionalPetOrlandia',
+                    'summary': 'Planejar ou executar acao operacional por texto livre',
+                    'description': 'Sem confirmar_gravacao, apenas planeja. Com confirmar_gravacao="sim", pode gravar dados.',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['profile', 'tutors:write', 'pets:write', 'appointments:write', 'consultations:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'texto': {'type': 'string'},
+                            'mensagens': {'type': 'array', 'items': {'type': 'object'}},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                    }),
+                    'responses': {'200': ok_response()},
+                }
+            },
+            '/api/integrations/tutors-with-pets': {
+                'post': {
+                    'operationId': 'cadastrarTutorEPetsPetOrlandia',
+                    'summary': 'Cadastrar ou reaproveitar tutor e pets',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['tutors:write', 'pets:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'tutor': {'type': 'object'},
+                            'pets': {'type': 'array', 'items': {'type': 'object'}},
+                            'observacao_clinica': {'type': 'string'},
+                            'disponibilidade': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['tutor', 'pets', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Tutor e pets cadastrados ou reaproveitados.')},
+                }
+            },
+            '/api/integrations/consultations': {
+                'post': {
+                    'operationId': 'registrarConsultaClinicaPetOrlandia',
+                    'summary': 'Registrar ou atualizar consulta clinica',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['consultations:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'animal_id': {'type': 'integer'},
+                            'nome_animal': {'type': 'string'},
+                            'consulta_id': {'type': 'integer'},
+                            'queixa_principal': {'type': 'string'},
+                            'historico_clinico': {'type': 'string'},
+                            'exame_fisico': {'type': 'string'},
+                            'diagnostico': {'type': 'string'},
+                            'conduta': {'type': 'string'},
+                            'exames_solicitados': {'type': 'string'},
+                            'prescricao': {'type': 'string'},
+                            'finalizar': {'type': 'boolean'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Consulta criada ou atualizada.')},
+                }
+            },
+            '/api/integrations/exam-blocks': {
+                'post': {
+                    'operationId': 'registrarBlocoExamesPetOrlandia',
+                    'summary': 'Registrar bloco de exames',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'animal_id': {'type': 'integer'},
+                            'nome_animal': {'type': 'string'},
+                            'observacoes_gerais': {'type': 'string'},
+                            'exames': {'type': 'array', 'items': {'type': 'object'}},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['exames', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Bloco de exames criado.')},
+                }
+            },
+            '/api/integrations/returns': {
+                'post': {
+                    'operationId': 'agendarRetornoPetOrlandia',
+                    'summary': 'Agendar retorno a partir de consulta existente',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['appointments:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'consulta_id': {'type': 'integer'},
+                            'data': {'type': 'string', 'format': 'date'},
+                            'hora': {'type': 'string', 'description': 'HH:MM'},
+                            'veterinario_id': {'type': 'integer'},
+                            'motivo': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['consulta_id', 'data', 'hora', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Retorno agendado.')},
+                }
+            },
+        },
+    }
+    return jsonify(spec)
+
+
 @login_required
 def api_my_pets():
     """Return the authenticated tutor's pets ordered by recency."""

@@ -139,6 +139,12 @@ def get_blueprint():
     bp.add_url_rule(
         "/api/integrations/appointments",
         view_func=lazy_view("api_integrations_appointments"),
+        methods=["GET"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/appointments",
+        view_func=lazy_view("api_integrations_create_appointment"),
+        methods=["POST"],
     )
     bp.add_url_rule(
         "/api/integrations/clinical-summary/<int:animal_id>",
@@ -159,5 +165,39 @@ def get_blueprint():
     bp.add_url_rule(
         "/api/integrations/handoff/<int:animal_id>",
         view_func=lazy_view("api_integrations_handoff"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/intake/interpret",
+        view_func=lazy_view("api_integrations_interpret_intake"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/assistant",
+        view_func=lazy_view("api_integrations_operational_assistant"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/tutors-with-pets",
+        view_func=lazy_view("api_integrations_create_tutor_and_pets"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/consultations",
+        view_func=lazy_view("api_integrations_create_or_update_consultation"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/exam-blocks",
+        view_func=lazy_view("api_integrations_create_exam_block"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/returns",
+        view_func=lazy_view("api_integrations_create_return_appointment"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/openapi.json",
+        view_func=lazy_view("api_integrations_openapi"),
     )
     return bp

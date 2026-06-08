@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from sqlalchemy.sql import func
 
 from extensions import db
 from time_utils import utcnow
+
+
+def _as_utc_aware(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class OAuthClient(db.Model):
@@ -57,7 +65,8 @@ class OAuthAuthorizationCode(db.Model):
     @property
     def is_active(self) -> bool:
         now = utcnow()
-        return self.revoked_at is None and self.used_at is None and self.expires_at > now
+        expires_at = _as_utc_aware(self.expires_at)
+        return self.revoked_at is None and self.used_at is None and expires_at and expires_at > now
 
 
 class OAuthAccessToken(db.Model):
@@ -78,7 +87,8 @@ class OAuthAccessToken(db.Model):
 
     @property
     def is_active(self) -> bool:
-        return self.revoked_at is None and self.expires_at > utcnow()
+        expires_at = _as_utc_aware(self.expires_at)
+        return self.revoked_at is None and expires_at and expires_at > utcnow()
 
     def revoke(self):
         self.revoked_at = utcnow()
@@ -101,7 +111,8 @@ class OAuthRefreshToken(db.Model):
 
     @property
     def is_active(self) -> bool:
-        return self.revoked_at is None and self.expires_at > utcnow()
+        expires_at = _as_utc_aware(self.expires_at)
+        return self.revoked_at is None and expires_at and expires_at > utcnow()
 
 
 class OAuthConsent(db.Model):
