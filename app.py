@@ -10884,12 +10884,6 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     tutor, tutor_created, tutor_provisional_email = _integration_find_or_create_tutor_for_clinic(user, clinic, tutor_data)
     animal, animal_created = _integration_find_or_create_pet_for_tutor(user, clinic, tutor, animal_data)
 
-    report_text = (payload.get('laudo_texto') or payload.get('texto_laudo') or '').strip()
-    conclusion = (exam_data.get('conclusao') or payload.get('conclusao') or '').strip()
-    findings = (exam_data.get('achados') or payload.get('achados') or '').strip()
-    result_parts = [part for part in [conclusion, findings, report_text] if part]
-    result_text = '\n\n'.join(result_parts) or None
-
     laudo_url = (payload.get('laudo_url') or '').strip()
     laudo_filename = (payload.get('laudo_filename') or payload.get('nome_arquivo') or '').strip() or None
     laudo_file_ref = _mcp_extract_file_reference(payload, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file')
@@ -10911,6 +10905,17 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             raise ValueError('laudo_url deve ser uma URL http/https publica. Para anexos do ChatGPT, use laudo_arquivo ou cole o texto integral.')
         laudo_file_status = 'url_registrada'
 
+    existing_exam = _integration_find_existing_exam_for_laudo(payload, animal)
+    if existing_exam and existing_exam.bloco and existing_exam.bloco.animal:
+        animal = existing_exam.bloco.animal
+        tutor = animal.owner or tutor
+        clinic = animal.clinica or clinic
+    report_text = (payload.get('laudo_texto') or payload.get('texto_laudo') or '').strip()
+    conclusion = (exam_data.get('conclusao') or payload.get('conclusao') or '').strip()
+    findings = (exam_data.get('achados') or payload.get('achados') or '').strip()
+    result_parts = [part for part in [conclusion, findings, report_text] if part]
+    result_text = '\n\n'.join(result_parts) or None
+
     performed_at = None
     performed_at_raw = exam_data.get('data') or payload.get('data_exame')
     if performed_at_raw:
@@ -10919,27 +10924,63 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             raise ValueError('Data do exame invalida. Use YYYY-MM-DD ou DD/MM/YYYY.')
         performed_at = datetime.combine(parsed_date, time(12, 0), tzinfo=BR_TZ)
 
-    bloco = BlocoExames(
-        animal_id=animal.id,
-        observacoes_gerais=(payload.get('observacoes_gerais') or 'Laudo importado via conector ChatGPT.').strip(),
-    )
-    db.session.add(bloco)
-    db.session.flush()
+    if existing_exam:
+        exam = existing_exam
+        bloco = exam.bloco
+        if laudo_url:
+            uploaded_at = datetime.now(BR_TZ)
+            exam.laudo_url = laudo_url
+            exam.laudo_filename = laudo_filename
+            exam.laudo_uploaded_at = uploaded_at
+            db.session.execute(
+                text(
+                    'UPDATE exame_solicitado '
+                    'SET laudo_url = :laudo_url, laudo_filename = :laudo_filename, laudo_uploaded_at = :laudo_uploaded_at '
+                    'WHERE id = :exam_id'
+                ),
+                {
+                    'laudo_url': laudo_url,
+                    'laudo_filename': laudo_filename,
+                    'laudo_uploaded_at': uploaded_at,
+                    'exam_id': exam.id,
+                },
+            )
+            _integration_add_exam_document(user, animal, laudo_url, laudo_filename, exam.nome)
+        elif laudo_filename and not exam.laudo_filename:
+            exam.laudo_filename = laudo_filename
+            db.session.execute(
+                text('UPDATE exame_solicitado SET laudo_filename = :laudo_filename WHERE id = :exam_id'),
+                {'laudo_filename': laudo_filename, 'exam_id': exam.id},
+            )
+        if payload.get('mensagem_clinica'):
+            exam.laudo_message = (payload.get('mensagem_clinica') or '').strip() or exam.laudo_message
+        db.session.add(exam)
+        db.session.flush()
+        laudo_import_mode = 'anexo_em_exame_existente'
+    else:
+        bloco = BlocoExames(
+            animal_id=animal.id,
+            observacoes_gerais=(payload.get('observacoes_gerais') or 'Laudo importado via conector ChatGPT.').strip(),
+        )
+        db.session.add(bloco)
+        db.session.flush()
 
-    exam = ExameSolicitado(
-        bloco_id=bloco.id,
-        nome=(exam_data.get('nome') or exam_data.get('tipo') or 'Ultrassonografia').strip(),
-        justificativa=(exam_data.get('justificativa') or '').strip() or None,
-        status='concluido',
-        resultado=result_text,
-        performed_at=performed_at or datetime.now(BR_TZ),
-        laudo_url=laudo_url or None,
-        laudo_filename=laudo_filename,
-        laudo_uploaded_at=datetime.now(BR_TZ) if laudo_url else None,
-        laudo_message=(payload.get('mensagem_clinica') or '').strip() or None,
-    )
-    db.session.add(exam)
-    db.session.flush()
+        exam = ExameSolicitado(
+            bloco_id=bloco.id,
+            nome=(exam_data.get('nome') or exam_data.get('tipo') or 'Ultrassonografia').strip(),
+            justificativa=(exam_data.get('justificativa') or '').strip() or None,
+            status='concluido',
+            resultado=result_text,
+            performed_at=performed_at or datetime.now(BR_TZ),
+            laudo_url=laudo_url or None,
+            laudo_filename=laudo_filename,
+            laudo_uploaded_at=datetime.now(BR_TZ) if laudo_url else None,
+            laudo_message=(payload.get('mensagem_clinica') or '').strip() or None,
+        )
+        db.session.add(exam)
+        db.session.flush()
+        _integration_add_exam_document(user, animal, laudo_url, laudo_filename, exam.nome)
+        laudo_import_mode = 'exame_criado'
 
     animal_name = animal.name or 'paciente'
     clinic_message = (
@@ -10988,6 +11029,24 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     exam_laudo_url = exam.laudo_url
     exam_laudo_filename = exam.laudo_filename
     bloco_id = bloco.id
+    clinic_invite = _create_external_onboarding_invite(
+        'clinic',
+        user,
+        clinic=clinic,
+        tutor=tutor,
+        animal=animal,
+        exam=exam,
+        message=f'{clinic_message}\n\nAcesse para ver o laudo e conhecer o PetOrlandia.',
+    )
+    tutor_invite = _create_external_onboarding_invite(
+        'tutor',
+        user,
+        clinic=clinic,
+        tutor=tutor,
+        animal=animal,
+        exam=exam,
+        message=f'O laudo de {exam.nome} do paciente {animal_name} foi recebido pelo PetOrlandia.',
+    )
     db.session.commit()
 
     clinic_url = None
@@ -11025,6 +11084,11 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             'laudo_url': exam_laudo_url,
             'laudo_filename': exam_laudo_filename,
             'arquivo_status': laudo_file_status,
+            'modo_importacao': laudo_import_mode,
+        },
+        'links_primeiro_acesso': {
+            'clinica': _external_onboarding_url(clinic_invite),
+            'tutor': _external_onboarding_url(tutor_invite),
         },
         'proxima_acao_recomendada': (
             'Enviar o link da clinica para o dono fazer o primeiro acesso.'
@@ -11032,6 +11096,73 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             'Avisar o dono da clinica para abrir a notificacao no PetOrlandia.'
         ),
         'mensagem_sugerida_para_clinica': notification_message,
+    }
+
+
+def _integration_suggest_report_template(user: User, payload: dict):
+    exam_type = (payload.get('tipo_exame') or payload.get('exame') or '').strip()
+    if not exam_type:
+        raise ValueError('Informe o tipo de exame.')
+    limit = max(1, min(int(payload.get('limite_exemplos') or 3), 5))
+    normalized_type = _integration_normalize_match_text(exam_type)
+    species_filter = _integration_normalize_match_text(payload.get('especie') or '')
+
+    query = (
+        ExameSolicitado.query
+        .join(BlocoExames, ExameSolicitado.bloco_id == BlocoExames.id)
+        .join(Animal, BlocoExames.animal_id == Animal.id)
+        .filter(ExameSolicitado.resultado.isnot(None))
+        .order_by(ExameSolicitado.performed_at.desc().nullslast(), ExameSolicitado.id.desc())
+        .limit(50)
+    )
+
+    examples = []
+    for exam in query.all():
+        if normalized_type not in _integration_normalize_match_text(exam.nome):
+            continue
+        animal = exam.bloco.animal if exam.bloco else None
+        animal_species = getattr(animal, 'species', '') if animal else ''
+        species_name = getattr(animal_species, 'name', animal_species)
+        if species_filter and animal and species_filter not in _integration_normalize_match_text(species_name):
+            continue
+        result = (exam.resultado or '').strip()
+        examples.append({
+            'exame_id': exam.id,
+            'nome': exam.nome,
+            'paciente': getattr(animal, 'name', None),
+            'data_realizacao': exam.performed_at.astimezone(BR_TZ).date().isoformat() if exam.performed_at else None,
+            'trecho_modelo': result[:1200],
+        })
+        if len(examples) >= limit:
+            break
+
+    achados = (payload.get('achados') or '').strip()
+    sections = [
+        'Identificacao do paciente e dados do exame',
+        'Tecnica e limitacoes do metodo',
+        'Descricao por sistemas/orgaos avaliados',
+        'Impressao diagnostica',
+        'Recomendacoes e correlacao clinica',
+    ]
+    draft = (
+        f'{exam_type}\n\n'
+        'Paciente: [nome]\nTutor: [nome]\nData: [data]\n\n'
+        'Achados:\n'
+        f'{achados or "[descrever achados atuais por orgao/sistema]"}\n\n'
+        'Impressao diagnostica:\n'
+        '[resumir os achados principais sem extrapolar alem do exame]\n\n'
+        'Recomendacoes:\n'
+        '[sugerir correlacao clinica, exames complementares ou acompanhamento quando aplicavel]'
+    )
+    return {
+        'tipo_exame': exam_type,
+        'estrutura_sugerida': sections,
+        'rascunho_base': draft,
+        'exemplos_encontrados': examples,
+        'orientacao': (
+            'Use os exemplos apenas como padrao de estrutura e linguagem. '
+            'Adapte todos os achados ao paciente atual e mantenha a impressao diagnostica compatível com o exame.'
+        ),
     }
 
 
@@ -11866,6 +11997,105 @@ def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | No
     return stored_url, safe_name
 
 
+def _ensure_external_onboarding_invite_table() -> bool:
+    try:
+        ExternalOnboardingInvite.__table__.create(db.engine, checkfirst=True)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao garantir tabela de convites externos: %s", exc)
+        return False
+
+
+def _integration_add_exam_document(user: User, animal: Animal, laudo_url: str | None, laudo_filename: str | None, exam_name: str):
+    if not laudo_url:
+        return None
+    filename = laudo_filename or os.path.basename(urlparse(laudo_url).path) or 'laudo.pdf'
+    existing = AnimalDocumento.query.filter_by(animal_id=animal.id, file_url=laudo_url).first()
+    if existing:
+        return existing
+    documento = AnimalDocumento(
+        animal_id=animal.id,
+        veterinario_id=user.id,
+        filename=filename,
+        file_url=laudo_url,
+        descricao=f'Laudo anexado ao exame: {exam_name}',
+    )
+    db.session.add(documento)
+    return documento
+
+
+def _integration_normalize_match_text(value) -> str:
+    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'\s+', ' ', text.lower()).strip()
+
+
+def _integration_find_existing_exam_for_laudo(payload: dict, animal: Animal | None = None):
+    exam_data = payload.get('exame') or {}
+    raw_exam_id = payload.get('exame_id') or exam_data.get('id') or exam_data.get('exame_id')
+    if raw_exam_id:
+        try:
+            exam = db.session.get(ExameSolicitado, int(raw_exam_id))
+        except (TypeError, ValueError):
+            exam = None
+        if exam:
+            return exam
+
+    raw_bloco_id = payload.get('bloco_id') or exam_data.get('bloco_id')
+    if raw_bloco_id:
+        try:
+            bloco = db.session.get(BlocoExames, int(raw_bloco_id))
+        except (TypeError, ValueError):
+            bloco = None
+        if bloco and (animal is None or bloco.animal_id == animal.id):
+            exam_name = (exam_data.get('nome') or exam_data.get('tipo') or '').strip()
+            if exam_name:
+                normalized_name = _integration_normalize_match_text(exam_name)
+                for exam in bloco.exames or []:
+                    if _integration_normalize_match_text(exam.nome) == normalized_name:
+                        return exam
+            return (bloco.exames or [None])[0]
+    exam_name = (exam_data.get('nome') or exam_data.get('tipo') or '').strip()
+    if animal and exam_name:
+        normalized_name = _integration_normalize_match_text(exam_name)
+        exams = (
+            ExameSolicitado.query
+            .join(BlocoExames, ExameSolicitado.bloco_id == BlocoExames.id)
+            .filter(BlocoExames.animal_id == animal.id)
+            .order_by(ExameSolicitado.performed_at.desc().nullslast(), ExameSolicitado.id.desc())
+            .limit(20)
+            .all()
+        )
+        for exam in exams:
+            if _integration_normalize_match_text(exam.nome) == normalized_name:
+                return exam
+    return None
+
+
+def _create_external_onboarding_invite(invite_type: str, user: User, *, clinic=None, tutor=None, animal=None, exam=None, message: str | None = None):
+    if not _ensure_external_onboarding_invite_table():
+        return None
+    invite = ExternalOnboardingInvite(
+        token=secrets.token_urlsafe(24),
+        invite_type=invite_type,
+        clinica_id=getattr(clinic, 'id', None),
+        tutor_id=getattr(tutor, 'id', None),
+        animal_id=getattr(animal, 'id', None),
+        exame_id=getattr(exam, 'id', None),
+        created_by_id=getattr(user, 'id', None),
+        referrer_vet_id=getattr(getattr(user, 'veterinario', None), 'id', None),
+        message=message,
+        expires_at=datetime.now(BR_TZ) + timedelta(days=30),
+    )
+    db.session.add(invite)
+    return invite
+
+
+def _external_onboarding_url(invite):
+    if not invite or not has_request_context():
+        return None
+    return url_for('external_onboarding_invite', token=invite.token, _external=True)
+
+
 def _mcp_laudo_volante_widget_html():
     return """
 <main class="po-widget">
@@ -12406,6 +12636,8 @@ def mcp_server():
                 'inputSchema': {
                     'type': 'object',
                     'properties': {
+                        'exame_id': {'type': 'integer'},
+                        'bloco_id': {'type': 'integer'},
                         'clinica': {'type': 'object'},
                         'tutor': {'type': 'object'},
                         'animal': {'type': 'object'},
@@ -12445,12 +12677,15 @@ def mcp_server():
                 'name': 'importar_laudo_volante',
                 'description': (
                     'Use quando um ultrassonografista volante enviar ou colar um laudo no ChatGPT. '
-                    'A tool cria ou reaproveita clinica, tutor e animal, registra o exame como concluido '
-                    'e prepara a notificacao para a clinica acessar o PetOrlandia.'
+                    'Se exame_id ou bloco_id apontarem para um exame existente, a tool apenas anexa o PDF/laudo '
+                    'ao exame e nao reescreve resultado, achados ou conclusao. Se nao houver exame existente, '
+                    'cria o registro minimo e prepara os links de primeiro acesso.'
                 ),
                 'inputSchema': {
                     'type': 'object',
                     'properties': {
+                        'exame_id': {'type': 'integer', 'description': 'ID do exame existente quando o objetivo for apenas anexar o PDF.'},
+                        'bloco_id': {'type': 'integer', 'description': 'ID do bloco de exames existente quando houver.'},
                         'clinica': {'type': 'object', 'description': 'Clinica solicitante: nome, email, telefone e endereco quando houver.'},
                         'tutor': {'type': 'object', 'description': 'Tutor/responsavel: nome, telefone, email e endereco quando houver.'},
                         'animal': {'type': 'object', 'description': 'Paciente: nome, especie, raca, sexo e idade quando houver.'},
@@ -12471,6 +12706,7 @@ def mcp_server():
                         'tutor': {'type': 'object'},
                         'animal': {'type': 'object'},
                         'exame': {'type': 'object'},
+                        'links_primeiro_acesso': {'type': 'object'},
                         'proxima_acao_recomendada': {'type': 'string'},
                         'mensagem_sugerida_para_clinica': {'type': 'string'},
                     },
@@ -12485,6 +12721,29 @@ def mcp_server():
                     'openai/fileParams': ['laudo_arquivo'],
                     'openai/toolInvocation/invoking': 'Importando laudo...',
                     'openai/toolInvocation/invoked': 'Laudo importado.',
+                },
+            },
+            {
+                'name': 'sugerir_modelo_laudo',
+                'description': (
+                    'Ajuda o veterinario a escrever novo relatorio/laudo usando laudos antigos como modelo. '
+                    'Nao grava dados; retorna estrutura, frases-base e exemplos recentes semelhantes.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'tipo_exame': {'type': 'string', 'description': 'Ex.: Ultrassonografia abdominal.'},
+                        'especie': {'type': 'string'},
+                        'achados': {'type': 'string', 'description': 'Achados do caso atual para adaptar o modelo.'},
+                        'limite_exemplos': {'type': 'integer'},
+                    },
+                    'required': ['tipo_exame'],
+                },
+                'annotations': {
+                    'readOnlyHint': True,
+                    'destructiveHint': False,
+                    'openWorldHint': False,
+                    'idempotentHint': True,
                 },
             },
             {
@@ -12806,6 +13065,8 @@ def mcp_server():
             if scope_error:
                 return scope_error
             draft = {
+                'exame_id': tool_args.get('exame_id'),
+                'bloco_id': tool_args.get('bloco_id'),
                 'clinica': tool_args.get('clinica') or {},
                 'tutor': tool_args.get('tutor') or {},
                 'animal': tool_args.get('animal') or {},
@@ -12850,6 +13111,20 @@ def mcp_server():
                 result = _integration_import_mobile_exam_report(user, tool_args)
             except ValueError as exc:
                 db.session.rollback()
+                return _mcp_err(req_id, -32602, str(exc))
+            response = _mcp_json_content(result)
+            response['structuredContent'] = result
+            return _mcp_ok(req_id, response)
+
+        if tool_name == 'sugerir_modelo_laudo':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            try:
+                result = _integration_suggest_report_template(user, tool_args)
+            except ValueError as exc:
                 return _mcp_err(req_id, -32602, str(exc))
             response = _mcp_json_content(result)
             response['structuredContent'] = result
@@ -16282,6 +16557,26 @@ def parceiro_clinica_landing():
             return redirect(url_for('clinic_detail', clinica_id=target.id) + '#clinica')
         return redirect(url_for('minha_clinica'))
     return render_template('clinica/parceiro_landing.html')
+
+
+def external_onboarding_invite(token):
+    _ensure_external_onboarding_invite_table()
+    invite = ExternalOnboardingInvite.query.filter_by(token=token).first_or_404()
+    expired = bool(invite.expires_at and invite.expires_at < datetime.now(BR_TZ))
+    referrer = invite.referrer_vet.user if invite.referrer_vet and invite.referrer_vet.user else invite.created_by
+    register_url = url_for('register', next=request.path)
+    login_url = url_for('login_view', next=request.path)
+    if current_user.is_authenticated and not invite.used_at:
+        invite.used_at = datetime.now(BR_TZ)
+        db.session.commit()
+    return render_template(
+        'clinica/external_onboarding_invite.html',
+        invite=invite,
+        expired=expired,
+        referrer=referrer,
+        register_url=register_url,
+        login_url=login_url,
+    )
 
 
 def minha_clinica():

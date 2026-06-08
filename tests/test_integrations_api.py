@@ -1,9 +1,12 @@
 import json
-from datetime import date, timedelta
+import sys
+from datetime import date, datetime, timedelta
+from urllib.parse import urlparse
 
 from extensions import db
 from models import (
     Animal,
+    AnimalDocumento,
     Appointment,
     BlocoExames,
     BlocoPrescricao,
@@ -1064,7 +1067,7 @@ def test_mcp_importar_laudo_volante_creates_clinic_patient_and_exam(app, client)
 
 
 def test_mcp_importar_laudo_volante_accepts_chatgpt_file_reference(app, client, monkeypatch):
-    import app as app_module
+    app_module = sys.modules[app.import_name]
 
     class FakeDownloadResponse:
         def raise_for_status(self):
@@ -1140,6 +1143,94 @@ def test_mcp_importar_laudo_volante_accepts_chatgpt_file_reference(app, client, 
     assert result["exame"]["arquivo_status"] == "arquivo_salvo"
 
 
+def test_mcp_importar_laudo_volante_attaches_file_without_rewriting_existing_exam(app, client, monkeypatch):
+    app_module = sys.modules[app.import_name]
+
+    class FakeDownloadResponse:
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size=1024 * 1024):
+            yield b"%PDF-1.4\nlaudo atualizado"
+
+    monkeypatch.setattr(app_module.requests, "get", lambda *args, **kwargs: FakeDownloadResponse())
+    monkeypatch.setattr(
+        app_module,
+        "upload_to_s3",
+        lambda file_storage, filename, folder="uploads": "/static/uploads/laudos_exames/anexo.pdf",
+    )
+
+    with app.app_context():
+        professional = User(name="Dr. Robson", email="robson-modelo@example.com", role="veterinario", worker="veterinario")
+        professional.set_password("secret123")
+        clinic = Clinica(nome="Angrisano")
+        tutor = User(name="Rosa", email="rosa-anexo@example.com")
+        tutor.set_password("secret123")
+        animal = Animal(name="Sid", owner=tutor, clinica=clinic)
+        db.session.add_all([professional, clinic, tutor, animal])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-ROBSON"))
+        bloco = BlocoExames(animal=animal, observacoes_gerais="Pedido original")
+        exam = ExameSolicitado(
+            bloco=bloco,
+            nome="Ultrassonografia abdominal",
+            status="concluido",
+            resultado="Resultado original que nao deve ser alterado.",
+            performed_at=datetime(2026, 2, 16),
+        )
+        db.session.add_all([bloco, exam])
+        db.session.commit()
+        exam_id = exam.id
+        token_value = _create_token(professional.id, scope="profile tutors:write pets:write exams:write")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 43,
+            "method": "tools/call",
+            "params": {
+                "name": "importar_laudo_volante",
+                "arguments": {
+                    "confirmar_gravacao": "sim",
+                    "exame_id": exam_id,
+                    "clinica": {"nome": "Angrisano"},
+                    "tutor": {"nome": "Rosa"},
+                    "animal": {"nome": "Sid", "especie": "canina"},
+                    "exame": {"nome": "Ultrassonografia abdominal", "conclusao": "Texto novo que nao deve substituir."},
+                    "laudo_arquivo": {
+                        "download_url": "https://files.example.test/anexo.pdf",
+                        "file_id": "file_anexo_123",
+                        "mime_type": "application/pdf",
+                        "file_name": "Ultrassom SID,Rosa.pdf",
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    result = json.loads(response.get_json()["result"]["content"][0]["text"])
+    assert result["exame"]["modo_importacao"] == "anexo_em_exame_existente"
+    assert result["exame"]["exame_id"] == exam_id
+    assert result["exame"]["laudo_url"] == "/static/uploads/laudos_exames/anexo.pdf"
+    assert result["exame"]["laudo_filename"] == "Ultrassom_SIDRosa.pdf"
+    assert result["links_primeiro_acesso"]["clinica"]
+    assert result["links_primeiro_acesso"]["tutor"]
+    invite_path = urlparse(result["links_primeiro_acesso"]["clinica"]).path
+    invite_response = client.get(invite_path)
+    assert invite_response.status_code == 200
+    invite_html = invite_response.get_data(as_text=True)
+    assert "Acesso inicial da clinica" in invite_html
+    assert "Angrisano" in invite_html
+    assert "Como acessar pela primeira vez" in invite_html
+    with app.app_context():
+        db.session.remove()
+        saved = db.session.get(ExameSolicitado, exam_id)
+        assert saved.resultado == "Resultado original que nao deve ser alterado."
+
+
 def test_mcp_importar_laudo_volante_ignores_unreachable_chatgpt_local_path(app, client):
     with app.app_context():
         professional = User(
@@ -1186,6 +1277,48 @@ def test_mcp_importar_laudo_volante_ignores_unreachable_chatgpt_local_path(app, 
     assert result["exame"]["laudo_url"] is None
     assert result["exame"]["laudo_filename"] == "Ultrassom SID,Rosa.pdf"
     assert result["exame"]["arquivo_status"] == "caminho_local_ignorado"
+
+
+def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
+    with app.app_context():
+        professional = User(name="Dra. Modelo", email="modelo-laudo@example.com", role="veterinario", worker="veterinario")
+        professional.set_password("secret123")
+        tutor = User(name="Tutor Modelo", email="tutor-modelo@example.com")
+        tutor.set_password("secret123")
+        animal = Animal(name="Paciente Modelo", owner=tutor)
+        db.session.add_all([professional, tutor, animal])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-MODELO"))
+        bloco = BlocoExames(animal=animal)
+        db.session.add(ExameSolicitado(
+            bloco=bloco,
+            nome="Ultrassonografia abdominal",
+            status="concluido",
+            resultado="Bexiga com paredes espessadas. Impressao diagnostica: cistite.",
+            performed_at=datetime(2026, 2, 16),
+        ))
+        db.session.commit()
+        token_value = _create_token(professional.id, scope="profile")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 44,
+            "method": "tools/call",
+            "params": {
+                "name": "sugerir_modelo_laudo",
+                "arguments": {"tipo_exame": "Ultrassonografia abdominal", "achados": "Bexiga espessada."},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    result = json.loads(response.get_json()["result"]["content"][0]["text"])
+    assert result["tipo_exame"] == "Ultrassonografia abdominal"
+    assert "Bexiga espessada." in result["rascunho_base"]
+    assert result["exemplos_encontrados"][0]["trecho_modelo"].startswith("Bexiga")
 
 
 def test_mcp_laudo_volante_widget_contract(app, client):

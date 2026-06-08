@@ -1263,6 +1263,31 @@ class VetClinicInvite(db.Model):
     veterinario = db.relationship('Veterinario', backref='clinic_invites')
 
 # Itens de estoque específicos por clínica
+class ExternalOnboardingInvite(db.Model):
+    __tablename__ = 'external_onboarding_invite'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    invite_type = db.Column(db.String(20), nullable=False, index=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
+    exame_id = db.Column(db.Integer, db.ForeignKey('exame_solicitado.id'), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    referrer_vet_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True)
+    message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    clinica = db.relationship('Clinica', foreign_keys=[clinica_id])
+    tutor = db.relationship('User', foreign_keys=[tutor_id])
+    animal = db.relationship('Animal', foreign_keys=[animal_id])
+    exame = db.relationship('ExameSolicitado', foreign_keys=[exame_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    referrer_vet = db.relationship('Veterinario', foreign_keys=[referrer_vet_id])
+
+
 class ClinicInventoryItem(db.Model):
     __tablename__ = 'clinic_inventory_item'
     id = db.Column(db.Integer, primary_key=True)

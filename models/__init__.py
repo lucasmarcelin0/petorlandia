@@ -101,6 +101,7 @@ __all__ = [
     "FiscalDocumentType",
     "FiscalEmitter",
     "FiscalEvent",
+    "ExternalOnboardingInvite",
     "ClinicInventory",
     "ClinicInventoryMovement",
     "ProtocoloClinico",
