@@ -1273,6 +1273,7 @@ class ExternalOnboardingInvite(db.Model):
     tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
     exame_id = db.Column(db.Integer, db.ForeignKey('exame_solicitado.id'), nullable=True)
+    exame_imagem_id = db.Column(db.Integer, db.ForeignKey('exame_imagem.id'), nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrer_vet_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True)
     message = db.Column(db.Text, nullable=True)
@@ -1284,6 +1285,7 @@ class ExternalOnboardingInvite(db.Model):
     tutor = db.relationship('User', foreign_keys=[tutor_id])
     animal = db.relationship('Animal', foreign_keys=[animal_id])
     exame = db.relationship('ExameSolicitado', foreign_keys=[exame_id])
+    exame_imagem = db.relationship('ExameImagem', foreign_keys=[exame_imagem_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     referrer_vet = db.relationship('Veterinario', foreign_keys=[referrer_vet_id])
 

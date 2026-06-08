@@ -12236,8 +12236,13 @@ def _integration_download_and_store_laudo_file(file_ref: dict) -> tuple[str | No
 def _ensure_external_onboarding_invite_table() -> bool:
     try:
         ExternalOnboardingInvite.__table__.create(db.engine, checkfirst=True)
+        columns = {column['name'] for column in inspect(db.engine).get_columns('external_onboarding_invite')}
+        if 'exame_imagem_id' not in columns:
+            db.session.execute(text('ALTER TABLE external_onboarding_invite ADD COLUMN exame_imagem_id INTEGER'))
+            db.session.commit()
         return True
     except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
         current_app.logger.exception("Falha ao garantir tabela de convites externos: %s", exc)
         return False
 
@@ -12385,6 +12390,10 @@ def _integration_create_exame_imagem(user: User, payload: dict):
 
 def _integration_store_exame_pdf(user: User, exame: ExameImagem, file_ref: dict):
     if not file_ref:
+        if _integration_reconcile_exam_documents(exame.animal, [exame]) or exame.arquivo_pdf_url:
+            db.session.add(exame)
+            db.session.commit()
+            return _integration_serialize_exame_imagem(exame, user)
         raise ValueError('Informe attachment_id/arquivo_pdf como anexo autorizado do ChatGPT com download_url temporaria.')
     mime_type = (file_ref.get('mime_type') or '').strip().lower()
     original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo.pdf').strip()
@@ -12624,9 +12633,12 @@ def _integration_find_existing_exam_for_laudo(payload: dict, animal: Animal | No
     return None
 
 
-def _create_external_onboarding_invite(invite_type: str, user: User, *, clinic=None, tutor=None, animal=None, exam=None, message: str | None = None):
+def _create_external_onboarding_invite(invite_type: str, user: User, *, clinic=None, tutor=None, animal=None, exam=None, exam_image=None, message: str | None = None):
     if not _ensure_external_onboarding_invite_table():
         return None
+    if isinstance(exam, ExameImagem) and exam_image is None:
+        exam_image = exam
+        exam = exam.exame_solicitado
     invite = ExternalOnboardingInvite(
         token=secrets.token_urlsafe(24),
         invite_type=invite_type,
@@ -12634,6 +12646,7 @@ def _create_external_onboarding_invite(invite_type: str, user: User, *, clinic=N
         tutor_id=getattr(tutor, 'id', None),
         animal_id=getattr(animal, 'id', None),
         exame_id=getattr(exam, 'id', None),
+        exame_imagem_id=getattr(exam_image, 'id', None),
         created_by_id=getattr(user, 'id', None),
         referrer_vet_id=getattr(getattr(user, 'veterinario', None), 'id', None),
         message=message,
@@ -12652,7 +12665,11 @@ def _external_onboarding_url(invite):
 
 
 def _external_invite_exame_imagem(invite):
-    if not invite or not getattr(invite, 'exame_id', None):
+    if not invite:
+        return None
+    if getattr(invite, 'exame_imagem_id', None):
+        return db.session.get(ExameImagem, invite.exame_imagem_id)
+    if not getattr(invite, 'exame_id', None):
         return None
     return ExameImagem.query.filter_by(exame_solicitado_id=invite.exame_id).first()
 
@@ -12668,11 +12685,12 @@ def _external_invite_document_url(invite, exame_imagem=None):
 
 def _invite_missing_fields(invite, exame_imagem=None):
     missing = []
+    effective_exame_id = getattr(exame_imagem, 'id', None) or getattr(invite, 'exame_id', None)
     if not getattr(invite, 'tutor_id', None):
         missing.append('tutor_id')
     if not getattr(invite, 'animal_id', None):
         missing.append('animal_id')
-    if not getattr(invite, 'exame_id', None):
+    if not effective_exame_id:
         missing.append('exame_id')
     if invite and invite.invite_type == 'clinic' and not getattr(invite, 'clinica_id', None):
         missing.append('clinica_id')
@@ -12683,12 +12701,17 @@ def _invite_missing_fields(invite, exame_imagem=None):
 
 def _invite_payload(invite, *, pricing=None):
     exame_imagem = _external_invite_exame_imagem(invite)
+    if exame_imagem:
+        _integration_reconcile_exam_documents(exame_imagem.animal, [exame_imagem])
     document_url = _external_invite_document_url(invite, exame_imagem)
     missing = _invite_missing_fields(invite, exame_imagem)
+    effective_exame_id = getattr(exame_imagem, 'id', None) or getattr(invite, 'exame_id', None)
+    documento_id = getattr(exame_imagem, 'documento_id', None)
     base = {
         'url': _external_onboarding_url(invite),
         'expires_at': _integration_format_datetime(invite.expires_at) if invite else None,
         'dados_faltantes': missing,
+        'documento_id': documento_id,
     }
     if invite and invite.invite_type == 'clinic':
         pricing = pricing or _public_pricing_config()
@@ -12699,7 +12722,7 @@ def _invite_payload(invite, *, pricing=None):
             'pricing_source': pricing.get('fonte'),
             'permite_visualizar_exame': True,
             'clinica_id': invite.clinica_id,
-            'exame_id': invite.exame_id,
+            'exame_id': effective_exame_id,
         }
         if pricing.get('exibir_preco_no_convite_clinica') and pricing.get('preco_formatado'):
             payload['preco_formatado'] = pricing.get('preco_formatado')
@@ -12711,7 +12734,7 @@ def _invite_payload(invite, *, pricing=None):
         'permite_visualizar_laudo': True,
         'tutor_id': getattr(invite, 'tutor_id', None),
         'animal_id': getattr(invite, 'animal_id', None),
-        'exame_id': getattr(invite, 'exame_id', None),
+        'exame_id': effective_exame_id,
     }
 
 
@@ -13840,7 +13863,9 @@ def mcp_server():
                     name=tool_args.get('nome_responsavel') or tool_args.get('responsavel_nome'),
                 )
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
-                invite = _create_external_onboarding_invite('clinic', user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
+                if exame:
+                    _integration_reconcile_exam_documents(exame.animal, [exame])
+                invite = _create_external_onboarding_invite('clinic', user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Primeiro acesso gratuito da clinica requisitante.')
             else:
                 tutor = db.session.get(User, int(tool_args.get('tutor_id'))) if tool_args.get('tutor_id') else None
                 animal = db.session.get(Animal, int(tool_args.get('animal_id') or 0))
@@ -13849,7 +13874,9 @@ def mcp_server():
                 if not tutor or not animal or animal.user_id != tutor.id:
                     return _mcp_err(req_id, -32602, 'Informe tutor e animal vinculados.')
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
-                invite = _create_external_onboarding_invite('tutor', user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), message='Acesso restrito a ficha do proprio animal.')
+                if exame:
+                    _integration_reconcile_exam_documents(exame.animal, [exame])
+                invite = _create_external_onboarding_invite('tutor', user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Acesso restrito a ficha do proprio animal.')
             db.session.commit()
             convite = {'token': invite.token if invite else None, **_invite_payload(invite)}
             return _mcp_ok(req_id, _mcp_json_content({'convite': convite}))
@@ -31623,7 +31650,9 @@ def api_integrations_generate_clinic_first_access_invite():
             name=payload.get('nome_responsavel') or payload.get('responsavel_nome'),
         )
         exame = db.session.get(ExameImagem, int(payload.get('exame_id'))) if payload.get('exame_id') else None
-        invite = _create_external_onboarding_invite('clinic', auth_user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
+        if exame:
+            _integration_reconcile_exam_documents(exame.animal, [exame])
+        invite = _create_external_onboarding_invite('clinic', auth_user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Primeiro acesso gratuito da clinica requisitante.')
         db.session.commit()
     except ValueError as exc:
         return _integration_error('invalid_clinic_invite_payload', str(exc), 400)
@@ -31649,7 +31678,9 @@ def api_integrations_generate_tutor_access_invite():
         if not tutor or not animal or animal.user_id != tutor.id:
             raise ValueError('Informe tutor e animal vinculados.')
         exame = db.session.get(ExameImagem, int(payload.get('exame_id'))) if payload.get('exame_id') else None
-        invite = _create_external_onboarding_invite('tutor', auth_user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), message='Acesso restrito a ficha do proprio animal.')
+        if exame:
+            _integration_reconcile_exam_documents(exame.animal, [exame])
+        invite = _create_external_onboarding_invite('tutor', auth_user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Acesso restrito a ficha do proprio animal.')
         db.session.commit()
     except ValueError as exc:
         return _integration_error('invalid_tutor_invite_payload', str(exc), 400)
