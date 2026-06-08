@@ -482,6 +482,46 @@ def _build_legend_requests(sheet_id: int) -> list[dict[str, Any]]:
     return requests
 
 
+def _ensure_master_columns(service, spreadsheet_id: str, sheet_id: int) -> None:
+    """Garante que a aba mestre tenha colunas suficientes (até a legenda).
+
+    Se o usuário apagar colunas (ex.: a M de Status), o batchUpdate falharia com
+    'Cannot update a column that doesn't exist'. Aqui estendemos a grade antes.
+    """
+    needed = LEGEND_END_COLUMN_INDEX + 1
+    meta = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets(properties(sheetId,gridProperties(columnCount)))",
+        )
+        .execute()
+    )
+    current = None
+    for sheet in meta.get("sheets", []):
+        props = sheet.get("properties", {})
+        if props.get("sheetId") == sheet_id:
+            current = (props.get("gridProperties") or {}).get("columnCount")
+            break
+    if current is not None and current < needed:
+        _retry_execute(
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": [
+                        {
+                            "appendDimension": {
+                                "sheetId": sheet_id,
+                                "dimension": "COLUMNS",
+                                "length": needed - current,
+                            }
+                        }
+                    ]
+                },
+            )
+        )
+
+
 def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], match_map: dict[int, list[PmoVaccinationVisit]]):
     requests = _build_legend_requests(sheet_id) + [
         {

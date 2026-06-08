@@ -31,6 +31,7 @@ from scripts.sync_pmo_master_status_notes import (
     _build_requests,
     _build_visit_index,
     _chunked,
+    _ensure_master_columns,
     _matching_visits,
     _overall_status,
     _resolve_sheet_id_by_title,
@@ -118,6 +119,9 @@ def _apply_master_status(service, spreadsheet_id: str) -> Counter:
     master_sheet_id = sheet_ids.get(MASTER_SHEET_TITLE)
     if master_sheet_id is None:
         raise RuntimeError(f"Aba {MASTER_SHEET_TITLE!r} nao encontrada.")
+
+    # Se colunas foram apagadas (ex.: a M de Status), estende a grade antes de escrever.
+    _ensure_master_columns(service, spreadsheet_id, master_sheet_id)
 
     requests = _build_requests(master_sheet_id, master_visits, match_map)
     for chunk in _chunked(requests, 200):
