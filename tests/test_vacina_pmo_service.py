@@ -1599,3 +1599,63 @@ def test_status_color_back_to_pendente_clears_to_white(app, monkeypatch):
         update_vacina_pmo_animal_status(animal_id, "pendente")
 
     assert _color_dict(fake.batch_updates[-1]["body"]) == PMO_STATUS_CLEAR_COLOR
+
+
+# ——— Criar dia de vacinação ————————————————————————————————————————————————
+
+def test_distribute_pmo_houses_respects_shift_targets():
+    houses = [{"sourceRow": i, "dogs": 1, "cats": 1} for i in range(1, 16)]
+
+    plan = vacina_pmo_service.distribute_pmo_houses(houses)
+
+    # Manhã enche até a meta (~14 animais), tarde leva o resto até ~25 no total.
+    assert len(plan["Manha"]) == 7
+    assert len(plan["Tarde"]) == 5
+    assert plan["manha_animals"] == 14
+    assert plan["tarde_animals"] == 10
+    assert [h["sourceRow"] for h in plan["Manha"]] == [1, 2, 3, 4, 5, 6, 7]
+    assert [h["sourceRow"] for h in plan["Tarde"]] == [8, 9, 10, 11, 12]
+
+
+def test_distribute_pmo_houses_never_exceeds_template_rows():
+    houses = [{"sourceRow": i, "dogs": 1, "cats": 0} for i in range(1, 40)]
+
+    plan = vacina_pmo_service.distribute_pmo_houses(houses)
+
+    assert len(plan["Manha"]) <= 9
+    assert len(plan["Tarde"]) <= 9
+
+
+def test_empty_shift_slots_skips_header_and_summary_rows():
+    def _row(turno, first=""):
+        row = [""] * 18
+        row[0] = first
+        row[17] = turno
+        return row
+
+    values = [
+        _row("Turno"),            # linha 1: cabeçalho
+        _row("Manhã"),            # linha 2: vaga manhã
+        _row("Manhã"),            # linha 3: vaga manhã
+        _row("Manhã", "Resumo"),  # linha 4: A preenchido -> ignora
+        _row("Tarde"),            # linha 5: vaga tarde
+    ]
+
+    assert vacina_pmo_service._pmo_empty_shift_slots(values, "Manha") == [2, 3]
+    assert vacina_pmo_service._pmo_empty_shift_slots(values, "Tarde") == [5]
+
+
+def test_scheduled_rows_from_backgrounds_detects_painted_rows():
+    backgrounds = [
+        None,                                           # linha 1: sem cor
+        {"red": 1.0, "green": 1.0, "blue": 1.0},        # linha 2: branca
+        {"red": 0.851, "green": 0.918, "blue": 0.827},  # linha 3: verde -> agendada
+    ]
+
+    assert vacina_pmo_service._pmo_scheduled_rows_from_backgrounds(backgrounds) == {3}
+
+
+def test_pmo_color_is_white():
+    assert vacina_pmo_service._pmo_color_is_white(None) is True
+    assert vacina_pmo_service._pmo_color_is_white({"red": 0.95, "green": 0.95, "blue": 0.95}) is True
+    assert vacina_pmo_service._pmo_color_is_white({"red": 0.851, "green": 0.918, "blue": 0.827}) is False

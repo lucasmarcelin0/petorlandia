@@ -4549,6 +4549,24 @@ def vacina_pmo_sync():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/criar-dia', methods=['POST'])
+@login_required
+def vacina_pmo_criar_dia():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import criar_dia_vacinacao
+
+        payload = request.get_json(silent=True) or {}
+        result = criar_dia_vacinacao((payload.get('date') or '').strip())
+        return jsonify({'success': True, **result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao criar dia de vacinação Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/sheets', methods=['GET'])
 @login_required
 def vacina_pmo_sheets():

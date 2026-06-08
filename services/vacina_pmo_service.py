@@ -109,6 +109,35 @@ PMO_STATUS_COLORS: dict[str, dict[str, float]] = {
 # Branco "neutro": usado para limpar a cor de uma célula quando o status volta a pendente.
 PMO_STATUS_CLEAR_COLOR = {"red": 1.0, "green": 1.0, "blue": 1.0}
 
+# ——— Criação do "dia de vacinação" ————————————————————————————————————————
+# Aba modelo que é duplicada a cada novo dia e aba de onde saem as casas a agendar.
+PMO_TEMPLATE_SHEET_TITLE_ENV = "PMO_VACCINE_TEMPLATE_SHEET_TITLE"
+PMO_TEMPLATE_SHEET_DEFAULT_TITLE = "padrão"
+PMO_SCHEDULE_SOURCE_SHEET_TITLE_ENV = "PMO_VACCINE_SCHEDULE_SOURCE_SHEET_TITLE"
+PMO_SCHEDULE_SOURCE_SHEET_DEFAULT_TITLE = "inscrições a agendar"
+
+# Célula-mestra onde a data do dia é gravada na aba nova.
+PMO_DATE_MASTER_CELL = "Q12"
+# Colunas copiadas de cada casa (A..K) da "inscrições a agendar" para a aba do dia.
+PMO_SCHEDULE_SOURCE_COLUMNS = 11  # A..K
+
+# Metas de distribuição por turno. A planilha modelo tem 9 linhas por turno, então
+# o máximo da manhã é limitado a 9 (a meta de até 10 rolaria para o próximo dia).
+PMO_DAY_TARGET_ANIMALS = 25
+PMO_MORNING_MIN_HOUSES = 6
+PMO_MORNING_MAX_HOUSES = 9
+PMO_MORNING_TARGET_ANIMALS = 14
+PMO_AFTERNOON_MIN_HOUSES = 5
+PMO_AFTERNOON_MAX_HOUSES = 7
+
+# Cores de marcação das casas já agendadas (linha inteira), uma por turno.
+PMO_SCHEDULE_COLORS: dict[str, dict[str, float]] = {
+    "Manha": {"red": 0.851, "green": 0.918, "blue": 0.827},  # verde claro
+    "Tarde": {"red": 0.812, "green": 0.886, "blue": 0.953},  # azul claro
+}
+# Acima desse valor em todos os canais consideramos a célula "sem cor" (branca).
+PMO_SCHEDULE_WHITE_THRESHOLD = 0.93
+
 
 @dataclass
 class PmoSyncResult:
@@ -1782,6 +1811,311 @@ def _get_sheet_gid(service, spreadsheet_id: str, title: str) -> str:
     except Exception:
         pass
     return ""
+
+
+# ——— Criação do "dia de vacinação" ————————————————————————————————————————
+
+def _resolve_pmo_sheet_title(service, spreadsheet_id: str, wanted: str) -> str:
+    """Acha o título real de uma aba ignorando acentos/maiúsculas."""
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    target = _strip_accents(wanted).strip().lower()
+    for sheet in metadata.get("sheets", []):
+        title = sheet.get("properties", {}).get("title", "")
+        if _strip_accents(title).strip().lower() == target:
+            return title
+    raise ValueError(f"Não encontrei a aba '{wanted}' na planilha PMO.")
+
+
+def _pmo_color_is_white(color: dict[str, float] | None) -> bool:
+    """True quando a célula não tem cor de fundo (branca/neutra)."""
+    if not color:
+        return True
+    return all(
+        color.get(channel, 1.0) >= PMO_SCHEDULE_WHITE_THRESHOLD
+        for channel in ("red", "green", "blue")
+    )
+
+
+def _pmo_scheduled_rows_from_backgrounds(backgrounds: list[dict[str, float] | None]) -> set[int]:
+    """Linhas (1-based) já pintadas = já agendadas, devem ser puladas."""
+    return {
+        index
+        for index, color in enumerate(backgrounds, start=1)
+        if not _pmo_color_is_white(color)
+    }
+
+
+def _pmo_scheduled_source_rows(
+    service, spreadsheet_id: str, sheet_title: str, max_rows: int
+) -> set[int]:
+    if max_rows <= 0:
+        return set()
+    response = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            ranges=[f"{_quote_sheet_title(sheet_title)}!A1:A{max_rows}"],
+            fields="sheets(data(rowData(values(effectiveFormat(backgroundColor)))))",
+            includeGridData=True,
+        )
+        .execute()
+    )
+    backgrounds: list[dict[str, float] | None] = []
+    sheets = response.get("sheets", [])
+    if sheets:
+        data = sheets[0].get("data", [])
+        if data:
+            for row_data in data[0].get("rowData", []):
+                values = row_data.get("values", [])
+                color = (
+                    values[0].get("effectiveFormat", {}).get("backgroundColor")
+                    if values
+                    else None
+                )
+                backgrounds.append(color)
+    return _pmo_scheduled_rows_from_backgrounds(backgrounds)
+
+
+def distribute_pmo_houses(houses: list[dict[str, Any]]) -> dict[str, Any]:
+    """Distribui casas (na ordem recebida) entre manhã e tarde respeitando as metas.
+
+    Cada casa preenche a manhã primeiro, até atingir o mínimo de casas e o alvo de
+    animais; o excedente vai para a tarde até bater o total do dia. Nunca passa do
+    máximo de cada turno (limitado pelas 9 linhas do modelo).
+    """
+    manha: list[dict[str, Any]] = []
+    tarde: list[dict[str, Any]] = []
+    manha_animals = 0
+    tarde_animals = 0
+    for house in houses:
+        animals = int(house.get("dogs") or 0) + int(house.get("cats") or 0)
+        if len(manha) < PMO_MORNING_MAX_HOUSES and (
+            len(manha) < PMO_MORNING_MIN_HOUSES
+            or manha_animals + animals <= PMO_MORNING_TARGET_ANIMALS
+        ):
+            manha.append(house)
+            manha_animals += animals
+            continue
+        if len(tarde) < PMO_AFTERNOON_MAX_HOUSES and (
+            len(tarde) < PMO_AFTERNOON_MIN_HOUSES
+            or manha_animals + tarde_animals + animals <= PMO_DAY_TARGET_ANIMALS
+        ):
+            tarde.append(house)
+            tarde_animals += animals
+            continue
+        break
+    return {
+        "Manha": manha,
+        "Tarde": tarde,
+        "manha_animals": manha_animals,
+        "tarde_animals": tarde_animals,
+    }
+
+
+def _pmo_empty_shift_slots(values: list[list[Any]], shift: str) -> list[int]:
+    """Linhas-modelo vazias do turno: coluna R == turno e A..K em branco."""
+    target = _normalize_shift(shift)
+    slots: list[int] = []
+    for index, row in enumerate(values, start=1):
+        turno = _normalize_shift(row[17]) if len(row) > 17 else ""
+        if turno != target:
+            continue
+        has_data = any(
+            _normalize_text(row[col]) if len(row) > col else ""
+            for col in range(PMO_SCHEDULE_SOURCE_COLUMNS)
+        )
+        if has_data:
+            continue
+        slots.append(index)
+    return slots
+
+
+def _pmo_duplicate_template(
+    service, spreadsheet_id: str, template_gid: int, new_title: str
+) -> int:
+    response = (
+        service.spreadsheets()
+        .batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "duplicateSheet": {
+                            "sourceSheetId": template_gid,
+                            "insertSheetIndex": 0,
+                            "newSheetName": new_title,
+                        }
+                    }
+                ]
+            },
+        )
+        .execute()
+    )
+    for reply in response.get("replies", []):
+        props = reply.get("duplicateSheet", {}).get("properties", {})
+        if "sheetId" in props:
+            return int(props["sheetId"])
+    raise RuntimeError("Falha ao duplicar a aba modelo da campanha PMO.")
+
+
+def _pmo_paint_source_rows(
+    service, spreadsheet_id: str, source_gid: int, assignments: list[tuple[int, str]]
+) -> None:
+    requests = []
+    for rownum, shift in assignments:
+        color = PMO_SCHEDULE_COLORS.get(_normalize_shift(shift))
+        if not color:
+            continue
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": source_gid,
+                        "startRowIndex": rownum - 1,
+                        "endRowIndex": rownum,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 18,
+                    },
+                    "cell": {"userEnteredFormat": {"backgroundColor": color}},
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            }
+        )
+    if requests:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id, body={"requests": requests}
+        ).execute()
+
+
+def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
+    """Cria a aba de um novo dia de vacinação a partir do modelo "padrão".
+
+    Duplica a aba modelo, grava a data em Q12, distribui as próximas casas ainda não
+    agendadas da "inscrições a agendar" entre manhã/tarde e pinta as linhas de origem
+    (verde = manhã, azul = tarde) para marcar o agendamento.
+    """
+    target_date = _parse_date_object(date_value)
+    if not target_date:
+        raise ValueError("Informe uma data válida para o dia de vacinação.")
+    date_label = target_date.strftime("%d/%m/%Y")
+
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+
+    service = _get_sheets_service_rw()
+
+    template_title = _resolve_pmo_sheet_title(
+        service,
+        spreadsheet_id,
+        os.getenv(PMO_TEMPLATE_SHEET_TITLE_ENV, PMO_TEMPLATE_SHEET_DEFAULT_TITLE),
+    )
+    source_title = _resolve_pmo_sheet_title(
+        service,
+        spreadsheet_id,
+        os.getenv(
+            PMO_SCHEDULE_SOURCE_SHEET_TITLE_ENV, PMO_SCHEDULE_SOURCE_SHEET_DEFAULT_TITLE
+        ),
+    )
+
+    if _get_sheet_gid(service, spreadsheet_id, date_label):
+        raise ValueError(f"Já existe uma aba chamada '{date_label}' na planilha.")
+
+    template_gid = _get_sheet_gid(service, spreadsheet_id, template_title)
+    source_gid = _get_sheet_gid(service, spreadsheet_id, source_title)
+    if not template_gid or not source_gid:
+        raise RuntimeError("Não consegui localizar as abas modelo/origem da campanha PMO.")
+
+    source_values = (
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{_quote_sheet_title(source_title)}!A:R",
+        )
+        .execute()
+        .get("values", [])
+    )
+    scheduled = _pmo_scheduled_source_rows(
+        service, spreadsheet_id, source_title, len(source_values)
+    )
+
+    houses: list[dict[str, Any]] = []
+    for row in parse_vacina_pmo_rows(source_values):
+        src = int(row.get("sourceRow") or 0)
+        if src <= 0 or src in scheduled:
+            continue
+        raw = source_values[src - 1] if src - 1 < len(source_values) else []
+        houses.append(
+            {
+                "sourceRow": src,
+                "tutor": row.get("tutor") or "",
+                "dogs": row.get("dogs") or 0,
+                "cats": row.get("cats") or 0,
+                "cells": [_cell(raw, col) for col in range(PMO_SCHEDULE_SOURCE_COLUMNS)],
+            }
+        )
+
+    plan = distribute_pmo_houses(houses)
+    manha, tarde = plan["Manha"], plan["Tarde"]
+    if not manha and not tarde:
+        raise ValueError("Nenhuma casa nova para agendar (todas já estão pintadas).")
+
+    new_gid = _pmo_duplicate_template(
+        service, spreadsheet_id, int(template_gid), date_label
+    )
+    new_tab = _quote_sheet_title(date_label)
+
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{new_tab}!{PMO_DATE_MASTER_CELL}",
+        valueInputOption="USER_ENTERED",
+        body={"values": [[date_label]]},
+    ).execute()
+
+    new_values = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{new_tab}!A:R")
+        .execute()
+        .get("values", [])
+    )
+    manha_slots = _pmo_empty_shift_slots(new_values, "Manha")
+    tarde_slots = _pmo_empty_shift_slots(new_values, "Tarde")
+
+    data_updates = []
+    for house, rownum in zip(manha, manha_slots):
+        cells = (house["cells"] + [""] * PMO_SCHEDULE_SOURCE_COLUMNS)[:PMO_SCHEDULE_SOURCE_COLUMNS]
+        data_updates.append({"range": f"{new_tab}!A{rownum}:K{rownum}", "values": [cells]})
+    for house, rownum in zip(tarde, tarde_slots):
+        cells = (house["cells"] + [""] * PMO_SCHEDULE_SOURCE_COLUMNS)[:PMO_SCHEDULE_SOURCE_COLUMNS]
+        data_updates.append({"range": f"{new_tab}!A{rownum}:K{rownum}", "values": [cells]})
+    if data_updates:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"valueInputOption": "USER_ENTERED", "data": data_updates},
+        ).execute()
+
+    placed_manha = min(len(manha), len(manha_slots))
+    placed_tarde = min(len(tarde), len(tarde_slots))
+    assignments = [(house["sourceRow"], "Manha") for house in manha[:placed_manha]]
+    assignments += [(house["sourceRow"], "Tarde") for house in tarde[:placed_tarde]]
+    _pmo_paint_source_rows(service, spreadsheet_id, int(source_gid), assignments)
+
+    return {
+        "date": date_label,
+        "sheetTitle": date_label,
+        "sheetGid": str(new_gid),
+        "spreadsheetId": spreadsheet_id,
+        "morning": {"houses": placed_manha, "animals": plan["manha_animals"]},
+        "afternoon": {"houses": placed_tarde, "animals": plan["tarde_animals"]},
+        "leftover": (len(manha) - placed_manha) + (len(tarde) - placed_tarde),
+    }
 
 
 def normalize_pmo_request_address(payload: dict[str, Any]) -> dict[str, str]:

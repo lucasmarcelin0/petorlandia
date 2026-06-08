@@ -598,6 +598,9 @@
       <button type="button" class="btn btn-primary" id="pmo-sync" data-sync-url="{{ url_for('vacina_pmo_sync') }}">
         <i class="fas fa-rotate me-1"></i> Sincronizar planilha
       </button>
+      <button type="button" class="btn btn-outline-primary" id="pmo-create-day" data-create-url="{{ url_for('vacina_pmo_criar_dia') }}">
+        <i class="fas fa-calendar-plus me-1"></i> Criar dia de vacinação
+      </button>
       <button type="button" class="btn btn-outline-success" id="pmo-export">
         <i class="fas fa-file-export me-1"></i> Copiar exportação
       </button>
@@ -759,6 +762,32 @@
       </div>
     </div>
   </section>
+</div>
+
+<div class="modal fade" id="pmo-create-day-modal" tabindex="-1" aria-labelledby="pmo-create-day-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pmo-create-day-title"><i class="fas fa-calendar-plus me-2"></i>Criar dia de vacinação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label" for="pmo-create-day-date">Data do dia de vacinação</label>
+        <input type="date" class="form-control" id="pmo-create-day-date">
+        <div class="form-text">
+          Duplica a aba <strong>padrão</strong>, grava a data em Q12 e distribui as próximas casas ainda não
+          agendadas da <strong>inscrições a agendar</strong> entre manhã (verde) e tarde (azul).
+        </div>
+        <div class="small text-muted mt-2" id="pmo-create-day-feedback"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="pmo-create-day-confirm">
+          <i class="fas fa-calendar-plus me-1"></i> Criar aba
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -989,6 +1018,57 @@
       if (otherButton) otherButton.disabled = false;
       button.innerHTML = original;
     }
+  }
+
+  function setupCreateDay() {
+    const trigger = document.getElementById('pmo-create-day');
+    const modalEl = document.getElementById('pmo-create-day-modal');
+    const confirmBtn = document.getElementById('pmo-create-day-confirm');
+    const dateEl = document.getElementById('pmo-create-day-date');
+    const feedbackEl = document.getElementById('pmo-create-day-feedback');
+    if (!trigger || !modalEl || !confirmBtn || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+
+    trigger.addEventListener('click', () => {
+      feedbackEl.textContent = '';
+      dateEl.value = sheetEl.selectedOptions[0]?.dataset.date || '';
+      modal.show();
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!dateEl.value) {
+        feedbackEl.textContent = 'Escolha uma data primeiro.';
+        return;
+      }
+      const original = confirmBtn.innerHTML;
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Criando';
+      try {
+        const response = await fetch(trigger.dataset.createUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify({ date: dateEl.value }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'Não foi possível criar o dia de vacinação.');
+        }
+        const msg = `Aba "${payload.sheetTitle}" criada: manhã ${payload.morning.houses} casas / ${payload.morning.animals} animais, tarde ${payload.afternoon.houses} casas / ${payload.afternoon.animals} animais.`;
+        window.showAppToast ? window.showAppToast(msg, 'success') : alert(msg);
+        modal.hide();
+        loadSheets();
+      } catch (error) {
+        feedbackEl.textContent = error.message;
+        window.showAppToast ? window.showAppToast(error.message, 'danger') : null;
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = original;
+      }
+    });
   }
 
   async function loadSavedState(useSelectedSheet = false) {
@@ -1608,6 +1688,7 @@
 
   document.getElementById('pmo-sync').addEventListener('click', () => syncSheet('pmo-sync'));
   document.getElementById('pmo-sync-inline').addEventListener('click', () => syncSheet('pmo-sync-inline'));
+  setupCreateDay();
   document.getElementById('pmo-clear').addEventListener('click', () => {
     loadSavedState(true);
   });
