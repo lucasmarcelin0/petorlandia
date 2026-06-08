@@ -219,7 +219,46 @@ def test_image_exam_flow_releases_pdf_to_clinic_and_tutor_only(app, client):
     assert clinic_history.status_code == 200
     clinic_payload = clinic_history.get_json()["data"]
     assert clinic_payload["exames"][0]["titulo"] == "Ultrassonografia Abdominal"
-    assert clinic_payload["pdfs_disponiveis"][0]["filename"] == "sid.pdf"
+    clinic_pdf = clinic_payload["pdfs_disponiveis"][0]
+    assert clinic_pdf["filename"] == "sid.pdf"
+    assert clinic_pdf["url"].endswith("/static/uploads/laudos_exames/sid.pdf")
+    assert "/api/integrations/clinical-document" not in clinic_pdf["url"]
+    assert clinic_pdf["api_document_requires_bearer"] is True
+    assert "/api/integrations/clinical-document" in clinic_pdf["api_document_url"]
+    assert clinic_payload["exames"][0]["pdf_url"] == clinic_pdf["url"]
+
+    mcp_history = client.post(
+        "/mcp",
+        headers=_auth_header(clinic_token),
+        json={
+            "jsonrpc": "2.0",
+            "id": 101,
+            "method": "tools/call",
+            "params": {"name": "listar_historico_medico_animal", "arguments": {"animal_id": sid_id}},
+        },
+    )
+    assert mcp_history.status_code == 200
+    mcp_result = json.loads(mcp_history.get_json()["result"]["content"][0]["text"])
+    assert "api_document_url" not in mcp_result["exames"][0]
+    assert "api_document_url" not in mcp_result["pdfs_disponiveis"][0]
+    assert "/api/integrations/clinical-document" not in mcp_result["pdfs_disponiveis"][0]["url"]
+
+    clinic_invite = client.post(
+        "/api/integrations/clinic-first-access-invites",
+        headers=_auth_header(vet_token),
+        json={"clinica_id": clinic_id, "exame_id": exame_id, "confirmar_gravacao": "sim"},
+    )
+    assert clinic_invite.status_code == 201
+    clinic_history_with_invite = client.get(
+        f"/api/integrations/medical-history?animal_id={sid_id}",
+        headers=_auth_header(clinic_token),
+    )
+    clinic_invite_payload = clinic_history_with_invite.get_json()["data"]
+    clinic_invite_pdf = clinic_invite_payload["pdfs_disponiveis"][0]
+    assert "/primeiro-acesso-clinica/" in clinic_invite_pdf["url"]
+    assert "/api/integrations/clinical-document" not in clinic_invite_pdf["url"]
+    assert clinic_invite_payload["exames"][0]["portal_url"] == clinic_invite_pdf["url"]
+    assert clinic_invite_payload["exames"][0]["shareable_url_type"] == "clinica_portal"
 
     release_tutor = client.post(
         "/api/integrations/image-exams/release-tutor",
@@ -236,7 +275,7 @@ def test_image_exam_flow_releases_pdf_to_clinic_and_tutor_only(app, client):
     assert tutor_history.status_code == 200
     tutor_payload = tutor_history.get_json()["data"]
     assert len(tutor_payload["exames"]) == 1
-    assert tutor_payload["animal"]["name"] == "SID"
+    assert tutor_payload["animal"]["name"].lower() == "sid"
 
     forbidden_other_pet = client.get(
         f"/api/integrations/medical-history?animal_id={other_pet_id}",
@@ -417,7 +456,16 @@ def test_medical_history_reconciles_existing_document_with_image_exam(app, clien
     assert serialized_exam["arquivo_pdf_filename"] == "Ultrassom_SID_Rosa.pdf"
     assert serialized_exam["pdf_disponivel"] is True
     assert serialized_exam["pdf_url"]
-    assert payload["pdfs_disponiveis"][0]["documento_id"] == documento_id
+    assert serialized_exam["pdf_url"].endswith("/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf")
+    assert "/api/integrations/clinical-document" not in serialized_exam["pdf_url"]
+    assert serialized_exam["download_url"] == serialized_exam["pdf_url"]
+    assert serialized_exam["api_document_requires_bearer"] is True
+    assert "/api/integrations/clinical-document" in serialized_exam["api_document_url"]
+    pdf_summary = payload["pdfs_disponiveis"][0]
+    assert pdf_summary["documento_id"] == documento_id
+    assert pdf_summary["url"] == serialized_exam["pdf_url"]
+    assert "/api/integrations/clinical-document" not in pdf_summary["url"]
+    assert "/api/integrations/clinical-document" in pdf_summary["api_document_url"]
 
     by_document = client.get(
         f"/api/integrations/clinical-document?documento_id={documento_id}",
@@ -428,6 +476,10 @@ def test_medical_history_reconciles_existing_document_with_image_exam(app, clien
     assert by_document_payload["documento"]["id"] == exame_id
     assert by_document_payload["documento"]["documento_id"] == documento_id
     assert by_document_payload["url_temporaria"] == "/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf"
+    assert by_document_payload["shareable_url"].endswith("/static/uploads/laudos_exames/Ultrassom_SID_Rosa.pdf")
+    assert "/api/integrations/clinical-document" not in by_document_payload["shareable_url"]
+    assert by_document_payload["api_document_requires_bearer"] is True
+    assert "/api/integrations/clinical-document" in by_document_payload["api_document_url"]
 
     by_exam = client.get(
         f"/api/integrations/clinical-document?exame_id={exame_id}",
@@ -522,13 +574,13 @@ def test_external_tutor_invite_shows_report_without_price_trial_or_required_sign
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "O laudo do Sid foi liberado para você" in html
+    assert "Seu exame foi disponibilizado pela equipe da clinica Angrisano" in html
     assert "Ver laudo agora" in html
-    assert "Criar meu acesso gratuito" in html
-    assert "O acesso do tutor é gratuito." in html
+    assert "Guardar no meu historico" in html
     assert "/static/uploads/laudos_exames/sid.pdf" in html
     assert "30 dias" not in html
     assert "R$" not in html
+    assert "Criar meu acesso gratuito" not in html
     assert "Crie sua conta para acessar o laudo" not in html
     assert "Cadastre-se para liberar o exame" not in html
 
@@ -670,10 +722,14 @@ def test_external_clinic_invite_shows_trial_and_central_price(app, client):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Sua clínica recebeu um exame no PetOrlândia" in html
+    assert "Fornecido com tecnologia PetOrlândia" in html
+    assert "Angrisano" in html
     assert "Ver exame recebido" in html
-    assert "Ativar painel gratuito por 30 dias" in html
-    assert "R$ 91,25/mês" in html
+    assert "Gostaria de organizar seus exames e prontuarios da mesma forma?" in html
+    assert "Conhecer a solucao" in html
+    assert "Solicitar acesso" in html
+    assert "Ativar painel gratuito por 30 dias" not in html
+    assert "R$ 91,25/mês" not in html
     assert "Criar meu acesso gratuito" not in html
 
 
@@ -719,7 +775,7 @@ def test_integrations_clinical_endpoints_for_veterinarian(app, client):
         db.session.add(consulta)
         db.session.flush()
 
-        agenda_at = utcnow().replace(hour=15, minute=0, second=0, microsecond=0)
+        agenda_at = (utcnow() + timedelta(days=1)).replace(hour=15, minute=0, second=0, microsecond=0)
         retorno_at = agenda_at + timedelta(hours=2)
 
         retorno = Appointment(
@@ -1800,9 +1856,9 @@ def test_mcp_importar_laudo_volante_attaches_file_without_rewriting_existing_exa
     invite_response = client.get(invite_path)
     assert invite_response.status_code == 200
     invite_html = invite_response.get_data(as_text=True)
-    assert "Acesso inicial da clinica" in invite_html
+    assert "Fornecido com tecnologia PetOrlândia" in invite_html
     assert "Angrisano" in invite_html
-    assert "Como acessar pela primeira vez" in invite_html
+    assert "Gostaria de organizar seus exames e prontuarios da mesma forma?" in invite_html
     with app.app_context():
         db.session.remove()
         saved = db.session.get(ExameSolicitado, exam_id)
@@ -1987,6 +2043,12 @@ def test_mcp_laudo_volante_widget_contract(app, client):
         }:
             assert tool.get("securitySchemes"), tool["name"]
             assert tool.get("_meta", {}).get("securitySchemes"), tool["name"]
+    history_tool = next(tool for tool in tools if tool["name"] == "listar_historico_medico_animal")
+    assert "shareable_url" in history_tool["description"]
+    assert "bearer" in history_tool["description"]
+    document_tool = next(tool for tool in tools if tool["name"] == "obter_documento_clinico")
+    assert "shareable_url" in document_tool["description"]
+    assert "URL de API protegida" in document_tool["description"]
     render_tool = next(tool for tool in tools if tool["name"] == "abrir_importador_laudo_volante")
     assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
     assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v1.html"

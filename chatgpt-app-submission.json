@@ -184,7 +184,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Only retrieves an accessible clinical document and a permission-checked URL.",
+        "read_only_justification": "Only retrieves an accessible clinical document with human-facing portal/download links; protected API URLs are not intended for end-user sharing.",
         "open_world_justification": "Does not write to public internet state or third-party systems.",
         "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
       }
@@ -412,7 +412,7 @@
       "user_prompt": "Conduza o fluxo do ultrassonografista para Ultrassonografia Abdominal do SID, tutor Rosa, clinica requisitante Angrisano, data 16/02/2026, profissional Robson Oliveira CRMV-MG 26136, com PDF anexado, e confirme cada gravacao quando eu autorizar.",
       "file_attachment_urls": null,
       "tools_triggered": "criar_exame_imagem, anexar_pdf_exame_imagem, liberar_exame_para_clinica, gerar_convite_primeiro_acesso_clinica, liberar_exame_para_tutor, gerar_convite_acesso_tutor, listar_historico_medico_animal, obter_documento_clinico",
-      "expected_output": "Creates or reuses clinic, tutor, and animal records, creates the image exam, attaches the PDF, releases it according to permissions, returns invite links, and lists the exam in the animal medical history with an accessible PDF URL.",
+      "expected_output": "Creates or reuses clinic, tutor, and animal records, creates the image exam, attaches the PDF, releases it according to permissions, returns invite links, and lists the exam in the animal medical history with a human-facing shareable_url or portal URL. Protected API URLs must not be presented as the exam link.",
       "expected_output_url": null
     },
     {

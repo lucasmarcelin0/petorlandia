@@ -10308,7 +10308,7 @@ def _integration_infer_assistant_action(user: User, payload: dict):
         r'conduta\s*[:\-]\s*([^.\n]{3,200})',
     ])
     clinic_name = _extract_label([
-        r'(?:cl[iÃ­]nica(?:\s+requisitante)?|requisitante)\s*[:\-]\s*([A-Za-zÃ€-Ã¿0-9\' &.-]{2,120})',
+        r'(?:cl[ií]nica(?:\s+requisitante)?|requisitante)\s*[:\-]\s*([^.\n]{2,120})',
     ])
     exam_type = _extract_label([
         r'(?:exame|tipo\s+de\s+exame)\s*[:\-]\s*([^.\n]{3,120})',
@@ -12022,13 +12022,13 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'title': 'Listar historico medico do animal',
         'scopes': ['clinical_summary:read', 'exams:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
-        'outputSchema': _mcp_object_output_schema('Historico medico com exames e PDFs.'),
+        'outputSchema': _mcp_object_output_schema('Historico medico com exames e links humanos de portal/download.'),
     },
     'obter_documento_clinico': {
         'title': 'Obter documento clinico',
         'scopes': ['exams:read'],
         'annotations': _mcp_annotations(True, idempotent=False),
-        'outputSchema': _mcp_object_output_schema('Documento clinico com URL temporaria.'),
+        'outputSchema': _mcp_object_output_schema('Documento clinico com links humanos de portal/download.'),
     },
     'buscar_ou_criar_clinica_requisitante': {
         'title': 'Buscar ou criar clinica requisitante',
@@ -12429,9 +12429,166 @@ def _integration_user_can_access_exame_imagem(user: User, exame: ExameImagem) ->
     return False
 
 
-def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = None):
-    can_pdf = bool(exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
-    return {
+def _integration_absolute_public_url(raw_url: str | None) -> str | None:
+    if not raw_url:
+        return None
+    parsed = urlparse(raw_url)
+    if parsed.scheme and parsed.netloc:
+        return raw_url
+    if has_request_context() and raw_url.startswith('/'):
+        return f"{request.url_root.rstrip('/')}{raw_url}"
+    return raw_url
+
+
+def _integration_invite_is_active(invite) -> bool:
+    expires_at = getattr(invite, 'expires_at', None)
+    if not expires_at:
+        return True
+    now = datetime.now(BR_TZ)
+    if getattr(expires_at, 'tzinfo', None) is None:
+        now = now.replace(tzinfo=None)
+    return expires_at >= now
+
+
+def _integration_latest_external_invite_for_exame(exame: ExameImagem, invite_type: str):
+    if not exame or not has_request_context():
+        return None
+    filters = [ExternalOnboardingInvite.exame_imagem_id == exame.id]
+    if getattr(exame, 'exame_solicitado_id', None):
+        filters.append(ExternalOnboardingInvite.exame_id == exame.exame_solicitado_id)
+    try:
+        invites = (
+            ExternalOnboardingInvite.query
+            .filter(ExternalOnboardingInvite.invite_type == invite_type, or_(*filters))
+            .order_by(ExternalOnboardingInvite.created_at.desc(), ExternalOnboardingInvite.id.desc())
+            .limit(10)
+            .all()
+        )
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.debug("Convite externo indisponivel para exame %s: %s", getattr(exame, 'id', None), exc)
+        return None
+    for invite in invites:
+        if _integration_invite_is_active(invite):
+            return invite
+    return None
+
+
+def _integration_exame_imagem_portal_urls(exame: ExameImagem, user: User | None = None):
+    if not exame:
+        return {'clinic_portal_url': None, 'tutor_portal_url': None, 'portal_url': None, 'portal_tipo': None}
+    role = (getattr(user, 'role', '') or '').lower() if user else ''
+    is_internal_operator = user is None or role == 'admin' or has_veterinarian_profile(user)
+    clinic_id = _integration_user_clinic_id(user) if user else None
+    can_use_clinic_portal = bool(is_internal_operator or (clinic_id and exame.clinica_requisitante_id == clinic_id))
+    can_use_tutor_portal = bool(is_internal_operator or (getattr(user, 'id', None) == exame.tutor_id))
+
+    clinic_portal_url = None
+    tutor_portal_url = None
+    if can_use_clinic_portal and exame.liberado_para_clinica:
+        clinic_invite = _integration_latest_external_invite_for_exame(exame, 'clinic')
+        clinic_portal_url = _external_onboarding_url(clinic_invite) if clinic_invite else None
+    if can_use_tutor_portal and exame.liberado_para_tutor:
+        tutor_invite = _integration_latest_external_invite_for_exame(exame, 'tutor')
+        tutor_portal_url = _external_onboarding_url(tutor_invite) if tutor_invite else None
+
+    if getattr(user, 'id', None) == exame.tutor_id and tutor_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': tutor_portal_url, 'portal_tipo': 'tutor'}
+    if clinic_id and exame.clinica_requisitante_id == clinic_id and clinic_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': clinic_portal_url, 'portal_tipo': 'clinica'}
+    if clinic_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': clinic_portal_url, 'portal_tipo': 'clinica'}
+    if tutor_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': tutor_portal_url, 'portal_tipo': 'tutor'}
+    return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': None, 'portal_tipo': None}
+
+
+def _integration_exame_imagem_access_links(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    can_pdf = bool(exame and exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
+    empty = {
+        'pdf_disponivel': can_pdf,
+        'download_url': None,
+        'portal_url': None,
+        'portal_tipo': None,
+        'clinic_portal_url': None,
+        'tutor_portal_url': None,
+        'shareable_url': None,
+        'shareable_url_type': None,
+        'orientacao_compartilhamento': None,
+    }
+    if include_internal_links:
+        empty.update({'api_document_url': None, 'api_document_requires_bearer': False})
+    if not can_pdf:
+        return empty
+
+    portal_urls = _integration_exame_imagem_portal_urls(exame, user)
+    download_url = _integration_absolute_public_url(exame.arquivo_pdf_url)
+    portal_url = portal_urls.get('portal_url')
+    portal_tipo = portal_urls.get('portal_tipo')
+    shareable_url = portal_url or download_url
+    shareable_url_type = f"{portal_tipo}_portal" if portal_url and portal_tipo else ('download' if download_url else None)
+    links = {
+        'pdf_disponivel': True,
+        'download_url': download_url,
+        **portal_urls,
+        'shareable_url': shareable_url,
+        'shareable_url_type': shareable_url_type,
+        'orientacao_compartilhamento': 'Compartilhe shareable_url ou portal_url com clinica/tutor. Nao compartilhe api_document_url; ele exige bearer token.',
+    }
+    if include_internal_links:
+        api_document_url = url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True) if has_request_context() else None
+        links.update({'api_document_url': api_document_url, 'api_document_requires_bearer': bool(api_document_url)})
+    return links
+
+
+def _integration_exame_imagem_pdf_summary(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    if not links.get('pdf_disponivel'):
+        return None
+    summary = {
+        'exame_id': exame.id,
+        'documento_id': exame.documento_id,
+        'filename': exame.arquivo_pdf_filename,
+        'url': links.get('shareable_url'),
+        'url_tipo': links.get('shareable_url_type'),
+        'download_url': links.get('download_url'),
+        'portal_url': links.get('portal_url'),
+        'portal_tipo': links.get('portal_tipo'),
+        'shareable_url': links.get('shareable_url'),
+        'shareable_url_type': links.get('shareable_url_type'),
+        'orientacao_compartilhamento': links.get('orientacao_compartilhamento'),
+    }
+    if include_internal_links:
+        summary.update({
+            'api_document_url': links.get('api_document_url'),
+            'api_document_requires_bearer': links.get('api_document_requires_bearer'),
+        })
+    return summary
+
+
+def _integration_exame_imagem_document_payload(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    payload = {
+        'documento': _integration_serialize_exame_imagem(exame, user, include_internal_links=include_internal_links),
+        'url_temporaria': exame.arquivo_pdf_url,
+        'download_url': links.get('download_url'),
+        'portal_url': links.get('portal_url'),
+        'portal_tipo': links.get('portal_tipo'),
+        'shareable_url': links.get('shareable_url'),
+        'shareable_url_type': links.get('shareable_url_type'),
+        'orientacao_compartilhamento': links.get('orientacao_compartilhamento'),
+    }
+    if include_internal_links:
+        payload.update({
+            'api_document_url': links.get('api_document_url'),
+            'api_document_requires_bearer': links.get('api_document_requires_bearer'),
+        })
+    return payload
+
+
+def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    access_links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    payload = {
         'id': exame.id,
         'documento_id': exame.documento_id,
         'animal_id': exame.animal_id,
@@ -12451,11 +12608,25 @@ def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = 
         'data_liberacao_clinica': _integration_format_datetime(exame.data_liberacao_clinica),
         'data_liberacao_tutor': _integration_format_datetime(exame.data_liberacao_tutor),
         'arquivo_pdf_filename': exame.arquivo_pdf_filename,
-        'pdf_disponivel': can_pdf,
-        'pdf_url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True) if can_pdf and has_request_context() else None,
+        'pdf_disponivel': access_links.get('pdf_disponivel'),
+        'pdf_url': access_links.get('shareable_url'),
+        'download_url': access_links.get('download_url'),
+        'portal_url': access_links.get('portal_url'),
+        'portal_tipo': access_links.get('portal_tipo'),
+        'clinic_portal_url': access_links.get('clinic_portal_url'),
+        'tutor_portal_url': access_links.get('tutor_portal_url'),
+        'shareable_url': access_links.get('shareable_url'),
+        'shareable_url_type': access_links.get('shareable_url_type'),
+        'orientacao_compartilhamento': access_links.get('orientacao_compartilhamento'),
         'created_at': _integration_format_datetime(exame.created_at),
         'updated_at': _integration_format_datetime(exame.updated_at),
     }
+    if include_internal_links:
+        payload.update({
+            'api_document_url': access_links.get('api_document_url'),
+            'api_document_requires_bearer': access_links.get('api_document_requires_bearer'),
+        })
+    return payload
 
 
 def _integration_document_matches_exam(documento: AnimalDocumento, exame: ExameImagem) -> bool:
@@ -13282,8 +13453,8 @@ def mcp_server():
             {'name': 'liberar_exame_para_tutor', 'description': 'Libera exame para o tutor vinculado.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'tutor_id', 'confirmar_gravacao']}},
             {'name': 'gerar_convite_primeiro_acesso_clinica', 'description': 'Gera convite seguro de primeiro acesso gratuito para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['confirmar_gravacao']}},
             {'name': 'gerar_convite_acesso_tutor', 'description': 'Gera convite seguro de acesso do tutor.', 'inputSchema': {'type': 'object', 'properties': {'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'animal_id': {'type': 'integer'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['animal_id', 'confirmar_gravacao']}},
-            {'name': 'listar_historico_medico_animal', 'description': 'Lista historico medico com exames de imagem, documentos e PDFs disponiveis.', 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}}, 'required': []}},
-            {'name': 'obter_documento_clinico', 'description': 'Retorna documento clinico e URL temporaria respeitando permissoes.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'documento_id': {'type': 'integer'}}, 'required': []}},
+            {'name': 'listar_historico_medico_animal', 'description': 'Lista historico medico com exames de imagem, documentos e PDFs disponiveis. Use pdfs_disponiveis[].url, portal_url ou shareable_url ao compartilhar com clinica/tutor; endpoints internos exigem bearer e nao devem ser enviados como link final.', 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}}, 'required': []}},
+            {'name': 'obter_documento_clinico', 'description': 'Retorna documento clinico e links humanos de portal/download respeitando permissoes. Use shareable_url para o usuario final; nao apresente URL de API protegida como link do exame.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'documento_id': {'type': 'integer'}}, 'required': []}},
             {'name': 'buscar_ou_criar_clinica_requisitante', 'description': 'Busca ou cria clinica requisitante do exame.', 'inputSchema': {'type': 'object', 'properties': {'nome_clinica': {'type': 'string'}, 'cnpj': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_clinica', 'confirmar_gravacao']}},
             {'name': 'buscar_ou_criar_tutor_animal', 'description': 'Busca ou cria tutor e animal para o fluxo de exame.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'telefone': {'type': 'string'}, 'email': {'type': 'string'}, 'nome_animal': {'type': 'string'}, 'especie': {'type': 'string'}, 'idade': {'type': 'string'}, 'raca': {'type': 'string'}, 'sexo': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_tutor', 'nome_animal', 'especie', 'confirmar_gravacao']}},
             {
@@ -13781,10 +13952,17 @@ def mcp_server():
                 db.session.commit()
             result = {
                 'animal': _serialize_calendar_pet(animal),
-                'exames': [_integration_serialize_exame_imagem(exame, user) for exame in exames_imagem],
+                'exames': [
+                    _integration_serialize_exame_imagem(exame, user, include_internal_links=False)
+                    for exame in exames_imagem
+                ],
                 'pdfs_disponiveis': [
-                    {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
-                    for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(user, exame)
+                    summary
+                    for summary in (
+                        _integration_exame_imagem_pdf_summary(exame, user, include_internal_links=False)
+                        for exame in exames_imagem
+                    )
+                    if summary
                 ],
             }
             return _mcp_ok(req_id, _mcp_json_content(result))
@@ -13807,7 +13985,9 @@ def mcp_server():
             if not _integration_user_can_access_exame_imagem(user, exame):
                 return _mcp_err(req_id, -32003, 'Sem permissao para acessar este documento.')
             db.session.commit()
-            return _mcp_ok(req_id, _mcp_json_content({'documento': _integration_serialize_exame_imagem(exame, user), 'url_temporaria': exame.arquivo_pdf_url}))
+            return _mcp_ok(req_id, _mcp_json_content(
+                _integration_exame_imagem_document_payload(exame, user, include_internal_links=False)
+            ))
 
         if tool_name == 'buscar_ou_criar_clinica_requisitante':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
@@ -31712,8 +31892,12 @@ def api_integrations_list_animal_medical_history():
             for d in documentos_query.order_by(AnimalDocumento.uploaded_at.desc()).limit(20).all()
         ],
         'pdfs_disponiveis': [
-            {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
-            for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(auth_user, exame)
+            summary
+            for summary in (
+                _integration_exame_imagem_pdf_summary(exame, auth_user)
+                for exame in exames_imagem
+            )
+            if summary
         ],
     })
 
@@ -31745,7 +31929,7 @@ def api_integrations_get_clinical_document():
         db.session.commit()
     else:
         db.session.commit()
-    return _integration_ok({'documento': _integration_serialize_exame_imagem(exame, auth_user), 'url_temporaria': exame.arquivo_pdf_url})
+    return _integration_ok(_integration_exame_imagem_document_payload(exame, auth_user))
 
 
 @csrf.exempt
@@ -32277,7 +32461,7 @@ def api_integrations_openapi():
             '/api/integrations/medical-history': {
                 'get': {
                     'operationId': 'listarHistoricoMedicoAnimalPetOrlandia',
-                    'summary': 'Listar historico medico do animal',
+                    'summary': 'Listar historico medico do animal com links humanos de portal ou download',
                     'security': [{'PetOrlandiaOAuth': ['clinical_summary:read', 'exams:read']}],
                     'parameters': [
                         {'name': 'animal_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
@@ -32289,7 +32473,7 @@ def api_integrations_openapi():
             '/api/integrations/clinical-document': {
                 'get': {
                     'operationId': 'obterDocumentoClinicoPetOrlandia',
-                    'summary': 'Obter documento clinico com URL temporaria respeitando permissao',
+                    'summary': 'Obter documento clinico com shareable_url para usuario final e metadado tecnico protegido',
                     'security': [{'PetOrlandiaOAuth': ['exams:read']}],
                     'parameters': [
                         {'name': 'exame_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},

@@ -1,45 +1,89 @@
 {% extends "layout.html" %}
+{% from 'components/logo.html' import clinic_logo %}
 
-{% block title %}Acesso ao laudo | PetOrlândia{% endblock %}
+{% block title %}Acesso ao laudo | {{ invite.clinica.nome if invite.clinica else 'Clinica' }}{% endblock %}
 
 {% block main %}
 {% set animal_nome = invite.animal.name if invite.animal else 'pet' %}
 {% set tutor_nome = invite.tutor.name if invite.tutor else 'tutor' %}
 {% set tipo_exame = (exame_imagem.tipo_exame if exame_imagem else (invite.exame.nome if invite.exame else 'exame')) %}
 {% set clinica_nome = invite.clinica.nome if invite.clinica else 'sua clinica' %}
+{% set profissional_nome = (exame_imagem.profissional_nome if exame_imagem and exame_imagem.profissional_nome else (referrer.name if referrer else None)) %}
+{% set profissional_crmv = (exame_imagem.profissional_crmv if exame_imagem and exame_imagem.profissional_crmv else (referrer.veterinario.crmv if referrer and referrer.veterinario else None)) %}
+{% set data_exame = (exame_imagem.data_exame if exame_imagem and exame_imagem.data_exame else (invite.exame.performed_at if invite.exame and invite.exame.performed_at else None)) %}
+{% set animal_image = invite.animal.image if invite.animal and invite.animal.image else None %}
 
-<div class="py-5" style="max-width: 920px;">
-  <section class="mb-4">
+<div class="py-4" style="max-width: 980px;">
+  <section class="border-bottom pb-4 mb-4">
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-      <div>
-        <p class="text-uppercase text-muted fw-semibold mb-2" style="letter-spacing:.04em;">PetOrlândia</p>
-        <h1 class="h2 mb-2">
-          {% if invite.invite_type == 'clinic' %}
-            Sua clínica recebeu um exame no PetOrlândia
+      <div class="d-flex align-items-start gap-3">
+        <div class="rounded border bg-white d-flex align-items-center justify-content-center overflow-hidden" style="width: 86px; height: 86px;">
+          {% if invite.invite_type == 'tutor' and animal_image %}
+            <img src="{{ animal_image if animal_image.startswith('/') or animal_image.startswith('http') else url_for('static', filename=animal_image) }}" alt="Foto de {{ animal_nome }}" class="w-100 h-100 object-fit-cover">
           {% else %}
-            O laudo do {{ animal_nome }} foi liberado para você
+            {{ clinic_logo(invite.clinica, alt_text='Logotipo da ' ~ clinica_nome, fallback='clinic') }}
           {% endif %}
-        </h1>
-        <p class="lead text-muted mb-0">
+        </div>
+        <div>
           {% if invite.invite_type == 'clinic' %}
-            A clínica {{ clinica_nome }} recebeu um laudo de {{ tipo_exame }} vinculado ao paciente {{ animal_nome }}.
+            <p class="text-muted small text-uppercase fw-semibold mb-1" style="letter-spacing:.04em;">{{ tipo_exame }}</p>
+            <h1 class="h2 mb-2">{{ clinica_nome }}</h1>
           {% else %}
-            Olá, {{ tutor_nome }}. A clínica liberou o laudo de {{ tipo_exame }} do {{ animal_nome }} para você acessar com segurança.
+            <p class="text-muted small text-uppercase fw-semibold mb-1" style="letter-spacing:.04em;">Paciente</p>
+            <h1 class="h2 mb-2">{{ animal_nome }}</h1>
+            <div class="d-flex align-items-center gap-2 text-muted">
+              <span>{{ clinica_nome }}</span>
+            </div>
           {% endif %}
-        </p>
+          {% if profissional_nome %}
+            <div class="fw-semibold">{{ profissional_nome }}</div>
+            {% if profissional_crmv %}
+              <div class="small text-muted">CRMV {{ profissional_crmv }}</div>
+            {% endif %}
+          {% endif %}
+          <div class="small text-muted mt-2">
+            Paciente: {{ animal_nome }}
+            {% if data_exame %}
+              · {{ data_exame.strftime('%d/%m/%Y') if data_exame.strftime else data_exame|format_datetime_brazil('%d/%m/%Y') }}
+            {% endif %}
+          </div>
+        </div>
       </div>
-      {% if expired %}
-        <span class="badge bg-secondary">Link expirado</span>
-      {% else %}
-        <span class="badge bg-success">Link ativo</span>
-      {% endif %}
+      <div class="text-md-end">
+        {% if expired %}
+          <span class="badge bg-secondary">Link expirado</span>
+        {% else %}
+          <span class="badge bg-success">Link ativo</span>
+        {% endif %}
+        <div class="small text-muted mt-3">Fornecido com tecnologia PetOrlândia</div>
+      </div>
     </div>
   </section>
 
   {% if expired %}
     <div class="alert alert-warning">
-      Este link expirou. Peça um novo acesso ao profissional que enviou o laudo.
+      Este link expirou. Peca um novo acesso ao profissional que enviou o laudo.
     </div>
+  {% endif %}
+
+  {% if invite.invite_type == 'clinic' %}
+    <section class="mb-4">
+      <p class="lead mb-2">
+        Este exame foi disponibilizado para a equipe da {{ clinica_nome }}.
+      </p>
+      <p class="text-muted mb-0">
+        O laudo de {{ tipo_exame }} do paciente {{ animal_nome }} pode ser consultado com seguranca pela clinica requisitante.
+      </p>
+    </section>
+  {% else %}
+    <section class="mb-4">
+      <p class="lead mb-2">
+        Seu exame foi disponibilizado pela equipe da clinica {{ clinica_nome }}.
+      </p>
+      <p class="text-muted mb-0">
+        O laudo de {{ tipo_exame }} do {{ animal_nome }} deve ser interpretado pelo medico veterinario responsavel junto com o exame clinico e os demais exames do pet.
+      </p>
+    </section>
   {% endif %}
 
   <section class="row g-3 mb-4">
@@ -56,10 +100,8 @@
       <div class="border rounded p-3 h-100">
         <div class="text-muted small mb-1">Exame</div>
         <div class="fw-semibold">{{ tipo_exame }}</div>
-        {% if exame_imagem and exame_imagem.data_exame %}
-          <div class="small text-muted mt-1">Realizado em {{ exame_imagem.data_exame.strftime('%d/%m/%Y') }}</div>
-        {% elif invite.exame and invite.exame.performed_at %}
-          <div class="small text-muted mt-1">Realizado em {{ invite.exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>
+        {% if data_exame %}
+          <div class="small text-muted mt-1">Realizado em {{ data_exame.strftime('%d/%m/%Y') if data_exame.strftime else data_exame|format_datetime_brazil('%d/%m/%Y') }}</div>
         {% endif %}
       </div>
     </div>
@@ -67,15 +109,10 @@
 
   {% if invite.invite_type == 'clinic' %}
     <section class="mb-4">
-      <p class="mb-3">
-        Com o PetOrlândia, sua clínica organiza fichas dos pacientes, histórico médico, exames, laudos em PDF, orientações para tutores, retornos, agenda, equipe e acesso seguro para tutores.
+      <p class="fw-semibold mb-2">Gostaria de organizar seus exames e prontuarios da mesma forma?</p>
+      <p class="text-muted mb-0">
+        Sua clinica tambem pode oferecer esta experiencia aos pacientes, mantendo a marca da clinica e do veterinario em primeiro plano.
       </p>
-      <p class="fw-semibold mb-2">Ative gratuitamente o painel da sua clínica por {{ pricing.trial_dias_clinica if pricing else 30 }} dias.</p>
-      {% if pricing and pricing.exibir_preco_no_convite_clinica and pricing.preco_formatado %}
-        <p class="text-muted mb-0">Depois do período gratuito, continue usando por {{ pricing.preco_formatado }}/mês.</p>
-      {% else %}
-        <p class="text-muted mb-0">Consulte as condições atuais no site do PetOrlândia.</p>
-      {% endif %}
     </section>
 
     <div class="d-flex flex-wrap gap-2">
@@ -84,20 +121,18 @@
       {% else %}
         <button class="btn btn-primary" type="button" disabled>Ver exame recebido</button>
       {% endif %}
-      <a class="btn btn-outline-primary" href="{{ register_url }}">Ativar painel gratuito por 30 dias</a>
-      <a class="btn btn-outline-secondary" href="{{ login_url }}">Já tenho conta</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('parceiro_clinica_landing') }}">Conhecer a solucao</a>
+      <a class="btn btn-outline-secondary" href="{{ register_url }}">Solicitar acesso</a>
+      <a class="btn btn-link text-decoration-none" href="{{ login_url }}">Ja tenho acesso</a>
     </div>
   {% else %}
     <section class="mb-4">
-      <p class="mb-3">
-        Você pode visualizar o laudo agora. Também pode criar seu acesso gratuito para acompanhar a ficha digital do {{ animal_nome }} e usar outros recursos do PetOrlândia.
-      </p>
-      <p class="mb-3">
-        Com seu acesso gratuito, você pode consultar exames e laudos liberados pela clínica, receber orientações, organizar o histórico médico do seu pet e acessar documentos importantes quando precisar.
-      </p>
-      <p class="fw-semibold mb-3">O acesso do tutor é gratuito.</p>
-      <div class="alert alert-info mb-0">
-        Este laudo deve ser interpretado pelo médico veterinário responsável, junto com o exame clínico e os demais exames do pet.
+      <p class="fw-semibold mb-2">Gostaria de guardar este exame e outros documentos do seu pet em um unico lugar?</p>
+      <div class="row g-2 text-muted">
+        <div class="col-sm-6">✓ Historico permanente</div>
+        <div class="col-sm-6">✓ Vacinas</div>
+        <div class="col-sm-6">✓ Exames</div>
+        <div class="col-sm-6">✓ Consultas e documentos</div>
       </div>
     </section>
 
@@ -107,8 +142,8 @@
       {% else %}
         <button class="btn btn-primary" type="button" disabled>Ver laudo agora</button>
       {% endif %}
-      <a class="btn btn-outline-primary" href="{{ register_url }}">Criar meu acesso gratuito</a>
-      <a class="btn btn-outline-secondary" href="{{ login_url }}">Já tenho conta</a>
+      <a class="btn btn-outline-primary" href="{{ register_url }}">Guardar no meu historico</a>
+      <a class="btn btn-link text-decoration-none" href="{{ login_url }}">Ja tenho acesso</a>
     </div>
   {% endif %}
 </div>
