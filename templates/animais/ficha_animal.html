@@ -98,10 +98,12 @@
       </div>
 
     </div>
-    <!-- DOCUMENTOS -->
-    <div class="mt-4">
-      {% include 'partials/documentos.html' %}
-    </div>
+    {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+      <!-- DOCUMENTOS -->
+      <div class="mt-4">
+        {% include 'partials/documentos.html' %}
+      </div>
+    {% endif %}
   <!-- VOLTAR -->
   <div class="card tutor-card shadow-sm border-0 mb-4">
     <div class="card-body">

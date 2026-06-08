@@ -10234,6 +10234,15 @@ def _integration_infer_assistant_action(user: User, payload: dict):
     conduta = _extract_label([
         r'conduta\s*[:\-]\s*([^.\n]{3,200})',
     ])
+    clinic_name = _extract_label([
+        r'(?:cl[iÃ­]nica(?:\s+requisitante)?|requisitante)\s*[:\-]\s*([A-Za-zÃ€-Ã¿0-9\' &.-]{2,120})',
+    ])
+    exam_type = _extract_label([
+        r'(?:exame|tipo\s+de\s+exame)\s*[:\-]\s*([^.\n]{3,120})',
+    ])
+    crmv = _extract_label([
+        r'(?:crmv(?:[-\s]?[A-Za-z]{2})?)\s*[:\-]?\s*([A-Za-z]{0,2}\s*\d{2,8})',
+    ])
 
     species = None
     labeled_species = _extract_label([r'esp[eé]cie\s*[:\-]\s*([A-Za-zÀ-ÿ ]{2,40})'])
@@ -10264,7 +10273,16 @@ def _integration_infer_assistant_action(user: User, payload: dict):
         'cadastrar_tutor_e_pets': 0,
         'agendar_consulta': 0,
         'registrar_consulta_clinica': 0,
+        'criar_exame_imagem': 0,
     }
+    if any(token in normalized_text for token in ('ultrassom', 'ultrassonografia', 'laudo', 'pdf', 'imagem', 'clinicarequisitante', 'requisitante')):
+        intent_scores['criar_exame_imagem'] += 6
+    if any(token in normalized_text for token in ('anexar', 'liberar', 'convite', 'primeiroacesso')):
+        intent_scores['criar_exame_imagem'] += 2
+    if exam_type:
+        intent_scores['criar_exame_imagem'] += 2
+    if clinic_name:
+        intent_scores['criar_exame_imagem'] += 1
     if any(token in normalized_text for token in ('cadastrar', 'cadastro', 'novotutor', 'novopet')):
         intent_scores['cadastrar_tutor_e_pets'] += 3
     if tutor_name:
@@ -10334,6 +10352,26 @@ def _integration_infer_assistant_action(user: User, payload: dict):
             missing_fields.append('nome_do_pet_ja_cadastrado')
         if not any(suggested_arguments.get(key) for key in ('queixa_principal', 'diagnostico', 'conduta')):
             missing_fields.append('dados_clinicos_da_consulta')
+    elif suggested_action == 'criar_exame_imagem':
+        suggested_arguments = {
+            'nome_animal': pet_name,
+            'nome_tutor': tutor_name,
+            'nome_clinica': clinic_name,
+            'tipo_exame': exam_type or ('Ultrassonografia Abdominal' if 'ultrassonografia' in normalized_text or 'ultrassom' in normalized_text else None),
+            'data_exame': parsed_date.isoformat() if parsed_date else None,
+            'profissional_crmv': crmv,
+            'descricao': reason or observacao_clinica,
+        }
+        if not pet_name:
+            missing_fields.append('nome_do_animal')
+        if not tutor_name:
+            missing_fields.append('nome_do_tutor')
+        if not clinic_name:
+            missing_fields.append('nome_da_clinica_requisitante')
+        if not suggested_arguments.get('tipo_exame'):
+            missing_fields.append('tipo_exame')
+        if not parsed_date:
+            missing_fields.append('data_exame')
 
     return {
         'intake': intake,
@@ -10395,6 +10433,14 @@ def _integration_execute_assistant_action(user: User, planning: dict):
                 'queixa_principal': consulta.queixa_principal,
                 'conduta': consulta.conduta,
             },
+        }
+
+    if action == 'criar_exame_imagem':
+        if not has_veterinarian_profile(user):
+            raise PermissionError('Somente contas veterinarias podem criar exame de imagem via assistente.')
+        return {
+            'acao_executada': action,
+            'resultado': _integration_create_exame_imagem(user, arguments),
         }
 
     raise ValueError('A ação sugerida ainda não pode ser executada automaticamente.')
@@ -11826,6 +11872,66 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'annotations': _mcp_annotations(False, idempotent=False),
         'outputSchema': _mcp_object_output_schema('Bloco de exames criado para o paciente.'),
     },
+    'criar_exame_imagem': {
+        'title': 'Criar exame de imagem',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Exame de imagem criado.'),
+    },
+    'anexar_pdf_exame_imagem': {
+        'title': 'Anexar PDF ao exame de imagem',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('PDF anexado ao exame de imagem.'),
+    },
+    'liberar_exame_para_clinica': {
+        'title': 'Liberar exame para clinica',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Exame liberado para a clinica.'),
+    },
+    'liberar_exame_para_tutor': {
+        'title': 'Liberar exame para tutor',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Exame liberado para o tutor.'),
+    },
+    'gerar_convite_primeiro_acesso_clinica': {
+        'title': 'Gerar convite de primeiro acesso da clinica',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Convite de primeiro acesso gerado.'),
+    },
+    'gerar_convite_acesso_tutor': {
+        'title': 'Gerar convite de acesso do tutor',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Convite de tutor gerado.'),
+    },
+    'listar_historico_medico_animal': {
+        'title': 'Listar historico medico do animal',
+        'scopes': ['clinical_summary:read', 'exams:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Historico medico com exames e PDFs.'),
+    },
+    'obter_documento_clinico': {
+        'title': 'Obter documento clinico',
+        'scopes': ['exams:read'],
+        'annotations': _mcp_annotations(True, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Documento clinico com URL temporaria.'),
+    },
+    'buscar_ou_criar_clinica_requisitante': {
+        'title': 'Buscar ou criar clinica requisitante',
+        'scopes': ['exams:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Clinica requisitante encontrada ou criada.'),
+    },
+    'buscar_ou_criar_tutor_animal': {
+        'title': 'Buscar ou criar tutor e animal',
+        'scopes': ['tutors:write', 'pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Tutor e animal encontrados ou criados.'),
+    },
     'abrir_importador_laudo_volante': {
         'scopes': ['profile'],
         'annotations': _mcp_annotations(True, idempotent=True),
@@ -12022,6 +12128,243 @@ def _integration_add_exam_document(user: User, animal: Animal, laudo_url: str | 
     )
     db.session.add(documento)
     return documento
+
+
+def _integration_exam_image_status(status: str | None) -> str:
+    normalized = (status or '').strip().lower()
+    allowed = {'rascunho', 'finalizado', 'liberado_para_clinica', 'liberado_para_tutor'}
+    return normalized if normalized in allowed else 'rascunho'
+
+
+def _integration_ensure_exam_image_table():
+    try:
+        ExameImagem.__table__.create(db.engine, checkfirst=True)
+        ExameImagemPdfAccessLog.__table__.create(db.engine, checkfirst=True)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao garantir tabela de exames de imagem: %s", exc)
+        return False
+
+
+def _integration_find_or_create_exame_image_entities(user: User, payload: dict):
+    raw_clinic_id = payload.get('clinica_id') or payload.get('clinica_requisitante_id')
+    if raw_clinic_id:
+        clinic = db.session.get(Clinica, int(raw_clinic_id))
+        clinic_created = False
+        if not clinic:
+            raise ValueError('Clinica requisitante nao encontrada.')
+    elif payload.get('nome_clinica'):
+        clinic, clinic_created = _integration_find_or_create_external_clinic(user, {
+            'nome': payload.get('nome_clinica'),
+            'email': payload.get('email_clinica') or payload.get('email'),
+            'telefone': payload.get('telefone_clinica') or payload.get('telefone'),
+            'cnpj': payload.get('cnpj'),
+        })
+    else:
+        clinic_id = _integration_user_clinic_id(user)
+        clinic = db.session.get(Clinica, clinic_id) if clinic_id else None
+        clinic_created = False
+    if not clinic:
+        raise ValueError('Informe clinica_id ou nome_clinica para vincular o exame.')
+
+    raw_tutor_id = payload.get('tutor_id')
+    if raw_tutor_id:
+        tutor = db.session.get(User, int(raw_tutor_id))
+        tutor_created = False
+        tutor_provisional_email = False
+        if not tutor:
+            raise ValueError('Tutor nao encontrado.')
+    elif payload.get('nome_tutor'):
+        tutor, tutor_created, tutor_provisional_email = _integration_find_or_create_tutor_for_clinic(
+            user,
+            clinic,
+            {
+                'nome': payload.get('nome_tutor'),
+                'email': payload.get('email_tutor'),
+                'telefone': payload.get('telefone_tutor'),
+                'cpf': payload.get('cpf_tutor'),
+            },
+        )
+    else:
+        raise ValueError('Informe tutor_id ou nome_tutor.')
+
+    raw_animal_id = payload.get('animal_id')
+    if raw_animal_id:
+        animal = db.session.get(Animal, int(raw_animal_id))
+        if not animal:
+            raise ValueError('Animal nao encontrado.')
+        if animal.user_id != tutor.id:
+            raise ValueError('Animal informado nao pertence ao tutor indicado.')
+        if not animal.clinica_id:
+            animal.clinica_id = clinic.id
+            db.session.add(animal)
+    elif payload.get('nome_animal'):
+        animal, _animal_created = _integration_find_or_create_pet_for_tutor(
+            user,
+            clinic,
+            tutor,
+            {
+                'nome': payload.get('nome_animal'),
+                'especie': payload.get('especie'),
+                'raca': payload.get('raca'),
+                'sexo': payload.get('sexo'),
+                'idade': payload.get('idade'),
+            },
+        )
+    else:
+        raise ValueError('Informe animal_id ou nome_animal.')
+
+    return clinic, clinic_created, tutor, tutor_created, tutor_provisional_email, animal
+
+
+def _integration_create_exame_imagem(user: User, payload: dict):
+    if not _integration_ensure_exam_image_table():
+        raise ValueError('Nao foi possivel preparar a tabela de exames de imagem.')
+    tipo_exame = (payload.get('tipo_exame') or payload.get('tipo') or '').strip()
+    if not tipo_exame:
+        raise ValueError('Informe tipo_exame.')
+    exam_date = _integration_parse_flexible_date(str(payload.get('data_exame') or '')) if payload.get('data_exame') else None
+    if not exam_date:
+        raise ValueError('Informe data_exame valida em YYYY-MM-DD ou DD/MM/YYYY.')
+    clinic, clinic_created, tutor, tutor_created, tutor_provisional_email, animal = _integration_find_or_create_exame_image_entities(user, payload)
+    status = 'finalizado' if payload.get('finalizar') is True else _integration_exam_image_status(payload.get('status'))
+    exame = ExameImagem(
+        animal_id=animal.id,
+        tutor_id=tutor.id,
+        clinica_requisitante_id=clinic.id,
+        profissional_id=user.id,
+        tipo_exame=tipo_exame,
+        data_exame=exam_date,
+        titulo=(payload.get('titulo') or tipo_exame).strip(),
+        descricao=(payload.get('descricao') or '').strip() or None,
+        impressao_diagnostica=(payload.get('impressao_diagnostica') or '').strip() or None,
+        profissional_nome=(payload.get('profissional_nome') or user.name or '').strip() or None,
+        profissional_crmv=(payload.get('profissional_crmv') or '').strip() or None,
+        status=status,
+    )
+    db.session.add(exame)
+    db.session.flush()
+    db.session.commit()
+    return {
+        'exame': _integration_serialize_exame_imagem(exame, user),
+        'clinica': {'id': clinic.id, 'nome': clinic.nome, 'criada_agora': clinic_created},
+        'tutor': {'id': tutor.id, 'nome': tutor.name, 'criado_agora': tutor_created, 'email_provisorio': tutor_provisional_email},
+        'animal': {'id': animal.id, 'nome': animal.name},
+    }
+
+
+def _integration_store_exame_pdf(user: User, exame: ExameImagem, file_ref: dict):
+    if not file_ref:
+        raise ValueError('Informe arquivo_pdf como anexo autorizado do ChatGPT.')
+    mime_type = (file_ref.get('mime_type') or '').strip().lower()
+    original_name = (file_ref.get('file_name') or file_ref.get('filename') or 'laudo.pdf').strip()
+    if mime_type and mime_type != 'application/pdf':
+        raise ValueError('Apenas arquivos PDF sao aceitos neste fluxo.')
+    if not original_name.lower().endswith('.pdf'):
+        raise ValueError('O arquivo do laudo deve ter extensao .pdf.')
+    stored_url, safe_name = _integration_download_and_store_laudo_file(file_ref)
+    documento = _integration_add_exam_document(user, exame.animal, stored_url, safe_name, exame.tipo_exame)
+    if documento:
+        db.session.flush()
+        exame.documento_id = documento.id
+    exame.arquivo_pdf_url = stored_url
+    exame.arquivo_pdf_filename = safe_name
+    exame.arquivo_pdf_content_type = 'application/pdf'
+    exame.arquivo_pdf_size = file_ref.get('size') if isinstance(file_ref.get('size'), int) else None
+    db.session.add(exame)
+    db.session.commit()
+    return _integration_serialize_exame_imagem(exame, user)
+
+
+def _integration_user_can_access_exame_imagem(user: User, exame: ExameImagem) -> bool:
+    role = (getattr(user, 'role', '') or '').lower()
+    if role == 'admin':
+        return True
+    if has_veterinarian_profile(user) and exame.profissional_id == user.id:
+        return True
+    if exame.tutor_id == user.id:
+        return bool(exame.liberado_para_tutor)
+    clinic_id = _integration_user_clinic_id(user)
+    if clinic_id and exame.clinica_requisitante_id == clinic_id:
+        return bool(exame.liberado_para_clinica)
+    return False
+
+
+def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = None):
+    can_pdf = bool(exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
+    return {
+        'id': exame.id,
+        'animal_id': exame.animal_id,
+        'tutor_id': exame.tutor_id,
+        'clinica_requisitante_id': exame.clinica_requisitante_id,
+        'tipo_registro': 'exame',
+        'tipo_exame': exame.tipo_exame,
+        'data_exame': exame.data_exame.isoformat() if exame.data_exame else None,
+        'titulo': exame.titulo,
+        'descricao': exame.descricao,
+        'impressao_diagnostica': exame.impressao_diagnostica,
+        'profissional_nome': exame.profissional_nome,
+        'profissional_crmv': exame.profissional_crmv,
+        'status': exame.status,
+        'liberado_para_clinica': bool(exame.liberado_para_clinica),
+        'liberado_para_tutor': bool(exame.liberado_para_tutor),
+        'data_liberacao_clinica': _integration_format_datetime(exame.data_liberacao_clinica),
+        'data_liberacao_tutor': _integration_format_datetime(exame.data_liberacao_tutor),
+        'arquivo_pdf_filename': exame.arquivo_pdf_filename,
+        'pdf_disponivel': can_pdf,
+        'pdf_url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True) if can_pdf and has_request_context() else None,
+        'created_at': _integration_format_datetime(exame.created_at),
+        'updated_at': _integration_format_datetime(exame.updated_at),
+    }
+
+
+def _integration_release_exame_imagem(user: User, payload: dict, *, target: str):
+    if not _integration_ensure_exam_image_table():
+        raise ValueError('Nao foi possivel preparar a tabela de exames de imagem.')
+    exame = db.session.get(ExameImagem, int(payload.get('exame_id') or 0))
+    if not exame:
+        raise ValueError('Exame de imagem nao encontrado.')
+    clinic_id = _integration_user_clinic_id(user)
+    if target == 'clinica':
+        if not (getattr(user, 'role', '') == 'admin' or exame.profissional_id == user.id):
+            raise PermissionError('Somente o ultrassonografista criador ou admin pode liberar para a clinica.')
+        if payload.get('clinica_id') and int(payload.get('clinica_id')) != exame.clinica_requisitante_id:
+            raise ValueError('clinica_id nao corresponde a clinica requisitante do exame.')
+        exame.liberado_para_clinica = True
+        exame.data_liberacao_clinica = datetime.now(BR_TZ)
+        exame.status = 'liberado_para_clinica'
+    else:
+        allowed_clinic = clinic_id and clinic_id == exame.clinica_requisitante_id and exame.liberado_para_clinica
+        if not (getattr(user, 'role', '') == 'admin' or allowed_clinic or exame.profissional_id == user.id):
+            raise PermissionError('Somente a clinica vinculada, o ultrassonografista criador ou admin pode liberar para o tutor.')
+        if payload.get('tutor_id') and int(payload.get('tutor_id')) != exame.tutor_id:
+            raise ValueError('tutor_id nao corresponde ao tutor do exame.')
+        exame.liberado_para_tutor = True
+        exame.data_liberacao_tutor = datetime.now(BR_TZ)
+        exame.status = 'liberado_para_tutor'
+    exame.usuario_que_liberou_id = user.id
+    db.session.add(exame)
+    db.session.commit()
+    return _integration_serialize_exame_imagem(exame, user)
+
+
+def _integration_list_exame_imagem_history(user: User, animal: Animal):
+    if not _integration_ensure_exam_image_table():
+        return []
+    query = ExameImagem.query.filter_by(animal_id=animal.id)
+    role = (getattr(user, 'role', '') or '').lower()
+    clinic_id = _integration_user_clinic_id(user)
+    if role == 'admin':
+        pass
+    elif has_veterinarian_profile(user):
+        query = query.filter(ExameImagem.profissional_id == user.id)
+    elif animal.user_id == user.id:
+        query = query.filter(ExameImagem.tutor_id == user.id, ExameImagem.liberado_para_tutor.is_(True))
+    elif clinic_id:
+        query = query.filter(ExameImagem.clinica_requisitante_id == clinic_id, ExameImagem.liberado_para_clinica.is_(True))
+    else:
+        query = query.filter(db.text('0=1'))
+    return query.order_by(ExameImagem.data_exame.desc().nullslast(), ExameImagem.created_at.desc()).all()
 
 
 def _integration_normalize_match_text(value) -> str:
@@ -12626,6 +12969,25 @@ def mcp_server():
                 },
             },
             {
+                'name': 'criar_exame_imagem',
+                'description': 'Cria exame de imagem com paciente, tutor, clinica requisitante, profissional, CRMV, data e status.',
+                'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}, 'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'tipo_exame': {'type': 'string'}, 'data_exame': {'type': 'string'}, 'profissional_nome': {'type': 'string'}, 'profissional_crmv': {'type': 'string'}, 'descricao': {'type': 'string'}, 'impressao_diagnostica': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['tipo_exame', 'data_exame', 'confirmar_gravacao']},
+            },
+            {
+                'name': 'anexar_pdf_exame_imagem',
+                'description': 'Anexa PDF autorizado pelo ChatGPT ao exame de imagem.',
+                'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA, 'attachment_id': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'arquivo_pdf', 'confirmar_gravacao']},
+                '_meta': {'openai/fileParams': ['arquivo_pdf']},
+            },
+            {'name': 'liberar_exame_para_clinica', 'description': 'Libera exame para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'clinica_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'clinica_id', 'confirmar_gravacao']}},
+            {'name': 'liberar_exame_para_tutor', 'description': 'Libera exame para o tutor vinculado.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'tutor_id', 'confirmar_gravacao']}},
+            {'name': 'gerar_convite_primeiro_acesso_clinica', 'description': 'Gera convite seguro de primeiro acesso gratuito para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['confirmar_gravacao']}},
+            {'name': 'gerar_convite_acesso_tutor', 'description': 'Gera convite seguro de acesso do tutor.', 'inputSchema': {'type': 'object', 'properties': {'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'animal_id': {'type': 'integer'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['animal_id', 'confirmar_gravacao']}},
+            {'name': 'listar_historico_medico_animal', 'description': 'Lista historico medico com exames de imagem, documentos e PDFs disponiveis.', 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}}, 'required': []}},
+            {'name': 'obter_documento_clinico', 'description': 'Retorna documento clinico e URL temporaria respeitando permissoes.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'documento_id': {'type': 'integer'}}, 'required': []}},
+            {'name': 'buscar_ou_criar_clinica_requisitante', 'description': 'Busca ou cria clinica requisitante do exame.', 'inputSchema': {'type': 'object', 'properties': {'nome_clinica': {'type': 'string'}, 'cnpj': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_clinica', 'confirmar_gravacao']}},
+            {'name': 'buscar_ou_criar_tutor_animal', 'description': 'Busca ou cria tutor e animal para o fluxo de exame.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'telefone': {'type': 'string'}, 'email': {'type': 'string'}, 'nome_animal': {'type': 'string'}, 'especie': {'type': 'string'}, 'idade': {'type': 'string'}, 'raca': {'type': 'string'}, 'sexo': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_tutor', 'nome_animal', 'especie', 'confirmar_gravacao']}},
+            {
                 'name': 'abrir_importador_laudo_volante',
                 'title': 'Abrir importador de laudo volante',
                 'description': (
@@ -13059,6 +13421,148 @@ def mcp_server():
                 'observacoes_gerais': bloco.observacoes_gerais,
                 'total_exames': len(bloco.exames or []),
             }))
+
+        if tool_name == 'criar_exame_imagem':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
+            try:
+                result = _integration_create_exame_imagem(user, tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content(result))
+
+        if tool_name == 'anexar_pdf_exame_imagem':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            exame = db.session.get(ExameImagem, int(tool_args.get('exame_id') or 0))
+            if not exame:
+                return _mcp_err(req_id, -32004, 'Exame de imagem nao encontrado.')
+            if getattr(user, 'role', '') != 'admin' and exame.profissional_id != user.id:
+                return _mcp_err(req_id, -32003, 'Somente o profissional criador pode anexar PDF.')
+            try:
+                result = _integration_store_exame_pdf(user, exame, _mcp_extract_file_reference(tool_args, 'arquivo_pdf', 'laudo_arquivo', 'arquivo_laudo'))
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({'exame': result}))
+
+        if tool_name in {'liberar_exame_para_clinica', 'liberar_exame_para_tutor'}:
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            try:
+                result = _integration_release_exame_imagem(user, tool_args, target='clinica' if tool_name.endswith('clinica') else 'tutor')
+            except PermissionError as exc:
+                return _mcp_err(req_id, -32003, str(exc))
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({'exame': result}))
+
+        if tool_name == 'listar_historico_medico_animal':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'clinical_summary:read', 'exams:read')
+            if scope_error:
+                return scope_error
+            animal = _integration_find_accessible_animal(user, animal_id=tool_args.get('animal_id'), animal_name=tool_args.get('nome_animal'))
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal nao encontrado no escopo disponivel.')
+            exames_imagem = _integration_list_exame_imagem_history(user, animal)
+            result = {
+                'animal': _serialize_calendar_pet(animal),
+                'exames': [_integration_serialize_exame_imagem(exame, user) for exame in exames_imagem],
+                'pdfs_disponiveis': [
+                    {'exame_id': exame.id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
+                    for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(user, exame)
+                ],
+            }
+            return _mcp_ok(req_id, _mcp_json_content(result))
+
+        if tool_name == 'obter_documento_clinico':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:read')
+            if scope_error:
+                return scope_error
+            exame = None
+            if tool_args.get('exame_id'):
+                exame = db.session.get(ExameImagem, int(tool_args.get('exame_id') or 0))
+            elif tool_args.get('documento_id'):
+                exame = ExameImagem.query.filter_by(documento_id=int(tool_args.get('documento_id') or 0)).first()
+            if not exame:
+                return _mcp_err(req_id, -32004, 'Documento clinico nao encontrado.')
+            if not _integration_user_can_access_exame_imagem(user, exame):
+                return _mcp_err(req_id, -32003, 'Sem permissao para acessar este documento.')
+            return _mcp_ok(req_id, _mcp_json_content({'documento': _integration_serialize_exame_imagem(exame, user), 'url_temporaria': exame.arquivo_pdf_url}))
+
+        if tool_name == 'buscar_ou_criar_clinica_requisitante':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            try:
+                clinic, created = _integration_find_or_create_external_clinic(user, {'nome': tool_args.get('nome_clinica'), 'cnpj': tool_args.get('cnpj'), 'email': tool_args.get('email'), 'telefone': tool_args.get('telefone')})
+                db.session.commit()
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({'clinica': {'id': clinic.id, 'nome': clinic.nome, 'criada_agora': created}}))
+
+        if tool_name == 'buscar_ou_criar_tutor_animal':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            clinic = db.session.get(Clinica, int(tool_args.get('clinica_id') or _integration_user_clinic_id(user) or 0))
+            if not clinic:
+                return _mcp_err(req_id, -32602, 'Informe clinica_id ou conecte um usuario com clinica vinculada.')
+            try:
+                tutor, tutor_created, provisional = _integration_find_or_create_tutor_for_clinic(user, clinic, {'nome': tool_args.get('nome_tutor'), 'telefone': tool_args.get('telefone'), 'email': tool_args.get('email')})
+                animal, animal_created = _integration_find_or_create_pet_for_tutor(user, clinic, tutor, {'nome': tool_args.get('nome_animal'), 'especie': tool_args.get('especie'), 'idade': tool_args.get('idade'), 'raca': tool_args.get('raca'), 'sexo': tool_args.get('sexo')})
+                db.session.commit()
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content({'tutor': {'id': tutor.id, 'nome': tutor.name, 'criado_agora': tutor_created, 'email_provisorio': provisional}, 'animal': {'id': animal.id, 'nome': animal.name, 'criado_agora': animal_created}, 'clinica': {'id': clinic.id, 'nome': clinic.nome}}))
+
+        if tool_name in {'gerar_convite_primeiro_acesso_clinica', 'gerar_convite_acesso_tutor'}:
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if tool_name.endswith('clinica'):
+                clinic = db.session.get(Clinica, int(tool_args.get('clinica_id'))) if tool_args.get('clinica_id') else None
+                if not clinic and tool_args.get('nome_clinica'):
+                    clinic, _created = _integration_find_or_create_external_clinic(user, {'nome': tool_args.get('nome_clinica'), 'email': tool_args.get('email'), 'telefone': tool_args.get('telefone')})
+                if not clinic:
+                    return _mcp_err(req_id, -32602, 'Informe clinica_id ou nome_clinica.')
+                if not (tool_args.get('email') or tool_args.get('telefone') or clinic.email or clinic.telefone):
+                    return _mcp_err(req_id, -32602, 'Informe email ou telefone para enviar o primeiro acesso da clinica.')
+                exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
+                invite = _create_external_onboarding_invite('clinic', user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
+            else:
+                tutor = db.session.get(User, int(tool_args.get('tutor_id'))) if tool_args.get('tutor_id') else None
+                animal = db.session.get(Animal, int(tool_args.get('animal_id') or 0))
+                if not tutor and tool_args.get('nome_tutor') and animal and animal.owner and _integration_normalize_match_text(animal.owner.name) == _integration_normalize_match_text(tool_args.get('nome_tutor')):
+                    tutor = animal.owner
+                if not tutor or not animal or animal.user_id != tutor.id:
+                    return _mcp_err(req_id, -32602, 'Informe tutor e animal vinculados.')
+                exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
+                invite = _create_external_onboarding_invite('tutor', user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), message='Acesso restrito a ficha do proprio animal.')
+            db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite)}}))
 
         if tool_name == 'abrir_importador_laudo_volante':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
@@ -15192,10 +15696,12 @@ def ficha_animal(animal_id):
             .order_by(Vacina.aplicada_em)
             .all()
         )
+        exames_imagem = _integration_list_exame_imagem_history(current_user, animal)
         return {
             'consultas': consultas,
             'blocos_prescricao': blocos_prescricao,
             'blocos_exames': blocos_exames,
+            'exames_imagem': exames_imagem,
             'vacinas_aplicadas': vacinas_aplicadas,
             'proxima_vacina': proxima_vacina,
             'doses_atrasadas': doses_atrasadas,
@@ -30502,6 +31008,7 @@ def api_integrations_operational_assistant():
         'cadastrar_tutor_e_pets': {'tutors:write', 'pets:write'},
         'agendar_consulta': {'appointments:write'},
         'registrar_consulta_clinica': {'consultations:write'},
+        'criar_exame_imagem': {'exams:write'},
     }.get(planning.get('acao_sugerida'), set())
     granted_scopes = set(g.integration_auth.get('scopes') or [])
     missing_scopes = sorted(action_scopes.difference(granted_scopes))
@@ -30627,6 +31134,257 @@ def api_integrations_create_exam_block():
         'animal_id': animal.id,
         'total_exames': len(payload.get('exames') or []),
     }, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_create_exame_imagem():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+    try:
+        result = _integration_create_exame_imagem(auth_user, payload)
+    except ValueError as exc:
+        return _integration_error('invalid_exame_imagem_payload', str(exc), 400)
+    return _integration_ok(result, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_find_or_create_requesting_clinic():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+    try:
+        clinic, created = _integration_find_or_create_external_clinic(auth_user, {
+            'nome': payload.get('nome_clinica'),
+            'cnpj': payload.get('cnpj'),
+            'email': payload.get('email'),
+            'telefone': payload.get('telefone'),
+        })
+        db.session.commit()
+    except ValueError as exc:
+        return _integration_error('invalid_requesting_clinic_payload', str(exc), 400)
+    return _integration_ok({'clinica': {'id': clinic.id, 'nome': clinic.nome, 'cnpj': clinic.cnpj, 'email': clinic.email, 'telefone': clinic.telefone, 'criada_agora': created}}, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('tutors:write', 'pets:write')
+def api_integrations_find_or_create_tutor_animal_for_exam():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    professional_error = _integration_professional_error(auth_user, veterinarian_only=True)
+    if professional_error:
+        return professional_error
+    clinic_id = payload.get('clinica_id') or _integration_user_clinic_id(auth_user)
+    clinic = db.session.get(Clinica, int(clinic_id or 0))
+    if not clinic:
+        return _integration_error('clinic_required', 'Informe clinica_id ou conecte um usuario com clinica vinculada.', 400)
+    try:
+        tutor, tutor_created, provisional = _integration_find_or_create_tutor_for_clinic(
+            auth_user,
+            clinic,
+            {'nome': payload.get('nome_tutor'), 'telefone': payload.get('telefone'), 'email': payload.get('email')},
+        )
+        animal, animal_created = _integration_find_or_create_pet_for_tutor(
+            auth_user,
+            clinic,
+            tutor,
+            {'nome': payload.get('nome_animal'), 'especie': payload.get('especie'), 'idade': payload.get('idade'), 'raca': payload.get('raca'), 'sexo': payload.get('sexo')},
+        )
+        db.session.commit()
+    except ValueError as exc:
+        return _integration_error('invalid_tutor_animal_payload', str(exc), 400)
+    return _integration_ok({
+        'tutor': {'id': tutor.id, 'nome': tutor.name, 'criado_agora': tutor_created, 'email_provisorio': provisional},
+        'animal': {'id': animal.id, 'nome': animal.name, 'criado_agora': animal_created},
+        'clinica': {'id': clinic.id, 'nome': clinic.nome},
+    }, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_attach_exame_imagem_pdf():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    exame = db.session.get(ExameImagem, int(payload.get('exame_id') or 0))
+    if not exame:
+        return _integration_error('exame_imagem_not_found', 'Exame de imagem nao encontrado.', 404)
+    if getattr(auth_user, 'role', '') != 'admin' and exame.profissional_id != auth_user.id:
+        return _integration_error('exame_imagem_forbidden', 'Somente o profissional criador pode anexar PDF.', 403)
+    file_ref = _mcp_extract_file_reference(payload, 'arquivo_pdf', 'laudo_arquivo', 'arquivo_laudo')
+    try:
+        result = _integration_store_exame_pdf(auth_user, exame, file_ref)
+    except ValueError as exc:
+        return _integration_error('invalid_exame_imagem_pdf', str(exc), 400)
+    return _integration_ok({'exame': result})
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_release_exame_to_clinic():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    try:
+        result = _integration_release_exame_imagem(auth_user, payload, target='clinica')
+    except PermissionError as exc:
+        return _integration_error('exame_imagem_forbidden', str(exc), 403)
+    except ValueError as exc:
+        return _integration_error('invalid_exame_imagem_release', str(exc), 400)
+    return _integration_ok({'exame': result})
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_release_exame_to_tutor():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    try:
+        result = _integration_release_exame_imagem(auth_user, payload, target='tutor')
+    except PermissionError as exc:
+        return _integration_error('exame_imagem_forbidden', str(exc), 403)
+    except ValueError as exc:
+        return _integration_error('invalid_exame_imagem_release', str(exc), 400)
+    return _integration_ok({'exame': result})
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_generate_clinic_first_access_invite():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    try:
+        clinic = db.session.get(Clinica, int(payload.get('clinica_id'))) if payload.get('clinica_id') else None
+        if not clinic and payload.get('nome_clinica'):
+            clinic, _created = _integration_find_or_create_external_clinic(auth_user, {'nome': payload.get('nome_clinica'), 'email': payload.get('email'), 'telefone': payload.get('telefone')})
+        if not clinic:
+            raise ValueError('Informe clinica_id ou nome_clinica.')
+        if not (payload.get('email') or payload.get('telefone') or clinic.email or clinic.telefone):
+            raise ValueError('Informe email ou telefone para enviar o primeiro acesso da clinica.')
+        exame = db.session.get(ExameImagem, int(payload.get('exame_id'))) if payload.get('exame_id') else None
+        invite = _create_external_onboarding_invite('clinic', auth_user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), message='Primeiro acesso gratuito da clinica requisitante.')
+        db.session.commit()
+    except ValueError as exc:
+        return _integration_error('invalid_clinic_invite_payload', str(exc), 400)
+    return _integration_ok({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite), 'expires_at': _integration_format_datetime(invite.expires_at) if invite else None}}, 201)
+
+
+@csrf.exempt
+@integration_bearer_required('exams:write')
+def api_integrations_generate_tutor_access_invite():
+    auth_user = g.integration_current_user
+    payload, error = _integration_request_json()
+    if error:
+        return error
+    confirmation_error = _integration_confirmation_error(payload)
+    if confirmation_error:
+        return confirmation_error
+    try:
+        tutor = db.session.get(User, int(payload.get('tutor_id'))) if payload.get('tutor_id') else None
+        animal = db.session.get(Animal, int(payload.get('animal_id'))) if payload.get('animal_id') else None
+        if not tutor and payload.get('nome_tutor') and animal and animal.owner:
+            if _integration_normalize_match_text(animal.owner.name) == _integration_normalize_match_text(payload.get('nome_tutor')):
+                tutor = animal.owner
+        if not tutor or not animal or animal.user_id != tutor.id:
+            raise ValueError('Informe tutor e animal vinculados.')
+        exame = db.session.get(ExameImagem, int(payload.get('exame_id'))) if payload.get('exame_id') else None
+        invite = _create_external_onboarding_invite('tutor', auth_user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), message='Acesso restrito a ficha do proprio animal.')
+        db.session.commit()
+    except ValueError as exc:
+        return _integration_error('invalid_tutor_invite_payload', str(exc), 400)
+    return _integration_ok({'convite': {'token': invite.token if invite else None, 'url': _external_onboarding_url(invite), 'expires_at': _integration_format_datetime(invite.expires_at) if invite else None}}, 201)
+
+
+@integration_bearer_required('clinical_summary:read', 'exams:read')
+def api_integrations_list_animal_medical_history():
+    auth_user = g.integration_current_user
+    animal = _integration_find_accessible_animal(auth_user, animal_id=request.args.get('animal_id', type=int), animal_name=request.args.get('nome_animal'))
+    if not animal:
+        return _integration_error('animal_not_found', 'Animal not found within the accessible integration scope.', 404)
+    exames_imagem = _integration_list_exame_imagem_history(auth_user, animal)
+    allowed_document_ids = {exame.documento_id for exame in exames_imagem if exame.documento_id}
+    documentos_query = AnimalDocumento.query.filter_by(animal_id=animal.id)
+    if (getattr(auth_user, 'role', '') or '').lower() != 'admin':
+        documentos_query = documentos_query.filter(AnimalDocumento.id.in_(allowed_document_ids or {0}))
+    return _integration_ok({
+        'animal': _serialize_calendar_pet(animal),
+        'consultas': [
+            {'id': c.id, 'data': _integration_format_datetime(c.created_at), 'titulo': c.queixa_principal or 'Consulta', 'status': c.status}
+            for c in _integration_accessible_consultas_query(auth_user).filter(Consulta.animal_id == animal.id).order_by(Consulta.created_at.desc()).limit(20).all()
+        ],
+        'exames': [_integration_serialize_exame_imagem(exame, auth_user) for exame in exames_imagem],
+        'documentos_anexados': [
+            {'id': d.id, 'filename': d.filename, 'descricao': d.descricao, 'uploaded_at': _integration_format_datetime(d.uploaded_at), 'pdf_disponivel': bool(d.file_url)}
+            for d in documentos_query.order_by(AnimalDocumento.uploaded_at.desc()).limit(20).all()
+        ],
+        'pdfs_disponiveis': [
+            {'exame_id': exame.id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
+            for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(auth_user, exame)
+        ],
+    })
+
+
+@integration_bearer_required('exams:read')
+def api_integrations_get_clinical_document():
+    auth_user = g.integration_current_user
+    exame = None
+    if request.args.get('exame_id'):
+        exame = db.session.get(ExameImagem, int(request.args.get('exame_id') or 0))
+    elif request.args.get('documento_id'):
+        exame = ExameImagem.query.filter_by(documento_id=int(request.args.get('documento_id') or 0)).first()
+    if not exame:
+        return _integration_error('document_not_found', 'Documento clinico nao encontrado.', 404)
+    if not _integration_user_can_access_exame_imagem(auth_user, exame):
+        return _integration_error('document_forbidden', 'Sem permissao para acessar este documento.', 403)
+    if exame.arquivo_pdf_url:
+        db.session.add(ExameImagemPdfAccessLog(
+            exame_imagem_id=exame.id,
+            user_id=auth_user.id,
+            action='view',
+            ip_address=request.headers.get('X-Forwarded-For', request.remote_addr),
+            user_agent=(request.headers.get('User-Agent') or '')[:255],
+        ))
+        db.session.commit()
+    return _integration_ok({'documento': _integration_serialize_exame_imagem(exame, auth_user), 'url_temporaria': exame.arquivo_pdf_url})
 
 
 @csrf.exempt
@@ -30775,6 +31533,10 @@ def api_integrations_openapi():
                 'Actions para usar o PetOrlandia no ChatGPT com OAuth. '
                 'Acoes de escrita exigem confirmar_gravacao="sim".'
             ),
+            'x-logo': {
+                'url': f'{issuer}/static/chatgpt_app_icon.png',
+                'altText': 'PetOrlandia',
+            },
         },
         'servers': [{'url': issuer}],
         'components': {
@@ -30988,6 +31750,180 @@ def api_integrations_openapi():
                         'required': ['exames', 'confirmar_gravacao'],
                     }),
                     'responses': {'201': ok_response('Bloco de exames criado.')},
+                }
+            },
+            '/api/integrations/image-exams': {
+                'post': {
+                    'operationId': 'criarExameImagemPetOrlandia',
+                    'summary': 'Criar exame de imagem vinculado a animal, tutor e clinica requisitante',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'animal_id': {'type': 'integer'},
+                            'nome_animal': {'type': 'string'},
+                            'tutor_id': {'type': 'integer'},
+                            'nome_tutor': {'type': 'string'},
+                            'clinica_id': {'type': 'integer'},
+                            'nome_clinica': {'type': 'string'},
+                            'tipo_exame': {'type': 'string'},
+                            'data_exame': {'type': 'string'},
+                            'profissional_nome': {'type': 'string'},
+                            'profissional_crmv': {'type': 'string'},
+                            'descricao': {'type': 'string'},
+                            'impressao_diagnostica': {'type': 'string'},
+                            'status': {'type': 'string', 'enum': ['rascunho', 'finalizado', 'liberado_para_clinica', 'liberado_para_tutor']},
+                            'finalizar': {'type': 'boolean'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['tipo_exame', 'data_exame', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Exame de imagem criado.')},
+                }
+            },
+            '/api/integrations/requesting-clinics': {
+                'post': {
+                    'operationId': 'buscarOuCriarClinicaRequisitantePetOrlandia',
+                    'summary': 'Buscar ou criar clinica requisitante para exame de imagem',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'nome_clinica': {'type': 'string'},
+                            'cnpj': {'type': 'string'},
+                            'email': {'type': 'string'},
+                            'telefone': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['nome_clinica', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Clinica requisitante encontrada ou criada.')},
+                }
+            },
+            '/api/integrations/exam-tutor-animal': {
+                'post': {
+                    'operationId': 'buscarOuCriarTutorAnimalPetOrlandia',
+                    'summary': 'Buscar ou criar tutor e animal para fluxo de exame',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['tutors:write', 'pets:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'clinica_id': {'type': 'integer'},
+                            'nome_tutor': {'type': 'string'},
+                            'telefone': {'type': 'string'},
+                            'email': {'type': 'string'},
+                            'nome_animal': {'type': 'string'},
+                            'especie': {'type': 'string'},
+                            'idade': {'type': 'string'},
+                            'raca': {'type': 'string'},
+                            'sexo': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['nome_tutor', 'nome_animal', 'especie', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Tutor e animal encontrados ou criados.')},
+                }
+            },
+            '/api/integrations/image-exams/pdf': {
+                'post': {
+                    'operationId': 'anexarPdfExameImagemPetOrlandia',
+                    'summary': 'Anexar PDF ao exame de imagem',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {
+                            'exame_id': {'type': 'integer'},
+                            'arquivo_pdf': {'type': 'object'},
+                            'attachment_id': {'type': 'string'},
+                            'confirmar_gravacao': write_confirmation,
+                        },
+                        'required': ['exame_id', 'arquivo_pdf', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'200': ok_response('PDF anexado.')},
+                }
+            },
+            '/api/integrations/image-exams/release-clinic': {
+                'post': {
+                    'operationId': 'liberarExameParaClinicaPetOrlandia',
+                    'summary': 'Liberar exame de imagem para a clinica requisitante',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {'exame_id': {'type': 'integer'}, 'clinica_id': {'type': 'integer'}, 'confirmar_gravacao': write_confirmation},
+                        'required': ['exame_id', 'clinica_id', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'200': ok_response('Exame liberado para clinica.')},
+                }
+            },
+            '/api/integrations/image-exams/release-tutor': {
+                'post': {
+                    'operationId': 'liberarExameParaTutorPetOrlandia',
+                    'summary': 'Liberar exame de imagem para o tutor',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': write_confirmation},
+                        'required': ['exame_id', 'tutor_id', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'200': ok_response('Exame liberado para tutor.')},
+                }
+            },
+            '/api/integrations/clinic-first-access-invites': {
+                'post': {
+                    'operationId': 'gerarConvitePrimeiroAcessoClinicaPetOrlandia',
+                    'summary': 'Gerar convite de primeiro acesso gratuito da clinica',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': write_confirmation},
+                        'required': ['confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Convite da clinica gerado.')},
+                }
+            },
+            '/api/integrations/tutor-access-invites': {
+                'post': {
+                    'operationId': 'gerarConviteAcessoTutorPetOrlandia',
+                    'summary': 'Gerar convite de acesso restrito do tutor',
+                    'x-openai-isConsequential': True,
+                    'security': [{'PetOrlandiaOAuth': ['exams:write']}],
+                    'requestBody': json_body({
+                        'type': 'object',
+                        'properties': {'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'animal_id': {'type': 'integer'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': write_confirmation},
+                        'required': ['animal_id', 'confirmar_gravacao'],
+                    }),
+                    'responses': {'201': ok_response('Convite do tutor gerado.')},
+                }
+            },
+            '/api/integrations/medical-history': {
+                'get': {
+                    'operationId': 'listarHistoricoMedicoAnimalPetOrlandia',
+                    'summary': 'Listar historico medico do animal',
+                    'security': [{'PetOrlandiaOAuth': ['clinical_summary:read', 'exams:read']}],
+                    'parameters': [
+                        {'name': 'animal_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
+                        {'name': 'nome_animal', 'in': 'query', 'required': False, 'schema': {'type': 'string'}},
+                    ],
+                    'responses': {'200': ok_response('Historico medico listado.')},
+                }
+            },
+            '/api/integrations/clinical-document': {
+                'get': {
+                    'operationId': 'obterDocumentoClinicoPetOrlandia',
+                    'summary': 'Obter documento clinico com URL temporaria respeitando permissao',
+                    'security': [{'PetOrlandiaOAuth': ['exams:read']}],
+                    'parameters': [
+                        {'name': 'exame_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
+                        {'name': 'documento_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
+                    ],
+                    'responses': {'200': ok_response('Documento clinico obtido.')},
                 }
             },
             '/api/integrations/returns': {

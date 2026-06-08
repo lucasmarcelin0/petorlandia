@@ -5,7 +5,8 @@
     "display_name": "PetOrlandia",
     "subtitle": "Gestao veterinaria",
     "description": "PetOrlandia ajuda veterinarios e equipes clinicas a consultar pets, agenda e pendencias, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT.",
-    "category": "PRODUCTIVITY"
+    "category": "PRODUCTIVITY",
+    "icon_url": "https://petorlandia-fbabb575d64c.herokuapp.com/static/chatgpt_app_icon.png"
   },
   "tools": {
     "listar_meus_pets": {
@@ -88,6 +89,126 @@
       },
       "justifications": {
         "read_only_justification": "Creates a private exam block and exam items for a patient.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "criar_exame_imagem": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a private image exam record after explicit confirmation.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "anexar_pdf_exame_imagem": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Attaches an authorized PDF file to a private image exam after explicit confirmation.",
+        "open_world_justification": "Writes only inside PetOrlandia file storage and clinical records.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "liberar_exame_para_clinica": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes a private release flag after explicit confirmation.",
+        "open_world_justification": "Shares access only inside the linked PetOrlandia clinic scope.",
+        "destructive_justification": "Does not delete records or revoke existing access."
+      }
+    },
+    "liberar_exame_para_tutor": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes a private tutor visibility flag after explicit confirmation.",
+        "open_world_justification": "Shares access only with the linked tutor inside PetOrlandia.",
+        "destructive_justification": "Does not delete records or revoke existing access."
+      }
+    },
+    "gerar_convite_primeiro_acesso_clinica": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a secure onboarding invite after explicit confirmation.",
+        "open_world_justification": "Creates an internal PetOrlandia invite link for the linked clinic.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "gerar_convite_acesso_tutor": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a secure tutor access invite after explicit confirmation.",
+        "open_world_justification": "Creates an internal PetOrlandia invite link for the linked tutor.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "listar_historico_medico_animal": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves accessible medical history and document metadata.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "obter_documento_clinico": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves an accessible clinical document and a permission-checked URL.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "buscar_ou_criar_clinica_requisitante": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or reuses a private clinic record after explicit confirmation.",
+        "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
+        "destructive_justification": "Does not delete records or perform irreversible external actions."
+      }
+    },
+    "buscar_ou_criar_tutor_animal": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or reuses private tutor and animal records after explicit confirmation.",
         "open_world_justification": "Writes only inside PetOrlandia and does not publish externally.",
         "destructive_justification": "Does not delete records or perform irreversible external actions."
       }
@@ -284,6 +405,14 @@
       "file_attachment_urls": null,
       "tools_triggered": "abrir_importador_laudo_volante",
       "expected_output": "Renders the review widget with clinic, tutor, animal, exam, report text, and missing fields to confirm.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Run the ultrasound image exam flow with PDF and releases.",
+      "user_prompt": "Conduza o fluxo do ultrassonografista para Ultrassonografia Abdominal do SID, tutor Rosa, clinica requisitante Angrisano, data 16/02/2026, profissional Robson Oliveira CRMV-MG 26136, com PDF anexado, e confirme cada gravacao quando eu autorizar.",
+      "file_attachment_urls": null,
+      "tools_triggered": "criar_exame_imagem, anexar_pdf_exame_imagem, liberar_exame_para_clinica, gerar_convite_primeiro_acesso_clinica, liberar_exame_para_tutor, gerar_convite_acesso_tutor, listar_historico_medico_animal, obter_documento_clinico",
+      "expected_output": "Creates or reuses clinic, tutor, and animal records, creates the image exam, attaches the PDF, releases it according to permissions, returns invite links, and lists the exam in the animal medical history with an accessible PDF URL.",
       "expected_output_url": null
     },
     {

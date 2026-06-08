@@ -102,6 +102,8 @@ __all__ = [
     "FiscalEmitter",
     "FiscalEvent",
     "ExternalOnboardingInvite",
+    "ExameImagem",
+    "ExameImagemPdfAccessLog",
     "ClinicInventory",
     "ClinicInventoryMovement",
     "ProtocoloClinico",

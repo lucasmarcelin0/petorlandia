@@ -192,6 +192,54 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/api/integrations/image-exams",
+        view_func=lazy_view("api_integrations_create_exame_imagem"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/requesting-clinics",
+        view_func=lazy_view("api_integrations_find_or_create_requesting_clinic"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/exam-tutor-animal",
+        view_func=lazy_view("api_integrations_find_or_create_tutor_animal_for_exam"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/image-exams/pdf",
+        view_func=lazy_view("api_integrations_attach_exame_imagem_pdf"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/image-exams/release-clinic",
+        view_func=lazy_view("api_integrations_release_exame_to_clinic"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/image-exams/release-tutor",
+        view_func=lazy_view("api_integrations_release_exame_to_tutor"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/clinic-first-access-invites",
+        view_func=lazy_view("api_integrations_generate_clinic_first_access_invite"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/tutor-access-invites",
+        view_func=lazy_view("api_integrations_generate_tutor_access_invite"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/api/integrations/medical-history",
+        view_func=lazy_view("api_integrations_list_animal_medical_history"),
+    )
+    bp.add_url_rule(
+        "/api/integrations/clinical-document",
+        view_func=lazy_view("api_integrations_get_clinical_document"),
+    )
+    bp.add_url_rule(
         "/api/integrations/returns",
         view_func=lazy_view("api_integrations_create_return_appointment"),
         methods=["POST"],

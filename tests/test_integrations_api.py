@@ -13,6 +13,7 @@ from models import (
     Clinica,
     Consulta,
     ExamAppointment,
+    ExameImagem,
     ExameSolicitado,
     OAuthAccessToken,
     Prescricao,
@@ -36,6 +37,10 @@ def _create_token(user_id: int, scope: str = "") -> str:
     db.session.add(token)
     db.session.commit()
     return token_value
+
+
+def _auth_header(token_value: str) -> dict:
+    return {"Authorization": f"Bearer {token_value}"}
 
 
 def test_integrations_endpoint_requires_bearer_token(app, client):
@@ -119,6 +124,124 @@ def test_integrations_me_and_resource_endpoints(app, client):
     appointments_payload = appointments_response.get_json()["data"]
     assert len(appointments_payload) == 1
     assert appointments_payload[0]["animal_id"] == pets_payload[0]["id"]
+
+
+def test_image_exam_flow_releases_pdf_to_clinic_and_tutor_only(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Angrisano", email="angrisano@example.com")
+        other_clinic = Clinica(nome="Outra Clinica")
+        tutor = User(name="Rosa", email="rosa-image@example.com", role="adotante")
+        tutor.set_password("secret123")
+        other_tutor = User(name="Outro Tutor", email="outro-image@example.com", role="adotante")
+        other_tutor.set_password("secret123")
+        vet_user = User(name="Ultrassonografista", email="ultra-image@example.com", role="veterinario", worker="veterinario")
+        vet_user.set_password("secret123")
+        clinic_user = User(name="Dono Angrisano", email="dono-angrisano@example.com", role="adotante", worker="colaborador")
+        clinic_user.set_password("secret123")
+        db.session.add_all([clinic, other_clinic, tutor, other_tutor, vet_user, clinic_user])
+        db.session.flush()
+        clinic_user.clinica_id = clinic.id
+        vet = Veterinario(user_id=vet_user.id, crmv="12345-SP", clinica_id=clinic.id)
+        sid = Animal(name="SID", user_id=tutor.id, clinica_id=clinic.id)
+        other_pet = Animal(name="NINA", user_id=other_tutor.id, clinica_id=other_clinic.id)
+        db.session.add_all([vet, sid, other_pet])
+        db.session.commit()
+
+        clinic_id = clinic.id
+        tutor_id = tutor.id
+        sid_id = sid.id
+        other_pet_id = other_pet.id
+        vet_token = _create_token(vet_user.id, scope="profile exams:write exams:read clinical_summary:read")
+        clinic_token = _create_token(clinic_user.id, scope="profile exams:write exams:read clinical_summary:read")
+        tutor_token = _create_token(tutor.id, scope="profile exams:read clinical_summary:read")
+
+    missing_confirmation = client.post(
+        "/api/integrations/image-exams",
+        headers=_auth_header(vet_token),
+        json={
+            "animal_id": sid_id,
+            "tutor_id": tutor_id,
+            "clinica_id": clinic_id,
+            "tipo_exame": "Ultrassonografia Abdominal",
+            "data_exame": "16/02/2026",
+            "profissional_nome": "Ultrassonografista",
+            "profissional_crmv": "12345-SP",
+        },
+    )
+    assert missing_confirmation.status_code == 409
+
+    create_response = client.post(
+        "/api/integrations/image-exams",
+        headers=_auth_header(vet_token),
+        json={
+            "animal_id": sid_id,
+            "tutor_id": tutor_id,
+            "clinica_id": clinic_id,
+            "tipo_exame": "Ultrassonografia Abdominal",
+            "data_exame": "16/02/2026",
+            "profissional_nome": "Ultrassonografista",
+            "profissional_crmv": "12345-SP",
+            "impressao_diagnostica": "Sem alteracoes relevantes.",
+            "confirmar_gravacao": "sim",
+        },
+    )
+    assert create_response.status_code == 201
+    exame_id = create_response.get_json()["data"]["exame"]["id"]
+
+    with app.app_context():
+        exame = db.session.get(ExameImagem, exame_id)
+        exame.arquivo_pdf_url = "/static/uploads/laudos_exames/sid.pdf"
+        exame.arquivo_pdf_filename = "sid.pdf"
+        exame.status = "finalizado"
+        db.session.add(exame)
+        db.session.commit()
+
+    clinic_before_release = client.get(
+        f"/api/integrations/medical-history?animal_id={sid_id}",
+        headers=_auth_header(clinic_token),
+    )
+    assert clinic_before_release.status_code == 200
+    assert clinic_before_release.get_json()["data"]["exames"] == []
+
+    release_clinic = client.post(
+        "/api/integrations/image-exams/release-clinic",
+        headers=_auth_header(vet_token),
+        json={"exame_id": exame_id, "clinica_id": clinic_id, "confirmar_gravacao": "sim"},
+    )
+    assert release_clinic.status_code == 200
+    assert release_clinic.get_json()["data"]["exame"]["liberado_para_clinica"] is True
+
+    clinic_history = client.get(
+        f"/api/integrations/medical-history?animal_id={sid_id}",
+        headers=_auth_header(clinic_token),
+    )
+    assert clinic_history.status_code == 200
+    clinic_payload = clinic_history.get_json()["data"]
+    assert clinic_payload["exames"][0]["titulo"] == "Ultrassonografia Abdominal"
+    assert clinic_payload["pdfs_disponiveis"][0]["filename"] == "sid.pdf"
+
+    release_tutor = client.post(
+        "/api/integrations/image-exams/release-tutor",
+        headers=_auth_header(clinic_token),
+        json={"exame_id": exame_id, "tutor_id": tutor_id, "confirmar_gravacao": "sim"},
+    )
+    assert release_tutor.status_code == 200
+    assert release_tutor.get_json()["data"]["exame"]["liberado_para_tutor"] is True
+
+    tutor_history = client.get(
+        f"/api/integrations/medical-history?animal_id={sid_id}",
+        headers=_auth_header(tutor_token),
+    )
+    assert tutor_history.status_code == 200
+    tutor_payload = tutor_history.get_json()["data"]
+    assert len(tutor_payload["exames"]) == 1
+    assert tutor_payload["animal"]["name"] == "SID"
+
+    forbidden_other_pet = client.get(
+        f"/api/integrations/medical-history?animal_id={other_pet_id}",
+        headers=_auth_header(tutor_token),
+    )
+    assert forbidden_other_pet.status_code == 404
 
 
 def test_integrations_clinical_endpoints_for_veterinarian(app, client):
@@ -350,6 +473,28 @@ def test_integrations_openapi_contract_exposes_chatgpt_actions(app, client):
     create_registration = payload["paths"]["/api/integrations/tutors-with-pets"]["post"]
     assert create_registration["x-openai-isConsequential"] is True
     assert create_registration["operationId"] == "cadastrarTutorEPetsPetOrlandia"
+    operation_ids = {
+        spec["post"]["operationId"]
+        for spec in payload["paths"].values()
+        if isinstance(spec, dict) and "post" in spec and "operationId" in spec["post"]
+    }
+    operation_ids.update(
+        spec["get"]["operationId"]
+        for spec in payload["paths"].values()
+        if isinstance(spec, dict) and "get" in spec and "operationId" in spec["get"]
+    )
+    assert {
+        "criarExameImagemPetOrlandia",
+        "anexarPdfExameImagemPetOrlandia",
+        "liberarExameParaClinicaPetOrlandia",
+        "liberarExameParaTutorPetOrlandia",
+        "gerarConvitePrimeiroAcessoClinicaPetOrlandia",
+        "gerarConviteAcessoTutorPetOrlandia",
+        "listarHistoricoMedicoAnimalPetOrlandia",
+        "obterDocumentoClinicoPetOrlandia",
+        "buscarOuCriarClinicaRequisitantePetOrlandia",
+        "buscarOuCriarTutorAnimalPetOrlandia",
+    }.issubset(operation_ids)
 
 
 def test_integrations_rest_write_requires_explicit_confirmation(app, client):
@@ -1357,6 +1502,19 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     )
     tools = tools_response.get_json()["result"]["tools"]
     assert tools
+    tool_names = {tool["name"] for tool in tools}
+    assert {
+        "criar_exame_imagem",
+        "anexar_pdf_exame_imagem",
+        "liberar_exame_para_clinica",
+        "liberar_exame_para_tutor",
+        "gerar_convite_primeiro_acesso_clinica",
+        "gerar_convite_acesso_tutor",
+        "listar_historico_medico_animal",
+        "obter_documento_clinico",
+        "buscar_ou_criar_clinica_requisitante",
+        "buscar_ou_criar_tutor_animal",
+    }.issubset(tool_names)
     for tool in tools:
         annotations = tool.get("annotations") or {}
         assert isinstance(annotations.get("readOnlyHint"), bool), tool["name"]
@@ -1371,6 +1529,16 @@ def test_mcp_laudo_volante_widget_contract(app, client):
             "cadastrar_tutor_e_pets",
             "registrar_consulta_clinica",
             "registrar_bloco_exames",
+            "criar_exame_imagem",
+            "anexar_pdf_exame_imagem",
+            "liberar_exame_para_clinica",
+            "liberar_exame_para_tutor",
+            "gerar_convite_primeiro_acesso_clinica",
+            "gerar_convite_acesso_tutor",
+            "listar_historico_medico_animal",
+            "obter_documento_clinico",
+            "buscar_ou_criar_clinica_requisitante",
+            "buscar_ou_criar_tutor_animal",
             "abrir_importador_laudo_volante",
             "importar_laudo_volante",
             "agendar_consulta",

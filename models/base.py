@@ -2374,6 +2374,60 @@ class ExameSolicitado(db.Model):
     laudo_message = db.Column(db.Text, nullable=True)
 
 
+class ExameImagem(db.Model):
+    __tablename__ = 'exame_imagem'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False, index=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    clinica_requisitante_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True, index=True)
+    profissional_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    documento_id = db.Column(db.Integer, db.ForeignKey('animal_documento.id', ondelete='SET NULL'), nullable=True)
+    exame_solicitado_id = db.Column(db.Integer, db.ForeignKey('exame_solicitado.id', ondelete='SET NULL'), nullable=True)
+    tipo_exame = db.Column(db.String(160), nullable=False)
+    data_exame = db.Column(db.Date, nullable=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    impressao_diagnostica = db.Column(db.Text, nullable=True)
+    profissional_nome = db.Column(db.String(160), nullable=True)
+    profissional_crmv = db.Column(db.String(60), nullable=True)
+    arquivo_pdf_url = db.Column(db.String(500), nullable=True)
+    arquivo_pdf_filename = db.Column(db.String(255), nullable=True)
+    arquivo_pdf_content_type = db.Column(db.String(120), nullable=True)
+    arquivo_pdf_size = db.Column(db.Integer, nullable=True)
+    status = db.Column(db.String(40), nullable=False, default='rascunho', index=True)
+    liberado_para_clinica = db.Column(db.Boolean, nullable=False, default=False)
+    liberado_para_tutor = db.Column(db.Boolean, nullable=False, default=False)
+    data_liberacao_clinica = db.Column(db.DateTime(timezone=True), nullable=True)
+    data_liberacao_tutor = db.Column(db.DateTime(timezone=True), nullable=True)
+    usuario_que_liberou_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, onupdate=now_in_brazil, nullable=False)
+
+    animal = db.relationship('Animal', backref=db.backref('exames_imagem', cascade='all, delete-orphan'))
+    tutor = db.relationship('User', foreign_keys=[tutor_id], backref=db.backref('exames_imagem_tutor', cascade='all, delete-orphan'))
+    clinica_requisitante = db.relationship('Clinica', backref=db.backref('exames_imagem_recebidos', cascade='all, delete-orphan'))
+    profissional = db.relationship('User', foreign_keys=[profissional_id])
+    documento = db.relationship('AnimalDocumento', foreign_keys=[documento_id])
+    exame_solicitado = db.relationship('ExameSolicitado', foreign_keys=[exame_solicitado_id])
+    usuario_que_liberou = db.relationship('User', foreign_keys=[usuario_que_liberou_id])
+
+
+class ExameImagemPdfAccessLog(db.Model):
+    __tablename__ = 'exame_imagem_pdf_access_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    exame_imagem_id = db.Column(db.Integer, db.ForeignKey('exame_imagem.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    accessed_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    action = db.Column(db.String(40), nullable=False, default='view')
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+
+    exame = db.relationship('ExameImagem', backref=db.backref('pdf_access_logs', cascade='all, delete-orphan'))
+    user = db.relationship('User')
+
+
 class ProtocoloClinico(db.Model):
     __tablename__ = 'protocolo_clinico'
 
