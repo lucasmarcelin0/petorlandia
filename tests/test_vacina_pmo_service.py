@@ -1753,3 +1753,12 @@ def test_plan_pmo_day_groups_condo_units_despite_messy_complement():
     assert plan["condo"] == "Quebec"
     condo_units = [h for h in plan["Manha"] if vacina_pmo_service._pmo_is_condo(h)]
     assert sorted(h["sourceRow"] for h in condo_units) == [1, 2, 3]
+
+
+def test_pmo_is_master_sheet_matches_ignoring_accent_and_case():
+    assert vacina_pmo_service._pmo_is_master_sheet("Vacinação 2026")
+    assert vacina_pmo_service._pmo_is_master_sheet("vacinacao 2026")
+    assert vacina_pmo_service._pmo_is_master_sheet("  Vacinação  2026 ")
+    assert not vacina_pmo_service._pmo_is_master_sheet("03/06/2026")
+    assert not vacina_pmo_service._pmo_is_master_sheet("Inscrição a agendar")
+    assert not vacina_pmo_service._pmo_is_master_sheet("")

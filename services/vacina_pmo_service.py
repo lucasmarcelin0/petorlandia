@@ -76,6 +76,10 @@ PMO_DOGS_VACCINATED_COLUMN = "M"
 PMO_CATS_VACCINATED_COLUMN = "N"
 PMO_ATTENDED_BY_COLUMN = "O"
 PMO_NOTE_COLUMN = "K"
+
+# Aba mestre de status (mantida pelo sync agendado). O app NUNCA deve escrever
+# nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
+PMO_MASTER_SHEET_TITLE = os.getenv("PMO_VACCINE_MASTER_SHEET_TITLE", "Vacinação 2026")
 PMO_ROUTE_ORIGIN_ADDRESS_ENV = "PMO_ROUTE_ORIGIN_ADDRESS"
 PMO_ROUTE_ORIGIN_LAT_ENV = "PMO_ROUTE_ORIGIN_LAT"
 PMO_ROUTE_ORIGIN_LNG_ENV = "PMO_ROUTE_ORIGIN_LNG"
@@ -279,6 +283,14 @@ def _normalize_shift(value: Any) -> str:
     if text.startswith("tar"):
         return "Tarde"
     return _normalize_text(value)
+
+
+def _pmo_is_master_sheet(title: Any) -> bool:
+    """True quando o título é a aba mestre de status — o app não deve escrever nela."""
+    def _norm(value: Any) -> str:
+        return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+
+    return bool(_normalize_text(title)) and _norm(title) == _norm(PMO_MASTER_SHEET_TITLE)
 
 
 def _pmo_address_parts(address: str) -> dict[str, str]:
@@ -1394,6 +1406,8 @@ def write_vaccinated_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre (coluna M = Status PMO compilado)
 
     dogs_vac, cats_vac = _count_vaccinated_by_species(visit)
 
@@ -1444,6 +1458,8 @@ def write_note_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre
 
     try:
         service = _get_sheets_service_rw()
@@ -1510,6 +1526,8 @@ def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
     if not visit.sheet_gid:
         return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca pinta a aba mestre (coluna A é gerida pelo status-sync)
     try:
         sheet_id = int(visit.sheet_gid)
     except (TypeError, ValueError):

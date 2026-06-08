@@ -522,6 +522,11 @@ def _build_requests(sheet_id: int, master_visits: list[PmoVaccinationVisit], mat
         matches = match_map.get(visit.id, [])
         status = _overall_status(matches)
         status_text, status_runs = _status_link_cell(matches)
+        # Sem correspondência: NÃO sobrescreve a linha — preserva o que já está na
+        # coluna M (e na coluna A). Antes, linhas sem match recebiam "Sem registro"
+        # com cor neutra, apagando o status compilado que já existia ali.
+        if not matches:
+            continue
         requests.append(
             {
                 "repeatCell": {
