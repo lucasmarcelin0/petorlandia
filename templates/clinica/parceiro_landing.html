@@ -3,60 +3,68 @@
 <div class="container py-5" style="max-width: 680px;">
 
   <div class="text-center mb-5">
-    <span class="fs-1">🏥</span>
-    <h1 class="h2 fw-bold mt-3">Cadastre sua clínica na PetOrlândia</h1>
+    <span class="fs-1"><i class="fa-solid fa-hospital-user text-primary" aria-hidden="true"></i></span>
+    <h1 class="h2 fw-bold mt-3">Gostaria de organizar seus exames e prontuários da mesma forma?</h1>
     <p class="text-muted lead">
-      Gerencie consultas, orçamentos e venda produtos — tudo em um só lugar.
+      Sua clínica também pode oferecer uma experiência mais clara aos pacientes, mantendo sua marca,
+      seus veterinários e sua relação com o tutor no centro da jornada.
     </p>
   </div>
 
   <!-- Passos -->
-  <div class="row g-4 mb-5">
+  <div class="row g-4 mb-5" id="fluxo">
     <div class="col-md-4 text-center">
       <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
            style="width:56px;height:56px;">
         <span class="fw-bold text-primary fs-5">1</span>
       </div>
-      <h6 class="fw-semibold">Crie sua conta</h6>
-      <p class="text-muted small">Cadastro gratuito, leva menos de 1 minuto.</p>
+      <h6 class="fw-semibold">Organize os exames</h6>
+      <p class="text-muted small">Pedidos, resultados, laudos e documentos reunidos com leitura simples.</p>
     </div>
     <div class="col-md-4 text-center">
       <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
            style="width:56px;height:56px;">
         <span class="fw-bold text-primary fs-5">2</span>
       </div>
-      <h6 class="fw-semibold">Cadastre sua clínica</h6>
-      <p class="text-muted small">Nome, endereço e horários de atendimento.</p>
+      <h6 class="fw-semibold">Valorize sua clínica</h6>
+      <p class="text-muted small">O tutor recebe o exame com o nome da clínica e do veterinário em destaque.</p>
     </div>
     <div class="col-md-4 text-center">
       <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
            style="width:56px;height:56px;">
         <span class="fw-bold text-primary fs-5">3</span>
       </div>
-      <h6 class="fw-semibold">Conecte o Mercado Pago</h6>
-      <p class="text-muted small">Um clique para autorizar. Pagamentos caem direto na sua conta.</p>
+      <h6 class="fw-semibold">Mantenha seu fluxo</h6>
+      <p class="text-muted small">A tecnologia entra como apoio, sem substituir o sistema ou a rotina da equipe.</p>
     </div>
   </div>
 
   <!-- CTA -->
   <div class="d-grid gap-2 mb-4">
+    <a href="#fluxo" class="btn btn-primary btn-lg">
+      Conhecer a solução
+    </a>
     <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}"
-       class="btn btn-primary btn-lg">
-      Quero cadastrar minha clínica
+       class="btn btn-outline-primary btn-lg">
+      Solicitar acesso
+    </a>
+    <a href="{{ url_for('index') }}#recursos"
+       class="btn btn-outline-secondary">
+      Ver demonstração
     </a>
     <a href="{{ url_for('login_view') }}?next={{ url_for('minha_clinica') }}"
        class="btn btn-outline-secondary">
-      Já tenho conta — entrar
+      Já tenho acesso — entrar
     </a>
   </div>
 
   <p class="text-center text-muted small">
-    <i class="fa-solid fa-lock me-1"></i>Seus dados são protegidos. Sem taxas de adesão.
+    <i class="fa-solid fa-lock me-1"></i>PetOrlândia atua como tecnologia habilitadora: a experiência continua pertencendo à clínica.
   </p>
 
   <!-- QR Code da própria página -->
   <div class="text-center mt-5 pt-4 border-top">
-    <p class="text-muted small mb-3">Compartilhe este link com outros parceiros</p>
+    <p class="text-muted small mb-3">Compartilhe este link com a equipe da clínica</p>
     <div id="qrcode" class="d-inline-block mb-2"></div>
     <div>
       <code class="small text-muted" id="page-url"></code>

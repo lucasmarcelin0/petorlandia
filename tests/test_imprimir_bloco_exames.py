@@ -45,10 +45,15 @@ def test_imprimir_bloco_exames_requer_clinica(app):
         assert resp.status_code == 400
         resp = client.get(f'/imprimir_bloco_exames/{bloco_id}?clinica_id={clinica_id}')
         assert resp.status_code == 200
-        assert b'Pet Clinic' in resp.data
-        assert b'Ultrassonografia abdominal' in resp.data
-        assert b'Cistite e hiperplasia prostatica.' in resp.data
-        assert b'Ultrassom SID,Rosa.pdf' in resp.data
+        html = resp.get_data(as_text=True)
+        assert 'Pet Clinic' in html
+        assert 'Paciente: <strong>Rex</strong>' in html
+        assert 'Status: Concluído' in html
+        assert 'Ultrassonografia abdominal' in html
+        assert 'Cistite e hiperplasia prostatica.' in html
+        assert 'Ultrassom SID,Rosa.pdf' in html
+        assert 'Fornecido com tecnologia <strong>PetOrlândia</strong>' in html
+        assert html.index('Pet Clinic') < html.index('Fornecido com tecnologia')
 
     with app.app_context():
         db.drop_all()

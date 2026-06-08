@@ -102,7 +102,7 @@ class RegistrationForm(FlaskForm):
         render_kw={"required": True, "aria-required": "true"},
     )
 
-    submit = SubmitField('Cadastrar')
+    submit = SubmitField('Solicitar acesso')
 
 
 

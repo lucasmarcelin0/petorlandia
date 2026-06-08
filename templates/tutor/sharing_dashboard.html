@@ -5,6 +5,31 @@
      data-share-endpoint="{{ share_api }}"
      {% if pending_token %}data-share-token="{{ pending_token }}"{% endif %}
      {% if token_request %}data-token-request='{{ token_request|tojson }}'{% endif %}>
+  {% if token_request %}
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+      <span class="text-uppercase text-muted small fw-semibold">Solicitação da clínica</span>
+      <h1 class="h3 fw-bold mt-2 mb-2">{{ token_request.clinic or 'Clínica parceira' }}</h1>
+      {% if token_request.animal %}
+      <p class="mb-2">Pet: <strong>{{ token_request.animal }}</strong></p>
+      {% endif %}
+      <p class="text-muted mb-0">
+        A equipe da {{ token_request.clinic or 'clínica responsável' }} solicitou acesso aos dados para manter
+        o atendimento organizado e acompanhar o histórico com mais clareza.
+      </p>
+      {% if token_request.message %}
+      <div class="alert alert-light border mt-3 mb-0">
+        <strong>Mensagem da clínica:</strong> {{ token_request.message }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="mb-4">
+    <h1 class="h3 fw-bold mb-1">Compartilhamentos com clínicas</h1>
+    <p class="text-muted mb-0">Revise os pedidos das equipes que atendem seus pets.</p>
+  </div>
+  {% endif %}
   <div class="row g-4">
     <div class="col-12 col-lg-6">
       <div class="card shadow-sm border-0 h-100">
