@@ -9139,7 +9139,7 @@ def _oauth_allowed_scopes() -> set[str]:
         'OAUTH_ALLOWED_SCOPES',
         (
             'openid profile email '
-            'pets:read appointments:read tutors:write pets:write '
+            'pets:read appointments:read tutors:read tutors:write pets:write '
             'appointments:write consultations:write exams:write '
             'clinical_summary:read consultations:read prescriptions:read '
             'exams:read vaccines:read handoff:read tutor_guidance:generate'
@@ -9156,6 +9156,7 @@ def _oauth_order_scopes(scopes: Iterable[str]) -> str:
         'email',
         'pets:read',
         'appointments:read',
+        'tutors:read',
         'tutors:write',
         'pets:write',
         'appointments:write',
@@ -9182,6 +9183,63 @@ def _oauth_veterinarian_write_scopes() -> set[str]:
         'consultations:write',
         'exams:write',
     }
+
+
+# Human-friendly copy for the consent screen, keyed by scope.
+# Each value is (group_key, short_label, plain_description) — all in pt-BR so a
+# veterinarian sees "Consultar pacientes" instead of the raw "pets:read".
+_OAUTH_SCOPE_CATALOG = {
+    'openid':                  ('identity', 'Identificar você',             'Confirma quem você é no PetOrlândia.'),
+    'profile':                 ('identity', 'Ver seu perfil',              'Seu nome e informações básicas de perfil.'),
+    'email':                   ('identity', 'Ver seu e-mail',             'O endereço de e-mail da sua conta.'),
+    'pets:read':               ('read',     'Consultar pacientes',         'Ver os pets e seus dados aos quais você tem acesso.'),
+    'appointments:read':       ('read',     'Consultar a agenda',          'Ver consultas e agendamentos.'),
+    'tutors:read':             ('read',     'Consultar tutores',           'Ver os dados dos tutores dos pacientes.'),
+    'clinical_summary:read':   ('read',     'Resumir o histórico clínico', 'Gerar resumos do histórico dos pacientes.'),
+    'consultations:read':      ('read',     'Consultar consultas',         'Ver o histórico de consultas clínicas.'),
+    'prescriptions:read':      ('read',     'Consultar prescrições',       'Ver prescrições e medicamentos.'),
+    'exams:read':              ('read',     'Consultar exames',            'Ver exames, laudos e resultados.'),
+    'vaccines:read':           ('read',     'Consultar vacinas',           'Ver o histórico e as pendências de vacinas.'),
+    'handoff:read':            ('read',     'Gerar passagem de plantão',   'Montar handoffs clínicos a partir dos dados existentes.'),
+    'tutor_guidance:generate': ('read',     'Gerar orientações ao tutor',  'Criar orientações para o tutor a partir do histórico.'),
+    'tutors:write':            ('write',    'Cadastrar e editar tutores',  'Criar ou atualizar cadastros de tutores.'),
+    'pets:write':              ('write',    'Cadastrar e editar pacientes','Criar ou atualizar cadastros de pets.'),
+    'appointments:write':      ('write',    'Agendar consultas e retornos','Criar agendamentos e retornos na agenda.'),
+    'consultations:write':     ('write',    'Registrar consultas',         'Salvar novas consultas clínicas.'),
+    'exams:write':             ('write',    'Registrar exames e laudos',   'Criar exames, anexar laudos e liberá-los.'),
+}
+
+# Display order + copy for the groups shown on the consent screen.
+# (group_key, title, Font Awesome icon, reassurance line)
+_OAUTH_SCOPE_GROUPS = (
+    ('identity', 'Identificação',            'fa-id-badge',         'Para reconhecer a sua conta.'),
+    ('read',     'Consultar informações',    'fa-magnifying-glass', 'Somente leitura — não altera nada no sistema.'),
+    ('write',    'Registrar e alterar dados','fa-pen-to-square',    'Cria ou atualiza registros. Toda gravação pede a sua confirmação no chat antes de salvar.'),
+)
+
+
+def _oauth_scope_detail(scope: str) -> dict:
+    group, label, description = _OAUTH_SCOPE_CATALOG.get(
+        scope, ('read', scope, 'Permissão solicitada pelo aplicativo.')
+    )
+    return {'scope': scope, 'group': group, 'label': label, 'description': description}
+
+
+def _oauth_scope_details(scopes: Iterable[str]) -> list[dict]:
+    """Flat list of friendly scope descriptions in canonical display order."""
+    return [_oauth_scope_detail(scope) for scope in _oauth_order_scopes(scopes).split()]
+
+
+def _oauth_grouped_scope_details(scopes: Iterable[str]) -> list[dict]:
+    """Scope descriptions bucketed into the consent-screen groups, skipping
+    empty groups and preserving canonical ordering inside each group."""
+    details = _oauth_scope_details(scopes)
+    groups = []
+    for key, title, icon, hint in _OAUTH_SCOPE_GROUPS:
+        items = [detail for detail in details if detail['group'] == key]
+        if items:
+            groups.append({'key': key, 'title': title, 'icon': icon, 'hint': hint, 'perms': items})
+    return groups
 
 
 def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
@@ -11500,6 +11558,9 @@ def oauth_authorize():
             client=client,
             current_account=current_user,
             requested_scopes=requested_scopes,
+            write_scopes=_oauth_scope_details(
+                requested_scope_set.intersection(_oauth_veterinarian_write_scopes())
+            ),
             error_message='Esta conexao pede permissoes de escrita clinica e exige uma conta veterinaria.',
             switch_account_url=url_for('logout'),
             continue_url=request.url,
@@ -11536,8 +11597,10 @@ def oauth_authorize():
     return render_template(
         'auth/oauth_consent.html',
         client=client,
+        current_account=current_user,
         scope=scope,
         requested_scopes=requested_scopes,
+        scope_groups=_oauth_grouped_scope_details(requested_scopes),
         state=state,
         redirect_uri=redirect_uri,
         response_type=response_type,
@@ -11783,25 +11846,10 @@ def openid_configuration():
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
-        'scopes_supported': [
-            'openid',
-            'profile',
-            'email',
-            'pets:read',
-            'appointments:read',
-            'tutors:write',
-            'pets:write',
-            'appointments:write',
-            'consultations:write',
-            'exams:write',
-            'clinical_summary:read',
-            'consultations:read',
-            'prescriptions:read',
-            'exams:read',
-            'vaccines:read',
-            'handoff:read',
-            'tutor_guidance:generate',
-        ],
+        # Single source of truth: derived from OAUTH_ALLOWED_SCOPES so the
+        # authorization-server metadata, the protected-resource metadata and
+        # the consent screen never drift apart.
+        'scopes_supported': _oauth_order_scopes(_oauth_allowed_scopes()).split(),
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post', 'client_secret_basic'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
