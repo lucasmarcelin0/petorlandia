@@ -50,6 +50,34 @@
                     <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
                   {% endif %}
                 </div>
+                <div class="card-body pt-0">
+                  <ul class="list-group list-group-flush">
+                    {% for exame in bloco.exames %}
+                      <li class="list-group-item px-0">
+                        <div class="d-flex flex-wrap justify-content-between gap-2">
+                          <strong>{{ exame.nome }}</strong>
+                          <span class="badge {% if exame.status == 'concluido' %}bg-success{% elif exame.status == 'cancelado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+                            {{ (exame.status or 'pendente')|replace('_', ' ')|capitalize }}
+                          </span>
+                        </div>
+                        {% if exame.performed_at %}
+                          <div class="small text-muted">Realizado em {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</div>
+                        {% endif %}
+                        {% if exame.resultado %}
+                          <div class="small mt-1"><strong>Resultado:</strong> {{ exame.resultado }}</div>
+                        {% endif %}
+                        {% if exame.laudo_url %}
+                          <div class="small mt-1">
+                            <strong>Laudo:</strong>
+                            <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">{{ exame.laudo_filename or 'Abrir laudo' }}</a>
+                          </div>
+                        {% elif exame.laudo_filename %}
+                          <div class="small text-muted mt-1">Arquivo informado: {{ exame.laudo_filename }}</div>
+                        {% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
               </div>
             {% endfor %}
             {% if blocos_exames|length > 3 and 'historico_exames' in current_app.view_functions %}

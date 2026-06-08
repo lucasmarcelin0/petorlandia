@@ -90,8 +90,25 @@
     {% for exame in bloco.exames %}
       <div class="exame-item">
         <strong>{{ exame.nome }}</strong>
+        <div class="prescricao-obs">
+          Status: {{ (exame.status or 'pendente')|replace('_', ' ')|capitalize }}
+          {% if exame.performed_at %}
+            • Realizado em {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}
+          {% endif %}
+        </div>
         {% if exame.justificativa %}
           <p class="prescricao-obs">{{ exame.justificativa }}</p>
+        {% endif %}
+        {% if exame.resultado %}
+          <p class="prescricao-obs"><strong>Resultado:</strong> {{ exame.resultado }}</p>
+        {% endif %}
+        {% if exame.laudo_url %}
+          <p class="prescricao-obs">
+            <strong>Laudo:</strong>
+            <a href="{{ exame.laudo_url }}" target="_blank" rel="noopener">{{ exame.laudo_filename or 'Abrir laudo' }}</a>
+          </p>
+        {% elif exame.laudo_filename %}
+          <p class="prescricao-obs"><strong>Arquivo informado:</strong> {{ exame.laudo_filename }}</p>
         {% endif %}
       </div>
     {% endfor %}
