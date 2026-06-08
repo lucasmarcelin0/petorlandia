@@ -102,6 +102,7 @@ Antes de submeter para o publico:
 - Privacy policy URL: `https://www.petorlandia.com.br/privacy`
 - Support URL: `https://www.petorlandia.com.br/support`
 - Terms of Service URL: `https://www.petorlandia.com.br/terms`
+- Demo Recording URL: `https://www.petorlandia.com.br/static/chatgpt_app_demo.mp4`
 - Import JSON: `chatgpt-app-submission.json`
 
 ## Riscos antes da revisao publica
