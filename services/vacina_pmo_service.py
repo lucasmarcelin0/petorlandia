@@ -131,13 +131,12 @@ PMO_DATE_MASTER_CELL = "Q13"
 # Colunas copiadas de cada casa (A..K) da "inscrições a agendar" para a aba do dia.
 PMO_SCHEDULE_SOURCE_COLUMNS = 11  # A..K
 
-# Metas de distribuição por turno. A planilha modelo tem 9 linhas por turno, então
-# o máximo da manhã é limitado a 9 (a meta de até 10 rolaria para o próximo dia).
-PMO_DAY_TARGET_ANIMALS = 25
-PMO_MORNING_MIN_HOUSES = 6
+# Metas de distribuição por turno. O número de ANIMAIS manda (alvo ~22-23, teto 24);
+# as casas são flexíveis, limitadas só pelas 9 linhas de cada turno no modelo.
+PMO_DAY_TARGET_ANIMALS = 23      # alvo do dia (faixa boa 22-23)
+PMO_DAY_MAX_ANIMALS = 24         # teto duro: casas avulsas nunca passam disso
+PMO_MORNING_TARGET_ANIMALS = 13  # manhã pega um pouco mais que metade
 PMO_MORNING_MAX_HOUSES = 9
-PMO_MORNING_TARGET_ANIMALS = 14
-PMO_AFTERNOON_MIN_HOUSES = 5
 PMO_AFTERNOON_MAX_HOUSES = 7
 
 # Cores de marcação das casas já agendadas (linha inteira), uma por turno.
@@ -1979,17 +1978,17 @@ def distribute_pmo_houses(
     tarde_animals = 0
     for house in houses:
         animals = _pmo_house_animals(house)
-        if len(manha) < PMO_MORNING_MAX_HOUSES and (
-            len(manha) < PMO_MORNING_MIN_HOUSES
-            or manha_animals + animals <= PMO_MORNING_TARGET_ANIMALS
-        ):
+        # Teto duro do dia: casas avulsas nunca fazem o total passar de PMO_DAY_MAX_ANIMALS.
+        # (O condomínio, que entra via seed_morning, é a única exceção.)
+        if manha_animals + tarde_animals + animals > PMO_DAY_MAX_ANIMALS:
+            break
+        # Manhã primeiro, até o alvo de animais da manhã (e o limite de linhas).
+        if len(manha) < PMO_MORNING_MAX_HOUSES and manha_animals + animals <= PMO_MORNING_TARGET_ANIMALS:
             manha.append(house)
             manha_animals += animals
             continue
-        if len(tarde) < PMO_AFTERNOON_MAX_HOUSES and (
-            len(tarde) < PMO_AFTERNOON_MIN_HOUSES
-            or manha_animals + tarde_animals + animals <= PMO_DAY_TARGET_ANIMALS
-        ):
+        # Senão, tarde — respeitando só o limite de linhas do turno.
+        if len(tarde) < PMO_AFTERNOON_MAX_HOUSES:
             tarde.append(house)
             tarde_animals += animals
             continue

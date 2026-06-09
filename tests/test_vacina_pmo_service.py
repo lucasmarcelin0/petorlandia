@@ -1604,17 +1604,27 @@ def test_status_color_back_to_pendente_clears_to_white(app, monkeypatch):
 # ——— Criar dia de vacinação ————————————————————————————————————————————————
 
 def test_distribute_pmo_houses_respects_shift_targets():
+    # 15 casas com 2 animais cada. O nº de animais manda: manhã enche até ~13
+    # (6 casas = 12 animais), tarde leva o resto até o teto de 24 (mais 6 casas).
     houses = [{"sourceRow": i, "dogs": 1, "cats": 1} for i in range(1, 16)]
 
     plan = vacina_pmo_service.distribute_pmo_houses(houses)
 
-    # Manhã enche até a meta (~14 animais), tarde leva o resto até ~25 no total.
-    assert len(plan["Manha"]) == 7
-    assert len(plan["Tarde"]) == 5
-    assert plan["manha_animals"] == 14
-    assert plan["tarde_animals"] == 10
-    assert [h["sourceRow"] for h in plan["Manha"]] == [1, 2, 3, 4, 5, 6, 7]
-    assert [h["sourceRow"] for h in plan["Tarde"]] == [8, 9, 10, 11, 12]
+    assert plan["manha_animals"] == 12
+    assert plan["tarde_animals"] == 12
+    assert plan["manha_animals"] + plan["tarde_animals"] <= 24
+    assert [h["sourceRow"] for h in plan["Manha"]] == [1, 2, 3, 4, 5, 6]
+    assert [h["sourceRow"] for h in plan["Tarde"]] == [7, 8, 9, 10, 11, 12]
+
+
+def test_distribute_pmo_houses_never_exceeds_daily_animal_cap():
+    # Famílias grandes (4 animais) não podem mais estourar: antes a regressão de
+    # "mínimo de casas" forçava 5 casas à tarde e o dia ia a 29.
+    houses = [{"sourceRow": i, "dogs": 4, "cats": 0} for i in range(1, 20)]
+
+    plan = vacina_pmo_service.distribute_pmo_houses(houses)
+
+    assert plan["manha_animals"] + plan["tarde_animals"] <= 24
 
 
 def test_distribute_pmo_houses_never_exceeds_template_rows():
