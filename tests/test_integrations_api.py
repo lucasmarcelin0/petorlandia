@@ -16,6 +16,8 @@ from models import (
     ExameImagem,
     ExameSolicitado,
     OAuthAccessToken,
+    OAuthClient,
+    OAuthRefreshToken,
     Prescricao,
     User,
     Vacina,
@@ -69,6 +71,56 @@ def test_integrations_endpoint_requires_scope(app, client):
     payload = response.get_json()
     assert payload["error"]["code"] == "insufficient_scope"
     assert "pets:read" in payload["error"]["details"]["missing_scopes"]
+
+
+def test_chatgpt_oidc_only_access_token_forces_reauthorization(app, client):
+    with app.app_context():
+        user = User(name="ChatGPT Vet", email="chatgpt-token@example.com", role="veterinario", worker="veterinario")
+        user.set_password("secret123")
+        oauth_client = OAuthClient(
+            client_id="chatgpt-token-client",
+            name="ChatGPT PetOrlandia MCP",
+            redirect_uris="https://chatgpt.com/aip/petorlandia/oauth/callback",
+            scopes="openid profile email",
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv="CRMV-TOKEN"))
+        refresh = OAuthRefreshToken(
+            client_id="chatgpt-token-client",
+            user_id=user.id,
+            refresh_token="old-chatgpt-refresh-token",
+            scope="openid profile email",
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+        db.session.add(refresh)
+        db.session.flush()
+        access = OAuthAccessToken(
+            client_id="chatgpt-token-client",
+            user_id=user.id,
+            access_token="old-chatgpt-access-token",
+            token_type="Bearer",
+            scope="openid profile email",
+            refresh_token_id=refresh.id,
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(access)
+        db.session.commit()
+        access_id = access.id
+        refresh_id = refresh.id
+
+    response = client.get(
+        "/api/integrations/pets",
+        headers={"Authorization": "Bearer old-chatgpt-access-token"},
+    )
+
+    assert response.status_code == 401
+    payload = response.get_json()
+    assert payload["error"]["code"] == "reauthorization_required"
+    assert "pets:read" in payload["error"]["details"]["missing_scopes"]
+    with app.app_context():
+        assert db.session.get(OAuthAccessToken, access_id).revoked_at is not None
+        assert db.session.get(OAuthRefreshToken, refresh_id).revoked_at is not None
 
 
 def test_integrations_me_and_resource_endpoints(app, client):

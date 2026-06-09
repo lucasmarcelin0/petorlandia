@@ -1,10 +1,13 @@
+import re
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import base64
 import json
 
 from extensions import db
-from models import OAuthClient, User
+from models import OAuthClient, OAuthRefreshToken, User, Veterinario
+from time_utils import utcnow
 
 
 def _login(client, user_id: int):
@@ -222,10 +225,10 @@ def test_confidential_client_allows_authorize_without_pkce_and_requires_client_s
         user = User(name='Confidential User', email='confidential@example.com', role='adotante')
         user.set_password('secret123')
         oauth_client = OAuthClient(
-            client_id='chatgpt-client',
+            client_id='confidential-client',
             client_secret='super-secret',
-            name='ChatGPT confidential client',
-            redirect_uris='https://chat.openai.com/aip/plugin-callback',
+            name='Confidential client',
+            redirect_uris='https://client.example/confidential-callback',
             scopes='openid profile email',
             is_confidential=True,
             auth_method='client_secret_post',
@@ -240,8 +243,8 @@ def test_confidential_client_allows_authorize_without_pkce_and_requires_client_s
         '/oauth/authorize',
         data={
             'response_type': 'code',
-            'client_id': 'chatgpt-client',
-            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+            'client_id': 'confidential-client',
+            'redirect_uri': 'https://client.example/confidential-callback',
             'scope': 'openid profile email',
             'state': 'state-chatgpt',
             'consent_action': 'approve',
@@ -257,8 +260,8 @@ def test_confidential_client_allows_authorize_without_pkce_and_requires_client_s
         data={
             'grant_type': 'authorization_code',
             'code': code,
-            'client_id': 'chatgpt-client',
-            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+            'client_id': 'confidential-client',
+            'redirect_uri': 'https://client.example/confidential-callback',
         },
     )
     assert missing_secret.status_code == 401
@@ -269,10 +272,127 @@ def test_confidential_client_allows_authorize_without_pkce_and_requires_client_s
         data={
             'grant_type': 'authorization_code',
             'code': code,
-            'client_id': 'chatgpt-client',
+            'client_id': 'confidential-client',
             'client_secret': 'super-secret',
-            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+            'redirect_uri': 'https://client.example/confidential-callback',
         },
     )
     assert token_response.status_code == 200
     assert token_response.get_json()['token_type'] == 'Bearer'
+
+
+def test_chatgpt_cached_oidc_scope_is_expanded_to_clinical_consent_and_token(app, client):
+    redirect_uri = 'https://chatgpt.com/aip/petorlandia/oauth/callback'
+    with app.app_context():
+        user = User(name='Dr. ChatGPT', email='chatgpt-vet@example.com', role='veterinario', worker='veterinario')
+        user.set_password('secret123')
+        oauth_client = OAuthClient(
+            client_id='chatgpt-stale-client',
+            name='ChatGPT PetOrlandia MCP',
+            redirect_uris=redirect_uri,
+            scopes='openid profile email',
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-CHATGPT'))
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+
+    consent_response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'chatgpt-stale-client',
+            'redirect_uri': redirect_uri,
+            'scope': 'openid profile email',
+            'state': 'state-chatgpt-stale',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
+            'code_challenge_method': 'S256',
+        },
+    )
+
+    assert consent_response.status_code == 200
+    html = consent_response.get_data(as_text=True)
+    consent_scopes = re.findall(r'name="consent_scopes" value="([^"]+)"', html)
+    scope_value = re.search(r'name="scope" value="([^"]+)"', html).group(1)
+    assert 'pets:read' in consent_scopes
+    assert 'exams:write' in consent_scopes
+
+    authorize_response = client.post(
+        '/oauth/authorize',
+        data={
+            'response_type': 'code',
+            'client_id': 'chatgpt-stale-client',
+            'redirect_uri': redirect_uri,
+            'scope': scope_value,
+            'state': 'state-chatgpt-stale',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
+            'code_challenge_method': 'S256',
+            'consent_action': 'approve',
+            'consent_scopes': consent_scopes,
+        },
+        follow_redirects=False,
+    )
+    assert authorize_response.status_code == 302
+    code = parse_qs(urlparse(authorize_response.headers['Location']).query)['code'][0]
+
+    token_response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': 'chatgpt-stale-client',
+            'redirect_uri': redirect_uri,
+            'code_verifier': 'verifier',
+        },
+    )
+
+    assert token_response.status_code == 200
+    granted_scopes = set(token_response.get_json()['scope'].split())
+    assert {'pets:read', 'exams:write', 'clinical_summary:read'}.issubset(granted_scopes)
+    with app.app_context():
+        stored_client = OAuthClient.query.filter_by(client_id='chatgpt-stale-client').one()
+        assert {'pets:read', 'exams:write'}.issubset(set(stored_client.scopes.split()))
+
+
+def test_chatgpt_oidc_only_refresh_token_forces_reauthorization(app, client):
+    with app.app_context():
+        user = User(name='Dr. Refresh', email='chatgpt-refresh@example.com', role='veterinario', worker='veterinario')
+        user.set_password('secret123')
+        oauth_client = OAuthClient(
+            client_id='chatgpt-refresh-client',
+            name='ChatGPT PetOrlandia MCP',
+            redirect_uris='https://chatgpt.com/aip/petorlandia/oauth/callback',
+            scopes='openid profile email',
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-REFRESH'))
+        refresh = OAuthRefreshToken(
+            client_id='chatgpt-refresh-client',
+            user_id=user.id,
+            refresh_token='refresh-token-with-basic-scope',
+            scope='openid profile email',
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+        db.session.add(refresh)
+        db.session.commit()
+        refresh_id = refresh.id
+
+    response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'refresh_token',
+            'client_id': 'chatgpt-refresh-client',
+            'refresh_token': 'refresh-token-with-basic-scope',
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()['error'] == 'invalid_grant'
+    assert 'clinical scopes' in response.get_json()['error_description']
+    with app.app_context():
+        stored_refresh = db.session.get(OAuthRefreshToken, refresh_id)
+        assert stored_refresh.revoked_at is not None

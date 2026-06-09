@@ -275,6 +275,28 @@ def test_dynamic_registration_without_scope_defaults_to_allowed_app_scopes(app):
     assert {'pets:read', 'appointments:read', 'consultations:write', 'tutor_guidance:generate'}.issubset(scope_set)
 
 
+def test_chatgpt_dynamic_registration_with_oidc_scope_expands_to_clinical_scopes(app):
+    client = app.test_client()
+
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'ChatGPT PetOrlandia MCP',
+            'redirect_uris': ['https://chatgpt.com/aip/petorlandia/oauth/callback'],
+            'token_endpoint_auth_method': 'none',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+            'scope': 'openid profile email',
+        },
+    )
+
+    assert registration.status_code == 201
+    payload = registration.get_json()
+    scope_set = set(payload['scope'].split())
+    assert {'openid', 'profile', 'email'}.issubset(scope_set)
+    assert {'pets:read', 'exams:read', 'exams:write', 'clinical_summary:read'}.issubset(scope_set)
+
+
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
     client = app.test_client()
 

@@ -9185,6 +9185,99 @@ def _oauth_veterinarian_write_scopes() -> set[str]:
     }
 
 
+_OAUTH_IDENTITY_SCOPES = {'openid', 'profile', 'email'}
+_OAUTH_MCP_SCOPE_SENTINELS = {'pets:read', 'exams:read', 'exams:write'}
+
+
+def _oauth_scope_tokens(scope_value: str | None) -> set[str]:
+    return {item.strip() for item in (scope_value or '').split() if item.strip()}
+
+
+def _oauth_default_mcp_scope() -> str:
+    return _oauth_order_scopes(_oauth_allowed_scopes())
+
+
+def _oauth_scope_needs_mcp_recovery(scope_value: str | None) -> bool:
+    requested = _oauth_scope_tokens(scope_value)
+    return not requested or requested.issubset(_OAUTH_IDENTITY_SCOPES)
+
+
+def _oauth_client_looks_like_openai_mcp(
+    client: OAuthClient | None,
+    *,
+    redirect_uri: str = '',
+    resource: str = '',
+) -> bool:
+    if client is None:
+        return False
+
+    values = ' '.join(
+        value
+        for value in (
+            getattr(client, 'name', ''),
+            getattr(client, 'client_id', ''),
+            getattr(client, 'redirect_uris', ''),
+            redirect_uri,
+            resource,
+        )
+        if value
+    ).lower()
+    resource_value = (resource or '').strip().rstrip('/').lower()
+    expected_resource = f'{_oauth_issuer().rstrip("/")}/mcp'.lower()
+
+    has_chatgpt_marker = (
+        'chatgpt' in values
+        or 'chat.openai.com' in values
+        or 'openai' in (getattr(client, 'name', '') or '').lower()
+    )
+    has_mcp_marker = (
+        resource_value == expected_resource
+        or values.find('/connector/') != -1
+        or values.find('/aip/') != -1
+        or ' mcp' in values
+        or values.endswith('mcp')
+    )
+    return has_chatgpt_marker and has_mcp_marker
+
+
+def _oauth_registration_looks_like_openai_mcp(payload: dict, redirect_uris: list[str]) -> bool:
+    client_name = str(payload.get('client_name') or '').lower()
+    resource = str(payload.get('resource') or '').strip().rstrip('/').lower()
+    expected_resource = f'{_oauth_issuer().rstrip("/")}/mcp'.lower()
+    values = ' '.join([client_name, *redirect_uris, resource]).lower()
+    has_chatgpt_marker = 'chatgpt' in values or 'chat.openai.com' in values or 'openai' in client_name
+    has_mcp_marker = (
+        resource == expected_resource
+        or values.find('/connector/') != -1
+        or values.find('/aip/') != -1
+        or ' mcp' in values
+        or values.endswith('mcp')
+    )
+    return has_chatgpt_marker and has_mcp_marker
+
+
+def _oauth_ensure_mcp_client_scopes(client: OAuthClient) -> bool:
+    current_scopes = _oauth_scope_tokens(client.scopes)
+    desired_scopes = current_scopes.union(_oauth_allowed_scopes())
+    if _OAUTH_MCP_SCOPE_SENTINELS.issubset(current_scopes):
+        return False
+
+    client.scopes = _oauth_order_scopes(desired_scopes)
+    db.session.add(client)
+    return True
+
+
+def _oauth_access_token_requires_mcp_reauthorization(token: OAuthAccessToken) -> bool:
+    if not _oauth_scope_needs_mcp_recovery(token.scope):
+        return False
+    client = OAuthClient.query.filter_by(client_id=token.client_id).first()
+    return _oauth_client_looks_like_openai_mcp(client)
+
+
+def _oauth_refresh_token_requires_mcp_reauthorization(refresh: OAuthRefreshToken, client: OAuthClient) -> bool:
+    return _oauth_scope_needs_mcp_recovery(refresh.scope) and _oauth_client_looks_like_openai_mcp(client)
+
+
 # Human-friendly copy for the consent screen, keyed by scope.
 # Each value is (group_key, short_label, plain_description) — all in pt-BR so a
 # veterinarian sees "Consultar pacientes" instead of the raw "pets:read".
@@ -11444,6 +11537,27 @@ def integration_bearer_required(*required_scopes: str):
             token_scope_set = {item.strip() for item in (token.scope or '').split() if item.strip()}
             missing_scopes = sorted(required_scope_set.difference(token_scope_set))
             if missing_scopes:
+                if _oauth_access_token_requires_mcp_reauthorization(token):
+                    refresh = (
+                        db.session.get(OAuthRefreshToken, token.refresh_token_id)
+                        if token.refresh_token_id
+                        else None
+                    )
+                    if refresh is not None:
+                        _oauth_revoke_refresh_family(refresh)
+                    elif token.revoked_at is None:
+                        token.revoked_at = utcnow()
+                        db.session.add(token)
+                    db.session.commit()
+                    _oauth_log_event('oauth_mcp_reauthorization_required', client_id=token.client_id, user_id=token.user_id)
+                    return _integration_error(
+                        'reauthorization_required',
+                        'Este token foi emitido antes dos escopos clinicos atuais. Reconecte o PetOrlandia no ChatGPT para autorizar pets:read, exams:write e os demais escopos clinicos.',
+                        401,
+                        required_scopes=sorted(required_scope_set),
+                        granted_scopes=sorted(token_scope_set),
+                        missing_scopes=missing_scopes,
+                    )
                 return _integration_error(
                     'insufficient_scope',
                     'Access token does not grant the required scope.',
@@ -11520,6 +11634,7 @@ def oauth_authorize():
     nonce = request.values.get('nonce', '').strip() or None
     code_challenge = request.values.get('code_challenge', '').strip()
     code_challenge_method = request.values.get('code_challenge_method', '').strip()
+    resource = request.values.get('resource', '').strip()
 
     if response_type != 'code':
         return _oauth_error_response('unsupported_response_type', 'Only authorization code flow is supported.')
@@ -11539,6 +11654,13 @@ def oauth_authorize():
     requires_pkce = _oauth_requires_pkce(client)
     if requires_pkce and (not code_challenge or code_challenge_method != 'S256'):
         return _oauth_error_response('invalid_request', 'PKCE with code_challenge_method=S256 is required.')
+
+    if _oauth_client_looks_like_openai_mcp(client, redirect_uri=redirect_uri, resource=resource):
+        if _oauth_ensure_mcp_client_scopes(client):
+            db.session.commit()
+            _oauth_log_event('oauth_mcp_client_scopes_upgraded', client_id=client_id)
+        if _oauth_scope_needs_mcp_recovery(scope_raw):
+            scope_raw = _oauth_default_mcp_scope()
 
     try:
         scope = _oauth_normalize_scope(scope_raw, client)
@@ -11727,6 +11849,15 @@ def oauth_token():
             _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
             return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
 
+        if _oauth_refresh_token_requires_mcp_reauthorization(refresh, client):
+            _oauth_revoke_refresh_family(refresh)
+            db.session.commit()
+            _oauth_log_event('oauth_mcp_reauthorization_required', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response(
+                'invalid_grant',
+                'Refresh token is missing the current clinical scopes. Reconnect PetOrlandia in ChatGPT to authorize pets:read, exams:write and the remaining clinical scopes.',
+            )
+
         now = utcnow()
         refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
         access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
@@ -11800,6 +11931,11 @@ def oauth_dynamic_client_registration():
         return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
 
     requested_scope = str(payload.get('scope') or '').strip()
+    if (
+        _oauth_registration_looks_like_openai_mcp(payload, normalized_redirect_uris)
+        and _oauth_scope_needs_mcp_recovery(requested_scope)
+    ):
+        requested_scope = _oauth_default_mcp_scope()
     scope = _oauth_normalize_scope(requested_scope) if requested_scope else _oauth_order_scopes(_oauth_allowed_scopes())
     if not scope:
         return _oauth_error_response('invalid_scope', 'No valid scope was requested.')
