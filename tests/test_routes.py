@@ -173,6 +173,23 @@ def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     assert 'client_secret_basic' in payload['token_endpoint_auth_methods_supported']
 
 
+def test_protected_resource_metadata_advertises_clinical_scopes(app):
+    """MCP clients (ChatGPT/Claude) read scopes_supported from the protected
+    resource metadata to decide which scopes to request. Without the clinical
+    scopes here, only openid/profile/email are ever granted."""
+    client = app.test_client()
+    response = client.get('/.well-known/oauth-protected-resource')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload['resource'].endswith('/mcp')
+    scopes = payload.get('scopes_supported')
+    assert isinstance(scopes, list)
+    for required in ('openid', 'pets:read', 'exams:write', 'appointments:read'):
+        assert required in scopes
+
+
 
 
 def test_dynamic_registration_supports_client_secret_basic(app):
@@ -256,6 +273,28 @@ def test_dynamic_registration_without_scope_defaults_to_allowed_app_scopes(app):
     scope_set = set(payload['scope'].split())
     assert {'openid', 'profile', 'email'}.issubset(scope_set)
     assert {'pets:read', 'appointments:read', 'consultations:write', 'tutor_guidance:generate'}.issubset(scope_set)
+
+
+def test_chatgpt_dynamic_registration_with_oidc_scope_expands_to_clinical_scopes(app):
+    client = app.test_client()
+
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'ChatGPT PetOrlandia MCP',
+            'redirect_uris': ['https://chatgpt.com/aip/petorlandia/oauth/callback'],
+            'token_endpoint_auth_method': 'none',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+            'scope': 'openid profile email',
+        },
+    )
+
+    assert registration.status_code == 201
+    payload = registration.get_json()
+    scope_set = set(payload['scope'].split())
+    assert {'openid', 'profile', 'email'}.issubset(scope_set)
+    assert {'pets:read', 'exams:read', 'exams:write', 'clinical_summary:read'}.issubset(scope_set)
 
 
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):

@@ -17,22 +17,48 @@
 
 {% from 'components/logo.html' import clinic_logo %}
 <div class="document">
+  {% set status_info = namespace(concluidos=0, cancelados=0, label='Pendente') %}
+  {% for exame in bloco.exames %}
+    {% if exame.status == 'concluido' %}
+      {% set status_info.concluidos = status_info.concluidos + 1 %}
+    {% elif exame.status == 'cancelado' %}
+      {% set status_info.cancelados = status_info.cancelados + 1 %}
+    {% endif %}
+  {% endfor %}
+  {% set total_exames = bloco.exames|length %}
+  {% if total_exames and status_info.concluidos == total_exames %}
+    {% set status_info.label = 'Concluído' %}
+  {% elif total_exames and status_info.cancelados == total_exames %}
+    {% set status_info.label = 'Cancelado' %}
+  {% elif status_info.concluidos %}
+    {% set status_info.label = 'Parcial' %}
+  {% endif %}
+
   {% if clinica %}
-    <div class="header">
-      <div class="header-logo">
-        {{ clinic_logo(clinica) }}
+    <div class="header header--exam-portal">
+      <div class="header-logo header-logo--clinic-primary">
+        {{ clinic_logo(clinica, alt_text='Logotipo da ' ~ clinica.nome, fallback='clinic') }}
       </div>
-      <div class="header-info">
+      <div class="header-info header-info--clinic-first">
         <div class="clinica-nome">{{ clinica.nome }}</div>
-        <div class="clinica-contato">
-          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
-          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
-          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
-          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
+        {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
+          <div class="header-responsible">
+            <span>Veterinário responsável: {{ veterinario.name or 'Não informado' }}</span>
+            {% if veterinario.veterinario and veterinario.veterinario.crmv %}
+              <span>CRMV {{ veterinario.veterinario.crmv }}</span>
+            {% endif %}
+          </div>
+        {% endif %}
+        <div class="header-patient">Paciente: <strong>{{ animal.name }}</strong></div>
+        <div class="header-exam-meta">
+          {% if bloco.data_criacao %}<span>Data: {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }}</span>{% endif %}
+          <span>Tipo de exame: Requisição de exames complementares</span>
+          <span>Status: {{ status_info.label }}</span>
         </div>
       </div>
-      <div class="header-logo header-logo--right">
-        {{ clinic_logo(clinica) }}
+      <div class="header-powered-by">
+        <img src="{{ url_for('static', filename='logo_pet.png') }}" alt="" aria-hidden="true">
+        <span>Fornecido com tecnologia <strong>PetOrlândia</strong></span>
       </div>
     </div>
   {% endif %}

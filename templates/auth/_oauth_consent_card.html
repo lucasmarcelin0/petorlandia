@@ -1,0 +1,101 @@
+<style>
+  .oauth-card { max-width: 520px; }
+  .oauth-app-badge {
+    width: 64px; height: 64px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #4e73df, #6f8ff0);
+    color: #fff; font-size: 1.6rem;
+    box-shadow: 0 8px 20px rgba(78, 115, 223, .35);
+  }
+  .oauth-avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex: 0 0 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: #e9effd; color: #4e73df;
+  }
+  .oauth-group { border: 1px solid #eef0f5; border-radius: 16px; }
+  .oauth-group-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex: 0 0 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: #f3f6ff; color: #4e73df;
+  }
+  .oauth-group--write .oauth-group-icon { background: #fff4e8; color: #d98324; }
+  .oauth-perm + .oauth-perm { margin-top: .6rem; }
+</style>
+
+<div class="oauth-card mx-auto">
+  <div class="card border-0 shadow-lg rounded-4">
+    <div class="card-body p-4 p-lg-5">
+
+      <div class="text-center mb-4">
+        <div class="oauth-app-badge mx-auto mb-3">
+          <i class="fas fa-plug"></i>
+        </div>
+        <h1 class="h4 fw-bold mb-1">Conectar ao PetOrlândia</h1>
+        <p class="text-muted mb-0">
+          <strong>{{ client.name }}</strong> quer acessar a sua conta.
+        </p>
+      </div>
+
+      <div class="d-flex align-items-center gap-3 bg-light rounded-4 p-3 mb-4">
+        <span class="oauth-avatar"><i class="fas fa-user"></i></span>
+        <div class="small lh-sm">
+          <div class="text-muted">Conectando como</div>
+          <div class="fw-semibold">{{ current_account.name or current_account.email }}</div>
+        </div>
+      </div>
+
+      <p class="fw-semibold mb-3">Este aplicativo poderá:</p>
+
+      {% for group in scope_groups %}
+      <div class="oauth-group oauth-group--{{ group.key }} p-3 mb-3">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="oauth-group-icon"><i class="fas {{ group.icon }}"></i></span>
+          <span class="fw-semibold">{{ group.title }}</span>
+        </div>
+        <p class="text-muted small mb-2">{{ group.hint }}</p>
+        <div>
+          {% for item in group.perms %}
+          <div class="oauth-perm d-flex align-items-start gap-2">
+            <i class="fas fa-circle-check text-success mt-1"></i>
+            <span class="lh-sm">
+              <span class="fw-semibold">{{ item.label }}</span>
+              <span class="d-block text-muted small">{{ item.description }}</span>
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <form method="post" class="mt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="response_type" value="{{ response_type }}">
+        <input type="hidden" name="client_id" value="{{ client_id }}">
+        <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <input type="hidden" name="state" value="{{ state }}">
+        <input type="hidden" name="nonce" value="{{ nonce or '' }}">
+        <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+        <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
+        {% for item in requested_scopes %}
+        <input type="hidden" name="consent_scopes" value="{{ item }}">
+        {% endfor %}
+
+        <div class="d-grid gap-2">
+          <button class="btn btn-primary btn-lg rounded-pill" type="submit" name="consent_action" value="approve">
+            <i class="fas fa-shield-halved me-1"></i> Autorizar acesso
+          </button>
+          <button class="btn btn-light rounded-pill" type="submit" name="consent_action" value="deny">
+            Agora não
+          </button>
+        </div>
+      </form>
+
+      <p class="text-center text-muted small mt-4 mb-0">
+        <i class="fas fa-lock me-1"></i>
+        Você pode revogar este acesso quando quiser. Nenhum dado é gravado sem a sua confirmação no chat.
+      </p>
+
+    </div>
+  </div>
+</div>

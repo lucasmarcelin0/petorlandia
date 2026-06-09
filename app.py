@@ -9139,7 +9139,7 @@ def _oauth_allowed_scopes() -> set[str]:
         'OAUTH_ALLOWED_SCOPES',
         (
             'openid profile email '
-            'pets:read appointments:read tutors:write pets:write '
+            'pets:read appointments:read tutors:read tutors:write pets:write '
             'appointments:write consultations:write exams:write '
             'clinical_summary:read consultations:read prescriptions:read '
             'exams:read vaccines:read handoff:read tutor_guidance:generate'
@@ -9156,6 +9156,7 @@ def _oauth_order_scopes(scopes: Iterable[str]) -> str:
         'email',
         'pets:read',
         'appointments:read',
+        'tutors:read',
         'tutors:write',
         'pets:write',
         'appointments:write',
@@ -9182,6 +9183,186 @@ def _oauth_veterinarian_write_scopes() -> set[str]:
         'consultations:write',
         'exams:write',
     }
+
+
+_OAUTH_IDENTITY_SCOPES = {'openid', 'profile', 'email'}
+_OAUTH_MCP_SCOPE_SENTINELS = {'pets:read', 'exams:read', 'exams:write'}
+
+
+def _oauth_scope_tokens(scope_value: str | None) -> set[str]:
+    return {item.strip() for item in (scope_value or '').split() if item.strip()}
+
+
+def _oauth_default_mcp_scope() -> str:
+    return _oauth_order_scopes(_oauth_allowed_scopes())
+
+
+def _oauth_scope_needs_mcp_recovery(scope_value: str | None) -> bool:
+    requested = _oauth_scope_tokens(scope_value)
+    return not requested or requested.issubset(_OAUTH_IDENTITY_SCOPES)
+
+
+def _oauth_client_looks_like_openai_mcp(
+    client: OAuthClient | None,
+    *,
+    redirect_uri: str = '',
+    resource: str = '',
+) -> bool:
+    if client is None:
+        return False
+
+    values = ' '.join(
+        value
+        for value in (
+            getattr(client, 'name', ''),
+            getattr(client, 'client_id', ''),
+            getattr(client, 'redirect_uris', ''),
+            redirect_uri,
+            resource,
+        )
+        if value
+    ).lower()
+    resource_value = (resource or '').strip().rstrip('/').lower()
+    expected_resource = f'{_oauth_issuer().rstrip("/")}/mcp'.lower()
+
+    has_chatgpt_marker = (
+        'chatgpt' in values
+        or 'chat.openai.com' in values
+        or 'openai' in (getattr(client, 'name', '') or '').lower()
+    )
+    has_mcp_marker = (
+        resource_value == expected_resource
+        or values.find('/connector/') != -1
+        or values.find('/aip/') != -1
+        or ' mcp' in values
+        or values.endswith('mcp')
+    )
+    return has_chatgpt_marker and has_mcp_marker
+
+
+def _oauth_registration_looks_like_openai_mcp(payload: dict, redirect_uris: list[str]) -> bool:
+    client_name = str(payload.get('client_name') or '').lower()
+    resource = str(payload.get('resource') or '').strip().rstrip('/').lower()
+    expected_resource = f'{_oauth_issuer().rstrip("/")}/mcp'.lower()
+    values = ' '.join([client_name, *redirect_uris, resource]).lower()
+    has_chatgpt_marker = 'chatgpt' in values or 'chat.openai.com' in values or 'openai' in client_name
+    has_mcp_marker = (
+        resource == expected_resource
+        or values.find('/connector/') != -1
+        or values.find('/aip/') != -1
+        or ' mcp' in values
+        or values.endswith('mcp')
+    )
+    return has_chatgpt_marker and has_mcp_marker
+
+
+def _oauth_ensure_mcp_client_scopes(client: OAuthClient) -> bool:
+    current_scopes = _oauth_scope_tokens(client.scopes)
+    desired_scopes = current_scopes.union(_oauth_allowed_scopes())
+    if _OAUTH_MCP_SCOPE_SENTINELS.issubset(current_scopes):
+        return False
+
+    client.scopes = _oauth_order_scopes(desired_scopes)
+    db.session.add(client)
+    return True
+
+
+def _oauth_access_token_requires_mcp_reauthorization(token: OAuthAccessToken) -> bool:
+    if not _oauth_scope_needs_mcp_recovery(token.scope):
+        return False
+    client = OAuthClient.query.filter_by(client_id=token.client_id).first()
+    return _oauth_client_looks_like_openai_mcp(client)
+
+
+def _oauth_refresh_token_requires_mcp_reauthorization(refresh: OAuthRefreshToken, client: OAuthClient) -> bool:
+    return _oauth_scope_needs_mcp_recovery(refresh.scope) and _oauth_client_looks_like_openai_mcp(client)
+
+
+def _oauth_datetime_is_future(value) -> bool:
+    if value is None:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value > utcnow()
+
+
+def _oauth_mcp_user_can_receive_clinical_scopes(user_id: int | None) -> bool:
+    user = db.session.get(User, user_id) if user_id else None
+    return bool(user and has_veterinarian_profile(user))
+
+
+def _oauth_access_token_can_self_heal_mcp_scope(token: OAuthAccessToken) -> bool:
+    return (
+        _oauth_access_token_requires_mcp_reauthorization(token)
+        and _oauth_mcp_user_can_receive_clinical_scopes(token.user_id)
+    )
+
+
+def _oauth_refresh_token_can_self_heal_mcp_scope(refresh: OAuthRefreshToken, client: OAuthClient) -> bool:
+    if refresh.replaced_by_jti:
+        return False
+    return (
+        _oauth_refresh_token_requires_mcp_reauthorization(refresh, client)
+        and _oauth_datetime_is_future(refresh.expires_at)
+        and _oauth_mcp_user_can_receive_clinical_scopes(refresh.user_id)
+    )
+
+
+# Human-friendly copy for the consent screen, keyed by scope.
+# Each value is (group_key, short_label, plain_description) — all in pt-BR so a
+# veterinarian sees "Consultar pacientes" instead of the raw "pets:read".
+_OAUTH_SCOPE_CATALOG = {
+    'openid':                  ('identity', 'Identificar você',             'Confirma quem você é no PetOrlândia.'),
+    'profile':                 ('identity', 'Ver seu perfil',              'Seu nome e informações básicas de perfil.'),
+    'email':                   ('identity', 'Ver seu e-mail',             'O endereço de e-mail da sua conta.'),
+    'pets:read':               ('read',     'Consultar pacientes',         'Ver os pets e seus dados aos quais você tem acesso.'),
+    'appointments:read':       ('read',     'Consultar a agenda',          'Ver consultas e agendamentos.'),
+    'tutors:read':             ('read',     'Consultar tutores',           'Ver os dados dos tutores dos pacientes.'),
+    'clinical_summary:read':   ('read',     'Resumir o histórico clínico', 'Gerar resumos do histórico dos pacientes.'),
+    'consultations:read':      ('read',     'Consultar consultas',         'Ver o histórico de consultas clínicas.'),
+    'prescriptions:read':      ('read',     'Consultar prescrições',       'Ver prescrições e medicamentos.'),
+    'exams:read':              ('read',     'Consultar exames',            'Ver exames, laudos e resultados.'),
+    'vaccines:read':           ('read',     'Consultar vacinas',           'Ver o histórico e as pendências de vacinas.'),
+    'handoff:read':            ('read',     'Gerar passagem de plantão',   'Montar handoffs clínicos a partir dos dados existentes.'),
+    'tutor_guidance:generate': ('read',     'Gerar orientações ao tutor',  'Criar orientações para o tutor a partir do histórico.'),
+    'tutors:write':            ('write',    'Cadastrar e editar tutores',  'Criar ou atualizar cadastros de tutores.'),
+    'pets:write':              ('write',    'Cadastrar e editar pacientes','Criar ou atualizar cadastros de pets.'),
+    'appointments:write':      ('write',    'Agendar consultas e retornos','Criar agendamentos e retornos na agenda.'),
+    'consultations:write':     ('write',    'Registrar consultas',         'Salvar novas consultas clínicas.'),
+    'exams:write':             ('write',    'Registrar exames e laudos',   'Criar exames, anexar laudos e liberá-los.'),
+}
+
+# Display order + copy for the groups shown on the consent screen.
+# (group_key, title, Font Awesome icon, reassurance line)
+_OAUTH_SCOPE_GROUPS = (
+    ('identity', 'Identificação',            'fa-id-badge',         'Para reconhecer a sua conta.'),
+    ('read',     'Consultar informações',    'fa-magnifying-glass', 'Somente leitura — não altera nada no sistema.'),
+    ('write',    'Registrar e alterar dados','fa-pen-to-square',    'Cria ou atualiza registros. Toda gravação pede a sua confirmação no chat antes de salvar.'),
+)
+
+
+def _oauth_scope_detail(scope: str) -> dict:
+    group, label, description = _OAUTH_SCOPE_CATALOG.get(
+        scope, ('read', scope, 'Permissão solicitada pelo aplicativo.')
+    )
+    return {'scope': scope, 'group': group, 'label': label, 'description': description}
+
+
+def _oauth_scope_details(scopes: Iterable[str]) -> list[dict]:
+    """Flat list of friendly scope descriptions in canonical display order."""
+    return [_oauth_scope_detail(scope) for scope in _oauth_order_scopes(scopes).split()]
+
+
+def _oauth_grouped_scope_details(scopes: Iterable[str]) -> list[dict]:
+    """Scope descriptions bucketed into the consent-screen groups, skipping
+    empty groups and preserving canonical ordering inside each group."""
+    details = _oauth_scope_details(scopes)
+    groups = []
+    for key, title, icon, hint in _OAUTH_SCOPE_GROUPS:
+        items = [detail for detail in details if detail['group'] == key]
+        if items:
+            groups.append({'key': key, 'title': title, 'icon': icon, 'hint': hint, 'perms': items})
+    return groups
 
 
 def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
@@ -10308,7 +10489,7 @@ def _integration_infer_assistant_action(user: User, payload: dict):
         r'conduta\s*[:\-]\s*([^.\n]{3,200})',
     ])
     clinic_name = _extract_label([
-        r'(?:cl[iÃ­]nica(?:\s+requisitante)?|requisitante)\s*[:\-]\s*([A-Za-zÃ€-Ã¿0-9\' &.-]{2,120})',
+        r'(?:cl[ií]nica(?:\s+requisitante)?|requisitante)\s*[:\-]\s*([^.\n]{2,120})',
     ])
     exam_type = _extract_label([
         r'(?:exame|tipo\s+de\s+exame)\s*[:\-]\s*([^.\n]{3,120})',
@@ -11386,14 +11567,53 @@ def integration_bearer_required(*required_scopes: str):
             token_scope_set = {item.strip() for item in (token.scope or '').split() if item.strip()}
             missing_scopes = sorted(required_scope_set.difference(token_scope_set))
             if missing_scopes:
-                return _integration_error(
-                    'insufficient_scope',
-                    'Access token does not grant the required scope.',
-                    403,
-                    required_scopes=sorted(required_scope_set),
-                    granted_scopes=sorted(token_scope_set),
-                    missing_scopes=missing_scopes,
-                )
+                if _oauth_access_token_can_self_heal_mcp_scope(token):
+                    healed_scope = _oauth_default_mcp_scope()
+                    token.scope = healed_scope
+                    refresh = (
+                        db.session.get(OAuthRefreshToken, token.refresh_token_id)
+                        if token.refresh_token_id
+                        else None
+                    )
+                    if refresh is not None and _oauth_scope_needs_mcp_recovery(refresh.scope):
+                        refresh.scope = healed_scope
+                        db.session.add(refresh)
+                    db.session.add(token)
+                    db.session.commit()
+                    _oauth_log_event('oauth_mcp_legacy_access_scope_upgraded', client_id=token.client_id, user_id=token.user_id)
+                    token_scope_set = _oauth_scope_tokens(healed_scope)
+                    missing_scopes = sorted(required_scope_set.difference(token_scope_set))
+
+                if missing_scopes and _oauth_access_token_requires_mcp_reauthorization(token):
+                    refresh = (
+                        db.session.get(OAuthRefreshToken, token.refresh_token_id)
+                        if token.refresh_token_id
+                        else None
+                    )
+                    if refresh is not None:
+                        _oauth_revoke_refresh_family(refresh)
+                    elif token.revoked_at is None:
+                        token.revoked_at = utcnow()
+                        db.session.add(token)
+                    db.session.commit()
+                    _oauth_log_event('oauth_mcp_reauthorization_required', client_id=token.client_id, user_id=token.user_id)
+                    return _integration_error(
+                        'reauthorization_required',
+                        'Este token foi emitido antes dos escopos clinicos atuais. Reconecte o PetOrlandia no ChatGPT para autorizar pets:read, exams:write e os demais escopos clinicos.',
+                        401,
+                        required_scopes=sorted(required_scope_set),
+                        granted_scopes=sorted(token_scope_set),
+                        missing_scopes=missing_scopes,
+                    )
+                if missing_scopes:
+                    return _integration_error(
+                        'insufficient_scope',
+                        'Access token does not grant the required scope.',
+                        403,
+                        required_scopes=sorted(required_scope_set),
+                        granted_scopes=sorted(token_scope_set),
+                        missing_scopes=missing_scopes,
+                    )
 
             auth_user = db.session.get(User, token.user_id)
             if not auth_user:
@@ -11453,6 +11673,54 @@ def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
                 db.session.add(access)
 
 
+def _oauth_issue_refresh_grant_response(
+    refresh: OAuthRefreshToken,
+    *,
+    scope: str | None = None,
+    log_event: str = 'oauth_token_issued',
+):
+    now = utcnow()
+    refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+    access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+    granted_scope = scope or refresh.scope
+
+    new_refresh = OAuthRefreshToken(
+        client_id=refresh.client_id,
+        user_id=refresh.user_id,
+        refresh_token=secrets.token_urlsafe(48),
+        scope=granted_scope,
+        family_id=refresh.family_id,
+        expires_at=now + timedelta(seconds=refresh_expires_in),
+    )
+    db.session.add(new_refresh)
+    db.session.flush()
+
+    refresh.revoked_at = now
+    refresh.replaced_by_jti = new_refresh.jti
+    db.session.add(refresh)
+
+    new_access = OAuthAccessToken(
+        client_id=refresh.client_id,
+        user_id=refresh.user_id,
+        access_token=secrets.token_urlsafe(48),
+        token_type='Bearer',
+        scope=granted_scope,
+        refresh_token_id=new_refresh.id,
+        expires_at=now + timedelta(seconds=access_expires_in),
+    )
+    db.session.add(new_access)
+    db.session.commit()
+    _oauth_log_event(log_event, client_id=refresh.client_id, user_id=refresh.user_id, grant_type='refresh_token')
+
+    return jsonify({
+        'access_token': new_access.access_token,
+        'token_type': 'Bearer',
+        'expires_in': access_expires_in,
+        'scope': granted_scope,
+        'refresh_token': new_refresh.refresh_token,
+    })
+
+
 def oauth_authorize():
     response_type = request.values.get('response_type', '').strip()
     client_id = request.values.get('client_id', '').strip()
@@ -11462,6 +11730,7 @@ def oauth_authorize():
     nonce = request.values.get('nonce', '').strip() or None
     code_challenge = request.values.get('code_challenge', '').strip()
     code_challenge_method = request.values.get('code_challenge_method', '').strip()
+    resource = request.values.get('resource', '').strip()
 
     if response_type != 'code':
         return _oauth_error_response('unsupported_response_type', 'Only authorization code flow is supported.')
@@ -11482,6 +11751,13 @@ def oauth_authorize():
     if requires_pkce and (not code_challenge or code_challenge_method != 'S256'):
         return _oauth_error_response('invalid_request', 'PKCE with code_challenge_method=S256 is required.')
 
+    if _oauth_client_looks_like_openai_mcp(client, redirect_uri=redirect_uri, resource=resource):
+        if _oauth_ensure_mcp_client_scopes(client):
+            db.session.commit()
+            _oauth_log_event('oauth_mcp_client_scopes_upgraded', client_id=client_id)
+        if _oauth_scope_needs_mcp_recovery(scope_raw):
+            scope_raw = _oauth_default_mcp_scope()
+
     try:
         scope = _oauth_normalize_scope(scope_raw, client)
     except ValueError as exc:
@@ -11500,6 +11776,9 @@ def oauth_authorize():
             client=client,
             current_account=current_user,
             requested_scopes=requested_scopes,
+            write_scopes=_oauth_scope_details(
+                requested_scope_set.intersection(_oauth_veterinarian_write_scopes())
+            ),
             error_message='Esta conexao pede permissoes de escrita clinica e exige uma conta veterinaria.',
             switch_account_url=url_for('logout'),
             continue_url=request.url,
@@ -11536,8 +11815,10 @@ def oauth_authorize():
     return render_template(
         'auth/oauth_consent.html',
         client=client,
+        current_account=current_user,
         scope=scope,
         requested_scopes=requested_scopes,
+        scope_groups=_oauth_grouped_scope_details(requested_scopes),
         state=state,
         redirect_uri=redirect_uri,
         response_type=response_type,
@@ -11659,50 +11940,33 @@ def oauth_token():
             return _oauth_error_response('invalid_grant', 'Refresh token is invalid.')
 
         if not refresh.is_active:
+            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
+                return _oauth_issue_refresh_grant_response(
+                    refresh,
+                    scope=_oauth_default_mcp_scope(),
+                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
+                )
             _oauth_revoke_refresh_family(refresh)
             db.session.commit()
             _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
             return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
 
-        now = utcnow()
-        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
-        access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+        if _oauth_refresh_token_requires_mcp_reauthorization(refresh, client):
+            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
+                return _oauth_issue_refresh_grant_response(
+                    refresh,
+                    scope=_oauth_default_mcp_scope(),
+                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
+                )
+            _oauth_revoke_refresh_family(refresh)
+            db.session.commit()
+            _oauth_log_event('oauth_mcp_reauthorization_required', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response(
+                'invalid_grant',
+                'Refresh token is missing the current clinical scopes. Reconnect PetOrlandia in ChatGPT to authorize pets:read, exams:write and the remaining clinical scopes.',
+            )
 
-        new_refresh = OAuthRefreshToken(
-            client_id=client_id,
-            user_id=refresh.user_id,
-            refresh_token=secrets.token_urlsafe(48),
-            scope=refresh.scope,
-            family_id=refresh.family_id,
-            expires_at=now + timedelta(seconds=refresh_expires_in),
-        )
-        db.session.add(new_refresh)
-        db.session.flush()
-
-        refresh.revoked_at = now
-        refresh.replaced_by_jti = new_refresh.jti
-        db.session.add(refresh)
-
-        new_access = OAuthAccessToken(
-            client_id=client_id,
-            user_id=refresh.user_id,
-            access_token=secrets.token_urlsafe(48),
-            token_type='Bearer',
-            scope=refresh.scope,
-            refresh_token_id=new_refresh.id,
-            expires_at=now + timedelta(seconds=access_expires_in),
-        )
-        db.session.add(new_access)
-        db.session.commit()
-        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
-
-        return jsonify({
-            'access_token': new_access.access_token,
-            'token_type': 'Bearer',
-            'expires_in': access_expires_in,
-            'scope': refresh.scope,
-            'refresh_token': new_refresh.refresh_token,
-        })
+        return _oauth_issue_refresh_grant_response(refresh)
 
     return _oauth_error_response('unsupported_grant_type', 'Only authorization_code and refresh_token grants are supported.')
 
@@ -11737,6 +12001,11 @@ def oauth_dynamic_client_registration():
         return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
 
     requested_scope = str(payload.get('scope') or '').strip()
+    if (
+        _oauth_registration_looks_like_openai_mcp(payload, normalized_redirect_uris)
+        and _oauth_scope_needs_mcp_recovery(requested_scope)
+    ):
+        requested_scope = _oauth_default_mcp_scope()
     scope = _oauth_normalize_scope(requested_scope) if requested_scope else _oauth_order_scopes(_oauth_allowed_scopes())
     if not scope:
         return _oauth_error_response('invalid_scope', 'No valid scope was requested.')
@@ -11783,25 +12052,10 @@ def openid_configuration():
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
-        'scopes_supported': [
-            'openid',
-            'profile',
-            'email',
-            'pets:read',
-            'appointments:read',
-            'tutors:write',
-            'pets:write',
-            'appointments:write',
-            'consultations:write',
-            'exams:write',
-            'clinical_summary:read',
-            'consultations:read',
-            'prescriptions:read',
-            'exams:read',
-            'vaccines:read',
-            'handoff:read',
-            'tutor_guidance:generate',
-        ],
+        # Single source of truth: derived from OAUTH_ALLOWED_SCOPES so the
+        # authorization-server metadata, the protected-resource metadata and
+        # the consent screen never drift apart.
+        'scopes_supported': _oauth_order_scopes(_oauth_allowed_scopes()).split(),
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post', 'client_secret_basic'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
@@ -12022,13 +12276,13 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'title': 'Listar historico medico do animal',
         'scopes': ['clinical_summary:read', 'exams:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
-        'outputSchema': _mcp_object_output_schema('Historico medico com exames e PDFs.'),
+        'outputSchema': _mcp_object_output_schema('Historico medico com exames e links humanos de portal/download.'),
     },
     'obter_documento_clinico': {
         'title': 'Obter documento clinico',
         'scopes': ['exams:read'],
         'annotations': _mcp_annotations(True, idempotent=False),
-        'outputSchema': _mcp_object_output_schema('Documento clinico com URL temporaria.'),
+        'outputSchema': _mcp_object_output_schema('Documento clinico com links humanos de portal/download.'),
     },
     'buscar_ou_criar_clinica_requisitante': {
         'title': 'Buscar ou criar clinica requisitante',
@@ -12429,9 +12683,166 @@ def _integration_user_can_access_exame_imagem(user: User, exame: ExameImagem) ->
     return False
 
 
-def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = None):
-    can_pdf = bool(exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
-    return {
+def _integration_absolute_public_url(raw_url: str | None) -> str | None:
+    if not raw_url:
+        return None
+    parsed = urlparse(raw_url)
+    if parsed.scheme and parsed.netloc:
+        return raw_url
+    if has_request_context() and raw_url.startswith('/'):
+        return f"{request.url_root.rstrip('/')}{raw_url}"
+    return raw_url
+
+
+def _integration_invite_is_active(invite) -> bool:
+    expires_at = getattr(invite, 'expires_at', None)
+    if not expires_at:
+        return True
+    now = datetime.now(BR_TZ)
+    if getattr(expires_at, 'tzinfo', None) is None:
+        now = now.replace(tzinfo=None)
+    return expires_at >= now
+
+
+def _integration_latest_external_invite_for_exame(exame: ExameImagem, invite_type: str):
+    if not exame or not has_request_context():
+        return None
+    filters = [ExternalOnboardingInvite.exame_imagem_id == exame.id]
+    if getattr(exame, 'exame_solicitado_id', None):
+        filters.append(ExternalOnboardingInvite.exame_id == exame.exame_solicitado_id)
+    try:
+        invites = (
+            ExternalOnboardingInvite.query
+            .filter(ExternalOnboardingInvite.invite_type == invite_type, or_(*filters))
+            .order_by(ExternalOnboardingInvite.created_at.desc(), ExternalOnboardingInvite.id.desc())
+            .limit(10)
+            .all()
+        )
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.debug("Convite externo indisponivel para exame %s: %s", getattr(exame, 'id', None), exc)
+        return None
+    for invite in invites:
+        if _integration_invite_is_active(invite):
+            return invite
+    return None
+
+
+def _integration_exame_imagem_portal_urls(exame: ExameImagem, user: User | None = None):
+    if not exame:
+        return {'clinic_portal_url': None, 'tutor_portal_url': None, 'portal_url': None, 'portal_tipo': None}
+    role = (getattr(user, 'role', '') or '').lower() if user else ''
+    is_internal_operator = user is None or role == 'admin' or has_veterinarian_profile(user)
+    clinic_id = _integration_user_clinic_id(user) if user else None
+    can_use_clinic_portal = bool(is_internal_operator or (clinic_id and exame.clinica_requisitante_id == clinic_id))
+    can_use_tutor_portal = bool(is_internal_operator or (getattr(user, 'id', None) == exame.tutor_id))
+
+    clinic_portal_url = None
+    tutor_portal_url = None
+    if can_use_clinic_portal and exame.liberado_para_clinica:
+        clinic_invite = _integration_latest_external_invite_for_exame(exame, 'clinic')
+        clinic_portal_url = _external_onboarding_url(clinic_invite) if clinic_invite else None
+    if can_use_tutor_portal and exame.liberado_para_tutor:
+        tutor_invite = _integration_latest_external_invite_for_exame(exame, 'tutor')
+        tutor_portal_url = _external_onboarding_url(tutor_invite) if tutor_invite else None
+
+    if getattr(user, 'id', None) == exame.tutor_id and tutor_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': tutor_portal_url, 'portal_tipo': 'tutor'}
+    if clinic_id and exame.clinica_requisitante_id == clinic_id and clinic_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': clinic_portal_url, 'portal_tipo': 'clinica'}
+    if clinic_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': clinic_portal_url, 'portal_tipo': 'clinica'}
+    if tutor_portal_url:
+        return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': tutor_portal_url, 'portal_tipo': 'tutor'}
+    return {'clinic_portal_url': clinic_portal_url, 'tutor_portal_url': tutor_portal_url, 'portal_url': None, 'portal_tipo': None}
+
+
+def _integration_exame_imagem_access_links(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    can_pdf = bool(exame and exame.arquivo_pdf_url and (user is None or _integration_user_can_access_exame_imagem(user, exame)))
+    empty = {
+        'pdf_disponivel': can_pdf,
+        'download_url': None,
+        'portal_url': None,
+        'portal_tipo': None,
+        'clinic_portal_url': None,
+        'tutor_portal_url': None,
+        'shareable_url': None,
+        'shareable_url_type': None,
+        'orientacao_compartilhamento': None,
+    }
+    if include_internal_links:
+        empty.update({'api_document_url': None, 'api_document_requires_bearer': False})
+    if not can_pdf:
+        return empty
+
+    portal_urls = _integration_exame_imagem_portal_urls(exame, user)
+    download_url = _integration_absolute_public_url(exame.arquivo_pdf_url)
+    portal_url = portal_urls.get('portal_url')
+    portal_tipo = portal_urls.get('portal_tipo')
+    shareable_url = portal_url or download_url
+    shareable_url_type = f"{portal_tipo}_portal" if portal_url and portal_tipo else ('download' if download_url else None)
+    links = {
+        'pdf_disponivel': True,
+        'download_url': download_url,
+        **portal_urls,
+        'shareable_url': shareable_url,
+        'shareable_url_type': shareable_url_type,
+        'orientacao_compartilhamento': 'Compartilhe shareable_url ou portal_url com clinica/tutor. Nao compartilhe api_document_url; ele exige bearer token.',
+    }
+    if include_internal_links:
+        api_document_url = url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True) if has_request_context() else None
+        links.update({'api_document_url': api_document_url, 'api_document_requires_bearer': bool(api_document_url)})
+    return links
+
+
+def _integration_exame_imagem_pdf_summary(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    if not links.get('pdf_disponivel'):
+        return None
+    summary = {
+        'exame_id': exame.id,
+        'documento_id': exame.documento_id,
+        'filename': exame.arquivo_pdf_filename,
+        'url': links.get('shareable_url'),
+        'url_tipo': links.get('shareable_url_type'),
+        'download_url': links.get('download_url'),
+        'portal_url': links.get('portal_url'),
+        'portal_tipo': links.get('portal_tipo'),
+        'shareable_url': links.get('shareable_url'),
+        'shareable_url_type': links.get('shareable_url_type'),
+        'orientacao_compartilhamento': links.get('orientacao_compartilhamento'),
+    }
+    if include_internal_links:
+        summary.update({
+            'api_document_url': links.get('api_document_url'),
+            'api_document_requires_bearer': links.get('api_document_requires_bearer'),
+        })
+    return summary
+
+
+def _integration_exame_imagem_document_payload(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    payload = {
+        'documento': _integration_serialize_exame_imagem(exame, user, include_internal_links=include_internal_links),
+        'url_temporaria': exame.arquivo_pdf_url,
+        'download_url': links.get('download_url'),
+        'portal_url': links.get('portal_url'),
+        'portal_tipo': links.get('portal_tipo'),
+        'shareable_url': links.get('shareable_url'),
+        'shareable_url_type': links.get('shareable_url_type'),
+        'orientacao_compartilhamento': links.get('orientacao_compartilhamento'),
+    }
+    if include_internal_links:
+        payload.update({
+            'api_document_url': links.get('api_document_url'),
+            'api_document_requires_bearer': links.get('api_document_requires_bearer'),
+        })
+    return payload
+
+
+def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = None, *, include_internal_links: bool = True):
+    access_links = _integration_exame_imagem_access_links(exame, user, include_internal_links=include_internal_links)
+    payload = {
         'id': exame.id,
         'documento_id': exame.documento_id,
         'animal_id': exame.animal_id,
@@ -12451,11 +12862,25 @@ def _integration_serialize_exame_imagem(exame: ExameImagem, user: User | None = 
         'data_liberacao_clinica': _integration_format_datetime(exame.data_liberacao_clinica),
         'data_liberacao_tutor': _integration_format_datetime(exame.data_liberacao_tutor),
         'arquivo_pdf_filename': exame.arquivo_pdf_filename,
-        'pdf_disponivel': can_pdf,
-        'pdf_url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True) if can_pdf and has_request_context() else None,
+        'pdf_disponivel': access_links.get('pdf_disponivel'),
+        'pdf_url': access_links.get('shareable_url'),
+        'download_url': access_links.get('download_url'),
+        'portal_url': access_links.get('portal_url'),
+        'portal_tipo': access_links.get('portal_tipo'),
+        'clinic_portal_url': access_links.get('clinic_portal_url'),
+        'tutor_portal_url': access_links.get('tutor_portal_url'),
+        'shareable_url': access_links.get('shareable_url'),
+        'shareable_url_type': access_links.get('shareable_url_type'),
+        'orientacao_compartilhamento': access_links.get('orientacao_compartilhamento'),
         'created_at': _integration_format_datetime(exame.created_at),
         'updated_at': _integration_format_datetime(exame.updated_at),
     }
+    if include_internal_links:
+        payload.update({
+            'api_document_url': access_links.get('api_document_url'),
+            'api_document_requires_bearer': access_links.get('api_document_requires_bearer'),
+        })
+    return payload
 
 
 def _integration_document_matches_exam(documento: AnimalDocumento, exame: ExameImagem) -> bool:
@@ -12736,6 +13161,323 @@ def _invite_payload(invite, *, pricing=None):
         'animal_id': getattr(invite, 'animal_id', None),
         'exame_id': effective_exame_id,
     }
+
+
+def _web_exame_imagem_operator_required():
+    role = (getattr(current_user, 'role', '') or '').lower()
+    if role == 'admin' or has_veterinarian_profile(current_user):
+        return None
+    abort(403)
+
+
+def _web_user_can_manage_exame_imagem(user: User, exame: ExameImagem) -> bool:
+    role = (getattr(user, 'role', '') or '').lower()
+    return bool(role == 'admin' or getattr(exame, 'profissional_id', None) == getattr(user, 'id', None))
+
+
+def _integration_store_exame_pdf_upload(user: User, exame: ExameImagem, file_storage):
+    if not file_storage or not getattr(file_storage, 'filename', ''):
+        return _integration_serialize_exame_imagem(exame, user)
+
+    original_name = secure_filename(file_storage.filename or 'laudo.pdf') or 'laudo.pdf'
+    if not original_name.lower().endswith('.pdf'):
+        raise ValueError('O arquivo do laudo deve ser um PDF.')
+
+    file_size = None
+    stream = getattr(file_storage, 'stream', None)
+    if stream:
+        try:
+            position = stream.tell()
+            stream.seek(0, os.SEEK_END)
+            file_size = stream.tell()
+            stream.seek(position)
+        except (OSError, ValueError):
+            file_size = None
+
+    stored_url = upload_to_s3(file_storage, f"{uuid.uuid4().hex}_{original_name}", folder='laudos_exames')
+    if not stored_url:
+        raise ValueError('Nao foi possivel salvar o PDF do laudo.')
+
+    documento = _integration_add_exam_document(user, exame.animal, stored_url, original_name, exame.tipo_exame)
+    if documento:
+        db.session.flush()
+        exame.documento_id = documento.id
+    exame.arquivo_pdf_url = stored_url
+    exame.arquivo_pdf_filename = original_name
+    exame.arquivo_pdf_content_type = 'application/pdf'
+    exame.arquivo_pdf_size = file_size
+    exame.status = 'finalizado'
+    db.session.add(exame)
+    db.session.commit()
+    return _integration_serialize_exame_imagem(exame, user)
+
+
+def _web_exame_imagem_ensure_invite(user: User, exame: ExameImagem, invite_type: str, form=None):
+    invite = _integration_latest_external_invite_for_exame(exame, invite_type)
+    if invite:
+        return invite
+
+    form = form or {}
+    if invite_type == 'clinic':
+        clinic = exame.clinica_requisitante
+        _integration_ensure_clinic_admin_user(
+            clinic,
+            email=form.get('email_clinica'),
+            phone=form.get('telefone_clinica'),
+            name=form.get('nome_responsavel_clinica') or getattr(clinic, 'nome', None),
+        )
+        message = (
+            f'Laudo do paciente {getattr(exame.animal, "name", "paciente")} '
+            f'disponivel para {getattr(clinic, "nome", "a clinica requisitante")}.'
+        )
+        invite = _create_external_onboarding_invite(
+            'clinic',
+            user,
+            clinic=clinic,
+            tutor=exame.tutor,
+            animal=exame.animal,
+            exam=exame.exame_solicitado,
+            exam_image=exame,
+            message=message,
+        )
+    else:
+        clinic = exame.clinica_requisitante
+        message = (
+            f'Seu exame foi disponibilizado pela equipe da '
+            f'{getattr(clinic, "nome", "clinica requisitante")}.'
+        )
+        invite = _create_external_onboarding_invite(
+            'tutor',
+            user,
+            clinic=clinic,
+            tutor=exame.tutor,
+            animal=exame.animal,
+            exam=exame.exame_solicitado,
+            exam_image=exame,
+            message=message,
+        )
+
+    db.session.flush()
+    return invite
+
+
+def _web_exame_imagem_notify(exame: ExameImagem, invite, target: str):
+    url = _external_onboarding_url(invite)
+    if not url:
+        return
+    animal_name = getattr(getattr(exame, 'animal', None), 'name', None) or 'paciente'
+    clinic_name = getattr(getattr(exame, 'clinica_requisitante', None), 'nome', None) or 'clinica requisitante'
+    if target == 'clinic':
+        owner_id = getattr(getattr(exame, 'clinica_requisitante', None), 'owner_id', None)
+        if owner_id:
+            db.session.add(Notification(
+                user_id=owner_id,
+                message=f'Laudo de {animal_name} disponivel para {clinic_name}.',
+                channel='app',
+                kind='exam_report',
+            ))
+    elif getattr(exame, 'tutor_id', None):
+        db.session.add(Notification(
+            user_id=exame.tutor_id,
+            message=f'Seu exame foi disponibilizado pela equipe da {clinic_name}.',
+            channel='app',
+            kind='exam_report',
+        ))
+
+
+def _web_whatsapp_url(phone: str | None, message: str) -> str | None:
+    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+    if not digits:
+        return None
+    if not digits.startswith('55'):
+        digits = f'55{digits}'
+    return f'https://wa.me/{digits}?text={quote_plus(message)}'
+
+
+def _web_exame_imagem_card(exame: ExameImagem, highlight_id: int | None = None):
+    clinic_invite = _integration_latest_external_invite_for_exame(exame, 'clinic')
+    tutor_invite = _integration_latest_external_invite_for_exame(exame, 'tutor')
+    clinic_url = _external_onboarding_url(clinic_invite) if clinic_invite else None
+    tutor_url = _external_onboarding_url(tutor_invite) if tutor_invite else None
+    pdf_url = _integration_absolute_public_url(exame.arquivo_pdf_url)
+    animal_name = getattr(getattr(exame, 'animal', None), 'name', None) or 'Paciente'
+    clinic_name = getattr(getattr(exame, 'clinica_requisitante', None), 'nome', None) or 'Clinica requisitante'
+    clinic_message = (
+        f'Laudo de {animal_name} disponivel para {clinic_name}. '
+        f'Acesse: {clinic_url}'
+    ) if clinic_url else ''
+    tutor_message = (
+        f'Seu exame foi disponibilizado pela equipe da {clinic_name}. '
+        f'Acesse: {tutor_url}'
+    ) if tutor_url else ''
+    return {
+        'exame': exame,
+        'highlight': bool(highlight_id and exame.id == highlight_id),
+        'pdf_url': pdf_url,
+        'clinic_url': clinic_url,
+        'tutor_url': tutor_url,
+        'clinic_whatsapp_url': _web_whatsapp_url(
+            getattr(getattr(exame, 'clinica_requisitante', None), 'telefone', None),
+            clinic_message,
+        ),
+        'tutor_whatsapp_url': _web_whatsapp_url(
+            getattr(getattr(exame, 'tutor', None), 'phone', None),
+            tutor_message,
+        ),
+    }
+
+
+def _web_exame_imagem_cards(highlight_id: int | None = None):
+    query = ExameImagem.query.options(
+        joinedload(ExameImagem.animal),
+        joinedload(ExameImagem.tutor),
+        joinedload(ExameImagem.clinica_requisitante),
+    )
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        query = query.filter(ExameImagem.profissional_id == current_user.id)
+    exames = query.order_by(ExameImagem.created_at.desc(), ExameImagem.id.desc()).limit(80).all()
+    return [_web_exame_imagem_card(exame, highlight_id) for exame in exames]
+
+
+def _web_render_exames_imagem(highlight_id: int | None = None):
+    vet_profile = getattr(current_user, 'veterinario', None)
+    return render_template(
+        'exames_imagem/painel.html',
+        exam_cards=_web_exame_imagem_cards(highlight_id),
+        today=date.today().isoformat(),
+        profissional_nome=getattr(current_user, 'name', '') or '',
+        profissional_crmv=getattr(vet_profile, 'crmv', '') or '',
+        highlight_id=highlight_id,
+    )
+
+
+@app.route('/exames-imagem', methods=['GET', 'POST'])
+@login_required
+def exames_imagem_painel():
+    _web_exame_imagem_operator_required()
+    if request.method == 'GET':
+        return _web_render_exames_imagem(request.args.get('exame_id', type=int))
+
+    form = request.form
+    pdf_file = request.files.get('arquivo_pdf')
+    wants_share = any(
+        form.get(name)
+        for name in ('liberar_clinica', 'gerar_convite_clinica', 'liberar_tutor', 'gerar_convite_tutor')
+    )
+    has_pdf_upload = bool(pdf_file and getattr(pdf_file, 'filename', ''))
+    if wants_share and not has_pdf_upload:
+        flash('Anexe o PDF do laudo antes de liberar acesso para clinica ou tutor.', 'warning')
+        return _web_render_exames_imagem(), 400
+
+    payload = {
+        'nome_clinica': form.get('nome_clinica'),
+        'email_clinica': form.get('email_clinica'),
+        'telefone_clinica': form.get('telefone_clinica'),
+        'nome_tutor': form.get('nome_tutor'),
+        'email_tutor': form.get('email_tutor'),
+        'telefone_tutor': form.get('telefone_tutor'),
+        'nome_animal': form.get('nome_animal'),
+        'especie': form.get('especie'),
+        'raca': form.get('raca'),
+        'sexo': form.get('sexo'),
+        'idade': form.get('idade'),
+        'tipo_exame': form.get('tipo_exame'),
+        'data_exame': form.get('data_exame'),
+        'titulo': form.get('titulo') or form.get('tipo_exame'),
+        'descricao': form.get('descricao'),
+        'impressao_diagnostica': form.get('impressao_diagnostica'),
+        'profissional_nome': form.get('profissional_nome') or getattr(current_user, 'name', None),
+        'profissional_crmv': form.get('profissional_crmv') or getattr(getattr(current_user, 'veterinario', None), 'crmv', None),
+        'finalizar': True,
+    }
+
+    try:
+        result = _integration_create_exame_imagem(current_user, payload)
+        exame = db.session.get(ExameImagem, result['exame']['id'])
+        if has_pdf_upload:
+            _integration_store_exame_pdf_upload(current_user, exame, pdf_file)
+            exame = db.session.get(ExameImagem, exame.id)
+
+        if form.get('liberar_clinica'):
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'clinica_id': exame.clinica_requisitante_id},
+                target='clinica',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+        if form.get('gerar_convite_clinica'):
+            clinic_invite = _web_exame_imagem_ensure_invite(current_user, exame, 'clinic', form)
+            _web_exame_imagem_notify(exame, clinic_invite, 'clinic')
+        if form.get('liberar_tutor'):
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'tutor_id': exame.tutor_id},
+                target='tutor',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+        if form.get('gerar_convite_tutor'):
+            tutor_invite = _web_exame_imagem_ensure_invite(current_user, exame, 'tutor', form)
+            _web_exame_imagem_notify(exame, tutor_invite, 'tutor')
+        db.session.commit()
+    except PermissionError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+        return _web_render_exames_imagem(), 403
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return _web_render_exames_imagem(), 400
+
+    flash('Laudo salvo e acessos preparados.', 'success')
+    return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
+
+
+@app.route('/exames-imagem/<int:exame_id>/compartilhar', methods=['POST'])
+@login_required
+def exames_imagem_compartilhar(exame_id):
+    _web_exame_imagem_operator_required()
+    exame = db.session.get(ExameImagem, exame_id)
+    if not exame:
+        abort(404)
+    if not _web_user_can_manage_exame_imagem(current_user, exame):
+        abort(403)
+    if not exame.arquivo_pdf_url:
+        flash('Anexe o PDF antes de gerar links de acesso.', 'warning')
+        return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
+
+    target = (request.form.get('target') or '').strip().lower()
+    try:
+        if target == 'clinica':
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'clinica_id': exame.clinica_requisitante_id},
+                target='clinica',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+            invite = _web_exame_imagem_ensure_invite(current_user, exame, 'clinic', request.form)
+            _web_exame_imagem_notify(exame, invite, 'clinic')
+            flash('Acesso da clinica preparado.', 'success')
+        elif target == 'tutor':
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'tutor_id': exame.tutor_id},
+                target='tutor',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+            invite = _web_exame_imagem_ensure_invite(current_user, exame, 'tutor', request.form)
+            _web_exame_imagem_notify(exame, invite, 'tutor')
+            flash('Acesso do tutor preparado.', 'success')
+        else:
+            abort(400)
+        db.session.commit()
+    except PermissionError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+
+    return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
 
 
 def _mcp_laudo_volante_widget_html():
@@ -13282,8 +14024,8 @@ def mcp_server():
             {'name': 'liberar_exame_para_tutor', 'description': 'Libera exame para o tutor vinculado.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'tutor_id', 'confirmar_gravacao']}},
             {'name': 'gerar_convite_primeiro_acesso_clinica', 'description': 'Gera convite seguro de primeiro acesso gratuito para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_clinica': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['confirmar_gravacao']}},
             {'name': 'gerar_convite_acesso_tutor', 'description': 'Gera convite seguro de acesso do tutor.', 'inputSchema': {'type': 'object', 'properties': {'tutor_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'animal_id': {'type': 'integer'}, 'exame_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['animal_id', 'confirmar_gravacao']}},
-            {'name': 'listar_historico_medico_animal', 'description': 'Lista historico medico com exames de imagem, documentos e PDFs disponiveis.', 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}}, 'required': []}},
-            {'name': 'obter_documento_clinico', 'description': 'Retorna documento clinico e URL temporaria respeitando permissoes.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'documento_id': {'type': 'integer'}}, 'required': []}},
+            {'name': 'listar_historico_medico_animal', 'description': 'Lista historico medico com exames de imagem, documentos e PDFs disponiveis. Use pdfs_disponiveis[].url, portal_url ou shareable_url ao compartilhar com clinica/tutor; endpoints internos exigem bearer e nao devem ser enviados como link final.', 'inputSchema': {'type': 'object', 'properties': {'animal_id': {'type': 'integer'}, 'nome_animal': {'type': 'string'}}, 'required': []}},
+            {'name': 'obter_documento_clinico', 'description': 'Retorna documento clinico e links humanos de portal/download respeitando permissoes. Use shareable_url para o usuario final; nao apresente URL de API protegida como link do exame.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'documento_id': {'type': 'integer'}}, 'required': []}},
             {'name': 'buscar_ou_criar_clinica_requisitante', 'description': 'Busca ou cria clinica requisitante do exame.', 'inputSchema': {'type': 'object', 'properties': {'nome_clinica': {'type': 'string'}, 'cnpj': {'type': 'string'}, 'email': {'type': 'string'}, 'telefone': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_clinica', 'confirmar_gravacao']}},
             {'name': 'buscar_ou_criar_tutor_animal', 'description': 'Busca ou cria tutor e animal para o fluxo de exame.', 'inputSchema': {'type': 'object', 'properties': {'clinica_id': {'type': 'integer'}, 'nome_tutor': {'type': 'string'}, 'telefone': {'type': 'string'}, 'email': {'type': 'string'}, 'nome_animal': {'type': 'string'}, 'especie': {'type': 'string'}, 'idade': {'type': 'string'}, 'raca': {'type': 'string'}, 'sexo': {'type': 'string'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['nome_tutor', 'nome_animal', 'especie', 'confirmar_gravacao']}},
             {
@@ -13781,10 +14523,17 @@ def mcp_server():
                 db.session.commit()
             result = {
                 'animal': _serialize_calendar_pet(animal),
-                'exames': [_integration_serialize_exame_imagem(exame, user) for exame in exames_imagem],
+                'exames': [
+                    _integration_serialize_exame_imagem(exame, user, include_internal_links=False)
+                    for exame in exames_imagem
+                ],
                 'pdfs_disponiveis': [
-                    {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
-                    for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(user, exame)
+                    summary
+                    for summary in (
+                        _integration_exame_imagem_pdf_summary(exame, user, include_internal_links=False)
+                        for exame in exames_imagem
+                    )
+                    if summary
                 ],
             }
             return _mcp_ok(req_id, _mcp_json_content(result))
@@ -13807,7 +14556,9 @@ def mcp_server():
             if not _integration_user_can_access_exame_imagem(user, exame):
                 return _mcp_err(req_id, -32003, 'Sem permissao para acessar este documento.')
             db.session.commit()
-            return _mcp_ok(req_id, _mcp_json_content({'documento': _integration_serialize_exame_imagem(exame, user), 'url_temporaria': exame.arquivo_pdf_url}))
+            return _mcp_ok(req_id, _mcp_json_content(
+                _integration_exame_imagem_document_payload(exame, user, include_internal_links=False)
+            ))
 
         if tool_name == 'buscar_ou_criar_clinica_requisitante':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
@@ -14141,6 +14892,10 @@ def mcp_protected_resource_metadata():
         'resource': f'{issuer}/mcp',
         'authorization_servers': [issuer],
         'bearer_methods_supported': ['header'],
+        # RFC 9728 §2: the scopes a client must request to access this resource.
+        # Without this, MCP clients (ChatGPT/Claude) only request the default
+        # OIDC scopes and never obtain pets:read / exams:write / etc.
+        'scopes_supported': _oauth_order_scopes(_oauth_allowed_scopes()).split(),
         'resource_documentation': f'{issuer}/mcp',
     })
 
@@ -31712,8 +32467,12 @@ def api_integrations_list_animal_medical_history():
             for d in documentos_query.order_by(AnimalDocumento.uploaded_at.desc()).limit(20).all()
         ],
         'pdfs_disponiveis': [
-            {'exame_id': exame.id, 'documento_id': exame.documento_id, 'filename': exame.arquivo_pdf_filename, 'url': url_for('api_integrations_get_clinical_document', exame_id=exame.id, _external=True)}
-            for exame in exames_imagem if exame.arquivo_pdf_url and _integration_user_can_access_exame_imagem(auth_user, exame)
+            summary
+            for summary in (
+                _integration_exame_imagem_pdf_summary(exame, auth_user)
+                for exame in exames_imagem
+            )
+            if summary
         ],
     })
 
@@ -31745,7 +32504,7 @@ def api_integrations_get_clinical_document():
         db.session.commit()
     else:
         db.session.commit()
-    return _integration_ok({'documento': _integration_serialize_exame_imagem(exame, auth_user), 'url_temporaria': exame.arquivo_pdf_url})
+    return _integration_ok(_integration_exame_imagem_document_payload(exame, auth_user))
 
 
 @csrf.exempt
@@ -32277,7 +33036,7 @@ def api_integrations_openapi():
             '/api/integrations/medical-history': {
                 'get': {
                     'operationId': 'listarHistoricoMedicoAnimalPetOrlandia',
-                    'summary': 'Listar historico medico do animal',
+                    'summary': 'Listar historico medico do animal com links humanos de portal ou download',
                     'security': [{'PetOrlandiaOAuth': ['clinical_summary:read', 'exams:read']}],
                     'parameters': [
                         {'name': 'animal_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},
@@ -32289,7 +33048,7 @@ def api_integrations_openapi():
             '/api/integrations/clinical-document': {
                 'get': {
                     'operationId': 'obterDocumentoClinicoPetOrlandia',
-                    'summary': 'Obter documento clinico com URL temporaria respeitando permissao',
+                    'summary': 'Obter documento clinico com shareable_url para usuario final e metadado tecnico protegido',
                     'security': [{'PetOrlandiaOAuth': ['exams:read']}],
                     'parameters': [
                         {'name': 'exame_id', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}},

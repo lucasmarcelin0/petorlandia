@@ -98,9 +98,46 @@ body {
   justify-content: center;
 }
 
+.logo-img--clinic-placeholder {
+  width: 92px;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--soft-border-color);
+  border-radius: 12px;
+  background: rgba(31, 58, 86, 0.06);
+  color: var(--primary-color);
+  font-size: 30pt;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .header img {
   max-height: 72px;
   width: auto;
+}
+
+.header--exam-portal {
+  position: relative;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-bottom: 32px;
+}
+
+.header--exam-portal .clinica-nome {
+  font-size: 18pt;
+}
+
+.header-logo--clinic-primary {
+  flex: 0 0 132px;
+  justify-content: flex-start;
+}
+
+.header-logo--clinic-primary img {
+  max-width: 132px;
+  max-height: 96px;
+  object-fit: contain;
 }
 
 .header-info {
@@ -110,6 +147,44 @@ body {
   align-items: center;
   text-align: center;
   gap: 6px;
+}
+
+.header-info--clinic-first {
+  align-items: flex-start;
+  text-align: left;
+  padding-right: 178px;
+}
+
+.header-responsible,
+.header-exam-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--secondary-color);
+  font-size: 10pt;
+}
+
+.header-patient {
+  color: var(--body-text);
+  font-size: 12.5pt;
+}
+
+.header-powered-by {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-text);
+  font-size: 8.4pt;
+  opacity: 0.72;
+}
+
+.header-powered-by img {
+  max-height: 18px;
+  width: auto;
+  opacity: 0.78;
 }
 
 .clinica-nome {
@@ -475,6 +550,21 @@ footer span + span::before {
 .no-print button:hover,
 .no-print a:hover {
   background-color: #172b42;
+}
+
+@media (max-width: 720px) {
+  .header--exam-portal {
+    flex-direction: column;
+  }
+
+  .header-info--clinic-first {
+    padding-right: 0;
+  }
+
+  .header-powered-by {
+    position: static;
+    align-self: flex-end;
+  }
 }
 
 @media print {

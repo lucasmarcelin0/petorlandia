@@ -23,10 +23,22 @@
 
                         <dt class="col-sm-4">E-mail</dt>
                         <dd class="col-sm-8">{{ current_account.email }}</dd>
-
-                        <dt class="col-sm-4">Escopos pedidos</dt>
-                        <dd class="col-sm-8">{{ requested_scopes | join(', ') }}</dd>
                     </dl>
+
+                    {% if write_scopes %}
+                    <p class="fw-semibold mb-2">Permissões que exigem conta veterinária:</p>
+                    <ul class="list-unstyled mb-4">
+                        {% for item in write_scopes %}
+                        <li class="d-flex align-items-start gap-2 mb-2">
+                            <i class="fas fa-pen-to-square text-warning mt-1"></i>
+                            <span class="lh-sm">
+                                <span class="fw-semibold">{{ item.label }}</span>
+                                <span class="d-block text-muted small">{{ item.description }}</span>
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
 
                     <p class="small text-muted mb-4">
                         Se você já tem uma conta veterinária, saia desta conta e entre novamente com a conta correta.
