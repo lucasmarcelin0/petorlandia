@@ -357,7 +357,7 @@ def test_chatgpt_cached_oidc_scope_is_expanded_to_clinical_consent_and_token(app
         assert {'pets:read', 'exams:write'}.issubset(set(stored_client.scopes.split()))
 
 
-def test_chatgpt_oidc_only_refresh_token_forces_reauthorization(app, client):
+def test_chatgpt_oidc_only_refresh_token_self_heals_for_veterinarian(app, client):
     with app.app_context():
         user = User(name='Dr. Refresh', email='chatgpt-refresh@example.com', role='veterinario', worker='veterinario')
         user.set_password('secret123')
@@ -390,9 +390,50 @@ def test_chatgpt_oidc_only_refresh_token_forces_reauthorization(app, client):
         },
     )
 
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert {'pets:read', 'exams:write', 'clinical_summary:read'}.issubset(set(payload['scope'].split()))
+    assert payload['refresh_token'] != 'refresh-token-with-basic-scope'
+    with app.app_context():
+        stored_refresh = db.session.get(OAuthRefreshToken, refresh_id)
+        assert stored_refresh.revoked_at is not None
+        assert stored_refresh.replaced_by_jti is not None
+
+
+def test_chatgpt_oidc_only_refresh_token_still_requires_veterinarian_account(app, client):
+    with app.app_context():
+        user = User(name='Tutor Refresh', email='chatgpt-refresh-tutor@example.com', role='adotante')
+        user.set_password('secret123')
+        oauth_client = OAuthClient(
+            client_id='chatgpt-refresh-tutor-client',
+            name='ChatGPT PetOrlandia MCP',
+            redirect_uris='https://chatgpt.com/aip/petorlandia/oauth/callback',
+            scopes='openid profile email',
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.flush()
+        refresh = OAuthRefreshToken(
+            client_id='chatgpt-refresh-tutor-client',
+            user_id=user.id,
+            refresh_token='refresh-token-tutor-basic-scope',
+            scope='openid profile email',
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+        db.session.add(refresh)
+        db.session.commit()
+        refresh_id = refresh.id
+
+    response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'refresh_token',
+            'client_id': 'chatgpt-refresh-tutor-client',
+            'refresh_token': 'refresh-token-tutor-basic-scope',
+        },
+    )
+
     assert response.status_code == 400
     assert response.get_json()['error'] == 'invalid_grant'
-    assert 'clinical scopes' in response.get_json()['error_description']
     with app.app_context():
         stored_refresh = db.session.get(OAuthRefreshToken, refresh_id)
         assert stored_refresh.revoked_at is not None

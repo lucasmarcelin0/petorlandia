@@ -73,7 +73,7 @@ def test_integrations_endpoint_requires_scope(app, client):
     assert "pets:read" in payload["error"]["details"]["missing_scopes"]
 
 
-def test_chatgpt_oidc_only_access_token_forces_reauthorization(app, client):
+def test_chatgpt_oidc_only_access_token_self_heals_for_veterinarian(app, client):
     with app.app_context():
         user = User(name="ChatGPT Vet", email="chatgpt-token@example.com", role="veterinario", worker="veterinario")
         user.set_password("secret123")
@@ -114,13 +114,12 @@ def test_chatgpt_oidc_only_access_token_forces_reauthorization(app, client):
         headers={"Authorization": "Bearer old-chatgpt-access-token"},
     )
 
-    assert response.status_code == 401
-    payload = response.get_json()
-    assert payload["error"]["code"] == "reauthorization_required"
-    assert "pets:read" in payload["error"]["details"]["missing_scopes"]
+    assert response.status_code == 200
+    assert response.get_json()["data"] == []
     with app.app_context():
-        assert db.session.get(OAuthAccessToken, access_id).revoked_at is not None
-        assert db.session.get(OAuthRefreshToken, refresh_id).revoked_at is not None
+        assert db.session.get(OAuthAccessToken, access_id).revoked_at is None
+        assert "pets:read" in db.session.get(OAuthAccessToken, access_id).scope
+        assert "exams:write" in db.session.get(OAuthRefreshToken, refresh_id).scope
 
 
 def test_integrations_me_and_resource_endpoints(app, client):

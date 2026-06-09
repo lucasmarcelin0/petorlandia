@@ -9278,6 +9278,36 @@ def _oauth_refresh_token_requires_mcp_reauthorization(refresh: OAuthRefreshToken
     return _oauth_scope_needs_mcp_recovery(refresh.scope) and _oauth_client_looks_like_openai_mcp(client)
 
 
+def _oauth_datetime_is_future(value) -> bool:
+    if value is None:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value > utcnow()
+
+
+def _oauth_mcp_user_can_receive_clinical_scopes(user_id: int | None) -> bool:
+    user = db.session.get(User, user_id) if user_id else None
+    return bool(user and has_veterinarian_profile(user))
+
+
+def _oauth_access_token_can_self_heal_mcp_scope(token: OAuthAccessToken) -> bool:
+    return (
+        _oauth_access_token_requires_mcp_reauthorization(token)
+        and _oauth_mcp_user_can_receive_clinical_scopes(token.user_id)
+    )
+
+
+def _oauth_refresh_token_can_self_heal_mcp_scope(refresh: OAuthRefreshToken, client: OAuthClient) -> bool:
+    if refresh.replaced_by_jti:
+        return False
+    return (
+        _oauth_refresh_token_requires_mcp_reauthorization(refresh, client)
+        and _oauth_datetime_is_future(refresh.expires_at)
+        and _oauth_mcp_user_can_receive_clinical_scopes(refresh.user_id)
+    )
+
+
 # Human-friendly copy for the consent screen, keyed by scope.
 # Each value is (group_key, short_label, plain_description) — all in pt-BR so a
 # veterinarian sees "Consultar pacientes" instead of the raw "pets:read".
@@ -11537,7 +11567,24 @@ def integration_bearer_required(*required_scopes: str):
             token_scope_set = {item.strip() for item in (token.scope or '').split() if item.strip()}
             missing_scopes = sorted(required_scope_set.difference(token_scope_set))
             if missing_scopes:
-                if _oauth_access_token_requires_mcp_reauthorization(token):
+                if _oauth_access_token_can_self_heal_mcp_scope(token):
+                    healed_scope = _oauth_default_mcp_scope()
+                    token.scope = healed_scope
+                    refresh = (
+                        db.session.get(OAuthRefreshToken, token.refresh_token_id)
+                        if token.refresh_token_id
+                        else None
+                    )
+                    if refresh is not None and _oauth_scope_needs_mcp_recovery(refresh.scope):
+                        refresh.scope = healed_scope
+                        db.session.add(refresh)
+                    db.session.add(token)
+                    db.session.commit()
+                    _oauth_log_event('oauth_mcp_legacy_access_scope_upgraded', client_id=token.client_id, user_id=token.user_id)
+                    token_scope_set = _oauth_scope_tokens(healed_scope)
+                    missing_scopes = sorted(required_scope_set.difference(token_scope_set))
+
+                if missing_scopes and _oauth_access_token_requires_mcp_reauthorization(token):
                     refresh = (
                         db.session.get(OAuthRefreshToken, token.refresh_token_id)
                         if token.refresh_token_id
@@ -11558,14 +11605,15 @@ def integration_bearer_required(*required_scopes: str):
                         granted_scopes=sorted(token_scope_set),
                         missing_scopes=missing_scopes,
                     )
-                return _integration_error(
-                    'insufficient_scope',
-                    'Access token does not grant the required scope.',
-                    403,
-                    required_scopes=sorted(required_scope_set),
-                    granted_scopes=sorted(token_scope_set),
-                    missing_scopes=missing_scopes,
-                )
+                if missing_scopes:
+                    return _integration_error(
+                        'insufficient_scope',
+                        'Access token does not grant the required scope.',
+                        403,
+                        required_scopes=sorted(required_scope_set),
+                        granted_scopes=sorted(token_scope_set),
+                        missing_scopes=missing_scopes,
+                    )
 
             auth_user = db.session.get(User, token.user_id)
             if not auth_user:
@@ -11623,6 +11671,54 @@ def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
             if access.revoked_at is None:
                 access.revoked_at = now
                 db.session.add(access)
+
+
+def _oauth_issue_refresh_grant_response(
+    refresh: OAuthRefreshToken,
+    *,
+    scope: str | None = None,
+    log_event: str = 'oauth_token_issued',
+):
+    now = utcnow()
+    refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+    access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+    granted_scope = scope or refresh.scope
+
+    new_refresh = OAuthRefreshToken(
+        client_id=refresh.client_id,
+        user_id=refresh.user_id,
+        refresh_token=secrets.token_urlsafe(48),
+        scope=granted_scope,
+        family_id=refresh.family_id,
+        expires_at=now + timedelta(seconds=refresh_expires_in),
+    )
+    db.session.add(new_refresh)
+    db.session.flush()
+
+    refresh.revoked_at = now
+    refresh.replaced_by_jti = new_refresh.jti
+    db.session.add(refresh)
+
+    new_access = OAuthAccessToken(
+        client_id=refresh.client_id,
+        user_id=refresh.user_id,
+        access_token=secrets.token_urlsafe(48),
+        token_type='Bearer',
+        scope=granted_scope,
+        refresh_token_id=new_refresh.id,
+        expires_at=now + timedelta(seconds=access_expires_in),
+    )
+    db.session.add(new_access)
+    db.session.commit()
+    _oauth_log_event(log_event, client_id=refresh.client_id, user_id=refresh.user_id, grant_type='refresh_token')
+
+    return jsonify({
+        'access_token': new_access.access_token,
+        'token_type': 'Bearer',
+        'expires_in': access_expires_in,
+        'scope': granted_scope,
+        'refresh_token': new_refresh.refresh_token,
+    })
 
 
 def oauth_authorize():
@@ -11844,12 +11940,24 @@ def oauth_token():
             return _oauth_error_response('invalid_grant', 'Refresh token is invalid.')
 
         if not refresh.is_active:
+            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
+                return _oauth_issue_refresh_grant_response(
+                    refresh,
+                    scope=_oauth_default_mcp_scope(),
+                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
+                )
             _oauth_revoke_refresh_family(refresh)
             db.session.commit()
             _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
             return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
 
         if _oauth_refresh_token_requires_mcp_reauthorization(refresh, client):
+            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
+                return _oauth_issue_refresh_grant_response(
+                    refresh,
+                    scope=_oauth_default_mcp_scope(),
+                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
+                )
             _oauth_revoke_refresh_family(refresh)
             db.session.commit()
             _oauth_log_event('oauth_mcp_reauthorization_required', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
@@ -11858,45 +11966,7 @@ def oauth_token():
                 'Refresh token is missing the current clinical scopes. Reconnect PetOrlandia in ChatGPT to authorize pets:read, exams:write and the remaining clinical scopes.',
             )
 
-        now = utcnow()
-        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
-        access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
-
-        new_refresh = OAuthRefreshToken(
-            client_id=client_id,
-            user_id=refresh.user_id,
-            refresh_token=secrets.token_urlsafe(48),
-            scope=refresh.scope,
-            family_id=refresh.family_id,
-            expires_at=now + timedelta(seconds=refresh_expires_in),
-        )
-        db.session.add(new_refresh)
-        db.session.flush()
-
-        refresh.revoked_at = now
-        refresh.replaced_by_jti = new_refresh.jti
-        db.session.add(refresh)
-
-        new_access = OAuthAccessToken(
-            client_id=client_id,
-            user_id=refresh.user_id,
-            access_token=secrets.token_urlsafe(48),
-            token_type='Bearer',
-            scope=refresh.scope,
-            refresh_token_id=new_refresh.id,
-            expires_at=now + timedelta(seconds=access_expires_in),
-        )
-        db.session.add(new_access)
-        db.session.commit()
-        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
-
-        return jsonify({
-            'access_token': new_access.access_token,
-            'token_type': 'Bearer',
-            'expires_in': access_expires_in,
-            'scope': refresh.scope,
-            'refresh_token': new_refresh.refresh_token,
-        })
+        return _oauth_issue_refresh_grant_response(refresh)
 
     return _oauth_error_response('unsupported_grant_type', 'Only authorization_code and refresh_token grants are supported.')
 
