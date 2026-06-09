@@ -4640,6 +4640,20 @@ def vacina_pmo_status_webhook():
     return jsonify({'success': True, 'message': 'Atualização de status iniciada.'})
 
 
+@app.route('/vacina-pmo/painel')
+@login_required
+def vacina_pmo_painel():
+    if current_user.role != 'admin':
+        abort(403)
+    from services.vacina_pmo_service import get_vacina_pmo_kpis
+    try:
+        kpis = get_vacina_pmo_kpis()
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar painel Vacina PMO")
+        kpis = {'error': str(exc)}
+    return render_template('vacina_pmo/painel.html', kpis=kpis)
+
+
 @app.route('/vacina-pmo/sheets', methods=['GET'])
 @login_required
 def vacina_pmo_sheets():

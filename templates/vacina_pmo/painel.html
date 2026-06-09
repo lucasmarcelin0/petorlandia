@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+
+{% block head %}
+{{ super() }}
+<style>
+  .pmo-kpi-card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; height: 100%; }
+  .pmo-kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+  .pmo-kpi-card .kpi-label { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+  .pmo-kpi-card .kpi-sub { font-size: .85rem; color: #6b7280; }
+  .pmo-bar { height: 12px; border-radius: 6px; background: #eef2ff; overflow: hidden; }
+  .pmo-bar > span { display: block; height: 100%; border-radius: 6px; }
+  .pmo-meta-ok { color: #047857; font-weight: 600; }
+  .pmo-meta-off { color: #b91c1c; font-weight: 600; }
+  .pmo-funnel-step { background: #f3f4f6; border-radius: 10px; padding: 10px 14px; text-align: center; }
+  .pmo-funnel-step .n { font-size: 1.4rem; font-weight: 700; }
+  .pmo-funnel-step .l { font-size: .78rem; color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+      <h2 class="mb-1">📊 Painel da Campanha — Vacinação 2026</h2>
+      <p class="text-muted mb-0">Indicadores ao vivo (lidos do banco). Não escreve em planilha nenhuma.</p>
+    </div>
+    <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Voltar ao painel operacional</a>
+  </div>
+
+  {% if kpis.error %}
+    <div class="alert alert-danger">Não foi possível montar o painel: {{ kpis.error }}</div>
+  {% else %}
+
+  {% set meta_ok = kpis.avg_per_day >= 21 and kpis.avg_per_day <= 24 %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Vacinados</div>
+        <div class="kpi-value">{{ kpis.vaccinated_animals }}</div>
+        <div class="kpi-sub">🐕 {{ kpis.vac_dogs }} &nbsp; 🐈 {{ kpis.vac_cats }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Cobertura</div>
+        <div class="kpi-value">{{ kpis.coverage }}%</div>
+        <div class="kpi-sub">de {{ kpis.registered_animals }} animais cadastrados</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Animais / dia</div>
+        <div class="kpi-value">{{ kpis.avg_per_day }}</div>
+        <div class="kpi-sub">
+          meta 22–24 ·
+          <span class="{{ 'pmo-meta-ok' if meta_ok else 'pmo-meta-off' }}">
+            {{ 'na faixa' if meta_ok else 'fora da faixa' }}
+          </span>
+          · {{ kpis.days_count }} dias
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">A agendar</div>
+        <div class="kpi-value">{{ kpis.backlog }}</div>
+        <div class="kpi-sub">casas na fila ("Inscrição a agendar")</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <h5 class="mb-3">Funil</h5>
+      <div class="row g-2">
+        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.total_people }}</div><div class="l">Cadastrados</div></div></div>
+        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.atendidos }}</div><div class="l">Atendidos</div></div></div>
+        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.vacinado_people }}</div><div class="l">Vacinados</div></div></div>
+      </div>
+      <p class="text-muted small mt-2">Pessoas (cadastros únicos da aba mestre). "Atendidos" = já têm desfecho (vacinado/parcial/ausente/recusou/remarcar).</p>
+    </div>
+
+    <div class="col-lg-7">
+      <h5 class="mb-3">Desfechos por pessoa</h5>
+      {% for o in kpis.outcomes %}
+      <div class="mb-2">
+        <div class="d-flex justify-content-between small">
+          <span>{{ o.label }}</span>
+          <span class="text-muted">{{ o.count }} · {{ o.pct }}%</span>
+        </div>
+        <div class="pmo-bar">
+          <span style="width: {{ o.pct }}%; background:
+            {%- if o.key == 'vacinado' %} #34d399
+            {%- elif o.key == 'parcial' %} #fbbf24
+            {%- elif o.key in ['agendado','pendente','fluxo_ativo','reagendar'] %} #60a5fa
+            {%- elif o.key == 'ausente' %} #fb923c
+            {%- elif o.key == 'recusou' %} #f87171
+            {%- else %} #9ca3af {%- endif %};"></span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if kpis.per_day %}
+  <h5 class="mt-4 mb-3">Animais por dia</h5>
+  <div class="row g-2">
+    {% for d in kpis.per_day %}
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="pmo-funnel-step">
+        <div class="n {{ 'pmo-meta-ok' if 21 <= d.animals <= 24 else 'pmo-meta-off' }}">{{ d.animals }}</div>
+        <div class="l">{{ d.tab }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

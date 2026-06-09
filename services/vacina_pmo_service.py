@@ -2329,6 +2329,98 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     }
 
 
+def get_vacina_pmo_kpis() -> dict[str, Any]:
+    """Indicadores da campanha, calculados do banco (mesma fonte do status-sync).
+
+    Tudo é leitura — não escreve em planilha nenhuma.
+    """
+    from collections import Counter, defaultdict
+    from scripts.sync_pmo_master_status_notes import (
+        MASTER_SHEET_TITLE,
+        STATUS_LABELS,
+        _build_visit_index,
+        _matching_visits,
+        _overall_status,
+    )
+
+    all_visits = PmoVaccinationVisit.query.all()
+    by_phone, by_name, by_user = _build_visit_index(all_visits)
+
+    master_visits = [v for v in all_visits if v.sheet_title == MASTER_SHEET_TITLE]
+    status_counts: Counter = Counter()
+    registered_dogs = 0
+    registered_cats = 0
+    for visit in master_visits:
+        matches = _matching_visits(visit, by_phone=by_phone, by_name=by_name, by_user=by_user)
+        status_counts[_overall_status(matches)] += 1
+        registered_dogs += int(visit.dogs or 0)
+        registered_cats += int(visit.cats or 0)
+    registered_animals = registered_dogs + registered_cats
+    total_people = len(master_visits)
+
+    # Vacinados reais (por espécie) nas abas datadas (os dias de campo).
+    dated_visits = [v for v in all_visits if _parse_date_object((v.sheet_title or "").strip())]
+    vac_dogs = sum(
+        1 for v in dated_visits for a in v.animals if a.species == "cao" and a.status == "vacinado"
+    )
+    vac_cats = sum(
+        1 for v in dated_visits for a in v.animals if a.species == "gato" and a.status == "vacinado"
+    )
+    vaccinated_animals = vac_dogs + vac_cats
+
+    # Animais por dia (abas datadas) — para acompanhar a meta de 22–24.
+    per_day: dict[str, int] = defaultdict(int)
+    for v in dated_visits:
+        per_day[v.sheet_title] += int(v.dogs or 0) + int(v.cats or 0)
+    day_totals = list(per_day.values())
+    avg_per_day = round(sum(day_totals) / len(day_totals), 1) if day_totals else 0.0
+
+    source_title = os.getenv(
+        PMO_SCHEDULE_SOURCE_SHEET_TITLE_ENV, PMO_SCHEDULE_SOURCE_SHEET_DEFAULT_TITLE
+    )
+    source_norm = _pmo_normalize_title(source_title)
+    backlog = sum(
+        1 for v in all_visits if _pmo_normalize_title(v.sheet_title) == source_norm
+    )
+
+    visited_keys = {"vacinado", "parcial", "ausente", "recusou", "remarcar"}
+    atendidos = sum(c for k, c in status_counts.items() if k in visited_keys)
+    vacinado_people = status_counts.get("vacinado", 0)
+    coverage = (
+        round(100 * vaccinated_animals / registered_animals, 1) if registered_animals else 0.0
+    )
+
+    label_map = dict(STATUS_LABELS)
+    label_map.setdefault("sem_registro", "Sem registro")
+    outcomes = [
+        {
+            "key": key,
+            "label": label_map.get(key, key),
+            "count": count,
+            "pct": round(100 * count / total_people, 1) if total_people else 0.0,
+        }
+        for key, count in status_counts.most_common()
+    ]
+
+    return {
+        "total_people": total_people,
+        "atendidos": atendidos,
+        "vacinado_people": vacinado_people,
+        "registered_animals": registered_animals,
+        "registered_dogs": registered_dogs,
+        "registered_cats": registered_cats,
+        "vaccinated_animals": vaccinated_animals,
+        "vac_dogs": vac_dogs,
+        "vac_cats": vac_cats,
+        "coverage": coverage,
+        "avg_per_day": avg_per_day,
+        "days_count": len(day_totals),
+        "backlog": backlog,
+        "outcomes": outcomes,
+        "per_day": [{"tab": t, "animals": a} for t, a in sorted(per_day.items())],
+    }
+
+
 def normalize_pmo_request_address(payload: dict[str, Any]) -> dict[str, str]:
     """Normaliza endereco do formulario, inclusive quando tudo foi colado na rua."""
     street = _normalize_text(payload.get("address_street"))
