@@ -1,0 +1,449 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<style>
+  .exame-imagem-page {
+    color: #16202a;
+  }
+
+  .exame-imagem-page .page-kicker {
+    color: #047857;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .exame-imagem-page .tool-panel,
+  .exame-imagem-page .exam-item {
+    background: #fff;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+  }
+
+  .exame-imagem-page .section-title {
+    align-items: center;
+    color: #1f2937;
+    display: flex;
+    font-size: .92rem;
+    font-weight: 800;
+    gap: .5rem;
+    margin: 0 0 .75rem;
+  }
+
+  .exame-imagem-page .form-label {
+    color: #334155;
+    font-size: .82rem;
+    font-weight: 700;
+  }
+
+  .exame-imagem-page .form-control,
+  .exame-imagem-page .form-select {
+    border-color: #cbd5e1;
+    border-radius: 8px;
+    min-height: 42px;
+  }
+
+  .exame-imagem-page textarea.form-control {
+    min-height: 96px;
+  }
+
+  .exame-imagem-page .form-check-input {
+    border-color: #94a3b8;
+  }
+
+  .exame-imagem-page .form-check-input:checked {
+    background-color: #0f766e;
+    border-color: #0f766e;
+  }
+
+  .exame-imagem-page .status-dot {
+    border-radius: 999px;
+    display: inline-block;
+    height: .58rem;
+    width: .58rem;
+  }
+
+  .exame-imagem-page .status-on {
+    background: #16a34a;
+  }
+
+  .exame-imagem-page .status-off {
+    background: #cbd5e1;
+  }
+
+  .exame-imagem-page .exam-item {
+    border-left: 4px solid #cbd5e1;
+    padding: 1rem;
+  }
+
+  .exame-imagem-page .exam-item.is-highlighted {
+    border-left-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, .18), 0 6px 20px rgba(15, 23, 42, .08);
+  }
+
+  .exame-imagem-page .link-box {
+    background: #f8fafc;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: .65rem;
+  }
+
+  .exame-imagem-page .link-box input {
+    background: transparent;
+    border: 0;
+    color: #0f172a;
+    font-size: .84rem;
+    min-width: 0;
+    outline: 0;
+  }
+
+  .exame-imagem-page .btn-icon {
+    align-items: center;
+    display: inline-flex;
+    gap: .4rem;
+    justify-content: center;
+    min-height: 36px;
+    white-space: nowrap;
+  }
+
+  .exame-imagem-page .empty-state {
+    border: 1px dashed #bac6d3;
+    border-radius: 8px;
+    color: #64748b;
+    padding: 1.25rem;
+    text-align: center;
+  }
+
+  @media (max-width: 575.98px) {
+    .exame-imagem-page .link-box {
+      grid-template-columns: 1fr;
+    }
+
+    .exame-imagem-page .btn-icon {
+      width: 100%;
+    }
+  }
+</style>
+
+<div class="exame-imagem-page py-4">
+  <header class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+      <div class="page-kicker">Exames de imagem</div>
+      <h1 class="h3 fw-bold mb-1">Laudos e acessos</h1>
+      <div class="text-muted">Operacao do ultrassonografista</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-icon" href="{{ url_for('appointments') }}">
+      <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+      Agenda
+    </a>
+  </header>
+
+  <div class="row g-4 align-items-start">
+    <div class="col-xl-5">
+      <section class="tool-panel p-3 p-md-4">
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('exames_imagem_painel') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-4">
+            <h2 class="section-title"><i class="fa-solid fa-hospital text-success" aria-hidden="true"></i>Clinica requisitante</h2>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label" for="nome_clinica">Nome da clinica</label>
+                <input class="form-control" id="nome_clinica" name="nome_clinica" autocomplete="organization" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="nome_responsavel_clinica">Responsavel</label>
+                <input class="form-control" id="nome_responsavel_clinica" name="nome_responsavel_clinica" autocomplete="name">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="telefone_clinica">Telefone</label>
+                <input class="form-control" id="telefone_clinica" name="telefone_clinica" autocomplete="tel">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="email_clinica">E-mail</label>
+                <input class="form-control" id="email_clinica" name="email_clinica" type="email" autocomplete="email">
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <h2 class="section-title"><i class="fa-solid fa-user-group text-primary" aria-hidden="true"></i>Tutor e paciente</h2>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="nome_tutor">Tutor</label>
+                <input class="form-control" id="nome_tutor" name="nome_tutor" autocomplete="name" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="telefone_tutor">Telefone do tutor</label>
+                <input class="form-control" id="telefone_tutor" name="telefone_tutor" autocomplete="tel">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="email_tutor">E-mail do tutor</label>
+                <input class="form-control" id="email_tutor" name="email_tutor" type="email" autocomplete="email">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="nome_animal">Paciente</label>
+                <input class="form-control" id="nome_animal" name="nome_animal" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="especie">Especie</label>
+                <input class="form-control" id="especie" name="especie" placeholder="Canina, felina...">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="raca">Raca</label>
+                <input class="form-control" id="raca" name="raca">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="sexo">Sexo</label>
+                <select class="form-select" id="sexo" name="sexo">
+                  <option value="">Selecionar</option>
+                  <option value="Macho">Macho</option>
+                  <option value="Femea">Femea</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="idade">Idade</label>
+                <input class="form-control" id="idade" name="idade" placeholder="Ex.: 8 anos">
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <h2 class="section-title"><i class="fa-solid fa-file-medical text-info" aria-hidden="true"></i>Exame e laudo</h2>
+            <div class="row g-3">
+              <div class="col-md-7">
+                <label class="form-label" for="tipo_exame">Tipo de exame</label>
+                <input class="form-control" id="tipo_exame" name="tipo_exame" value="Ultrassonografia abdominal" required>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label" for="data_exame">Data</label>
+                <input class="form-control" id="data_exame" name="data_exame" type="date" value="{{ today }}" required>
+              </div>
+              <div class="col-md-7">
+                <label class="form-label" for="profissional_nome">Profissional</label>
+                <input class="form-control" id="profissional_nome" name="profissional_nome" value="{{ profissional_nome }}">
+              </div>
+              <div class="col-md-5">
+                <label class="form-label" for="profissional_crmv">CRMV</label>
+                <input class="form-control" id="profissional_crmv" name="profissional_crmv" value="{{ profissional_crmv }}">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="arquivo_pdf">PDF do laudo</label>
+                <input class="form-control" id="arquivo_pdf" name="arquivo_pdf" type="file" accept="application/pdf,.pdf">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="impressao_diagnostica">Impressao diagnostica</label>
+                <textarea class="form-control" id="impressao_diagnostica" name="impressao_diagnostica"></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="descricao">Observacoes</label>
+                <textarea class="form-control" id="descricao" name="descricao"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <h2 class="section-title"><i class="fa-solid fa-share-nodes text-warning" aria-hidden="true"></i>Acessos</h2>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="form-check">
+                  <input class="form-check-input" id="liberar_clinica" name="liberar_clinica" type="checkbox" value="1" checked>
+                  <label class="form-check-label" for="liberar_clinica">Liberar para clinica</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check">
+                  <input class="form-check-input" id="gerar_convite_clinica" name="gerar_convite_clinica" type="checkbox" value="1" checked>
+                  <label class="form-check-label" for="gerar_convite_clinica">Link da clinica</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check">
+                  <input class="form-check-input" id="liberar_tutor" name="liberar_tutor" type="checkbox" value="1" checked>
+                  <label class="form-check-label" for="liberar_tutor">Liberar para tutor</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check">
+                  <input class="form-check-input" id="gerar_convite_tutor" name="gerar_convite_tutor" type="checkbox" value="1" checked>
+                  <label class="form-check-label" for="gerar_convite_tutor">Link do tutor</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-success w-100 btn-icon" type="submit">
+            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+            Salvar laudo e preparar acessos
+          </button>
+        </form>
+      </section>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <h2 class="h5 fw-bold mb-0">Laudos recentes</h2>
+        <span class="badge bg-light text-dark border">{{ exam_cards|length }}</span>
+      </div>
+
+      {% if exam_cards %}
+      <div class="d-grid gap-3">
+        {% for card in exam_cards %}
+        {% set exame = card.exame %}
+        <section class="exam-item{% if card.highlight %} is-highlighted{% endif %}" id="exame-{{ exame.id }}">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+            <div>
+              <div class="fw-bold">{{ exame.animal.name if exame.animal else 'Paciente' }}</div>
+              <div class="text-muted small">
+                {{ exame.tipo_exame }}{% if exame.data_exame %} · {{ exame.data_exame.strftime('%d/%m/%Y') }}{% endif %}
+              </div>
+              <div class="small mt-1">
+                <span class="fw-semibold">{{ exame.clinica_requisitante.nome if exame.clinica_requisitante else 'Clinica requisitante' }}</span>
+                {% if exame.tutor %}<span class="text-muted"> · Tutor: {{ exame.tutor.name }}</span>{% endif %}
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-start">
+              <span class="badge bg-light text-dark border">
+                <span class="status-dot {{ 'status-on' if exame.arquivo_pdf_url else 'status-off' }}"></span>
+                PDF
+              </span>
+              <span class="badge bg-light text-dark border">
+                <span class="status-dot {{ 'status-on' if exame.liberado_para_clinica else 'status-off' }}"></span>
+                Clinica
+              </span>
+              <span class="badge bg-light text-dark border">
+                <span class="status-dot {{ 'status-on' if exame.liberado_para_tutor else 'status-off' }}"></span>
+                Tutor
+              </span>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-2">
+            <div class="col-lg-6">
+              <div class="small fw-bold mb-1">Clinica</div>
+              {% if card.clinic_url %}
+              <div class="link-box">
+                <input value="{{ card.clinic_url }}" readonly aria-label="Link da clinica">
+                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.clinic_url }}">
+                  <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                  Copiar
+                </button>
+              </div>
+              <div class="d-flex gap-2 mt-2 flex-wrap">
+                <a class="btn btn-outline-primary btn-sm btn-icon" href="{{ card.clinic_url }}" target="_blank" rel="noopener">
+                  <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                  Abrir
+                </a>
+                {% if card.clinic_whatsapp_url %}
+                <a class="btn btn-outline-success btn-sm btn-icon" href="{{ card.clinic_whatsapp_url }}" target="_blank" rel="noopener">
+                  <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                  WhatsApp
+                </a>
+                {% endif %}
+              </div>
+              {% else %}
+              <form method="post" action="{{ url_for('exames_imagem_compartilhar', exame_id=exame.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="target" value="clinica">
+                <button class="btn btn-outline-primary btn-sm btn-icon" type="submit">
+                  <i class="fa-solid fa-link" aria-hidden="true"></i>
+                  Gerar link da clinica
+                </button>
+              </form>
+              {% endif %}
+            </div>
+
+            <div class="col-lg-6">
+              <div class="small fw-bold mb-1">Tutor</div>
+              {% if card.tutor_url %}
+              <div class="link-box">
+                <input value="{{ card.tutor_url }}" readonly aria-label="Link do tutor">
+                <button class="btn btn-outline-secondary btn-sm btn-icon js-copy-link" type="button" data-copy="{{ card.tutor_url }}">
+                  <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                  Copiar
+                </button>
+              </div>
+              <div class="d-flex gap-2 mt-2 flex-wrap">
+                <a class="btn btn-outline-primary btn-sm btn-icon" href="{{ card.tutor_url }}" target="_blank" rel="noopener">
+                  <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                  Abrir
+                </a>
+                {% if card.tutor_whatsapp_url %}
+                <a class="btn btn-outline-success btn-sm btn-icon" href="{{ card.tutor_whatsapp_url }}" target="_blank" rel="noopener">
+                  <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+                  WhatsApp
+                </a>
+                {% endif %}
+              </div>
+              {% else %}
+              <form method="post" action="{{ url_for('exames_imagem_compartilhar', exame_id=exame.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="target" value="tutor">
+                <button class="btn btn-outline-primary btn-sm btn-icon" type="submit">
+                  <i class="fa-solid fa-link" aria-hidden="true"></i>
+                  Gerar link do tutor
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            {% if card.pdf_url %}
+            <a class="btn btn-outline-secondary btn-sm btn-icon" href="{{ card.pdf_url }}" target="_blank" rel="noopener">
+              <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+              PDF
+            </a>
+            {% endif %}
+            {% if exame.impressao_diagnostica %}
+            <span class="small text-muted align-self-center">{{ exame.impressao_diagnostica|truncate(120) }}</span>
+            {% endif %}
+          </div>
+        </section>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="fa-solid fa-file-medical d-block mb-2" aria-hidden="true"></i>
+        Nenhum laudo de imagem registrado.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-copy-link').forEach(function (button) {
+      button.addEventListener('click', async function () {
+        const value = button.dataset.copy || '';
+        try {
+          await navigator.clipboard.writeText(value);
+          button.classList.remove('btn-outline-secondary');
+          button.classList.add('btn-success');
+          button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          window.setTimeout(function () {
+            button.classList.add('btn-outline-secondary');
+            button.classList.remove('btn-success');
+            button.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i> Copiar';
+          }, 1600);
+        } catch (error) {
+          const input = button.closest('.link-box')?.querySelector('input');
+          if (input) {
+            input.select();
+            document.execCommand('copy');
+          }
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

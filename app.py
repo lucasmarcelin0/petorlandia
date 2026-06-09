@@ -13163,6 +13163,323 @@ def _invite_payload(invite, *, pricing=None):
     }
 
 
+def _web_exame_imagem_operator_required():
+    role = (getattr(current_user, 'role', '') or '').lower()
+    if role == 'admin' or has_veterinarian_profile(current_user):
+        return None
+    abort(403)
+
+
+def _web_user_can_manage_exame_imagem(user: User, exame: ExameImagem) -> bool:
+    role = (getattr(user, 'role', '') or '').lower()
+    return bool(role == 'admin' or getattr(exame, 'profissional_id', None) == getattr(user, 'id', None))
+
+
+def _integration_store_exame_pdf_upload(user: User, exame: ExameImagem, file_storage):
+    if not file_storage or not getattr(file_storage, 'filename', ''):
+        return _integration_serialize_exame_imagem(exame, user)
+
+    original_name = secure_filename(file_storage.filename or 'laudo.pdf') or 'laudo.pdf'
+    if not original_name.lower().endswith('.pdf'):
+        raise ValueError('O arquivo do laudo deve ser um PDF.')
+
+    file_size = None
+    stream = getattr(file_storage, 'stream', None)
+    if stream:
+        try:
+            position = stream.tell()
+            stream.seek(0, os.SEEK_END)
+            file_size = stream.tell()
+            stream.seek(position)
+        except (OSError, ValueError):
+            file_size = None
+
+    stored_url = upload_to_s3(file_storage, f"{uuid.uuid4().hex}_{original_name}", folder='laudos_exames')
+    if not stored_url:
+        raise ValueError('Nao foi possivel salvar o PDF do laudo.')
+
+    documento = _integration_add_exam_document(user, exame.animal, stored_url, original_name, exame.tipo_exame)
+    if documento:
+        db.session.flush()
+        exame.documento_id = documento.id
+    exame.arquivo_pdf_url = stored_url
+    exame.arquivo_pdf_filename = original_name
+    exame.arquivo_pdf_content_type = 'application/pdf'
+    exame.arquivo_pdf_size = file_size
+    exame.status = 'finalizado'
+    db.session.add(exame)
+    db.session.commit()
+    return _integration_serialize_exame_imagem(exame, user)
+
+
+def _web_exame_imagem_ensure_invite(user: User, exame: ExameImagem, invite_type: str, form=None):
+    invite = _integration_latest_external_invite_for_exame(exame, invite_type)
+    if invite:
+        return invite
+
+    form = form or {}
+    if invite_type == 'clinic':
+        clinic = exame.clinica_requisitante
+        _integration_ensure_clinic_admin_user(
+            clinic,
+            email=form.get('email_clinica'),
+            phone=form.get('telefone_clinica'),
+            name=form.get('nome_responsavel_clinica') or getattr(clinic, 'nome', None),
+        )
+        message = (
+            f'Laudo do paciente {getattr(exame.animal, "name", "paciente")} '
+            f'disponivel para {getattr(clinic, "nome", "a clinica requisitante")}.'
+        )
+        invite = _create_external_onboarding_invite(
+            'clinic',
+            user,
+            clinic=clinic,
+            tutor=exame.tutor,
+            animal=exame.animal,
+            exam=exame.exame_solicitado,
+            exam_image=exame,
+            message=message,
+        )
+    else:
+        clinic = exame.clinica_requisitante
+        message = (
+            f'Seu exame foi disponibilizado pela equipe da '
+            f'{getattr(clinic, "nome", "clinica requisitante")}.'
+        )
+        invite = _create_external_onboarding_invite(
+            'tutor',
+            user,
+            clinic=clinic,
+            tutor=exame.tutor,
+            animal=exame.animal,
+            exam=exame.exame_solicitado,
+            exam_image=exame,
+            message=message,
+        )
+
+    db.session.flush()
+    return invite
+
+
+def _web_exame_imagem_notify(exame: ExameImagem, invite, target: str):
+    url = _external_onboarding_url(invite)
+    if not url:
+        return
+    animal_name = getattr(getattr(exame, 'animal', None), 'name', None) or 'paciente'
+    clinic_name = getattr(getattr(exame, 'clinica_requisitante', None), 'nome', None) or 'clinica requisitante'
+    if target == 'clinic':
+        owner_id = getattr(getattr(exame, 'clinica_requisitante', None), 'owner_id', None)
+        if owner_id:
+            db.session.add(Notification(
+                user_id=owner_id,
+                message=f'Laudo de {animal_name} disponivel para {clinic_name}.',
+                channel='app',
+                kind='exam_report',
+            ))
+    elif getattr(exame, 'tutor_id', None):
+        db.session.add(Notification(
+            user_id=exame.tutor_id,
+            message=f'Seu exame foi disponibilizado pela equipe da {clinic_name}.',
+            channel='app',
+            kind='exam_report',
+        ))
+
+
+def _web_whatsapp_url(phone: str | None, message: str) -> str | None:
+    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+    if not digits:
+        return None
+    if not digits.startswith('55'):
+        digits = f'55{digits}'
+    return f'https://wa.me/{digits}?text={quote_plus(message)}'
+
+
+def _web_exame_imagem_card(exame: ExameImagem, highlight_id: int | None = None):
+    clinic_invite = _integration_latest_external_invite_for_exame(exame, 'clinic')
+    tutor_invite = _integration_latest_external_invite_for_exame(exame, 'tutor')
+    clinic_url = _external_onboarding_url(clinic_invite) if clinic_invite else None
+    tutor_url = _external_onboarding_url(tutor_invite) if tutor_invite else None
+    pdf_url = _integration_absolute_public_url(exame.arquivo_pdf_url)
+    animal_name = getattr(getattr(exame, 'animal', None), 'name', None) or 'Paciente'
+    clinic_name = getattr(getattr(exame, 'clinica_requisitante', None), 'nome', None) or 'Clinica requisitante'
+    clinic_message = (
+        f'Laudo de {animal_name} disponivel para {clinic_name}. '
+        f'Acesse: {clinic_url}'
+    ) if clinic_url else ''
+    tutor_message = (
+        f'Seu exame foi disponibilizado pela equipe da {clinic_name}. '
+        f'Acesse: {tutor_url}'
+    ) if tutor_url else ''
+    return {
+        'exame': exame,
+        'highlight': bool(highlight_id and exame.id == highlight_id),
+        'pdf_url': pdf_url,
+        'clinic_url': clinic_url,
+        'tutor_url': tutor_url,
+        'clinic_whatsapp_url': _web_whatsapp_url(
+            getattr(getattr(exame, 'clinica_requisitante', None), 'telefone', None),
+            clinic_message,
+        ),
+        'tutor_whatsapp_url': _web_whatsapp_url(
+            getattr(getattr(exame, 'tutor', None), 'phone', None),
+            tutor_message,
+        ),
+    }
+
+
+def _web_exame_imagem_cards(highlight_id: int | None = None):
+    query = ExameImagem.query.options(
+        joinedload(ExameImagem.animal),
+        joinedload(ExameImagem.tutor),
+        joinedload(ExameImagem.clinica_requisitante),
+    )
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        query = query.filter(ExameImagem.profissional_id == current_user.id)
+    exames = query.order_by(ExameImagem.created_at.desc(), ExameImagem.id.desc()).limit(80).all()
+    return [_web_exame_imagem_card(exame, highlight_id) for exame in exames]
+
+
+def _web_render_exames_imagem(highlight_id: int | None = None):
+    vet_profile = getattr(current_user, 'veterinario', None)
+    return render_template(
+        'exames_imagem/painel.html',
+        exam_cards=_web_exame_imagem_cards(highlight_id),
+        today=date.today().isoformat(),
+        profissional_nome=getattr(current_user, 'name', '') or '',
+        profissional_crmv=getattr(vet_profile, 'crmv', '') or '',
+        highlight_id=highlight_id,
+    )
+
+
+@app.route('/exames-imagem', methods=['GET', 'POST'])
+@login_required
+def exames_imagem_painel():
+    _web_exame_imagem_operator_required()
+    if request.method == 'GET':
+        return _web_render_exames_imagem(request.args.get('exame_id', type=int))
+
+    form = request.form
+    pdf_file = request.files.get('arquivo_pdf')
+    wants_share = any(
+        form.get(name)
+        for name in ('liberar_clinica', 'gerar_convite_clinica', 'liberar_tutor', 'gerar_convite_tutor')
+    )
+    has_pdf_upload = bool(pdf_file and getattr(pdf_file, 'filename', ''))
+    if wants_share and not has_pdf_upload:
+        flash('Anexe o PDF do laudo antes de liberar acesso para clinica ou tutor.', 'warning')
+        return _web_render_exames_imagem(), 400
+
+    payload = {
+        'nome_clinica': form.get('nome_clinica'),
+        'email_clinica': form.get('email_clinica'),
+        'telefone_clinica': form.get('telefone_clinica'),
+        'nome_tutor': form.get('nome_tutor'),
+        'email_tutor': form.get('email_tutor'),
+        'telefone_tutor': form.get('telefone_tutor'),
+        'nome_animal': form.get('nome_animal'),
+        'especie': form.get('especie'),
+        'raca': form.get('raca'),
+        'sexo': form.get('sexo'),
+        'idade': form.get('idade'),
+        'tipo_exame': form.get('tipo_exame'),
+        'data_exame': form.get('data_exame'),
+        'titulo': form.get('titulo') or form.get('tipo_exame'),
+        'descricao': form.get('descricao'),
+        'impressao_diagnostica': form.get('impressao_diagnostica'),
+        'profissional_nome': form.get('profissional_nome') or getattr(current_user, 'name', None),
+        'profissional_crmv': form.get('profissional_crmv') or getattr(getattr(current_user, 'veterinario', None), 'crmv', None),
+        'finalizar': True,
+    }
+
+    try:
+        result = _integration_create_exame_imagem(current_user, payload)
+        exame = db.session.get(ExameImagem, result['exame']['id'])
+        if has_pdf_upload:
+            _integration_store_exame_pdf_upload(current_user, exame, pdf_file)
+            exame = db.session.get(ExameImagem, exame.id)
+
+        if form.get('liberar_clinica'):
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'clinica_id': exame.clinica_requisitante_id},
+                target='clinica',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+        if form.get('gerar_convite_clinica'):
+            clinic_invite = _web_exame_imagem_ensure_invite(current_user, exame, 'clinic', form)
+            _web_exame_imagem_notify(exame, clinic_invite, 'clinic')
+        if form.get('liberar_tutor'):
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'tutor_id': exame.tutor_id},
+                target='tutor',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+        if form.get('gerar_convite_tutor'):
+            tutor_invite = _web_exame_imagem_ensure_invite(current_user, exame, 'tutor', form)
+            _web_exame_imagem_notify(exame, tutor_invite, 'tutor')
+        db.session.commit()
+    except PermissionError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+        return _web_render_exames_imagem(), 403
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return _web_render_exames_imagem(), 400
+
+    flash('Laudo salvo e acessos preparados.', 'success')
+    return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
+
+
+@app.route('/exames-imagem/<int:exame_id>/compartilhar', methods=['POST'])
+@login_required
+def exames_imagem_compartilhar(exame_id):
+    _web_exame_imagem_operator_required()
+    exame = db.session.get(ExameImagem, exame_id)
+    if not exame:
+        abort(404)
+    if not _web_user_can_manage_exame_imagem(current_user, exame):
+        abort(403)
+    if not exame.arquivo_pdf_url:
+        flash('Anexe o PDF antes de gerar links de acesso.', 'warning')
+        return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
+
+    target = (request.form.get('target') or '').strip().lower()
+    try:
+        if target == 'clinica':
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'clinica_id': exame.clinica_requisitante_id},
+                target='clinica',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+            invite = _web_exame_imagem_ensure_invite(current_user, exame, 'clinic', request.form)
+            _web_exame_imagem_notify(exame, invite, 'clinic')
+            flash('Acesso da clinica preparado.', 'success')
+        elif target == 'tutor':
+            _integration_release_exame_imagem(
+                current_user,
+                {'exame_id': exame.id, 'tutor_id': exame.tutor_id},
+                target='tutor',
+            )
+            exame = db.session.get(ExameImagem, exame.id)
+            invite = _web_exame_imagem_ensure_invite(current_user, exame, 'tutor', request.form)
+            _web_exame_imagem_notify(exame, invite, 'tutor')
+            flash('Acesso do tutor preparado.', 'success')
+        else:
+            abort(400)
+        db.session.commit()
+    except PermissionError as exc:
+        db.session.rollback()
+        flash(str(exc), 'danger')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+
+    return redirect(url_for('exames_imagem_painel', exame_id=exame.id))
+
+
 def _mcp_laudo_volante_widget_html():
     return """
 <main class="po-widget">
