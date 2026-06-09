@@ -81,6 +81,14 @@ PMO_NOTE_COLUMN = "K"
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
 PMO_MASTER_SHEET_TITLE = os.getenv("PMO_VACCINE_MASTER_SHEET_TITLE", "Vacinação 2026")
 
+# Aba de controle de doses/estoque mantida à mão (fonte oficial de vacinados/perdas).
+PMO_DOSES_SHEET_TITLE_ENV = "PMO_VACCINE_DOSES_SHEET_TITLE"
+PMO_DOSES_SHEET_DEFAULT_TITLE = "Controle de doses"
+_PMO_MONTHS = [
+    "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
 # Limite de nome de animal. O cadastro flui para duas colunas: pmo_vaccination_animal.name
 # (varchar 120) e animal.name (varchar 100). Usamos o menor (100) para caber em ambas.
 # Cadastros com muitos nomes em texto livre geram um "nome" gigante; truncar evita
@@ -2327,6 +2335,79 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
         ),
         "leftover": (len(manha) - placed_manha) + (len(tarde) - placed_tarde),
     }
+
+
+def _pmo_last_numeric(row: list[Any]) -> int:
+    """Último número da linha — na 'Controle de doses' é sempre o TOTAL da métrica."""
+    last = 0
+    for cell in row:
+        text = _normalize_text(cell).replace(".", "").replace(",", ".")
+        if not text:
+            continue
+        try:
+            last = int(float(text))
+        except (ValueError, TypeError):
+            continue
+    return last
+
+
+def get_controle_de_doses_summary() -> dict[str, Any]:
+    """Espelha a aba 'Controle de doses' (vacinados, doses, perdas por mês).
+
+    Só leitura. Usa o último número de cada linha (Cachorros/Gatos/Doses/Perdas)
+    como total do mês, o que é robusto às irregularidades da planilha manual.
+    """
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+    service = _get_sheets_service()
+    title = _resolve_pmo_sheet_title(
+        service,
+        spreadsheet_id,
+        os.getenv(PMO_DOSES_SHEET_TITLE_ENV, PMO_DOSES_SHEET_DEFAULT_TITLE),
+    )
+    values = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!A1:Z200")
+        .execute()
+        .get("values", [])
+    )
+
+    per_month: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for row in values:
+        label = _strip_accents(_normalize_text(row[0] if row else "")).lower().rstrip(":").strip()
+        if label in _PMO_MONTHS:
+            current = {"month": label.capitalize(), "doses": 0, "dogs": 0, "cats": 0, "perdas": 0}
+            per_month.append(current)
+            continue
+        if current is None:
+            continue
+        if label.startswith("doses utilizadas"):
+            current["doses"] = _pmo_last_numeric(row)
+        elif label == "cachorros":
+            current["dogs"] = _pmo_last_numeric(row)
+        elif label == "gatos":
+            current["cats"] = _pmo_last_numeric(row)
+        elif label == "perdas":
+            current["perdas"] = _pmo_last_numeric(row)
+
+    active = [m for m in per_month if (m["doses"] or m["dogs"] or m["cats"])]
+    for m in active:
+        m["vaccinated"] = m["dogs"] + m["cats"]
+    totals = {
+        "doses": sum(m["doses"] for m in active),
+        "dogs": sum(m["dogs"] for m in active),
+        "cats": sum(m["cats"] for m in active),
+        "perdas": sum(m["perdas"] for m in active),
+    }
+    totals["vaccinated"] = totals["dogs"] + totals["cats"]
+    totals["waste_pct"] = (
+        round(100 * totals["perdas"] / totals["doses"], 1) if totals["doses"] else 0.0
+    )
+    return {"months": active, "totals": totals, "sheet_title": title}
 
 
 def get_vacina_pmo_kpis() -> dict[str, Any]:

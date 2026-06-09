@@ -11,9 +11,10 @@
   .pmo-bar > span { display: block; height: 100%; border-radius: 6px; }
   .pmo-meta-ok { color: #047857; font-weight: 600; }
   .pmo-meta-off { color: #b91c1c; font-weight: 600; }
-  .pmo-funnel-step { background: #f3f4f6; border-radius: 10px; padding: 10px 14px; text-align: center; }
-  .pmo-funnel-step .n { font-size: 1.4rem; font-weight: 700; }
-  .pmo-funnel-step .l { font-size: .78rem; color: #6b7280; }
+  .pmo-step { background: #f3f4f6; border-radius: 10px; padding: 10px 14px; text-align: center; }
+  .pmo-step .n { font-size: 1.4rem; font-weight: 700; }
+  .pmo-step .l { font-size: .78rem; color: #6b7280; }
+  .pmo-section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
 </style>
 {% endblock %}
 
@@ -22,100 +23,94 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
       <h2 class="mb-1">📊 Painel da Campanha — Vacinação 2026</h2>
-      <p class="text-muted mb-0">Indicadores ao vivo (lidos do banco). Não escreve em planilha nenhuma.</p>
+      <p class="text-muted mb-0">Resultado/doses espelhados da "Controle de doses"; pipeline lido do banco. Só leitura.</p>
     </div>
-    <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Voltar ao painel operacional</a>
+    <a href="{{ url_for('vacina_pmo') }}" class="btn btn-outline-secondary">← Painel operacional</a>
   </div>
 
-  {% if kpis.error %}
-    <div class="alert alert-danger">Não foi possível montar o painel: {{ kpis.error }}</div>
+  {# ───── Resultado & doses (espelho da Controle de doses) ───── #}
+  <div class="pmo-section-title mb-3">Resultado & doses (Controle de doses)</div>
+  {% if doses.error %}
+    <div class="alert alert-warning">Não consegui ler a "Controle de doses": {{ doses.error }}</div>
   {% else %}
-
-  {% set meta_ok = kpis.avg_per_day >= 21 and kpis.avg_per_day <= 24 %}
-  <div class="row g-3 mb-4">
+  {% set t = doses.totals %}
+  <div class="row g-3 mb-3">
     <div class="col-6 col-lg-3">
       <div class="pmo-kpi-card">
         <div class="kpi-label">Vacinados</div>
-        <div class="kpi-value">{{ kpis.vaccinated_animals }}</div>
-        <div class="kpi-sub">🐕 {{ kpis.vac_dogs }} &nbsp; 🐈 {{ kpis.vac_cats }}</div>
+        <div class="kpi-value">{{ t.vaccinated }}</div>
+        <div class="kpi-sub">🐕 {{ t.dogs }} &nbsp; 🐈 {{ t.cats }}</div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-kpi-card">
-        <div class="kpi-label">Cobertura</div>
-        <div class="kpi-value">{{ kpis.coverage }}%</div>
-        <div class="kpi-sub">de {{ kpis.registered_animals }} animais cadastrados</div>
+        <div class="kpi-label">Doses utilizadas</div>
+        <div class="kpi-value">{{ t.doses }}</div>
+        <div class="kpi-sub">vacinados + perdas</div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-kpi-card">
-        <div class="kpi-label">Animais / dia</div>
-        <div class="kpi-value">{{ kpis.avg_per_day }}</div>
-        <div class="kpi-sub">
-          meta 22–24 ·
-          <span class="{{ 'pmo-meta-ok' if meta_ok else 'pmo-meta-off' }}">
-            {{ 'na faixa' if meta_ok else 'fora da faixa' }}
-          </span>
-          · {{ kpis.days_count }} dias
-        </div>
+        <div class="kpi-label">Desperdício</div>
+        <div class="kpi-value {{ 'pmo-meta-off' if t.waste_pct >= 8 else 'pmo-meta-ok' }}">{{ t.waste_pct }}%</div>
+        <div class="kpi-sub">{{ t.perdas }} doses perdidas</div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
       <div class="pmo-kpi-card">
-        <div class="kpi-label">A agendar</div>
-        <div class="kpi-value">{{ kpis.backlog }}</div>
-        <div class="kpi-sub">casas na fila ("Inscrição a agendar")</div>
+        <div class="kpi-label">Meses ativos</div>
+        <div class="kpi-value">{{ doses.months|length }}</div>
+        <div class="kpi-sub">com vacinação registrada</div>
       </div>
     </div>
   </div>
 
-  <div class="row g-4">
-    <div class="col-lg-5">
-      <h5 class="mb-3">Funil</h5>
-      <div class="row g-2">
-        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.total_people }}</div><div class="l">Cadastrados</div></div></div>
-        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.atendidos }}</div><div class="l">Atendidos</div></div></div>
-        <div class="col-4"><div class="pmo-funnel-step"><div class="n">{{ kpis.vacinado_people }}</div><div class="l">Vacinados</div></div></div>
-      </div>
-      <p class="text-muted small mt-2">Pessoas (cadastros únicos da aba mestre). "Atendidos" = já têm desfecho (vacinado/parcial/ausente/recusou/remarcar).</p>
-    </div>
-
-    <div class="col-lg-7">
-      <h5 class="mb-3">Desfechos por pessoa</h5>
-      {% for o in kpis.outcomes %}
+  {% set maxv = (doses.months|map(attribute='vaccinated')|max) or 1 %}
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="small text-muted mb-2">Vacinados por mês</div>
+      {% for m in doses.months %}
       <div class="mb-2">
         <div class="d-flex justify-content-between small">
-          <span>{{ o.label }}</span>
-          <span class="text-muted">{{ o.count }} · {{ o.pct }}%</span>
+          <span>{{ m.month }}</span>
+          <span class="text-muted">{{ m.vaccinated }} &nbsp;(🐕{{ m.dogs }} 🐈{{ m.cats }} · perdas {{ m.perdas }})</span>
         </div>
-        <div class="pmo-bar">
-          <span style="width: {{ o.pct }}%; background:
-            {%- if o.key == 'vacinado' %} #34d399
-            {%- elif o.key == 'parcial' %} #fbbf24
-            {%- elif o.key in ['agendado','pendente','fluxo_ativo','reagendar'] %} #60a5fa
-            {%- elif o.key == 'ausente' %} #fb923c
-            {%- elif o.key == 'recusou' %} #f87171
-            {%- else %} #9ca3af {%- endif %};"></span>
-        </div>
+        <div class="pmo-bar"><span style="width: {{ (100 * m.vaccinated / maxv)|round }}%; background:#34d399;"></span></div>
       </div>
       {% endfor %}
     </div>
   </div>
-
-  {% if kpis.per_day %}
-  <h5 class="mt-4 mb-3">Animais por dia</h5>
-  <div class="row g-2">
-    {% for d in kpis.per_day %}
-    <div class="col-6 col-md-3 col-lg-2">
-      <div class="pmo-funnel-step">
-        <div class="n {{ 'pmo-meta-ok' if 21 <= d.animals <= 24 else 'pmo-meta-off' }}">{{ d.animals }}</div>
-        <div class="l">{{ d.tab }}</div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
   {% endif %}
 
+  {# ───── Pipeline (banco) ───── #}
+  <div class="pmo-section-title mb-3">Pipeline (cadastros e agendamentos)</div>
+  {% if kpis.error %}
+    <div class="alert alert-warning">Não consegui montar o pipeline: {{ kpis.error }}</div>
+  {% else %}
+  <div class="row g-3 mb-3">
+    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.total_people }}</div><div class="l">Cadastrados</div></div></div>
+    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.backlog }}</div><div class="l">A agendar</div></div></div>
+    <div class="col-4"><div class="pmo-step"><div class="n">{{ kpis.outcomes|selectattr('key','equalto','agendado')|map(attribute='count')|sum }}</div><div class="l">Agendados</div></div></div>
+  </div>
+
+  <div class="small text-muted mb-2">Desfechos por pessoa (cadastros únicos)</div>
+  {% for o in kpis.outcomes %}
+  <div class="mb-2">
+    <div class="d-flex justify-content-between small">
+      <span>{{ o.label }}</span>
+      <span class="text-muted">{{ o.count }} · {{ o.pct }}%</span>
+    </div>
+    <div class="pmo-bar">
+      <span style="width: {{ o.pct }}%; background:
+        {%- if o.key == 'vacinado' %} #34d399
+        {%- elif o.key == 'parcial' %} #fbbf24
+        {%- elif o.key in ['agendado','pendente','fluxo_ativo','reagendar'] %} #60a5fa
+        {%- elif o.key == 'ausente' %} #fb923c
+        {%- elif o.key == 'recusou' %} #f87171
+        {%- else %} #9ca3af {%- endif %};"></span>
+    </div>
+  </div>
+  {% endfor %}
   {% endif %}
 </div>
 {% endblock %}

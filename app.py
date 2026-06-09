@@ -4645,13 +4645,18 @@ def vacina_pmo_status_webhook():
 def vacina_pmo_painel():
     if current_user.role != 'admin':
         abort(403)
-    from services.vacina_pmo_service import get_vacina_pmo_kpis
+    from services.vacina_pmo_service import get_vacina_pmo_kpis, get_controle_de_doses_summary
     try:
         kpis = get_vacina_pmo_kpis()
     except Exception as exc:
         current_app.logger.exception("Falha ao montar painel Vacina PMO")
         kpis = {'error': str(exc)}
-    return render_template('vacina_pmo/painel.html', kpis=kpis)
+    try:
+        doses = get_controle_de_doses_summary()
+    except Exception as exc:
+        current_app.logger.exception("Falha ao ler Controle de doses PMO")
+        doses = {'error': str(exc)}
+    return render_template('vacina_pmo/painel.html', kpis=kpis, doses=doses)
 
 
 @app.route('/vacina-pmo/sheets', methods=['GET'])
