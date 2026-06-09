@@ -1,0 +1,141 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container" style="max-width: 920px;">
+  <h1 class="h3 fw-bold text-primary mb-3"><i class="fa-solid fa-dog me-2"></i> Petsitter — Painel</h1>
+
+  <!-- Candidaturas pendentes -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-3">
+        Candidaturas pendentes
+        <span class="badge bg-warning text-dark">{{ candidaturas | length }}</span>
+      </h2>
+      {% if not candidaturas %}
+      <p class="text-muted mb-0">Nenhuma candidatura pendente. 🎉</p>
+      {% else %}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Categoria</th><th>Nome</th><th>Contato</th><th>Cidade</th><th>Detalhes</th><th class="text-end">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in candidaturas %}
+            <tr>
+              <td><span class="badge bg-secondary">{{ categorias.get(c.categoria, c.categoria) }}</span></td>
+              <td>{{ c.nome }}</td>
+              <td class="small">
+                {{ c.email }}{% if c.telefone %}<br>{{ c.telefone }}{% endif %}
+              </td>
+              <td>{{ c.cidade or '—' }}</td>
+              <td class="small text-muted">
+                {% if c.especialidade %}<strong>{{ c.especialidade }}</strong><br>{% endif %}
+                {{ (c.mensagem or '') | truncate(80) }}
+              </td>
+              <td class="text-end text-nowrap">
+                <form method="POST" class="d-inline"
+                      action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='aprovar') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-success">Aprovar</button>
+                </form>
+                <form method="POST" class="d-inline"
+                      action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='rejeitar') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-danger">Rejeitar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Solicitações em andamento -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-3">
+        Solicitações de petsitter
+        <span class="badge bg-primary">{{ solicitacoes | length }}</span>
+      </h2>
+      {% if not solicitacoes %}
+      <p class="text-muted mb-0">Nenhuma solicitação aberta.</p>
+      {% else %}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr><th>Tutor</th><th>Período</th><th>Pets</th><th>Local</th><th>Cuidador</th><th class="text-end">Ações</th></tr>
+          </thead>
+          <tbody>
+            {% for s in solicitacoes %}
+            <tr>
+              <td>
+                {{ s.tutor.name }}
+                {% if s.tutor.phone %}<br><span class="small text-muted">{{ s.tutor.phone }}</span>{% endif %}
+              </td>
+              <td class="small">{{ s.data_inicio.strftime('%d/%m') }}–{{ s.data_fim.strftime('%d/%m/%Y') }}<br>({{ s.dias }}d)</td>
+              <td class="small">{{ s.animais | map(attribute='name') | join(', ') }}</td>
+              <td class="small">{{ 'Casa do tutor' if s.local_atendimento == 'domicilio_tutor' else 'Casa do cuidador' }}</td>
+              <td class="small">
+                {% if s.sitter %}<strong>{{ s.sitter.user.name }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-end">
+                {% if s.status == 'aberta' %}
+                <form method="POST" class="d-flex gap-1 justify-content-end"
+                      action="{{ url_for('petsitter_routes.petsitter_admin_atribuir', solicitacao_id=s.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <select name="sitter_id" class="form-select form-select-sm" style="max-width: 180px;" required>
+                    <option value="" disabled selected>Cuidador…</option>
+                    {% for sitter in sitters %}
+                    <option value="{{ sitter.id }}">{{ sitter.user.name }}{% if sitter.cidade %} ({{ sitter.cidade }}){% endif %}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn btn-sm btn-primary text-nowrap">Atribuir</button>
+                </form>
+                {% elif s.status == 'atribuida' %}
+                <form method="POST" class="d-inline"
+                      action="{{ url_for('petsitter_routes.petsitter_admin_concluir', solicitacao_id=s.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-success">Concluir</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Cuidadores aprovados -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-3">
+        Cuidadores aprovados
+        <span class="badge bg-success">{{ sitters | length }}</span>
+      </h2>
+      {% if not sitters %}
+      <p class="text-muted mb-0">Nenhum cuidador aprovado ainda. Aprove candidaturas da categoria Petsitter acima.</p>
+      {% else %}
+      <ul class="list-unstyled mb-0">
+        {% for sitter in sitters %}
+        <li class="mb-1">
+          <i class="fa-solid fa-user-check text-success me-1"></i>
+          <strong>{{ sitter.user.name }}</strong>
+          <span class="text-muted small">
+            {{ sitter.user.email }}{% if sitter.cidade %} • {{ sitter.cidade }}{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

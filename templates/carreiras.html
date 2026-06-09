@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="description"
+  content="Faça parte da PetOrlândia: cadastre-se como petsitter, clínica, petshop, laboratório ou profissional especialista.">
+{% endblock %}
+
+{% block main %}
+<div class="container" style="max-width: 680px;">
+  <h1 class="h3 fw-bold text-primary mb-1"><i class="fa-solid fa-handshake me-2"></i> Carreiras & Parceiros</h1>
+  <p class="text-muted">
+    A PetOrlândia conecta tutores a quem cuida. Cadastre-se e, após a aprovação,
+    você passa a fazer parte da rede.
+  </p>
+
+  <form method="POST" class="card border-0 shadow-sm rounded-4 p-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Quero me cadastrar como</label>
+      <select class="form-select" name="categoria" id="categoria" required>
+        <option value="" {% if not categoria_selecionada %}selected{% endif %} disabled>Escolha uma opção…</option>
+        {% for valor, rotulo in categorias.items() %}
+        <option value="{{ valor }}" {% if categoria_selecionada == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="nome" class="form-label fw-semibold">Nome ou estabelecimento</label>
+      <input type="text" class="form-control" id="nome" name="nome" required
+             value="{{ request.form.get('nome', current_user.name if current_user.is_authenticated else '') }}">
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-6">
+        <label for="email" class="form-label fw-semibold">E-mail</label>
+        <input type="email" class="form-control" id="email" name="email" required
+               value="{{ request.form.get('email', current_user.email if current_user.is_authenticated else '') }}">
+      </div>
+      <div class="col-12 col-md-6">
+        <label for="telefone" class="form-label fw-semibold">WhatsApp <span class="text-muted fw-normal">(opcional)</span></label>
+        <input type="tel" class="form-control" id="telefone" name="telefone"
+               value="{{ request.form.get('telefone', current_user.phone or '' if current_user.is_authenticated else '') }}">
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-6">
+        <label for="cidade" class="form-label fw-semibold">Cidade</label>
+        <input type="text" class="form-control" id="cidade" name="cidade" placeholder="Orlândia"
+               value="{{ request.form.get('cidade', '') }}">
+      </div>
+      <div class="col-12 col-md-6" id="campo-especialidade">
+        <label for="especialidade" class="form-label fw-semibold">
+          Especialidade <span class="text-muted fw-normal">(se for especialista)</span>
+        </label>
+        <input type="text" class="form-control" id="especialidade" name="especialidade"
+               placeholder="Ex.: ultrassonografia, radiologia"
+               value="{{ request.form.get('especialidade', '') }}">
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label for="mensagem" class="form-label fw-semibold">Conte um pouco sobre você <span class="text-muted fw-normal">(opcional)</span></label>
+      <textarea class="form-control" id="mensagem" name="mensagem" rows="3"
+                placeholder="Experiência, serviços oferecidos, disponibilidade...">{{ request.form.get('mensagem', '') }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100">
+      <i class="fa-solid fa-paper-plane me-2"></i> Enviar candidatura
+    </button>
+    <p class="text-muted small text-center mt-3 mb-0">
+      Analisamos cada cadastro para manter a confiança da rede. Você recebe retorno por e-mail ou WhatsApp.
+    </p>
+  </form>
+</div>
+{% endblock %}

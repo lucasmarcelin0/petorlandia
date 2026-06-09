@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<meta name="description"
+  content="Vai viajar? Encontre um petsitter de confiança na PetOrlândia. Cuidado em casa ou hospedagem, com cuidadores aprovados pela plataforma.">
+<meta property="og:title" content="Petsitter PetOrlândia — cuidado para seu pet enquanto você viaja">
+<meta property="og:description"
+  content="Cuidadores aprovados pela PetOrlândia cuidam do seu pet em casa ou em hospedagem. Solicite em menos de 2 minutos.">
+<meta property="og:url" content="{{ page_url }}">
+<meta property="og:type" content="website">
+{% endblock %}
+
+{% block main %}
+<section class="text-center pb-3">
+  <h1 class="fw-bold text-primary mb-2">
+    <i class="fa-solid fa-dog me-2"></i> Petsitter PetOrlândia
+  </h1>
+  <p class="text-muted mx-auto" style="max-width: 720px;">
+    Vai viajar? Um cuidador de confiança, aprovado pela PetOrlândia, cuida do seu pet
+    — na sua casa ou em hospedagem. Você solicita, nós encontramos a pessoa certa.
+  </p>
+
+  <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mt-3">
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('petsitter_routes.petsitter_solicitar') }}" class="btn btn-primary btn-lg">
+      <i class="fa-solid fa-paw me-2"></i> Solicitar um petsitter
+    </a>
+    <a href="{{ url_for('petsitter_routes.petsitter_minhas') }}" class="btn btn-outline-secondary btn-lg">
+      Minhas solicitações
+    </a>
+    {% else %}
+    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">
+      <i class="fa-solid fa-paw me-2"></i> Criar conta e solicitar
+    </a>
+    <a href="{{ url_for('login_view') }}" class="btn btn-outline-secondary btn-lg">Entrar</a>
+    {% endif %}
+    <a href="{{ share_whatsapp }}" target="_blank" rel="noopener" class="btn btn-success btn-lg">
+      <i class="fa-brands fa-whatsapp me-2"></i> Compartilhar
+    </a>
+  </div>
+</section>
+
+<div class="row g-3 g-md-4 mt-1">
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm rounded-4">
+      <div class="card-body text-center">
+        <div class="text-primary mb-2" style="font-size:2rem;"><i class="fa-solid fa-calendar-days"></i></div>
+        <h2 class="h6 fw-bold">1. Conte sobre a viagem</h2>
+        <p class="text-muted small mb-0">Datas, quais pets e onde eles ficarão: na sua casa ou na casa do cuidador.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm rounded-4">
+      <div class="card-body text-center">
+        <div class="text-primary mb-2" style="font-size:2rem;"><i class="fa-solid fa-user-check"></i></div>
+        <h2 class="h6 fw-bold">2. Nós encontramos o cuidador</h2>
+        <p class="text-muted small mb-0">Todos os petsitters passam pela aprovação da PetOrlândia antes de atender.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm rounded-4">
+      <div class="card-body text-center">
+        <div class="text-primary mb-2" style="font-size:2rem;"><i class="fa-solid fa-heart"></i></div>
+        <h2 class="h6 fw-bold">3. Viaje tranquilo</h2>
+        <p class="text-muted small mb-0">Seu pet fica bem cuidado e você acompanha tudo pela plataforma.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if sitters_aprovados %}
+<p class="text-center text-muted small mt-4 mb-0">
+  <i class="fa-solid fa-shield-heart me-1 text-success"></i>
+  {{ sitters_aprovados }} cuidador{{ 'es' if sitters_aprovados != 1 else '' }} aprovado{{ 's' if sitters_aprovados != 1 else '' }} na plataforma.
+</p>
+{% endif %}
+
+<p class="text-center mt-4">
+  <span class="text-muted small">Quer trabalhar como petsitter?</span>
+  <a href="{{ url_for('petsitter_routes.carreiras', categoria='petsitter') }}" class="small">Cadastre-se em Carreiras</a>
+</p>
+{% endblock %}

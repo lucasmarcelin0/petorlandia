@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container" style="max-width: 680px;">
+  <h1 class="h3 fw-bold text-primary mb-1"><i class="fa-solid fa-dog me-2"></i> Solicitar petsitter</h1>
+  <p class="text-muted">Conte sobre a viagem e nós encontramos um cuidador aprovado para o seu pet.</p>
+
+  {% if not animais %}
+  <div class="alert alert-info">
+    Você ainda não tem pets cadastrados.
+    <a href="{{ url_for('add_animal') }}" class="alert-link">Cadastre seu pet</a> para solicitar um petsitter.
+  </div>
+  {% else %}
+  <form method="POST" class="card border-0 shadow-sm rounded-4 p-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Quais pets?</label>
+      <div class="d-flex flex-wrap gap-2">
+        {% for animal in animais %}
+        <input type="checkbox" class="btn-check" name="animal_ids" value="{{ animal.id }}"
+               id="animal-{{ animal.id }}" autocomplete="off"
+               {% if request.form and animal.id|string in request.form.getlist('animal_ids') %}checked{% endif %}>
+        <label class="btn btn-outline-primary rounded-pill" for="animal-{{ animal.id }}">
+          🐾 {{ animal.name }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-6">
+        <label for="data_inicio" class="form-label fw-semibold">Início</label>
+        <input type="date" class="form-control" id="data_inicio" name="data_inicio" required
+               value="{{ request.form.get('data_inicio', '') }}">
+      </div>
+      <div class="col-6">
+        <label for="data_fim" class="form-label fw-semibold">Fim</label>
+        <input type="date" class="form-control" id="data_fim" name="data_fim" required
+               value="{{ request.form.get('data_fim', '') }}">
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Onde o pet ficará?</label>
+      {% for valor, rotulo in locais.items() %}
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="local_atendimento" id="local-{{ valor }}"
+               value="{{ valor }}" required
+               {% if request.form.get('local_atendimento', 'domicilio_tutor') == valor %}checked{% endif %}>
+        <label class="form-check-label" for="local-{{ valor }}">{{ rotulo }}</label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3" id="campo-endereco">
+      <label for="endereco" class="form-label fw-semibold">Endereço <span class="text-muted fw-normal">(se for na sua casa)</span></label>
+      <input type="text" class="form-control" id="endereco" name="endereco"
+             placeholder="{{ current_user.endereco.full if current_user.endereco else 'Rua, número, bairro' }}"
+             value="{{ request.form.get('endereco', '') }}">
+      <div class="form-text">Se deixar em branco, usaremos o endereço do seu cadastro.</div>
+    </div>
+
+    <div class="mb-4">
+      <label for="observacoes" class="form-label fw-semibold">Observações <span class="text-muted fw-normal">(opcional)</span></label>
+      <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                placeholder="Rotina, medicamentos, manias, alimentação...">{{ request.form.get('observacoes', '') }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100">
+      <i class="fa-solid fa-paper-plane me-2"></i> Enviar solicitação
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

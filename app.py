@@ -4448,6 +4448,7 @@ def _export_vacina_pmo_pet_certificate_pdf(
     for line_index, text_line in enumerate(_wrap_pmo_pdf_text(statement, 86)):
         lines.append(f'q 0.078 0.129 0.239 rg BT /F1 10.5 Tf 76 {statement_y - (line_index * 15)} Td ({_pmo_pdf_escape(text_line)}) Tj ET Q')
 
+    issued_at_text = _pmo_pdf_escape(f"Emitido em {date.today().strftime('%d/%m/%Y')}")
     lines.extend([
         'q 0.859 0.890 0.933 RG 70 258 m 250 258 l S Q',
         'q 0.859 0.890 0.933 RG 345 258 m 525 258 l S Q',
@@ -4455,7 +4456,7 @@ def _export_vacina_pmo_pet_certificate_pdf(
         'q 0.365 0.408 0.478 rg BT /F1 9 Tf 391 242 Td (Tutor responsavel) Tj ET Q',
         'q 0.059 0.404 1 rg 52 60 491 34 re f Q',
         'q 1 1 1 rg BT /F2 8.5 Tf 70 73 Td (PetOrlandia - Carteirinha digital da campanha PMO) Tj ET Q',
-        f'q 1 1 1 rg BT /F1 8.5 Tf 416 73 Td ({_pmo_pdf_escape(f"Emitido em {date.today().strftime("%d/%m/%Y")}")}) Tj ET Q',
+        f'q 1 1 1 rg BT /F1 8.5 Tf 416 73 Td ({issued_at_text}) Tj ET Q',
     ])
 
     pdf_bytes = _build_simple_pmo_pdf(lines)
@@ -8722,6 +8723,11 @@ def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
+    # Programa de indicação: guarda o código vindo de ?ref= para creditar após o cadastro.
+    ref_code = (request.args.get('ref') or '').strip()
+    if ref_code:
+        session['referral_code'] = ref_code[:16]
+
     if form.validate_on_submit():
         normalized_email = normalize_email(form.email.data)
         normalized_phone = normalize_phone(form.phone.data)
@@ -8810,6 +8816,19 @@ def register():
                     return jsonify({'success': False, 'errors': {'form': ['Erro ao criar conta. Tente novamente.']}, 'message': 'Erro ao criar conta.'}), 500
                 flash('Erro ao criar conta. Tente novamente.', 'danger')
             return render_template('auth/register.html', form=form, endereco=None)
+
+        # Programa de indicação: credita quem indicou (não bloqueia o cadastro em caso de erro).
+        try:
+            referral_code_value = session.pop('referral_code', None)
+            if referral_code_value:
+                from models import ReferralCode, ReferralSignup
+                referral = ReferralCode.query.filter_by(code=referral_code_value).first()
+                if referral and referral.user_id != user.id:
+                    db.session.add(ReferralSignup(code_id=referral.id, referred_user_id=user.id))
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('Falha ao registrar indicação no cadastro')
 
         # Faz login automático do usuário recém-criado
         login_user(user)
@@ -11374,8 +11393,10 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     clinic_id = clinic.id
     clinic_name = clinic.nome
     clinic_owner_id = clinic.owner_id
+    clinic_phone = clinic.telefone
     tutor_id = tutor.id
     tutor_name = tutor.name
+    tutor_phone = tutor.phone
     animal_id = animal.id
     animal_name = animal.name
     exam_id = exam.id
@@ -11403,6 +11424,8 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
         exam=exam,
         message=f'O laudo de {exam.nome} do paciente {animal_name} foi recebido pelo PetOrlandia.',
     )
+    clinic_invite_url = _external_onboarding_url(clinic_invite)
+    tutor_invite_url = _external_onboarding_url(tutor_invite)
     db.session.commit()
 
     clinic_url = None
@@ -11410,6 +11433,24 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     if has_request_context():
         clinic_url = url_for('clinic_detail', clinica_id=clinic_id, _external=True)
         animal_url = url_for('ficha_animal', animal_id=animal_id, _external=True)
+
+    laudo_public_url = _integration_absolute_public_url(exam_laudo_url)
+    clinic_share_url = clinic_invite_url or laudo_public_url
+    tutor_share_url = tutor_invite_url or laudo_public_url
+
+    clinic_share_message = (
+        (payload.get('mensagem_clinica') or '').strip()
+        or f'Laudo de {exam_name} do paciente {animal_name} disponivel no PetOrlandia.'
+    )
+    if clinic_share_url and clinic_share_url not in clinic_share_message:
+        clinic_share_message = f'{clinic_share_message}\n\nAcesse: {clinic_share_url}'
+
+    tutor_share_message = (
+        (payload.get('mensagem_tutor') or '').strip()
+        or f'O laudo de {exam_name} do paciente {animal_name} esta disponivel para consulta.'
+    )
+    if tutor_share_url and tutor_share_url not in tutor_share_message:
+        tutor_share_message = f'{tutor_share_message}\n\nAcesse: {tutor_share_url}'
 
     return {
         'clinica': {
@@ -11443,15 +11484,33 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
             'modo_importacao': laudo_import_mode,
         },
         'links_primeiro_acesso': {
-            'clinica': _external_onboarding_url(clinic_invite),
-            'tutor': _external_onboarding_url(tutor_invite),
+            'clinica': clinic_invite_url,
+            'tutor': tutor_invite_url,
+        },
+        'links': {
+            'laudo': laudo_public_url,
+            'clinica': clinic_invite_url,
+            'tutor': tutor_invite_url,
+        },
+        'comunicacao': {
+            'clinica': {
+                'url': clinic_share_url,
+                'mensagem': clinic_share_message,
+                'whatsapp_url': _web_whatsapp_url(clinic_phone, clinic_share_message),
+            },
+            'tutor': {
+                'url': tutor_share_url,
+                'mensagem': tutor_share_message,
+                'whatsapp_url': _web_whatsapp_url(tutor_phone, tutor_share_message),
+            },
         },
         'proxima_acao_recomendada': (
-            'Enviar o link da clinica para o dono fazer o primeiro acesso.'
+            'Enviar os links prontos para clinica e tutor.'
             if not clinic_owner_id else
             'Avisar o dono da clinica para abrir a notificacao no PetOrlandia.'
         ),
-        'mensagem_sugerida_para_clinica': notification_message,
+        'mensagem_sugerida_para_clinica': clinic_share_message,
+        'mensagem_sugerida_para_tutor': tutor_share_message,
     }
 
 
@@ -12411,7 +12470,7 @@ def _mcp_finalize_tool_descriptors(tools: list[dict]) -> list[dict]:
     return tools
 
 
-LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v1.html'
+LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v2.html'
 MAX_MCP_LAUDO_FILE_BYTES = 25 * 1024 * 1024
 MCP_FILE_REFERENCE_SCHEMA = {
     'type': 'object',
@@ -13505,7 +13564,8 @@ def _mcp_laudo_volante_widget_html():
   <section class="hero">
     <div>
       <p class="eyebrow">PetOrlandia</p>
-      <h1>Revisar laudo volante</h1>
+      <h1>Enviar laudo volante</h1>
+      <p class="subtitle">Revise, grave e envie os links sem sair desta tela.</p>
     </div>
     <span id="status-pill" class="pill">Rascunho</span>
   </section>
@@ -13533,14 +13593,27 @@ def _mcp_laudo_volante_widget_html():
     </article>
   </section>
 
+  <section class="report-strip">
+    <div>
+      <strong>Laudo recebido</strong>
+      <small id="laudo-status">Cole o texto do laudo ou anexe o arquivo.</small>
+    </div>
+    <button id="abrir-laudo-inicial" type="button" class="secondary" disabled>Abrir laudo</button>
+  </section>
+
   <label class="field">
     <span>Mensagem para a clinica</span>
     <textarea id="mensagem" rows="3"></textarea>
   </label>
 
   <label class="field">
+    <span>Mensagem para o tutor</span>
+    <textarea id="mensagem-tutor" rows="3"></textarea>
+  </label>
+
+  <label class="field">
     <span>Resumo do laudo</span>
-    <textarea id="laudo" rows="7"></textarea>
+    <textarea id="laudo" rows="6"></textarea>
   </label>
 
   <section class="file-tools">
@@ -13555,29 +13628,71 @@ def _mcp_laudo_volante_widget_html():
   <section id="missing" class="missing" hidden></section>
 
   <footer>
-    <button id="confirmar" type="button">Confirmar e gravar no PetOrlandia</button>
+    <button id="confirmar" type="button">Gravar e preparar mensagens</button>
     <p id="feedback"></p>
   </footer>
+
+  <section id="resultado" class="result" hidden>
+    <div class="result-head">
+      <div>
+        <span>Pronto para enviar</span>
+        <h2>Laudo salvo no PetOrlandia</h2>
+      </div>
+      <button id="abrir-laudo-final" type="button" class="secondary" disabled>Abrir laudo</button>
+    </div>
+
+    <div class="actions-grid">
+      <article class="action-card">
+        <div>
+          <span>Clinica</span>
+          <strong id="acao-clinica-nome">-</strong>
+        </div>
+        <p id="acao-clinica-msg"></p>
+        <div class="action-buttons">
+          <button id="enviar-clinica" type="button" class="secondary" disabled>Enviar WhatsApp</button>
+          <button id="copiar-clinica" type="button" class="light">Copiar mensagem</button>
+          <button id="abrir-clinica" type="button" class="light" disabled>Abrir link</button>
+        </div>
+      </article>
+
+      <article class="action-card">
+        <div>
+          <span>Tutor</span>
+          <strong id="acao-tutor-nome">-</strong>
+        </div>
+        <p id="acao-tutor-msg"></p>
+        <div class="action-buttons">
+          <button id="enviar-tutor" type="button" class="secondary" disabled>Enviar WhatsApp</button>
+          <button id="copiar-tutor" type="button" class="light">Copiar mensagem</button>
+          <button id="abrir-tutor" type="button" class="light" disabled>Abrir link</button>
+        </div>
+      </article>
+    </div>
+  </section>
 </main>
 
 <style>
   :root {
     color: #0f172a;
-    background: #f8fafc;
+    background: #f7faf9;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
   body { margin: 0; }
-  .po-widget { padding: 18px; max-width: 760px; margin: 0 auto; }
+  .po-widget { padding: 18px; max-width: 820px; margin: 0 auto; }
   .hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .eyebrow { margin: 0 0 4px; font-size: 12px; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0; }
   h1 { margin: 0; font-size: 24px; line-height: 1.15; }
+  .subtitle { margin: 7px 0 0; color: #475569; font-size: 13px; line-height: 1.35; }
   .pill { flex: none; border: 1px solid #99f6e4; color: #0f766e; background: #ecfeff; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 800; }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
   article { border: 1px solid #dbe3ea; background: #ffffff; border-radius: 8px; padding: 12px; min-height: 86px; }
   article span, .field span { display: block; color: #64748b; font-size: 12px; font-weight: 800; margin-bottom: 6px; }
   article strong { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
   article small { display: block; margin-top: 6px; color: #475569; line-height: 1.35; overflow-wrap: anywhere; }
+  .report-strip { align-items: center; background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; display: flex; gap: 12px; justify-content: space-between; margin: 12px 0; padding: 12px; }
+  .report-strip strong { display: block; color: #14532d; font-size: 14px; }
+  .report-strip small { color: #475569; display: block; line-height: 1.35; margin-top: 3px; overflow-wrap: anywhere; }
   .field { display: block; margin: 12px 0; }
   textarea { width: 100%; resize: vertical; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 12px; font: inherit; line-height: 1.45; background: #ffffff; color: #0f172a; }
   textarea:focus { outline: 3px solid #bbf7d0; border-color: #059669; }
@@ -13588,12 +13703,24 @@ def _mcp_laudo_volante_widget_html():
   footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   button { border: 0; border-radius: 8px; background: #10b981; color: white; padding: 12px 16px; font-weight: 900; cursor: pointer; }
   button.secondary { background: #0f766e; padding: 10px 12px; }
+  button.light { background: #e2e8f0; color: #0f172a; padding: 10px 12px; }
   button:disabled { cursor: not-allowed; background: #94a3b8; }
   #feedback { margin: 0; color: #334155; font-size: 13px; }
+  .result { border-top: 1px solid #dbe3ea; margin-top: 18px; padding-top: 16px; }
+  .result-head { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 12px; }
+  .result-head span { color: #047857; display: block; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+  .result-head h2 { font-size: 18px; line-height: 1.2; margin: 3px 0 0; }
+  .actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .action-card { min-height: 0; }
+  .action-card p { color: #334155; font-size: 13px; line-height: 1.45; margin: 10px 0 12px; white-space: pre-wrap; }
+  .action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .action-buttons button { flex: 1 1 130px; min-height: 40px; }
   @media (max-width: 560px) {
     .po-widget { padding: 14px; }
     .hero { align-items: flex-start; flex-direction: column; }
     .grid { grid-template-columns: 1fr; }
+    .report-strip, .result-head { align-items: stretch; flex-direction: column; }
+    .actions-grid { grid-template-columns: 1fr; }
     h1 { font-size: 21px; }
     button { width: 100%; }
   }
@@ -13610,6 +13737,7 @@ def _mcp_laudo_volante_widget_html():
     exameNome: document.getElementById("exame-nome"),
     exameData: document.getElementById("exame-data"),
     mensagem: document.getElementById("mensagem"),
+    mensagemTutor: document.getElementById("mensagem-tutor"),
     laudo: document.getElementById("laudo"),
     missing: document.getElementById("missing"),
     feedback: document.getElementById("feedback"),
@@ -13617,13 +13745,93 @@ def _mcp_laudo_volante_widget_html():
     fileInput: document.getElementById("arquivo-upload"),
     fileButton: document.getElementById("selecionar-arquivo"),
     button: document.getElementById("confirmar"),
-    pill: document.getElementById("status-pill")
+    pill: document.getElementById("status-pill"),
+    reportStatus: document.getElementById("laudo-status"),
+    openInitialReport: document.getElementById("abrir-laudo-inicial"),
+    result: document.getElementById("resultado"),
+    openFinalReport: document.getElementById("abrir-laudo-final"),
+    actionClinicName: document.getElementById("acao-clinica-nome"),
+    actionClinicMsg: document.getElementById("acao-clinica-msg"),
+    actionTutorName: document.getElementById("acao-tutor-nome"),
+    actionTutorMsg: document.getElementById("acao-tutor-msg"),
+    sendClinic: document.getElementById("enviar-clinica"),
+    copyClinic: document.getElementById("copiar-clinica"),
+    openClinic: document.getElementById("abrir-clinica"),
+    sendTutor: document.getElementById("enviar-tutor"),
+    copyTutor: document.getElementById("copiar-tutor"),
+    openTutor: document.getElementById("abrir-tutor")
   };
 
   let currentDraft = {};
   let selectedFileRef = null;
+  let initialReportUrl = "";
   const text = (value) => value == null || value === "" ? "-" : String(value);
   const compact = (items) => items.filter(Boolean).join(" - ");
+  const first = (...values) => values.find((value) => value != null && String(value).trim() !== "") || "";
+  const isLocalChatGptPath = (value) => {
+    const raw = String(value || "").trim().toLowerCase();
+    return raw.startsWith("/mnt/data/")
+      || raw.startsWith("/tmp/")
+      || raw.startsWith("file:")
+      || /^[a-z]:\\/.test(String(value || "").trim());
+  };
+  const usableReportUrl = (...values) => values.find((value) => {
+    const raw = String(value || "").trim();
+    return raw && !isLocalChatGptPath(raw);
+  }) || "";
+
+  function applyExternalButton(button, url) {
+    button.disabled = !url;
+    button.dataset.url = url || "";
+  }
+
+  async function openUrl(url) {
+    if (!url) return;
+    if (window.openai?.openExternal) {
+      await window.openai.openExternal({ href: url });
+      return;
+    }
+    window.open(url, "_blank", "noopener");
+  }
+
+  async function copyText(value, button) {
+    const textToCopy = String(value || "").trim();
+    if (!textToCopy) return;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      const original = button.textContent;
+      button.textContent = "Copiado";
+      window.setTimeout(() => { button.textContent = original; }, 1400);
+    } catch (error) {
+      fields.feedback.textContent = "Nao consegui copiar automaticamente. Selecione o texto da mensagem.";
+    }
+  }
+
+  function digitsOnly(value) {
+    return String(value || "").replace(/\\D/g, "");
+  }
+
+  function whatsappUrl(phone, message) {
+    let digits = digitsOnly(phone);
+    if (!digits) return "";
+    if (!digits.startsWith("55")) digits = "55" + digits;
+    return "https://wa.me/" + digits + "?text=" + encodeURIComponent(message || "");
+  }
+
+  function defaultClinicMessage(clinica, animal, exame, url) {
+    const animalName = animal?.nome || animal?.name || "paciente";
+    const exameName = exame?.nome || exame?.tipo || "laudo";
+    const base = "Laudo de " + exameName + " do paciente " + animalName + " disponivel no PetOrlandia.";
+    return url ? base + "\\n\\nAcesse: " + url : base;
+  }
+
+  function defaultTutorMessage(clinica, animal, exame, url) {
+    const animalName = animal?.nome || animal?.name || "paciente";
+    const exameName = exame?.nome || exame?.tipo || "exame";
+    const clinicName = clinica?.nome || "clinica";
+    const base = "O laudo de " + exameName + " do paciente " + animalName + " foi disponibilizado pela " + clinicName + ".";
+    return url ? base + "\\n\\nAcesse: " + url : base;
+  }
 
   function render(output) {
     currentDraft = output?.rascunho || output || {};
@@ -13639,9 +13847,15 @@ def _mcp_laudo_volante_widget_html():
     fields.animalDetalhes.textContent = compact([animal.especie, animal.raca, animal.sexo, animal.idade]);
     fields.exameNome.textContent = text(exame.nome || exame.tipo);
     fields.exameData.textContent = text(exame.data || currentDraft.data_exame);
-    fields.mensagem.value = currentDraft.mensagem_clinica || "Laudo finalizado e disponivel no PetOrlandia.";
-    fields.laudo.value = currentDraft.laudo_texto || exame.conclusao || exame.achados || "";
     selectedFileRef = currentDraft.laudo_arquivo || currentDraft.arquivo_laudo || null;
+    initialReportUrl = usableReportUrl(currentDraft.laudo_url, selectedFileRef?.download_url);
+    fields.reportStatus.textContent = initialReportUrl
+      ? "Link do laudo pronto para consulta."
+      : (selectedFileRef?.file_name ? "Arquivo autorizado pelo ChatGPT: " + selectedFileRef.file_name : "Cole o texto do laudo ou anexe o arquivo.");
+    applyExternalButton(fields.openInitialReport, initialReportUrl);
+    fields.mensagem.value = currentDraft.mensagem_clinica || defaultClinicMessage(clinica, animal, exame, initialReportUrl);
+    fields.mensagemTutor.value = currentDraft.mensagem_tutor || defaultTutorMessage(clinica, animal, exame, initialReportUrl);
+    fields.laudo.value = currentDraft.laudo_texto || exame.conclusao || exame.achados || "";
     fields.fileStatus.textContent = selectedFileRef?.file_name
       ? "Arquivo autorizado pelo ChatGPT: " + selectedFileRef.file_name
       : (currentDraft.laudo_filename ? "Arquivo informado: " + currentDraft.laudo_filename : "Opcional. Se o ChatGPT nao conseguir enviar o PDF, cole o texto integral acima.");
@@ -13650,6 +13864,57 @@ def _mcp_laudo_volante_widget_html():
     fields.missing.hidden = missing.length === 0;
     fields.missing.textContent = missing.length ? "Conferir antes de gravar: " + missing.join(", ") : "";
     fields.pill.textContent = missing.length ? "Conferir dados" : "Pronto para gravar";
+  }
+
+  function showAction(kind, data, fallback) {
+    const isClinic = kind === "clinica";
+    const nameField = isClinic ? fields.actionClinicName : fields.actionTutorName;
+    const msgField = isClinic ? fields.actionClinicMsg : fields.actionTutorMsg;
+    const sendButton = isClinic ? fields.sendClinic : fields.sendTutor;
+    const copyButton = isClinic ? fields.copyClinic : fields.copyTutor;
+    const openButton = isClinic ? fields.openClinic : fields.openTutor;
+    const message = data?.mensagem || fallback.message || "";
+    const url = data?.url || fallback.url || "";
+    const waUrl = data?.whatsapp_url || whatsappUrl(fallback.phone, message);
+
+    nameField.textContent = text(fallback.name);
+    msgField.textContent = message || "Mensagem pronta indisponivel.";
+    sendButton.disabled = !waUrl;
+    sendButton.dataset.url = waUrl || "";
+    copyButton.dataset.message = message || "";
+    applyExternalButton(openButton, url);
+  }
+
+  function showResult(payload) {
+    const clinica = currentDraft.clinica || {};
+    const tutor = currentDraft.tutor || {};
+    const animal = currentDraft.animal || {};
+    const exame = currentDraft.exame || {};
+    const links = payload?.links || {};
+    const access = payload?.links_primeiro_acesso || {};
+    const comm = payload?.comunicacao || {};
+    const finalReportUrl = usableReportUrl(
+      links.laudo,
+      payload?.exame?.laudo_url,
+      initialReportUrl,
+      access.clinica,
+      access.tutor
+    );
+
+    applyExternalButton(fields.openFinalReport, finalReportUrl);
+    showAction("clinica", comm.clinica, {
+      name: payload?.clinica?.nome || clinica.nome,
+      phone: clinica.telefone || clinica.phone,
+      url: access.clinica || links.clinica || finalReportUrl,
+      message: fields.mensagem.value || defaultClinicMessage(clinica, animal, exame, access.clinica || finalReportUrl)
+    });
+    showAction("tutor", comm.tutor, {
+      name: payload?.tutor?.nome || tutor.nome,
+      phone: tutor.telefone || tutor.phone,
+      url: access.tutor || links.tutor || finalReportUrl,
+      message: fields.mensagemTutor.value || defaultTutorMessage(clinica, animal, exame, access.tutor || finalReportUrl)
+    });
+    fields.result.hidden = false;
   }
 
   async function selectOrUploadFile() {
@@ -13693,6 +13958,7 @@ def _mcp_laudo_volante_widget_html():
         download_url: typeof downloadUrlResult === "string" ? downloadUrlResult : (downloadUrlResult?.download_url || downloadUrlResult?.url)
       };
       fields.fileStatus.textContent = "Arquivo autorizado pelo ChatGPT: " + file.name;
+      fields.reportStatus.textContent = "Arquivo do laudo pronto para gravacao.";
     } catch (error) {
       fields.fileStatus.textContent = error?.message || "Nao foi possivel enviar o arquivo. Cole o texto integral do laudo.";
     }
@@ -13710,6 +13976,7 @@ def _mcp_laudo_volante_widget_html():
         ...currentDraft,
         laudo_texto: fields.laudo.value,
         mensagem_clinica: fields.mensagem.value,
+        mensagem_tutor: fields.mensagemTutor.value,
         confirmar_gravacao: "sim"
       };
       if (selectedFileRef?.download_url && selectedFileRef?.file_id) {
@@ -13718,15 +13985,24 @@ def _mcp_laudo_volante_widget_html():
       const result = await window.openai.callTool("importar_laudo_volante", args);
       const payload = result?.structuredContent || result;
       fields.feedback.textContent = payload?.exame?.exame_id
-        ? "Laudo gravado. A clinica ja pode acessar o resultado."
+        ? "Laudo gravado. Use os botoes abaixo para enviar os acessos."
         : "Solicitacao enviada. Confira a resposta no chat.";
       fields.pill.textContent = "Gravado";
+      showResult(payload);
     } catch (error) {
       fields.feedback.textContent = error?.message || "Nao foi possivel gravar agora.";
       fields.button.disabled = false;
     }
   }
 
+  fields.openInitialReport.addEventListener("click", () => openUrl(fields.openInitialReport.dataset.url));
+  fields.openFinalReport.addEventListener("click", () => openUrl(fields.openFinalReport.dataset.url));
+  fields.sendClinic.addEventListener("click", () => openUrl(fields.sendClinic.dataset.url));
+  fields.sendTutor.addEventListener("click", () => openUrl(fields.sendTutor.dataset.url));
+  fields.openClinic.addEventListener("click", () => openUrl(fields.openClinic.dataset.url));
+  fields.openTutor.addEventListener("click", () => openUrl(fields.openTutor.dataset.url));
+  fields.copyClinic.addEventListener("click", () => copyText(fields.copyClinic.dataset.message, fields.copyClinic));
+  fields.copyTutor.addEventListener("click", () => copyText(fields.copyTutor.dataset.message, fields.copyTutor));
   fields.fileButton.addEventListener("click", selectOrUploadFile);
   fields.fileInput.addEventListener("change", uploadPickedFile);
   fields.button.addEventListener("click", confirmImport);
@@ -13741,8 +14017,8 @@ def _mcp_laudo_volante_widget_html():
 def _mcp_laudo_volante_widget_resource():
     return {
         'uri': LAUDO_VOLANTE_WIDGET_URI,
-        'name': 'Revisar laudo volante',
-        'description': 'Painel para revisar e confirmar laudo de ultrassonografista volante.',
+        'name': 'Enviar laudo volante',
+        'description': 'Aplicativo simples para revisar, gravar e enviar laudo de ultrassonografista volante.',
         'mimeType': 'text/html;profile=mcp-app',
     }
 
@@ -13896,6 +14172,7 @@ def mcp_server():
                         'openai/widgetCSP': {
                             'connect_domains': [],
                             'resource_domains': [],
+                            'redirect_domains': [_oauth_issuer(), 'https://wa.me'],
                         },
                     },
                 }
@@ -14051,9 +14328,10 @@ def mcp_server():
                 'name': 'abrir_importador_laudo_volante',
                 'title': 'Abrir importador de laudo volante',
                 'description': (
-                    'Use this when o ultrassonografista colou um laudo ou informou os dados extraidos '
-                    'e quer revisar visualmente clinica, tutor, animal, exame e mensagem antes de gravar. '
-                    'Esta tool apenas renderiza o painel; para gravar, use importar_laudo_volante apos confirmacao.'
+                    'Use this immediately when o ultrassonografista enviar um link, PDF, arquivo ou texto de laudo '
+                    'volante no ChatGPT. Abra este aplicativo na mesma resposta para revisar clinica, tutor, animal, '
+                    'laudo e mensagens antes de gravar; o profissional nao deve precisar pedir o app em outra mensagem. '
+                    'Esta tool renderiza o painel; o botao do painel chama importar_laudo_volante apos confirmacao.'
                 ),
                 'inputSchema': {
                     'type': 'object',
@@ -14069,6 +14347,7 @@ def mcp_server():
                         'laudo_filename': {'type': 'string'},
                         'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
                         'mensagem_clinica': {'type': 'string'},
+                        'mensagem_tutor': {'type': 'string'},
                         'campos_a_confirmar': {'type': 'array', 'items': {'type': 'string'}},
                     },
                     'required': [],
@@ -14117,6 +14396,7 @@ def mcp_server():
                         'laudo_filename': {'type': 'string', 'description': 'Nome do arquivo do laudo quando houver link.'},
                         'laudo_arquivo': MCP_FILE_REFERENCE_SCHEMA,
                         'mensagem_clinica': {'type': 'string', 'description': 'Mensagem curta e cordial para a clinica.'},
+                        'mensagem_tutor': {'type': 'string', 'description': 'Mensagem curta e cordial para o tutor.'},
                         'confirmar_gravacao': {'type': 'string'},
                     },
                     'required': ['clinica', 'tutor', 'animal', 'exame', 'confirmar_gravacao'],
@@ -14129,8 +14409,11 @@ def mcp_server():
                         'animal': {'type': 'object'},
                         'exame': {'type': 'object'},
                         'links_primeiro_acesso': {'type': 'object'},
+                        'links': {'type': 'object'},
+                        'comunicacao': {'type': 'object'},
                         'proxima_acao_recomendada': {'type': 'string'},
                         'mensagem_sugerida_para_clinica': {'type': 'string'},
+                        'mensagem_sugerida_para_tutor': {'type': 'string'},
                     },
                 },
                 'annotations': {
@@ -14655,6 +14938,9 @@ def mcp_server():
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
             if scope_error:
                 return scope_error
+            draft_laudo_url = (tool_args.get('laudo_url') or '').strip()
+            if _is_local_chatgpt_file_path(draft_laudo_url):
+                draft_laudo_url = ''
             draft = {
                 'exame_id': tool_args.get('exame_id'),
                 'bloco_id': tool_args.get('bloco_id'),
@@ -14663,13 +14949,14 @@ def mcp_server():
                 'animal': tool_args.get('animal') or {},
                 'exame': tool_args.get('exame') or {},
                 'laudo_texto': tool_args.get('laudo_texto') or '',
-                'laudo_url': tool_args.get('laudo_url') or '',
+                'laudo_url': draft_laudo_url,
                 'laudo_filename': tool_args.get('laudo_filename') or '',
                 'laudo_arquivo': _mcp_extract_file_reference(tool_args, 'laudo_arquivo', 'arquivo_laudo', 'laudo_file'),
                 'mensagem_clinica': (
                     tool_args.get('mensagem_clinica')
                     or 'Laudo finalizado e disponivel no PetOrlandia.'
                 ),
+                'mensagem_tutor': tool_args.get('mensagem_tutor') or '',
             }
             missing_fields = tool_args.get('campos_a_confirmar') or []
             response_payload = {

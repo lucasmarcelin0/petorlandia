@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+
+{% set status_badges = {
+  'aberta': ('warning', 'Procurando cuidador'),
+  'atribuida': ('primary', 'Cuidador definido'),
+  'concluida': ('success', 'Concluída'),
+  'cancelada': ('secondary', 'Cancelada'),
+} %}
+
+{% block main %}
+<div class="container" style="max-width: 760px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 fw-bold text-primary mb-0"><i class="fa-solid fa-dog me-2"></i> Minhas solicitações</h1>
+    <a href="{{ url_for('petsitter_routes.petsitter_solicitar') }}" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-1"></i> Nova
+    </a>
+  </div>
+
+  {% if not solicitacoes %}
+  <div class="card border-0 shadow-sm rounded-4 p-4 text-center text-muted">
+    Você ainda não tem solicitações de petsitter.
+    <a href="{{ url_for('petsitter_routes.petsitter_solicitar') }}">Fazer a primeira</a>
+  </div>
+  {% endif %}
+
+  {% for s in solicitacoes %}
+  {% set badge = status_badges.get(s.status, ('secondary', s.status)) %}
+  <div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <span class="badge bg-{{ badge[0] }} mb-2">{{ badge[1] }}</span>
+          <h2 class="h6 fw-bold mb-1">
+            {{ s.data_inicio.strftime('%d/%m/%Y') }} a {{ s.data_fim.strftime('%d/%m/%Y') }}
+            <span class="text-muted fw-normal">({{ s.dias }} dia{{ 's' if s.dias != 1 }})</span>
+          </h2>
+          <p class="text-muted small mb-1">
+            🐾 {{ s.animais | map(attribute='name') | join(', ') }}
+            • {{ 'Na sua casa' if s.local_atendimento == 'domicilio_tutor' else 'Hospedagem na casa do cuidador' }}
+          </p>
+          {% if s.sitter and s.status == 'atribuida' %}
+          <p class="small mb-0">
+            <i class="fa-solid fa-user-check text-success me-1"></i>
+            Cuidador: <strong>{{ s.sitter.user.name }}</strong>
+            {% if s.sitter.user.phone %}
+            — <a href="https://wa.me/55{{ s.sitter.user.phone | replace('(', '') | replace(')', '') | replace('-', '') | replace(' ', '') }}"
+                 target="_blank" rel="noopener">WhatsApp <i class="fa-brands fa-whatsapp text-success"></i></a>
+            {% endif %}
+          </p>
+          {% endif %}
+        </div>
+        {% if s.status in ('aberta', 'atribuida') %}
+        <form method="POST" action="{{ url_for('petsitter_routes.petsitter_cancelar', solicitacao_id=s.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-secondary">Cancelar</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

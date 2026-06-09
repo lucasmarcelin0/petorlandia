@@ -51,6 +51,13 @@ from .sfa import (
     SfaRespostaT30,
     SfaSinanLog,
 )
+from .petsitter import (
+    CareerApplication,
+    PetsitterProfile,
+    PetsitterRequest,
+    ReferralCode,
+    ReferralSignup,
+)
 
 __all__ = [
     "CasaDeRacao",
@@ -117,4 +124,9 @@ __all__ = [
     "SfaRespostaT10",
     "SfaRespostaT30",
     "SfaSinanLog",
+    "CareerApplication",
+    "PetsitterProfile",
+    "PetsitterRequest",
+    "ReferralCode",
+    "ReferralSignup",
 ]
