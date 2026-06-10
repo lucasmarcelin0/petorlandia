@@ -30,7 +30,14 @@
   </div>
 
   {# ───── Resultado & doses (espelho da Controle de doses) ───── #}
-  <div class="pmo-section-title mb-3">Resultado & doses (Controle de doses)</div>
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div class="pmo-section-title mb-0">Resultado & doses (Controle de doses)</div>
+    <div class="d-flex gap-2">
+      <button type="button" id="pmo-doses-dry" class="btn btn-sm btn-outline-secondary" title="Mostra o que seria lançado, sem escrever nada na planilha">Simular compilação</button>
+      <button type="button" id="pmo-doses-compile" class="btn btn-sm btn-primary" title="Lança as abas-dia pendentes no Controle de doses e pinta-as de verde">Compilar Controle de doses</button>
+    </div>
+  </div>
+  <div id="pmo-doses-compile-result" class="alert alert-light border small d-none"></div>
   {% if doses.error %}
     <div class="alert alert-warning">Não consegui ler a "Controle de doses": {{ doses.error }}</div>
   {% else %}
@@ -163,6 +170,78 @@
 </div>
 
 <script>
+(function () {
+  const dryBtn = document.getElementById('pmo-doses-dry');
+  const runBtn = document.getElementById('pmo-doses-compile');
+  const resultEl = document.getElementById('pmo-doses-compile-result');
+  if (!dryBtn || !runBtn || !resultEl) return;
+
+  function esc(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    }[char]));
+  }
+
+  function describe(payload) {
+    const parts = [];
+    if (payload.dryRun) {
+      parts.push('<div class="fw-semibold mb-1">Simulação — nada foi escrito na planilha.</div>');
+    }
+    if (payload.compiled && payload.compiled.length) {
+      parts.push('<div class="fw-semibold">Dias compilados:</div>');
+      payload.compiled.forEach((day) => {
+        const cols = day.columns.map((col) => `${esc(col.label)}: ${col.doses} doses (🐕${col.dogs} 🐈${col.cats} · perdas ${col.perdas})`).join('<br>');
+        parts.push(`<div class="mb-1">✅ <strong>${esc(day.title)}</strong><br>${cols}</div>`);
+      });
+    } else {
+      parts.push('<div>Nenhuma aba-dia pendente para compilar.</div>');
+    }
+    (payload.skipped || []).forEach((item) => {
+      parts.push(`<div class="text-warning-emphasis">⏭️ ${esc(item.title)} — ${esc(item.reason)}</div>`);
+    });
+    (payload.warnings || []).forEach((warning) => {
+      parts.push(`<div class="text-danger">⚠️ ${esc(warning)}</div>`);
+    });
+    if (!payload.dryRun && payload.compiled && payload.compiled.length) {
+      parts.push('<div class="mt-2"><a href="javascript:location.reload()">Recarregar a página</a> para ver os números atualizados.</div>');
+    }
+    return parts.join('');
+  }
+
+  async function compile(dryRun, button) {
+    if (!dryRun && !window.confirm('Compilar as abas-dia pendentes no "Controle de doses" e pintá-las de verde?')) return;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Compilando…';
+    try {
+      const response = await fetch('{{ url_for("vacina_pmo_doses_compilar") }}', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível compilar o Controle de doses.');
+      }
+      resultEl.innerHTML = describe(payload);
+      resultEl.classList.remove('d-none');
+    } catch (error) {
+      resultEl.innerHTML = `<div class="text-danger">${esc(error.message)}</div>`;
+      resultEl.classList.remove('d-none');
+    } finally {
+      button.disabled = false;
+      button.innerHTML = original;
+    }
+  }
+
+  dryBtn.addEventListener('click', () => compile(true, dryBtn));
+  runBtn.addEventListener('click', () => compile(false, runBtn));
+})();
+
 (function () {
   const btn = document.getElementById('pmo-cobertura-toggle');
   const box = document.getElementById('pmo-cobertura-detail');

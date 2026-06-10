@@ -599,6 +599,43 @@
     border-color: #6366f1;
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
   }
+
+  .pmo-losses {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .pmo-losses__btn {
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .pmo-losses__btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .pmo-losses__value {
+    min-width: 18px;
+    text-align: center;
+    font-weight: 600;
+    color: #64748b;
+  }
+
+  .pmo-losses__value.is-positive {
+    color: #b91c1c;
+  }
 </style>
 {% endblock %}
 
@@ -969,6 +1006,7 @@
       certificateUrl: row.certificateUrl || '',
       publicUrl: row.publicUrl || row.certificateUrl || '',
       attendedBy: row.attendedBy || '',
+      losses: Number(row.losses) || 0,
       evaluationRating: row.evaluationRating || null,
       evaluationRegistrationRating: row.evaluationRegistrationRating || null,
       evaluationServiceRating: row.evaluationServiceRating || null,
@@ -1248,6 +1286,56 @@
     }
   }
 
+  const lossesTimers = new Map();
+
+  async function saveLosses(row, losses) {
+    if (!row.visitId) {
+      throw new Error('Sincronize a aba antes de registrar perdas.');
+    }
+    const response = await fetch(`/vacina-pmo/visit/${row.visitId}/losses`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ losses }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível salvar as perdas.');
+    }
+    if (payload.row && !lossesTimers.has(row.id)) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+    }
+  }
+
+  function changeLosses(row, delta) {
+    const previous = Number(row.losses) || 0;
+    const next = Math.max(0, Math.min(30, previous + delta));
+    if (next === previous) return;
+    if (!row.visitId) {
+      window.showAppToast ? window.showAppToast('Sincronize a aba antes de registrar perdas.', 'warning') : alert('Sincronize a aba antes de registrar perdas.');
+      return;
+    }
+    row.losses = next;
+    render();
+    // Espera os cliques pararem antes de salvar (uma observação só por ajuste).
+    clearTimeout(lossesTimers.get(row.id));
+    lossesTimers.set(row.id, setTimeout(() => {
+      lossesTimers.delete(row.id);
+      saveLosses(row, row.losses)
+        .then(() => render())
+        .catch((error) => {
+          row.losses = previous;
+          render();
+          window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        });
+    }, 700));
+  }
+
   async function postJson(url, body) {
     const response = await fetch(url, {
       method: 'POST',
@@ -1389,6 +1477,18 @@
     `;
   }
 
+  function renderLosses(row) {
+    const value = Number(row.losses) || 0;
+    return `
+      <div class="pmo-losses" title="Doses perdidas nesta casa (frasco quebrado, refluxo etc.) — entram no Controle de doses">
+        <span><i class="fas fa-syringe"></i> Perdas</span>
+        <button type="button" class="pmo-losses__btn" data-action="losses-dec" aria-label="Diminuir perdas" ${value <= 0 ? 'disabled' : ''}>&minus;</button>
+        <span class="pmo-losses__value ${value > 0 ? 'is-positive' : ''}">${value}</span>
+        <button type="button" class="pmo-losses__btn" data-action="losses-inc" aria-label="Aumentar perdas">+</button>
+      </div>
+    `;
+  }
+
   function renderNote(row) {
     if (row.editingNote) {
       return `
@@ -1461,6 +1561,7 @@
         ${progress.total ? `<div class="pmo-progress" role="progressbar" aria-valuenow="${progress.done}" aria-valuemin="0" aria-valuemax="${progress.total}" aria-label="Animais vacinados nesta visita"><div class="pmo-progress__bar" data-status="${row.status}" style="width:${progress.pct}%"></div></div>` : ''}
         <div class="pmo-animal-list">
           ${renderAnimalControls(row)}
+          ${renderLosses(row)}
           ${renderNote(row)}
         </div>
         <div class="pmo-card-actions">
@@ -1588,7 +1689,7 @@
     });
 
     tbody.innerHTML = prepared.map((row) => {
-      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderNote(row)}</div>`;
+      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderLosses(row)}${renderNote(row)}</div>`;
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
@@ -1727,6 +1828,10 @@
       }
     } else if (action === 'attended-clear') {
       commitAttendedByEdit(row, '');
+    } else if (action === 'losses-inc') {
+      changeLosses(row, 1);
+    } else if (action === 'losses-dec') {
+      changeLosses(row, -1);
     } else if (action === 'note-edit') {
       state.rows.forEach((other) => { if (other !== row) other.editingNote = false; });
       row.editingNote = true;

@@ -97,6 +97,27 @@ def _run_pmo_sync() -> None:
         current_app.logger.info("[Scheduler] Sincronizacao PMO concluida: %s", result)
 
 
+def _run_pmo_doses_compile() -> None:
+    with app.app_context():
+        if not _env_bool("PMO_DOSES_COMPILE_ENABLED", True):
+            current_app.logger.info(
+                "[Scheduler] Compilacao do Controle de doses desativada por PMO_DOSES_COMPILE_ENABLED."
+            )
+            return
+        from services.vacina_pmo_service import compile_controle_de_doses
+
+        try:
+            result = compile_controle_de_doses()
+        except Exception:
+            current_app.logger.exception("[Scheduler] Falha na compilacao do Controle de doses.")
+            return
+        current_app.logger.info("[Scheduler] Controle de doses compilado: %s", result)
+        for item in result.get("skipped", []):
+            current_app.logger.warning(
+                "[Scheduler] Controle de doses pulou %s: %s", item.get("title"), item.get("reason")
+            )
+
+
 def main() -> None:
     timezone = os.getenv('SCHEDULER_TZ') or os.getenv('ACCOUNTING_BACKFILL_TZ', 'UTC')
     scheduler = BlockingScheduler(timezone=timezone)
@@ -121,11 +142,26 @@ def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    doses_trigger = CronTrigger(
+        hour=_env_int('PMO_DOSES_COMPILE_HOUR', 19, 0, 23),
+        minute=_env_int('PMO_DOSES_COMPILE_MINUTE', 30, 0, 59),
+        timezone='America/Sao_Paulo',
+    )
+    scheduler.add_job(
+        _run_pmo_doses_compile,
+        doses_trigger,
+        id='pmo-doses-compile',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     with app.app_context():
         current_app.logger.info(
-            'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s).',
+            'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
+            'Controle de doses em %s.',
             trigger,
             pmo_interval,
+            doses_trigger,
         )
     try:
         scheduler.start()

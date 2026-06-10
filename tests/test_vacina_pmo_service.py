@@ -1387,6 +1387,141 @@ def test_update_attended_by_clears_value_when_empty(app, monkeypatch):
     assert fake_service.updates[-1]["body"] == {"values": [[""]]}
 
 
+def test_status_update_defaults_attended_by_to_tutor_in_column_o(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Ivone Aparecida Verdun",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 5,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        result = update_vacina_pmo_animal_status(animal_id, "vacinado")
+
+    # O painel continua mostrando "tutor atendeu" (sem chip de outra pessoa)...
+    assert result["attendedBy"] == ""
+    attended_updates = [
+        call
+        for call in fake_service.updates
+        if call["range"].endswith(f"{PMO_ATTENDED_BY_COLUMN}5")
+    ]
+    # ...mas a coluna O da planilha recebe o nome do cadastro automaticamente.
+    assert attended_updates[-1]["body"] == {"values": [["Ivone Aparecida Verdun"]]}
+
+
+def test_status_update_keeps_column_o_blank_when_nobody_attended(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor Ausente",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Rex", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 6,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        update_vacina_pmo_animal_status(animal_id, "ausente")
+
+    attended_updates = [
+        call
+        for call in fake_service.updates
+        if call["range"].endswith(f"{PMO_ATTENDED_BY_COLUMN}6")
+    ]
+    assert attended_updates[-1]["body"] == {"values": [[""]]}
+
+
+def test_typed_attended_by_takes_precedence_over_tutor_fallback(app, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 8,
+    }
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(
+        vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service
+    )
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        visit_id = saved[0]["visitId"]
+        animal_id = saved[0]["animals"][0]["id"]
+        update_vacina_pmo_visit_attended_by(visit_id, "Vizinho Pedro")
+        update_vacina_pmo_animal_status(animal_id, "vacinado")
+        # Limpar o nome com a visita já vacinada volta para o tutor do cadastro.
+        update_vacina_pmo_visit_attended_by(visit_id, "")
+
+    attended_updates = [
+        call
+        for call in fake_service.updates
+        if call["range"].endswith(f"{PMO_ATTENDED_BY_COLUMN}8")
+    ]
+    assert attended_updates[0]["body"] == {"values": [["Vizinho Pedro"]]}
+    assert attended_updates[1]["body"] == {"values": [["Vizinho Pedro"]]}
+    assert attended_updates[-1]["body"] == {"values": [["Tutor PMO"]]}
+
+
 def _color_request(body):
     return body["requests"][0]["repeatCell"]
 
@@ -1879,3 +2014,410 @@ def test_pmo_is_master_sheet_matches_ignoring_accent_and_case():
     assert not vacina_pmo_service._pmo_is_master_sheet("03/06/2026")
     assert not vacina_pmo_service._pmo_is_master_sheet("Inscrição a agendar")
     assert not vacina_pmo_service._pmo_is_master_sheet("")
+
+
+# ——— Perdas por visita ———————————————————————————————————————————————————————
+
+
+def _losses_row(source_row=5):
+    return {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": source_row,
+    }
+
+
+def test_update_visit_losses_saves_value_and_notes_sheet(app, monkeypatch):
+    from services.vacina_pmo_service import update_vacina_pmo_visit_losses
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_event_time_label", lambda: "10:55")
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_losses_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        visit_id = saved[0]["visitId"]
+        result = update_vacina_pmo_visit_losses(visit_id, 1)
+
+    assert result["losses"] == 1
+    visit = db.session.get(PmoVaccinationVisit, visit_id)
+    assert visit.losses == 1
+    assert "10:55 - 1 dose perdida nesta casa." in (visit.note or "")
+    note_updates = [
+        call for call in fake_service.updates if call["range"].endswith(f"{PMO_NOTE_COLUMN}5")
+    ]
+    assert "1 dose perdida" in note_updates[-1]["body"]["values"][0][0]
+
+
+def test_update_visit_losses_rejects_invalid_values(app, monkeypatch):
+    import pytest
+
+    from services.vacina_pmo_service import update_vacina_pmo_visit_losses
+
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_losses_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        visit_id = saved[0]["visitId"]
+        with pytest.raises(ValueError):
+            update_vacina_pmo_visit_losses(visit_id, -1)
+        with pytest.raises(ValueError):
+            update_vacina_pmo_visit_losses(visit_id, "abc")
+        with pytest.raises(ValueError):
+            update_vacina_pmo_visit_losses(visit_id, 31)
+
+
+# ——— Compilação do Controle de doses —————————————————————————————————————————
+
+
+class _FakeExec:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def execute(self):
+        return self._payload
+
+
+class _FakeDosesValues:
+    def __init__(self, svc):
+        self._svc = svc
+
+    def get(self, *, spreadsheetId, range):
+        title = range.split("!")[0].strip("'")
+        values = self._svc.values_by_title.get(title, [])
+        return _FakeExec({"values": [list(row) for row in values]})
+
+    def batchUpdate(self, *, spreadsheetId, body):
+        self._svc.value_updates.append(body)
+        return _FakeExec({})
+
+
+class _FakeDosesSheetsService:
+    """Fake da API Sheets para o compilador (metadados + leitura + escritas)."""
+
+    def __init__(self, metadata, values_by_title):
+        self.metadata = metadata
+        self.values_by_title = values_by_title
+        self.value_updates = []
+        self.batch_requests = []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return _FakeDosesValues(self)
+
+    def get(self, *, spreadsheetId, fields=None, **kwargs):
+        return _FakeExec(self.metadata)
+
+    def batchUpdate(self, *, spreadsheetId, body):
+        self.batch_requests.append(body)
+        return _FakeExec({})
+
+
+def _day_tab_row(tutor, dogs_vac, cats_vac, shift):
+    row = [""] * 18
+    row[0] = tutor
+    row[12] = str(dogs_vac)
+    row[13] = str(cats_vac)
+    row[17] = shift
+    return row
+
+
+def _doses_tab_values():
+    return [
+        ["Junho"],
+        [],
+        ["Estoque:", "150"],
+        ["Recebida no mês:", ""],
+        ["", "03/06/2026"],
+        ["Doses utilizadas:", "25", "", "", "", "", "", "", "", "50"],
+        ["Cachorros:", "19"],
+        ["Gatos:", "4"],
+        ["Perdas:", "2"],
+        [],
+        ["Estoque ao final do mês:"],
+    ]
+
+
+def _compile_metadata():
+    return {
+        "sheets": [
+            {"properties": {"sheetId": 999, "title": "Controle de doses"}},
+            {"properties": {"sheetId": 555, "title": "08/06/2026"}},
+            {
+                "properties": {
+                    "sheetId": 333,
+                    "title": "03/06/2026",
+                    "tabColor": {"green": 1.0},
+                }
+            },
+            {"properties": {"sheetId": 444, "title": "17/06/2026"}},
+        ]
+    }
+
+
+def _seed_compile_visits(spreadsheet_id, *, losses_manha=1):
+    from models import PmoVaccinationAnimal
+
+    visit_manha = PmoVaccinationVisit(
+        spreadsheet_id=spreadsheet_id,
+        sheet_gid="555",
+        sheet_title="08/06/2026",
+        source_row=2,
+        tutor_name="Maria",
+        password="PMOA0001",
+        shift="Manha",
+        losses=losses_manha,
+    )
+    visit_tarde = PmoVaccinationVisit(
+        spreadsheet_id=spreadsheet_id,
+        sheet_gid="555",
+        sheet_title="08/06/2026",
+        source_row=16,
+        tutor_name="José",
+        password="PMOA0002",
+        shift="Tarde",
+        losses=0,
+    )
+    db.session.add_all([visit_manha, visit_tarde])
+    db.session.flush()
+    db.session.add_all(
+        [
+            PmoVaccinationAnimal(visit=visit_manha, position=1, name="Rex", species="cao", status="vacinado"),
+            PmoVaccinationAnimal(visit=visit_manha, position=2, name="Bolt", species="cao", status="vacinado"),
+            PmoVaccinationAnimal(visit=visit_tarde, position=1, name="Mia", species="gato", status="vacinado"),
+        ]
+    )
+    db.session.commit()
+
+
+def _patch_compile_clock(monkeypatch):
+    from datetime import datetime
+
+    monkeypatch.setattr(
+        vacina_pmo_service, "now_in_brazil", lambda: datetime(2026, 6, 10, 19, 30)
+    )
+
+
+def test_compile_controle_de_doses_writes_columns_and_paints_tab(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata(),
+        {"Controle de doses": _doses_tab_values(), "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id)
+        result = compile_controle_de_doses()
+
+    assert [item["title"] for item in result["compiled"]] == ["08/06/2026"]
+    columns = result["compiled"][0]["columns"]
+    assert columns == [
+        {"label": "08/06/2026 - Manhã", "doses": 3, "dogs": 2, "cats": 0, "perdas": 1},
+        {"label": "08/06/2026 - Tarde", "doses": 1, "dogs": 0, "cats": 1, "perdas": 0},
+    ]
+
+    writes = {}
+    for body in fake.value_updates:
+        for item in body["data"]:
+            writes[item["range"]] = item["values"][0][0]
+    # Manhã na primeira coluna livre (C), Tarde na seguinte (D).
+    assert writes["'Controle de doses'!C5"] == "08/06/2026 - Manhã"
+    assert writes["'Controle de doses'!C6"] == 3
+    assert writes["'Controle de doses'!C7"] == 2
+    assert writes["'Controle de doses'!C8"] == 0
+    assert writes["'Controle de doses'!C9"] == 1
+    assert writes["'Controle de doses'!D5"] == "08/06/2026 - Tarde"
+    assert writes["'Controle de doses'!D6"] == 1
+    # Totais do mês viram fórmula na coluna J.
+    assert writes["'Controle de doses'!J6"] == "=SUM(B6:I6)"
+    assert writes["'Controle de doses'!J9"] == "=SUM(B9:I9)"
+
+    paint = [
+        request
+        for body in fake.batch_requests
+        for request in body["requests"]
+        if "updateSheetProperties" in request
+    ]
+    assert paint[-1]["updateSheetProperties"]["properties"]["sheetId"] == 555
+    assert paint[-1]["updateSheetProperties"]["properties"]["tabColor"]["green"] == 1.0
+
+
+def test_compile_controle_de_doses_skips_on_count_mismatch(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 3, 0, "Manhã"),  # planilha diz 3 cães; app tem 2
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata(),
+        {"Controle de doses": _doses_tab_values(), "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id)
+        result = compile_controle_de_doses()
+
+    assert result["compiled"] == []
+    assert any("divergentes" in item["reason"] for item in result["skipped"])
+    assert fake.value_updates == []
+    assert fake.batch_requests == []
+
+
+def test_compile_controle_de_doses_blocks_on_dateonly_manual_column(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    doses_values = _doses_tab_values()
+    doses_values[4] = ["", "03/06/2026", "08/06/2026"]  # lançamento manual sem turno
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata(),
+        {"Controle de doses": doses_values, "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id)
+        result = compile_controle_de_doses()
+
+    assert result["compiled"] == []
+    assert any("sem turno" in item["reason"] for item in result["skipped"])
+    assert fake.value_updates == []
+
+
+def test_compile_controle_de_doses_inserts_column_when_month_is_full(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    doses_values = _doses_tab_values()
+    # Vagas B..I todas ocupadas por outros dias; o dia novo precisa de coluna inserida.
+    doses_values[4] = [""] + [f"{n:02d}/06/2026 - Manhã" for n in range(1, 8)] + ["07/06/2026 - Tarde"]
+    doses_values[5] = ["Doses utilizadas:"] + ["5"] * 8 + ["40"]
+    doses_values[6] = ["Cachorros:"] + ["4"] * 8 + ["32"]
+    doses_values[7] = ["Gatos:"] + ["1"] * 8 + ["8"]
+    doses_values[8] = ["Perdas:"] + ["0"] * 8 + ["0"]
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata(),
+        {"Controle de doses": doses_values, "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        from models import PmoVaccinationAnimal
+
+        visit = PmoVaccinationVisit(
+            spreadsheet_id=spreadsheet_id,
+            sheet_gid="555",
+            sheet_title="08/06/2026",
+            source_row=2,
+            tutor_name="Maria",
+            password="PMOA0001",
+            shift="Manha",
+            losses=0,
+        )
+        db.session.add(visit)
+        db.session.flush()
+        db.session.add_all([
+            PmoVaccinationAnimal(visit=visit, position=1, name="Rex", species="cao", status="vacinado"),
+            PmoVaccinationAnimal(visit=visit, position=2, name="Bolt", species="cao", status="vacinado"),
+        ])
+        db.session.commit()
+        result = compile_controle_de_doses()
+
+    assert result["compiled"], result["skipped"]
+    inserts = [
+        request
+        for body in fake.batch_requests
+        for request in body["requests"]
+        if "insertDimension" in request
+    ]
+    assert len(inserts) == 1
+    assert inserts[0]["insertDimension"]["range"]["startIndex"] == 9
+    writes = {}
+    for body in fake.value_updates:
+        for item in body["data"]:
+            writes[item["range"]] = item["values"][0][0]
+    # O dia novo entra na coluna J (inserida antes do total, que vira K).
+    assert writes["'Controle de doses'!J5"] == "08/06/2026 - Manhã"
+    assert writes["'Controle de doses'!J6"] == 2
+    assert writes["'Controle de doses'!K6"] == "=SUM(B6:J6)"
+
+
+def test_compile_controle_de_doses_dry_run_writes_nothing(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata(),
+        {"Controle de doses": _doses_tab_values(), "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id)
+        result = compile_controle_de_doses(dry_run=True)
+
+    assert result["dryRun"] is True
+    assert [item["title"] for item in result["compiled"]] == ["08/06/2026"]
+    assert fake.value_updates == []
+    assert fake.batch_requests == []

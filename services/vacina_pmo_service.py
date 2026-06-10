@@ -1045,6 +1045,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "certificateUrl": visit.certificate_url or public_url,
         "publicUrl": public_url,
         "attendedBy": visit.attended_by or "",
+        "losses": visit.losses or 0,
         "evaluationRating": evaluation["rating"],
         "evaluationRegistrationRating": evaluation["registration_rating"],
         "evaluationServiceRating": evaluation["service_rating"],
@@ -1767,6 +1768,9 @@ def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, An
     write_vaccinated_counts_to_sheet(animal.visit)
     write_note_to_sheet(animal.visit)
     write_tutor_name_color_to_sheet(animal.visit)
+    # Sem nome digitado, a coluna O recebe o tutor do cadastro assim que a
+    # visita ganha um desfecho presencial (ver _attended_by_sheet_value).
+    write_attended_by_to_sheet(animal.visit)
     return _serialize_visit(animal.visit)
 
 
@@ -1784,12 +1788,28 @@ def append_vacina_pmo_visit_note(visit_id: int, note: str) -> dict[str, Any]:
     return _serialize_visit(visit)
 
 
+def _attended_by_sheet_value(visit: PmoVaccinationVisit) -> str:
+    """Valor da coluna O: nome digitado ou, se vazio, o próprio tutor do cadastro.
+
+    O fallback só vale quando alguém de fato atendeu a porta (algum animal com
+    desfecho presencial); visita só com pendente/ausente deixa a célula em branco.
+    """
+    if visit.attended_by:
+        return visit.attended_by
+    attended_statuses = {"vacinado", "recusou", "remarcar"}
+    if any((animal.status or "") in attended_statuses for animal in visit.animals):
+        return visit.tutor_name or ""
+    return ""
+
+
 def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
     """Escreve o nome de quem atendeu (coluna O) na linha de origem do tutor."""
     if not visit.spreadsheet_id or not visit.source_row:
         return False
     if not visit.sheet_title and not visit.sheet_gid:
         return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre
 
     try:
         service = _get_sheets_service_rw()
@@ -1817,7 +1837,7 @@ def write_attended_by_to_sheet(visit: PmoVaccinationVisit) -> bool:
             spreadsheetId=visit.spreadsheet_id,
             range=range_value,
             valueInputOption="USER_ENTERED",
-            body={"values": [[visit.attended_by or ""]]},
+            body={"values": [[_attended_by_sheet_value(visit)]]},
         ).execute()
         return True
     except Exception:
@@ -1840,6 +1860,28 @@ def update_vacina_pmo_visit_attended_by(visit_id: int, attended_by: str | None) 
     visit.attended_by = normalized or None
     db.session.commit()
     write_attended_by_to_sheet(visit)
+    return _serialize_visit(visit)
+
+
+PMO_VISIT_LOSSES_MAX = 30
+
+
+def update_vacina_pmo_visit_losses(visit_id: int, losses: Any) -> dict[str, Any]:
+    """Registra as doses perdidas na visita e deixa rastro na observação (coluna K)."""
+    visit = PmoVaccinationVisit.query.get_or_404(visit_id)
+    try:
+        value = int(losses)
+    except (TypeError, ValueError):
+        raise ValueError(f"Informe um número de perdas entre 0 e {PMO_VISIT_LOSSES_MAX}.")
+    if value < 0 or value > PMO_VISIT_LOSSES_MAX:
+        raise ValueError(f"Informe um número de perdas entre 0 e {PMO_VISIT_LOSSES_MAX}.")
+    if value == (visit.losses or 0):
+        return _serialize_visit(visit)
+    visit.losses = value
+    label = "dose perdida" if value == 1 else "doses perdidas"
+    _append_visit_note(visit, f"{_pmo_event_time_label()} - {value} {label} nesta casa.")
+    db.session.commit()
+    write_note_to_sheet(visit)
     return _serialize_visit(visit)
 
 
@@ -2564,6 +2606,474 @@ def get_controle_de_doses_summary() -> dict[str, Any]:
         round(100 * totals["perdas"] / totals["doses"], 1) if totals["doses"] else 0.0
     )
     return {"months": active, "totals": totals, "sheet_title": title}
+
+
+# ——— Compilação automática do "Controle de doses" ————————————————————————————
+# Espelha o gesto manual: somar cães/gatos/perdas de cada aba-dia e lançar uma
+# coluna por data+turno no bloco do mês; a aba-dia compilada é pintada de verde.
+
+PMO_DOSES_COMPILED_TAB_COLOR = {"red": 0.0, "green": 1.0, "blue": 0.0}
+# Layout padrão dos blocos mensais: 8 vagas de dia (B..I) e total em J. Quando
+# as vagas acabam, o compilador insere coluna antes do total em vez de estourar.
+PMO_DOSES_DEFAULT_TOTAL_COL = 9
+_PMO_DOSES_LABEL_DATE_RE = re.compile(r"(\d{1,2})\s*/\s*(\d{1,2})(?:\s*/\s*(\d{2,4}))?")
+PMO_DOSES_SHIFT_LABELS = {"Manha": "Manhã", "Tarde": "Tarde"}
+
+
+def _pmo_col_letter(index: int) -> str:
+    """Índice 0-based de coluna → letra A1 (suporta além de Z)."""
+    letters = ""
+    index += 1
+    while index:
+        index, rem = divmod(index - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
+
+
+def _pmo_tab_color_is_green(color: dict[str, Any] | None) -> bool:
+    if not color:
+        return False
+    red = float(color.get("red", 0.0))
+    green = float(color.get("green", 0.0))
+    blue = float(color.get("blue", 0.0))
+    return green >= 0.9 and red <= 0.3 and blue <= 0.3
+
+
+def _pmo_doses_label(value: Any) -> str:
+    return _strip_accents(_normalize_text(value)).lower().rstrip(":").strip()
+
+
+def _pmo_parse_doses_header_label(value: Any, default_year: int) -> tuple[date, str] | None:
+    """Lê um rótulo de cabeçalho ("10/06/2026 - Manhã") → (data, turno|'')."""
+    raw = _strip_accents(_normalize_text(value)).lower()
+    if not raw:
+        return None
+    match = _PMO_DOSES_LABEL_DATE_RE.search(raw)
+    if not match:
+        return None
+    year_text = match.group(3)
+    year = int(year_text) if year_text else default_year
+    if year < 100:
+        year += 2000
+    try:
+        parsed = date(year, int(match.group(2)), int(match.group(1)))
+    except ValueError:
+        return None
+    shift = ""
+    if "manh" in raw:
+        shift = "Manha"
+    elif "tard" in raw:
+        shift = "Tarde"
+    return parsed, shift
+
+
+def _pmo_cell(values: list[list[Any]], row: int, col: int) -> Any:
+    if row >= len(values):
+        return ""
+    cells = values[row]
+    return cells[col] if col < len(cells) else ""
+
+
+def _pmo_set_cell(values: list[list[Any]], row: int, col: int, value: Any) -> None:
+    while len(values) <= row:
+        values.append([])
+    cells = values[row]
+    while len(cells) <= col:
+        cells.append("")
+    cells[col] = value
+
+
+def _pmo_cell_number(value: Any) -> float | None:
+    text = _normalize_text(value).replace(".", "").replace(",", ".")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pmo_day_sheet_counts(values: list[list[Any]]) -> dict[str, dict[str, int]]:
+    """Soma M (cães) e N (gatos) das linhas de casa da aba-dia, por turno (R)."""
+    counts = {shift: {"dogs": 0, "cats": 0} for shift in ("Manha", "Tarde")}
+    for row in values[1:]:
+        tutor = _normalize_text(row[0] if row else "")
+        if not tutor:
+            continue
+        if _strip_accents(tutor).lower().startswith("nome completo"):
+            continue  # cabeçalho repetido do bloco da tarde
+        shift = _normalize_shift(row[17] if len(row) > 17 else "")
+        if shift not in counts:
+            continue
+        counts[shift]["dogs"] += _parse_count(row[12] if len(row) > 12 else "")
+        counts[shift]["cats"] += _parse_count(row[13] if len(row) > 13 else "")
+    return counts
+
+
+def _pmo_day_db_counts(spreadsheet_id: str, sheet_gid: str) -> tuple[dict[str, dict[str, int]], int]:
+    """Vacinados e perdas por turno segundo o banco; também devolve o que ficou sem turno."""
+    counts = {shift: {"dogs": 0, "cats": 0, "losses": 0} for shift in ("Manha", "Tarde")}
+    no_shift = 0
+    visits = PmoVaccinationVisit.query.filter_by(
+        spreadsheet_id=spreadsheet_id, sheet_gid=str(sheet_gid)
+    ).all()
+    for visit in visits:
+        shift = _normalize_shift(visit.shift)
+        vaccinated_dogs = sum(
+            1 for animal in visit.animals
+            if (animal.status or "") == "vacinado" and animal.species != "gato"
+        )
+        vaccinated_cats = sum(
+            1 for animal in visit.animals
+            if (animal.status or "") == "vacinado" and animal.species == "gato"
+        )
+        losses = visit.losses or 0
+        if shift not in counts:
+            no_shift += vaccinated_dogs + vaccinated_cats + losses
+            continue
+        counts[shift]["dogs"] += vaccinated_dogs
+        counts[shift]["cats"] += vaccinated_cats
+        counts[shift]["losses"] += losses
+    return counts, no_shift
+
+
+def _pmo_find_doses_month_block(values: list[list[Any]], month_number: int) -> dict[str, int]:
+    """Localiza o bloco do mês na 'Controle de doses' (índices 0-based)."""
+    month_name = _PMO_MONTHS[month_number - 1]
+    month_rows = [
+        idx for idx, row in enumerate(values)
+        if _pmo_doses_label(row[0] if row else "") in _PMO_MONTHS
+    ]
+    start = next(
+        (idx for idx in month_rows if _pmo_doses_label(values[idx][0]) == month_name),
+        None,
+    )
+    if start is None:
+        raise ValueError(f"não encontrei o bloco de {month_name.capitalize()} na Controle de doses")
+    end = next((idx for idx in month_rows if idx > start), len(values))
+
+    rows: dict[str, int | None] = {"doses": None, "dogs": None, "cats": None, "perdas": None, "recebida": None}
+    for idx in range(start + 1, end):
+        label = _pmo_doses_label(values[idx][0] if values[idx] else "")
+        if rows["doses"] is None and label.startswith("doses utilizadas"):
+            rows["doses"] = idx
+        elif rows["dogs"] is None and label == "cachorros":
+            rows["dogs"] = idx
+        elif rows["cats"] is None and label == "gatos":
+            rows["cats"] = idx
+        elif rows["perdas"] is None and label == "perdas":
+            rows["perdas"] = idx
+        elif rows["recebida"] is None and label.startswith("recebida"):
+            rows["recebida"] = idx
+    missing = [name for name in ("doses", "dogs", "cats", "perdas") if rows[name] is None]
+    if missing:
+        raise ValueError(
+            f"bloco de {month_name.capitalize()} incompleto na Controle de doses "
+            f"(faltam linhas: {', '.join(missing)})"
+        )
+
+    # Cabeçalho de datas: entre "Recebida no mês" e "Doses utilizadas", a linha
+    # que já tem rótulos de data; senão, a última linha vazia do intervalo.
+    header_start = (rows["recebida"] if rows["recebida"] is not None else start) + 1
+    header_row = None
+    empty_candidate = None
+    for idx in range(header_start, rows["doses"]):
+        cells = values[idx] if idx < len(values) else []
+        tail = [cell for cell in cells[1:] if _normalize_text(cell)]
+        if any(_PMO_DOSES_LABEL_DATE_RE.search(_normalize_text(cell)) for cell in tail):
+            header_row = idx
+            break
+        if not tail and not _normalize_text(cells[0] if cells else ""):
+            empty_candidate = idx
+    if header_row is None:
+        header_row = empty_candidate
+    if header_row is None:
+        raise ValueError(
+            f"não achei a linha de cabeçalho de datas no bloco de {month_name.capitalize()}"
+        )
+
+    doses_cells = values[rows["doses"]] if rows["doses"] < len(values) else []
+    last_numeric = None
+    for col in range(1, len(doses_cells)):
+        if _pmo_cell_number(doses_cells[col]) is not None:
+            last_numeric = col
+    total_col = last_numeric if last_numeric is not None and last_numeric >= PMO_DOSES_DEFAULT_TOTAL_COL else PMO_DOSES_DEFAULT_TOTAL_COL
+
+    return {
+        "header_row": header_row,
+        "doses_row": rows["doses"],
+        "dogs_row": rows["dogs"],
+        "cats_row": rows["cats"],
+        "perdas_row": rows["perdas"],
+        "total_col": total_col,
+    }
+
+
+def _pmo_resolve_doses_target_column(
+    values: list[list[Any]], block: dict[str, int], day: date, shift: str
+) -> tuple[int, bool]:
+    """Coluna onde lançar (date, turno) → (índice, precisa inserir antes do total)."""
+    header = values[block["header_row"]] if block["header_row"] < len(values) else []
+    total_col = block["total_col"]
+    for col in range(1, max(total_col, len(header))):
+        parsed = _pmo_parse_doses_header_label(
+            header[col] if col < len(header) else "", day.year
+        )
+        if not parsed or parsed[0] != day:
+            continue
+        if parsed[1] == shift:
+            return col, False  # coluna já existe: atualiza no lugar (idempotente)
+        if not parsed[1]:
+            raise ValueError(
+                f"já existe coluna sem turno para {day.strftime('%d/%m/%Y')} no Controle de doses; "
+                "confira/apague o lançamento manual antes de compilar"
+            )
+    metric_rows = (block["doses_row"], block["dogs_row"], block["cats_row"], block["perdas_row"])
+    for col in range(1, total_col):
+        if _normalize_text(_pmo_cell(values, block["header_row"], col)):
+            continue
+        # Coluna sem rótulo mas com dado não-zero = lançamento manual órfão; não sobrescreve.
+        occupied = any(
+            (_pmo_cell_number(_pmo_cell(values, row, col)) or 0) != 0 for row in metric_rows
+        )
+        if occupied:
+            continue
+        return col, False
+    return total_col, True
+
+
+def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
+    """Compila as abas-dia não-verdes no "Controle de doses" e pinta-as de verde.
+
+    Regras: uma coluna por data+turno (rótulo "dd/mm/aaaa - Manhã/Tarde"); números
+    vêm do banco do app e são conferidos com as somas M/N da própria aba-dia —
+    divergência pula o dia com aviso em vez de compilar dado suspeito. Os totais
+    do mês viram fórmula =SUM(...). Com dry_run=True nada é escrito.
+    """
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+    service = _get_sheets_service_rw()
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title,tabColor))")
+        .execute()
+    )
+
+    wanted_doses_title = os.getenv(PMO_DOSES_SHEET_TITLE_ENV, PMO_DOSES_SHEET_DEFAULT_TITLE)
+    doses_title = ""
+    doses_gid = None
+    today = now_in_brazil().date()
+    candidates: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    for sheet in metadata.get("sheets", []):
+        props = sheet.get("properties", {})
+        title = props.get("title", "")
+        if _pmo_normalize_title(title) == _pmo_normalize_title(wanted_doses_title):
+            doses_title = title
+            doses_gid = props.get("sheetId")
+            continue
+        day = _parse_date_object(title)
+        if not day:
+            continue
+        if _pmo_tab_color_is_green(props.get("tabColor")):
+            continue  # verde = já compilada
+        if day > today:
+            continue  # dia ainda não aconteceu
+        if day.year != today.year:
+            skipped.append({"title": title, "reason": "ano diferente do atual (aba modelo/teste?)"})
+            continue
+        candidates.append({"title": title, "gid": str(props.get("sheetId", "")), "date": day})
+    if not doses_title:
+        raise RuntimeError(f"Aba '{wanted_doses_title}' não encontrada na planilha PMO.")
+    candidates.sort(key=lambda item: item["date"])
+
+    doses_values = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(doses_title)}!A1:AZ400")
+        .execute()
+        .get("values", [])
+    )
+
+    compiled: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    def _values_batch(data: list[dict[str, Any]]) -> None:
+        if dry_run or not data:
+            return
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"valueInputOption": "USER_ENTERED", "data": data},
+        ).execute()
+
+    for candidate in candidates:
+        title = candidate["title"]
+        day: date = candidate["date"]
+        day_values = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(title)}!A1:R200")
+            .execute()
+            .get("values", [])
+        )
+        sheet_counts = _pmo_day_sheet_counts(day_values)
+        db_counts, no_shift = _pmo_day_db_counts(spreadsheet_id, candidate["gid"])
+
+        total_day = sum(
+            db_counts[shift]["dogs"] + db_counts[shift]["cats"] + db_counts[shift]["losses"]
+            for shift in ("Manha", "Tarde")
+        )
+        if total_day == 0:
+            skipped.append({"title": title, "reason": "sem vacinados nem perdas registrados"})
+            continue
+        if no_shift:
+            warnings.append(
+                f"{title}: {no_shift} vacinado(s)/perda(s) em casas sem turno definido ficaram fora."
+            )
+
+        mismatches = [
+            f"{PMO_DOSES_SHIFT_LABELS[shift]} (planilha {sheet_counts[shift]['dogs']}🐕/{sheet_counts[shift]['cats']}🐈 "
+            f"× app {db_counts[shift]['dogs']}🐕/{db_counts[shift]['cats']}🐈)"
+            for shift in ("Manha", "Tarde")
+            if sheet_counts[shift]["dogs"] != db_counts[shift]["dogs"]
+            or sheet_counts[shift]["cats"] != db_counts[shift]["cats"]
+        ]
+        if mismatches:
+            skipped.append(
+                {
+                    "title": title,
+                    "reason": "contagens divergentes entre planilha e app: " + "; ".join(mismatches)
+                    + ". Sincronize a aba no painel e confira antes de compilar.",
+                }
+            )
+            continue
+
+        try:
+            block = _pmo_find_doses_month_block(doses_values, day.month)
+        except ValueError as exc:
+            skipped.append({"title": title, "reason": str(exc)})
+            continue
+
+        # Pré-checagem: um lançamento manual antigo "só com a data" bloqueia o dia
+        # inteiro ANTES de qualquer escrita (evita compilar meio dia).
+        try:
+            for shift in ("Manha", "Tarde"):
+                _pmo_resolve_doses_target_column(doses_values, block, day, shift)
+        except ValueError as exc:
+            skipped.append({"title": title, "reason": str(exc)})
+            continue
+
+        written_columns = []
+        for shift in ("Manha", "Tarde"):
+            shift_counts = db_counts[shift]
+            doses = shift_counts["dogs"] + shift_counts["cats"] + shift_counts["losses"]
+            if doses == 0:
+                continue
+            # Resolve na hora de escrever: o turno anterior já marcou o cabeçalho
+            # no modelo local, então cada turno ganha uma coluna própria.
+            col, needs_insert = _pmo_resolve_doses_target_column(doses_values, block, day, shift)
+            if needs_insert:
+                if not dry_run:
+                    service.spreadsheets().batchUpdate(
+                        spreadsheetId=spreadsheet_id,
+                        body={
+                            "requests": [
+                                {
+                                    "insertDimension": {
+                                        "range": {
+                                            "sheetId": doses_gid,
+                                            "dimension": "COLUMNS",
+                                            "startIndex": col,
+                                            "endIndex": col + 1,
+                                        },
+                                        "inheritFromBefore": True,
+                                    }
+                                }
+                            ]
+                        },
+                    ).execute()
+                # Mantém o modelo local alinhado com a grade (vale também no dry-run).
+                for cells in doses_values:
+                    if len(cells) > col:
+                        cells.insert(col, "")
+                block["total_col"] += 1
+
+            label = f"{day.strftime('%d/%m/%Y')} - {PMO_DOSES_SHIFT_LABELS[shift]}"
+            cell_writes = [
+                (block["header_row"], label),
+                (block["doses_row"], doses),
+                (block["dogs_row"], shift_counts["dogs"]),
+                (block["cats_row"], shift_counts["cats"]),
+                (block["perdas_row"], shift_counts["losses"]),
+            ]
+            data = []
+            for row_idx, value in cell_writes:
+                _pmo_set_cell(doses_values, row_idx, col, value)
+                data.append(
+                    {
+                        "range": f"{_quote_sheet_title(doses_title)}!{_pmo_col_letter(col)}{row_idx + 1}",
+                        "values": [[value]],
+                    }
+                )
+            _values_batch(data)
+            written_columns.append(
+                {
+                    "label": label,
+                    "doses": doses,
+                    "dogs": shift_counts["dogs"],
+                    "cats": shift_counts["cats"],
+                    "perdas": shift_counts["losses"],
+                }
+            )
+
+        if not written_columns:
+            skipped.append({"title": title, "reason": "sem vacinados nem perdas registrados"})
+            continue
+
+        # Totais do mês viram fórmula — nunca mais ficam defasados.
+        total_col = block["total_col"]
+        last_day_letter = _pmo_col_letter(total_col - 1)
+        total_letter = _pmo_col_letter(total_col)
+        totals_data = []
+        for row_idx in (block["doses_row"], block["dogs_row"], block["cats_row"], block["perdas_row"]):
+            formula = f"=SUM(B{row_idx + 1}:{last_day_letter}{row_idx + 1})"
+            # No modelo local guarda o número calculado (como a API devolveria),
+            # para a detecção de "último numérico = total" continuar valendo.
+            computed = int(
+                sum(_pmo_cell_number(_pmo_cell(doses_values, row_idx, c)) or 0 for c in range(1, total_col))
+            )
+            _pmo_set_cell(doses_values, row_idx, total_col, computed)
+            totals_data.append(
+                {
+                    "range": f"{_quote_sheet_title(doses_title)}!{total_letter}{row_idx + 1}",
+                    "values": [[formula]],
+                }
+            )
+        _values_batch(totals_data)
+
+        if not dry_run:
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": [
+                        {
+                            "updateSheetProperties": {
+                                "properties": {
+                                    "sheetId": int(candidate["gid"]),
+                                    "tabColor": PMO_DOSES_COMPILED_TAB_COLOR,
+                                },
+                                "fields": "tabColor",
+                            }
+                        }
+                    ]
+                },
+            ).execute()
+
+        compiled.append({"title": title, "date": day.isoformat(), "columns": written_columns})
+
+    return {"compiled": compiled, "skipped": skipped, "warnings": warnings, "dryRun": dry_run}
 
 
 def get_vacina_pmo_kpis() -> dict[str, Any]:

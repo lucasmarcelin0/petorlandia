@@ -2719,6 +2719,9 @@ class PmoVaccinationVisit(db.Model):
     certificate_url = db.Column(db.String(500), nullable=True)
     public_token = db.Column(db.String(96), unique=True, nullable=True, index=True)
     attended_by = db.Column(db.String(255), nullable=True)
+    # Doses perdidas nesta casa (frasco quebrado, refluxo etc.); perdas do
+    # turno no "Controle de doses" = soma das visitas do turno.
+    losses = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     tutor_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
     evaluation_rating = db.Column(db.Integer, nullable=True)
     evaluation_registration_rating = db.Column(db.Integer, nullable=True)

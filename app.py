@@ -4863,6 +4863,40 @@ def vacina_pmo_visit_attended_by(visit_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/visit/<int:visit_id>/losses', methods=['POST'])
+@login_required
+def vacina_pmo_visit_losses(visit_id):
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import update_vacina_pmo_visit_losses
+
+        payload = request.get_json(silent=True) or {}
+        row = update_vacina_pmo_visit_losses(visit_id, payload.get('losses'))
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao salvar perdas Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/doses/compilar', methods=['POST'])
+@login_required
+def vacina_pmo_doses_compilar():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import compile_controle_de_doses
+
+        payload = request.get_json(silent=True) or {}
+        result = compile_controle_de_doses(dry_run=bool(payload.get('dry_run')))
+        return jsonify({'success': True, **result})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao compilar Controle de doses PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/visit/<int:visit_id>/note', methods=['POST'])
 @login_required
 def vacina_pmo_visit_note(visit_id):
