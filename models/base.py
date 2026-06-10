@@ -2726,6 +2726,9 @@ class PmoVaccinationVisit(db.Model):
     evaluation_survey_rating = db.Column(db.Integer, nullable=True)
     evaluation_comment = db.Column(db.Text, nullable=True)
     evaluated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    geocode_lat = db.Column(db.Float, nullable=True)
+    geocode_lng = db.Column(db.Float, nullable=True)
+    geocode_address_key = db.Column(db.String(500), nullable=True)
     synced_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

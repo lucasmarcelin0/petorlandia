@@ -397,20 +397,43 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
 
 
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
+    """Geocode a free-text PMO address.
+
+    Tries helpers.geocode_address (structured Nominatim, 5 s timeout) first,
+    then falls back to PMO-specific free-text queries.
+    """
     normalized = _normalize_text(address)
     if not normalized:
         return None
     cache_key = _strip_accents(normalized).lower()
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
-    session = requests.Session()
-    session.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
+
+    parts = _pmo_address_parts(normalized)
+    rua = _pmo_clean_address_fragment(parts["rua"])
+    numero = _pmo_clean_address_fragment(parts["numero"])
+    bairro = _pmo_clean_address_fragment(parts["bairro"])
+
+    # Structured search via helpers (better Nominatim structured params, 5 s timeout)
+    try:
+        from helpers import geocode_address as _geocode_helper
+        coords = _geocode_helper(rua=rua, numero=numero, bairro=bairro, cidade="Orlândia", estado="SP")
+    except Exception:
+        coords = None
+
+    if coords and _pmo_coords_in_orlandia(coords):
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
+
+    # Free-text Nominatim fallback with longer timeout
+    http = requests.Session()
+    http.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
     for query in _pmo_address_queries(normalized)[:_pmo_route_geocode_variants()]:
         try:
-            response = session.get(
+            response = http.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": query, "format": "json", "limit": 3, "countrycodes": "br"},
-                timeout=2,
+                timeout=5,
             )
             response.raise_for_status()
             coords = _pmo_extract_best_nominatim_coords(response.json() or [])
@@ -420,6 +443,40 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
             _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
             return coords
     return None
+
+
+def _pmo_geocode_visit(visit: PmoVaccinationVisit) -> tuple[float, float] | None:
+    """Return coordinates for a visit, using DB-persisted cache when available.
+
+    The DB cache survives Heroku dyno restarts.  The in-memory dict avoids
+    redundant DB reads within the same request.
+    """
+    address = visit.address or ""
+    cache_key = _strip_accents(_normalize_text(address)).lower()
+    if not cache_key:
+        return None
+
+    # 1. In-memory cache (fast within a dyno)
+    if cache_key in _PMO_ROUTE_COORDS_CACHE:
+        return _PMO_ROUTE_COORDS_CACHE[cache_key]
+
+    # 2. DB-persisted cache (survives restarts)
+    if (
+        visit.geocode_lat is not None
+        and visit.geocode_lng is not None
+        and visit.geocode_address_key == cache_key
+    ):
+        coords: tuple[float, float] = (visit.geocode_lat, visit.geocode_lng)
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
+
+    # 3. Fresh geocode
+    coords = _pmo_geocode_address(address)
+    if coords:
+        visit.geocode_lat = coords[0]
+        visit.geocode_lng = coords[1]
+        visit.geocode_address_key = cache_key
+    return coords
 
 
 def _pmo_route_geocode_limit() -> int:
@@ -1134,13 +1191,29 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
     geocode_limit = _pmo_route_geocode_limit()
     for visit in selected:
         coords = None
-        if geocoded_now < geocode_limit:
-            coords = _pmo_geocode_address(visit.address or "")
+        # Always use DB cache even beyond the fresh-geocode limit
+        cache_key = _strip_accents(_normalize_text(visit.address or "")).lower()
+        if cache_key and (
+            cache_key in _PMO_ROUTE_COORDS_CACHE
+            or (
+                visit.geocode_lat is not None
+                and visit.geocode_lng is not None
+                and visit.geocode_address_key == cache_key
+            )
+        ):
+            coords = _pmo_geocode_visit(visit)
+        elif geocoded_now < geocode_limit:
+            coords = _pmo_geocode_visit(visit)
             geocoded_now += 1
         if coords:
             geocoded.append((visit, coords))
         else:
             ungeocoded.append(visit)
+    # Persist any newly geocoded coordinates before heavy Sheets work
+    try:
+        db.session.flush()
+    except Exception:
+        pass
     if not geocoded:
         raise ValueError(
             "Não foi possível localizar nenhum endereço deste turno rapidamente. "
@@ -1363,7 +1436,12 @@ def persist_vacina_pmo_rows(
 
         visit.sheet_title = sheet_title
         visit.tutor_name = tutor_name
-        visit.address = row.get("address") or ""
+        new_address = row.get("address") or ""
+        if _strip_accents(_normalize_text(new_address)).lower() != _strip_accents(_normalize_text(visit.address or "")).lower():
+            visit.geocode_lat = None
+            visit.geocode_lng = None
+            visit.geocode_address_key = None
+        visit.address = new_address
         visit.phone1 = phone1
         visit.phone2 = phone2
         visit.dogs = int(row.get("dogs") or 0)

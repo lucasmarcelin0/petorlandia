@@ -859,17 +859,29 @@
   function googleMapsUrl(row) {
     const destination = normalizeText(row.address);
     if (!destination) return '';
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${destination}, Orlândia, SP`)}&travelmode=driving`;
+    const full = `${destination}, Orlândia, SP, Brasil`;
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(full)}&travelmode=driving`;
+  }
+
+  function wazeUrl(row) {
+    const destination = normalizeText(row.address);
+    if (!destination) return '';
+    const full = `${destination}, Orlândia, SP`;
+    return `https://waze.com/ul?q=${encodeURIComponent(full)}&navigate=yes`;
   }
 
   function renderAddress(row, compact = false) {
     const mapsUrl = googleMapsUrl(row);
+    const waze = wazeUrl(row);
     const label = escapeHtml(row.address || 'Endereço não informado');
-    const mapLink = mapsUrl
-      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="Abrir rota no Google Maps" aria-label="Abrir rota no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
+    const mapsLink = mapsUrl
+      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="Google Maps" aria-label="Abrir no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
+      : '';
+    const wazeLink = waze
+      ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Waze" aria-label="Abrir no Waze"><i class="fas fa-route"></i></a>`
       : '';
     const textClass = compact ? '' : ' class="pmo-address-text"';
-    return `<div class="d-flex align-items-start gap-2"><span${textClass}>${label}</span>${mapLink}</div>`;
+    return `<div class="d-flex align-items-start gap-1 flex-wrap"><span${textClass}>${label}</span><span class="d-flex gap-1">${mapsLink}${wazeLink}</span></div>`;
   }
 
   function makePassword(seed) {
