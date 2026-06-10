@@ -4932,7 +4932,7 @@ def vacina_pmo_solicitar():
         'email': current_user.email or '',
         'cpf': current_user.cpf or '',
         'phone': current_user.phone or '',
-        'phone2': flask_session.pop('pmo_phone2', '') or '',
+        'phone2': current_user.phone2 or '',
         'address_street': _prof_street,
         'address_number': _prof_number,
         'address_complement': _prof_complement,
@@ -5036,11 +5036,9 @@ def vacina_pmo_solicitar():
                 if form_state['email']:
                     current_user.email = form_state['email']
                 current_user.phone = form_state['phone'] or current_user.phone
+                current_user.phone2 = form_state['phone2'] or current_user.phone2
                 current_user.cpf = form_state['cpf'] or current_user.cpf
                 db.session.commit()
-
-                if form_state['phone2']:
-                    flask_session['pmo_phone2'] = form_state['phone2']
                 flask_session['pmo_solicitar_success'] = result.get('public_token') or True
                 return redirect(url_for('vacina_pmo_solicitar'))
             except Exception as exc:

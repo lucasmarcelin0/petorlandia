@@ -143,6 +143,7 @@ class User(UserMixin, db.Model):
 
 
     phone = db.Column(db.String(20))
+    phone2 = db.Column(db.String(20), nullable=True)
 
     address = db.Column(db.String(200))
     endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'), nullable=True)
