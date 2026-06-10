@@ -1,0 +1,188 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4" style="max-width: 1000px;">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+      <h2 class="h4 fw-bold mb-1"><i class="fa-solid fa-syringe me-2 text-primary"></i>Vacinas pagas — Admin</h2>
+      <p class="text-muted small mb-0">Pedidos, designação de veterinários e catálogo.</p>
+    </div>
+    <a href="{{ url_for('servicos_vacinas') }}" class="btn btn-outline-secondary btn-sm">Ver página do cliente</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category if category != 'message' else 'info' }} small">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {# ───── Pedidos que precisam de ação ───── #}
+  {% set acionaveis = pedidos | selectattr('status', 'in', ['pago', 'atribuido', 'agendado']) | list %}
+  {% set demais = pedidos | rejectattr('status', 'in', ['pago', 'atribuido', 'agendado']) | list %}
+
+  <h6 class="text-uppercase text-muted small fw-bold mb-3">Precisam de ação ({{ acionaveis|length }})</h6>
+  {% if not acionaveis %}
+  <p class="text-muted small mb-4">Nenhum pedido aguardando ação. 🎉</p>
+  {% endif %}
+  {% for p in acionaveis %}
+  <div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+        <div>
+          <span class="fw-semibold">#{{ p.id }} · {{ p.item_nome }}</span>
+          <span class="badge rounded-pill bg-primary-subtle text-primary ms-1">{{ p.status_label }}</span>
+          <div class="small text-muted mt-1">
+            <i class="fa-solid fa-paw me-1"></i>{{ p.animal.name if p.animal else '—' }}
+            &nbsp;·&nbsp;<i class="fa-solid fa-user me-1"></i>{{ p.user.name if p.user else '—' }}
+            &nbsp;·&nbsp;<i class="fa-solid fa-phone me-1"></i>{{ p.phone or '—' }}
+          </div>
+          <div class="small text-muted">
+            <i class="fa-solid fa-location-dot me-1"></i>{{ p.address_full or '—' }}
+            {% if p.preferred_date %}&nbsp;·&nbsp;<i class="fa-solid fa-calendar me-1"></i>prefere {{ p.preferred_date.strftime('%d/%m') }}{% if p.preferred_shift %} ({{ p.preferred_shift }}){% endif %}{% endif %}
+          </div>
+          {% if p.note %}<div class="small text-muted fst-italic"><i class="fa-solid fa-note-sticky me-1"></i>{{ p.note }}</div>{% endif %}
+        </div>
+        <div class="text-end">
+          <span class="fw-bold">R$ {{ '%.2f'|format(p.valor)|replace('.', ',') }}</span>
+          <a class="d-block small" href="{{ url_for('servicos_vacinas_pedido', token=p.public_token) }}" target="_blank">ver pedido ↗</a>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap border-top pt-2">
+        {% if p.status == 'pago' %}
+        <form method="post" action="{{ url_for('servicos_vacinas_admin_acao', req_id=p.id) }}" class="d-flex gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="atribuir">
+          <select name="vet_id" class="form-select form-select-sm" style="max-width:260px;" required>
+            <option value="">Designar veterinário…</option>
+            {% for v in vets %}
+            <option value="{{ v.id }}">{{ v.user.name if v.user else 'Vet ' ~ v.id }} (CRMV {{ v.crmv }})</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm btn-primary text-nowrap"><i class="fa-solid fa-user-doctor me-1"></i>Designar</button>
+        </form>
+        {% endif %}
+
+        {% if p.status in ('atribuido', 'agendado') %}
+        <form method="post" action="{{ url_for('servicos_vacinas_admin_acao', req_id=p.id) }}" class="d-flex gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="agendar">
+          <input type="date" name="scheduled_date" class="form-control form-control-sm" required
+                 value="{{ p.scheduled_date.isoformat() if p.scheduled_date else '' }}">
+          <select name="scheduled_shift" class="form-select form-select-sm" style="max-width:110px;">
+            <option value="">Turno…</option>
+            <option value="Manha" {% if p.scheduled_shift == 'Manha' %}selected{% endif %}>Manhã</option>
+            <option value="Tarde" {% if p.scheduled_shift == 'Tarde' %}selected{% endif %}>Tarde</option>
+          </select>
+          <button class="btn btn-sm btn-info text-nowrap text-white">
+            <i class="fa-solid fa-calendar-check me-1"></i>{{ 'Reagendar' if p.status == 'agendado' else 'Agendar' }}
+          </button>
+        </form>
+        {% endif %}
+
+        {% if p.status in ('atribuido', 'agendado') %}
+        <form method="post" action="{{ url_for('servicos_vacinas_admin_acao', req_id=p.id) }}" class="d-flex gap-2"
+              onsubmit="return confirm('Confirmar aplicação da vacina? Será criado o registro no prontuário do pet.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="concluir">
+          <input type="text" name="lote" class="form-control form-control-sm" placeholder="Lote (opcional)" style="max-width:140px;">
+          <button class="btn btn-sm btn-success text-nowrap"><i class="fa-solid fa-check me-1"></i>Aplicada</button>
+        </form>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('servicos_vacinas_admin_acao', req_id=p.id) }}" class="ms-auto"
+              onsubmit="return confirm('Cancelar este pedido? O reembolso será feito automaticamente.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="acao" value="cancelar">
+          <input type="hidden" name="reason" value="Cancelado pela equipe">
+          <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-ban me-1"></i>Cancelar + reembolso</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {# ───── Demais pedidos ───── #}
+  <h6 class="text-uppercase text-muted small fw-bold mb-3 mt-4">Histórico ({{ demais|length }})</h6>
+  <div class="table-responsive mb-5">
+    <table class="table table-sm align-middle small">
+      <thead><tr><th>#</th><th>Vacina</th><th>Pet / Tutor</th><th>Valor</th><th>Status</th><th>Data</th><th></th></tr></thead>
+      <tbody>
+        {% for p in demais %}
+        <tr>
+          <td>{{ p.id }}</td>
+          <td>{{ p.item_nome }}</td>
+          <td>{{ p.animal.name if p.animal else '—' }} / {{ p.user.name if p.user else '—' }}</td>
+          <td>R$ {{ '%.2f'|format(p.valor)|replace('.', ',') }}</td>
+          <td>
+            <span class="badge rounded-pill
+              {% if p.status == 'concluido' %}bg-success-subtle text-success
+              {% elif p.status == 'pendente_pagamento' %}bg-warning-subtle text-warning
+              {% else %}bg-secondary-subtle text-secondary{% endif %}">{{ p.status_label }}</span>
+            {% if p.refund_status == 'solicitado' or p.refund_status == 'falhou' %}
+            <span class="badge bg-danger-subtle text-danger">reembolso pendente</span>
+            {% endif %}
+          </td>
+          <td>{{ p.created_at.strftime('%d/%m/%y') }}</td>
+          <td><a href="{{ url_for('servicos_vacinas_pedido', token=p.public_token) }}" target="_blank">ver ↗</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted">Nenhum pedido ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ───── Catálogo ───── #}
+  <h6 class="text-uppercase text-muted small fw-bold mb-3">Catálogo de vacinas</h6>
+  <div class="row g-3 mb-3">
+    {% for item in items %}
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm rounded-4 h-100 {% if not item.ativo %}opacity-50{% endif %}">
+        <div class="card-body p-3">
+          <form method="post" action="{{ url_for('servicos_vacinas_admin_item') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="item_id" value="{{ item.id }}">
+            <div class="d-flex gap-2 mb-2">
+              <input type="text" name="nome" class="form-control form-control-sm fw-semibold" value="{{ item.nome }}" required>
+              <input type="text" name="preco" class="form-control form-control-sm" style="max-width:100px;" value="{{ '%.2f'|format(item.preco) }}" required>
+            </div>
+            <input type="text" name="descricao" class="form-control form-control-sm mb-2" placeholder="Descrição" value="{{ item.descricao or '' }}">
+            <input type="text" name="doses_info" class="form-control form-control-sm mb-2" placeholder="Ex.: Dose única anual" value="{{ item.doses_info or '' }}">
+            <div class="d-flex gap-3 align-items-center mb-2 small">
+              <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="cao" {% if 'cao' in item.especies %}checked{% endif %}> 🐕 Cão</label>
+              <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="gato" {% if 'gato' in item.especies %}checked{% endif %}> 🐈 Gato</label>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" type="submit"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar</button>
+              <button class="btn btn-sm btn-outline-secondary" type="submit" name="acao" value="desativar">
+                {{ 'Reativar' if not item.ativo else 'Desativar' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4 mb-5" style="border:2px dashed #d1d5db !important;">
+    <div class="card-body p-3">
+      <h6 class="fw-bold small mb-2"><i class="fa-solid fa-plus me-1"></i>Nova vacina no catálogo</h6>
+      <form method="post" action="{{ url_for('servicos_vacinas_admin_item') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4"><input type="text" name="nome" class="form-control form-control-sm" placeholder="Nome (ex.: V10)" required></div>
+        <div class="col-md-2"><input type="text" name="preco" class="form-control form-control-sm" placeholder="Preço" required></div>
+        <div class="col-md-6"><input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição curta"></div>
+        <div class="col-md-4"><input type="text" name="doses_info" class="form-control form-control-sm" placeholder="Ex.: Dose única anual"></div>
+        <div class="col-md-4 d-flex gap-3 align-items-center small">
+          <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="cao" checked> 🐕 Cão</label>
+          <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="gato" checked> 🐈 Gato</label>
+        </div>
+        <div class="col-md-4"><button class="btn btn-sm btn-primary w-100"><i class="fa-solid fa-plus me-1"></i>Adicionar</button></div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

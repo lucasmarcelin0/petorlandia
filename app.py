@@ -29140,6 +29140,288 @@ def servicos():
     return render_template('servicos.html')
 
 
+# ──────────────────── Serviço de Vacinas Pagas ────────────────────
+
+def _vacserv_refund_payment(payment) -> bool:
+    """Reembolso total via API do Mercado Pago. True se aprovado."""
+    if not payment or not payment.mercado_pago_id:
+        return False
+    resp = mp_sdk().refund().create(payment.mercado_pago_id)
+    return resp.get('status') in (200, 201)
+
+
+@app.route('/servicos/vacinas', methods=['GET', 'POST'])
+@login_required
+def servicos_vacinas():
+    from models import VaccineServiceRequest
+    from services.vaccine_service_paid import create_vaccine_request, list_active_items
+
+    items = list_active_items()
+    animals = (
+        Animal.query.filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+
+    if request.method == 'POST':
+        item = next((i for i in items if i.id == request.form.get('item_id', type=int)), None)
+        animal = next((a for a in animals if a.id == request.form.get('animal_id', type=int)), None)
+        phone = (request.form.get('phone') or '').strip()
+        street = (request.form.get('address_street') or '').strip()
+
+        if not item:
+            flash('Escolha a vacina desejada.', 'danger')
+        elif not animal:
+            flash('Escolha o pet que vai receber a vacina.', 'danger')
+        elif not phone:
+            flash('Informe um telefone para contato.', 'danger')
+        elif not street:
+            flash('Informe o endereço para a aplicação.', 'danger')
+        else:
+            preferred_date = None
+            raw_date = (request.form.get('preferred_date') or '').strip()
+            if raw_date:
+                try:
+                    preferred_date = datetime.strptime(raw_date, '%Y-%m-%d').date()
+                except ValueError:
+                    preferred_date = None
+            try:
+                req, payment_url = create_vaccine_request(
+                    user=current_user,
+                    animal=animal,
+                    item=item,
+                    payload={
+                        'phone': phone,
+                        'address_street': street,
+                        'address_number': request.form.get('address_number'),
+                        'address_complement': request.form.get('address_complement'),
+                        'address_neighborhood': request.form.get('address_neighborhood'),
+                        'preferred_date': preferred_date,
+                        'preferred_shift': request.form.get('preferred_shift'),
+                        'note': request.form.get('note'),
+                    },
+                    criar_preferencia=_criar_preferencia_pagamento,
+                    back_url_builder=lambda tok: url_for(
+                        'servicos_vacinas_pedido', token=tok, _external=True
+                    ),
+                )
+                return redirect(payment_url)
+            except PaymentPreferenceError as exc:
+                db.session.rollback()
+                flash(str(exc), 'danger')
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception('Falha ao criar pedido de vacina paga')
+                flash('Não foi possível iniciar o pedido agora. Tente novamente.', 'danger')
+
+    meus_pedidos = (
+        VaccineServiceRequest.query
+        .filter_by(user_id=current_user.id)
+        .order_by(VaccineServiceRequest.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    prof_phone = current_user.phone or ''
+    prof = {'street': '', 'number': '', 'complement': '', 'neighborhood': ''}
+    if current_user.endereco:
+        prof = {
+            'street': current_user.endereco.rua or '',
+            'number': current_user.endereco.numero or '',
+            'complement': current_user.endereco.complemento or '',
+            'neighborhood': current_user.endereco.bairro or '',
+        }
+
+    return render_template(
+        'vacinas_servico/catalogo.html',
+        items=items,
+        animals=animals,
+        meus_pedidos=meus_pedidos,
+        prof_phone=prof_phone,
+        prof_address=prof,
+    )
+
+
+@app.route('/servicos/vacinas/pedido/<token>')
+def servicos_vacinas_pedido(token):
+    from models import VaccineServiceRequest
+    from services.vaccine_service_paid import timeline_for
+
+    req = VaccineServiceRequest.query.filter_by(public_token=token).first_or_404()
+    is_owner = current_user.is_authenticated and current_user.id == req.user_id
+    is_admin = current_user.is_authenticated and current_user.role == 'admin'
+    return render_template(
+        'vacinas_servico/pedido.html',
+        req=req,
+        timeline=timeline_for(req),
+        is_owner=is_owner,
+        is_admin=is_admin,
+    )
+
+
+@app.route('/servicos/vacinas/pedido/<token>/cancelar', methods=['POST'])
+@login_required
+def servicos_vacinas_cancelar(token):
+    from models import VaccineServiceRequest
+    from services.vaccine_service_paid import cancel_request
+
+    req = VaccineServiceRequest.query.filter_by(public_token=token).first_or_404()
+    if current_user.id != req.user_id and current_user.role != 'admin':
+        abort(403)
+    try:
+        outcome = cancel_request(
+            req,
+            reason=(request.form.get('reason') or '').strip(),
+            actor_user_id=current_user.id,
+            refund_payment=_vacserv_refund_payment,
+        )
+        db.session.commit()
+        if outcome == 'reembolsado':
+            flash('Pedido cancelado e reembolso concluído. O valor volta pelo mesmo meio de pagamento.', 'success')
+        elif outcome == 'reembolso_pendente':
+            flash('Pedido cancelado. O reembolso foi solicitado e será processado em breve.', 'success')
+        else:
+            flash('Pedido cancelado.', 'success')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    return redirect(url_for('servicos_vacinas_pedido', token=token))
+
+
+@app.route('/servicos/vacinas/pedido/<token>/reagendar', methods=['POST'])
+@login_required
+def servicos_vacinas_reagendar(token):
+    from models import VaccineServiceRequest
+    from services.vaccine_service_paid import request_reschedule
+
+    req = VaccineServiceRequest.query.filter_by(public_token=token).first_or_404()
+    if current_user.id != req.user_id and current_user.role != 'admin':
+        abort(403)
+    preferred_date = None
+    raw_date = (request.form.get('preferred_date') or '').strip()
+    if raw_date:
+        try:
+            preferred_date = datetime.strptime(raw_date, '%Y-%m-%d').date()
+        except ValueError:
+            preferred_date = None
+    try:
+        request_reschedule(req, preferred_date, (request.form.get('note') or '').strip(), current_user.id)
+        db.session.commit()
+        flash('Pedido de nova data enviado. A equipe confirmará o novo agendamento.', 'success')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    return redirect(url_for('servicos_vacinas_pedido', token=token))
+
+
+@app.route('/servicos/vacinas/admin', methods=['GET'])
+@login_required
+def servicos_vacinas_admin():
+    if current_user.role != 'admin':
+        abort(403)
+    from models import VaccineServiceItem, VaccineServiceRequest, Veterinario
+
+    pedidos = (
+        VaccineServiceRequest.query
+        .order_by(VaccineServiceRequest.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    items = VaccineServiceItem.query.order_by(VaccineServiceItem.position, VaccineServiceItem.nome).all()
+    vets = Veterinario.query.all()
+    return render_template('vacinas_servico/admin.html', pedidos=pedidos, items=items, vets=vets)
+
+
+@app.route('/servicos/vacinas/admin/<int:req_id>/acao', methods=['POST'])
+@login_required
+def servicos_vacinas_admin_acao(req_id):
+    if current_user.role != 'admin':
+        abort(403)
+    from models import VaccineServiceRequest, Veterinario
+    from services.vaccine_service_paid import (
+        assign_vet,
+        cancel_request,
+        complete_request,
+        schedule_request,
+    )
+
+    req = VaccineServiceRequest.query.get_or_404(req_id)
+    acao = request.form.get('acao') or ''
+    try:
+        if acao == 'atribuir':
+            vet = Veterinario.query.get_or_404(request.form.get('vet_id', type=int))
+            assign_vet(req, vet, current_user.id)
+        elif acao == 'agendar':
+            raw_date = (request.form.get('scheduled_date') or '').strip()
+            scheduled = datetime.strptime(raw_date, '%Y-%m-%d').date()
+            schedule_request(req, scheduled, (request.form.get('scheduled_shift') or '').strip(), current_user.id)
+        elif acao == 'concluir':
+            complete_request(req, current_user.id, (request.form.get('lote') or '').strip())
+        elif acao == 'cancelar':
+            cancel_request(
+                req,
+                reason=(request.form.get('reason') or '').strip(),
+                actor_user_id=current_user.id,
+                refund_payment=_vacserv_refund_payment,
+            )
+        else:
+            flash('Ação inválida.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
+        db.session.commit()
+        flash('Pedido atualizado.', 'success')
+    except (ValueError, KeyError) as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falha em ação admin vacina paga')
+        flash('Não foi possível executar a ação.', 'danger')
+    return redirect(url_for('servicos_vacinas_admin'))
+
+
+@app.route('/servicos/vacinas/admin/item', methods=['POST'])
+@login_required
+def servicos_vacinas_admin_item():
+    if current_user.role != 'admin':
+        abort(403)
+    from decimal import Decimal as _Dec
+    from models import VaccineServiceItem
+
+    item_id = request.form.get('item_id', type=int)
+    item = VaccineServiceItem.query.get(item_id) if item_id else None
+    if request.form.get('acao') == 'desativar' and item:
+        item.ativo = not item.ativo
+        db.session.commit()
+        flash(f'"{item.nome}" {"reativada" if item.ativo else "desativada"}.', 'success')
+        return redirect(url_for('servicos_vacinas_admin'))
+
+    nome = (request.form.get('nome') or '').strip()
+    preco_raw = (request.form.get('preco') or '').replace(',', '.').strip()
+    if not nome or not preco_raw:
+        flash('Informe nome e preço da vacina.', 'warning')
+        return redirect(url_for('servicos_vacinas_admin'))
+    try:
+        preco = _Dec(preco_raw)
+    except Exception:
+        flash('Preço inválido.', 'warning')
+        return redirect(url_for('servicos_vacinas_admin'))
+
+    especies = ','.join(request.form.getlist('especies')) or 'cao,gato'
+    if item is None:
+        item = VaccineServiceItem(nome=nome, preco=preco, especies=especies)
+        db.session.add(item)
+    else:
+        item.nome = nome
+        item.preco = preco
+        item.especies = especies
+    item.descricao = (request.form.get('descricao') or '').strip() or None
+    item.doses_info = (request.form.get('doses_info') or '').strip() or None
+    db.session.commit()
+    flash(f'Vacina "{nome}" salva.', 'success')
+    return redirect(url_for('servicos_vacinas_admin'))
+
+
 @app.route('/servicos/exames')
 @login_required
 def servicos_exames():
@@ -30029,6 +30311,22 @@ def notificacoes_mercado_pago():
 
                 if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
                     _sync_veterinarian_membership_payment(pay)
+
+                if (
+                    pay.status == PaymentStatus.COMPLETED
+                    and pay.external_reference
+                    and pay.external_reference.startswith('vacserv-')
+                ):
+                    from models import VaccineServiceRequest
+                    from services.vaccine_service_paid import mark_request_paid
+                    try:
+                        vacserv_id = int(pay.external_reference.split('-', 1)[1])
+                    except (ValueError, TypeError):
+                        vacserv_id = None
+                    if vacserv_id:
+                        vacserv_req = VaccineServiceRequest.query.get(vacserv_id)
+                        if vacserv_req:
+                            mark_request_paid(vacserv_req)
 
                 if pay.status == PaymentStatus.COMPLETED and pay.order_id:
                     order = Order.query.get(pay.order_id)

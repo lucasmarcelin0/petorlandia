@@ -1,0 +1,185 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 760px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <h1 class="h4 fw-bold mb-0">Vacinas em domicílio</h1>
+  </div>
+
+  <div class="alert alert-info small d-flex gap-2 align-items-start">
+    <i class="fa-solid fa-circle-info mt-1"></i>
+    <div>
+      Escolha a vacina, o pet e o endereço — um veterinário parceiro aplica na sua casa.
+      O pagamento é online e seguro pelo <strong>Mercado Pago</strong>. Cancelamento com
+      reembolso até a visita ser realizada.
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category if category != 'message' else 'info' }} small">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not items %}
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4 text-center text-muted">
+      <i class="fa-solid fa-syringe fs-3 d-block mb-2"></i>
+      Nenhuma vacina disponível no momento. Volte em breve!
+    </div>
+  </div>
+  {% else %}
+
+  <form method="post" id="vacserv-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Passo 1: vacina -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <span class="badge rounded-pill bg-primary me-1">1</span> Escolha a vacina
+        </h6>
+        <div class="d-grid gap-2">
+          {% for item in items %}
+          <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3 vacserv-item"
+                 style="cursor:pointer;" data-especies="{{ item.especies }}">
+            <input class="form-check-input mt-0" type="radio" name="item_id" value="{{ item.id }}" required>
+            <span class="d-flex flex-column flex-grow-1">
+              <span class="fw-semibold">{{ item.nome }}</span>
+              {% if item.descricao %}<span class="text-muted small">{{ item.descricao }}</span>{% endif %}
+              {% if item.doses_info %}<span class="text-muted small"><i class="fa-solid fa-syringe me-1"></i>{{ item.doses_info }}</span>{% endif %}
+            </span>
+            <span class="fw-bold text-primary text-nowrap">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Passo 2: pet -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <span class="badge rounded-pill bg-primary me-1">2</span> Escolha o pet
+        </h6>
+        {% if animals %}
+        <div class="d-grid gap-2">
+          {% for animal in animals %}
+          <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3" style="cursor:pointer;">
+            <input class="form-check-input mt-0" type="radio" name="animal_id" value="{{ animal.id }}" required>
+            <span class="d-flex flex-column">
+              <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
+              <span class="text-muted small">
+                {{ animal.species.name if animal.species else 'Espécie não informada' }}
+                {% if animal.breed and animal.breed.name %} · {{ animal.breed.name }}{% endif %}
+              </span>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted small mb-2">Você ainda não tem pets cadastrados.</p>
+        <a href="{{ url_for('add_animal') }}" class="btn btn-sm btn-outline-primary">
+          <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Passo 3: contato e endereço -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <span class="badge rounded-pill bg-primary me-1">3</span> Contato e endereço
+        </h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="phone" class="form-label small fw-semibold">Telefone *</label>
+            <input type="tel" id="phone" name="phone" class="form-control"
+                   value="{{ prof_phone }}" placeholder="(16) 99999-9999" required>
+          </div>
+          <div class="col-md-6">
+            <label for="preferred_date" class="form-label small fw-semibold">Data preferida</label>
+            <input type="date" id="preferred_date" name="preferred_date" class="form-control">
+          </div>
+          <div class="col-md-8">
+            <label for="address_street" class="form-label small fw-semibold">Rua / Avenida *</label>
+            <input type="text" id="address_street" name="address_street" class="form-control"
+                   value="{{ prof_address.street }}" required>
+          </div>
+          <div class="col-md-4">
+            <label for="address_number" class="form-label small fw-semibold">Número</label>
+            <input type="text" id="address_number" name="address_number" class="form-control"
+                   value="{{ prof_address.number }}">
+          </div>
+          <div class="col-md-6">
+            <label for="address_complement" class="form-label small fw-semibold">Complemento</label>
+            <input type="text" id="address_complement" name="address_complement" class="form-control"
+                   value="{{ prof_address.complement }}">
+          </div>
+          <div class="col-md-6">
+            <label for="address_neighborhood" class="form-label small fw-semibold">Bairro</label>
+            <input type="text" id="address_neighborhood" name="address_neighborhood" class="form-control"
+                   value="{{ prof_address.neighborhood }}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold d-block">Turno preferido</label>
+            <div class="btn-group w-100">
+              <input type="radio" class="btn-check" name="preferred_shift" id="shift-m" value="Manha">
+              <label class="btn btn-outline-primary btn-sm" for="shift-m"><i class="fa-solid fa-sun me-1"></i>Manhã</label>
+              <input type="radio" class="btn-check" name="preferred_shift" id="shift-t" value="Tarde">
+              <label class="btn btn-outline-primary btn-sm" for="shift-t"><i class="fa-solid fa-cloud-sun me-1"></i>Tarde</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label for="note" class="form-label small fw-semibold">Observações</label>
+            <textarea id="note" name="note" class="form-control" rows="2"
+                      placeholder="Ex.: portão azul, cão bravo, avisar antes…"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2 mb-4">
+      <button type="submit" class="btn btn-primary btn-lg rounded-pill">
+        <i class="fa-solid fa-lock me-1"></i> Continuar para o pagamento
+      </button>
+      <p class="text-center text-muted small mb-0">
+        Você será direcionado ao Mercado Pago. Nada é cobrado antes da confirmação.
+      </p>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if meus_pedidos %}
+  <div class="mb-5">
+    <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Meus pedidos</h5>
+    <div class="d-flex flex-column gap-2">
+      {% for p in meus_pedidos %}
+      <a href="{{ url_for('servicos_vacinas_pedido', token=p.public_token) }}"
+         class="card border-0 shadow-sm rounded-4 text-decoration-none text-body">
+        <div class="card-body p-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+          <div>
+            <span class="fw-semibold">{{ p.item_nome }}</span>
+            <span class="text-muted small">· {{ p.animal.name if p.animal else '—' }}</span>
+            <div class="text-muted small">{{ p.created_at.strftime('%d/%m/%Y') }}</div>
+          </div>
+          <span class="badge rounded-pill
+            {% if p.status == 'concluido' %}bg-success-subtle text-success
+            {% elif p.status in ('cancelado','reembolsado') %}bg-secondary-subtle text-secondary
+            {% elif p.status == 'pendente_pagamento' %}bg-warning-subtle text-warning
+            {% else %}bg-primary-subtle text-primary{% endif %}">
+            {{ p.status_label }}
+          </span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

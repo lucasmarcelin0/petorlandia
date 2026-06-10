@@ -3646,3 +3646,123 @@ def _normalize_animal_name_before_insert(mapper, connection, target):
 @event.listens_for(Animal, "before_update")
 def _normalize_animal_name_before_update(mapper, connection, target):
     _normalize_model_name(target)
+
+
+# ──────────────────── Serviço de Vacinas Pagas ────────────────────
+
+class VaccineServiceItem(db.Model):
+    """Item do catálogo de vacinas pagas (preço único da plataforma)."""
+
+    __tablename__ = 'vaccine_service_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    especies = db.Column(db.String(40), nullable=False, default='cao,gato')  # csv: cao,gato
+    preco = db.Column(db.Numeric(10, 2), nullable=False)
+    doses_info = db.Column(db.String(200), nullable=True)  # ex.: "Dose única anual"
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    def especies_list(self):
+        return [e.strip() for e in (self.especies or '').split(',') if e.strip()]
+
+
+class VaccineServiceRequest(db.Model):
+    """Pedido de vacina paga: solicitação → pagamento → vet → aplicação."""
+
+    __tablename__ = 'vaccine_service_request'
+
+    STATUS_LABELS = {
+        'pendente_pagamento': 'Aguardando pagamento',
+        'pago': 'Pago — aguardando veterinário',
+        'atribuido': 'Veterinário designado',
+        'agendado': 'Agendado',
+        'concluido': 'Vacina aplicada',
+        'cancelado': 'Cancelado',
+        'reembolsado': 'Reembolsado',
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='CASCADE'), nullable=False, index=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('vaccine_service_item.id'), nullable=False)
+
+    # Snapshot do item no momento da compra (preço pode mudar depois)
+    item_nome = db.Column(db.String(120), nullable=False)
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+
+    address_street = db.Column(db.String(200), nullable=True)
+    address_number = db.Column(db.String(20), nullable=True)
+    address_complement = db.Column(db.String(100), nullable=True)
+    address_neighborhood = db.Column(db.String(100), nullable=True)
+    phone = db.Column(db.String(32), nullable=True)
+    preferred_date = db.Column(db.Date, nullable=True)
+    preferred_shift = db.Column(db.String(20), nullable=True)  # Manha/Tarde
+    note = db.Column(db.Text, nullable=True)
+
+    status = db.Column(db.String(30), nullable=False, default='pendente_pagamento', index=True)
+    public_token = db.Column(db.String(96), unique=True, nullable=False, index=True)
+
+    payment_id = db.Column(db.Integer, db.ForeignKey('payment.id', ondelete='SET NULL'), nullable=True)
+    assigned_vet_id = db.Column(db.Integer, db.ForeignKey('veterinario.id', ondelete='SET NULL'), nullable=True, index=True)
+    scheduled_date = db.Column(db.Date, nullable=True)
+    scheduled_shift = db.Column(db.String(20), nullable=True)
+    vaccinated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    vacina_id = db.Column(db.Integer, db.ForeignKey('vacina.id', ondelete='SET NULL'), nullable=True)
+
+    cancel_reason = db.Column(db.String(255), nullable=True)
+    refund_status = db.Column(db.String(30), nullable=True)  # solicitado/concluido/falhou
+
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    animal = db.relationship('Animal', foreign_keys=[animal_id])
+    item = db.relationship('VaccineServiceItem', foreign_keys=[item_id])
+    payment = db.relationship('Payment', foreign_keys=[payment_id])
+    assigned_vet = db.relationship('Veterinario', foreign_keys=[assigned_vet_id])
+    vacina = db.relationship('Vacina', foreign_keys=[vacina_id])
+    events = db.relationship(
+        'VaccineServiceEvent',
+        backref='request',
+        cascade='all, delete-orphan',
+        order_by='VaccineServiceEvent.created_at',
+    )
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def address_full(self):
+        parts = [self.address_street or '']
+        if self.address_number:
+            parts[0] += f', {self.address_number}'
+        if self.address_complement:
+            parts.append(self.address_complement)
+        if self.address_neighborhood:
+            parts.append(self.address_neighborhood)
+        return ' — '.join(p for p in parts if p)
+
+
+class VaccineServiceEvent(db.Model):
+    """Histórico/auditoria de cada pedido (linha do tempo do usuário)."""
+
+    __tablename__ = 'vaccine_service_event'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vaccine_service_request.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    event = db.Column(db.String(40), nullable=False)  # criado/pago/atribuido/agendado/...
+    note = db.Column(db.Text, nullable=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    actor = db.relationship('User', foreign_keys=[actor_user_id])
