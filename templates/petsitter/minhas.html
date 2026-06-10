@@ -47,6 +47,26 @@
                  target="_blank" rel="noopener">WhatsApp <i class="fa-brands fa-whatsapp text-success"></i></a>
             {% endif %}
           </p>
+          {% if s.preco_total %}
+          <div class="mt-2">
+            {% if s.payment and s.payment.status.name == 'COMPLETED' %}
+            <span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Pago — R$ {{ '%.2f' | format(s.preco_total) | replace('.', ',') }}</span>
+            <span class="text-muted small d-block mt-1">Pagamento protegido: em caso de problema, o valor é estornado.</span>
+            {% else %}
+            <form method="POST" action="{{ url_for('petsitter_routes.petsitter_pagar', solicitacao_id=s.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-success">
+                <i class="fa-solid fa-credit-card me-1"></i>
+                Pagar R$ {{ '%.2f' | format(s.preco_total) | replace('.', ',') }}
+              </button>
+            </form>
+            {% if s.payment and s.payment.status.name == 'PENDING' and s.payment.init_point %}
+            <span class="text-muted small ms-1">Pagamento em processamento — <a href="{{ s.payment.init_point }}">retomar checkout</a></span>
+            {% endif %}
+            <span class="text-muted small d-block mt-1">Cartão, Pix ou boleto via Mercado Pago. Estorno integral garantido se algo der errado.</span>
+            {% endif %}
+          </div>
+          {% endif %}
           {% endif %}
         </div>
         {% if s.status in ('aberta', 'atribuida') %}

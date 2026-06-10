@@ -106,6 +106,12 @@ class PetsitterRequest(db.Model):
     endereco = db.Column(db.String(255), nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), default="aberta", nullable=False, index=True)
+    preco_total = db.Column(db.Numeric(10, 2), nullable=True)
+    payment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("payment.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     tutor = db.relationship(
@@ -114,6 +120,7 @@ class PetsitterRequest(db.Model):
     sitter = db.relationship(
         "PetsitterProfile", backref="atendimentos", foreign_keys=[sitter_id]
     )
+    payment = db.relationship("Payment", foreign_keys=[payment_id])
     animais = db.relationship(
         "Animal", secondary=petsitter_request_animal, lazy="selectin"
     )

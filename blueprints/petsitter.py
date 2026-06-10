@@ -212,6 +212,82 @@ def _parse_date(value):
         return None
 
 
+def _parse_preco(value):
+    """Converte '350,00' / '350.00' em Decimal ou None."""
+    from decimal import Decimal, InvalidOperation
+
+    raw = (value or "").strip().replace("R$", "").replace(" ", "")
+    if not raw:
+        return None
+    raw = raw.replace(".", "").replace(",", ".") if "," in raw else raw
+    try:
+        preco = Decimal(raw)
+    except InvalidOperation:
+        return None
+    return preco if preco > 0 else None
+
+
+@bp.route("/petsitter/solicitacao/<int:solicitacao_id>/pagar", methods=["POST"])
+@login_required
+def petsitter_pagar(solicitacao_id: int):
+    """Gera (ou reaproveita) a cobrança Mercado Pago e redireciona ao checkout.
+
+    O pagamento via Checkout Pro aceita cartão de crédito/débito, Pix e
+    boleto, e permite estorno integral pela API caso algo dê errado.
+    """
+    from blueprints.utils import _load_app_module
+    from models import PaymentMethod, PaymentStatus, Payment, PetsitterRequest
+
+    solicitacao = PetsitterRequest.query.get_or_404(solicitacao_id)
+    if solicitacao.tutor_id != current_user.id:
+        abort(403)
+    if solicitacao.status != "atribuida" or not solicitacao.preco_total:
+        flash("Esta solicitação ainda não tem cobrança definida.", "warning")
+        return redirect(url_for("petsitter_routes.petsitter_minhas"))
+
+    payment = solicitacao.payment
+    if payment is not None and payment.status == PaymentStatus.COMPLETED:
+        flash("Esta solicitação já está paga.", "info")
+        return redirect(url_for("petsitter_routes.petsitter_minhas"))
+
+    app_module = _load_app_module()
+    back_url = url_for("petsitter_routes.petsitter_minhas", _external=True)
+    pets = ", ".join(a.name for a in solicitacao.animais) or "pets"
+    items = [{
+        "id": f"petsitter-{solicitacao.id}",
+        "title": f"Petsitter para {pets} ({solicitacao.dias} diária(s))",
+        "quantity": 1,
+        "unit_price": float(solicitacao.preco_total),
+    }]
+
+    try:
+        resultado = app_module._criar_preferencia_pagamento(
+            items,
+            external_reference=f"petsitter-{solicitacao.id}",
+            back_url=back_url,
+        )
+    except app_module.PaymentPreferenceError as exc:
+        flash(str(exc) or "Erro ao iniciar pagamento. Tente novamente.", "danger")
+        return redirect(url_for("petsitter_routes.petsitter_minhas"))
+
+    if payment is None:
+        payment = Payment(
+            user_id=current_user.id,
+            method=PaymentMethod.CREDIT_CARD,
+            status=PaymentStatus.PENDING,
+            external_reference=f"petsitter-{solicitacao.id}",
+        )
+        db.session.add(payment)
+        db.session.flush()
+        solicitacao.payment_id = payment.id
+    else:
+        payment.status = PaymentStatus.PENDING
+    payment.init_point = resultado["payment_url"]
+    db.session.commit()
+
+    return redirect(resultado["payment_url"])
+
+
 # ---------------------------------------------------------------------------
 # Carreiras
 # ---------------------------------------------------------------------------
@@ -402,15 +478,67 @@ def petsitter_admin_atribuir(solicitacao_id: int):
 
     solicitacao = PetsitterRequest.query.get_or_404(solicitacao_id)
     sitter_id = request.form.get("sitter_id", type=int)
-    sitter = PetsitterProfile.query.get(sitter_id) if sitter_id else None
+    sitter = db.session.get(PetsitterProfile, sitter_id) if sitter_id else None
     if sitter is None or sitter.status != "aprovado":
         flash("Escolha um cuidador aprovado.", "warning")
         return redirect(url_for("petsitter_routes.petsitter_admin"))
 
+    preco_total = _parse_preco(request.form.get("preco_total"))
+    if preco_total is None:
+        flash("Informe o valor total da cobrança (ex.: 350,00).", "warning")
+        return redirect(url_for("petsitter_routes.petsitter_admin"))
+
     solicitacao.sitter_id = sitter.id
+    solicitacao.preco_total = preco_total
     solicitacao.status = "atribuida"
     db.session.commit()
-    flash("Cuidador atribuído à solicitação.", "success")
+    flash(
+        "Cuidador atribuído. O tutor verá o botão de pagamento em Minhas Solicitações.",
+        "success",
+    )
+    return redirect(url_for("petsitter_routes.petsitter_admin"))
+
+
+@bp.route(
+    "/petsitter/admin/solicitacao/<int:solicitacao_id>/estornar", methods=["POST"]
+)
+@admin_required
+def petsitter_admin_estornar(solicitacao_id: int):
+    """Estorna integralmente o pagamento via API do Mercado Pago."""
+    from blueprints.utils import _load_app_module
+    from models import PaymentStatus, PetsitterRequest
+
+    solicitacao = PetsitterRequest.query.get_or_404(solicitacao_id)
+    payment = solicitacao.payment
+    if payment is None or payment.status != PaymentStatus.COMPLETED:
+        flash("Não há pagamento aprovado para estornar.", "warning")
+        return redirect(url_for("petsitter_routes.petsitter_admin"))
+    if not payment.mercado_pago_id:
+        flash(
+            "Pagamento sem identificador do Mercado Pago — estorne manualmente no painel MP.",
+            "danger",
+        )
+        return redirect(url_for("petsitter_routes.petsitter_admin"))
+
+    app_module = _load_app_module()
+    try:
+        resp = app_module.mp_sdk().refund().create(payment.mercado_pago_id)
+    except Exception:  # noqa: BLE001
+        flash("Falha ao conectar com o Mercado Pago. Tente novamente.", "danger")
+        return redirect(url_for("petsitter_routes.petsitter_admin"))
+
+    if resp.get("status") not in (200, 201):
+        flash(
+            f"Mercado Pago recusou o estorno (HTTP {resp.get('status')}). "
+            "Verifique no painel do MP.",
+            "danger",
+        )
+        return redirect(url_for("petsitter_routes.petsitter_admin"))
+
+    payment.status = PaymentStatus.FAILED  # padrão do projeto para 'refunded'
+    solicitacao.status = "cancelada"
+    db.session.commit()
+    flash("Estorno solicitado com sucesso. O valor voltará ao tutor.", "success")
     return redirect(url_for("petsitter_routes.petsitter_admin"))
 
 

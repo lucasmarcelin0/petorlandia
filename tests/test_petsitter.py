@@ -255,7 +255,7 @@ def test_admin_atribuir_sitter_a_solicitacao(app, client, monkeypatch):
     login(monkeypatch, admin_id)
     resp = client.post(
         f"/petsitter/admin/solicitacao/{solicitacao_id}/atribuir",
-        data={"sitter_id": str(perfil_id)},
+        data={"sitter_id": str(perfil_id), "preco_total": "350,00"},
         follow_redirects=True,
     )
     assert resp.status_code == 200
@@ -263,6 +263,33 @@ def test_admin_atribuir_sitter_a_solicitacao(app, client, monkeypatch):
         solicitacao = db.session.get(PetsitterRequest, solicitacao_id)
         assert solicitacao.status == "atribuida"
         assert solicitacao.sitter_id == perfil_id
+        assert float(solicitacao.preco_total) == 350.0
+
+
+def test_admin_atribuir_sem_preco_nao_atribui(app, client, monkeypatch):
+    with app.app_context():
+        admin = _criar_tutor(name="Admin", email="admin@example.com", role="admin")
+        tutor = _criar_tutor(name="Tutor", email="tutor@example.com")
+        sitter_user = _criar_tutor(name="Sitter", email="sitter@example.com")
+        perfil = PetsitterProfile(user_id=sitter_user.id, status="aprovado")
+        solicitacao = PetsitterRequest(
+            tutor_id=tutor.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+        )
+        db.session.add_all([perfil, solicitacao])
+        db.session.commit()
+        admin_id, perfil_id, solicitacao_id = admin.id, perfil.id, solicitacao.id
+
+    login(monkeypatch, admin_id)
+    client.post(
+        f"/petsitter/admin/solicitacao/{solicitacao_id}/atribuir",
+        data={"sitter_id": str(perfil_id), "preco_total": ""},
+        follow_redirects=True,
+    )
+    with app.app_context():
+        solicitacao = db.session.get(PetsitterRequest, solicitacao_id)
+        assert solicitacao.status == "aberta"
 
 
 def test_painel_admin_exige_admin(app, client, monkeypatch):
@@ -275,6 +302,124 @@ def test_painel_admin_exige_admin(app, client, monkeypatch):
     # Com Accept HTML o app devolve 403; em JSON ele converte para 404 (defense in depth).
     resp = client.get("/petsitter/admin", headers={"Accept": "text/html"})
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Pagamento e estorno
+# ---------------------------------------------------------------------------
+
+def _solicitacao_atribuida(preco="350.00"):
+    """Cria tutor + sitter + solicitação atribuída com preço definido."""
+    from decimal import Decimal
+
+    tutor = _criar_tutor(name="Tutor", email="tutor@example.com")
+    sitter_user = _criar_tutor(name="Sitter", email="sitter@example.com")
+    perfil = PetsitterProfile(user_id=sitter_user.id, status="aprovado")
+    db.session.add(perfil)
+    db.session.flush()
+    solicitacao = PetsitterRequest(
+        tutor_id=tutor.id,
+        sitter_id=perfil.id,
+        data_inicio=date.today(),
+        data_fim=date.today() + timedelta(days=1),
+        status="atribuida",
+        preco_total=Decimal(preco),
+    )
+    db.session.add(solicitacao)
+    db.session.commit()
+    return tutor, solicitacao
+
+
+def test_pagar_cria_payment_e_redireciona(app, client, monkeypatch):
+    import app as app_module
+    from models import Payment, PaymentStatus
+
+    with app.app_context():
+        tutor, solicitacao = _solicitacao_atribuida()
+        tutor_id, solicitacao_id = tutor.id, solicitacao.id
+
+    def fake_preferencia(items, external_reference, back_url):
+        assert external_reference == f"petsitter-{solicitacao_id}"
+        assert items[0]["unit_price"] == 350.0
+        return {
+            "payment_url": "https://mp.example/checkout",
+            "preference": {},
+            "payment_reference": "pref-1",
+        }
+
+    monkeypatch.setattr(app_module, "_criar_preferencia_pagamento", fake_preferencia)
+
+    login(monkeypatch, tutor_id)
+    resp = client.post(f"/petsitter/solicitacao/{solicitacao_id}/pagar")
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "https://mp.example/checkout"
+    with app.app_context():
+        payment = Payment.query.filter_by(
+            external_reference=f"petsitter-{solicitacao_id}"
+        ).one()
+        assert payment.status == PaymentStatus.PENDING
+        assert payment.user_id == tutor_id
+        solicitacao = db.session.get(PetsitterRequest, solicitacao_id)
+        assert solicitacao.payment_id == payment.id
+
+
+def test_pagar_de_outro_usuario_negado(app, client, monkeypatch):
+    with app.app_context():
+        _, solicitacao = _solicitacao_atribuida()
+        intruso = _criar_tutor(name="Intruso", email="intruso@example.com")
+        db.session.commit()
+        solicitacao_id, intruso_id = solicitacao.id, intruso.id
+
+    login(monkeypatch, intruso_id)
+    resp = client.post(
+        f"/petsitter/solicitacao/{solicitacao_id}/pagar",
+        headers={"Accept": "text/html"},
+    )
+    assert resp.status_code == 403
+
+
+def test_estornar_pagamento_aprovado(app, client, monkeypatch):
+    import app as app_module
+    from models import Payment, PaymentMethod, PaymentStatus
+
+    with app.app_context():
+        admin = _criar_tutor(name="Admin", email="admin@example.com", role="admin")
+        tutor, solicitacao = _solicitacao_atribuida()
+        payment = Payment(
+            user_id=tutor.id,
+            method=PaymentMethod.CREDIT_CARD,
+            status=PaymentStatus.COMPLETED,
+            external_reference=f"petsitter-{solicitacao.id}",
+            mercado_pago_id="123456",
+        )
+        db.session.add(payment)
+        db.session.flush()
+        solicitacao.payment_id = payment.id
+        db.session.commit()
+        admin_id, solicitacao_id, payment_id = admin.id, solicitacao.id, payment.id
+
+    class FakeRefund:
+        def create(self, mp_id):
+            assert mp_id == "123456"
+            return {"status": 201, "response": {}}
+
+    class FakeSDK:
+        def refund(self):
+            return FakeRefund()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda *a, **k: FakeSDK())
+
+    login(monkeypatch, admin_id)
+    resp = client.post(
+        f"/petsitter/admin/solicitacao/{solicitacao_id}/estornar",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        payment = db.session.get(Payment, payment_id)
+        assert payment.status == PaymentStatus.FAILED
+        solicitacao = db.session.get(PetsitterRequest, solicitacao_id)
+        assert solicitacao.status == "cancelada"
 
 
 # ---------------------------------------------------------------------------

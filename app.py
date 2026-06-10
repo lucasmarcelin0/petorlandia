@@ -3779,6 +3779,24 @@ def _get_cached_context(user_id: int, key: str):
     return None
 
 
+def _invalidate_cached_context(user_id: int, key: str) -> None:
+    """Remove cached context value so the next request recomputes it.
+
+    Usado ao marcar mensagens como lidas (ou aceitar consultas) para o badge
+    da navbar atualizar imediatamente, sem esperar o TTL do cache.
+    """
+    _context_cache.pop(f"{user_id}:{key}", None)
+
+
+def _invalidate_admin_unread_cache() -> None:
+    """Invalida o contador de mensagens não lidas de todos os admins."""
+    try:
+        for admin in User.query.filter_by(role='admin').all():
+            _invalidate_cached_context(admin.id, 'unread_messages')
+    except Exception:
+        pass
+
+
 def _set_cached_context(user_id: int, key: str, value):
     """Cache context value with timestamp."""
     cache_key = f"{user_id}:{key}"
@@ -3826,13 +3844,18 @@ def inject_unread_count():
 
 @app.context_processor
 def inject_pending_exam_count():
+    """Exames aguardando ação do veterinário (status 'pending').
+
+    O badge reflete itens acionáveis: ele zera quando o exame é confirmado,
+    não quando a página é visitada (sem aritmética de "visto", que gerava
+    notificações fantasma).
+    """
     try:
         if current_user.is_authenticated and is_veterinarian(current_user):
             user_id = current_user.id
             cached = _get_cached_context(user_id, 'pending_exam_count')
             if cached is not None:
-                seen = session.get('exam_pending_seen_count', 0)
-                return dict(pending_exam_count=max(cached - seen, 0))
+                return dict(pending_exam_count=cached)
 
             from models import ExamAppointment
 
@@ -3840,8 +3863,6 @@ def inject_pending_exam_count():
                 specialist_id=current_user.veterinario.id, status='pending'
             ).count()
             _set_cached_context(user_id, 'pending_exam_count', pending)
-            seen = session.get('exam_pending_seen_count', 0)
-            pending = max(pending - seen, 0)
         else:
             pending = 0
     except Exception:
@@ -3852,27 +3873,34 @@ def inject_pending_exam_count():
 
 @app.context_processor
 def inject_pending_appointment_count():
-    """Expose count of upcoming appointments requiring vet action."""
+    """Consultas futuras aguardando aceite do veterinário.
+
+    Usa o MESMO escopo da página da Agenda (consultas do veterinário ou
+    criadas por ele), para o badge bater exatamente com o que a página
+    mostra. O badge zera quando a consulta é aceita/atendida — sem
+    aritmética de "visto".
+    """
 
     try:
         if current_user.is_authenticated and is_veterinarian(current_user):
             user_id = current_user.id
             cached = _get_cached_context(user_id, 'pending_appointment_count')
             if cached is not None:
-                seen = session.get('appointment_pending_seen_count', 0)
-                return dict(pending_appointment_count=max(cached - seen, 0))
+                return dict(pending_appointment_count=cached)
 
             from models import Appointment
 
             now = utcnow()
-            pending = Appointment.query.filter(
+            scope_conditions = [
                 Appointment.veterinario_id == current_user.veterinario.id,
+            ]
+            scope_conditions.append(Appointment.created_by == user_id)
+            pending = Appointment.query.filter(
                 Appointment.status == "scheduled",
-                Appointment.scheduled_at >= now + timedelta(hours=2),
+                Appointment.scheduled_at > now,
+                or_(*scope_conditions),
             ).count()
             _set_cached_context(user_id, 'pending_appointment_count', pending)
-            seen = session.get('appointment_pending_seen_count', 0)
-            pending = max(pending - seen, 0)
         else:
             pending = 0
     except Exception:
@@ -12487,6 +12515,19 @@ MCP_FILE_REFERENCE_SCHEMA = {
     'required': ['download_url', 'file_id'],
 }
 
+MCP_FILE_REFERENCE_OR_STRING_SCHEMA = {
+    'oneOf': [
+        MCP_FILE_REFERENCE_SCHEMA,
+        {
+            'type': 'string',
+            'description': (
+                'Compatibilidade legada: ID do arquivo ou URL HTTPS temporaria. '
+                'Prefira arquivo_pdf/laudo_arquivo no ChatGPT atual.'
+            ),
+        },
+    ]
+}
+
 
 def _is_local_chatgpt_file_path(value: str) -> bool:
     raw = (value or '').strip()
@@ -14313,8 +14354,20 @@ def mcp_server():
             {
                 'name': 'anexar_pdf_exame_imagem',
                 'description': 'Anexa PDF autorizado pelo ChatGPT ao exame de imagem.',
-                'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'attachment_id': {'oneOf': [{'type': 'string'}, MCP_FILE_REFERENCE_SCHEMA]}, 'download_url': {'type': 'string'}, 'file_name': {'type': 'string'}, 'mime_type': {'type': 'string'}, 'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'attachment_id', 'confirmar_gravacao']},
-                '_meta': {'openai/fileParams': ['attachment_id', 'arquivo_pdf']},
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'exame_id': {'type': 'integer'},
+                        'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA,
+                        'attachment_id': MCP_FILE_REFERENCE_OR_STRING_SCHEMA,
+                        'download_url': {'type': 'string'},
+                        'file_name': {'type': 'string'},
+                        'mime_type': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['exame_id', 'confirmar_gravacao'],
+                },
+                '_meta': {'openai/fileParams': ['arquivo_pdf']},
             },
             {'name': 'liberar_exame_para_clinica', 'description': 'Libera exame para a clinica requisitante.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'clinica_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'clinica_id', 'confirmar_gravacao']}},
             {'name': 'liberar_exame_para_tutor', 'description': 'Libera exame para o tutor vinculado.', 'inputSchema': {'type': 'object', 'properties': {'exame_id': {'type': 'integer'}, 'tutor_id': {'type': 'integer'}, 'confirmar_gravacao': {'type': 'string'}}, 'required': ['exame_id', 'tutor_id', 'confirmar_gravacao']}},
@@ -15822,6 +15875,7 @@ def conversa(animal_id, user_id):
             updated = True
     if updated:
         db.session.commit()
+        _invalidate_cached_context(current_user.id, 'unread_messages')
 
     return render_template(
         'mensagens/conversa.html',
@@ -15943,14 +15997,22 @@ def conversa_admin(user_id=None):
             return redirect(url_for('conversa_admin', user_id=interlocutor.id))
         return redirect(url_for('conversa_admin'))
 
+    marked_read = False
     for m in mensagens:
         if is_admin:
             if m.receiver_id in admin_ids and not m.lida:
                 m.lida = True
+                marked_read = True
         else:
             if m.receiver_id == current_user.id and not m.lida:
                 m.lida = True
+                marked_read = True
     db.session.commit()
+    if marked_read:
+        if is_admin:
+            _invalidate_admin_unread_cache()
+        else:
+            _invalidate_cached_context(current_user.id, 'unread_messages')
 
     can_cancel_trial = bool(
         target_membership
@@ -16255,6 +16317,32 @@ def mensagens_admin():
         gerais_next=2 if gerais_has_more else None,
         per_page=per_page,
     )
+
+
+@login_required
+def mensagens_admin_marcar_lidas():
+    """Marca como lidas todas as mensagens endereçadas ao pool de admins.
+
+    Resolve badges fantasma: mensagens antigas em conversas nunca abertas
+    (ou de remetentes que não aparecem na lista) ficavam não lidas para
+    sempre, mantendo a notificação na navbar.
+    """
+    if current_user.role != 'admin':
+        abort(403)
+
+    admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+    atualizadas = (
+        Message.query
+        .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
+        .update({Message.lida: True}, synchronize_session=False)
+    )
+    db.session.commit()
+    _invalidate_admin_unread_cache()
+    if atualizadas:
+        flash(f'{atualizadas} mensagem(ns) marcada(s) como lida(s).', 'success')
+    else:
+        flash('Nenhuma mensagem pendente de leitura.', 'info')
+    return redirect(url_for('mensagens_admin'))
 
 
 @app.context_processor
@@ -17964,6 +18052,8 @@ def consulta_direct(animal_id):
 
         if consulta_created or appointment_updated:
             db.session.commit()
+            if appointment_updated:
+                _invalidate_cached_context(current_user.id, 'pending_appointment_count')
     else:
         consulta = None
 
@@ -31084,19 +31174,9 @@ def appointments():
             reverse=True,
         )
 
-        session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
-            specialist_id=veterinario.id, status='pending'
-        ).count()
-        session['appointment_pending_seen_count'] = (
-            Appointment.query.filter(Appointment.status == 'scheduled')
-            .filter(Appointment.scheduled_at >= now + timedelta(hours=2))
-            .filter(appointment_scope_filter)
-            .count()
-        )
-        clinic_pending_query = _clinic_pending_appointments_query(veterinario)
-        session['clinic_pending_seen_count'] = (
-            clinic_pending_query.count() if clinic_pending_query is not None else 0
-        )
+        # Nota: os contadores de "visto" em sessão foram removidos — os badges
+        # da navbar agora contam apenas itens acionáveis (exames pendentes e
+        # consultas aguardando aceite) e zeram quando o item é tratado.
 
         vet_clinic_ids = _veterinarian_accessible_clinic_ids(veterinario)
         vet_clinic_scope = (
@@ -32084,6 +32164,8 @@ def update_appointment_status(appointment_id):
 
     appointment.status = status
     db.session.commit()
+    # Atualiza o badge da Agenda imediatamente (sem esperar o TTL do cache).
+    _invalidate_cached_context(current_user.id, 'pending_appointment_count')
 
     if wants_json:
         card_html = render_template('partials/_appointment_card.html', appt=appointment)
@@ -33271,14 +33353,14 @@ def api_integrations_openapi():
                         'type': 'object',
                         'properties': {
                             'exame_id': {'type': 'integer'},
-                            'arquivo_pdf': {'type': 'object'},
-                            'attachment_id': {'oneOf': [{'type': 'string'}, {'type': 'object'}]},
+                            'arquivo_pdf': MCP_FILE_REFERENCE_SCHEMA,
+                            'attachment_id': MCP_FILE_REFERENCE_OR_STRING_SCHEMA,
                             'download_url': {'type': 'string'},
                             'file_name': {'type': 'string'},
                             'mime_type': {'type': 'string'},
                             'confirmar_gravacao': write_confirmation,
                         },
-                        'required': ['exame_id', 'attachment_id', 'confirmar_gravacao'],
+                        'required': ['exame_id', 'confirmar_gravacao'],
                     }),
                     'responses': {'200': ok_response('PDF anexado.')},
                 }

@@ -46,4 +46,9 @@ def get_blueprint():
         "/mensagens_admin",
         view_func=lazy_view("mensagens_admin"),
     )
+    bp.add_url_rule(
+        "/mensagens_admin/marcar_lidas",
+        view_func=lazy_view("mensagens_admin_marcar_lidas"),
+        methods=["POST"],
+    )
     return bp

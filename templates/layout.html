@@ -87,30 +87,26 @@
       <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
         <ul class="navbar-nav align-items-center gap-2">
           {% if current_user.is_authenticated and current_user.role == "admin" %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('delivery_overview') }}">
-              <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="fas fa-screwdriver-wrench me-1 text-primary"></i> Admin
             </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('planos_dashboard') }}">
-              <i class="fas fa-chart-pie me-1 text-success"></i> Planos
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('admin_tutor_map') }}">
-              <i class="fas fa-map-marked-alt me-1 text-info"></i> Mapa
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('vacina_pmo') }}">
-              <i class="fas fa-syringe me-1 text-danger"></i> Vacina PMO
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('petsitter_routes.petsitter_admin') }}">
-              <i class="fas fa-dog me-1 text-secondary"></i> Petsitter
-            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('painel_admin.index') }}">
+                  <i class="fas fa-gauge-high me-2 text-dark"></i> Painel</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('delivery_overview') }}">
+                  <i class="fas fa-chart-line me-2 text-primary"></i> Entregas</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('planos_dashboard') }}">
+                  <i class="fas fa-chart-pie me-2 text-success"></i> Planos</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('admin_tutor_map') }}">
+                  <i class="fas fa-map-marked-alt me-2 text-info"></i> Mapa</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('vacina_pmo') }}">
+                  <i class="fas fa-syringe me-2 text-danger"></i> Vacina PMO</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('petsitter_routes.petsitter_admin') }}">
+                  <i class="fas fa-dog me-2 text-secondary"></i> Petsitter</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('bulario') }}">
+                  <i class="fas fa-capsules me-2 text-success"></i> Bulário</a></li>
+            </ul>
           </li>
           {% endif %}
 
@@ -129,13 +125,6 @@
               <i class="fas fa-paw me-1 text-danger"></i> Serviços
             </a>
           </li>
-          {% if current_user.is_authenticated and current_user.role == 'admin' %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('bulario') }}">
-              <i class="fas fa-capsules me-1 text-success"></i> Bulário
-            </a>
-          </li>
-          {% endif %}
           {% if current_user.is_authenticated %}
           {% if current_user.worker == 'delivery' %}
           <li class="nav-item">
@@ -149,8 +138,10 @@
           <li class="nav-item position-relative">
             <a class="nav-link" href="{{ url_for('appointments') }}">
               <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
-              {% set total_pending = pending_exam_count + pending_appointment_count + clinic_pending_appointment_count
-              %}
+              {# Badge mostra apenas itens que exigem ação do próprio veterinário:
+                 exames pendentes + consultas aguardando aceite. Consultas de colegas
+                 da clínica aparecem na própria Agenda, não como notificação. #}
+              {% set total_pending = pending_exam_count + pending_appointment_count %}
               {% if total_pending > 0 %}
               <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{
                 total_pending }}</span>

@@ -85,23 +85,38 @@
               </td>
               <td class="text-end">
                 {% if s.status == 'aberta' %}
-                <form method="POST" class="d-flex gap-1 justify-content-end"
+                <form method="POST" class="d-flex gap-1 justify-content-end flex-wrap"
                       action="{{ url_for('petsitter_routes.petsitter_admin_atribuir', solicitacao_id=s.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <select name="sitter_id" class="form-select form-select-sm" style="max-width: 180px;" required>
+                  <select name="sitter_id" class="form-select form-select-sm" style="max-width: 170px;" required>
                     <option value="" disabled selected>Cuidador…</option>
                     {% for sitter in sitters %}
                     <option value="{{ sitter.id }}">{{ sitter.user.name }}{% if sitter.cidade %} ({{ sitter.cidade }}){% endif %}</option>
                     {% endfor %}
                   </select>
+                  <input type="text" name="preco_total" class="form-control form-control-sm"
+                         style="max-width: 110px;" placeholder="R$ total" required inputmode="decimal">
                   <button class="btn btn-sm btn-primary text-nowrap">Atribuir</button>
                 </form>
                 {% elif s.status == 'atribuida' %}
-                <form method="POST" class="d-inline"
-                      action="{{ url_for('petsitter_routes.petsitter_admin_concluir', solicitacao_id=s.id) }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-sm btn-success">Concluir</button>
-                </form>
+                <div class="d-flex gap-1 justify-content-end align-items-center flex-wrap">
+                  {% if s.payment and s.payment.status.name == 'COMPLETED' %}
+                  <span class="badge bg-success">Pago R$ {{ '%.2f' | format(s.preco_total) | replace('.', ',') }}</span>
+                  <form method="POST" class="d-inline"
+                        action="{{ url_for('petsitter_routes.petsitter_admin_estornar', solicitacao_id=s.id) }}"
+                        onsubmit="return confirm('Estornar o valor integral para o tutor?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger">Estornar</button>
+                  </form>
+                  {% elif s.preco_total %}
+                  <span class="badge bg-warning text-dark">Aguardando pagamento</span>
+                  {% endif %}
+                  <form method="POST" class="d-inline"
+                        action="{{ url_for('petsitter_routes.petsitter_admin_concluir', solicitacao_id=s.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-success">Concluir</button>
+                  </form>
+                </div>
                 {% endif %}
               </td>
             </tr>
