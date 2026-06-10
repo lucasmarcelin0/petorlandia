@@ -2831,3 +2831,124 @@ def submit_vacina_pmo_request(payload: dict[str, Any]) -> dict[str, Any]:
         "address": address,
         "submitted_at": submitted_at.isoformat(),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cobertura ativa — validade da vacina antirrábica (365 dias)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_PMO_VACCINE_VALIDITY_DAYS = 365
+
+
+def _pmo_format_phone_wa(raw: str | None) -> str | None:
+    """Retorna número limpo para wa.me (55XXXXXXXXXXX) ou None."""
+    if not raw:
+        return None
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits:
+        return None
+    if digits.startswith("0"):
+        digits = digits[1:]
+    if len(digits) in (10, 11):
+        digits = "55" + digits
+    return digits if len(digits) >= 12 else None
+
+
+def get_vacina_pmo_cobertura_summary() -> dict[str, Any]:
+    """Retorna 3 contadores rápidos de cobertura ativa, sem carregar objetos."""
+    from sqlalchemy import func, case
+    from models import PmoVaccinationAnimal, PmoVaccinationVisit
+
+    today = date.today()
+    threshold_30 = today + timedelta(days=30)
+
+    rows = (
+        db.session.query(
+            PmoVaccinationAnimal.id,
+            PmoVaccinationVisit.vaccine_date,
+        )
+        .join(PmoVaccinationVisit, PmoVaccinationAnimal.visit_id == PmoVaccinationVisit.id)
+        .filter(
+            PmoVaccinationAnimal.status == "vacinado",
+            PmoVaccinationVisit.vaccine_date.isnot(None),
+        )
+        .with_entities(PmoVaccinationVisit.vaccine_date)
+        .all()
+    )
+
+    protected = expiring = expired = 0
+    for (vdate,) in rows:
+        expiry = vdate + timedelta(days=_PMO_VACCINE_VALIDITY_DAYS)
+        days_left = (expiry - today).days
+        if days_left > 30:
+            protected += 1
+        elif days_left >= 0:
+            expiring += 1
+        else:
+            expired += 1
+
+    return {
+        "protected": protected,
+        "expiring": expiring,
+        "expired": expired,
+        "total": protected + expiring + expired,
+    }
+
+
+def get_vacina_pmo_cobertura_detail() -> list[dict[str, Any]]:
+    """Lista detalhada de animais vacinados com dias restantes de proteção."""
+    from models import PmoVaccinationAnimal, PmoVaccinationVisit
+
+    today = date.today()
+
+    animals = (
+        db.session.query(PmoVaccinationAnimal)
+        .join(PmoVaccinationVisit, PmoVaccinationAnimal.visit_id == PmoVaccinationVisit.id)
+        .filter(
+            PmoVaccinationAnimal.status == "vacinado",
+            PmoVaccinationVisit.vaccine_date.isnot(None),
+        )
+        .order_by(PmoVaccinationVisit.vaccine_date.asc())
+        .limit(500)
+        .all()
+    )
+
+    result = []
+    for a in animals:
+        vdate = a.visit.vaccine_date
+        expiry = vdate + timedelta(days=_PMO_VACCINE_VALIDITY_DAYS)
+        days_left = (expiry - today).days
+
+        if days_left > 30:
+            status_key = "protected"
+        elif days_left >= 0:
+            status_key = "expiring"
+        else:
+            status_key = "expired"
+
+        phone_raw = a.visit.phone1 or a.visit.phone2
+        phone_wa = _pmo_format_phone_wa(phone_raw)
+
+        msg = (
+            f"Olá, {a.visit.tutor_name}! "
+            f"A vacina antirrábica de *{a.name}* foi aplicada em "
+            f"{vdate.strftime('%d/%m/%Y')} pela Prefeitura de Orlândia. "
+            f"A proteção é válida por 1 ano e vence em *{expiry.strftime('%d/%m/%Y')}*. "
+            f"Lembre-se de revacinar para manter seu pet protegido. 🐾"
+        )
+
+        result.append({
+            "animal_name": a.name,
+            "species": a.species,
+            "tutor": a.visit.tutor_name,
+            "phone": phone_raw or "",
+            "phone_wa": phone_wa,
+            "vaccine_date": vdate.strftime("%d/%m/%Y"),
+            "expiry_date": expiry.strftime("%d/%m/%Y"),
+            "days_left": days_left,
+            "status_key": status_key,
+            "wa_msg": msg,
+        })
+
+    result.sort(key=lambda x: x["days_left"])
+    return result

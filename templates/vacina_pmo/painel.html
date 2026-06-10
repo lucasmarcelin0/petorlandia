@@ -15,6 +15,7 @@
   .pmo-step .n { font-size: 1.4rem; font-weight: 700; }
   .pmo-step .l { font-size: .78rem; color: #6b7280; }
   .pmo-section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+  .pmo-cob-row { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; background: #fff; }
 </style>
 {% endblock %}
 
@@ -82,6 +83,53 @@
   </div>
   {% endif %}
 
+  {# ───── Cobertura ativa ───── #}
+  <div class="pmo-section-title mb-3">Cobertura ativa (vacina antirrábica · 365 dias)</div>
+  {% if cobertura.error %}
+    <div class="alert alert-warning">Não consegui calcular a cobertura: {{ cobertura.error }}</div>
+  {% else %}
+  <div class="row g-3 mb-3">
+    <div class="col-4">
+      <div class="pmo-kpi-card text-center" style="border-color:#d1fae5;">
+        <div class="kpi-label">Protegidos</div>
+        <div class="kpi-value" style="color:#059669;">{{ cobertura.protected }}</div>
+        <div class="kpi-sub">mais de 30 dias</div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="pmo-kpi-card text-center" style="border-color:#fef3c7;">
+        <div class="kpi-label">Expirando</div>
+        <div class="kpi-value" style="color:#d97706;">{{ cobertura.expiring }}</div>
+        <div class="kpi-sub">em até 30 dias</div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="pmo-kpi-card text-center" style="border-color:#fee2e2;">
+        <div class="kpi-label">Expirados</div>
+        <div class="kpi-value" style="color:#dc2626;">{{ cobertura.expired }}</div>
+        <div class="kpi-sub">sem cobertura</div>
+      </div>
+    </div>
+  </div>
+  {% if cobertura.total > 0 %}
+  <div class="pmo-bar mb-1" style="height:10px;">
+    <span style="width:{{ (100 * cobertura.protected / cobertura.total)|round }}%;background:#34d399;float:left;height:100%;border-radius:6px 0 0 6px;"></span>
+    <span style="width:{{ (100 * cobertura.expiring / cobertura.total)|round }}%;background:#fbbf24;float:left;height:100%;border-radius:0;"></span>
+    <span style="width:{{ (100 * cobertura.expired / cobertura.total)|round }}%;background:#f87171;float:left;height:100%;border-radius:0 6px 6px 0;"></span>
+  </div>
+  <div class="d-flex gap-3 small text-muted mb-3">
+    <span><span style="display:inline-block;width:10px;height:10px;background:#34d399;border-radius:2px;"></span> Protegidos</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#fbbf24;border-radius:2px;"></span> Expirando</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#f87171;border-radius:2px;"></span> Expirados</span>
+  </div>
+  {% endif %}
+
+  <button class="btn btn-sm btn-outline-secondary mb-4" id="pmo-cobertura-toggle" type="button">
+    <i class="fa-solid fa-list me-1"></i> Ver animais ({{ cobertura.total }})
+  </button>
+  <div id="pmo-cobertura-detail" class="mb-4" style="display:none;"></div>
+  {% endif %}
+
   {# ───── Pipeline (banco) ───── #}
   <div class="pmo-section-title mb-3">Pipeline (cadastros e agendamentos)</div>
   {% if kpis.error %}
@@ -113,4 +161,127 @@
   {% endfor %}
   {% endif %}
 </div>
+
+<script>
+(function () {
+  const btn = document.getElementById('pmo-cobertura-toggle');
+  const box = document.getElementById('pmo-cobertura-detail');
+  if (!btn || !box) return;
+
+  const STATUS = {
+    protected: { label: 'Protegido',  bg: '#d1fae5', color: '#065f46', icon: 'fa-shield-dog' },
+    expiring:  { label: 'Expirando',  bg: '#fef3c7', color: '#92400e', icon: 'fa-clock' },
+    expired:   { label: 'Expirado',   bg: '#fee2e2', color: '#991b1b', icon: 'fa-triangle-exclamation' },
+  };
+
+  const SPECIES_ICON = { cao: '🐕', gato: '🐈' };
+
+  function renderAnimal(a) {
+    const s = STATUS[a.status_key] || STATUS.expired;
+    const daysText = a.days_left > 0
+      ? `${a.days_left} dias restantes`
+      : a.days_left === 0 ? 'Vence hoje'
+      : `Venceu há ${Math.abs(a.days_left)} dias`;
+    const barPct = Math.max(0, Math.min(100, Math.round(a.days_left / 3.65)));
+    const barColor = a.status_key === 'protected' ? '#34d399' : a.status_key === 'expiring' ? '#fbbf24' : '#f87171';
+    const waBtn = a.phone_wa
+      ? `<a href="https://wa.me/${a.phone_wa}?text=${encodeURIComponent(a.wa_msg)}" target="_blank" rel="noopener"
+            class="btn btn-sm btn-outline-success" title="Enviar lembrete pelo WhatsApp">
+           <i class="fa-brands fa-whatsapp me-1"></i>Lembrete
+         </a>`
+      : `<span class="text-muted small">Sem telefone</span>`;
+
+    return `
+      <div class="pmo-cob-row">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+          <div>
+            <span class="fw-semibold">${SPECIES_ICON[a.species] || '🐾'} ${a.animal_name}</span>
+            <span class="text-muted small ms-1">· ${a.tutor}</span>
+          </div>
+          <span class="badge rounded-pill" style="background:${s.bg};color:${s.color};">
+            <i class="fa-solid ${s.icon} me-1"></i>${s.label}
+          </span>
+        </div>
+        <div class="pmo-bar my-1" style="height:6px;">
+          <span style="width:${barPct}%;background:${barColor};"></span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+          <span class="small text-muted">
+            <i class="fa-solid fa-syringe me-1"></i>${a.vaccine_date}
+            &nbsp;→&nbsp;
+            <i class="fa-solid fa-calendar-xmark me-1"></i>${a.expiry_date}
+            &nbsp;·&nbsp;<strong>${daysText}</strong>
+          </span>
+          ${waBtn}
+        </div>
+      </div>`;
+  }
+
+  function renderFilter(animals) {
+    const counts = { all: animals.length, expiring: 0, expired: 0, protected: 0 };
+    animals.forEach(a => counts[a.status_key] = (counts[a.status_key] || 0) + 1);
+    return `
+      <div class="d-flex gap-2 flex-wrap mb-3" id="pmo-cob-filters">
+        <button class="btn btn-sm btn-primary pmo-cob-filter active" data-filter="all">Todos (${counts.all})</button>
+        <button class="btn btn-sm btn-outline-warning pmo-cob-filter" data-filter="expiring">Expirando (${counts.expiring})</button>
+        <button class="btn btn-sm btn-outline-danger pmo-cob-filter" data-filter="expired">Expirados (${counts.expired})</button>
+        <button class="btn btn-sm btn-outline-success pmo-cob-filter" data-filter="protected">Protegidos (${counts.protected})</button>
+      </div>`;
+  }
+
+  let allAnimals = null;
+  let loaded = false;
+
+  btn.addEventListener('click', async () => {
+    if (box.style.display !== 'none') {
+      box.style.display = 'none';
+      btn.innerHTML = '<i class="fa-solid fa-list me-1"></i> Ver animais';
+      return;
+    }
+
+    if (!loaded) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Carregando…';
+      try {
+        const resp = await fetch('{{ url_for("vacina_pmo_cobertura_ativa") }}');
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.message);
+        allAnimals = data.animals;
+        loaded = true;
+      } catch (e) {
+        box.innerHTML = `<div class="alert alert-warning small">Erro ao carregar: ${e.message}</div>`;
+        box.style.display = '';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-list me-1"></i> Ver animais';
+        return;
+      }
+    }
+
+    function applyFilter(filter) {
+      const list = filter === 'all' ? allAnimals : allAnimals.filter(a => a.status_key === filter);
+      const listHtml = list.length
+        ? list.map(renderAnimal).join('')
+        : '<p class="text-muted small">Nenhum animal nesta categoria.</p>';
+      document.getElementById('pmo-cob-list').innerHTML = listHtml;
+      document.querySelectorAll('.pmo-cob-filter').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === filter);
+        b.classList.toggle('btn-primary', b.dataset.filter === filter);
+        b.classList.toggle('btn-outline-secondary', false);
+      });
+    }
+
+    box.innerHTML = renderFilter(allAnimals) + `<div id="pmo-cob-list"></div>`;
+    applyFilter('all');
+
+    document.getElementById('pmo-cob-filters').addEventListener('click', e => {
+      const b = e.target.closest('.pmo-cob-filter');
+      if (b) applyFilter(b.dataset.filter);
+    });
+
+    box.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-chevron-up me-1"></i> Ocultar animais';
+  });
+})();
+</script>
 {% endblock %}

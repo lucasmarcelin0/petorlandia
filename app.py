@@ -4685,7 +4685,27 @@ def vacina_pmo_painel():
     except Exception as exc:
         current_app.logger.exception("Falha ao ler Controle de doses PMO")
         doses = {'error': str(exc)}
-    return render_template('vacina_pmo/painel.html', kpis=kpis, doses=doses)
+    try:
+        from services.vacina_pmo_service import get_vacina_pmo_cobertura_summary
+        cobertura = get_vacina_pmo_cobertura_summary()
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar cobertura ativa PMO")
+        cobertura = {'error': str(exc)}
+    return render_template('vacina_pmo/painel.html', kpis=kpis, doses=doses, cobertura=cobertura)
+
+
+@app.route('/vacina-pmo/cobertura-ativa')
+@login_required
+def vacina_pmo_cobertura_ativa():
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import get_vacina_pmo_cobertura_detail
+        detail = get_vacina_pmo_cobertura_detail()
+        return jsonify({'success': True, 'animals': detail})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao buscar cobertura ativa PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
 
 
 @app.route('/vacina-pmo/sheets', methods=['GET'])
