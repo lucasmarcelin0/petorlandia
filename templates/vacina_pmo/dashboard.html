@@ -402,6 +402,24 @@
     font-weight: 600;
   }
 
+  .pmo-animal-name--editable {
+    border: 0;
+    background: none;
+    padding: 0;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .pmo-animal-name--editable:hover {
+    text-decoration: underline dotted;
+  }
+
+  .pmo-animal-name__icon {
+    font-size: 0.7em;
+    opacity: 0.45;
+  }
+
   .pmo-animal-species {
     color: #64748b;
     font-size: 0.76rem;
@@ -1140,6 +1158,32 @@
     return null;
   }
 
+  async function saveAnimalName(animal, name) {
+    if (!animal.id) {
+      throw new Error('Sincronize a aba antes de corrigir nomes.');
+    }
+    const response = await fetch(`/vacina-pmo/animal/${animal.id}/name`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ name }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível salvar o nome do animal.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+      return updated;
+    }
+    return null;
+  }
+
   async function saveVisitNote(row, note) {
     if (!row.visitId) {
       throw new Error('Sincronize a aba antes de registrar observações.');
@@ -1362,7 +1406,13 @@
     return row.animals.map((animal, index) => `
       <div class="pmo-animal-item">
         <div>
-          <div class="pmo-animal-name">${escapeHtml(animal.name)}</div>
+          ${row.editingAnimalNameIndex === index ? `
+            <form class="pmo-animal-name-form" data-action="animal-name-form" data-animal-index="${index}">
+              <input type="text" class="form-control form-control-sm" data-action="animal-name-input" maxlength="100" value="${escapeHtml(animal.name)}" aria-label="Nome do animal">
+            </form>
+          ` : `
+            <button type="button" class="pmo-animal-name pmo-animal-name--editable" data-action="animal-name-edit" data-animal-index="${index}" title="Clique para corrigir o nome">${escapeHtml(animal.name)} <i class="fas fa-pen pmo-animal-name__icon" aria-hidden="true"></i></button>
+          `}
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
         </div>
         <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
@@ -1606,11 +1656,48 @@
     }
   }
 
+  async function commitAnimalNameEdit(row, index, value, { silentNoChange = false } = {}) {
+    const animal = row.animals[index];
+    row.editingAnimalNameIndex = undefined;
+    const trimmed = (value || '').trim();
+    if (!animal || trimmed === (animal.name || '') || !trimmed) {
+      if (silentNoChange) return;
+      render();
+      return;
+    }
+    const previous = animal.name;
+    animal.name = trimmed;
+    render();
+    try {
+      await saveAnimalName(animal, trimmed);
+      render();
+    } catch (error) {
+      animal.name = previous;
+      render();
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    }
+  }
+
   listPanel.addEventListener('click', (event) => {
     const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
-    const action = event.target.dataset.action;
+    const actionEl = event.target.closest('[data-action]');
+    const action = actionEl?.dataset.action;
+    if (action === 'animal-name-edit') {
+      state.rows.forEach((other) => { if (other !== row) other.editingAnimalNameIndex = undefined; });
+      row.editingAnimalNameIndex = Number(actionEl.dataset.animalIndex);
+      render();
+      const freshRow = rowEl.classList.contains('pmo-visit-card')
+        ? cardsEl.querySelector(`[data-id="${row.id}"]`)
+        : tbody.querySelector(`tr[data-id="${row.id}"]`);
+      const input = freshRow?.querySelector('[data-action="animal-name-input"]');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+      return;
+    }
     const findFreshRow = () => rowEl.classList.contains('pmo-visit-card')
       ? cardsEl.querySelector(`[data-id="${row.id}"]`)
       : tbody.querySelector(`tr[data-id="${row.id}"]`);
@@ -1640,7 +1727,13 @@
   });
 
   listPanel.addEventListener('submit', (event) => {
-    if (event.target.dataset.action === 'attended-form') {
+    if (event.target.dataset.action === 'animal-name-form') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      const input = event.target.querySelector('[data-action="animal-name-input"]');
+      if (row && input) commitAnimalNameEdit(row, Number(event.target.dataset.animalIndex), input.value);
+    } else if (event.target.dataset.action === 'attended-form') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
@@ -1672,7 +1765,15 @@
   });
 
   listPanel.addEventListener('keydown', (event) => {
-    if (event.target.dataset.action === 'attended-input' && event.key === 'Escape') {
+    if (event.target.dataset.action === 'animal-name-input' && event.key === 'Escape') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (row) {
+        row.editingAnimalNameIndex = undefined;
+        render();
+      }
+    } else if (event.target.dataset.action === 'attended-input' && event.key === 'Escape') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
@@ -1692,6 +1793,17 @@
   });
 
   listPanel.addEventListener('focusout', (event) => {
+    if (event.target.dataset.action === 'animal-name-input') {
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (!row || row.editingAnimalNameIndex === undefined) return;
+      const index = row.editingAnimalNameIndex;
+      setTimeout(() => {
+        if (rowEl.contains(document.activeElement)) return;
+        commitAnimalNameEdit(row, index, event.target.value, { silentNoChange: true });
+      }, 0);
+      return;
+    }
     if (event.target.dataset.action !== 'attended-input') return;
     const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);

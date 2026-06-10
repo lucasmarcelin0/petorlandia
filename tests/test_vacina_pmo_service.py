@@ -1777,6 +1777,101 @@ def test_build_animals_truncates_overlong_name_to_db_limit():
     assert len(animals[0]["name"]) <= vacina_pmo_service.PMO_ANIMAL_NAME_MAX
 
 
+def _animal_name_row(source_row=6):
+    return {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor PMO",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 2,
+        "animals": [
+            {"name": "Cao 1", "species": "cao", "status": "pendente"},
+            {"name": "Gato 1", "species": "gato", "status": "pendente"},
+            {"name": "Gato 2", "species": "gato", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-06-10",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": source_row,
+    }
+
+
+def test_update_animal_name_writes_all_names_to_column_j(app, monkeypatch):
+    from services.vacina_pmo_service import (
+        PMO_ANIMAL_NAMES_COLUMN,
+        update_vacina_pmo_animal_name,
+    )
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_animal_name_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        result = update_vacina_pmo_animal_name(saved[0]["animals"][1]["id"], "  Mimi ")
+
+    assert [a["name"] for a in result["animals"]] == ["Cao 1", "Mimi", "Gato 2"]
+    update = fake.updates[-1]
+    assert update["range"] == f"'Vacinacao Antirrabica_7'!{PMO_ANIMAL_NAMES_COLUMN}6"
+    assert update["body"] == {"values": [["Cao 1, Mimi, Gato 2"]]}
+
+
+def test_update_animal_name_rejects_empty_and_separators(app, monkeypatch):
+    import pytest
+
+    from services.vacina_pmo_service import update_vacina_pmo_animal_name
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_animal_name_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        with pytest.raises(ValueError):
+            update_vacina_pmo_animal_name(animal_id, "   ")
+        with pytest.raises(ValueError):
+            update_vacina_pmo_animal_name(animal_id, "Rex, Toto")
+
+
+def test_update_animal_name_renames_auto_created_real_animal(app, monkeypatch):
+    from services.vacina_pmo_service import (
+        update_vacina_pmo_animal_name,
+        update_vacina_pmo_animal_status,
+    )
+
+    fake = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_animal_name_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="123",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        animal_id = saved[0]["animals"][0]["id"]
+        # vacinar cria o cadastro real ("Cao 1"); o rename deve acompanhar
+        result = update_vacina_pmo_animal_status(animal_id, "vacinado")
+        real_id = result["animals"][0]["animalId"]
+        update_vacina_pmo_animal_name(animal_id, "Thor")
+        real = db.session.get(Animal, real_id)
+        assert real.name == "Thor"
+
+
 def test_pmo_is_master_sheet_matches_ignoring_accent_and_case():
     assert vacina_pmo_service._pmo_is_master_sheet("Vacinação 2026")
     assert vacina_pmo_service._pmo_is_master_sheet("vacinacao 2026")

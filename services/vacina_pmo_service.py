@@ -76,6 +76,7 @@ PMO_DOGS_VACCINATED_COLUMN = "M"
 PMO_CATS_VACCINATED_COLUMN = "N"
 PMO_ATTENDED_BY_COLUMN = "O"
 PMO_NOTE_COLUMN = "K"
+PMO_ANIMAL_NAMES_COLUMN = "J"
 
 # Aba mestre de status (mantida pelo sync agendado). O app NUNCA deve escrever
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
@@ -1595,6 +1596,83 @@ def write_tutor_name_color_to_sheet(visit: PmoVaccinationVisit) -> bool:
         except Exception:
             pass
         return False
+
+
+def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve os nomes dos animais (coluna J) na linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre
+
+    names = ", ".join(animal.name for animal in visit.animals if animal.name)
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar nomes de animais PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = f"{_quote_sheet_title(title)}!{PMO_ANIMAL_NAMES_COLUMN}{visit.source_row}"
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[names]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar nomes de animais na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
+def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
+    """Corrige o nome de um animal e replica a célula de nomes (coluna J) na planilha."""
+    normalized = _normalize_text(name)
+    if not normalized:
+        raise ValueError("Digite o nome do animal.")
+    if len(normalized) > PMO_ANIMAL_NAME_MAX:
+        raise ValueError(f"O nome do animal deve ter no máximo {PMO_ANIMAL_NAME_MAX} caracteres.")
+    # A célula da planilha é reimportada separando por vírgula/";"/" e "; um nome com
+    # esses separadores viraria dois animais na próxima sincronização.
+    if len(_split_animals(normalized)) > 1:
+        raise ValueError("Use um nome sem vírgulas, ponto e vírgula ou \" e \" — ele separa animais na planilha.")
+
+    animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
+    old_name = animal.name or ""
+    if normalized == old_name:
+        return _serialize_visit(animal.visit)
+
+    # Se o cadastro real ainda carrega o nome antigo (criado automaticamente pela
+    # campanha), renomeia junto para manter carteirinha e certificado coerentes.
+    if animal.animal_id:
+        real = db.session.get(Animal, animal.animal_id)
+        if real and _strip_accents(real.name or "").casefold().strip() == _strip_accents(old_name).casefold().strip():
+            real.name = normalized
+    animal.name = normalized
+    db.session.commit()
+    write_animal_names_to_sheet(animal.visit)
+    return _serialize_visit(animal.visit)
 
 
 def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, Any]:

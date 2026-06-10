@@ -4807,6 +4807,24 @@ def vacina_pmo_animal_status(animal_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/animal/<int:animal_id>/name', methods=['POST'])
+@login_required
+def vacina_pmo_animal_name(animal_id):
+    if current_user.role != 'admin':
+        abort(403)
+    try:
+        from services.vacina_pmo_service import update_vacina_pmo_animal_name
+
+        payload = request.get_json(silent=True) or {}
+        row = update_vacina_pmo_animal_name(animal_id, payload.get('name') or '')
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Falha ao salvar nome de animal Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
 @login_required
 def vacina_pmo_visit_attended_by(visit_id):
