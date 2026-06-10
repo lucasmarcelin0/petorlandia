@@ -989,10 +989,11 @@
       sheetEl.innerHTML = sortedSheets.length
         ? sortedSheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
         : '<option value="">Nenhuma aba encontrada</option>';
-      const selected = sortedSheets[0];
-      if (selected) {
-        sheetEl.value = selected.gid;
-      }
+      const savedGid = localStorage.getItem('pmo_sheet_gid');
+      const toSelect = savedGid && [...sheetEl.options].some((o) => o.value === savedGid)
+        ? savedGid
+        : (sortedSheets[0]?.gid || '');
+      if (toSelect) sheetEl.value = toSelect;
       sheetInfoEl.textContent = `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
@@ -1123,6 +1124,7 @@
       }
       if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
         sheetEl.value = payload.sheet_gid;
+        localStorage.setItem('pmo_sheet_gid', payload.sheet_gid);
       }
       state.rows = normalizeSyncedRows(payload.rows || []);
       render();
@@ -1828,6 +1830,7 @@
   openNextRouteBtn.addEventListener('click', openNextRoute);
   [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
   sheetEl.addEventListener('change', () => {
+    if (sheetEl.value) localStorage.setItem('pmo_sheet_gid', sheetEl.value);
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
       ? `Data selecionada: ${displayDate(date)}. Carregando estado salvo desta aba...`
