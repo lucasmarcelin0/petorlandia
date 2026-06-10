@@ -4911,7 +4911,7 @@ def vacina_pmo_solicitar():
         'email': current_user.email or '',
         'cpf': current_user.cpf or '',
         'phone': current_user.phone or '',
-        'phone2': '',
+        'phone2': current_user.phone2 or '',
         'address_street': _prof_street,
         'address_number': _prof_number,
         'address_complement': _prof_complement,
@@ -5015,22 +5015,12 @@ def vacina_pmo_solicitar():
                 if form_state['email']:
                     current_user.email = form_state['email']
                 current_user.phone = form_state['phone'] or current_user.phone
+                current_user.phone2 = form_state['phone2'] or current_user.phone2
                 current_user.cpf = form_state['cpf'] or current_user.cpf
                 db.session.commit()
 
-                public_token = result.get('public_token')
-                if public_token:
-                    flash(
-                        f'Solicitação enviada! Protocolo: <strong>{public_token}</strong>. '
-                        'A equipe da prefeitura entrará em contato pelo telefone informado.',
-                        'success',
-                    )
-                else:
-                    flash(
-                        'Solicitação enviada para a Prefeitura de Orlândia. '
-                        'A equipe entrará em contato pelo telefone informado para o agendamento.',
-                        'success',
-                    )
+                from flask import session as flask_session
+                flask_session['pmo_solicitar_success'] = result.get('public_token') or True
                 return redirect(url_for('vacina_pmo_solicitar'))
             except Exception as exc:
                 current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
@@ -5045,6 +5035,8 @@ def vacina_pmo_solicitar():
         .order_by(PmoVaccinationVisit.updated_at.desc(), PmoVaccinationVisit.synced_at.desc())
         .all()
     )
+    from flask import session as flask_session
+    success_token = flask_session.pop('pmo_solicitar_success', None)
     return render_template(
         'vacina_pmo/solicitar.html',
         user_animals=user_animals,
@@ -5052,6 +5044,7 @@ def vacina_pmo_solicitar():
         historico=historico,
         pmo_protocol_label=_pmo_protocol_label,
         animal_booster_guidance=animal_booster_guidance,
+        success_token=success_token,
     )
 
 
