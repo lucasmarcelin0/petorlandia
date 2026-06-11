@@ -869,3 +869,32 @@ def test_inline_global_protocol_can_be_loaded_as_clone_base(client, monkeypatch)
     assert payload['edit_mode'] == 'clone'
     assert payload['protocol']['nome'] == 'Dermatite Padrao'
     assert payload['protocol']['clinica_id'] is None
+
+
+def test_seed_protocolos_notas_idempotente_e_recomendavel(client):
+    from scripts.seed_protocolos_notas import PROTOCOLS, seed
+    from services.clinical_suggestions import recommend_protocols
+
+    with flask_app.app_context():
+        result = seed(db.session, apply=True)
+        assert sorted(result["created"]) == sorted(p["nome"] for p in PROTOCOLS)
+
+        # Segunda execucao nao duplica nada.
+        again = seed(db.session, apply=True)
+        assert again["created"] == []
+        assert sorted(again["skipped"]) == sorted(p["nome"] for p in PROTOCOLS)
+
+        # O motor de sugestao encontra o protocolo pela suspeita.
+        suggestions = recommend_protocols({"suspeita_clinica": "fratura", "especie": "cao"})
+        assert suggestions
+        top = suggestions[0]
+        assert top["nome"] == "Fratura / Trauma ortopédico"
+        med_names = [m["nome"] for m in top["medicamentos"]]
+        assert "Metadona" in med_names and "Meloxicam" in med_names
+        assert any(e["nome"] == "Raio-X" for e in top["exames"])
+
+        # Protocolo felino nao aparece para cao.
+        feline = recommend_protocols({"suspeita_clinica": "obstrucao uretral", "especie": "cao"})
+        assert all(item["nome"] != "Obstrução urinária felina" for item in feline)
+        feline_ok = recommend_protocols({"suspeita_clinica": "obstrucao uretral", "especie": "gato"})
+        assert feline_ok and feline_ok[0]["nome"] == "Obstrução urinária felina"
