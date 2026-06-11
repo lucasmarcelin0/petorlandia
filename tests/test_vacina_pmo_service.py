@@ -2564,3 +2564,131 @@ def test_compile_include_compiled_lists_up_to_date_day_as_unchanged(app, monkeyp
     assert result["unchanged"] == ["08/06/2026"]
     assert fake.value_updates == []
     assert fake.batch_requests == []
+
+
+# ——— Controle de frascos —————————————————————————————————————————————————————
+
+
+def _frascos_tab_values(header, doses_row):
+    return [
+        ["Janeiro"],
+        ["Estoque:", "325"],
+        ["Recebida no mês:", ""],
+        [""] + header,
+        ["Doses utilizadas:"] + doses_row,
+        ["Cachorros:", "1"],
+        ["Gatos:", "1"],
+        ["Perdas:", "0"],
+        [],
+        ["Estoque ao final do mês:"],
+    ]
+
+
+def _frascos_metadata():
+    return {
+        "sheets": [
+            {"properties": {"sheetId": 999, "title": "Controle de doses"}},
+            {"properties": {"sheetId": 444, "title": "17/06/2026"}},
+        ]
+    }
+
+
+def _patch_frascos_clock(monkeypatch, when):
+    monkeypatch.setattr(vacina_pmo_service, "now_in_brazil", lambda: when)
+
+
+def test_frascos_ledger_reconstructs_timeline(app, monkeypatch):
+    from datetime import datetime
+
+    from services.vacina_pmo_service import get_pmo_frascos_ledger
+
+    fake = _FakeDosesSheetsService(
+        _frascos_metadata(),
+        {
+            "Controle de doses": _frascos_tab_values(
+                ["20/01/2026 - Manhã", "20/01/2026 - Tarde", "22/01/2026 - Manhã", "22/01/2026 - Tarde", "24/01/2026"],
+                ["25", "10", "14", "21", "5", "", "", "", "75"],
+            )
+        },
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: fake)
+    _patch_frascos_clock(monkeypatch, datetime(2026, 1, 25, 12, 0))
+
+    with app.app_context():
+        ledger = get_pmo_frascos_ledger()
+
+    assert ledger["vialsTotal"] == 3
+    assert ledger["months"] == [
+        {"month": "Janeiro", "doses": 75, "vials": 3, "closes": True, "rest": 0}
+    ]
+    assert ledger["alerts"] == []
+    assert ledger["anomalies"] == []
+    assert ledger["current"]["leftover"] == 0
+    assert ledger["nextScheduled"] == "17/06/2026"
+
+    day1, day2, day3 = ledger["days"]
+    # 20/01: 35 doses → abre 2 frascos, sobra 15 válida até 22/01.
+    assert (day1["doses"], day1["vialsOpened"], day1["leftover"]) == (35, 2, 15)
+    assert day1["leftoverValidUntil"] == "22/01/2026"
+    # 22/01: usa a sobra de 15 + 1 frasco novo → sobra 5.
+    assert (day2["fromLeftover"], day2["vialsOpened"], day2["leftover"]) == (15, 1, 5)
+    # 24/01: usa as 5 da sobra; nada aberto.
+    assert (day3["fromLeftover"], day3["vialsOpened"], day3["leftover"]) == (5, 0, 0)
+
+
+def test_frascos_ledger_flags_expired_leftover_and_open_month(app, monkeypatch):
+    from datetime import datetime
+
+    from services.vacina_pmo_service import get_pmo_frascos_ledger
+
+    fake = _FakeDosesSheetsService(
+        _frascos_metadata(),
+        {
+            "Controle de doses": _frascos_tab_values(
+                ["20/01/2026 - Manhã"],
+                ["30", "", "", "", "", "", "", "", "30"],
+            )
+        },
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: fake)
+    _patch_frascos_clock(monkeypatch, datetime(2026, 1, 25, 12, 0))
+
+    with app.app_context():
+        ledger = get_pmo_frascos_ledger()
+
+    # 30 doses → 2 frascos, sobra 20 aberta em 20/01, válida até 22/01 — já venceu.
+    assert ledger["current"]["leftover"] == 20
+    assert ledger["current"]["expired"] is True
+    assert any("venceu" in alert for alert in ledger["alerts"])
+    # Mês aberto (não múltiplo de 25) é apontado.
+    assert any("não fecham" in anomaly for anomaly in ledger["anomalies"])
+
+
+def test_frascos_ledger_flags_unlabeled_column_and_midhistory_expiry(app, monkeypatch):
+    from datetime import datetime
+
+    from services.vacina_pmo_service import get_pmo_frascos_ledger
+
+    fake = _FakeDosesSheetsService(
+        _frascos_metadata(),
+        {
+            "Controle de doses": _frascos_tab_values(
+                # Coluna B sem rótulo (com 5 doses); 20/01 abre sobra que vence
+                # antes de 27/01 sem virar perda registrada.
+                ["", "20/01/2026", "27/01/2026"],
+                ["5", "30", "25", "", "", "", "", "", "60"],
+            )
+        },
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: fake)
+    _patch_frascos_clock(monkeypatch, datetime(2026, 1, 28, 12, 0))
+
+    with app.app_context():
+        ledger = get_pmo_frascos_ledger()
+
+    assert any("sem rótulo" in anomaly for anomaly in ledger["anomalies"])
+    # A sobra de 20 (frasco de 20/01) venceu em 22/01 sem registro de perda.
+    assert any("sem aparecer como perda" in alert for alert in ledger["alerts"])
+    # 27/01 recomeça com frasco novo: 25 → 1 frasco exato, sobra 0.
+    last = ledger["days"][-1]
+    assert (last["fromLeftover"], last["vialsOpened"], last["leftover"]) == (0, 1, 0)

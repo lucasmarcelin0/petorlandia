@@ -94,6 +94,86 @@
   </div>
   {% endif %}
 
+  {# ───── Controle de frascos ───── #}
+  <div class="pmo-section-title mb-3">Controle de frascos ({{ frascos.vialDoses or 25 }} doses · validade {{ frascos.validityDays or 3 }} dias após abrir)</div>
+  {% if frascos.error %}
+    <div class="alert alert-warning">Não consegui montar o controle de frascos: {{ frascos.error }}</div>
+  {% else %}
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Sobra atual</div>
+        <div class="kpi-value {{ 'pmo-meta-off' if frascos.current.expired else '' }}">{{ frascos.current.leftover }}</div>
+        <div class="kpi-sub">
+          {% if frascos.current.leftover %}
+            frasco de {{ frascos.current.opened }} · {{ 'VENCEU' if frascos.current.expired else 'usar até' }} {{ frascos.current.validUntil }}
+          {% else %}
+            nenhum frasco aberto
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Frascos abertos</div>
+        <div class="kpi-value">{{ frascos.vialsTotal }}</div>
+        <div class="kpi-sub">na campanha ({{ frascos.vialsTotal * frascos.vialDoses }} doses)</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Próximo dia agendado</div>
+        <div class="kpi-value" style="font-size:1.1rem;">{{ frascos.nextScheduled or '—' }}</div>
+        <div class="kpi-sub">
+          {% if frascos.current.leftover and not frascos.current.expired %}
+            {{ frascos.current.leftover }} dose(s) da sobra + frascos novos
+          {% else %}
+            começa com frasco novo
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="pmo-kpi-card">
+        <div class="kpi-label">Fechamento dos meses</div>
+        <div class="kpi-sub mt-1">
+          {% for m in frascos.months %}
+            <div>{{ '✅' if m.closes else '⚠️' }} {{ m.month }}: {{ m.doses }} = {{ m.vials }} frasco(s){{ '' if m.closes else ' + ' ~ m.rest }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% for alert in frascos.alerts %}
+    <div class="alert alert-warning py-2 small mb-2">⚠️ {{ alert }}</div>
+  {% endfor %}
+  {% for anomaly in frascos.anomalies %}
+    <div class="alert alert-secondary py-2 small mb-2">🔎 {{ anomaly }}</div>
+  {% endfor %}
+  {% if frascos.days %}
+  <details class="mb-4">
+    <summary class="small text-muted" style="cursor:pointer;">Linha do tempo dos frascos ({{ frascos.days|length }} dias de vacinação)</summary>
+    <div class="table-responsive mt-2" style="max-height: 320px; overflow-y: auto;">
+      <table class="table table-sm small align-middle">
+        <thead><tr><th>Data</th><th>Doses usadas</th><th>Da sobra</th><th>Frascos abertos</th><th>Sobra ao fim</th><th>Sobra vale até</th></tr></thead>
+        <tbody>
+          {% for d in frascos.days|reverse %}
+          <tr>
+            <td>{{ d.dateLabel }}</td>
+            <td>{{ d.doses }}</td>
+            <td>{{ d.fromLeftover or '' }}</td>
+            <td>{{ d.vialsOpened or '' }}</td>
+            <td>{{ d.leftover or 0 }}</td>
+            <td>{{ d.leftoverValidUntil }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+  {% endif %}
+
   {# ───── Cobertura ativa ───── #}
   <div class="pmo-section-title mb-3">Cobertura ativa (vacina antirrábica · 365 dias)</div>
   {% if cobertura.error %}

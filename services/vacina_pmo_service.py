@@ -3148,6 +3148,191 @@ def compile_controle_de_doses(*, dry_run: bool = False, include_compiled: bool =
     }
 
 
+# ——— Controle de frascos ——————————————————————————————————————————————————————
+# Cada frasco tem 25 doses e, depois de aberto, vale 3 dias (o dia da abertura
+# conta). A sobra de um dia abastece os seguintes dentro da validade; num
+# histórico bem registrado os descartes viram perdas do dia e todo mês fecha em
+# frascos inteiros — é exatamente o padrão dos totais (75/100/75/175/50...).
+
+PMO_FRASCO_DOSES = int(os.getenv("PMO_FRASCO_DOSES", "25"))
+PMO_FRASCO_VALIDADE_DIAS = int(os.getenv("PMO_FRASCO_VALIDADE_DIAS", "3"))
+
+
+def _pmo_br_date(value: date) -> str:
+    return value.strftime("%d/%m/%Y")
+
+
+def get_pmo_frascos_ledger() -> dict[str, Any]:
+    """Reconstrói a linha do tempo de frascos a partir da "Controle de doses".
+
+    Só leitura. A sobra é derivada (nunca digitada): sobra = sobra válida
+    anterior + frascos abertos × doses − doses usadas. Inconsistências do
+    registro (coluna sem data, mês que não fecha em frascos inteiros, sobra
+    vencida sem descarte) viram anomalias/alertas em vez de quebrar a conta.
+    """
+    vial = PMO_FRASCO_DOSES
+    validity = PMO_FRASCO_VALIDADE_DIAS
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+    service = _get_sheets_service()
+    metadata = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))")
+        .execute()
+    )
+    today = now_in_brazil().date()
+
+    wanted_doses_title = os.getenv(PMO_DOSES_SHEET_TITLE_ENV, PMO_DOSES_SHEET_DEFAULT_TITLE)
+    doses_title = ""
+    next_scheduled: date | None = None
+    for sheet in metadata.get("sheets", []):
+        title = sheet.get("properties", {}).get("title", "")
+        if _pmo_normalize_title(title) == _pmo_normalize_title(wanted_doses_title):
+            doses_title = title
+            continue
+        day = _parse_date_object(title)
+        if day and day > today and day.year == today.year:
+            if next_scheduled is None or day < next_scheduled:
+                next_scheduled = day
+    if not doses_title:
+        raise RuntimeError(f"Aba '{wanted_doses_title}' não encontrada na planilha PMO.")
+
+    values = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{_quote_sheet_title(doses_title)}!A1:AZ400")
+        .execute()
+        .get("values", [])
+    )
+
+    per_day: dict[date, int] = {}
+    anomalies: list[str] = []
+    months_summary: list[dict[str, Any]] = []
+    for month_number in range(1, 13):
+        try:
+            block = _pmo_find_doses_month_block(values, month_number)
+        except ValueError:
+            continue
+        month_name = _PMO_MONTHS[month_number - 1].capitalize()
+        header = values[block["header_row"]] if block["header_row"] < len(values) else []
+        doses_cells = values[block["doses_row"]] if block["doses_row"] < len(values) else []
+        month_sum = 0
+        for col in range(1, block["total_col"]):
+            doses_value = _pmo_cell_number(doses_cells[col] if col < len(doses_cells) else "")
+            if not doses_value:
+                continue
+            doses_value = int(doses_value)
+            month_sum += doses_value
+            label_cell = header[col] if col < len(header) else ""
+            parsed = _pmo_parse_doses_header_label(label_cell, today.year)
+            if not parsed:
+                anomalies.append(
+                    f"{month_name}: coluna {_pmo_col_letter(col)} tem {doses_value} dose(s) sem rótulo "
+                    "de data — fica fora da linha do tempo dos frascos. Dê um rótulo dd/mm/aaaa a ela."
+                )
+                continue
+            if parsed[0].month != month_number:
+                anomalies.append(
+                    f"{month_name}: rótulo '{_normalize_text(label_cell)}' aponta para outro mês "
+                    f"({_pmo_br_date(parsed[0])}) — confira se a data está certa."
+                )
+            per_day[parsed[0]] = per_day.get(parsed[0], 0) + doses_value
+        if month_sum:
+            months_summary.append(
+                {
+                    "month": month_name,
+                    "doses": month_sum,
+                    "vials": month_sum // vial,
+                    "closes": month_sum % vial == 0,
+                    "rest": month_sum % vial,
+                }
+            )
+            if month_sum % vial:
+                anomalies.append(
+                    f"{month_name}: {month_sum} doses não fecham em frascos inteiros de {vial} "
+                    f"(sobram {month_sum % vial}) — provável perda/descarte sem registro no mês."
+                )
+
+    days: list[dict[str, Any]] = []
+    alerts: list[str] = []
+    pending_expiry: list[dict[str, Any]] = []
+    leftover = 0
+    leftover_opened: date | None = None
+    vials_total = 0
+    for event_date in sorted(per_day):
+        if leftover and leftover_opened and (event_date - leftover_opened).days >= validity:
+            pending_expiry.append(
+                {
+                    "doses": leftover,
+                    "opened": _pmo_br_date(leftover_opened),
+                    "expired": _pmo_br_date(leftover_opened + timedelta(days=validity - 1)),
+                }
+            )
+            leftover, leftover_opened = 0, None
+        need = per_day[event_date]
+        from_leftover = min(leftover, need)
+        leftover -= from_leftover
+        remaining = need - from_leftover
+        new_vials = math.ceil(remaining / vial) if remaining else 0
+        if new_vials:
+            vials_total += new_vials
+            leftover = new_vials * vial - remaining
+            leftover_opened = event_date
+        if leftover == 0:
+            leftover_opened = None
+        valid_until = leftover_opened + timedelta(days=validity - 1) if leftover_opened else None
+        days.append(
+            {
+                "date": event_date.isoformat(),
+                "dateLabel": _pmo_br_date(event_date),
+                "doses": need,
+                "fromLeftover": from_leftover,
+                "vialsOpened": new_vials,
+                "leftover": leftover,
+                "leftoverValidUntil": _pmo_br_date(valid_until) if valid_until else "",
+            }
+        )
+
+    for pend in pending_expiry:
+        alerts.append(
+            f"Sobra de {pend['doses']} dose(s) do frasco aberto em {pend['opened']} venceu em "
+            f"{pend['expired']} sem aparecer como perda — registre o descarte como perdas desse dia."
+        )
+
+    current: dict[str, Any] = {"leftover": leftover, "opened": "", "validUntil": "", "expired": False}
+    if leftover and leftover_opened:
+        valid_until = leftover_opened + timedelta(days=validity - 1)
+        current.update(
+            {"opened": _pmo_br_date(leftover_opened), "validUntil": _pmo_br_date(valid_until)}
+        )
+        if today > valid_until:
+            current["expired"] = True
+            alerts.append(
+                f"Sobra atual de {leftover} dose(s) (frasco aberto em {_pmo_br_date(leftover_opened)}) "
+                f"venceu em {_pmo_br_date(valid_until)} — lance {leftover} perda(s) ou confirme o uso."
+            )
+        elif next_scheduled and next_scheduled > valid_until:
+            alerts.append(
+                f"Sobra de {leftover} dose(s) vence em {_pmo_br_date(valid_until)}, mas o próximo dia "
+                f"agendado é {_pmo_br_date(next_scheduled)} — antecipe um dia de vacinação ou planeje o descarte."
+            )
+
+    return {
+        "vialDoses": vial,
+        "validityDays": validity,
+        "vialsTotal": vials_total,
+        "days": days,
+        "months": months_summary,
+        "current": current,
+        "alerts": alerts,
+        "anomalies": anomalies,
+        "nextScheduled": _pmo_br_date(next_scheduled) if next_scheduled else "",
+        "sheet_title": doses_title,
+    }
+
+
 def get_vacina_pmo_kpis() -> dict[str, Any]:
     """Indicadores da campanha, calculados do banco (mesma fonte do status-sync).
 

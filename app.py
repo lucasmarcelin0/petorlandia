@@ -4669,6 +4669,48 @@ def vacina_pmo_status_webhook():
     return jsonify({'success': True, 'message': 'Atualização de status iniciada.'})
 
 
+_pmo_doses_compile_lock = _pmo_threading.Lock()
+
+
+@app.route('/vacina-pmo/webhook/compilar-doses', methods=['POST', 'GET'])
+@csrf.exempt
+def vacina_pmo_doses_webhook():
+    """Compila o Controle de doses sob demanda (menu "Vacinação 2026" da planilha).
+
+    Mesmo token do webhook de status (PMO_SYNC_WEBHOOK_TOKEN). Retorna na hora;
+    a compilação roda numa thread e as colunas aparecem na planilha em seguida.
+    """
+    import hmac
+
+    expected = os.getenv('PMO_SYNC_WEBHOOK_TOKEN', '').strip()
+    provided = (request.args.get('token') or request.headers.get('X-PMO-Token') or '').strip()
+    if not expected or not provided or not hmac.compare_digest(provided, expected):
+        abort(403)
+
+    if not _pmo_doses_compile_lock.acquire(blocking=False):
+        return jsonify({
+            'success': True,
+            'running': True,
+            'message': 'Uma compilação do Controle de doses já está em andamento.',
+        })
+
+    include_compiled = (request.args.get('completo') or '').strip().lower() in {'1', 'true', 'sim'}
+
+    def _job():
+        try:
+            from services.vacina_pmo_service import compile_controle_de_doses
+            with app.app_context():
+                result = compile_controle_de_doses(include_compiled=include_compiled)
+            app.logger.info('[PMO webhook] Controle de doses compilado: %s', result)
+        except Exception:
+            app.logger.exception('[PMO webhook] Falha na compilação do Controle de doses')
+        finally:
+            _pmo_doses_compile_lock.release()
+
+    _pmo_threading.Thread(target=_job, name='pmo-doses-compile', daemon=True).start()
+    return jsonify({'success': True, 'message': 'Compilação do Controle de doses iniciada.'})
+
+
 @app.route('/vacina-pmo/painel')
 @login_required
 def vacina_pmo_painel():
@@ -4691,7 +4733,15 @@ def vacina_pmo_painel():
     except Exception as exc:
         current_app.logger.exception("Falha ao montar cobertura ativa PMO")
         cobertura = {'error': str(exc)}
-    return render_template('vacina_pmo/painel.html', kpis=kpis, doses=doses, cobertura=cobertura)
+    try:
+        from services.vacina_pmo_service import get_pmo_frascos_ledger
+        frascos = get_pmo_frascos_ledger()
+    except Exception as exc:
+        current_app.logger.exception("Falha ao montar controle de frascos PMO")
+        frascos = {'error': str(exc)}
+    return render_template(
+        'vacina_pmo/painel.html', kpis=kpis, doses=doses, cobertura=cobertura, frascos=frascos
+    )
 
 
 @app.route('/vacina-pmo/cobertura-ativa')
