@@ -2421,3 +2421,146 @@ def test_compile_controle_de_doses_dry_run_writes_nothing(app, monkeypatch):
     assert [item["title"] for item in result["compiled"]] == ["08/06/2026"]
     assert fake.value_updates == []
     assert fake.batch_requests == []
+
+
+def _compile_metadata_with_green_day():
+    metadata = _compile_metadata()
+    metadata["sheets"][1]["properties"]["tabColor"] = {"green": 1.0}  # 08/06/2026
+    return metadata
+
+
+def test_compile_include_compiled_completes_green_tab_preserving_manual_perdas(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    doses_values = _doses_tab_values()
+    # Manhã já compilada à mão com 1 perda (que o app não conhece); falta a Tarde.
+    doses_values[4] = ["", "08/06/2026 - Manhã"]
+    doses_values[5] = ["Doses utilizadas:", "3", "", "", "", "", "", "", "", "3"]
+    doses_values[6] = ["Cachorros:", "2"]
+    doses_values[7] = ["Gatos:", "0"]
+    doses_values[8] = ["Perdas:", "1"]
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata_with_green_day(),
+        {"Controle de doses": doses_values, "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id, losses_manha=0)
+
+        # Sem include_compiled a aba verde nem entra na conta.
+        default_result = compile_controle_de_doses()
+        assert default_result["compiled"] == []
+        assert default_result["unchanged"] == []
+        assert fake.value_updates == []
+
+        result = compile_controle_de_doses(include_compiled=True)
+
+    assert [item["title"] for item in result["compiled"]] == ["08/06/2026"]
+    # Só a Tarde foi lançada; a Manhã já estava idêntica (com a perda manual preservada).
+    assert result["compiled"][0]["columns"] == [
+        {"label": "08/06/2026 - Tarde", "doses": 1, "dogs": 0, "cats": 1, "perdas": 0},
+    ]
+    writes = {}
+    for body in fake.value_updates:
+        for item in body["data"]:
+            writes[item["range"]] = item["values"][0][0]
+    assert writes["'Controle de doses'!C5"] == "08/06/2026 - Tarde"
+    assert "'Controle de doses'!B5" not in writes  # coluna da Manhã ficou intocada
+    assert "'Controle de doses'!B9" not in writes  # perda manual não foi zerada
+    # Aba já era verde: nenhuma repintura.
+    paints = [
+        request
+        for body in fake.batch_requests
+        for request in body["requests"]
+        if "updateSheetProperties" in request
+    ]
+    assert paints == []
+
+
+def test_compile_include_compiled_respects_typo_date_label(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    doses_values = _doses_tab_values()
+    # Rótulo manual com a data digitada errado ("0806/2026" ≈ 08/06/2026).
+    doses_values[4] = ["", "0806/2026"]
+    doses_values[5] = ["Doses utilizadas:", "4", "", "", "", "", "", "", "", "4"]
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+        _day_tab_row("José", 0, 1, "Tarde"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata_with_green_day(),
+        {"Controle de doses": doses_values, "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        _seed_compile_visits(spreadsheet_id)
+        result = compile_controle_de_doses(include_compiled=True)
+
+    assert result["compiled"] == []
+    assert any("sem turno" in item["reason"] for item in result["skipped"])
+    assert fake.value_updates == []
+
+
+def test_compile_include_compiled_lists_up_to_date_day_as_unchanged(app, monkeypatch):
+    from services.sfa_service import _extract_google_sheet_id
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL, compile_controle_de_doses
+
+    spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
+    doses_values = _doses_tab_values()
+    doses_values[4] = ["", "08/06/2026 - Manhã"]
+    doses_values[5] = ["Doses utilizadas:", "3", "", "", "", "", "", "", "", "3"]
+    doses_values[6] = ["Cachorros:", "2"]
+    doses_values[7] = ["Gatos:", "0"]
+    doses_values[8] = ["Perdas:", "1"]
+    day_values = [
+        ["Nome completo do tutor"] + [""] * 17,
+        _day_tab_row("Maria", 2, 0, "Manhã"),
+    ]
+    fake = _FakeDosesSheetsService(
+        _compile_metadata_with_green_day(),
+        {"Controle de doses": doses_values, "08/06/2026": day_values},
+    )
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake)
+    _patch_compile_clock(monkeypatch)
+
+    with app.app_context():
+        from models import PmoVaccinationAnimal
+
+        visit = PmoVaccinationVisit(
+            spreadsheet_id=spreadsheet_id,
+            sheet_gid="555",
+            sheet_title="08/06/2026",
+            source_row=2,
+            tutor_name="Maria",
+            password="PMOA0001",
+            shift="Manha",
+            losses=0,
+        )
+        db.session.add(visit)
+        db.session.flush()
+        db.session.add_all([
+            PmoVaccinationAnimal(visit=visit, position=1, name="Rex", species="cao", status="vacinado"),
+            PmoVaccinationAnimal(visit=visit, position=2, name="Bolt", species="cao", status="vacinado"),
+        ])
+        db.session.commit()
+        result = compile_controle_de_doses(include_compiled=True)
+
+    assert result["compiled"] == []
+    assert result["unchanged"] == ["08/06/2026"]
+    assert fake.value_updates == []
+    assert fake.batch_requests == []

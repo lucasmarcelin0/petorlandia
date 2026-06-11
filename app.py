@@ -4890,7 +4890,10 @@ def vacina_pmo_doses_compilar():
         from services.vacina_pmo_service import compile_controle_de_doses
 
         payload = request.get_json(silent=True) or {}
-        result = compile_controle_de_doses(dry_run=bool(payload.get('dry_run')))
+        result = compile_controle_de_doses(
+            dry_run=bool(payload.get('dry_run')),
+            include_compiled=bool(payload.get('include_compiled')),
+        )
         return jsonify({'success': True, **result})
     except Exception as exc:
         current_app.logger.exception("Falha ao compilar Controle de doses PMO")

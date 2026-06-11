@@ -2809,6 +2809,12 @@ def _pmo_find_doses_month_block(values: list[list[Any]], month_number: int) -> d
     }
 
 
+def _pmo_label_digits_match_date(value: Any, day: date) -> bool:
+    """Reconhece rótulos com a data digitada errado ("0502/2026") comparando só os dígitos."""
+    digits = _digits(value)
+    return bool(digits) and digits in {day.strftime("%d%m%Y"), day.strftime("%d%m%y")}
+
+
 def _pmo_resolve_doses_target_column(
     values: list[list[Any]], block: dict[str, int], day: date, shift: str
 ) -> tuple[int, bool]:
@@ -2816,17 +2822,25 @@ def _pmo_resolve_doses_target_column(
     header = values[block["header_row"]] if block["header_row"] < len(values) else []
     total_col = block["total_col"]
     for col in range(1, max(total_col, len(header))):
-        parsed = _pmo_parse_doses_header_label(
-            header[col] if col < len(header) else "", day.year
-        )
-        if not parsed or parsed[0] != day:
+        cell = header[col] if col < len(header) else ""
+        parsed = _pmo_parse_doses_header_label(cell, day.year)
+        if parsed:
+            if parsed[0] != day:
+                continue
+            if parsed[1] == shift:
+                return col, False  # coluna já existe: atualiza no lugar (idempotente)
+            if not parsed[1]:
+                raise ValueError(
+                    f"dia já representado por coluna manual sem turno para {day.strftime('%d/%m/%Y')} "
+                    "no Controle de doses; separe por turno manualmente se quiser padronizar"
+                )
             continue
-        if parsed[1] == shift:
-            return col, False  # coluna já existe: atualiza no lugar (idempotente)
-        if not parsed[1]:
+        if _pmo_label_digits_match_date(cell, day):
+            # Rótulo manual com erro de digitação: vale como coluna sem turno
+            # daquele dia, para não duplicar o lançamento.
             raise ValueError(
-                f"já existe coluna sem turno para {day.strftime('%d/%m/%Y')} no Controle de doses; "
-                "confira/apague o lançamento manual antes de compilar"
+                f"dia já representado por coluna manual sem turno (rótulo '{_normalize_text(cell)}' "
+                f"≈ {day.strftime('%d/%m/%Y')}) no Controle de doses; corrija o rótulo se quiser padronizar"
             )
     metric_rows = (block["doses_row"], block["dogs_row"], block["cats_row"], block["perdas_row"])
     for col in range(1, total_col):
@@ -2842,13 +2856,19 @@ def _pmo_resolve_doses_target_column(
     return total_col, True
 
 
-def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
-    """Compila as abas-dia não-verdes no "Controle de doses" e pinta-as de verde.
+def compile_controle_de_doses(*, dry_run: bool = False, include_compiled: bool = False) -> dict[str, Any]:
+    """Compila as abas-dia no "Controle de doses" e pinta-as de verde.
 
     Regras: uma coluna por data+turno (rótulo "dd/mm/aaaa - Manhã/Tarde"); números
     vêm do banco do app e são conferidos com as somas M/N da própria aba-dia —
     divergência pula o dia com aviso em vez de compilar dado suspeito. Os totais
     do mês viram fórmula =SUM(...). Com dry_run=True nada é escrito.
+
+    Por padrão só processa abas não-verdes (dias ainda não compilados). Com
+    include_compiled=True revisita também as verdes para garantir que TODO dia
+    tenha representação na tabela: colunas idênticas não geram escrita, dias já
+    representados por coluna manual "só com a data" são respeitados, e perdas
+    digitadas à mão são preservadas quando o app não conhece perdas do dia.
     """
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
@@ -2877,14 +2897,17 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
         day = _parse_date_object(title)
         if not day:
             continue
-        if _pmo_tab_color_is_green(props.get("tabColor")):
+        is_green = _pmo_tab_color_is_green(props.get("tabColor"))
+        if is_green and not include_compiled:
             continue  # verde = já compilada
         if day > today:
             continue  # dia ainda não aconteceu
         if day.year != today.year:
             skipped.append({"title": title, "reason": "ano diferente do atual (aba modelo/teste?)"})
             continue
-        candidates.append({"title": title, "gid": str(props.get("sheetId", "")), "date": day})
+        candidates.append(
+            {"title": title, "gid": str(props.get("sheetId", "")), "date": day, "green": is_green}
+        )
     if not doses_title:
         raise RuntimeError(f"Aba '{wanted_doses_title}' não encontrada na planilha PMO.")
     candidates.sort(key=lambda item: item["date"])
@@ -2898,6 +2921,7 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
     )
 
     compiled: list[dict[str, Any]] = []
+    unchanged: list[str] = []
     warnings: list[str] = []
 
     def _values_batch(data: list[dict[str, Any]]) -> None:
@@ -2966,14 +2990,43 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
             continue
 
         written_columns = []
+        unchanged_columns = 0
         for shift in ("Manha", "Tarde"):
             shift_counts = db_counts[shift]
-            doses = shift_counts["dogs"] + shift_counts["cats"] + shift_counts["losses"]
-            if doses == 0:
+            if shift_counts["dogs"] + shift_counts["cats"] + shift_counts["losses"] == 0:
                 continue
             # Resolve na hora de escrever: o turno anterior já marcou o cabeçalho
             # no modelo local, então cada turno ganha uma coluna própria.
             col, needs_insert = _pmo_resolve_doses_target_column(doses_values, block, day, shift)
+
+            # Perdas digitadas à mão na tabela valem quando o app não conhece
+            # nenhuma perda do turno (dias antigos, antes do campo no app).
+            losses = shift_counts["losses"]
+            if not losses and not needs_insert:
+                existing_perdas = _pmo_cell_number(_pmo_cell(doses_values, block["perdas_row"], col))
+                if existing_perdas:
+                    losses = int(existing_perdas)
+            doses = shift_counts["dogs"] + shift_counts["cats"] + losses
+
+            label = f"{day.strftime('%d/%m/%Y')} - {PMO_DOSES_SHIFT_LABELS[shift]}"
+            cell_writes = [
+                (block["header_row"], label),
+                (block["doses_row"], doses),
+                (block["dogs_row"], shift_counts["dogs"]),
+                (block["cats_row"], shift_counts["cats"]),
+                (block["perdas_row"], losses),
+            ]
+
+            # Coluna já idêntica ao banco: não gasta escrita nem repinta nada.
+            if not needs_insert:
+                same = _normalize_text(_pmo_cell(doses_values, block["header_row"], col)) == label and all(
+                    (_pmo_cell_number(_pmo_cell(doses_values, row_idx, col)) or 0) == value
+                    for row_idx, value in cell_writes[1:]
+                )
+                if same:
+                    unchanged_columns += 1
+                    continue
+
             if needs_insert:
                 if not dry_run:
                     service.spreadsheets().batchUpdate(
@@ -3000,14 +3053,6 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
                         cells.insert(col, "")
                 block["total_col"] += 1
 
-            label = f"{day.strftime('%d/%m/%Y')} - {PMO_DOSES_SHIFT_LABELS[shift]}"
-            cell_writes = [
-                (block["header_row"], label),
-                (block["doses_row"], doses),
-                (block["dogs_row"], shift_counts["dogs"]),
-                (block["cats_row"], shift_counts["cats"]),
-                (block["perdas_row"], shift_counts["losses"]),
-            ]
             data = []
             for row_idx, value in cell_writes:
                 _pmo_set_cell(doses_values, row_idx, col, value)
@@ -3024,12 +3069,33 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
                     "doses": doses,
                     "dogs": shift_counts["dogs"],
                     "cats": shift_counts["cats"],
-                    "perdas": shift_counts["losses"],
+                    "perdas": losses,
                 }
             )
 
         if not written_columns:
-            skipped.append({"title": title, "reason": "sem vacinados nem perdas registrados"})
+            if unchanged_columns:
+                # Tudo já estava em dia; garante só a cor da aba.
+                if not candidate["green"] and not dry_run:
+                    service.spreadsheets().batchUpdate(
+                        spreadsheetId=spreadsheet_id,
+                        body={
+                            "requests": [
+                                {
+                                    "updateSheetProperties": {
+                                        "properties": {
+                                            "sheetId": int(candidate["gid"]),
+                                            "tabColor": PMO_DOSES_COMPILED_TAB_COLOR,
+                                        },
+                                        "fields": "tabColor",
+                                    }
+                                }
+                            ]
+                        },
+                    ).execute()
+                unchanged.append(title)
+            else:
+                skipped.append({"title": title, "reason": "sem vacinados nem perdas registrados"})
             continue
 
         # Totais do mês viram fórmula — nunca mais ficam defasados.
@@ -3053,7 +3119,7 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
             )
         _values_batch(totals_data)
 
-        if not dry_run:
+        if not dry_run and not candidate["green"]:
             service.spreadsheets().batchUpdate(
                 spreadsheetId=spreadsheet_id,
                 body={
@@ -3073,7 +3139,13 @@ def compile_controle_de_doses(*, dry_run: bool = False) -> dict[str, Any]:
 
         compiled.append({"title": title, "date": day.isoformat(), "columns": written_columns})
 
-    return {"compiled": compiled, "skipped": skipped, "warnings": warnings, "dryRun": dry_run}
+    return {
+        "compiled": compiled,
+        "unchanged": unchanged,
+        "skipped": skipped,
+        "warnings": warnings,
+        "dryRun": dry_run,
+    }
 
 
 def get_vacina_pmo_kpis() -> dict[str, Any]:
