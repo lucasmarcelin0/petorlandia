@@ -3691,6 +3691,7 @@ class VaccineServiceItem(db.Model):
     nome = db.Column(db.String(120), nullable=False)
     fabricante = db.Column(db.String(120), nullable=True)
     descricao = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(255), nullable=True)
     especies = db.Column(db.String(40), nullable=False, default='cao,gato')  # csv: cao,gato
     preco = db.Column(db.Numeric(10, 2), nullable=False)
     valor_repasse = db.Column(db.Numeric(10, 2), nullable=True)

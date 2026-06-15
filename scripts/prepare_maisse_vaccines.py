@@ -23,6 +23,7 @@ VACCINES = [
         "valor_repasse": Decimal("60.00"),
         "descricao": "Vacina múltipla canina V8 com aplicação em domicílio.",
         "doses_info": "Esquema e reforço definidos pela médica-veterinária.",
+        "image_url": "uploads/vaccine_service/v8-msd-nobivac.jpg",
         "position": 10,
     },
     {
@@ -32,6 +33,7 @@ VACCINES = [
         "valor_repasse": Decimal("30.00"),
         "descricao": "Vacina contra a raiva com aplicação em domicílio.",
         "doses_info": "Dose e reforço conforme avaliação da médica-veterinária.",
+        "image_url": "uploads/vaccine_service/raiva-virbac-canigen-r.png",
         "position": 20,
     },
     {
@@ -41,6 +43,7 @@ VACCINES = [
         "valor_repasse": Decimal("80.00"),
         "descricao": "Vacina múltipla canina V10 com aplicação em domicílio.",
         "doses_info": "Esquema e reforço definidos pela médica-veterinária.",
+        "image_url": "uploads/vaccine_service/v10-zoetis-vanguard-plus.jpg",
         "position": 30,
     },
 ]

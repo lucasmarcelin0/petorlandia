@@ -29544,6 +29544,12 @@ def servicos_vacinas():
             'neighborhood': current_user.endereco.bairro or '',
         }
 
+    featured_provider = next(
+        (item.provider_vet for item in items if item.provider_vet),
+        None,
+    )
+    featured_clinic = featured_provider.clinica if featured_provider else None
+
     return render_template(
         'vacinas_servico/catalogo.html',
         items=items,
@@ -29551,6 +29557,8 @@ def servicos_vacinas():
         meus_pedidos=meus_pedidos,
         prof_phone=prof_phone,
         prof_address=prof,
+        featured_provider=featured_provider,
+        featured_clinic=featured_clinic,
     )
 
 

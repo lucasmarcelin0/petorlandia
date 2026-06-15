@@ -68,3 +68,55 @@ def test_paid_vaccine_keeps_provider_and_payout_snapshot(app):
         db.session.commit()
         assert req.status == "atribuido"
         assert [event.event for event in req.events][-2:] == ["pago", "atribuido"]
+
+
+def test_vaccine_catalog_shows_clinic_product_and_pet_images(app, client):
+    with app.app_context():
+        tutor = User(name="Tutor", email="catalog-vaccine@example.com")
+        tutor.set_password("x")
+        provider_user = User(name="Maisse", email="catalog-maisse@example.com")
+        provider_user.set_password("x")
+        db.session.add_all([tutor, provider_user])
+        db.session.flush()
+
+        clinic = Clinica(
+            nome="Clínica Maisse",
+            owner_id=provider_user.id,
+            logotipo="https://assets.example/clinic-logo.jpg",
+        )
+        db.session.add(clinic)
+        db.session.flush()
+        vet = Veterinario(
+            user_id=provider_user.id,
+            clinica_id=clinic.id,
+            crmv="12345",
+        )
+        animal = Animal(
+            name="Bento",
+            user_id=tutor.id,
+            image="https://assets.example/bento.jpg",
+        )
+        item = VaccineServiceItem(
+            nome="V10",
+            fabricante="Zoetis",
+            descricao="Vacina múltipla canina.",
+            image_url="uploads/vaccine_service/v10-zoetis-vanguard-plus.jpg",
+            especies="cao",
+            preco=Decimal("90.00"),
+            valor_repasse=Decimal("80.00"),
+            provider_vet=vet,
+        )
+        db.session.add_all([vet, animal, item])
+        db.session.commit()
+        tutor_id = tutor.id
+
+    with client.session_transaction() as session:
+        session["_user_id"] = str(tutor_id)
+        session["_fresh"] = True
+
+    response = client.get("/servicos/vacinas")
+
+    assert response.status_code == 200
+    assert b"https://assets.example/clinic-logo.jpg" in response.data
+    assert b"uploads/vaccine_service/v10-zoetis-vanguard-plus.jpg" in response.data
+    assert b"https://assets.example/bento.jpg" in response.data

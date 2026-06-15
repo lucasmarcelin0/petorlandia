@@ -1,21 +1,122 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container mt-4" style="max-width: 760px;">
+<style>
+  .vacserv-page {
+    max-width: 920px;
+  }
+  .vacserv-hero {
+    background:
+      radial-gradient(circle at 88% 18%, rgba(255,255,255,.3) 0 9%, transparent 10%),
+      linear-gradient(135deg, #0b6b63, #159486);
+    color: #fff;
+    overflow: hidden;
+  }
+  .vacserv-clinic-logo {
+    width: 82px;
+    height: 82px;
+    object-fit: contain;
+    background: #fff;
+    border: 4px solid rgba(255,255,255,.72);
+  }
+  .vacserv-trust-chip {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.28);
+    color: #fff;
+  }
+  .vacserv-item,
+  .vacserv-pet {
+    position: relative;
+    border: 2px solid #e7ecef !important;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  .vacserv-item:hover,
+  .vacserv-pet:hover {
+    border-color: #8ccfc8 !important;
+    box-shadow: 0 .5rem 1.2rem rgba(18, 112, 102, .1);
+    transform: translateY(-1px);
+  }
+  .vacserv-item:has(input:checked),
+  .vacserv-pet:has(input:checked) {
+    border-color: #168c7f !important;
+    box-shadow: 0 0 0 3px rgba(22, 140, 127, .12);
+  }
+  .vacserv-product-image {
+    width: 150px;
+    height: 120px;
+    object-fit: contain;
+    background: linear-gradient(145deg, #f5fbfa, #fff);
+    border-radius: 1rem;
+  }
+  .vacserv-pet-photo {
+    width: 58px;
+    height: 58px;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #e9f5f3;
+  }
+  .vacserv-pet-placeholder {
+    display: grid;
+    place-items: center;
+    color: #168c7f;
+    font-size: 1.35rem;
+  }
+  .vacserv-official {
+    color: #38716b;
+    background: #e7f5f3;
+  }
+  @media (max-width: 575.98px) {
+    .vacserv-product-image {
+      width: 104px;
+      height: 96px;
+    }
+    .vacserv-item {
+      align-items: flex-start !important;
+    }
+  }
+</style>
+
+<div class="container mt-4 vacserv-page">
 
   <div class="d-flex align-items-center gap-3 mb-4">
     <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary btn-sm">
       <i class="fa-solid fa-arrow-left me-1"></i> Voltar
     </a>
-    <h1 class="h4 fw-bold mb-0">Vacinas em domicílio</h1>
+    <h1 class="h4 fw-bold mb-0">Vacinação em domicílio</h1>
   </div>
 
-  <div class="alert alert-info small d-flex gap-2 align-items-start">
-    <i class="fa-solid fa-circle-info mt-1"></i>
-    <div>
-      Escolha a vacina, o pet e o endereço — um veterinário parceiro aplica na sua casa.
-      O pagamento é online e seguro pelo <strong>Mercado Pago</strong>. Cancelamento com
-      reembolso até a visita ser realizada.
+  {% if featured_provider and featured_provider.user %}
+  <section class="vacserv-hero rounded-4 shadow-sm p-4 p-md-5 mb-4">
+    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-4">
+      {% if featured_clinic and featured_clinic.logo_url %}
+      <img src="{{ featured_clinic.logo_url }}" alt="Logotipo de {{ featured_clinic.nome }}"
+           class="vacserv-clinic-logo rounded-circle shadow-sm">
+      {% endif %}
+      <div class="flex-grow-1">
+        <span class="badge rounded-pill bg-light text-success mb-2">
+          <i class="fa-solid fa-house-medical me-1"></i> Atendimento em casa
+        </span>
+        <h2 class="h3 fw-bold mb-2">Cuidado profissional sem tirar seu pet de casa</h2>
+        <p class="mb-3 text-white-50">
+          Aplicação por <strong class="text-white">{{ featured_provider.user.name }}</strong>
+          {% if featured_provider.crmv %} · CRMV {{ featured_provider.crmv }}{% endif %}
+          {% if featured_clinic %}, da {{ featured_clinic.nome }}{% endif %}.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge rounded-pill vacserv-trust-chip p-2">
+            <i class="fa-solid fa-shield-dog me-1"></i> Vacinas de fabricantes reconhecidos
+          </span>
+          <span class="badge rounded-pill vacserv-trust-chip p-2">
+            <i class="fa-solid fa-credit-card me-1"></i> Pagamento seguro
+          </span>
+        </div>
+      </div>
     </div>
+  </section>
+  {% endif %}
+
+  <div class="alert alert-info small d-flex gap-2 align-items-start rounded-3">
+    <i class="fa-solid fa-circle-info mt-1"></i>
+    <div>Escolha a vacina, o pet e o endereço. Após o pagamento, a equipe combina a data e o turno da visita.</div>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -42,14 +143,23 @@
         <h6 class="fw-bold mb-3">
           <span class="badge rounded-pill bg-primary me-1">1</span> Escolha a vacina
         </h6>
-        <div class="d-grid gap-2">
+        <div class="d-grid gap-3">
           {% for item in items %}
-          <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3 vacserv-item"
+          <label class="form-check rounded-4 p-3 m-0 d-flex align-items-center gap-3 vacserv-item"
                  style="cursor:pointer;" data-especies="{{ item.especies }}">
             <input class="form-check-input mt-0" type="radio" name="item_id" value="{{ item.id }}" required>
-            <span class="d-flex flex-column flex-grow-1">
-              <span class="fw-semibold">{{ item.nome }}</span>
-              {% if item.fabricante %}<span class="text-muted small">Fabricante: {{ item.fabricante }}</span>{% endif %}
+            {% if item.image_url %}
+            <img src="{{ item.image_url if item.image_url.startswith('http') else url_for('static', filename=item.image_url) }}"
+                 alt="{{ item.nome }} {{ item.fabricante or '' }}" class="vacserv-product-image" loading="lazy">
+            {% endif %}
+            <span class="d-flex flex-column flex-grow-1 gap-1">
+              <span class="d-flex flex-wrap align-items-center gap-2">
+                <span class="h5 fw-bold mb-0">{{ item.nome }}</span>
+                <span class="badge rounded-pill vacserv-official">
+                  <i class="fa-solid fa-circle-check me-1"></i>Imagem oficial
+                </span>
+              </span>
+              {% if item.fabricante %}<span class="fw-semibold text-success">{{ item.fabricante }}</span>{% endif %}
               {% if item.provider_vet and item.provider_vet.user %}
               <span class="text-muted small">
                 <i class="fa-solid fa-user-doctor me-1"></i>Aplicação por {{ item.provider_vet.user.name }}
@@ -57,8 +167,8 @@
               {% endif %}
               {% if item.descricao %}<span class="text-muted small">{{ item.descricao }}</span>{% endif %}
               {% if item.doses_info %}<span class="text-muted small"><i class="fa-solid fa-syringe me-1"></i>{{ item.doses_info }}</span>{% endif %}
+              <span class="fw-bold text-primary fs-5 mt-1">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</span>
             </span>
-            <span class="fw-bold text-primary text-nowrap">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</span>
           </label>
           {% endfor %}
         </div>
@@ -72,18 +182,28 @@
           <span class="badge rounded-pill bg-primary me-1">2</span> Escolha o pet
         </h6>
         {% if animals %}
-        <div class="d-grid gap-2">
+        <div class="row g-3">
           {% for animal in animals %}
-          <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3" style="cursor:pointer;">
-            <input class="form-check-input mt-0" type="radio" name="animal_id" value="{{ animal.id }}" required>
-            <span class="d-flex flex-column">
-              <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
-              <span class="text-muted small">
-                {{ animal.species.name if animal.species else 'Espécie não informada' }}
-                {% if animal.breed and animal.breed.name %} · {{ animal.breed.name }}{% endif %}
+          <div class="col-md-6">
+            <label class="form-check rounded-4 p-3 m-0 d-flex align-items-center gap-3 vacserv-pet h-100"
+                   style="cursor:pointer;">
+              <input class="form-check-input mt-0" type="radio" name="animal_id" value="{{ animal.id }}" required>
+              {% if animal.image %}
+              <img src="{{ animal.image }}" alt="Foto de {{ animal.name or 'pet' }}" class="vacserv-pet-photo" loading="lazy">
+              {% else %}
+              <span class="vacserv-pet-photo vacserv-pet-placeholder">
+                <i class="fa-solid fa-paw"></i>
               </span>
-            </span>
-          </label>
+              {% endif %}
+              <span class="d-flex flex-column">
+                <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
+                <span class="text-muted small">
+                  {{ animal.species.name if animal.species else 'Espécie não informada' }}
+                  {% if animal.breed and animal.breed.name %} · {{ animal.breed.name }}{% endif %}
+                </span>
+              </span>
+            </label>
+          </div>
           {% endfor %}
         </div>
         {% else %}
