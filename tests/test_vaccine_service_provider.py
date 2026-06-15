@@ -1,0 +1,70 @@
+from decimal import Decimal
+
+from extensions import db
+from models import (
+    Animal,
+    Clinica,
+    User,
+    VaccineServiceItem,
+    Veterinario,
+)
+from services.vaccine_service_paid import create_vaccine_request, mark_request_paid
+
+
+def test_paid_vaccine_keeps_provider_and_payout_snapshot(app):
+    with app.app_context():
+        tutor = User(name="Tutor", email="tutor-vaccine@example.com")
+        tutor.set_password("x")
+        provider_user = User(name="Maisse", email="maisse-vaccine@example.com")
+        provider_user.set_password("x")
+        db.session.add_all([tutor, provider_user])
+        db.session.flush()
+
+        clinic = Clinica(nome="Clínica Maisse", owner_id=provider_user.id)
+        db.session.add(clinic)
+        db.session.flush()
+        vet = Veterinario(
+            user_id=provider_user.id,
+            clinica_id=clinic.id,
+            crmv="12345",
+        )
+        animal = Animal(name="Bento", user_id=tutor.id)
+        db.session.add_all([vet, animal])
+        db.session.flush()
+
+        item = VaccineServiceItem(
+            nome="V10",
+            fabricante="Zoetis",
+            especies="cao",
+            preco=Decimal("90.00"),
+            valor_repasse=Decimal("80.00"),
+            provider_vet_id=vet.id,
+        )
+        db.session.add(item)
+        db.session.commit()
+
+        req, payment_url = create_vaccine_request(
+            user=tutor,
+            animal=animal,
+            item=item,
+            payload={
+                "phone": "(34) 99999-9999",
+                "address_street": "Rua Teste",
+            },
+            criar_preferencia=lambda items, extref, back_url: {
+                "payment_url": "https://payments.example/checkout",
+            },
+            back_url_builder=lambda token: f"https://example.test/pedido/{token}",
+        )
+
+        assert payment_url == "https://payments.example/checkout"
+        assert req.assigned_vet_id == vet.id
+        assert req.fabricante == "Zoetis"
+        assert req.valor == Decimal("90.00")
+        assert req.valor_repasse == Decimal("80.00")
+        assert req.status == "pendente_pagamento"
+
+        assert mark_request_paid(req) is True
+        db.session.commit()
+        assert req.status == "atribuido"
+        assert [event.event for event in req.events][-2:] == ["pago", "atribuido"]

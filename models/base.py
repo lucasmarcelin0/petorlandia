@@ -3689,14 +3689,24 @@ class VaccineServiceItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
+    fabricante = db.Column(db.String(120), nullable=True)
     descricao = db.Column(db.Text, nullable=True)
     especies = db.Column(db.String(40), nullable=False, default='cao,gato')  # csv: cao,gato
     preco = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_repasse = db.Column(db.Numeric(10, 2), nullable=True)
+    provider_vet_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
     doses_info = db.Column(db.String(200), nullable=True)  # ex.: "Dose única anual"
     ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    provider_vet = db.relationship('Veterinario', foreign_keys=[provider_vet_id])
 
     def especies_list(self):
         return [e.strip() for e in (self.especies or '').split(',') if e.strip()]
@@ -3725,6 +3735,8 @@ class VaccineServiceRequest(db.Model):
     # Snapshot do item no momento da compra (preço pode mudar depois)
     item_nome = db.Column(db.String(120), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
+    fabricante = db.Column(db.String(120), nullable=True)
+    valor_repasse = db.Column(db.Numeric(10, 2), nullable=True)
 
     address_street = db.Column(db.String(200), nullable=True)
     address_number = db.Column(db.String(20), nullable=True)

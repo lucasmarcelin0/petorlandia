@@ -43,6 +43,7 @@
 
       <div class="small d-grid gap-1">
         <div><strong>Vacina:</strong> {{ req.item_nome }} — R$ {{ '%.2f'|format(req.valor)|replace('.', ',') }}</div>
+        {% if req.fabricante %}<div><strong>Fabricante:</strong> {{ req.fabricante }}</div>{% endif %}
         <div><strong>Pet:</strong> {{ req.animal.name if req.animal else '—' }}</div>
         <div><strong>Endereço:</strong> {{ req.address_full or '—' }}</div>
         {% if req.scheduled_date %}

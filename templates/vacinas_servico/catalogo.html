@@ -49,6 +49,12 @@
             <input class="form-check-input mt-0" type="radio" name="item_id" value="{{ item.id }}" required>
             <span class="d-flex flex-column flex-grow-1">
               <span class="fw-semibold">{{ item.nome }}</span>
+              {% if item.fabricante %}<span class="text-muted small">Fabricante: {{ item.fabricante }}</span>{% endif %}
+              {% if item.provider_vet and item.provider_vet.user %}
+              <span class="text-muted small">
+                <i class="fa-solid fa-user-doctor me-1"></i>Aplicação por {{ item.provider_vet.user.name }}
+              </span>
+              {% endif %}
               {% if item.descricao %}<span class="text-muted small">{{ item.descricao }}</span>{% endif %}
               {% if item.doses_info %}<span class="text-muted small"><i class="fa-solid fa-syringe me-1"></i>{{ item.doses_info }}</span>{% endif %}
             </span>

@@ -71,6 +71,8 @@ def create_vaccine_request(
         item_id=item.id,
         item_nome=item.nome,
         valor=item.preco,
+        fabricante=item.fabricante,
+        valor_repasse=item.valor_repasse,
         address_street=(payload.get('address_street') or '').strip() or None,
         address_number=(payload.get('address_number') or '').strip() or None,
         address_complement=(payload.get('address_complement') or '').strip() or None,
@@ -81,6 +83,7 @@ def create_vaccine_request(
         note=(payload.get('note') or '').strip() or None,
         status='pendente_pagamento',
         public_token=secrets.token_urlsafe(32),
+        assigned_vet_id=item.provider_vet_id,
     )
     db.session.add(req)
     db.session.flush()  # garante req.id para a external_reference
@@ -115,8 +118,11 @@ def mark_request_paid(req) -> bool:
     """Chamado pelo webhook quando o pagamento é aprovado. Idempotente."""
     if req.status != 'pendente_pagamento':
         return False
-    req.status = 'pago'
+    req.status = 'atribuido' if req.assigned_vet_id else 'pago'
     log_event(req, 'pago')
+    if req.assigned_vet_id and req.assigned_vet:
+        vet_name = getattr(getattr(req.assigned_vet, 'user', None), 'name', None)
+        log_event(req, 'atribuido', vet_name or f'Vet #{req.assigned_vet_id}')
     return True
 
 

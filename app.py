@@ -29718,6 +29718,16 @@ def servicos_vacinas_admin_item():
         flash('Preço inválido.', 'warning')
         return redirect(url_for('servicos_vacinas_admin'))
 
+    repasse_raw = (request.form.get('valor_repasse') or '').replace(',', '.').strip()
+    try:
+        valor_repasse = _Dec(repasse_raw) if repasse_raw else None
+    except Exception:
+        flash('Valor de repasse inválido.', 'warning')
+        return redirect(url_for('servicos_vacinas_admin'))
+    if valor_repasse is not None and (valor_repasse < 0 or valor_repasse > preco):
+        flash('O repasse deve ficar entre zero e o preço cobrado.', 'warning')
+        return redirect(url_for('servicos_vacinas_admin'))
+
     especies = ','.join(request.form.getlist('especies')) or 'cao,gato'
     if item is None:
         item = VaccineServiceItem(nome=nome, preco=preco, especies=especies)
@@ -29727,6 +29737,8 @@ def servicos_vacinas_admin_item():
         item.preco = preco
         item.especies = especies
     item.descricao = (request.form.get('descricao') or '').strip() or None
+    item.fabricante = (request.form.get('fabricante') or '').strip() or None
+    item.valor_repasse = valor_repasse
     item.doses_info = (request.form.get('doses_info') or '').strip() or None
     db.session.commit()
     flash(f'Vacina "{nome}" salva.', 'success')
