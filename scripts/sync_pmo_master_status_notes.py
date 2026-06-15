@@ -53,6 +53,7 @@ TRACKED_NON_DATE_TITLES = {
 STATUS_LABELS = {
     "vacinado": "Vacinado",
     "parcial": "Parcial",
+    "parcial_encerrado": "Parcial encerrado",
     "remarcar": "Remarcar",
     "recusou": "Cancelado/recusou",
     "ausente": "Ausente",
@@ -62,9 +63,13 @@ STATUS_LABELS = {
     "perdeu_contato": "Perdeu contato",
     "reagendar": "Reagendar",
 }
+# Laranja para "parcial encerrado": alguns animais foram vacinados mas o tutor
+# recusou o retorno via Encaixes — caso fechado sem possibilidade de completar.
+PMO_PARCIAL_ENCERRADO_COLOR = {"red": 0.988, "green": 0.800, "blue": 0.549}
 STATUS_COLORS = {
     "vacinado": PMO_STATUS_COLORS["vacinado"],
     "parcial": PMO_STATUS_COLORS["parcial"],
+    "parcial_encerrado": PMO_PARCIAL_ENCERRADO_COLOR,
     "remarcar": PMO_STATUS_COLORS["parcial"],
     "recusou": PMO_STATUS_COLORS["recusou"],
     "ausente": PMO_STATUS_COLORS["ausente"],
@@ -79,6 +84,7 @@ LEGEND_ROWS = [
     ("Cor", "Onde aparece", "Significado"),
     ("Verde", "Coluna M", "Vacinado confirmado."),
     ("Vermelho", "Coluna M / Encaixes", "Cancelado/recusou. Não foi e não será feito."),
+    ("Laranja", "Coluna M", "Parcial encerrado: alguns animais vacinados, tutor recusou retorno via Encaixes."),
     ("Amarelo", "Coluna M / Encaixes", "Atenção: parcial, remarcar ou perdeu contato com o tutor."),
     ("Azul claro", "Coluna M", "Já está no fluxo normal: agendado ou em Inscrição a agendar."),
     ("Branco", "Coluna M", "Ainda precisa de acompanhamento: pendente, reagendar ou sem registro."),
@@ -88,6 +94,7 @@ LEGEND_SWATCH_COLORS = [
     None,
     PMO_STATUS_COLORS["vacinado"],
     PMO_STATUS_COLORS["recusou"],
+    PMO_PARCIAL_ENCERRADO_COLOR,
     PMO_STATUS_COLORS["parcial"],
     PMO_ACTIVE_FLOW_COLOR,
     PMO_STATUS_CLEAR_COLOR,
@@ -275,20 +282,30 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
         for visit in matches
         if _parse_date_object((visit.sheet_title or "").strip())
     ]
+    # Calculado antes do bloco dated para que Encaixes vermelho possa sobrescrever
+    # status de abas datadas (ex.: pendente agendado → recusou).
+    contextual_statuses = [_display_status_key(visit) for visit in matches]
+    has_encaixes_recusou = any(
+        _is_encaixes(visit) and infer_visit_status(visit.animals) == "recusou"
+        for visit in matches
+    )
     if dated_statuses:
         if any(status == "vacinado" for status in dated_statuses):
             return "vacinado"
         if any(status == "parcial" for status in dated_statuses):
-            return "parcial"
+            # Encaixes vermelho + aba datada parcial = parcial encerrado (laranja).
+            return "parcial_encerrado" if has_encaixes_recusou else "parcial"
         if any(status == "remarcar" for status in dated_statuses):
             return "remarcar"
         if any(status == "recusou" for status in dated_statuses):
             return "recusou"
         if any(status == "ausente" for status in dated_statuses):
             return "ausente"
+        # Encaixes vermelho ganha sobre "agendado": tutor recusou o contato.
+        if has_encaixes_recusou:
+            return "recusou"
         if any(status == "pendente" for status in dated_statuses):
             return "agendado"
-    contextual_statuses = [_display_status_key(visit) for visit in matches]
     if any(status == "vacinado" for status in statuses):
         return "vacinado"
     for status in ("recusou", "perdeu_contato", "fluxo_ativo", "reagendar"):

@@ -9,6 +9,7 @@ import json
 import secrets
 import string
 import unicodedata
+import urllib.parse
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -2378,6 +2379,133 @@ def _pmo_insert_cloned_rows(
         return False
 
 
+_PMO_WEEKDAYS_PT = [
+    "Segunda-Feira", "Terça-Feira", "Quarta-Feira",
+    "Quinta-Feira", "Sexta-Feira", "Sábado", "Domingo",
+]
+
+_PMO_WA_SHIFT_HOURS = {
+    "Manha": "8h30 às 11h30",
+    "Tarde": "14h30 às 17h00",
+}
+
+
+def _pmo_wa_message_text(
+    tutor_name: str,
+    total_animals: int,
+    street: str,
+    number: str,
+    complement: str,
+    neighborhood: str,
+    date_label: str,
+    weekday: str,
+    shift: str,
+) -> str:
+    hours = _PMO_WA_SHIFT_HOURS.get(shift, "8h30 às 11h30")
+    parts = [f"{street}, {number}"]
+    if complement:
+        parts.append(complement)
+    parts.append(neighborhood)
+    address = " - ".join(parts)
+    return (
+        "Olá!\n"
+        "Aqui é do setor de Controle de Vetores. Estamos organizando a Vacinação"
+        " Contra a Raiva Animal 2026 e identificamos um cadastro em seu nome.\n"
+        "\n"
+        "Gostaríamos de confirmar algumas informações para que possamos vacinar seu"
+        " animal com segurança:\n"
+        "\n"
+        f"Data sugerida para a vacinação: {date_label} ({weekday})\n"
+        f"Horário: entre {hours}\n"
+        "\n"
+        "Para isso, pedimos sua colaboração respondendo às seguintes perguntas:\n"
+        "\n"
+        "• O animal está se alimentando normalmente?\n"
+        "• O animal está tomando alguma medicação atualmente?\n"
+        "• O endereço abaixo está correto? (se sim, favor confirmar, se não, corrigir)\n"
+        "\n"
+        f"REQUISITANTE: {tutor_name}\n"
+        f"Quantidade de animais: {total_animals}\n"
+        f"Endereço: {address}\n"
+        "\n"
+        "ATENÇÃO: caso não haja retorno, seu cadastro poderá ser substituído por outro.\n"
+        "\n"
+        "Agradecemos pela colaboração!"
+    )
+
+
+def _pmo_write_whatsapp_links(
+    service,
+    spreadsheet_id: str,
+    date_label: str,
+    target_date: date,
+    wa_assignments: list[tuple[list[Any], int, str]],
+) -> int:
+    """Escreve hyperlinks wa.me nas colunas S e T da aba de dia recém-criada.
+
+    wa_assignments: lista de (cells_A_K, rownum_na_aba, shift_key)
+    Retorna o número de células de hyperlink gravadas.
+    """
+    weekday = _PMO_WEEKDAYS_PT[target_date.weekday()]
+    quoted = _quote_sheet_title(date_label)
+
+    data_updates: list[dict[str, Any]] = []
+    for cells, rownum, shift in wa_assignments:
+        padded = (list(cells) + [""] * PMO_SCHEDULE_SOURCE_COLUMNS)[:PMO_SCHEDULE_SOURCE_COLUMNS]
+        tutor = str(padded[0] or "").strip()
+        street = str(padded[1] or "").strip()
+        number = str(padded[2] or "").strip()
+        complement = str(padded[3] or "").strip()
+        neighborhood = str(padded[4] or "").strip()
+        phone1_raw = str(padded[5] or "").strip()
+        phone2_raw = str(padded[6] or "").strip()
+
+        if not tutor:
+            continue
+
+        try:
+            dogs = int(float(padded[7] or 0))
+        except (ValueError, TypeError):
+            dogs = 0
+        try:
+            cats = int(float(padded[8] or 0))
+        except (ValueError, TypeError):
+            cats = 0
+        total = max(dogs + cats, 1)
+
+        phone1 = _pmo_format_phone_wa(phone1_raw)
+        phone2 = _pmo_format_phone_wa(phone2_raw)
+        if not phone1 and not phone2:
+            continue
+
+        msg = _pmo_wa_message_text(
+            tutor, total, street, number, complement, neighborhood,
+            date_label, weekday, shift,
+        )
+        encoded = urllib.parse.quote(msg)
+
+        if phone1:
+            url = f"https://wa.me/{phone1}?text={encoded}"
+            data_updates.append({
+                "range": f"{quoted}!S{rownum}",
+                "values": [[f'=HYPERLINK("{url}","WhatsApp 1")']],
+            })
+        if phone2:
+            url = f"https://wa.me/{phone2}?text={encoded}"
+            data_updates.append({
+                "range": f"{quoted}!T{rownum}",
+                "values": [[f'=HYPERLINK("{url}","WhatsApp 2")']],
+            })
+
+    if data_updates:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"valueInputOption": "USER_ENTERED", "data": data_updates},
+        ).execute()
+
+    return len(data_updates)
+
+
 def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     """Cria a aba de um novo dia de vacinação a partir do modelo "padrão".
 
@@ -2519,6 +2647,13 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     assignments = [(house["sourceRow"], "Manha") for house in manha[:placed_manha]]
     assignments += [(house["sourceRow"], "Tarde") for house in tarde[:placed_tarde]]
     _pmo_paint_source_rows(service, spreadsheet_id, int(source_gid), assignments)
+
+    wa_assignments = []
+    for house, rownum in zip(manha[:placed_manha], manha_slots[:placed_manha]):
+        wa_assignments.append((house["cells"], rownum, "Manha"))
+    for house, rownum in zip(tarde[:placed_tarde], tarde_slots[:placed_tarde]):
+        wa_assignments.append((house["cells"], rownum, "Tarde"))
+    _pmo_write_whatsapp_links(service, spreadsheet_id, date_label, target_date, wa_assignments)
 
     return {
         "date": date_label,

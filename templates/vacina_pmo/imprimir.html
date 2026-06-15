@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vacinação {{ sheet_title }} — {{ shift_label }}</title>
+  <style>
+    /* ── Geral ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 15pt;
+      margin: 0;
+      padding: 8mm 10mm;
+      background: #fff;
+      color: #000;
+    }
+
+    /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
+    .header { margin-bottom: 6px; }
+    .header h1 { font-size: 22pt; margin: 0 0 2px; }
+    .header .sub {
+      font-size: 14pt;
+      color: #444;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .header .sub strong { color: #000; }
+
+    /* ── Navegação (oculta na impressão) ───────────────────────────────────── */
+    .no-print {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .no-print a, .no-print button {
+      font-size: 12pt;
+      padding: 5px 14px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      color: #000;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .no-print .btn-print {
+      background: #1a5c2a;
+      color: #fff;
+      border-color: #1a5c2a;
+      font-weight: bold;
+    }
+
+    /* ── Tabela ─────────────────────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+    }
+
+    thead th {
+      background: #1a1a2e;
+      color: #fff;
+      font-size: 11pt;
+      padding: 7px 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 7px 8px;
+      border-bottom: 1px solid #bbb;
+      vertical-align: top;
+      font-size: 14pt;
+    }
+
+    tbody tr:nth-child(even) td { background: #f0f4f8; }
+
+    /* Colunas fixas */
+    .c-num  { width: 30px;  text-align: center; font-weight: 700; color: #555; }
+    .c-name { min-width: 160px; font-weight: 700; }
+    .c-addr { min-width: 180px; }
+    .c-tel  { min-width: 120px; white-space: nowrap; font-size: 12pt; }
+    .c-pet  { min-width: 140px; }
+    .c-obs  { min-width: 120px; font-size: 11pt; color: #333; }
+    .c-ok   { width: 38px;  text-align: center; font-size: 18pt; }
+
+    .pet-row { display: block; line-height: 1.4; }
+
+    /* ── Impressão ──────────────────────────────────────────────────────────── */
+    @media print {
+      .no-print { display: none !important; }
+
+      body { padding: 5mm 8mm; font-size: 13pt; }
+
+      thead th { font-size: 10pt; padding: 5px 6px; }
+
+      tbody td { font-size: 13pt; padding: 5px 6px; }
+
+      .c-tel  { font-size: 11pt; }
+      .c-obs  { font-size: 10pt; }
+      .c-ok   { font-size: 16pt; }
+
+      tr { page-break-inside: avoid; }
+    }
+
+    @page {
+      size: A4 landscape;
+      margin: 10mm 10mm 12mm;
+    }
+  </style>
+</head>
+<body>
+
+  {# ── Navegação ────────────────────────────────────────────────────────────── #}
+  <div class="no-print">
+    <a href="{{ url_for('vacina_pmo') }}">← Painel</a>
+    <a href="{{ url_for('vacina_pmo_imprimir', date_str=date_str, turno=other_turno) }}">
+      Trocar para {{ 'Tarde' if shift_key == 'Manha' else 'Manhã' }}
+    </a>
+    <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+  </div>
+
+  {# ── Cabeçalho ────────────────────────────────────────────────────────────── #}
+  <div class="header">
+    <h1>Vacinação {{ sheet_title }} — {{ shift_label }}</h1>
+    <div class="sub">
+      <span>Tutores: <strong>{{ visits|length }}</strong></span>
+      <span>Cães: <strong>{{ visits|sum(attribute='dogs') }}</strong></span>
+      <span>Gatos: <strong>{{ visits|sum(attribute='cats') }}</strong></span>
+      <span>Total animais: <strong>{{ (visits|sum(attribute='dogs')) + (visits|sum(attribute='cats')) }}</strong></span>
+    </div>
+  </div>
+
+  {# ── Tabela ───────────────────────────────────────────────────────────────── #}
+  {% if visits %}
+  <table>
+    <thead>
+      <tr>
+        <th class="c-num">#</th>
+        <th class="c-name">Tutor</th>
+        <th class="c-addr">Endereço</th>
+        <th class="c-tel">Telefone</th>
+        <th class="c-pet">Animais</th>
+        <th class="c-obs">Observação</th>
+        <th class="c-ok">✓</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in visits %}
+      <tr>
+        <td class="c-num">{{ loop.index }}</td>
+        <td class="c-name">{{ v.tutor_name }}</td>
+        <td class="c-addr">{{ v.address or '—' }}</td>
+        <td class="c-tel">
+          {{ v.phone1 or '' }}
+          {% if v.phone2 %}<br>{{ v.phone2 }}{% endif %}
+        </td>
+        <td class="c-pet">
+          {% for a in v.animals %}
+            <span class="pet-row">
+              {% if a.species == 'cao' %}🐕{% else %}🐈{% endif %}
+              {{ a.name }}
+            </span>
+          {% else %}
+            {% if v.dogs %}🐕 {{ v.dogs }}{% endif %}
+            {% if v.cats %}🐈 {{ v.cats }}{% endif %}
+          {% endfor %}
+        </td>
+        <td class="c-obs">{{ v.note or '' }}</td>
+        <td class="c-ok">☐</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="font-size:14pt; margin-top:20px;">Nenhum tutor sincronizado para este turno.</p>
+  {% endif %}
+
+  <script>
+    // Em dispositivo móvel (<900px) abre impressão automaticamente
+    if (window.innerWidth < 900) { window.addEventListener('load', () => window.print()); }
+  </script>
+</body>
+</html>

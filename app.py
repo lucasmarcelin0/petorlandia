@@ -4758,6 +4758,34 @@ def vacina_pmo_cobertura_ativa():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/imprimir/<date_str>/<turno>')
+@login_required
+def vacina_pmo_imprimir(date_str, turno):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    from models import PmoVaccinationVisit
+    sheet_title = date_str.replace('-', '/')
+    shift_key = "Manha" if turno.lower().startswith("man") else "Tarde"
+    shift_label = "Manhã" if shift_key == "Manha" else "Tarde"
+    other_turno = "tarde" if shift_key == "Manha" else "manha"
+
+    visits = (
+        PmoVaccinationVisit.query
+        .filter_by(sheet_title=sheet_title, shift=shift_key)
+        .order_by(PmoVaccinationVisit.source_row.asc())
+        .all()
+    )
+    return render_template(
+        'vacina_pmo/imprimir.html',
+        visits=visits,
+        sheet_title=sheet_title,
+        shift_label=shift_label,
+        shift_key=shift_key,
+        date_str=date_str,
+        other_turno=other_turno,
+    )
+
+
 @app.route('/vacina-pmo/sheets', methods=['GET'])
 @login_required
 def vacina_pmo_sheets():

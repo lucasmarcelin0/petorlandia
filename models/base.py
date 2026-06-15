@@ -128,6 +128,7 @@ class UserRole(enum.Enum):
     doador = 'doador'
     veterinario = 'veterinario'
     admin = 'admin'
+    vacinador = 'vacinador'
 
 
 # Usuário
