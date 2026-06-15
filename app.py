@@ -29463,9 +29463,17 @@ def _vacserv_refund_payment(payment) -> bool:
 @login_required
 def servicos_vacinas():
     from models import VaccineServiceRequest
-    from services.vaccine_service_paid import create_vaccine_request, list_active_items
+    from services.vaccine_service_paid import create_vaccine_request, list_active_items, list_cidades
 
-    items = list_active_items()
+    cidades = list_cidades()
+    # Prioridade: query param > cidade do endereço do usuário > primeira cidade disponível
+    cidade_param = (request.args.get('cidade') or request.form.get('cidade') or '').strip()
+    if not cidade_param and current_user.endereco and current_user.endereco.cidade:
+        cidade_param = current_user.endereco.cidade.strip()
+    if not cidade_param and cidades:
+        cidade_param = cidades[0]
+    cidade_selecionada = cidade_param if cidade_param in cidades else (cidades[0] if cidades else None)
+    items = list_active_items(cidade=cidade_selecionada)
     animals = (
         Animal.query.filter_by(user_id=current_user.id)
         .filter(Animal.removido_em.is_(None))
@@ -29574,6 +29582,8 @@ def servicos_vacinas():
         prof_address=prof,
         featured_provider=featured_provider,
         featured_clinic=featured_clinic,
+        cidades=cidades,
+        cidade_selecionada=cidade_selecionada,
     )
 
 
@@ -29763,6 +29773,7 @@ def servicos_vacinas_admin_item():
     item.fabricante = (request.form.get('fabricante') or '').strip() or None
     item.valor_repasse = valor_repasse
     item.doses_info = (request.form.get('doses_info') or '').strip() or None
+    item.cidade = (request.form.get('cidade') or '').strip() or None
     db.session.commit()
     flash(f'Vacina "{nome}" salva.', 'success')
     return redirect(url_for('servicos_vacinas_admin'))

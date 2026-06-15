@@ -159,6 +159,7 @@
             </div>
             <input type="text" name="descricao" class="form-control form-control-sm mb-2" placeholder="Descrição" value="{{ item.descricao or '' }}">
             <input type="text" name="doses_info" class="form-control form-control-sm mb-2" placeholder="Ex.: Dose única anual" value="{{ item.doses_info or '' }}">
+            <input type="text" name="cidade" class="form-control form-control-sm mb-2" placeholder="Cidade (ex.: Orlândia)" value="{{ item.cidade or '' }}">
             <div class="d-flex gap-3 align-items-center mb-2 small">
               <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="cao" {% if 'cao' in item.especies %}checked{% endif %}> 🐕 Cão</label>
               <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="gato" {% if 'gato' in item.especies %}checked{% endif %}> 🐈 Gato</label>
@@ -186,7 +187,8 @@
         <div class="col-md-3"><input type="text" name="fabricante" class="form-control form-control-sm" placeholder="Fabricante"></div>
         <div class="col-md-3"><input type="text" name="valor_repasse" class="form-control form-control-sm" placeholder="Repasse"></div>
         <div class="col-md-6"><input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição curta"></div>
-        <div class="col-md-4"><input type="text" name="doses_info" class="form-control form-control-sm" placeholder="Ex.: Dose única anual"></div>
+        <div class="col-md-3"><input type="text" name="doses_info" class="form-control form-control-sm" placeholder="Ex.: Dose única anual"></div>
+        <div class="col-md-3"><input type="text" name="cidade" class="form-control form-control-sm" placeholder="Cidade (ex.: Orlândia)" value="Orlândia"></div>
         <div class="col-md-4 d-flex gap-3 align-items-center small">
           <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="cao" checked> 🐕 Cão</label>
           <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="especies" value="gato" checked> 🐈 Gato</label>

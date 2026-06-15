@@ -42,15 +42,28 @@ def log_event(req, event: str, note: str = '', actor_user_id: int | None = None)
     ))
 
 
-def list_active_items():
+def list_active_items(cidade=None):
     from models import VaccineServiceItem
 
-    return (
+    q = VaccineServiceItem.query.filter_by(ativo=True)
+    if cidade:
+        q = q.filter(VaccineServiceItem.cidade == cidade)
+    return q.order_by(VaccineServiceItem.position, VaccineServiceItem.nome).all()
+
+
+def list_cidades():
+    """Retorna lista ordenada de cidades que têm itens ativos."""
+    from models import VaccineServiceItem
+    from sqlalchemy import distinct
+
+    rows = (
         VaccineServiceItem.query
-        .filter_by(ativo=True)
-        .order_by(VaccineServiceItem.position, VaccineServiceItem.nome)
+        .with_entities(distinct(VaccineServiceItem.cidade))
+        .filter(VaccineServiceItem.ativo == True, VaccineServiceItem.cidade.isnot(None))
+        .order_by(VaccineServiceItem.cidade)
         .all()
     )
+    return [r[0] for r in rows]
 
 
 def create_vaccine_request(

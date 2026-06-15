@@ -3702,6 +3702,7 @@ class VaccineServiceItem(db.Model):
         index=True,
     )
     doses_info = db.Column(db.String(200), nullable=True)  # ex.: "Dose única anual"
+    cidade = db.Column(db.String(100), nullable=True, index=True)
     ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)

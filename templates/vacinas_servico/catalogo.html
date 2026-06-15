@@ -118,6 +118,34 @@
   </section>
   {% endif %}
 
+  {# ── Seletor de cidade ───────────────────────────────────────────────── #}
+  {% if cidades|length > 1 %}
+  <div class="card border-0 shadow-sm rounded-4 mb-3 p-3 d-flex flex-row align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold text-nowrap"><i class="fa-solid fa-location-dot me-1 text-danger"></i>Cidade:</span>
+    <div class="d-flex flex-wrap gap-2">
+      {% for c in cidades %}
+      <a href="?cidade={{ c|urlencode }}"
+         class="btn btn-sm rounded-pill {% if c == cidade_selecionada %}btn-success{% else %}btn-outline-secondary{% endif %}">
+        {{ c }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Banner de localização ────────────────────────────────────────────── #}
+  {% if cidade_selecionada %}
+  <div class="alert alert-success small d-flex gap-2 align-items-start rounded-3 mb-3">
+    <i class="fa-solid fa-location-dot mt-1"></i>
+    <div>
+      Vacinas e preços disponíveis para <strong>{{ cidade_selecionada }}</strong>.
+      {% if cidades|length > 1 %}
+      <a href="?cidade=" class="alert-link ms-1">Ver outra cidade</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="alert alert-info small d-flex gap-2 align-items-start rounded-3">
     <i class="fa-solid fa-circle-info mt-1"></i>
     <div>Escolha a vacina, o pet e o endereço. Após o pagamento, a equipe combina a data e o turno da visita.</div>
