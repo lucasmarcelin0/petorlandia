@@ -98,8 +98,7 @@
         <h2 class="h3 fw-bold mb-2">Cuidado profissional sem tirar seu pet de casa</h2>
         <p class="mb-3 text-white-50">
           Aplicação por <strong class="text-white">{{ featured_provider.user.name }}</strong>
-          {% if featured_provider.crmv %} · CRMV {{ featured_provider.crmv }}{% endif %}
-          {% if featured_clinic %}, da {{ featured_clinic.nome }}{% endif %}.
+          {% if featured_provider.crmv %} · CRMV {{ featured_provider.crmv }}{% endif %}{% if featured_clinic %}, da {{ featured_clinic.nome }}{% endif %}.
         </p>
         <div class="d-flex flex-wrap gap-2">
           <span class="badge rounded-pill vacserv-trust-chip p-2">
