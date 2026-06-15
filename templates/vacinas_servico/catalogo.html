@@ -149,7 +149,7 @@
             <input class="form-check-input mt-0" type="radio" name="item_id" value="{{ item.id }}" required>
             {% if item.image_url %}
             <img src="{{ item.image_url if item.image_url.startswith('http') else url_for('static', filename=item.image_url) }}"
-                 alt="{{ item.nome }} {{ item.fabricante or '' }}" class="vacserv-product-image" loading="lazy">
+                 alt="{{ item.nome }} {{ item.fabricante or '' }}" class="vacserv-product-image">
             {% endif %}
             <span class="d-flex flex-column flex-grow-1 gap-1">
               <span class="d-flex flex-wrap align-items-center gap-2">
@@ -188,7 +188,7 @@
                    style="cursor:pointer;">
               <input class="form-check-input mt-0" type="radio" name="animal_id" value="{{ animal.id }}" required>
               {% if animal.image %}
-              <img src="{{ animal.image }}" alt="Foto de {{ animal.name or 'pet' }}" class="vacserv-pet-photo" loading="lazy">
+              <img src="{{ animal.image }}" alt="Foto de {{ animal.name or 'pet' }}" class="vacserv-pet-photo">
               {% else %}
               <span class="vacserv-pet-photo vacserv-pet-placeholder">
                 <i class="fa-solid fa-paw"></i>
