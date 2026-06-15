@@ -57,22 +57,51 @@ def create_vaccine_request(
     *,
     user,
     animal,
-    item,
+    items=None,
+    item=None,
     payload: dict[str, Any],
     criar_preferencia: Callable[[list[dict], str, str], dict],
     back_url_builder: Callable[[str], str],
 ) -> tuple[Any, str]:
     """Cria o pedido + Payment + preferência MP. Retorna (request, payment_url)."""
-    from models import Payment, PaymentMethod, VaccineServiceRequest
+    from models import (
+        Payment,
+        PaymentMethod,
+        VaccineServiceRequest,
+        VaccineServiceRequestItem,
+    )
+
+    selected_items = list(items or ([item] if item is not None else []))
+    if not selected_items:
+        raise ValueError('Escolha pelo menos uma vacina.')
+
+    provider_ids = {selected.provider_vet_id for selected in selected_items}
+    if len(provider_ids) > 1:
+        raise ValueError('As vacinas selecionadas precisam ser aplicadas pelo mesmo profissional.')
+
+    total = sum((Decimal(str(selected.preco)) for selected in selected_items), Decimal('0.00'))
+    payout_total = sum(
+        (
+            Decimal(str(selected.valor_repasse))
+            for selected in selected_items
+            if selected.valor_repasse is not None
+        ),
+        Decimal('0.00'),
+    )
+    first_item = selected_items[0]
+    item_names = ', '.join(selected.nome for selected in selected_items)
+    manufacturers = ', '.join(dict.fromkeys(
+        selected.fabricante for selected in selected_items if selected.fabricante
+    ))
 
     req = VaccineServiceRequest(
         user_id=user.id,
         animal_id=animal.id,
-        item_id=item.id,
-        item_nome=item.nome,
-        valor=item.preco,
-        fabricante=item.fabricante,
-        valor_repasse=item.valor_repasse,
+        item_id=first_item.id,
+        item_nome=item_names,
+        valor=total,
+        fabricante=manufacturers or None,
+        valor_repasse=payout_total,
         address_street=(payload.get('address_street') or '').strip() or None,
         address_number=(payload.get('address_number') or '').strip() or None,
         address_complement=(payload.get('address_complement') or '').strip() or None,
@@ -83,18 +112,31 @@ def create_vaccine_request(
         note=(payload.get('note') or '').strip() or None,
         status='pendente_pagamento',
         public_token=secrets.token_urlsafe(32),
-        assigned_vet_id=item.provider_vet_id,
+        assigned_vet_id=first_item.provider_vet_id,
     )
     db.session.add(req)
     db.session.flush()  # garante req.id para a external_reference
 
+    for selected in selected_items:
+        db.session.add(VaccineServiceRequestItem(
+            request_id=req.id,
+            item_id=selected.id,
+            nome=selected.nome,
+            fabricante=selected.fabricante,
+            valor=selected.preco,
+            valor_repasse=selected.valor_repasse,
+        ))
+
     extref = f'vacserv-{req.id}'
-    items_payload = [{
-        'id': f'vacserv-item-{item.id}',
-        'title': f'{item.nome} — {animal.name or "Pet"}',
-        'quantity': 1,
-        'unit_price': float(item.preco),
-    }]
+    items_payload = [
+        {
+            'id': f'vacserv-item-{selected.id}',
+            'title': f'{selected.nome} — {animal.name or "Pet"}',
+            'quantity': 1,
+            'unit_price': float(selected.preco),
+        }
+        for selected in selected_items
+    ]
     preference = criar_preferencia(items_payload, extref, back_url_builder(req.public_token))
 
     payment = Payment(
@@ -102,13 +144,13 @@ def create_vaccine_request(
         method=PaymentMethod.PIX,
         external_reference=extref,
         init_point=preference['payment_url'],
-        amount=Decimal(str(item.preco)),
+        amount=total,
     )
     db.session.add(payment)
     db.session.flush()
     req.payment_id = payment.id
 
-    log_event(req, 'criado', f'{item.nome} para {animal.name or "pet"}', user.id)
+    log_event(req, 'criado', f'{item_names} para {animal.name or "pet"}', user.id)
     log_event(req, 'pagamento_iniciado', actor_user_id=user.id)
     db.session.commit()
     return req, preference['payment_url']
@@ -160,29 +202,37 @@ def request_reschedule(req, preferred_date: date | None, note: str, actor_user_i
 
 
 def complete_request(req, actor_user_id: int, lote: str = '') -> None:
-    """Marca aplicada e cria o registro Vacina no prontuário do animal."""
+    """Marca aplicada e cria os registros de vacina no prontuário do animal."""
     from models import Vacina
 
     if req.status not in ('agendado', 'atribuido'):
         raise ValueError('Pedido precisa estar agendado para concluir.')
 
-    vacina = Vacina(
-        animal_id=req.animal_id,
-        nome=req.item_nome,
-        tipo='Particular',
-        aplicada=True,
-        aplicada_em=date.today(),
-        lote=lote or None,
-        aplicada_por=(
-            req.assigned_vet.user_id
-            if req.assigned_vet and getattr(req.assigned_vet, 'user_id', None)
-            else None
-        ),
-        created_by=actor_user_id,
-    )
-    db.session.add(vacina)
-    db.session.flush()
-    req.vacina_id = vacina.id
+    request_items = list(req.request_items)
+    vaccine_names = [entry.nome for entry in request_items] or [req.item_nome]
+    first_vaccine = None
+    for index, vaccine_name in enumerate(vaccine_names):
+        vacina = Vacina(
+            animal_id=req.animal_id,
+            nome=vaccine_name,
+            tipo='Particular',
+            aplicada=True,
+            aplicada_em=date.today(),
+            lote=lote or None,
+            aplicada_por=(
+                req.assigned_vet.user_id
+                if req.assigned_vet and getattr(req.assigned_vet, 'user_id', None)
+                else None
+            ),
+            created_by=actor_user_id,
+        )
+        db.session.add(vacina)
+        db.session.flush()
+        if index < len(request_items):
+            request_items[index].vacina_id = vacina.id
+        if first_vaccine is None:
+            first_vaccine = vacina
+    req.vacina_id = first_vaccine.id
     req.vaccinated_at = utcnow()
     req.status = 'concluido'
     log_event(req, 'concluido', f'Lote {lote}' if lote else '', actor_user_id)

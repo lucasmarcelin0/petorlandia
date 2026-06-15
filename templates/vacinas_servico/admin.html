@@ -87,7 +87,7 @@
 
         {% if p.status in ('atribuido', 'agendado') %}
         <form method="post" action="{{ url_for('servicos_vacinas_admin_acao', req_id=p.id) }}" class="d-flex gap-2"
-              onsubmit="return confirm('Confirmar aplicação da vacina? Será criado o registro no prontuário do pet.');">
+              onsubmit="return confirm('Confirmar aplicação das vacinas? Serão criados os registros no prontuário do pet.');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="acao" value="concluir">
           <input type="text" name="lote" class="form-control form-control-sm" placeholder="Lote (opcional)" style="max-width:140px;">

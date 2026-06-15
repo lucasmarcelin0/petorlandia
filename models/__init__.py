@@ -78,6 +78,7 @@ __all__ = [
     "PmoVaccinationVisit",
     "VaccineServiceItem",
     "VaccineServiceRequest",
+    "VaccineServiceRequestItem",
     "VaccineServiceEvent",
     "DeliveryRequest",
     "DeliveryResearchContact",

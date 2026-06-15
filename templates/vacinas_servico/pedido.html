@@ -8,7 +8,7 @@
       <i class="fa-solid fa-arrow-left me-1"></i> Voltar
     </a>
     {% endif %}
-    <h1 class="h4 fw-bold mb-0">Pedido de vacina</h1>
+    <h1 class="h4 fw-bold mb-0">Pedido de vacinas</h1>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -42,8 +42,21 @@
       </div>
 
       <div class="small d-grid gap-1">
+        {% if req.request_items %}
+        <div><strong>Vacinas:</strong></div>
+        <ul class="mb-1 ps-3">
+          {% for entry in req.request_items %}
+          <li>
+            {{ entry.nome }}{% if entry.fabricante %} · {{ entry.fabricante }}{% endif %}
+            — R$ {{ '%.2f'|format(entry.valor)|replace('.', ',') }}
+          </li>
+          {% endfor %}
+        </ul>
+        <div><strong>Total:</strong> R$ {{ '%.2f'|format(req.valor)|replace('.', ',') }}</div>
+        {% else %}
         <div><strong>Vacina:</strong> {{ req.item_nome }} — R$ {{ '%.2f'|format(req.valor)|replace('.', ',') }}</div>
         {% if req.fabricante %}<div><strong>Fabricante:</strong> {{ req.fabricante }}</div>{% endif %}
+        {% endif %}
         <div><strong>Pet:</strong> {{ req.animal.name if req.animal else '—' }}</div>
         <div><strong>Endereço:</strong> {{ req.address_full or '—' }}</div>
         {% if req.scheduled_date %}

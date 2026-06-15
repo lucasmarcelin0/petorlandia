@@ -64,6 +64,11 @@
     color: #38716b;
     background: #e7f5f3;
   }
+  .vacserv-selection-summary {
+    background: #eef9f7;
+    border: 1px solid #bce3dd;
+    color: #176d64;
+  }
   @media (max-width: 575.98px) {
     .vacserv-product-image {
       width: 104px;
@@ -140,13 +145,14 @@
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
-          <span class="badge rounded-pill bg-primary me-1">1</span> Escolha a vacina
+          <span class="badge rounded-pill bg-primary me-1">1</span> Escolha uma ou mais vacinas
         </h6>
         <div class="d-grid gap-3">
           {% for item in items %}
           <label class="form-check rounded-4 p-3 m-0 d-flex align-items-center gap-3 vacserv-item"
                  style="cursor:pointer;" data-especies="{{ item.especies }}">
-            <input class="form-check-input mt-0" type="radio" name="item_id" value="{{ item.id }}" required>
+            <input class="form-check-input mt-0 vacserv-item-check" type="checkbox"
+                   name="item_ids" value="{{ item.id }}" data-price="{{ item.preco }}">
             {% if item.image_url %}
             <img src="{{ item.image_url if item.image_url.startswith('http') else url_for('static', filename=item.image_url) }}"
                  alt="{{ item.nome }} {{ item.fabricante or '' }}" class="vacserv-product-image">
@@ -204,6 +210,10 @@
             </label>
           </div>
           {% endfor %}
+        </div>
+        <div class="vacserv-selection-summary rounded-3 p-3 mt-3 d-flex justify-content-between gap-3">
+          <span><strong id="vacserv-selected-count">0</strong> vacina(s) selecionada(s)</span>
+          <strong id="vacserv-selected-total">R$ 0,00</strong>
         </div>
         {% else %}
         <p class="text-muted small mb-2">Você ainda não tem pets cadastrados.</p>
@@ -307,4 +317,29 @@
   {% endif %}
 
 </div>
+<script>
+  (() => {
+    const checks = [...document.querySelectorAll('.vacserv-item-check')];
+    const count = document.getElementById('vacserv-selected-count');
+    const total = document.getElementById('vacserv-selected-total');
+    const form = document.getElementById('vacserv-form');
+
+    const updateSummary = () => {
+      const selected = checks.filter(check => check.checked);
+      const amount = selected.reduce((sum, check) => sum + Number(check.dataset.price || 0), 0);
+      count.textContent = selected.length;
+      total.textContent = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    checks.forEach(check => check.addEventListener('change', updateSummary));
+    form?.addEventListener('submit', event => {
+      if (!checks.some(check => check.checked)) {
+        event.preventDefault();
+        checks[0]?.focus();
+        alert('Escolha pelo menos uma vacina.');
+      }
+    });
+    updateSummary();
+  })();
+</script>
 {% endblock %}

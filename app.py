@@ -29476,13 +29476,18 @@ def servicos_vacinas():
     )
 
     if request.method == 'POST':
-        item = next((i for i in items if i.id == request.form.get('item_id', type=int)), None)
+        selected_ids = {
+            int(value)
+            for value in request.form.getlist('item_ids')
+            if value.isdigit()
+        }
+        selected_items = [item for item in items if item.id in selected_ids]
         animal = next((a for a in animals if a.id == request.form.get('animal_id', type=int)), None)
         phone = (request.form.get('phone') or '').strip()
         street = (request.form.get('address_street') or '').strip()
 
-        if not item:
-            flash('Escolha a vacina desejada.', 'danger')
+        if not selected_items:
+            flash('Escolha pelo menos uma vacina.', 'danger')
         elif not animal:
             flash('Escolha o pet que vai receber a vacina.', 'danger')
         elif not phone:
@@ -29501,7 +29506,7 @@ def servicos_vacinas():
                 req, payment_url = create_vaccine_request(
                     user=current_user,
                     animal=animal,
-                    item=item,
+                    items=selected_items,
                     payload={
                         'phone': phone,
                         'address_street': street,
@@ -29521,6 +29526,9 @@ def servicos_vacinas():
             except PaymentPreferenceError as exc:
                 db.session.rollback()
                 flash(str(exc), 'danger')
+            except ValueError as exc:
+                db.session.rollback()
+                flash(str(exc), 'warning')
             except Exception:
                 db.session.rollback()
                 current_app.logger.exception('Falha ao criar pedido de vacina paga')

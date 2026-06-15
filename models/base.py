@@ -3776,6 +3776,12 @@ class VaccineServiceRequest(db.Model):
         cascade='all, delete-orphan',
         order_by='VaccineServiceEvent.created_at',
     )
+    request_items = db.relationship(
+        'VaccineServiceRequestItem',
+        back_populates='request',
+        cascade='all, delete-orphan',
+        order_by='VaccineServiceRequestItem.id',
+    )
 
     @property
     def status_label(self):
@@ -3791,6 +3797,39 @@ class VaccineServiceRequest(db.Model):
         if self.address_neighborhood:
             parts.append(self.address_neighborhood)
         return ' — '.join(p for p in parts if p)
+
+
+class VaccineServiceRequestItem(db.Model):
+    """Snapshot de cada vacina incluída em um pedido pago."""
+
+    __tablename__ = 'vaccine_service_request_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vaccine_service_request.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vaccine_service_item.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    nome = db.Column(db.String(120), nullable=False)
+    fabricante = db.Column(db.String(120), nullable=True)
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_repasse = db.Column(db.Numeric(10, 2), nullable=True)
+    vacina_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vacina.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    request = db.relationship('VaccineServiceRequest', back_populates='request_items')
+    item = db.relationship('VaccineServiceItem', foreign_keys=[item_id])
+    vacina = db.relationship('Vacina', foreign_keys=[vacina_id])
 
 
 class VaccineServiceEvent(db.Model):
