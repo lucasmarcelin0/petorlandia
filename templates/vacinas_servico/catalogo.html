@@ -179,7 +179,7 @@
         </div>
         <div class="vacserv-selection-summary rounded-3 p-3 mt-3 d-flex justify-content-between gap-3">
           <span><strong id="vacserv-selected-count">0</strong> vacina(s) selecionada(s)</span>
-          <strong id="vacserv-selected-total">R$ 0,00</strong>
+          <strong id="vacserv-selected-subtotal">R$ 0,00</strong>
         </div>
       </div>
     </div>
@@ -221,6 +221,12 @@
           <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
         </a>
         {% endif %}
+        <div id="vacserv-total-wrap" class="vacserv-selection-summary rounded-3 p-3 mt-3 d-none">
+          <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <span id="vacserv-total-breakdown" class="small"></span>
+            <strong id="vacserv-selected-total" class="fs-5">R$ 0,00</strong>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -319,34 +325,57 @@
 </div>
 <script>
   (() => {
-    const checks = [...document.querySelectorAll('.vacserv-item-check')];
-    const count = document.getElementById('vacserv-selected-count');
-    const total = document.getElementById('vacserv-selected-total');
-    const form = document.getElementById('vacserv-form');
+    const fmt = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const vacChecks = [...document.querySelectorAll('.vacserv-item-check')];
+    const petChecks = [...document.querySelectorAll('.vacserv-pet-check')];
+
+    const countEl     = document.getElementById('vacserv-selected-count');
+    const subtotalEl  = document.getElementById('vacserv-selected-subtotal');
+    const totalWrap   = document.getElementById('vacserv-total-wrap');
+    const breakdownEl = document.getElementById('vacserv-total-breakdown');
+    const totalEl     = document.getElementById('vacserv-selected-total');
+    const form        = document.getElementById('vacserv-form');
 
     const updateSummary = () => {
-      const selected = checks.filter(check => check.checked);
-      const amount = selected.reduce((sum, check) => sum + Number(check.dataset.price || 0), 0);
-      count.textContent = selected.length;
-      total.textContent = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const selVac  = vacChecks.filter(c => c.checked);
+      const numPets = petChecks.filter(c => c.checked).length;
+      const perPet  = selVac.reduce((s, c) => s + Number(c.dataset.price || 0), 0);
+      const grand   = perPet * (numPets || 1);
+
+      countEl.textContent    = selVac.length;
+      subtotalEl.textContent = fmt(perPet);
+
+      if (selVac.length > 0 && numPets > 1) {
+        breakdownEl.textContent = `${fmt(perPet)} × ${numPets} pets`;
+        totalEl.textContent     = fmt(grand);
+        totalWrap.classList.remove('d-none');
+      } else if (selVac.length > 0 && numPets === 1) {
+        breakdownEl.textContent = '1 pet selecionado';
+        totalEl.textContent     = fmt(perPet);
+        totalWrap.classList.remove('d-none');
+      } else {
+        totalWrap.classList.add('d-none');
+      }
     };
 
-    checks.forEach(check => check.addEventListener('change', updateSummary));
+    vacChecks.forEach(c => c.addEventListener('change', updateSummary));
+    petChecks.forEach(c => c.addEventListener('change', updateSummary));
 
-    const petChecks = [...document.querySelectorAll('.vacserv-pet-check')];
     form?.addEventListener('submit', event => {
-      if (!checks.some(check => check.checked)) {
+      if (!vacChecks.some(c => c.checked)) {
         event.preventDefault();
-        checks[0]?.focus();
+        vacChecks[0]?.focus();
         alert('Escolha pelo menos uma vacina.');
         return;
       }
-      if (!petChecks.some(check => check.checked)) {
+      if (!petChecks.some(c => c.checked)) {
         event.preventDefault();
         petChecks[0]?.focus();
         alert('Escolha pelo menos um pet.');
       }
     });
+
     updateSummary();
   })();
 </script>
