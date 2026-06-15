@@ -159,6 +159,19 @@
 
 
 
+  <!-- Área Profissional: Vacinador -->
+  {% if current_user.role in ('vacinador', 'admin') %}
+  <div class="card shadow rounded-4 p-4 mb-5 border-0">
+    <h4 class="mb-3">💉 Área Profissional — Vacinação</h4>
+    <p class="text-muted mb-4">Acesse a agenda de turnos e as listas de animais para vacinar no dia.</p>
+    <div class="d-flex flex-wrap gap-3">
+      <a href="{{ url_for('vacina_pmo_agenda') }}" class="btn btn-success rounded-pill px-4">
+        📋 Ver Agenda de Turnos
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Meus Animais -->
   <div class="mb-5">
     <h4 class="mb-3">🐾 Meus Animais Cadastrados</h4>
