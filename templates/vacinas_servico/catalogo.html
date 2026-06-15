@@ -177,6 +177,10 @@
           </label>
           {% endfor %}
         </div>
+        <div class="vacserv-selection-summary rounded-3 p-3 mt-3 d-flex justify-content-between gap-3">
+          <span><strong id="vacserv-selected-count">0</strong> vacina(s) selecionada(s)</span>
+          <strong id="vacserv-selected-total">R$ 0,00</strong>
+        </div>
       </div>
     </div>
 
@@ -210,10 +214,6 @@
             </label>
           </div>
           {% endfor %}
-        </div>
-        <div class="vacserv-selection-summary rounded-3 p-3 mt-3 d-flex justify-content-between gap-3">
-          <span><strong id="vacserv-selected-count">0</strong> vacina(s) selecionada(s)</span>
-          <strong id="vacserv-selected-total">R$ 0,00</strong>
         </div>
         {% else %}
         <p class="text-muted small mb-2">Você ainda não tem pets cadastrados.</p>
