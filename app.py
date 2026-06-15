@@ -29480,14 +29480,17 @@ def servicos_vacinas():
             if value.isdigit()
         }
         selected_items = [item for item in items if item.id in selected_ids]
-        animal = next((a for a in animals if a.id == request.form.get('animal_id', type=int)), None)
+        selected_animal_ids = {
+            int(v) for v in request.form.getlist('animal_ids') if v.isdigit()
+        }
+        selected_animals = [a for a in animals if a.id in selected_animal_ids]
         phone = (request.form.get('phone') or '').strip()
         street = (request.form.get('address_street') or '').strip()
 
         if not selected_items:
             flash('Escolha pelo menos uma vacina.', 'danger')
-        elif not animal:
-            flash('Escolha o pet que vai receber a vacina.', 'danger')
+        elif not selected_animals:
+            flash('Escolha pelo menos um pet.', 'danger')
         elif not phone:
             flash('Informe um telefone para contato.', 'danger')
         elif not street:
@@ -29500,27 +29503,33 @@ def servicos_vacinas():
                     preferred_date = datetime.strptime(raw_date, '%Y-%m-%d').date()
                 except ValueError:
                     preferred_date = None
+            payload = {
+                'phone': phone,
+                'address_street': street,
+                'address_number': request.form.get('address_number'),
+                'address_complement': request.form.get('address_complement'),
+                'address_neighborhood': request.form.get('address_neighborhood'),
+                'preferred_date': preferred_date,
+                'preferred_shift': request.form.get('preferred_shift'),
+                'note': request.form.get('note'),
+            }
+            first_payment_url = None
             try:
-                req, payment_url = create_vaccine_request(
-                    user=current_user,
-                    animal=animal,
-                    items=selected_items,
-                    payload={
-                        'phone': phone,
-                        'address_street': street,
-                        'address_number': request.form.get('address_number'),
-                        'address_complement': request.form.get('address_complement'),
-                        'address_neighborhood': request.form.get('address_neighborhood'),
-                        'preferred_date': preferred_date,
-                        'preferred_shift': request.form.get('preferred_shift'),
-                        'note': request.form.get('note'),
-                    },
-                    criar_preferencia=_criar_preferencia_pagamento,
-                    back_url_builder=lambda tok: url_for(
-                        'servicos_vacinas_pedido', token=tok, _external=True
-                    ),
-                )
-                return redirect(payment_url)
+                for animal in selected_animals:
+                    _tok = None
+                    req, payment_url = create_vaccine_request(
+                        user=current_user,
+                        animal=animal,
+                        items=selected_items,
+                        payload=payload,
+                        criar_preferencia=_criar_preferencia_pagamento,
+                        back_url_builder=lambda tok: url_for(
+                            'servicos_vacinas_pedido', token=tok, _external=True
+                        ),
+                    )
+                    if first_payment_url is None:
+                        first_payment_url = payment_url
+                return redirect(first_payment_url)
             except PaymentPreferenceError as exc:
                 db.session.rollback()
                 flash(str(exc), 'danger')

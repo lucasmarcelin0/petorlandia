@@ -196,7 +196,7 @@
           <div class="col-md-6">
             <label class="form-check rounded-4 p-3 m-0 d-flex align-items-center gap-3 vacserv-pet h-100"
                    style="cursor:pointer;">
-              <input class="form-check-input mt-0" type="radio" name="animal_id" value="{{ animal.id }}" required>
+              <input class="form-check-input mt-0 vacserv-pet-check" type="checkbox" name="animal_ids" value="{{ animal.id }}">
               {% if animal.image %}
               <img src="{{ animal.image }}" alt="Foto de {{ animal.name or 'pet' }}" class="vacserv-pet-photo">
               {% else %}
@@ -332,11 +332,19 @@
     };
 
     checks.forEach(check => check.addEventListener('change', updateSummary));
+
+    const petChecks = [...document.querySelectorAll('.vacserv-pet-check')];
     form?.addEventListener('submit', event => {
       if (!checks.some(check => check.checked)) {
         event.preventDefault();
         checks[0]?.focus();
         alert('Escolha pelo menos uma vacina.');
+        return;
+      }
+      if (!petChecks.some(check => check.checked)) {
+        event.preventDefault();
+        petChecks[0]?.focus();
+        alert('Escolha pelo menos um pet.');
       }
     });
     updateSummary();
