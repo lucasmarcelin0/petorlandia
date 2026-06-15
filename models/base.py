@@ -1007,6 +1007,34 @@ class CasaDeRacao(db.Model):
         return f'{self.nome} ({self.cnpj or "sem CNPJ"})'
 
 
+class CasaDeRacaoOnboardingInvite(db.Model):
+    __tablename__ = 'casa_de_racao_onboarding_invite'
+
+    id = db.Column(db.Integer, primary_key=True)
+    casa_de_racao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('casa_de_racao.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+
+    casa_de_racao = db.relationship(
+        'CasaDeRacao',
+        backref=db.backref('onboarding_invites', cascade='all, delete-orphan'),
+    )
+
+    @property
+    def is_expired(self):
+        expires_at = self.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return bool(expires_at and expires_at < datetime.now(timezone.utc))
+
+
 class CasaDeRacaoHorario(db.Model):
     __tablename__ = 'casa_de_racao_horario'
 

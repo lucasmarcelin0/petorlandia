@@ -20,6 +20,11 @@ def get_blueprint():
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
+        "/ativar-loja/<token>",
+        view_func=lazy_view("casa_de_racao_onboarding"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
         "/casa-de-racao/<int:casa_id>",
         view_func=lazy_view("casa_de_racao_dashboard"),
         methods=["GET", "POST"],

@@ -124,7 +124,7 @@ from models import (
     clinica_has_column,
     get_clinica_field,
 )
-from models import CasaDeRacao, CasaDeRacaoHorario  # noqa: E402
+from models import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite  # noqa: E402
 from models import get_active_product_categories  # noqa: E402
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
@@ -18807,6 +18807,151 @@ def parceiro_loja_produtos_landing():
     return render_template('casa_de_racao/parceiro_landing.html', product_intent=True)
 
 
+def _onboarding_decimal(raw_value):
+    value = str(raw_value or '').strip().replace('R$', '').replace(' ', '')
+    if not value:
+        return None
+    if ',' in value:
+        value = value.replace('.', '').replace(',', '.')
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        return None
+
+
+def casa_de_racao_onboarding(token):
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    invite = CasaDeRacaoOnboardingInvite.query.filter_by(token_hash=token_hash).first_or_404()
+    casa = invite.casa_de_racao
+    owner = casa.owner
+
+    if invite.used_at:
+        flash('Este convite já foi concluído. Entre com seu e-mail ou celular.', 'info')
+        return redirect(url_for('login_view'))
+    if invite.is_expired:
+        return render_template(
+            'casa_de_racao/onboarding_expired.html',
+            casa=casa,
+        ), 410
+
+    produtos = Product.query.filter_by(casa_de_racao_id=casa.id).order_by(Product.id).all()
+    errors = []
+    values = {
+        'owner_name': owner.name or '',
+        'email': '' if owner.email.endswith('@convite.petorlandia.local') else owner.email,
+        'phone': owner.phone or casa.telefone or '',
+        'store_name': casa.nome or '',
+        'cnpj': casa.cnpj or '',
+        'store_email': casa.email or '',
+        'address': casa.endereco or owner.address or '',
+        'modo_entrega': casa.modo_entrega or 'plataforma',
+    }
+
+    if request.method == 'POST':
+        values.update({
+            'owner_name': (request.form.get('owner_name') or '').strip(),
+            'email': normalize_email(request.form.get('email')) or '',
+            'phone': (request.form.get('phone') or '').strip(),
+            'store_name': (request.form.get('store_name') or '').strip(),
+            'cnpj': (request.form.get('cnpj') or '').strip(),
+            'store_email': normalize_email(request.form.get('store_email')) or '',
+            'address': (request.form.get('address') or '').strip(),
+            'modo_entrega': (request.form.get('modo_entrega') or 'plataforma').strip(),
+        })
+        password = request.form.get('password') or ''
+        password_confirmation = request.form.get('password_confirmation') or ''
+
+        if len(values['owner_name']) < 2:
+            errors.append('Informe o nome completo.')
+        if not values['email'] or '@' not in values['email']:
+            errors.append('Informe um e-mail válido.')
+        else:
+            email_owner = User.query.filter(
+                func.lower(User.email) == values['email'],
+                User.id != owner.id,
+            ).first()
+            if email_owner:
+                errors.append('Este e-mail já pertence a outra conta.')
+        normalized_phone = normalize_phone(values['phone'])
+        if not normalized_phone:
+            errors.append('Informe o celular com DDD.')
+        elif find_users_by_phone(normalized_phone, exclude_user_id=owner.id):
+            errors.append('Este celular já pertence a outra conta.')
+        if not values['store_name']:
+            errors.append('Informe o nome da loja.')
+        if not values['address']:
+            errors.append('Informe o endereço da loja.')
+        if values['modo_entrega'] not in {'plataforma', 'propria'}:
+            errors.append('Escolha um modo de entrega válido.')
+        if values['cnpj']:
+            cnpj_digits = only_digits(values['cnpj'])
+            if len(cnpj_digits) != 14:
+                errors.append('O CNPJ deve ter 14 dígitos.')
+            else:
+                values['cnpj'] = format_cnpj_value(cnpj_digits)
+                existing_cnpj = CasaDeRacao.query.filter(
+                    CasaDeRacao.cnpj == values['cnpj'],
+                    CasaDeRacao.id != casa.id,
+                ).first()
+                if existing_cnpj:
+                    errors.append('Este CNPJ já está vinculado a outra loja.')
+        if len(password) < 8:
+            errors.append('Crie uma senha com pelo menos 8 caracteres.')
+        if password != password_confirmation:
+            errors.append('A confirmação da senha não confere.')
+
+        product_updates = []
+        for product in produtos:
+            raw_price = request.form.get(f'price_{product.id}')
+            price = _onboarding_decimal(raw_price)
+            raw_stock = (request.form.get(f'stock_{product.id}') or '').strip()
+            try:
+                stock = int(raw_stock)
+            except ValueError:
+                stock = -1
+            if price is None or price <= 0:
+                errors.append(f'Informe um preço válido para {product.name}.')
+            if stock < 0:
+                errors.append(f'Informe um estoque válido para {product.name}.')
+            product_updates.append((product, price, stock))
+
+        if not errors:
+            owner.name = values['owner_name']
+            owner.email = values['email']
+            owner.phone = normalized_phone
+            owner.address = values['address']
+            owner.set_password(password)
+
+            casa.nome = values['store_name']
+            casa.cnpj = values['cnpj'] or None
+            casa.telefone = normalized_phone
+            casa.email = values['store_email'] or values['email']
+            casa.endereco = values['address']
+            casa.modo_entrega = values['modo_entrega']
+            casa.status = 'ativa'
+
+            for product, price, stock in product_updates:
+                product.price = float(price)
+                product.stock = stock
+                product.status = 'active'
+
+            invite.used_at = datetime.now(timezone.utc)
+            db.session.commit()
+            login_user(owner)
+            flash('Cadastro concluído. A AgroGraner já está pronta para trabalhar!', 'success')
+            return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
+
+    return render_template(
+        'casa_de_racao/onboarding.html',
+        invite=invite,
+        casa=casa,
+        owner=owner,
+        produtos=produtos,
+        values=values,
+        errors=errors,
+    )
+
+
 @login_required
 def minha_casa_de_racao():
     wants_products = request.args.get('next') == 'produtos'
@@ -19309,6 +19454,9 @@ def casa_produto_editar(casa_id, product_id):
 def casa_produto_toggle(casa_id, product_id):
     casa = _casa_loja_access(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
+    if product.status != 'active' and product.price <= 0:
+        flash('Defina um preço maior que zero antes de ativar o produto.', 'warning')
+        return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
     product.status = 'inactive' if product.status == 'active' else 'active'
     db.session.commit()
     state = 'ativado' if product.status == 'active' else 'desativado'

@@ -1,0 +1,162 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4" style="max-width: 980px;">
+  <div class="text-center mb-4">
+    {% if casa.logotipo %}
+      <img src="{{ url_for('static', filename=casa.logotipo) }}"
+           alt="{{ casa.nome }}" class="img-fluid mb-3"
+           style="max-height: 90px; max-width: 260px;">
+    {% endif %}
+    <h1 class="h3 fw-bold">Vamos deixar sua loja pronta, Sabrina</h1>
+    <p class="text-muted mb-0">
+      Confirme seus dados e informe preço e estoque. Você fará tudo nesta página.
+    </p>
+  </div>
+
+  {% if errors %}
+  <div class="alert alert-danger">
+    <div class="fw-semibold mb-1">Revise os campos abaixo:</div>
+    <ul class="mb-0">
+      {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+      <div class="card-body p-4">
+        <h2 class="h5 fw-bold mb-3">1. Seus dados de acesso</h2>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="owner_name">Nome completo</label>
+            <input class="form-control" id="owner_name" name="owner_name"
+                   value="{{ values.owner_name }}" required autocomplete="name">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="phone">Celular com WhatsApp</label>
+            <input class="form-control" id="phone" name="phone"
+                   value="{{ values.phone }}" required autocomplete="tel">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="email">Seu e-mail</label>
+            <input class="form-control" type="email" id="email" name="email"
+                   value="{{ values.email }}" required autocomplete="email">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="store_email">E-mail público da loja</label>
+            <input class="form-control" type="email" id="store_email" name="store_email"
+                   value="{{ values.store_email }}" placeholder="Pode ser o mesmo e-mail">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="password">Crie sua senha</label>
+            <input class="form-control" type="password" id="password" name="password"
+                   minlength="8" required autocomplete="new-password">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="password_confirmation">Repita a senha</label>
+            <input class="form-control" type="password" id="password_confirmation"
+                   name="password_confirmation" minlength="8" required autocomplete="new-password">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+      <div class="card-body p-4">
+        <h2 class="h5 fw-bold mb-3">2. Dados da AgroGraner</h2>
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label class="form-label fw-semibold" for="store_name">Nome da loja</label>
+            <input class="form-control" id="store_name" name="store_name"
+                   value="{{ values.store_name }}" required>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold" for="cnpj">CNPJ, se houver</label>
+            <input class="form-control" id="cnpj" name="cnpj"
+                   value="{{ values.cnpj }}" placeholder="00.000.000/0000-00">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold" for="address">Endereço completo</label>
+            <input class="form-control" id="address" name="address"
+                   value="{{ values.address }}" required
+                   placeholder="Rua, número, bairro, cidade e UF">
+          </div>
+          <div class="col-12">
+            <div class="form-label fw-semibold">Como os pedidos serão entregues?</div>
+            <div class="d-flex flex-column flex-md-row gap-2">
+              <label class="border rounded-3 p-3 flex-fill">
+                <input class="form-check-input me-2" type="radio" name="modo_entrega"
+                       value="plataforma" {% if values.modo_entrega == 'plataforma' %}checked{% endif %}>
+                Entregadores da PetOrlândia
+              </label>
+              <label class="border rounded-3 p-3 flex-fill">
+                <input class="form-check-input me-2" type="radio" name="modo_entrega"
+                       value="propria" {% if values.modo_entrega == 'propria' %}checked{% endif %}>
+                Entrega própria da AgroGraner
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+      <div class="card-body p-4">
+        <h2 class="h5 fw-bold mb-1">3. Preços e estoque</h2>
+        <p class="text-muted small mb-3">
+          As fotos e os nomes já estão prontos. Informe apenas o preço de venda e a quantidade disponível.
+        </p>
+        <div class="row g-3">
+          {% for product in produtos %}
+          <div class="col-md-6">
+            <div class="border rounded-3 p-3 h-100">
+              <div class="d-flex gap-3 align-items-center mb-3">
+                {% if product.image_url %}
+                <img src="{{ url_for('static', filename=product.image_url) }}"
+                     alt="{{ product.name }}" class="rounded bg-white object-fit-contain"
+                     style="width: 86px; height: 86px;">
+                {% endif %}
+                <div>
+                  <div class="fw-semibold">{{ product.name }}</div>
+                  <div class="small text-muted">Produto oculto até a conclusão</div>
+                </div>
+              </div>
+              <div class="row g-2">
+                <div class="col-7">
+                  <label class="form-label small fw-semibold" for="price_{{ product.id }}">Preço</label>
+                  <div class="input-group">
+                    <span class="input-group-text">R$</span>
+                    <input class="form-control" inputmode="decimal"
+                           id="price_{{ product.id }}" name="price_{{ product.id }}"
+                           value="{{ request.form.get('price_' ~ product.id, '') }}"
+                           placeholder="0,00" required>
+                  </div>
+                </div>
+                <div class="col-5">
+                  <label class="form-label small fw-semibold" for="stock_{{ product.id }}">Estoque</label>
+                  <input class="form-control" type="number" min="0"
+                         id="stock_{{ product.id }}" name="stock_{{ product.id }}"
+                         value="{{ request.form.get('stock_' ~ product.id, product.stock or 0) }}" required>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid">
+      <button class="btn btn-primary btn-lg" type="submit">
+        Concluir e acessar minha loja
+      </button>
+    </div>
+    <p class="text-center text-muted small mt-3">
+      Este link é privado e deixa de funcionar após a conclusão.
+    </p>
+  </form>
+</div>
+<script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
+{% endblock %}
