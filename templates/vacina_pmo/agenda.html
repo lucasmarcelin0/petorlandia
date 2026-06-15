@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vacinação — Agenda de Turnos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 0;
+      color: #1a1a2e;
+    }
+
+    .topbar {
+      background: #1a5c2a;
+      color: #fff;
+      padding: 16px 20px;
+    }
+    .topbar h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .topbar p  { margin: 4px 0 0; font-size: 0.9rem; opacity: .85; }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin: 24px 0 10px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+      margin-bottom: 12px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: box-shadow .15s;
+    }
+    .card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.15); }
+
+    .card-inner {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .shift-stripe {
+      width: 8px;
+      flex-shrink: 0;
+    }
+    .shift-stripe.manha { background: #f59e0b; }
+    .shift-stripe.tarde { background: #3b82f6; }
+
+    .card-body {
+      flex: 1;
+      padding: 14px 16px;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .card-date {
+      font-size: 1.15rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .card-weekday {
+      font-size: 0.82rem;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    .shift-badge {
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .shift-badge.manha { background: #fef3c7; color: #92400e; }
+    .shift-badge.tarde { background: #dbeafe; color: #1e3a8a; }
+
+    .card-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.9rem;
+    }
+    .stat-num { font-weight: 700; font-size: 1rem; }
+    .stat-label { color: #64748b; font-size: 0.8rem; }
+
+    .card-arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 16px 0 8px;
+      color: #94a3b8;
+      font-size: 1.3rem;
+    }
+
+    .empty {
+      text-align: center;
+      color: #94a3b8;
+      padding: 40px 0;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 480px) {
+      .card-date { font-size: 1rem; }
+      .card-stats { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Vacinação Contra a Raiva 2026</h1>
+  <p>Selecione o dia e o turno para ver a lista</p>
+</div>
+
+<div class="container">
+
+  {% if dias %}
+    {% set today_str = now().strftime('%d/%m/%Y') if now is defined else '' %}
+
+    {# Agrupar em "próximos / passados" pela data de hoje #}
+    {% set upcoming = dias | selectattr('date') | list %}
+
+    {% if upcoming %}
+      <div class="section-title">Turnos cadastrados</div>
+    {% endif %}
+
+    {% for d in dias %}
+    <a class="card" href="{{ url_for('vacina_pmo_imprimir', date_str=d.date_str, turno=d.turno) }}">
+      <div class="card-inner">
+        <div class="shift-stripe {{ d.turno }}"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div>
+              <div class="card-date">{{ d.sheet_title }}</div>
+              <div class="card-weekday">{{ d.weekday }}</div>
+            </div>
+            <span class="shift-badge {{ d.turno }}">{{ d.shift_label }}</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat">
+              <span class="stat-num">{{ d.tutores }}</span>
+              <span class="stat-label">tutores</span>
+            </div>
+            <div class="stat">
+              <span>🐕</span>
+              <span class="stat-num">{{ d.caes }}</span>
+              <span class="stat-label">cães</span>
+            </div>
+            <div class="stat">
+              <span>🐈</span>
+              <span class="stat-num">{{ d.gatos }}</span>
+              <span class="stat-label">gatos</span>
+            </div>
+            <div class="stat">
+              <span class="stat-num">{{ d.caes + d.gatos }}</span>
+              <span class="stat-label">animais</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
+    </a>
+    {% endfor %}
+
+  {% else %}
+    <div class="empty">Nenhum turno sincronizado ainda.</div>
+  {% endif %}
+
+</div>
+</body>
+</html>

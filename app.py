@@ -4167,9 +4167,57 @@ def openai_apps_challenge():
 @app.route('/vacina-pmo')
 @login_required
 def vacina_pmo():
+    if current_user.role == 'vacinador':
+        return redirect(url_for('vacina_pmo_agenda'))
     if current_user.role != 'admin':
         abort(403)
     return render_template('vacina_pmo/dashboard.html')
+
+
+@app.route('/vacina-pmo/agenda')
+@login_required
+def vacina_pmo_agenda():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    from models import PmoVaccinationVisit
+    from sqlalchemy import func
+    from datetime import datetime, date as _date
+    rows = (
+        db.session.query(
+            PmoVaccinationVisit.sheet_title,
+            PmoVaccinationVisit.shift,
+            func.count(PmoVaccinationVisit.id).label('tutores'),
+            func.sum(PmoVaccinationVisit.dogs).label('caes'),
+            func.sum(PmoVaccinationVisit.cats).label('gatos'),
+        )
+        .group_by(PmoVaccinationVisit.sheet_title, PmoVaccinationVisit.shift)
+        .all()
+    )
+    _weekdays_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    dias = []
+    for r in rows:
+        try:
+            dt = datetime.strptime(r.sheet_title, '%d/%m/%Y').date()
+            weekday = _weekdays_pt[dt.weekday()]
+        except Exception:
+            dt = None
+            weekday = ''
+        date_str = r.sheet_title.replace('/', '-')
+        turno = 'manha' if r.shift == 'Manha' else 'tarde'
+        shift_label = 'Manhã' if r.shift == 'Manha' else 'Tarde'
+        dias.append(dict(
+            sheet_title=r.sheet_title,
+            date=dt,
+            weekday=weekday,
+            date_str=date_str,
+            turno=turno,
+            shift_label=shift_label,
+            tutores=r.tutores,
+            caes=int(r.caes or 0),
+            gatos=int(r.gatos or 0),
+        ))
+    dias.sort(key=lambda x: x['date'] or _date.min, reverse=True)
+    return render_template('vacina_pmo/agenda.html', dias=dias)
 
 
 @app.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
