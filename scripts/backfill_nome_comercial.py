@@ -46,7 +46,7 @@ def main() -> None:
 
             candidatas = [
                 ap for ap in (med.apresentacoes or [])
-                if (ap.fabricante or '').lower() == fab_like.lower()
+                if fab_like.lower() in (ap.fabricante or '').lower()
             ]
 
             if not candidatas:
