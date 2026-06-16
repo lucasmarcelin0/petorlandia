@@ -2275,6 +2275,11 @@ class ApresentacaoMedicamento(db.Model):
     volume_valor         = db.Column(db.Numeric(12, 3))       # 10 (un) ou 50 (ml)
     volume_unidade       = db.Column(db.String(20))           # 'un' | 'ml' | 'g'
 
+    # Nome do produto comercial associado (ex: "Sec Lac" para metergolina Agener).
+    # Quando preenchido, permite busca pelo nome comercial no autocomplete e
+    # exibe apenas as apresentações desta marca ao pesquisar por ela.
+    nome_comercial       = db.Column(db.String(150))
+
     # Fabricante específico desta apresentação.
     # Um mesmo Medicamento (ex.: "Prednisona") pode ter apresentações
     # da LigVet, Animalia, genérico, etc.

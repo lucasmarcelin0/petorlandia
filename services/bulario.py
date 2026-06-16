@@ -1124,12 +1124,22 @@ def extrair_secoes_vetsmart(medicamento) -> List[Dict[str, Any]]:
     return resultado
 
 
-def serializar_medicamento_busca(medicamento) -> Dict[str, Any]:
+def serializar_medicamento_busca(
+    medicamento,
+    nome_exibicao: Optional[str] = None,
+    nome_comercial_filtro: Optional[str] = None,
+) -> Dict[str, Any]:
     estrutura = montar_monografia_medicamento(medicamento)
     bula_url = vetsmart_url(medicamento)
     return {
         "id": medicamento.id,
         "nome": medicamento.nome,
+        # nome_exibicao_busca: exibido no autocomplete e na prescrição quando
+        # a busca foi feita por nome comercial (ex: "Sec Lac" vs "Metergolina").
+        "nome_exibicao_busca": nome_exibicao or medicamento.nome,
+        # nome_comercial_filtro: carregado pelo front para filtrar apresentações
+        # e nome na sugestão de dose ao usar o nome comercial.
+        "nome_comercial_filtro": nome_comercial_filtro,
         "classificacao": getattr(medicamento, "classificacao", None),
         "principio_ativo": getattr(medicamento, "principio_ativo", None),
         "via_administracao": getattr(medicamento, "via_administracao", None),
@@ -1143,7 +1153,10 @@ def serializar_medicamento_busca(medicamento) -> Dict[str, Any]:
         # Apresentações vão junto pra alimentar o dropdown obrigatório logo
         # após a escolha do medicamento — sem apresentação não há prescrição
         # válida (250 mg comprimido ≠ 250 mg/5 mL suspensão).
-        "apresentacoes": listar_apresentacoes_medicamento(medicamento),
+        "apresentacoes": listar_apresentacoes_medicamento(
+            medicamento,
+            nome_comercial_filtro=nome_comercial_filtro,
+        ),
     }
 
 
@@ -1615,6 +1628,7 @@ def listar_apresentacoes_medicamento(
     medicamento,
     dose_unit_out: Optional[str] = None,
     dose_media: Optional[float] = None,
+    nome_comercial_filtro: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Lista deduplicada/ordenada de apresentações do medicamento (sem precisar
     de animal/dose).  Reutilizada por:
@@ -1630,7 +1644,14 @@ def listar_apresentacoes_medicamento(
     quando há colisão, e acumula fabricantes equivalentes em `fabricantes`.
     """
     apres_info: List[Dict[str, Any]] = []
-    for ap in (getattr(medicamento, 'apresentacoes', None) or []):
+    todas_apresentacoes = getattr(medicamento, 'apresentacoes', None) or []
+    if nome_comercial_filtro:
+        nc_lower = nome_comercial_filtro.strip().lower()
+        todas_apresentacoes = [
+            ap for ap in todas_apresentacoes
+            if (getattr(ap, 'nome_comercial', None) or '').strip().lower() == nc_lower
+        ]
+    for ap in todas_apresentacoes:
         fabricante = getattr(ap, 'fabricante', None)
         categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
         unidade_pratica = _unidade_pratica_por_forma(ap.forma, categoria, ap.concentracao)
@@ -1665,6 +1686,7 @@ def listar_apresentacoes_medicamento(
             'id': ap.id,
             'descricao': desc,
             'nome_variante': getattr(ap, 'nome_variante', None) or '',
+            'nome_comercial': getattr(ap, 'nome_comercial', None) or '',
             'fabricante': fabricante,
             'tipo_origem': tipo_origem,
             'categoria': categoria,
@@ -2041,7 +2063,12 @@ def _indicacoes_disponiveis(medicamento, animal) -> List[str]:
     return out
 
 
-def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def sugerir_dose(
+    medicamento,
+    animal,
+    indicacao: Optional[str] = None,
+    nome_comercial_filtro: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Retorna dict com sugestão de dose, ou None se não aplicável.
 
     Se `indicacao` não for passada e houver protocolos com indicações
@@ -2390,7 +2417,10 @@ def sugerir_dose(medicamento, animal, indicacao: Optional[str] = None) -> Option
     # Equivalências por apresentação — usa o helper compartilhado com
     # `serializar_medicamento_busca` (que precisa da mesma lista sem dose).
     dose_media = (dose_calc_min + dose_calc_max) / 2.0
-    apres_info = listar_apresentacoes_medicamento(medicamento, dose_unit_out, dose_media)
+    apres_info = listar_apresentacoes_medicamento(
+        medicamento, dose_unit_out, dose_media,
+        nome_comercial_filtro=nome_comercial_filtro,
+    )
 
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
     proto_ind = (getattr(proto, 'indicacao', None) or '').strip() or None

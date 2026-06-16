@@ -996,7 +996,9 @@
       if (inputNome) inputNome.value = medicamento;
       const calculou = await carregarSugestaoDose(
         medResolvido.id,
-        String(draft?.indicacao || '').trim() || null
+        String(draft?.indicacao || '').trim() || null,
+        false,
+        medResolvido.nome_comercial_filtro || null,
       );
       if (calculou && sugestaoDoseAtual) {
         if (['min', 'media', 'max'].includes(modoDosePreferido)) {
@@ -1059,6 +1061,9 @@
   // ID do medicamento atualmente carregado no card de sugestão — usado pelo
   // onChange do select de indicação para saber qual endpoint re-chamar.
   let _medicamentoIdSugestao = null;
+  // Nome comercial ativo (ex: 'Sec Lac'): quando preenchido, filtra as
+  // apresentações e o nome na prescrição para o produto selecionado.
+  let _nomeComercialFiltroSugestao = null;
 
   // Mostra/oculta o botão opt-in "Calcular dose para este paciente".
   // A dose pré-calculada NÃO aparece sozinha: o veterinário decide quando
@@ -1071,12 +1076,13 @@
 
   // Chamado ao selecionar um medicamento: apenas prepara (não busca nada,
   // não abre o card). Deixa o botão opt-in disponível.
-  function prepararSugestaoDose(medicamentoId) {
+  function prepararSugestaoDose(medicamentoId, nomeComercial = null) {
     const card = document.getElementById('sugestao-dose-card');
     if (card) card.classList.add('d-none');
     _limparValoresCardSugestao();
     sugestaoDoseAtual = null;
     _medicamentoIdSugestao = medicamentoId || null;
+    _nomeComercialFiltroSugestao = nomeComercial || null;
     _toggleBotaoSugestao(!!medicamentoId);
   }
 
@@ -1084,7 +1090,7 @@
   function abrirSugestaoDose() {
     if (!_medicamentoIdSugestao) return;
     _toggleBotaoSugestao(false);
-    carregarSugestaoDose(_medicamentoIdSugestao);
+    carregarSugestaoDose(_medicamentoIdSugestao, null, false, _nomeComercialFiltroSugestao);
   }
 
   function fecharSugestaoDose() {
@@ -1127,7 +1133,7 @@
       }
 
       // Peso salvo — recarrega a sugestão de dose automaticamente
-      await carregarSugestaoDose(medicamentoId);
+      await carregarSugestaoDose(medicamentoId, null, false, _nomeComercialFiltroSugestao);
     } catch (err) {
       if (errEl) { errEl.textContent = err.message || 'Erro ao salvar o peso.'; errEl.style.display = 'block'; }
       if (btn) { btn.disabled = false; btn.textContent = 'Salvar e calcular'; }
@@ -1595,7 +1601,7 @@
     const sel = document.getElementById('sug-indicacao');
     if (!sel || !_medicamentoIdSugestao) return;
     const ind = sel.value || null;
-    carregarSugestaoDose(_medicamentoIdSugestao, ind);
+    carregarSugestaoDose(_medicamentoIdSugestao, ind, false, _nomeComercialFiltroSugestao);
   }
 
   function _tokensIndicacaoSugestao(texto) {
@@ -1806,7 +1812,7 @@
     }
   }
 
-  async function carregarSugestaoDose(medicamentoId, indicacao = null, autoResolvida = false) {
+  async function carregarSugestaoDose(medicamentoId, indicacao = null, autoResolvida = false, nomeComercialFiltro = null) {
     if (!medicamentoId) return false;
     if (!ANIMAL_ID_CONSULTA) {
       // Sem animal na consulta — silenciosamente não exibe sugestão.
@@ -1824,6 +1830,7 @@
         animal_id: ANIMAL_ID_CONSULTA,
       });
       if (indicacao) params.append('indicacao', indicacao);
+      if (nomeComercialFiltro) params.append('nome_comercial_filtro', nomeComercialFiltro);
       const url = `/api/bulario/sugerir-dose?${params.toString()}`;
       const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const data = await resp.json().catch(() => ({}));
@@ -1873,7 +1880,7 @@
           ? _escolherIndicacaoClinica(data.indicacoes || [], indicacao)
           : null;
         if (indicacaoAuto) {
-          return await carregarSugestaoDose(medicamentoId, indicacaoAuto, true);
+          return await carregarSugestaoDose(medicamentoId, indicacaoAuto, true, nomeComercialFiltro);
         }
         _popularSelectIndicacao(data.indicacoes || [], null);
         _mostrarEstadoSugestao({
@@ -2986,7 +2993,7 @@
     _carregarFavoritosSeNecessario().then(() => _atualizarIconeFavorito(m?.id));
     // Ponto único: ao exibir a monografia, a dose pré-calculada fica
     // disponível como botão opt-in (nunca abre sozinha).
-    prepararSugestaoDose(m?.id);
+    prepararSugestaoDose(m?.id, m?.nome_comercial_filtro || null);
     // Dropdown obrigatório de apresentação — renderizado sempre que houver
     // apresentações cadastradas, independente da dose pré-calculada.
     _renderDropdownApresentacaoPrescricao(m?.apresentacoes || []);
@@ -3001,13 +3008,15 @@
     const resumoTexto = document.getElementById('med-posologia-resumo');
 
     const nomeCard = document.getElementById('med-nome-card');
-    if (m.produto_match_nome) {
+    const nomeVisivel = _nomeVisivelMedicamento(m);
+    const temNomeComercial = m.nome_comercial_filtro && m.nome_comercial_filtro !== m.nome;
+    if (m.produto_match_nome || temNomeComercial) {
       nomeCard.innerHTML = `
-        <span>${_escapeHtml(_nomeVisivelMedicamento(m))}</span>
+        <span>${_escapeHtml(nomeVisivel)}</span>
         <small class="d-block mt-1 opacity-75" style="font-size:.72rem;">${_escapeHtml(m.nome || '')}</small>
       `;
     } else {
-      nomeCard.textContent = m.nome;
+      nomeCard.textContent = nomeVisivel;
     }
     document.getElementById('med-classificacao').textContent = m.classificacao || '–';
     document.getElementById('med-principio').textContent = m.principio_ativo || '–';

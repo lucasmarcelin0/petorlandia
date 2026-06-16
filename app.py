@@ -36492,15 +36492,24 @@ def bulario_excluir(medicamento_id):
 
 @login_required
 def bulario_buscar_api():
-    """API JSON para autocomplete de medicamentos (usado em prescrições)."""
-    from models.base import Medicamento
+    """API JSON para autocomplete de medicamentos (usado em prescrições).
+
+    Busca por nome genérico (Medicamento.nome / principio_ativo) E por nome
+    comercial (ApresentacaoMedicamento.nome_comercial).  Quando o termo bate
+    num nome comercial, o resultado carrega `nome_exibicao_busca` com o nome
+    comercial e `apresentacoes` filtradas para aquela marca — assim buscar
+    "Sec Lac" mostra só as concentrações dessa marca.
+    """
+    from models.base import Medicamento, ApresentacaoMedicamento
 
     q = request.args.get("q", "").strip()
     if not q or len(q) < 2:
         return jsonify([])
 
     like = f"%{q}%"
-    resultados = (
+
+    # 1. Busca genérica por nome do princípio ativo / medicamento
+    genericos = (
         Medicamento.query
         .filter(
             or_(
@@ -36514,11 +36523,48 @@ def bulario_buscar_api():
         .all()
     )
 
+    # 2. Busca por nome comercial das apresentações
+    comerciais = (
+        db.session.query(Medicamento, ApresentacaoMedicamento.nome_comercial)
+        .join(
+            ApresentacaoMedicamento,
+            ApresentacaoMedicamento.medicamento_id == Medicamento.id,
+        )
+        .filter(
+            ApresentacaoMedicamento.nome_comercial.isnot(None),
+            ApresentacaoMedicamento.nome_comercial != '',
+            ApresentacaoMedicamento.nome_comercial.ilike(like),
+        )
+        .group_by(Medicamento.id, ApresentacaoMedicamento.nome_comercial)
+        .order_by(Medicamento.nome, ApresentacaoMedicamento.nome_comercial)
+        .limit(10)
+        .all()
+    )
+
     from services.bulario import serializar_medicamento_busca
-    return jsonify([
-        serializar_medicamento_busca(m)
-        for m in resultados
-    ])
+
+    seen: set = set()
+    output = []
+
+    for med in genericos:
+        key = (med.id, None)
+        if key not in seen:
+            seen.add(key)
+            output.append(serializar_medicamento_busca(med))
+
+    for med, nome_comercial in comerciais:
+        key = (med.id, nome_comercial)
+        if key not in seen:
+            seen.add(key)
+            output.append(
+                serializar_medicamento_busca(
+                    med,
+                    nome_exibicao=nome_comercial,
+                    nome_comercial_filtro=nome_comercial,
+                )
+            )
+
+    return jsonify(output)
 
 
 @login_required
@@ -36539,6 +36585,7 @@ def bulario_sugerir_dose_api():
     med_id = request.args.get("medicamento_id", type=int)
     animal_id = request.args.get("animal_id", type=int)
     indicacao = (request.args.get("indicacao") or "").strip() or None
+    nome_comercial_filtro = (request.args.get("nome_comercial_filtro") or "").strip() or None
     if not med_id or not animal_id:
         return jsonify({
             "disponivel": False,
@@ -36572,7 +36619,11 @@ def bulario_sugerir_dose_api():
             "motivo": "Este medicamento ainda não tem protocolo de dose cadastrado no bulário.",
         })
 
-    sugestao = sugerir_dose(med, animal, indicacao=indicacao)
+    sugestao = sugerir_dose(
+        med, animal,
+        indicacao=indicacao,
+        nome_comercial_filtro=nome_comercial_filtro,
+    )
     if not sugestao:
         return jsonify({
             "disponivel": False,
@@ -36594,13 +36645,14 @@ def bulario_sugerir_dose_api():
     sugestao["dose_max"]   = _safe(sugestao.get("dose_max"))
 
     # Modo "múltiplas indicações": front exibe dropdown e recompõe a chamada
+    nome_exibir = nome_comercial_filtro or med.nome
     if sugestao.get("multiplo"):
         return jsonify({
             "disponivel": True,
             "multiplo": True,
             "medicamento": {
                 "id": med.id,
-                "nome": med.nome,
+                "nome": nome_exibir,
                 "principio_ativo": med.principio_ativo or "",
             },
             "animal": {
@@ -36617,7 +36669,7 @@ def bulario_sugerir_dose_api():
         "multiplo": False,
         "medicamento": {
             "id": med.id,
-            "nome": med.nome,
+            "nome": nome_exibir,
             "principio_ativo": med.principio_ativo or "",
         },
         "animal": {
