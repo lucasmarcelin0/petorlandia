@@ -192,7 +192,10 @@ def _apply_statuses(
 
     db.session.commit()
     write_vaccinated_counts_to_sheet(visit)
-    write_tutor_name_color_to_sheet(visit)
+    # No Encaixes as cores indicam status de contato (amarelo/vermelho/azul) definido
+    # manualmente — não repintamos para não apagar essa informação de workflow.
+    if (visit.sheet_title or "").strip().lower() != "encaixes":
+        write_tutor_name_color_to_sheet(visit)
     if partial:
         write_note_to_sheet(visit)
     return vacinados, ausentes

@@ -82,6 +82,12 @@ def _apply_encaixes_colors(service, spreadsheet_id: str) -> Counter:
 
         summary[f"encaixes_cor_{sheet_status}"] += 1
         current_status = infer_visit_status(visit.animals)
+        # A cor do Encaixes indica status de contato (tentativa de visita/ligação),
+        # não resultado de vacinação. Se algum animal já está vacinado — seja porque
+        # foi vacinado antes do encaixe, seja por backfill — preservamos esse status.
+        if any(a.status == "vacinado" for a in visit.animals):
+            summary["encaixes_vacinado_preservado"] += 1
+            continue
         if current_status == sheet_status or (
             sheet_status == "parcial" and current_status in {"parcial", "remarcar"}
         ):
