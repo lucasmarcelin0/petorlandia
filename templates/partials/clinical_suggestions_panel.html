@@ -287,6 +287,37 @@
       line-height: 1.25;
       overflow-wrap: anywhere;
     }
+    #clinical-suggestions-panel .clinical-plan-prescription {
+      border: 1px solid #cfe8d8;
+      border-radius: 13px;
+      background: #f3fbf6;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    #clinical-suggestions-panel .clinical-plan-prescription span {
+      display: block;
+      color: #2b7a57;
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    #clinical-suggestions-panel .clinical-plan-prescription strong {
+      display: block;
+      color: #133a2a;
+      font-size: .95rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    #clinical-suggestions-panel .clinical-plan-prescription--pending {
+      border-color: #ead6a7;
+      background: #fff8ea;
+    }
+    #clinical-suggestions-panel .clinical-plan-prescription--pending span {
+      color: #8a6318;
+    }
+    #clinical-suggestions-panel .clinical-plan-prescription--pending strong {
+      color: #68480d;
+    }
     #clinical-suggestions-panel .clinical-plan-messages {
       margin: 8px 0 0;
       padding-left: 18px;
@@ -411,6 +442,16 @@
       color: #6f8189;
       font-size: .88rem;
       margin: 0;
+    }
+    #clinical-suggestions-panel .clinical-technical-details summary {
+      cursor: pointer;
+      user-select: none;
+      color: #60717b;
+      font-size: .86rem;
+      font-weight: 700;
+    }
+    #clinical-suggestions-panel .clinical-technical-details summary::marker {
+      color: #8aa0a9;
     }
     @media (max-width: 991.98px) {
       #clinical-suggestions-panel .clinical-search-grid,
@@ -887,11 +928,34 @@
       `;
     }
 
+    function buildMedicationPlanActions(protocolId, itemId, title) {
+      return `
+        <div class="clinical-inline-actions">
+          <button type="button" class="btn btn-sm btn-success js-load-clinical-plan"
+            data-protocol-id="${protocolId}"
+            data-item-id="${itemId || ''}">
+            Calcular dose
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary js-dismiss-suggestion"
+            data-item-type="medicamento"
+            data-protocol-id="${protocolId}"
+            data-item-id="${itemId || ''}"
+            data-title="${escapeHtml(title || '')}">
+            Dispensar
+          </button>
+        </div>
+      `;
+    }
+
     function renderMedicationPlanItem(item, protocolId) {
       const calc = item.calculation || {};
+      const draft = item.draft_prescription || {};
       const practical = calc.apresentacao_pratica || {};
       const presentation = practical.presentation || {};
-      const readyForDraft = item.status !== 'blocked';
+      const readyForDraft = item.status === 'ready';
+      const tutorLine = calc.posologia_pratica || draft.texto || [draft.dosagem, draft.frequencia, draft.duracao].filter(Boolean).join(' ');
+      const technicalLine = calc.posologia_tecnica || [calc.dose_calculada || item.dose_protocolo, calc.frequencia, calc.duracao].filter(Boolean).join(' ');
+      const presentationLabel = presentation.label || presentation.nome_variante || draft.apresentacao_nome || '';
       const action = readyForDraft ? `
         <button type="button" class="btn btn-sm btn-success js-apply-plan-medication"
           data-protocol-id="${protocolId}"
@@ -900,7 +964,7 @@
         </button>
       ` : `
         <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
-          Precisa ajuste
+          Ajustar antes de enviar
         </button>
       `;
       return `
@@ -912,10 +976,21 @@
             </div>
             ${renderStatusBadge(item.status, item.status_label)}
           </div>
+          ${readyForDraft && tutorLine ? `
+            <div class="clinical-plan-prescription">
+              <span>Para a receita do tutor</span>
+              <strong>${escapeHtml(tutorLine)}</strong>
+            </div>
+          ` : `
+            <div class="clinical-plan-prescription clinical-plan-prescription--pending">
+              <span>Precisa de ajuste</span>
+              <strong>Escolha uma apresentação para converter em comprimidos, mL ou gotas antes de enviar.</strong>
+            </div>
+          `}
           <div class="clinical-plan-metrics">
-            ${renderMetric('Dose prática', calc.posologia_pratica || item.draft_prescription?.dosagem)}
-            ${renderMetric('Dose calculada', calc.dose_calculada || item.dose_protocolo)}
-            ${renderMetric('Apresentação', presentation.label || presentation.nome_variante || '')}
+            ${renderMetric('Apresentação', presentationLabel)}
+            ${renderMetric('Base técnica', technicalLine)}
+            ${renderMetric('Dose prática', calc.dose_pratica || draft.dosagem)}
           </div>
           ${item.justificativa ? `<div class="small text-muted mt-2">${escapeHtml(item.justificativa)}</div>` : ''}
           ${renderPlanMessages(item.messages)}
@@ -931,7 +1006,7 @@
       const exams = plan?.exams || [];
       const returns = plan?.returns || [];
       const conductText = plan?.conduct?.texto || '';
-      const sendableMeds = medications.filter(item => item.status !== 'blocked').length;
+      const sendableMeds = medications.filter(item => item.status === 'ready').length;
       const medicationList = medications.length
         ? medications.map(item => renderMedicationPlanItem(item, protocolId)).join('')
         : '<div class="clinical-card-block small text-muted">Nenhum medicamento no protocolo.</div>';
@@ -1029,7 +1104,7 @@
             ${item.frequencia ? `<div><strong>Frequência:</strong> ${escapeHtml(item.frequencia)}</div>` : ''}
             ${item.duracao ? `<div><strong>Duração:</strong> ${escapeHtml(item.duracao)}</div>` : ''}
           </div>
-          ${buildItemActions('medicamento', protocol.id, item.id, item.nome)}
+          ${buildMedicationPlanActions(protocol.id, item.id, item.nome)}
         </div>
       `).join('');
       const retornos = (protocol.retornos || []).map(item => `
@@ -1075,7 +1150,11 @@
               </div>
             </div>
 
-            <div class="clinical-plan-slot" data-plan-slot="${protocol.id}"></div>
+            <div class="clinical-plan-slot" data-plan-slot="${protocol.id}">
+              <div class="clinical-card-block small text-muted">
+                Calcule o plano para converter doses por peso em comprimidos, mL ou gotas antes de enviar para Medicamentos.
+              </div>
+            </div>
 
             ${reasons ? `
               <details class="mb-3">
@@ -1089,7 +1168,12 @@
             ${protocol.orientacoes_tutor ? `<div class="alert alert-info py-2 small"><strong>Orientações ao tutor:</strong> ${escapeHtml(protocol.orientacoes_tutor)}</div>` : ''}
 
             ${exames ? `<div class="mb-3"><div class="fw-semibold mb-2">Exames sugeridos</div><div class="d-grid gap-2">${exames}</div></div>` : ''}
-            ${medicamentos ? `<div class="mb-3"><div class="fw-semibold mb-2">Medicamentos sugeridos</div><div class="d-grid gap-2">${medicamentos}</div></div>` : ''}
+            ${medicamentos ? `
+              <details class="mb-3 clinical-technical-details">
+                <summary>Medicamentos do protocolo (base técnica)</summary>
+                <div class="d-grid gap-2 mt-2">${medicamentos}</div>
+              </details>
+            ` : ''}
             ${conduta ? `<div class="mb-3"><div class="fw-semibold mb-2">Conduta sugerida</div>${conduta}</div>` : ''}
             ${retornos ? `<div><div class="fw-semibold mb-2">Retorno sugerido</div><div class="d-grid gap-2">${retornos}</div></div>` : ''}
           </div>
@@ -1202,9 +1286,9 @@
     async function handleApplyPlanMedications(button) {
       const protocolId = String(button.dataset.protocolId || '');
       const plan = calculatedClinicalPlans.get(protocolId);
-      const medications = (plan?.medications || []).filter(item => item.status !== 'blocked');
+      const medications = (plan?.medications || []).filter(item => item.status === 'ready');
       if (!medications.length) {
-        setStatus('Este plano ainda não tem medicamentos prontos para enviar.', 'warning');
+        setStatus('Este plano ainda não tem medicamentos com apresentação prática pronta para enviar.', 'warning');
         return;
       }
       button.disabled = true;

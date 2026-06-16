@@ -170,11 +170,47 @@ def test_build_clinical_plan_calculates_medication_and_keeps_sections(app):
         med = plan["medications"][0]
         assert med["status"] == READY
         assert med["calculation"]["dose_calculada"] == "250 mg"
-        assert med["calculation"]["posologia_pratica"] == "0,5 comprimido a cada 12 horas por 7 a 10 dias"
+        assert med["calculation"]["dose_pratica"] == "meio comprimido"
+        assert med["calculation"]["posologia_pratica"] == "meio comprimido a cada 12 horas por 7 a 10 dias"
         assert med["draft_prescription"]["medicamento"] == "Cefalexina"
-        assert med["draft_prescription"]["dosagem"] == "0,5 comprimido"
+        assert med["draft_prescription"]["dosagem"] == "meio comprimido"
         assert med["draft_prescription"]["frequencia"] == "a cada 12 horas"
         assert med["draft_prescription"]["duracao"] == "por 7 a 10 dias"
+        assert med["draft_prescription"]["use_weight_based_dose"] is False
+        assert plan["draft_prescriptions"][0]["dosagem"] == "meio comprimido"
+
+
+def test_build_clinical_plan_formats_half_tablets_for_tutor(app):
+    with flask_app.app_context():
+        consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=50.0)
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        assert med["status"] == READY
+        assert med["calculation"]["dose_calculada"] == "1250 mg"
+        assert med["calculation"]["dose_pratica"] == "2 comprimidos e meio"
+        assert med["calculation"]["posologia_pratica"] == "2 comprimidos e meio a cada 12 horas por 7 a 10 dias"
+        assert med["draft_prescription"]["dosagem"] == "2 comprimidos e meio"
+        assert "2,5 comprimidos" not in med["draft_prescription"]["texto"]
+
+
+def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
+    with flask_app.app_context():
+        consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=10.0)
+        apresentacao = protocolo.medicamentos_sugeridos[0].medicamento.apresentacoes[0]
+        apresentacao.forma = "Solução oral"
+        apresentacao.concentracao = "50 mg/mL"
+        apresentacao.concentracao_valor = 50
+        apresentacao.concentracao_unidade = "mg/ml"
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        assert med["status"] == READY
+        assert med["calculation"]["dose_pratica"] == "5 mL"
+        assert med["draft_prescription"]["dosagem"] == "5 mL"
 
 
 def test_build_clinical_plan_blocks_calculation_without_weight(app):

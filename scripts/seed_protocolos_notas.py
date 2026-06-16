@@ -396,52 +396,52 @@ PROTOCOLS = [
         "suspeita_principal": "mastite / pseudociese",
         "especie": "cao",
         "sinais_gatilho": (
-            "Cadela com aumento mamario, producao de leite, comportamento maternal, "
-            "dor mamaria, calor local, mamas endurecidas ou secrecao."
+            "Cadela com aumento mamário, produção de leite, comportamento maternal, "
+            "dor mamária, calor local, mamas endurecidas ou secreção."
         ),
         "conduta_sugerida": (
-            "Correlacionar o quadro mamario com pseudociese e avaliar a intensidade da mastite. "
-            "Quando houver lactacao importante e mastite sem sinais sistemicos graves, considerar "
-            "suporte com antigalactogenico, antimicrobiano e anti-inflamatorio, com reavaliacao clinica."
+            "Correlacionar o quadro mamário com pseudociese e avaliar a intensidade da mastite. "
+            "Quando houver lactação importante e mastite sem sinais sistêmicos graves, considerar "
+            "suporte com antigalactogênico, antimicrobiano e anti-inflamatório, com reavaliação clínica."
         ),
         "orientacoes_tutor": (
             "Evitar manipular ou estimular as mamas, impedir lambedura e retornar antes do prazo "
-            "se houver febre, prostracao, secrecao purulenta, necrose ou piora importante da dor."
+            "se houver febre, prostração, secreção purulenta, necrose ou piora importante da dor."
         ),
         "alertas": (
-            "Reavaliar rapidamente se houver abscesso, secrecao sanguinolenta, sinais sistemicos "
-            "ou suspeita de mastite grave. Nao associar AINE com corticoide."
+            "Reavaliar rapidamente se houver abscesso, secreção sanguinolenta, sinais sistêmicos "
+            "ou suspeita de mastite grave. Não associar AINE com corticoide."
         ),
         "prioridade": 3,
         "medicamentos": [
             {
                 "nome_medicamento": "Sec Lac",
-                "dosagem_texto": "Conforme peso e apresentacao escolhida",
+                "dosagem_texto": "Calcular pelo peso e pela apresentação escolhida",
                 "frequencia_texto": "a cada 12 horas",
                 "duracao_texto": "por 4 a 8 dias",
                 "observacoes": (
-                    "Metergolina por via oral; calcular automaticamente a quantidade de comprimidos "
-                    "conforme o peso e a apresentacao compativel (Sec Lac 5 ou Sec Lac 20)."
+                    "Metergolina por via oral; o plano clínico converte automaticamente para comprimidos "
+                    "conforme peso e apresentação compatível (Sec Lac 5 ou Sec Lac 20)."
                 ),
-                "justificativa": "Controle da lactacao e suporte em quadro compativel com pseudociese.",
-                "indicacao": "Antigalactogenico",
+                "justificativa": "Controle da lactação e suporte em quadro compatível com pseudociese.",
+                "indicacao": "Antigalactogênico",
             },
             {
                 "nome_medicamento": "Cefalexina",
                 "dosagem_texto": "20 a 30 mg/kg",
                 "frequencia_texto": "a cada 12 horas",
                 "duracao_texto": "por 7 a 10 dias",
-                "observacoes": "Calcular automaticamente pela faixa de peso e manter preferencialmente apos alimentacao.",
+                "observacoes": "Calcular automaticamente pela faixa de peso e manter preferencialmente após alimentação.",
                 "justificativa": "Cobertura antimicrobiana inicial quando houver mastite sem sinais de sepse.",
-                "indicacao": "Antibiotico",
+                "indicacao": "Antibiótico",
             },
             {
                 "nome_medicamento": "Meloxicam",
                 "dosagem_texto": "0,1 mg/kg",
                 "frequencia_texto": "a cada 24 horas",
                 "duracao_texto": "por 5 dias",
-                "observacoes": "Usar com cautela gastrointestinal e sempre revisar hidratacao e perfusao da paciente.",
-                "justificativa": "Controle de dor e inflamacao mamaria.",
+                "observacoes": "Usar com cautela gastrointestinal e sempre revisar hidratação e perfusão da paciente.",
+                "justificativa": "Controle de dor e inflamação mamária.",
                 "indicacao": "Anti-inflamatório",
             },
         ],
@@ -451,7 +451,7 @@ PROTOCOLS = [
                 "prazo_min_dias": 3,
                 "prazo_max_dias": 5,
                 "tipo_retorno": "reavaliacao",
-                "objetivo": "Reavaliar reducao da lactacao, dor mamaria, calor local e resposta ao tratamento.",
+                "objetivo": "Reavaliar redução da lactação, dor mamária, calor local e resposta ao tratamento.",
             }
         ],
     },

@@ -1059,7 +1059,7 @@ def test_seed_protocolos_notas_updates_existing_mastitis_protocol(app):
             'Cefalexina',
             'Meloxicam',
         ]
-        assert atualizado.medicamentos_sugeridos[0].dosagem_texto == 'Conforme peso e apresentacao escolhida'
+        assert atualizado.medicamentos_sugeridos[0].dosagem_texto == 'Calcular pelo peso e pela apresentação escolhida'
         assert atualizado.medicamentos_sugeridos[1].dosagem_texto == '20 a 30 mg/kg'
         assert atualizado.medicamentos_sugeridos[2].dosagem_texto == '0,1 mg/kg'
 

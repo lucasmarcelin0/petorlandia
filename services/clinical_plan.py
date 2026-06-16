@@ -78,6 +78,61 @@ def _pluralize(unit: str, amount: float) -> str:
     return f"{normalized}s"
 
 
+def _unit_key(unit: str | None) -> str:
+    return re.sub(r"\s+", "", _normalize(unit))
+
+
+def _format_whole_unit(amount: float, singular: str, plural: str) -> str:
+    rounded = int(round(amount))
+    label = singular if rounded == 1 else plural
+    return f"{rounded} {label}"
+
+
+def _format_tablet_quantity(amount: float) -> str:
+    rounded = round(amount * 4) / 4
+    whole = int(rounded)
+    fraction = rounded - whole
+
+    if abs(fraction) < 0.001:
+        return _format_whole_unit(whole, "comprimido", "comprimidos")
+
+    fraction_labels = (
+        (0.25, "1/4 de comprimido", "1/4"),
+        (0.50, "meio comprimido", "meio"),
+        (0.75, "3/4 de comprimido", "3/4"),
+    )
+    for expected, standalone, suffix in fraction_labels:
+        if abs(fraction - expected) < 0.001:
+            if whole == 0:
+                return standalone
+            return f"{_format_whole_unit(whole, 'comprimido', 'comprimidos')} e {suffix}"
+
+    return f"{_fmt_number(amount)} comprimidos"
+
+
+def _format_practical_quantity(amount: float, unit: str) -> str:
+    key = _unit_key(unit)
+    if key == "ml":
+        return f"{_fmt_number(amount)} mL"
+    if "comprim" in key or key == "cp":
+        return _format_tablet_quantity(amount)
+    if "gota" in key:
+        return _format_whole_unit(amount, "gota", "gotas")
+    if "pipeta" in key:
+        return _format_whole_unit(amount, "pipeta", "pipetas")
+    if "capsul" in key:
+        return _format_whole_unit(amount, "cápsula", "cápsulas")
+    if "drage" in key:
+        return _format_whole_unit(amount, "drágea", "drágeas")
+    if "aplic" in key:
+        return _format_whole_unit(amount, "aplicação", "aplicações")
+
+    normalized = unit.strip() or "unidade"
+    if abs(amount - round(amount)) < 0.001:
+        return _format_whole_unit(amount, normalized, _pluralize(normalized, 2))
+    return f"{_fmt_number(amount)} {_pluralize(normalized, amount)}"
+
+
 def _dose_value_for_mode(suggestion: dict[str, Any], mode: str) -> float | None:
     min_value = _float_or_none(suggestion.get("dose_min"))
     max_value = _float_or_none(suggestion.get("dose_max"))
@@ -173,12 +228,14 @@ def _concentration_in_dose_unit(ap: dict[str, Any], dose_unit: str) -> float | N
 
 
 def _round_quantity(quantity: float, unit: str) -> float:
-    lowered = unit.lower()
-    if lowered in {"ml", "ml.", "mL".lower()}:
+    key = _unit_key(unit)
+    if key == "ml":
         return round(quantity * 10) / 10
-    if "gota" in lowered:
+    if "gota" in key:
         return round(quantity)
-    return round(quantity * 2) / 2
+    if "comprim" in key or key == "cp":
+        return round(quantity * 2) / 2
+    return round(quantity)
 
 
 def _practical_score(quantity: float, desired: float, delivered: float) -> float:
@@ -266,12 +323,11 @@ def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dic
     candidates.sort(key=lambda item: (item["score"], item["quantity"]))
     best = candidates[0]
     quantity = best["quantity"]
-    unit = _pluralize(best["unit"], quantity)
     ap = best["presentation"]
     return {
         "quantity": quantity,
         "unit": best["unit"],
-        "dose_text": f"{_fmt_number(quantity)} {unit}",
+        "dose_text": _format_practical_quantity(quantity, best["unit"]),
         "presentation": {
             "id": ap.get("id"),
             "label": ap.get("rotulo_escolha") or ap.get("descricao") or ap.get("nome_variante") or "",
@@ -374,6 +430,8 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
     duration = _duration_text(suggestion, getattr(item, "duracao_texto", None))
     calculated_dose = _format_dose_value(suggestion, mode)
     final_dose = practical["dose_text"] if practical else calculated_dose
+    practical_posology = " ".join(part for part in [final_dose, frequency, duration] if part) if practical else ""
+    technical_posology = " ".join(part for part in [calculated_dose, frequency, duration] if part)
     final_name = base["nome"]
     if practical:
         presentation_name = practical["presentation"].get("nome_variante")
@@ -386,7 +444,10 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         "dosagem": final_dose,
         "frequencia": frequency,
         "duracao": duration,
-        "use_weight_based_dose": True,
+        "texto": practical_posology or technical_posology,
+        "use_weight_based_dose": False if practical else True,
+        "apresentacao_id": practical["presentation"].get("id") if practical else None,
+        "apresentacao_nome": practical["presentation"].get("label") if practical else "",
     })
 
     status = READY if practical else REVIEW
@@ -403,10 +464,12 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "peso_kg": peso,
             "dose_mode": mode,
             "dose_calculada": calculated_dose,
+            "dose_pratica": final_dose if practical else "",
             "dose_faixa": suggestion.get("faixa_texto") or "",
             "frequencia": frequency,
             "duracao": duration,
-            "posologia_pratica": " ".join(part for part in [final_dose, frequency, duration] if part),
+            "posologia_pratica": practical_posology,
+            "posologia_tecnica": technical_posology,
             "apresentacao_pratica": practical,
             "raw_suggestion": suggestion,
         },
@@ -485,6 +548,6 @@ def build_clinical_plan(
         "draft_prescriptions": [
             item["draft_prescription"]
             for item in medications
-            if item["status"] in {READY, REVIEW, MANUAL}
+            if item["status"] == READY
         ],
     }
