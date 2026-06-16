@@ -416,30 +416,30 @@ PROTOCOLS = [
         "medicamentos": [
             {
                 "nome_medicamento": "Sec Lac",
-                "dosagem_texto": "1 comprimido/5 kg (Sec Lac 5) ou 1 comprimido/20 kg (Sec Lac 20)",
+                "dosagem_texto": "Conforme peso e apresentacao escolhida",
                 "frequencia_texto": "a cada 12 horas",
                 "duracao_texto": "por 4 a 8 dias",
                 "observacoes": (
-                    "Metergolina por via oral; usar a apresentacao compativel com o peso "
-                    "e reavaliar a necessidade de repeticao conforme resposta clinica."
+                    "Metergolina por via oral; calcular automaticamente a quantidade de comprimidos "
+                    "conforme o peso e a apresentacao compativel (Sec Lac 5 ou Sec Lac 20)."
                 ),
                 "justificativa": "Controle da lactacao e suporte em quadro compativel com pseudociese.",
                 "indicacao": "Antigalactogenico",
             },
             {
                 "nome_medicamento": "Cefalexina",
-                "dosagem_texto": "conforme peso e apresentacao escolhida",
+                "dosagem_texto": "20 a 30 mg/kg",
                 "frequencia_texto": "a cada 12 horas",
                 "duracao_texto": "por 7 a 10 dias",
-                "observacoes": "Preferir apos alimentacao e ajustar conforme a evolucao clinica do quadro mamario.",
+                "observacoes": "Calcular automaticamente pela faixa de peso e manter preferencialmente apos alimentacao.",
                 "justificativa": "Cobertura antimicrobiana inicial quando houver mastite sem sinais de sepse.",
                 "indicacao": "Antibiotico",
             },
             {
                 "nome_medicamento": "Meloxicam",
-                "dosagem_texto": "0,1 a 0,2 mg/kg",
+                "dosagem_texto": "0,1 mg/kg",
                 "frequencia_texto": "a cada 24 horas",
-                "duracao_texto": "por 3 a 5 dias",
+                "duracao_texto": "por 5 dias",
                 "observacoes": "Usar com cautela gastrointestinal e sempre revisar hidratacao e perfusao da paciente.",
                 "justificativa": "Controle de dor e inflamacao mamaria.",
                 "indicacao": "AINE",
@@ -458,8 +458,22 @@ PROTOCOLS = [
 ]
 
 
+def _sync_protocol_items(protocol, model, relation_name, rows):
+    items = getattr(protocol, relation_name)
+    items[:] = []
+    for pos, row in enumerate(rows, 1):
+        items.append(model(prioridade=pos, **row))
+
+
+def _normalize_rows(rows, keys):
+    normalized = []
+    for row in rows:
+        normalized.append({key: row.get(key) for key in keys})
+    return normalized
+
+
 def seed(session, *, apply: bool = False, only_names: list[str] | None = None) -> dict:
-    """Cria os protocolos que ainda não existem (identificados por nome global)."""
+    """Cria ou atualiza protocolos globais identificados por nome."""
     from models import (
         ProtocoloClinico,
         ProtocoloClinicoExame,
@@ -467,7 +481,7 @@ def seed(session, *, apply: bool = False, only_names: list[str] | None = None) -
         ProtocoloClinicoRetorno,
     )
 
-    created, skipped = [], []
+    created, updated, skipped = [], [], []
     normalized_filter = {name.strip().lower() for name in (only_names or []) if str(name).strip()}
     for data in PROTOCOLS:
         if normalized_filter and data["nome"].strip().lower() not in normalized_filter:
@@ -481,7 +495,102 @@ def seed(session, *, apply: bool = False, only_names: list[str] | None = None) -
             .first()
         )
         if exists:
-            skipped.append(data["nome"])
+            changed = False
+            scalar_fields = (
+                "nome",
+                "suspeita_principal",
+                "especie",
+                "sinais_gatilho",
+                "conduta_sugerida",
+                "orientacoes_tutor",
+                "alertas",
+                "prioridade",
+            )
+            for field in scalar_fields:
+                new_value = data[field]
+                if getattr(exists, field) != new_value:
+                    setattr(exists, field, new_value)
+                    changed = True
+
+            current_meds = [
+                {
+                    "nome_medicamento": item.nome_medicamento,
+                    "dosagem_texto": item.dosagem_texto,
+                    "frequencia_texto": item.frequencia_texto,
+                    "duracao_texto": item.duracao_texto,
+                    "observacoes": item.observacoes,
+                    "justificativa": item.justificativa,
+                    "indicacao": item.indicacao,
+                }
+                for item in exists.medicamentos_sugeridos
+            ]
+            current_exams = [
+                {
+                    "nome": item.nome,
+                    "justificativa": item.justificativa,
+                }
+                for item in exists.exames_sugeridos
+            ]
+            current_returns = [
+                {
+                    "prazo_min_dias": item.prazo_min_dias,
+                    "prazo_max_dias": item.prazo_max_dias,
+                    "tipo_retorno": item.tipo_retorno,
+                    "objetivo": item.objetivo,
+                    "gatilhos_antecipacao": item.gatilhos_antecipacao,
+                }
+                for item in exists.retornos_sugeridos
+            ]
+
+            expected_meds = _normalize_rows(
+                data["medicamentos"],
+                (
+                    "nome_medicamento",
+                    "dosagem_texto",
+                    "frequencia_texto",
+                    "duracao_texto",
+                    "observacoes",
+                    "justificativa",
+                    "indicacao",
+                ),
+            )
+            expected_exams = _normalize_rows(data["exames"], ("nome", "justificativa"))
+            expected_returns = _normalize_rows(
+                data["retornos"],
+                ("prazo_min_dias", "prazo_max_dias", "tipo_retorno", "objetivo", "gatilhos_antecipacao"),
+            )
+
+            if current_meds != expected_meds:
+                _sync_protocol_items(
+                    exists,
+                    ProtocoloClinicoMedicamento,
+                    "medicamentos_sugeridos",
+                    data["medicamentos"],
+                )
+                changed = True
+            if current_exams != expected_exams:
+                _sync_protocol_items(
+                    exists,
+                    ProtocoloClinicoExame,
+                    "exames_sugeridos",
+                    data["exames"],
+                )
+                changed = True
+            if current_returns != expected_returns:
+                _sync_protocol_items(
+                    exists,
+                    ProtocoloClinicoRetorno,
+                    "retornos_sugeridos",
+                    data["retornos"],
+                )
+                changed = True
+
+            if changed:
+                exists.versao = (exists.versao or 1) + 1
+                exists.ativo = True
+                updated.append(data["nome"])
+            else:
+                skipped.append(data["nome"])
             continue
         protocol = ProtocoloClinico(
             nome=data["nome"],
@@ -515,7 +624,7 @@ def seed(session, *, apply: bool = False, only_names: list[str] | None = None) -
         session.commit()
     else:
         session.rollback()
-    return {"created": created, "skipped": skipped, "applied": apply}
+    return {"created": created, "updated": updated, "skipped": skipped, "applied": apply}
 
 
 def main() -> None:

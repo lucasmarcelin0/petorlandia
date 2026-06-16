@@ -18033,6 +18033,28 @@ def _apply_protocol_payload(protocol: ProtocoloClinico, payload: dict, consulta)
     return protocol
 
 
+def _normalize_protocol_medication_name(value: str | None) -> str:
+    text = unicodedata.normalize('NFKD', (value or '').strip().lower())
+    return ''.join(char for char in text if not unicodedata.combining(char))
+
+
+def _protocol_prefers_weight_based_dose(item) -> bool:
+    name = _normalize_protocol_medication_name(getattr(item, 'nome_exibicao', None))
+    if name in {'sec lac', 'cefalexina'}:
+        return True
+    return False
+
+
+def _protocol_preferred_dose_mode(item) -> str:
+    name = _normalize_protocol_medication_name(getattr(item, 'nome_exibicao', None))
+    indication = _normalize_protocol_medication_name(getattr(item, 'indicacao', None))
+    if name == 'prednisona' and indication == 'alergia':
+        return 'min'
+    if name == 'cefalexina':
+        return 'media'
+    return ''
+
+
 def _build_protocol_from_payload(payload: dict, consulta) -> ProtocoloClinico:
     protocolo = ProtocoloClinico(
         versao=1,
@@ -18183,14 +18205,9 @@ def aplicar_sugestao_clinica(consulta_id):
                 'texto': item.observacoes or '',
                 'indicacao': item.indicacao or '',
                 'use_weight_based_dose': bool(
-                    resolved_medicamento_id and not (item.dosagem_texto or '').strip()
+                    resolved_medicamento_id and _protocol_prefers_weight_based_dose(item)
                 ),
-                'preferred_dose_mode': (
-                    'min'
-                    if (item.nome_exibicao or '').strip().lower() == 'prednisona'
-                    and (item.indicacao or '').strip().lower() == 'alergia'
-                    else ''
-                ),
+                'preferred_dose_mode': _protocol_preferred_dose_mode(item),
                 'compact_practical_dose': (item.nome_exibicao or '').strip().lower() == 'simparic',
             },
             'draft_instructions': (protocol.orientacoes_tutor or '').strip() or '',

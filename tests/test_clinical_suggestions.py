@@ -881,7 +881,11 @@ def test_seeded_mastitis_pseudocyesis_protocol_is_created_and_searchable(app):
             apply=True,
             only_names=['Mastite / Pseudociese em cadelas'],
         )
-        assert result['created'] == ['Mastite / Pseudociese em cadelas'] or result['skipped'] == ['Mastite / Pseudociese em cadelas']
+        assert (
+            result['created'] == ['Mastite / Pseudociese em cadelas']
+            or result['updated'] == ['Mastite / Pseudociese em cadelas']
+            or result['skipped'] == ['Mastite / Pseudociese em cadelas']
+        )
 
         protocolo = ProtocoloClinico.query.filter_by(
             nome='Mastite / Pseudociese em cadelas',
@@ -915,6 +919,148 @@ def test_seeded_mastitis_pseudocyesis_protocol_is_created_and_searchable(app):
             'Cefalexina',
             'Meloxicam',
         ]
+
+
+def test_mastitis_protocol_medication_draft_prefers_auto_weight_based_for_cefalexina(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica Mastite')
+        tutor = User(id=1, name='Tutor', email='tutor-mastite@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet-mastite@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Luna', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='in_progress',
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome='Mastite / Pseudociese em cadelas',
+            suspeita_principal='mastite / pseudociese',
+            especie='cao',
+            clinica_id=None,
+            created_by=vet_user.id,
+            prioridade=1,
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                id=1,
+                nome_medicamento='Cefalexina',
+                dosagem_texto='20 a 30 mg/kg',
+                frequencia_texto='a cada 12 horas',
+                duracao_texto='por 7 a 10 dias',
+                observacoes='Calcular automaticamente pela faixa de peso.',
+                indicacao='Antibiotico',
+                prioridade=1,
+            )
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                id=2,
+                nome_medicamento='Meloxicam',
+                dosagem_texto='0,1 mg/kg',
+                frequencia_texto='a cada 24 horas',
+                duracao_texto='por 5 dias',
+                indicacao='AINE',
+                prioridade=2,
+            )
+        )
+        medicamento_canonico = Medicamento(
+            id=10,
+            nome='Cefalexina',
+            classificacao='Antibacteriano',
+            created_by=vet_user.id,
+        )
+        meloxicam_canonico = Medicamento(
+            id=11,
+            nome='Meloxicam',
+            classificacao='Anti-inflamatorio',
+            created_by=vet_user.id,
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, protocolo, medicamento_canonico, meloxicam_canonico])
+        db.session.commit()
+        consulta_id = consulta.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+
+    _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
+
+    med_apply = client.post(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/aplicar',
+        json={'item_type': 'medicamento', 'protocol_id': 1, 'item_id': 1},
+    )
+    assert med_apply.status_code == 200
+    cefalexina_payload = med_apply.get_json()['draft_prescription']
+    assert cefalexina_payload['medicamento'] == 'Cefalexina'
+    assert cefalexina_payload['dosagem'] == '20 a 30 mg/kg'
+    assert cefalexina_payload['use_weight_based_dose'] is True
+    assert cefalexina_payload['preferred_dose_mode'] == 'media'
+
+    meloxicam_apply = client.post(
+        f'/consulta/{consulta_id}/sugestoes_clinicas/aplicar',
+        json={'item_type': 'medicamento', 'protocol_id': 1, 'item_id': 2},
+    )
+    assert meloxicam_apply.status_code == 200
+    meloxicam_payload = meloxicam_apply.get_json()['draft_prescription']
+    assert meloxicam_payload['medicamento'] == 'Meloxicam'
+    assert meloxicam_payload['dosagem'] == '0,1 mg/kg'
+    assert meloxicam_payload['frequencia'] == 'a cada 24 horas'
+    assert meloxicam_payload['duracao'] == 'por 5 dias'
+    assert meloxicam_payload['use_weight_based_dose'] is False
+
+
+def test_seed_protocolos_notas_updates_existing_mastitis_protocol(app):
+    with flask_app.app_context():
+        protocolo = ProtocoloClinico(
+            nome='Mastite / Pseudociese em cadelas',
+            suspeita_principal='mastite antiga',
+            especie='cao',
+            sinais_gatilho='leite',
+            conduta_sugerida='antiga',
+            orientacoes_tutor='antiga',
+            alertas='antigo',
+            prioridade=9,
+            versao=1,
+            ativo=True,
+            clinica_id=None,
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                nome_medicamento='Cefalexina',
+                dosagem_texto='10 mg/kg',
+                frequencia_texto='a cada 24 horas',
+                duracao_texto='por 3 dias',
+                prioridade=1,
+            )
+        )
+        db.session.add(protocolo)
+        db.session.commit()
+        protocolo_id = protocolo.id
+
+        result = seed_protocolos_notas(
+            db.session,
+            apply=True,
+            only_names=['Mastite / Pseudociese em cadelas'],
+        )
+
+        assert result['updated'] == ['Mastite / Pseudociese em cadelas']
+
+        atualizado = ProtocoloClinico.query.get(protocolo_id)
+        assert atualizado is not None
+        assert atualizado.versao == 2
+        assert [item.nome_exibicao for item in atualizado.medicamentos_sugeridos] == [
+            'Sec Lac',
+            'Cefalexina',
+            'Meloxicam',
+        ]
+        assert atualizado.medicamentos_sugeridos[0].dosagem_texto == 'Conforme peso e apresentacao escolhida'
+        assert atualizado.medicamentos_sugeridos[1].dosagem_texto == '20 a 30 mg/kg'
+        assert atualizado.medicamentos_sugeridos[2].dosagem_texto == '0,1 mg/kg'
 
 
 def test_seed_protocolos_notas_idempotente_e_recomendavel(client):
