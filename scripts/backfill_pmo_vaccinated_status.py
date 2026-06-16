@@ -27,6 +27,7 @@ import logging
 import os
 import sys
 from collections import Counter
+from datetime import date as _date_cls
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -197,6 +198,7 @@ def _apply_statuses(
 
 def run_backfill(*, dry_run: bool = True, only_sheet: str = "") -> Counter:
     summary: Counter = Counter()
+    today = _date_cls.today()
     spreadsheet_id = _extract_google_sheet_id(DEFAULT_SHEET_URL)
     if not spreadsheet_id:
         raise RuntimeError("URL da planilha PMO inválida.")
@@ -234,6 +236,11 @@ def run_backfill(*, dry_run: bool = True, only_sheet: str = "") -> Counter:
 
             if not vaccine_date:
                 summary["sem_data_vacina"] += 1
+                continue
+
+            vac_date_only = vaccine_date.date() if hasattr(vaccine_date, "date") else vaccine_date
+            if vac_date_only > today:
+                summary["data_futura"] += 1
                 continue
 
             dogs_vac = _parse_count(_cell(row, COL_DOGS_VAC + offset))
