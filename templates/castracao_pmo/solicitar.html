@@ -6,14 +6,14 @@
     <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">
       <i class="fa-solid fa-arrow-left me-1"></i> Voltar
     </a>
-    <h1 class="h4 fw-bold mb-0">Solicitar castracao PMO</h1>
+    <h1 class="h4 fw-bold mb-0">Solicitar castração PMO</h1>
   </div>
 
   <div class="alert alert-info small d-flex gap-2 align-items-start">
     <i class="fa-solid fa-circle-info mt-1"></i>
     <div>
-      Cadastro de interesse para castracao pela Prefeitura Municipal de Orlandia.
-      A equipe responsavel usara os dados informados para triagem e contato.
+      Cadastro de interesse para castração pela Prefeitura Municipal de Orlândia.
+      A equipe responsável usará os dados informados para triagem e contato.
     </div>
   </div>
 
@@ -33,9 +33,9 @@
         <i class="fa-solid fa-check text-white fs-5"></i>
       </div>
       <div>
-        <h6 class="fw-bold mb-1 text-success">Solicitacao enviada com sucesso!</h6>
+        <h6 class="fw-bold mb-1 text-success">Solicitação enviada com sucesso!</h6>
         <p class="mb-2 small text-success-emphasis">
-          A equipe responsavel fara a triagem e entrara em contato pelo telefone informado.
+          A equipe responsável fará a triagem e entrará em contato pelo telefone informado.
         </p>
         {% if success_token is not sameas true %}
         <span class="badge bg-success-subtle text-success border border-success-subtle fw-normal small">
@@ -84,7 +84,7 @@
     <div class="card border-0 shadow-sm rounded-4 mb-3">
       <div class="card-body p-4">
         <h6 class="fw-bold mb-3">
-          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereco
+          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereço
         </h6>
         <div class="row g-3">
           <div class="col-md-8">
@@ -92,7 +92,7 @@
             <input type="text" id="address_street" name="address_street" class="form-control" value="{{ form_state.address_street }}" required>
           </div>
           <div class="col-md-4">
-            <label for="address_number" class="form-label small fw-semibold">Numero</label>
+            <label for="address_number" class="form-label small fw-semibold">Número</label>
             <input type="text" id="address_number" name="address_number" class="form-control" value="{{ form_state.address_number }}">
           </div>
           <div class="col-md-6">
@@ -106,7 +106,7 @@
           <div class="col-12">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="save_address" name="save_address" value="1" {% if form_state.save_address %}checked{% endif %}>
-              <label class="form-check-label small" for="save_address">Salvar este endereco no meu perfil</label>
+              <label class="form-check-label small" for="save_address">Salvar este endereço no meu perfil</label>
             </div>
           </div>
         </div>
@@ -129,11 +129,11 @@
               <span class="d-flex flex-column">
                 <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
                 <span class="text-muted small">
-                  {% if species_name %}{{ species_name }}{% else %}Especie nao informada{% endif %}
+                  {% if species_name %}{{ species_name }}{% else %}Espécie não informada{% endif %}
                   {% if animal.breed and animal.breed.name %} &middot; {{ animal.breed.name }}{% endif %}
                   {% if animal.sex %} &middot; {{ animal.sex }}{% endif %}
                   {% if animal.peso %} &middot; {{ animal.peso }} kg{% endif %}
-                  {% if animal.neutered %} &middot; ja castrado{% endif %}
+                  {% if animal.neutered %} &middot; já castrado{% endif %}
                 </span>
               </span>
             </label>
@@ -149,36 +149,36 @@
         </h6>
         <div class="row g-3">
           <div class="col-md-6">
-            <label for="preferred_contact" class="form-label small fw-semibold">Preferencia de contato *</label>
+            <label for="preferred_contact" class="form-label small fw-semibold">Preferência de contato *</label>
             <select id="preferred_contact" name="preferred_contact" class="form-select" required>
               <option value="">Selecione</option>
-              {% for option in ['WhatsApp', 'Ligacao', 'Indiferente'] %}
+              {% for option in ['WhatsApp', 'Ligação', 'Indiferente'] %}
                 <option value="{{ option }}" {% if form_state.preferred_contact == option %}selected{% endif %}>{{ option }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-md-6">
-            <label for="female_status" class="form-label small fw-semibold">Femeas selecionadas</label>
+            <label for="female_status" class="form-label small fw-semibold">Fêmeas selecionadas</label>
             <select id="female_status" name="female_status" class="form-select">
-              <option value="" {% if not form_state.female_status %}selected{% endif %}>Nao sei / nao se aplica</option>
+              <option value="" {% if not form_state.female_status %}selected{% endif %}>Não sei / não se aplica</option>
               {% for option in ['Sem cio recente', 'Cio recente', 'Prenhez suspeita', 'Lactante'] %}
                 <option value="{{ option }}" {% if form_state.female_status == option %}selected{% endif %}>{{ option }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-12">
-            <label for="health_notes" class="form-label small fw-semibold">Observacoes de saude</label>
-            <textarea id="health_notes" name="health_notes" class="form-control" rows="3" placeholder="Medicamentos, doencas, idade avancada, historico de convulsoes, etc.">{{ form_state.health_notes }}</textarea>
+            <label for="health_notes" class="form-label small fw-semibold">Observações de saúde</label>
+            <textarea id="health_notes" name="health_notes" class="form-control" rows="3" placeholder="Medicamentos, doenças, idade avançada, histórico de convulsões, etc.">{{ form_state.health_notes }}</textarea>
           </div>
           <div class="col-12">
-            <label for="note" class="form-label small fw-semibold">Observacao geral</label>
-            <textarea id="note" name="note" class="form-control" rows="3" placeholder="Melhor horario para ligar, ponto de referencia, informacoes adicionais.">{{ form_state.note }}</textarea>
+            <label for="note" class="form-label small fw-semibold">Observação geral</label>
+            <textarea id="note" name="note" class="form-control" rows="3" placeholder="Melhor horário para ligar, ponto de referência, informações adicionais.">{{ form_state.note }}</textarea>
           </div>
           <div class="col-12">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="consent" name="consent" value="1" {% if form_state.consent %}checked{% endif %} required>
               <label class="form-check-label small" for="consent">
-                Estou ciente de que este cadastro e uma solicitacao de triagem e nao garante agendamento automatico.
+                Estou ciente de que este cadastro é uma solicitação de triagem e não garante agendamento automático.
               </label>
             </div>
           </div>
@@ -194,7 +194,7 @@
         <div class="small d-grid gap-2" id="pmo-submit-summary">
           <div><strong>Tutor:</strong> <span data-summary="tutor">-</span></div>
           <div><strong>Telefone:</strong> <span data-summary="phone">-</span></div>
-          <div><strong>Endereco:</strong> <span data-summary="address">-</span></div>
+          <div><strong>Endereço:</strong> <span data-summary="address">-</span></div>
           <div><strong>Animais:</strong> <span data-summary="animals">Selecione ao menos um animal.</span></div>
           <div><strong>Contato:</strong> <span data-summary="contact">-</span></div>
         </div>
@@ -203,7 +203,7 @@
 
     <div class="d-grid gap-2 mb-5">
       <button type="submit" class="btn btn-primary btn-lg rounded-pill">
-        <i class="fa-solid fa-paper-plane me-1"></i> Enviar solicitacao
+        <i class="fa-solid fa-paper-plane me-1"></i> Enviar solicitação
       </button>
       <a href="{{ url_for('index') }}" class="btn btn-link text-muted">Cancelar</a>
     </div>
@@ -212,7 +212,7 @@
   {% if historico %}
   <div class="mb-5">
     <h5 class="fw-bold mb-3">
-      <i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Historico de solicitacoes
+      <i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Histórico de solicitações
     </h5>
     <div class="d-flex flex-column gap-3">
       {% for item in historico %}
@@ -230,7 +230,7 @@
               </p>
               <p class="mb-0 text-muted small">
                 <i class="fa-solid fa-calendar me-1"></i>
-                Enviado em {{ (item.updated_at or item.synced_at).strftime('%d/%m/%Y as %H:%M') }}
+                Enviado em {{ (item.updated_at or item.synced_at).strftime('%d/%m/%Y às %H:%M') }}
               </p>
             </div>
             <div class="text-end">

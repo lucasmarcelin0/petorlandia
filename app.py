@@ -5250,7 +5250,7 @@ def castracao_pmo_solicitar():
 
     if not user_animals:
         flash(
-            'Voce precisa ter ao menos um animal cadastrado para solicitar a castracao PMO.',
+            'Você precisa ter ao menos um animal cadastrado para solicitar a castração PMO.',
             'warning',
         )
         return redirect(url_for('add_animal'))
@@ -5334,21 +5334,21 @@ def castracao_pmo_solicitar():
             flash('Selecione ao menos um animal para castrar.', 'danger')
         elif already_neutered:
             flash(
-                'Remova da solicitacao animal ja marcado como castrado: ' + ', '.join(already_neutered),
+                'Remova da solicitação animal já marcado como castrado: ' + ', '.join(already_neutered),
                 'danger',
             )
         elif duplicate_cpf:
-            flash('Este CPF ja esta cadastrado em outro tutor. Confira o numero informado.', 'danger')
+            flash('Este CPF já está cadastrado em outro tutor. Confira o número informado.', 'danger')
         elif duplicate_email:
-            flash('Este e-mail ja esta cadastrado em outro tutor. Confira o e-mail informado.', 'danger')
+            flash('Este e-mail já está cadastrado em outro tutor. Confira o e-mail informado.', 'danger')
         elif not form_state['phone']:
             flash('Informe um telefone para contato.', 'danger')
         elif not form_state['address_street'] or not form_state['address_neighborhood']:
             flash('Informe rua e bairro do tutor.', 'danger')
-        elif form_state['preferred_contact'] not in ('WhatsApp', 'Ligacao', 'Indiferente'):
-            flash('Selecione a preferencia de contato.', 'danger')
+        elif form_state['preferred_contact'] not in ('WhatsApp', 'Ligação', 'Indiferente'):
+            flash('Selecione a preferência de contato.', 'danger')
         elif not form_state['consent']:
-            flash('Confirme a ciencia para enviar a solicitacao.', 'danger')
+            flash('Confirme a ciência para enviar a solicitação.', 'danger')
         else:
             payload = {
                 'tutor': form_state['tutor'],
@@ -5393,8 +5393,8 @@ def castracao_pmo_solicitar():
                 flask_session['pmo_castracao_solicitar_success'] = result.get('public_token') or True
                 return redirect(url_for('castracao_pmo_solicitar'))
             except Exception as exc:
-                current_app.logger.exception("Falha ao enviar solicitacao Castracao PMO")
-                flash(f'Nao foi possivel enviar a solicitacao agora: {exc}', 'danger')
+                current_app.logger.exception("Falha ao enviar solicitação Castração PMO")
+                flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
 
     request_sheet_title = os.getenv(
         PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
