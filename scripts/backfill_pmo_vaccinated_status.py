@@ -26,6 +26,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from collections import Counter
 from datetime import date as _date_cls
 
@@ -191,12 +192,16 @@ def _apply_statuses(
             animal.vaccinated_at = None
 
     db.session.commit()
+    # Pausa entre escritas para não estourar a cota da Sheets API (60 req/min).
+    time.sleep(1.2)
     write_vaccinated_counts_to_sheet(visit)
     # No Encaixes as cores indicam status de contato (amarelo/vermelho/azul) definido
     # manualmente — não repintamos para não apagar essa informação de workflow.
     if (visit.sheet_title or "").strip().lower() != "encaixes":
+        time.sleep(1.2)
         write_tutor_name_color_to_sheet(visit)
     if partial:
+        time.sleep(1.2)
         write_note_to_sheet(visit)
     return vacinados, ausentes
 
