@@ -1,4 +1,5 @@
 import logging
+import os
 from logging.config import fileConfig
 
 from flask import current_app
@@ -30,6 +31,27 @@ def get_engine_url():
             '%', '%%')
     except AttributeError:
         return str(get_engine().url).replace('%', '%%')
+
+
+def _guard_against_accidental_sqlite_migrations():
+    """Fail fast when migrations are about to run against the local fallback DB.
+
+    The application can still use SQLite intentionally in tests or ad hoc local
+    workflows, but schema migrations should never silently target the fallback
+    file when the production/staging Postgres URL was simply missing.
+    """
+    engine = get_engine()
+    url = getattr(engine, "url", None)
+    drivername = getattr(url, "drivername", "") or ""
+    database = getattr(url, "database", "") or ""
+    explicit_uri = os.environ.get("SQLALCHEMY_DATABASE_URI", "").strip()
+
+    if drivername.startswith("sqlite") and database.endswith("petorlandia_dev.db") and not explicit_uri:
+        raise RuntimeError(
+            "Refusing to run Alembic migrations against the local fallback SQLite "
+            "database 'petorlandia_dev.db'. Set SQLALCHEMY_DATABASE_URI to the "
+            "correct Postgres database before running 'flask db upgrade'."
+        )
 
 
 # add your model's MetaData object here
@@ -95,6 +117,7 @@ def run_migrations_online():
         conf_args["process_revision_directives"] = process_revision_directives
 
     connectable = get_engine()
+    _guard_against_accidental_sqlite_migrations()
 
     with connectable.connect() as connection:
         context.configure(

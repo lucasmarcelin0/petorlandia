@@ -7,10 +7,33 @@
            alt="{{ casa.nome }}" class="img-fluid mb-3"
            style="max-height: 90px; max-width: 260px;">
     {% endif %}
-    <h1 class="h3 fw-bold">Vamos deixar sua loja pronta, Sabrina</h1>
+    <h1 class="h3 fw-bold">Vamos deixar sua loja pronta, {{ (values.owner_name or owner.name or 'parceira').split(' ')[0] }}</h1>
     <p class="text-muted mb-0">
-      Confirme seus dados e informe preço e estoque. Você fará tudo nesta página.
+      Confirme seus dados, crie sua senha e ative primeiro os produtos que quiser publicar agora.
     </p>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4 mb-4" style="background:#f8fbff;">
+    <div class="card-body p-4">
+      <div class="row g-3 align-items-start">
+        <div class="col-lg-7">
+          <h2 class="h5 fw-bold mb-2">O que voce vai precisar</h2>
+          <p class="text-muted small mb-0">
+            Separe seu e-mail, endereco da loja e os precos dos produtos que deseja publicar agora.
+            Voce nao precisa preencher tudo de uma vez: os produtos deixados em branco continuarao ocultos.
+          </p>
+        </div>
+        <div class="col-lg-5">
+          <div class="rounded-3 border bg-white p-3 h-100">
+            <div class="small text-uppercase text-muted fw-semibold mb-2">Resumo do convite</div>
+            <div class="small mb-1"><strong>Loja:</strong> {{ casa.nome }}</div>
+            <div class="small mb-1"><strong>Produtos no catalogo:</strong> {{ produtos|length }}</div>
+            <div class="small mb-1"><strong>Ja configurados:</strong> {{ configured_count }}</div>
+            <div class="small text-muted">O link deixa de funcionar depois da conclusao.</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   {% if errors %}
@@ -45,7 +68,7 @@
                    value="{{ values.email }}" required autocomplete="email">
           </div>
           <div class="col-md-6">
-            <label class="form-label fw-semibold" for="store_email">E-mail público da loja</label>
+            <label class="form-label fw-semibold" for="store_email">E-mail publico da loja</label>
             <input class="form-control" type="email" id="store_email" name="store_email"
                    value="{{ values.store_email }}" placeholder="Pode ser o mesmo e-mail">
           </div>
@@ -65,7 +88,7 @@
 
     <div class="card border-0 shadow-sm rounded-4 mb-4">
       <div class="card-body p-4">
-        <h2 class="h5 fw-bold mb-3">2. Dados da AgroGraner</h2>
+        <h2 class="h5 fw-bold mb-3">2. Dados da {{ casa.nome }}</h2>
         <div class="row g-3">
           <div class="col-md-7">
             <label class="form-label fw-semibold" for="store_name">Nome da loja</label>
@@ -78,23 +101,23 @@
                    value="{{ values.cnpj }}" placeholder="00.000.000/0000-00">
           </div>
           <div class="col-12">
-            <label class="form-label fw-semibold" for="address">Endereço completo</label>
+            <label class="form-label fw-semibold" for="address">Endereco completo</label>
             <input class="form-control" id="address" name="address"
                    value="{{ values.address }}" required
-                   placeholder="Rua, número, bairro, cidade e UF">
+                   placeholder="Rua, numero, bairro, cidade e UF">
           </div>
           <div class="col-12">
-            <div class="form-label fw-semibold">Como os pedidos serão entregues?</div>
+            <div class="form-label fw-semibold">Como os pedidos serao entregues?</div>
             <div class="d-flex flex-column flex-md-row gap-2">
               <label class="border rounded-3 p-3 flex-fill">
                 <input class="form-check-input me-2" type="radio" name="modo_entrega"
                        value="plataforma" {% if values.modo_entrega == 'plataforma' %}checked{% endif %}>
-                Entregadores da PetOrlândia
+                Entregadores da PetOrlandia
               </label>
               <label class="border rounded-3 p-3 flex-fill">
                 <input class="form-check-input me-2" type="radio" name="modo_entrega"
                        value="propria" {% if values.modo_entrega == 'propria' %}checked{% endif %}>
-                Entrega própria da AgroGraner
+                Entrega propria da {{ casa.nome }}
               </label>
             </div>
           </div>
@@ -104,12 +127,14 @@
 
     <div class="card border-0 shadow-sm rounded-4 mb-4">
       <div class="card-body p-4">
-        <h2 class="h5 fw-bold mb-1">3. Preços e estoque</h2>
+        <h2 class="h5 fw-bold mb-1">3. Precos e estoque</h2>
         <p class="text-muted small mb-3">
-          As fotos e os nomes já estão prontos. Informe apenas o preço de venda e a quantidade disponível.
+          As fotos e os nomes ja estao prontos. Preencha apenas os produtos que deseja ativar agora.
+          Os itens deixados em branco continuarao ocultos para os clientes.
         </p>
         <div class="row g-3">
-          {% for product in produtos %}
+          {% for item in produtos %}
+          {% set product = item.product %}
           <div class="col-md-6">
             <div class="border rounded-3 p-3 h-100">
               <div class="d-flex gap-3 align-items-center mb-3">
@@ -120,25 +145,28 @@
                 {% endif %}
                 <div>
                   <div class="fw-semibold">{{ product.name }}</div>
-                  <div class="small text-muted">Produto oculto até a conclusão</div>
+                  <div class="small {% if item.configured %}text-success{% else %}text-muted{% endif %}">
+                    {% if item.configured %}Pronto para publicar{% else %}Deixe em branco para manter oculto{% endif %}
+                  </div>
                 </div>
               </div>
               <div class="row g-2">
                 <div class="col-7">
-                  <label class="form-label small fw-semibold" for="price_{{ product.id }}">Preço</label>
+                  <label class="form-label small fw-semibold" for="price_{{ product.id }}">Preco</label>
                   <div class="input-group">
                     <span class="input-group-text">R$</span>
                     <input class="form-control" inputmode="decimal"
                            id="price_{{ product.id }}" name="price_{{ product.id }}"
-                           value="{{ request.form.get('price_' ~ product.id, '') }}"
-                           placeholder="0,00" required>
+                           value="{{ item.price_value }}"
+                           placeholder="0,00">
                   </div>
                 </div>
                 <div class="col-5">
                   <label class="form-label small fw-semibold" for="stock_{{ product.id }}">Estoque</label>
                   <input class="form-control" type="number" min="0"
                          id="stock_{{ product.id }}" name="stock_{{ product.id }}"
-                         value="{{ request.form.get('stock_' ~ product.id, product.stock or 0) }}" required>
+                         value="{{ item.stock_value }}"
+                         placeholder="0">
                 </div>
               </div>
             </div>
@@ -154,7 +182,7 @@
       </button>
     </div>
     <p class="text-center text-muted small mt-3">
-      Este link é privado e deixa de funcionar após a conclusão.
+      Este link e privado e deixa de funcionar apos a conclusao. Voce podera editar ou ativar mais produtos depois no painel da loja.
     </p>
   </form>
 </div>

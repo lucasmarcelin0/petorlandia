@@ -19082,6 +19082,27 @@ def _onboarding_decimal(raw_value):
         return None
 
 
+def _onboarding_prefill_email(user_email):
+    email = normalize_email(user_email) or ''
+    return '' if email.endswith('@convite.petorlandia.local') else email
+
+
+def _onboarding_product_form_state(produtos):
+    state = []
+    configured_count = 0
+    for product in produtos:
+        is_configured = bool((product.price or 0) > 0 and (product.stock or 0) >= 0 and product.status == 'active')
+        if is_configured:
+            configured_count += 1
+        state.append({
+            'product': product,
+            'price_value': '' if not is_configured else f"{float(product.price):.2f}".replace('.', ','),
+            'stock_value': '' if not is_configured else str(product.stock),
+            'configured': is_configured,
+        })
+    return state, configured_count
+
+
 def casa_de_racao_onboarding(token):
     token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
     invite = CasaDeRacaoOnboardingInvite.query.filter_by(token_hash=token_hash).first_or_404()
@@ -19101,14 +19122,15 @@ def casa_de_racao_onboarding(token):
     errors = []
     values = {
         'owner_name': owner.name or '',
-        'email': '' if owner.email.endswith('@convite.petorlandia.local') else owner.email,
+        'email': _onboarding_prefill_email(owner.email),
         'phone': owner.phone or casa.telefone or '',
         'store_name': casa.nome or '',
         'cnpj': casa.cnpj or '',
-        'store_email': casa.email or '',
+        'store_email': normalize_email(casa.email) or _onboarding_prefill_email(owner.email),
         'address': casa.endereco or owner.address or '',
         'modo_entrega': casa.modo_entrega or 'plataforma',
     }
+    product_form_state, configured_count = _onboarding_product_form_state(produtos)
 
     if request.method == 'POST':
         values.update({
@@ -19164,19 +19186,38 @@ def casa_de_racao_onboarding(token):
             errors.append('A confirmação da senha não confere.')
 
         product_updates = []
-        for product in produtos:
+        configured_products = 0
+        for item in product_form_state:
+            product = item['product']
             raw_price = request.form.get(f'price_{product.id}')
             price = _onboarding_decimal(raw_price)
             raw_stock = (request.form.get(f'stock_{product.id}') or '').strip()
+            touched = bool(str(raw_price or '').strip() or raw_stock)
             try:
-                stock = int(raw_stock)
+                stock = int(raw_stock) if raw_stock else 0
             except ValueError:
                 stock = -1
+
+            if not touched:
+                product_updates.append((product, None, None, False))
+                item['price_value'] = ''
+                item['stock_value'] = ''
+                item['configured'] = False
+                continue
+
             if price is None or price <= 0:
                 errors.append(f'Informe um preço válido para {product.name}.')
             if stock < 0:
                 errors.append(f'Informe um estoque válido para {product.name}.')
-            product_updates.append((product, price, stock))
+            if price is not None and price > 0 and stock >= 0:
+                configured_products += 1
+            item['price_value'] = str(raw_price or '').strip()
+            item['stock_value'] = raw_stock
+            item['configured'] = bool(price is not None and price > 0 and stock >= 0)
+            product_updates.append((product, price, stock, True))
+
+        if configured_products == 0:
+            errors.append('Preencha ao menos um produto com preço e estoque para concluir.')
 
         if not errors:
             owner.name = values['owner_name']
@@ -19193,15 +19234,23 @@ def casa_de_racao_onboarding(token):
             casa.modo_entrega = values['modo_entrega']
             casa.status = 'ativa'
 
-            for product, price, stock in product_updates:
-                product.price = float(price)
-                product.stock = stock
-                product.status = 'active'
+            for product, price, stock, should_activate in product_updates:
+                if should_activate and price is not None and price > 0 and stock is not None and stock >= 0:
+                    product.price = float(price)
+                    product.stock = stock
+                    product.status = 'active'
+                else:
+                    product.price = 0
+                    product.stock = 0
+                    product.status = 'inactive'
 
             invite.used_at = datetime.now(timezone.utc)
             db.session.commit()
             login_user(owner)
-            flash('Cadastro concluído. A AgroGraner já está pronta para trabalhar!', 'success')
+            flash(
+                f'Cadastro concluído. Sua loja já está pronta com {configured_products} produto(s) ativo(s).',
+                'success',
+            )
             return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id))
 
     return render_template(
@@ -19209,9 +19258,10 @@ def casa_de_racao_onboarding(token):
         invite=invite,
         casa=casa,
         owner=owner,
-        produtos=produtos,
+        produtos=product_form_state,
         values=values,
         errors=errors,
+        configured_count=configured_count,
     )
 
 
