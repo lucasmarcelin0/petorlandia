@@ -18134,6 +18134,43 @@ def registrar_feedback_sugestao_clinica(consulta_id):
     return jsonify({'success': True})
 
 
+@app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/plano', methods=['POST'])
+@login_required
+def calcular_plano_sugestao_clinica(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinÃ¡rios podem calcular planos clÃ­nicos.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        protocol_id = int(payload.get('protocol_id')) if payload.get('protocol_id') is not None else None
+    except (TypeError, ValueError):
+        protocol_id = None
+    if not protocol_id:
+        return jsonify({'success': False, 'message': 'Informe o protocolo clÃ­nico para calcular o plano.'}), 400
+
+    protocol = (
+        ProtocoloClinico.query
+        .options(
+            selectinload(ProtocoloClinico.exames_sugeridos),
+            selectinload(ProtocoloClinico.medicamentos_sugeridos),
+            selectinload(ProtocoloClinico.retornos_sugeridos),
+        )
+        .get_or_404(protocol_id)
+    )
+    if protocol.clinica_id and protocol.clinica_id != consulta.clinica_id:
+        return jsonify({'success': False, 'message': 'Protocolo clÃ­nico indisponÃ­vel para esta clÃ­nica.'}), 403
+
+    from services.clinical_plan import build_clinical_plan
+    plan = build_clinical_plan(consulta, protocol, session=db.session)
+    return jsonify({
+        'success': True,
+        'plan': plan,
+        'message': 'Plano clÃ­nico calculado com sucesso.',
+    })
+
+
 @app.route('/consulta/<int:consulta_id>/sugestoes_clinicas/aplicar', methods=['POST'])
 @login_required
 def aplicar_sugestao_clinica(consulta_id):

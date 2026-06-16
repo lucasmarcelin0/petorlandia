@@ -1011,7 +1011,8 @@ def test_mastitis_protocol_medication_draft_prefers_auto_weight_based_for_cefale
     assert meloxicam_payload['dosagem'] == '0,1 mg/kg'
     assert meloxicam_payload['frequencia'] == 'a cada 24 horas'
     assert meloxicam_payload['duracao'] == 'por 5 dias'
-    assert meloxicam_payload['use_weight_based_dose'] is False
+    assert meloxicam_payload['use_weight_based_dose'] is True
+    assert meloxicam_payload['preferred_dose_mode'] == 'min'
 
 
 def test_seed_protocolos_notas_updates_existing_mastitis_protocol(app):

@@ -1,0 +1,490 @@
+"""Build calculated clinical plans from protocols.
+
+This module is the bridge between clinical protocols and the prescription
+calculator. It keeps the protocol panel from needing to know how the bulario
+chooses doses, presentations, or practical quantities.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from datetime import date
+from typing import Any
+
+from extensions import db
+from models import Medicamento
+from services.bulario import sugerir_dose
+from services.clinical_suggestions import build_followup_prefill
+from services.prescricao_alias import resolver_alias
+
+
+READY = "ready"
+REVIEW = "review"
+BLOCKED = "blocked"
+MANUAL = "manual"
+
+
+def _normalize(value: str | None) -> str:
+    text = unicodedata.normalize("NFKD", (value or "").strip().lower())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if result > 0 else None
+
+
+def _fmt_number(value: float | None) -> str:
+    if value is None:
+        return ""
+    if abs(value - round(value)) < 0.0001:
+        return str(int(round(value)))
+    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _fmt_range(min_value: int | None, max_value: int | None, unit: str) -> str:
+    if min_value and max_value and min_value != max_value:
+        return f"por {min_value} a {max_value} {unit}"
+    if min_value:
+        return f"por {min_value} {unit}"
+    if max_value:
+        return f"por ate {max_value} {unit}"
+    return ""
+
+
+def _pluralize(unit: str, amount: float) -> str:
+    normalized = unit.strip() or "unidade"
+    singular_map = {
+        "comprimido(s)": "comprimido",
+        "gota(s)": "gota",
+        "pipeta(s)": "pipeta",
+        "capsula": "capsula",
+    }
+    normalized = singular_map.get(normalized.lower(), normalized)
+    if amount <= 1 or abs(amount - 1) < 0.0001:
+        return normalized
+    if normalized.endswith("l"):
+        return normalized
+    if normalized.endswith("s"):
+        return normalized
+    return f"{normalized}s"
+
+
+def _dose_value_for_mode(suggestion: dict[str, Any], mode: str) -> float | None:
+    min_value = _float_or_none(suggestion.get("dose_min"))
+    max_value = _float_or_none(suggestion.get("dose_max"))
+    if min_value is None and max_value is None:
+        return None
+    if max_value is None:
+        max_value = min_value
+    if min_value is None:
+        min_value = max_value
+    if mode == "min":
+        return min_value
+    if mode == "max":
+        return max_value
+    return (min_value + max_value) / 2
+
+
+def _format_dose_value(suggestion: dict[str, Any], mode: str) -> str:
+    value = _dose_value_for_mode(suggestion, mode)
+    unit = (suggestion.get("dose_unit_out") or "").strip()
+    if value is None:
+        return suggestion.get("dose_exibir") or ""
+    return f"{_fmt_number(value)} {unit}".strip()
+
+
+def _frequency_text(suggestion: dict[str, Any], override: str | None = None) -> str:
+    if override and override.strip():
+        return override.strip()
+    if suggestion.get("intervalo_horas"):
+        return f"a cada {suggestion['intervalo_horas']} horas"
+    return (suggestion.get("frequencia_texto") or "").strip()
+
+
+def _duration_text(suggestion: dict[str, Any], override: str | None = None) -> str:
+    if override and override.strip():
+        return override.strip()
+    return (
+        _fmt_range(suggestion.get("duracao_min_dias"), suggestion.get("duracao_max_dias"), "dias")
+        or (suggestion.get("duracao_texto") or "").strip()
+    )
+
+
+def _preferred_dose_mode(item) -> str:
+    name = _normalize(getattr(item, "nome_exibicao", None))
+    indication = _normalize(getattr(item, "indicacao", None))
+    dose_text = _normalize(getattr(item, "dosagem_texto", None))
+    if name == "prednisona" and indication == "alergia":
+        return "min"
+    if any(token in dose_text for token in (" a ", " ate ", " - ")) or "-" in (getattr(item, "dosagem_texto", "") or ""):
+        return "media"
+    return "media"
+
+
+def _resolve_medication(item, session) -> Medicamento | None:
+    if getattr(item, "medicamento", None):
+        return item.medicamento
+    med_id = getattr(item, "medicamento_id", None)
+    if not med_id and getattr(item, "nome_exibicao", None):
+        med_id, _confidence = resolver_alias(item.nome_exibicao, session)
+    if not med_id:
+        return None
+    getter = getattr(session, "get", None)
+    if getter:
+        return getter(Medicamento, med_id)
+    return Medicamento.query.get(med_id)
+
+
+def _commercial_filter(item, medication: Medicamento | None) -> str | None:
+    if not medication:
+        return None
+    item_name = (getattr(item, "nome_exibicao", None) or "").strip()
+    med_name = (getattr(medication, "nome", None) or "").strip()
+    if item_name and med_name and _normalize(item_name) != _normalize(med_name):
+        return item_name
+    return None
+
+
+def _concentration_in_dose_unit(ap: dict[str, Any], dose_unit: str) -> float | None:
+    value = _float_or_none(ap.get("concentracao_valor"))
+    if value is None:
+        return None
+    unit = (ap.get("concentracao_unidade") or "").lower()
+    dose_unit = dose_unit.lower()
+    if dose_unit == "mg":
+        if unit == "mg":
+            return value
+        if unit == "g":
+            return value * 1000
+        if unit == "mcg":
+            return value / 1000
+        if unit == "ui":
+            return value
+    return None
+
+
+def _round_quantity(quantity: float, unit: str) -> float:
+    lowered = unit.lower()
+    if lowered in {"ml", "ml.", "mL".lower()}:
+        return round(quantity * 10) / 10
+    if "gota" in lowered:
+        return round(quantity)
+    return round(quantity * 2) / 2
+
+
+def _practical_score(quantity: float, desired: float, delivered: float) -> float:
+    if desired <= 0:
+        return 9999
+    error = abs(delivered - desired) / desired
+    penalty = 0
+    if quantity > 6:
+        penalty += 50
+    elif quantity > 4:
+        penalty += 20
+    elif quantity > 2:
+        penalty += 8
+    if abs(quantity - round(quantity)) > 0.001:
+        penalty += 2
+    return penalty + error * 100
+
+
+def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dict[str, Any] | None:
+    presentations = [
+        ap for ap in (suggestion.get("apresentacoes") or [])
+        if ap.get("permite_calculo_automatico")
+    ]
+    if not presentations:
+        return None
+
+    preferred_id = suggestion.get("apresentacao_preferida_id")
+    if preferred_id:
+        for ap in presentations:
+            if ap.get("id") == preferred_id:
+                presentations = [ap] + [item for item in presentations if item.get("id") != preferred_id]
+                break
+
+    dose_value = _dose_value_for_mode(suggestion, mode)
+    dose_unit = (suggestion.get("dose_unit_out") or "").lower()
+    if dose_value is None:
+        return None
+
+    candidates: list[dict[str, Any]] = []
+    for ap in presentations:
+        practical_unit = (ap.get("unidade_pratica") or "unidade").strip() or "unidade"
+        concentration_unit = (ap.get("concentracao_unidade") or "").lower()
+        quantity = None
+        delivered = dose_value
+        if dose_unit == "mg" and concentration_unit in {"mg", "g", "mcg", "ui"}:
+            concentration = _concentration_in_dose_unit(ap, "mg")
+            if concentration:
+                quantity = dose_value / concentration
+                delivered = _round_quantity(quantity, practical_unit) * concentration
+        elif dose_unit == "mg" and concentration_unit in {"mg/ml", "mcg/ml"}:
+            concentration = _float_or_none(ap.get("concentracao_valor"))
+            if concentration:
+                if concentration_unit == "mcg/ml":
+                    concentration = concentration / 1000
+                quantity = dose_value / concentration
+                practical_unit = "mL"
+                delivered = _round_quantity(quantity, practical_unit) * concentration
+        elif dose_unit in {"ml", "ml."}:
+            quantity = dose_value
+            practical_unit = "mL"
+        elif dose_unit in {"comprimido(s)", "cp"}:
+            quantity = dose_value
+            practical_unit = "comprimido"
+        elif dose_unit == "gota(s)":
+            quantity = dose_value
+            practical_unit = "gota"
+        elif dose_unit == "pipeta(s)":
+            quantity = dose_value
+            practical_unit = "pipeta"
+
+        if quantity is None or quantity <= 0:
+            continue
+        rounded = _round_quantity(quantity, practical_unit)
+        if rounded <= 0:
+            continue
+        candidates.append({
+            "presentation": ap,
+            "quantity": rounded,
+            "unit": practical_unit,
+            "score": _practical_score(rounded, dose_value, delivered),
+        })
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item["score"], item["quantity"]))
+    best = candidates[0]
+    quantity = best["quantity"]
+    unit = _pluralize(best["unit"], quantity)
+    ap = best["presentation"]
+    return {
+        "quantity": quantity,
+        "unit": best["unit"],
+        "dose_text": f"{_fmt_number(quantity)} {unit}",
+        "presentation": {
+            "id": ap.get("id"),
+            "label": ap.get("rotulo_escolha") or ap.get("descricao") or ap.get("nome_variante") or "",
+            "forma": ap.get("forma") or "",
+            "concentracao": ap.get("concentracao_label") or ap.get("concentracao_texto") or "",
+            "nome_variante": ap.get("nome_variante") or "",
+            "nome_comercial": ap.get("nome_comercial") or "",
+            "fabricante": ap.get("fabricante") or "",
+        },
+    }
+
+
+def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
+    animal = getattr(consulta, "animal", None)
+    med = _resolve_medication(item, session)
+    mode = _preferred_dose_mode(item)
+    fallback_draft = {
+        "medicamento_id": getattr(med, "id", None),
+        "medicamento": getattr(item, "nome_exibicao", None) or "",
+        "dosagem": getattr(item, "dosagem_texto", None) or "",
+        "frequencia": getattr(item, "frequencia_texto", None) or "",
+        "duracao": getattr(item, "duracao_texto", None) or "",
+        "observacoes": getattr(item, "observacoes", None) or "",
+        "texto": getattr(item, "observacoes", None) or "",
+        "indicacao": getattr(item, "indicacao", None) or "",
+        "use_weight_based_dose": False,
+        "preferred_dose_mode": mode,
+        "compact_practical_dose": _normalize(getattr(item, "nome_exibicao", None)) == "simparic",
+    }
+
+    base = {
+        "id": item.id,
+        "protocol_item_id": item.id,
+        "nome": getattr(item, "nome_exibicao", None) or "",
+        "medicamento_id": getattr(med, "id", None),
+        "medicamento_canonico": getattr(med, "nome", None) if med else None,
+        "indicacao": getattr(item, "indicacao", None) or "",
+        "justificativa": getattr(item, "justificativa", None) or "",
+        "observacoes": getattr(item, "observacoes", None) or "",
+        "dose_protocolo": getattr(item, "dosagem_texto", None) or "",
+        "frequencia_protocolo": getattr(item, "frequencia_texto", None) or "",
+        "duracao_protocolo": getattr(item, "duracao_texto", None) or "",
+        "preferred_dose_mode": mode,
+        "draft_prescription": fallback_draft,
+        "calculation": None,
+        "messages": [],
+    }
+
+    if not med:
+        status = MANUAL if base["dose_protocolo"] else BLOCKED
+        base.update({
+            "status": status,
+            "status_label": "Medicamento nao vinculado ao bulario",
+            "messages": ["Vincule este medicamento ao bulario para calcular automaticamente."],
+        })
+        return base
+
+    peso = _float_or_none(getattr(animal, "peso", None))
+    if not peso:
+        base.update({
+            "status": BLOCKED,
+            "status_label": "Peso necessario",
+            "messages": ["Informe o peso do animal para calcular a dose automaticamente."],
+        })
+        return base
+
+    if not (getattr(med, "doses", None) or []):
+        status = MANUAL if base["dose_protocolo"] else BLOCKED
+        base.update({
+            "status": status,
+            "status_label": "Sem dose estruturada",
+            "messages": ["Este medicamento ainda nao tem regra de dose no bulario."],
+        })
+        return base
+
+    suggestion = sugerir_dose(
+        med,
+        animal,
+        indicacao=(getattr(item, "indicacao", None) or "").strip() or None,
+        nome_comercial_filtro=_commercial_filter(item, med),
+    )
+    if not suggestion:
+        base.update({
+            "status": REVIEW,
+            "status_label": "Sem protocolo aplicavel",
+            "messages": ["Nao encontramos dose aplicavel para especie, peso e indicacao."],
+        })
+        return base
+    if suggestion.get("multiplo"):
+        base.update({
+            "status": REVIEW,
+            "status_label": "Escolher indicacao",
+            "messages": ["Ha mais de uma indicacao possivel para este medicamento."],
+            "calculation": {"indicacoes": suggestion.get("indicacoes", [])},
+        })
+        return base
+
+    practical = _choose_practical_presentation(suggestion, mode)
+    frequency = _frequency_text(suggestion, getattr(item, "frequencia_texto", None))
+    duration = _duration_text(suggestion, getattr(item, "duracao_texto", None))
+    calculated_dose = _format_dose_value(suggestion, mode)
+    final_dose = practical["dose_text"] if practical else calculated_dose
+    final_name = base["nome"]
+    if practical:
+        presentation_name = practical["presentation"].get("nome_variante")
+        if presentation_name:
+            final_name = presentation_name
+
+    fallback_draft.update({
+        "medicamento_id": med.id,
+        "medicamento": final_name,
+        "dosagem": final_dose,
+        "frequencia": frequency,
+        "duracao": duration,
+        "use_weight_based_dose": True,
+    })
+
+    status = READY if practical else REVIEW
+    messages = []
+    if not practical:
+        messages.append("Dose calculada, mas a apresentacao ainda precisa ser escolhida ou revisada.")
+    for flag in suggestion.get("flags_risco") or []:
+        messages.append(flag.get("titulo") or flag.get("codigo") or "Revisar")
+
+    base.update({
+        "status": status,
+        "status_label": "Pronto para revisar" if status == READY else "Dose calculada sem apresentacao pratica",
+        "calculation": {
+            "peso_kg": peso,
+            "dose_mode": mode,
+            "dose_calculada": calculated_dose,
+            "dose_faixa": suggestion.get("faixa_texto") or "",
+            "frequencia": frequency,
+            "duracao": duration,
+            "posologia_pratica": " ".join(part for part in [final_dose, frequency, duration] if part),
+            "apresentacao_pratica": practical,
+            "raw_suggestion": suggestion,
+        },
+        "messages": messages,
+    })
+    return base
+
+
+def build_clinical_plan(
+    consulta,
+    protocolo,
+    *,
+    session=None,
+    reference_date: date | None = None,
+) -> dict[str, Any]:
+    """Return a calculated plan for a protocol in the context of a consultation."""
+    session = session or db.session
+    animal = getattr(consulta, "animal", None)
+    medications = [
+        _build_medication_plan(item, consulta, session)
+        for item in (getattr(protocolo, "medicamentos_sugeridos", None) or [])
+        if getattr(item, "nome_exibicao", None)
+    ]
+    exams = [
+        {
+            "id": item.id,
+            "nome": item.nome,
+            "justificativa": item.justificativa,
+            "status": READY,
+        }
+        for item in (getattr(protocolo, "exames_sugeridos", None) or [])
+    ]
+    returns = [
+        {
+            **build_followup_prefill(item, reference_date=reference_date),
+            "status": READY,
+        }
+        for item in (getattr(protocolo, "retornos_sugeridos", None) or [])
+    ]
+    counts = {
+        "ready": sum(1 for item in medications if item["status"] == READY),
+        "review": sum(1 for item in medications if item["status"] == REVIEW),
+        "manual": sum(1 for item in medications if item["status"] == MANUAL),
+        "blocked": sum(1 for item in medications if item["status"] == BLOCKED),
+    }
+    return {
+        "protocol": {
+            "id": protocolo.id,
+            "nome": protocolo.nome,
+            "suspeita_principal": protocolo.suspeita_principal,
+            "especie": protocolo.especie,
+            "versao": protocolo.versao,
+        },
+        "animal": {
+            "id": getattr(animal, "id", None),
+            "nome": getattr(animal, "name", None) or getattr(animal, "nome", None) or "",
+            "especie": getattr(getattr(animal, "species", None), "name", None) or "",
+            "peso_kg": _float_or_none(getattr(animal, "peso", None)),
+        },
+        "status": BLOCKED if counts["blocked"] else (REVIEW if counts["review"] or counts["manual"] else READY),
+        "summary": {
+            **counts,
+            "medications_total": len(medications),
+            "exams_total": len(exams),
+            "returns_total": len(returns),
+        },
+        "conduct": {
+            "texto": (getattr(protocolo, "conduta_sugerida", None) or "").strip(),
+            "status": READY if getattr(protocolo, "conduta_sugerida", None) else MANUAL,
+        },
+        "instructions": (getattr(protocolo, "orientacoes_tutor", None) or "").strip(),
+        "alerts": (getattr(protocolo, "alertas", None) or "").strip(),
+        "medications": medications,
+        "exams": exams,
+        "returns": returns,
+        "draft_prescriptions": [
+            item["draft_prescription"]
+            for item in medications
+            if item["status"] in {READY, REVIEW, MANUAL}
+        ],
+    }
