@@ -1,0 +1,301 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 760px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+    </a>
+    <h1 class="h4 fw-bold mb-0">Solicitar castracao PMO</h1>
+  </div>
+
+  <div class="alert alert-info small d-flex gap-2 align-items-start">
+    <i class="fa-solid fa-circle-info mt-1"></i>
+    <div>
+      Cadastro de interesse para castracao pela Prefeitura Municipal de Orlandia.
+      A equipe responsavel usara os dados informados para triagem e contato.
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category if category != 'message' else 'info' }} small">
+        {{ message | safe }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if success_token %}
+  <div class="card border-0 shadow-sm rounded-4 mb-4 border-success-subtle" style="background: var(--bs-success-bg-subtle, #d1e7dd);">
+    <div class="card-body p-4 d-flex gap-3 align-items-start">
+      <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+           style="width:48px;height:48px;background:#198754;">
+        <i class="fa-solid fa-check text-white fs-5"></i>
+      </div>
+      <div>
+        <h6 class="fw-bold mb-1 text-success">Solicitacao enviada com sucesso!</h6>
+        <p class="mb-2 small text-success-emphasis">
+          A equipe responsavel fara a triagem e entrara em contato pelo telefone informado.
+        </p>
+        {% if success_token is not sameas true %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle fw-normal small">
+          <i class="fa-solid fa-hashtag me-1"></i>Protocolo: {{ success_token[:8] }}...
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-1">
+          <i class="fa-solid fa-user me-2 text-primary"></i>Dados do tutor
+        </h6>
+        <p class="text-muted small mb-3">Confira os dados para a equipe conseguir localizar seu cadastro.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="tutor" class="form-label small fw-semibold">Nome completo *</label>
+            <input type="text" id="tutor" name="tutor" class="form-control" value="{{ form_state.tutor }}" required>
+          </div>
+          <div class="col-md-6">
+            <label for="email" class="form-label small fw-semibold">E-mail</label>
+            <input type="email" id="email" name="email" class="form-control" value="{{ form_state.email }}">
+          </div>
+          <div class="col-md-6">
+            <label for="cpf" class="form-label small fw-semibold">CPF</label>
+            <input type="text" id="cpf" name="cpf" class="form-control" value="{{ form_state.cpf }}" placeholder="000.000.000-00">
+          </div>
+          <div class="col-md-6">
+            <label for="phone" class="form-label small fw-semibold">Telefone *</label>
+            <input type="tel" id="phone" name="phone" class="form-control" value="{{ form_state.phone }}" placeholder="(16) 99999-9999" required>
+          </div>
+          <div class="col-md-6">
+            <label for="phone2" class="form-label small fw-semibold">Telefone 2 ou recado</label>
+            <input type="tel" id="phone2" name="phone2" class="form-control" value="{{ form_state.phone2 }}" placeholder="(16) 99999-9999">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-location-dot me-2 text-primary"></i>Endereco
+        </h6>
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label for="address_street" class="form-label small fw-semibold">Rua / Avenida *</label>
+            <input type="text" id="address_street" name="address_street" class="form-control" value="{{ form_state.address_street }}" required>
+          </div>
+          <div class="col-md-4">
+            <label for="address_number" class="form-label small fw-semibold">Numero</label>
+            <input type="text" id="address_number" name="address_number" class="form-control" value="{{ form_state.address_number }}">
+          </div>
+          <div class="col-md-6">
+            <label for="address_complement" class="form-label small fw-semibold">Complemento</label>
+            <input type="text" id="address_complement" name="address_complement" class="form-control" value="{{ form_state.address_complement }}">
+          </div>
+          <div class="col-md-6">
+            <label for="address_neighborhood" class="form-label small fw-semibold">Bairro *</label>
+            <input type="text" id="address_neighborhood" name="address_neighborhood" class="form-control" value="{{ form_state.address_neighborhood }}" required>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="save_address" name="save_address" value="1" {% if form_state.save_address %}checked{% endif %}>
+              <label class="form-check-label small" for="save_address">Salvar este endereco no meu perfil</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-paw me-2 text-primary"></i>Animais para castrar *
+        </h6>
+        <p class="text-muted small mb-3">Marque os pets que devem entrar na lista de triagem.</p>
+        <div class="d-grid gap-2">
+          {% for animal in user_animals %}
+            {% set selected = animal.id in form_state.animal_ids %}
+            {% set species_name = (animal.species.name if animal.species else '') %}
+            <label class="form-check border rounded-3 p-3 m-0 d-flex align-items-center gap-3 {% if animal.neutered %}bg-light text-muted{% endif %}"
+                   style="cursor:pointer;">
+              <input class="form-check-input mt-0" type="checkbox" name="animal_ids" value="{{ animal.id }}" {% if selected %}checked{% endif %} {% if animal.neutered %}disabled{% endif %}>
+              <span class="d-flex flex-column">
+                <span class="fw-semibold">{{ animal.name or 'Sem nome' }}</span>
+                <span class="text-muted small">
+                  {% if species_name %}{{ species_name }}{% else %}Especie nao informada{% endif %}
+                  {% if animal.breed and animal.breed.name %} &middot; {{ animal.breed.name }}{% endif %}
+                  {% if animal.sex %} &middot; {{ animal.sex }}{% endif %}
+                  {% if animal.peso %} &middot; {{ animal.peso }} kg{% endif %}
+                  {% if animal.neutered %} &middot; ja castrado{% endif %}
+                </span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">
+          <i class="fa-solid fa-notes-medical me-2 text-primary"></i>Triagem inicial
+        </h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="preferred_contact" class="form-label small fw-semibold">Preferencia de contato *</label>
+            <select id="preferred_contact" name="preferred_contact" class="form-select" required>
+              <option value="">Selecione</option>
+              {% for option in ['WhatsApp', 'Ligacao', 'Indiferente'] %}
+                <option value="{{ option }}" {% if form_state.preferred_contact == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="female_status" class="form-label small fw-semibold">Femeas selecionadas</label>
+            <select id="female_status" name="female_status" class="form-select">
+              <option value="" {% if not form_state.female_status %}selected{% endif %}>Nao sei / nao se aplica</option>
+              {% for option in ['Sem cio recente', 'Cio recente', 'Prenhez suspeita', 'Lactante'] %}
+                <option value="{{ option }}" {% if form_state.female_status == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label for="health_notes" class="form-label small fw-semibold">Observacoes de saude</label>
+            <textarea id="health_notes" name="health_notes" class="form-control" rows="3" placeholder="Medicamentos, doencas, idade avancada, historico de convulsoes, etc.">{{ form_state.health_notes }}</textarea>
+          </div>
+          <div class="col-12">
+            <label for="note" class="form-label small fw-semibold">Observacao geral</label>
+            <textarea id="note" name="note" class="form-control" rows="3" placeholder="Melhor horario para ligar, ponto de referencia, informacoes adicionais.">{{ form_state.note }}</textarea>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="consent" name="consent" value="1" {% if form_state.consent %}checked{% endif %} required>
+              <label class="form-check-label small" for="consent">
+                Estou ciente de que este cadastro e uma solicitacao de triagem e nao garante agendamento automatico.
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-primary-subtle shadow-sm rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-2">
+          <i class="fa-solid fa-clipboard-check me-2 text-primary"></i>Confira antes de enviar
+        </h6>
+        <div class="small d-grid gap-2" id="pmo-submit-summary">
+          <div><strong>Tutor:</strong> <span data-summary="tutor">-</span></div>
+          <div><strong>Telefone:</strong> <span data-summary="phone">-</span></div>
+          <div><strong>Endereco:</strong> <span data-summary="address">-</span></div>
+          <div><strong>Animais:</strong> <span data-summary="animals">Selecione ao menos um animal.</span></div>
+          <div><strong>Contato:</strong> <span data-summary="contact">-</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2 mb-5">
+      <button type="submit" class="btn btn-primary btn-lg rounded-pill">
+        <i class="fa-solid fa-paper-plane me-1"></i> Enviar solicitacao
+      </button>
+      <a href="{{ url_for('index') }}" class="btn btn-link text-muted">Cancelar</a>
+    </div>
+  </form>
+
+  {% if historico %}
+  <div class="mb-5">
+    <h5 class="fw-bold mb-3">
+      <i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Historico de solicitacoes
+    </h5>
+    <div class="d-flex flex-column gap-3">
+      {% for item in historico %}
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+              <p class="mb-1 fw-semibold small">
+                <i class="fa-solid fa-location-dot me-1 text-muted"></i>
+                {{ item.address or '-' }}
+              </p>
+              <p class="mb-1 text-muted small">
+                <i class="fa-solid fa-dog me-1"></i>{{ item.dogs }} cachorro(s) &nbsp;
+                <i class="fa-solid fa-cat me-1"></i>{{ item.cats }} gato(s)
+              </p>
+              <p class="mb-0 text-muted small">
+                <i class="fa-solid fa-calendar me-1"></i>
+                Enviado em {{ (item.updated_at or item.synced_at).strftime('%d/%m/%Y as %H:%M') }}
+              </p>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-primary-subtle text-primary d-block">{{ item.status|capitalize }}</span>
+              {% if item.public_token %}
+              <span class="badge bg-light text-dark border small mt-2 d-block">
+                {{ item.public_token[:8] }}...
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          {% if item.animals %}
+          <p class="mb-0 mt-2 text-muted small">
+            <i class="fa-solid fa-paw me-1"></i>
+            {{ item.animals|map(attribute='name')|join(', ') }}
+          </p>
+          {% endif %}
+          {% if item.note or item.health_notes %}
+          <p class="mb-0 mt-2 text-muted small fst-italic">
+            <i class="fa-solid fa-note-sticky me-1"></i>{{ item.health_notes or item.note }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const summary = {
+      tutor: document.querySelector('[data-summary="tutor"]'),
+      phone: document.querySelector('[data-summary="phone"]'),
+      address: document.querySelector('[data-summary="address"]'),
+      animals: document.querySelector('[data-summary="animals"]'),
+      contact: document.querySelector('[data-summary="contact"]'),
+    };
+
+    const valueOf = (selector) => document.querySelector(selector)?.value.trim() || '';
+    const selectedAnimalNames = () => Array.from(document.querySelectorAll('input[name="animal_ids"]:checked'))
+      .map((input) => input.closest('label')?.querySelector('.fw-semibold')?.textContent.trim())
+      .filter(Boolean);
+
+    function updateSummary() {
+      const addressParts = [
+        valueOf('#address_street'),
+        valueOf('#address_number'),
+        valueOf('#address_complement'),
+        valueOf('#address_neighborhood'),
+      ].filter(Boolean);
+      const animals = selectedAnimalNames();
+      summary.tutor.textContent = valueOf('#tutor') || '-';
+      summary.phone.textContent = valueOf('#phone') || '-';
+      summary.address.textContent = addressParts.join(', ') || '-';
+      summary.animals.textContent = animals.length ? animals.join(', ') : 'Selecione ao menos um animal.';
+      summary.contact.textContent = valueOf('#preferred_contact') || '-';
+    }
+
+    document.querySelectorAll('input, textarea, select').forEach((field) => {
+      field.addEventListener('input', updateSummary);
+      field.addEventListener('change', updateSummary);
+    });
+    updateSummary();
+  });
+</script>
+{% endblock %}

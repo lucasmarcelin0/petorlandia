@@ -227,6 +227,7 @@ def _sync_relevant_sheets() -> tuple[int, int]:
             spreadsheet_id=result.spreadsheet_id,
             sheet_gid=result.sheet_gid,
             sheet_title=result.sheet_title,
+            prune_orphans=True,
         )
         total_sheets += 1
         total_rows += len(saved)

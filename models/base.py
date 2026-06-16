@@ -2797,6 +2797,74 @@ class PmoVaccinationAnimal(db.Model):
     vaccine = db.relationship('Vacina', foreign_keys=[vaccine_id])
 
 
+class PmoCastrationRequest(db.Model):
+    __tablename__ = 'pmo_castration_request'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'spreadsheet_id',
+            'sheet_gid',
+            'source_row',
+            name='uq_pmo_castration_request_sheet_row',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    spreadsheet_id = db.Column(db.String(128), nullable=False, index=True)
+    sheet_gid = db.Column(db.String(64), nullable=False, index=True)
+    sheet_title = db.Column(db.String(120), nullable=False, index=True)
+    source_row = db.Column(db.Integer, nullable=False)
+    tutor_name = db.Column(db.String(255), nullable=False)
+    cpf = db.Column(db.String(32), nullable=True)
+    email = db.Column(db.String(255), nullable=True)
+    address = db.Column(db.String(500), nullable=True)
+    phone1 = db.Column(db.String(32), nullable=True)
+    phone2 = db.Column(db.String(32), nullable=True)
+    dogs = db.Column(db.Integer, nullable=False, default=0)
+    cats = db.Column(db.Integer, nullable=False, default=0)
+    preferred_contact = db.Column(db.String(80), nullable=True)
+    female_status = db.Column(db.String(120), nullable=True)
+    health_notes = db.Column(db.Text, nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='solicitado', index=True)
+    public_token = db.Column(db.String(96), unique=True, nullable=True, index=True)
+    tutor_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    submitted_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    synced_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    tutor_user = db.relationship('User', foreign_keys=[tutor_user_id])
+    animals = db.relationship(
+        'PmoCastrationAnimal',
+        backref='request',
+        cascade='all, delete-orphan',
+        order_by='PmoCastrationAnimal.position',
+    )
+
+
+class PmoCastrationAnimal(db.Model):
+    __tablename__ = 'pmo_castration_animal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pmo_castration_request.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    position = db.Column(db.Integer, nullable=False)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='SET NULL'), nullable=True, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    species = db.Column(db.String(20), nullable=False)
+    sex = db.Column(db.String(20), nullable=True)
+    age_label = db.Column(db.String(80), nullable=True)
+    weight_kg = db.Column(db.Float, nullable=True)
+    already_neutered = db.Column(db.Boolean, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='solicitado')
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    animal = db.relationship('Animal', foreign_keys=[animal_id])
+
+
 class PmoRouteOptimizationBackup(db.Model):
     __tablename__ = 'pmo_route_optimization_backup'
 

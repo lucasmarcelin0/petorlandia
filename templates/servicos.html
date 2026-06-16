@@ -21,6 +21,9 @@
 
 <!-- Grade de serviços -->
 {% set servicos = [
+  {'icon':'fa-hand-holding-medical','color':'primary','title':'Castracao (PMO)',
+   'desc':'Cadastro de interesse para castracao pela Prefeitura de Orlandia.',
+   'badge':'Gratuito','url':url_for('castracao_pmo_solicitar'),'cta':'Solicitar'},
   {'icon':'fa-syringe','color':'danger','title':'Vacina Antirrábica (PMO)',
    'desc':'Vacina antirrábica gratuita da Prefeitura de Orlândia para o seu pet.',
    'badge':'Gratuito','url':url_for('vacina_pmo_solicitar'),'cta':'Solicitar'},

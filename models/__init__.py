@@ -76,6 +76,8 @@ __all__ = [
     "CoberturaPlantonista",
     "PmoVaccinationAnimal",
     "PmoVaccinationVisit",
+    "PmoCastrationAnimal",
+    "PmoCastrationRequest",
     "VaccineServiceItem",
     "VaccineServiceRequest",
     "VaccineServiceRequestItem",

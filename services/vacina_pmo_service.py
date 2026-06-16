@@ -1398,6 +1398,7 @@ def persist_vacina_pmo_rows(
     spreadsheet_id: str,
     sheet_gid: str,
     sheet_title: str,
+    prune_orphans: bool = False,
 ) -> list[dict[str, Any]]:
     now = utcnow()
     saved: list[PmoVaccinationVisit] = []
@@ -1483,6 +1484,26 @@ def persist_vacina_pmo_rows(
         _ensure_visit_records(visit)
 
         saved.append(visit)
+
+    # Remove registros órfãos: linhas que existiam no banco para esta aba mas
+    # não aparecem mais na planilha (ex.: tutor removido da lista do dia).
+    # Só roda quando solicitado e nunca na aba mestre, para não apagar o
+    # histórico compilado do Status PMO.
+    if prune_orphans and sheet_gid and not _pmo_is_master_sheet(sheet_title):
+        live_rows = {
+            int(row.get("sourceRow") or 0)
+            for row in rows
+            if int(row.get("sourceRow") or 0) > 0
+        }
+        if live_rows:  # só limpa se o sync retornou dados; evita apagar tudo em caso de falha
+            stale = (
+                PmoVaccinationVisit.query
+                .filter_by(spreadsheet_id=spreadsheet_id, sheet_gid=sheet_gid)
+                .filter(PmoVaccinationVisit.source_row.notin_(live_rows))
+                .all()
+            )
+            for stale_visit in stale:
+                db.session.delete(stale_visit)
 
     db.session.commit()
     return [_serialize_visit(visit) for visit in saved]

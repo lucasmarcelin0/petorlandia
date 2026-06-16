@@ -5228,6 +5228,195 @@ def vacina_pmo_solicitar():
     )
 
 
+@app.route('/castracao-pmo/solicitar', methods=['GET', 'POST'])
+@login_required
+def castracao_pmo_solicitar():
+    from flask import session as flask_session
+    from models import PmoCastrationRequest
+    from services.castracao_pmo_service import (
+        PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE,
+        PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
+        build_castration_animal_payloads,
+        submit_castracao_pmo_request,
+    )
+    from services.vacina_pmo_service import normalize_pmo_request_address
+
+    user_animals = (
+        Animal.query.filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+
+    if not user_animals:
+        flash(
+            'Voce precisa ter ao menos um animal cadastrado para solicitar a castracao PMO.',
+            'warning',
+        )
+        return redirect(url_for('add_animal'))
+
+    _prof_street = ''
+    _prof_number = ''
+    _prof_complement = ''
+    _prof_neighborhood = ''
+    if current_user.endereco:
+        _e = current_user.endereco
+        _prof_street = _e.rua or ''
+        _prof_number = _e.numero or ''
+        _prof_complement = _e.complemento or ''
+        _prof_neighborhood = _e.bairro or ''
+    elif current_user.address:
+        _profile_address = normalize_pmo_request_address({
+            'address_street': current_user.address,
+            'address_number': '',
+            'address_complement': '',
+            'address_neighborhood': '',
+        })
+        _prof_street = _profile_address['street']
+        _prof_number = _profile_address['number']
+        _prof_complement = _profile_address['complement']
+        _prof_neighborhood = _profile_address['neighborhood']
+
+    form_state = {
+        'animal_ids': [],
+        'tutor': current_user.name or '',
+        'email': current_user.email or '',
+        'cpf': current_user.cpf or '',
+        'phone': current_user.phone or '',
+        'phone2': current_user.phone2 or '',
+        'address_street': _prof_street,
+        'address_number': _prof_number,
+        'address_complement': _prof_complement,
+        'address_neighborhood': _prof_neighborhood,
+        'save_address': False,
+        'preferred_contact': '',
+        'female_status': '',
+        'health_notes': '',
+        'note': '',
+        'consent': False,
+    }
+
+    if request.method == 'POST':
+        selected_ids = set(request.form.getlist('animal_ids', type=int))
+        form_state['animal_ids'] = list(selected_ids)
+        form_state['tutor'] = (request.form.get('tutor') or '').strip() or current_user.name
+        form_state['email'] = (request.form.get('email') or '').strip() or current_user.email
+        form_state['cpf'] = (request.form.get('cpf') or '').strip() or (current_user.cpf or '')
+        form_state['phone'] = (request.form.get('phone') or '').strip()
+        form_state['phone2'] = (request.form.get('phone2') or '').strip()
+        form_state['address_street'] = (request.form.get('address_street') or '').strip()
+        form_state['address_number'] = (request.form.get('address_number') or '').strip()
+        form_state['address_complement'] = (request.form.get('address_complement') or '').strip()
+        form_state['address_neighborhood'] = (request.form.get('address_neighborhood') or '').strip()
+        form_state['preferred_contact'] = (request.form.get('preferred_contact') or '').strip()
+        form_state['female_status'] = (request.form.get('female_status') or '').strip()
+        form_state['health_notes'] = (request.form.get('health_notes') or '').strip()
+        form_state['note'] = (request.form.get('note') or '').strip()
+        form_state['consent'] = request.form.get('consent') == '1'
+        save_address = request.form.get('save_address') == '1'
+        form_state['save_address'] = save_address
+        normalized_address = normalize_pmo_request_address(form_state)
+        form_state['address_street'] = normalized_address['street']
+        form_state['address_number'] = normalized_address['number']
+        form_state['address_complement'] = normalized_address['complement']
+        form_state['address_neighborhood'] = normalized_address['neighborhood']
+
+        selected_animals = [a for a in user_animals if a.id in selected_ids]
+        duplicate_cpf = None
+        if form_state['cpf'] and form_state['cpf'] != (current_user.cpf or ''):
+            duplicate_cpf = User.query.filter(User.cpf == form_state['cpf'], User.id != current_user.id).first()
+        duplicate_email = None
+        if form_state['email'] and form_state['email'] != (current_user.email or ''):
+            duplicate_email = User.query.filter(User.email == form_state['email'], User.id != current_user.id).first()
+
+        already_neutered = [a.name or 'Sem nome' for a in selected_animals if a.neutered is True]
+        if not selected_animals:
+            flash('Selecione ao menos um animal para castrar.', 'danger')
+        elif already_neutered:
+            flash(
+                'Remova da solicitacao animal ja marcado como castrado: ' + ', '.join(already_neutered),
+                'danger',
+            )
+        elif duplicate_cpf:
+            flash('Este CPF ja esta cadastrado em outro tutor. Confira o numero informado.', 'danger')
+        elif duplicate_email:
+            flash('Este e-mail ja esta cadastrado em outro tutor. Confira o e-mail informado.', 'danger')
+        elif not form_state['phone']:
+            flash('Informe um telefone para contato.', 'danger')
+        elif not form_state['address_street'] or not form_state['address_neighborhood']:
+            flash('Informe rua e bairro do tutor.', 'danger')
+        elif form_state['preferred_contact'] not in ('WhatsApp', 'Ligacao', 'Indiferente'):
+            flash('Selecione a preferencia de contato.', 'danger')
+        elif not form_state['consent']:
+            flash('Confirme a ciencia para enviar a solicitacao.', 'danger')
+        else:
+            payload = {
+                'tutor': form_state['tutor'],
+                'cpf': form_state['cpf'],
+                'phone': form_state['phone'],
+                'phone2': form_state['phone2'],
+                'email': form_state['email'],
+                'address_street': form_state['address_street'],
+                'address_number': form_state['address_number'],
+                'address_complement': form_state['address_complement'],
+                'address_neighborhood': form_state['address_neighborhood'],
+                'preferred_contact': form_state['preferred_contact'],
+                'female_status': form_state['female_status'],
+                'health_notes': form_state['health_notes'],
+                'note': form_state['note'],
+                'animals': build_castration_animal_payloads(selected_animals),
+                'user_id': current_user.id,
+            }
+
+            try:
+                result = submit_castracao_pmo_request(payload)
+
+                if save_address:
+                    endereco = current_user.endereco or Endereco()
+                    endereco.rua = normalized_address['street'] or None
+                    endereco.numero = normalized_address['number'] or None
+                    endereco.complemento = normalized_address['complement'] or None
+                    endereco.bairro = normalized_address['neighborhood'] or None
+                    if current_user.endereco is None:
+                        db.session.add(endereco)
+                        db.session.flush()
+                        current_user.endereco_id = endereco.id
+                        current_user.endereco = endereco
+                    current_user.address = normalized_address['full']
+                current_user.name = form_state['tutor'] or current_user.name
+                if form_state['email']:
+                    current_user.email = form_state['email']
+                current_user.phone = form_state['phone'] or current_user.phone
+                current_user.phone2 = form_state['phone2'] or current_user.phone2
+                current_user.cpf = form_state['cpf'] or current_user.cpf
+                db.session.commit()
+                flask_session['pmo_castracao_solicitar_success'] = result.get('public_token') or True
+                return redirect(url_for('castracao_pmo_solicitar'))
+            except Exception as exc:
+                current_app.logger.exception("Falha ao enviar solicitacao Castracao PMO")
+                flash(f'Nao foi possivel enviar a solicitacao agora: {exc}', 'danger')
+
+    request_sheet_title = os.getenv(
+        PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
+        PMO_CASTRATION_REQUEST_SHEET_DEFAULT_TITLE,
+    )
+    historico = (
+        PmoCastrationRequest.query
+        .filter_by(tutor_user_id=current_user.id)
+        .filter(PmoCastrationRequest.sheet_title == request_sheet_title)
+        .order_by(PmoCastrationRequest.updated_at.desc(), PmoCastrationRequest.synced_at.desc())
+        .all()
+    )
+    success_token = flask_session.pop('pmo_castracao_solicitar_success', None)
+    return render_template(
+        'castracao_pmo/solicitar.html',
+        user_animals=user_animals,
+        form_state=form_state,
+        historico=historico,
+        success_token=success_token,
+    )
+
+
 def _user_is_clinic_owner(user=None):
     """Return ``True`` if ``user`` owns at least one clinic."""
 
