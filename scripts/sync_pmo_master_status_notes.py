@@ -277,6 +277,7 @@ def _matching_visits(
 def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
     if not matches:
         return "sem_registro"
+    today = date.today()
     statuses = [infer_visit_status(visit.animals) for visit in matches]
     dated_statuses = [
         infer_visit_status(visit.animals)
@@ -290,9 +291,20 @@ def _overall_status(matches: list[PmoVaccinationVisit]) -> str:
         _is_encaixes(visit) and infer_visit_status(visit.animals) == "recusou"
         for visit in matches
     )
+    # Se há uma aba datada futura com animais pendentes, a pessoa já está reagendada.
+    # Isso ganha sobre parcial/ausente/remarcar histórico (mas não sobre vacinado).
+    has_future_pendente = any(
+        infer_visit_status(visit.animals) == "pendente"
+        and (sheet_date := _parse_date_object((visit.sheet_title or "").strip()))
+        and sheet_date >= today
+        for visit in matches
+    )
     if dated_statuses:
         if any(status == "vacinado" for status in dated_statuses):
             return "vacinado"
+        # Aba futura com pendente = de volta no fluxo, independente de histórico parcial/ausente.
+        if has_future_pendente:
+            return "agendado"
         if any(status == "parcial" for status in dated_statuses):
             # Encaixes vermelho + aba datada parcial = parcial encerrado (laranja).
             return "parcial_encerrado" if has_encaixes_recusou else "parcial"
