@@ -133,6 +133,44 @@ def _format_practical_quantity(amount: float, unit: str) -> str:
     return f"{_fmt_number(amount)} {_pluralize(normalized, amount)}"
 
 
+def _text_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value).strip()
+    if isinstance(value, dict):
+        parts = [_text_value(value.get(key)) for key in ("principal", "secundario", "forma", "concentracao")]
+        return " - ".join(part for part in parts if part)
+    if isinstance(value, (list, tuple, set)):
+        return " - ".join(part for part in (_text_value(item) for item in value) if part)
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _presentation_label(ap: dict[str, Any]) -> str:
+    choice = ap.get("rotulo_escolha") if isinstance(ap.get("rotulo_escolha"), dict) else {}
+    clinical_label = (
+        _text_value(ap.get("rotulo_principal"))
+        or _text_value(ap.get("descricao"))
+        or _text_value(ap.get("nome_variante"))
+        or _text_value(ap.get("concentracao_label"))
+        or _text_value(ap.get("concentracao_texto"))
+    )
+    context_label = _text_value(choice.get("principal"))
+    label = clinical_label or context_label
+    if context_label and clinical_label and _normalize(context_label) != _normalize(clinical_label):
+        label = f"{context_label} - {clinical_label}"
+
+    secondary = _text_value(ap.get("rotulo_secundario")) or _text_value(choice.get("secundario"))
+    if secondary and secondary.lower() not in label.lower():
+        label = f"{label} - {secondary}" if label else secondary
+
+    if label:
+        return label
+
+    parts = [_text_value(ap.get("forma")), _text_value(ap.get("concentracao"))]
+    return " - ".join(part for part in parts if part)
+
+
 def _dose_value_for_mode(suggestion: dict[str, Any], mode: str) -> float | None:
     min_value = _float_or_none(suggestion.get("dose_min"))
     max_value = _float_or_none(suggestion.get("dose_max"))
@@ -330,7 +368,7 @@ def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dic
         "dose_text": _format_practical_quantity(quantity, best["unit"]),
         "presentation": {
             "id": ap.get("id"),
-            "label": ap.get("rotulo_escolha") or ap.get("descricao") or ap.get("nome_variante") or "",
+            "label": _presentation_label(ap),
             "forma": ap.get("forma") or "",
             "concentracao": ap.get("concentracao_label") or ap.get("concentracao_texto") or "",
             "nome_variante": ap.get("nome_variante") or "",

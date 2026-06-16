@@ -918,12 +918,28 @@
       return `<ul class="clinical-plan-messages">${list.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
     }
 
+    function displayText(value) {
+      if (value === null || value === undefined || value === false) return '';
+      if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+      if (Array.isArray(value)) {
+        return value.map(displayText).filter(Boolean).join(' - ');
+      }
+      if (typeof value === 'object') {
+        const parts = ['principal', 'secundario', 'label', 'nome_variante', 'descricao', 'forma', 'concentracao']
+          .map(key => displayText(value[key]))
+          .filter(Boolean);
+        return parts.join(' - ');
+      }
+      return String(value).trim();
+    }
+
     function renderMetric(label, value) {
-      if (!value) return '';
+      const text = displayText(value);
+      if (!text) return '';
       return `
         <div class="clinical-plan-metric">
           <span>${escapeHtml(label)}</span>
-          <strong>${escapeHtml(value)}</strong>
+          <strong>${escapeHtml(text)}</strong>
         </div>
       `;
     }
@@ -953,9 +969,9 @@
       const practical = calc.apresentacao_pratica || {};
       const presentation = practical.presentation || {};
       const readyForDraft = item.status === 'ready';
-      const tutorLine = calc.posologia_pratica || draft.texto || [draft.dosagem, draft.frequencia, draft.duracao].filter(Boolean).join(' ');
-      const technicalLine = calc.posologia_tecnica || [calc.dose_calculada || item.dose_protocolo, calc.frequencia, calc.duracao].filter(Boolean).join(' ');
-      const presentationLabel = presentation.label || presentation.nome_variante || draft.apresentacao_nome || '';
+      const tutorLine = displayText(calc.posologia_pratica || draft.texto || [draft.dosagem, draft.frequencia, draft.duracao].filter(Boolean).join(' '));
+      const technicalLine = displayText(calc.posologia_tecnica || [calc.dose_calculada || item.dose_protocolo, calc.frequencia, calc.duracao].filter(Boolean).join(' '));
+      const presentationLabel = displayText(presentation.label || presentation.nome_variante || draft.apresentacao_nome || '');
       const action = readyForDraft ? `
         <button type="button" class="btn btn-sm btn-success js-apply-plan-medication"
           data-protocol-id="${protocolId}"

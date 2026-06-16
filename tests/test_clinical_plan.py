@@ -177,6 +177,11 @@ def test_build_clinical_plan_calculates_medication_and_keeps_sections(app):
         assert med["draft_prescription"]["frequencia"] == "a cada 12 horas"
         assert med["draft_prescription"]["duracao"] == "por 7 a 10 dias"
         assert med["draft_prescription"]["use_weight_based_dose"] is False
+        presentation = med["calculation"]["apresentacao_pratica"]["presentation"]
+        assert isinstance(presentation["label"], str)
+        assert presentation["label"]
+        assert isinstance(med["draft_prescription"]["apresentacao_nome"], str)
+        assert "[object Object]" not in med["draft_prescription"]["apresentacao_nome"]
         assert plan["draft_prescriptions"][0]["dosagem"] == "meio comprimido"
 
 
