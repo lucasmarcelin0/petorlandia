@@ -36543,10 +36543,18 @@ def bulario_buscar_api():
 
     from services.bulario import serializar_medicamento_busca
 
+    # IDs que têm match comercial — o resultado comercial tem prioridade e
+    # suprime o resultado genérico do mesmo medicamento.  Isso garante que
+    # buscar "Sec Lac" mostre apenas a entrada filtrada por marca, e buscar
+    # "metergolina" mostre todas as apresentações sem split por comercial.
+    ids_com_match_comercial = {med.id for med, _ in comerciais}
+
     seen: set = set()
     output = []
 
     for med in genericos:
+        if med.id in ids_com_match_comercial:
+            continue  # resultado comercial tem prioridade
         key = (med.id, None)
         if key not in seen:
             seen.add(key)
