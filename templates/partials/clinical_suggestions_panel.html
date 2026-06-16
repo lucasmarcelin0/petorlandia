@@ -3,6 +3,7 @@
   class="clinical-panel mt-4"
   data-fetch-url="{{ url_for('obter_sugestoes_clinicas', consulta_id=consulta.id) }}"
   data-apply-url="{{ url_for('aplicar_sugestao_clinica', consulta_id=consulta.id) }}"
+  data-plan-url="{{ url_for('calcular_plano_sugestao_clinica', consulta_id=consulta.id) }}"
   data-feedback-url="{{ url_for('registrar_feedback_sugestao_clinica', consulta_id=consulta.id) }}"
   data-create-url="{{ url_for('criar_protocolo_clinico_inline', consulta_id=consulta.id) }}"
   data-protocol-detail-url-template="{{ url_for('obter_protocolo_clinico_inline', consulta_id=consulta.id, protocol_id=0) }}"
@@ -170,6 +171,128 @@
       background: #fbfcfd;
       padding: 14px;
     }
+    #clinical-suggestions-panel .clinical-plan-slot {
+      margin: 12px 0 16px;
+    }
+    #clinical-suggestions-panel .clinical-plan-preview {
+      border: 1px solid #d7e7de;
+      border-radius: 18px;
+      background: #f7fbf8;
+      padding: 14px;
+    }
+    #clinical-suggestions-panel .clinical-plan-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    #clinical-suggestions-panel .clinical-plan-title {
+      margin: 0;
+      color: #14343d;
+      font-size: .98rem;
+      font-weight: 800;
+    }
+    #clinical-suggestions-panel .clinical-plan-copy {
+      margin: 4px 0 0;
+      color: #60717b;
+      font-size: .86rem;
+    }
+    #clinical-suggestions-panel .clinical-plan-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    #clinical-suggestions-panel .clinical-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border-radius: 999px;
+      padding: .34rem .58rem;
+      font-size: .75rem;
+      font-weight: 800;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    #clinical-suggestions-panel .clinical-status-badge.ready {
+      background: #eaf7ef;
+      border-color: #c7e7d2;
+      color: #1d6b4b;
+    }
+    #clinical-suggestions-panel .clinical-status-badge.review,
+    #clinical-suggestions-panel .clinical-status-badge.manual {
+      background: #fff7e8;
+      border-color: #ead3a2;
+      color: #876016;
+    }
+    #clinical-suggestions-panel .clinical-status-badge.blocked {
+      background: #fff0f0;
+      border-color: #edc4c4;
+      color: #9b3434;
+    }
+    #clinical-suggestions-panel .clinical-plan-grid {
+      display: grid;
+      gap: 10px;
+    }
+    #clinical-suggestions-panel .clinical-plan-section-title {
+      margin: 12px 0 8px;
+      color: #263b44;
+      font-size: .86rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+    #clinical-suggestions-panel .clinical-plan-item {
+      border: 1px solid #e1e9ed;
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 12px;
+    }
+    #clinical-suggestions-panel .clinical-plan-item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    #clinical-suggestions-panel .clinical-plan-item-title {
+      font-weight: 800;
+      color: #17323b;
+    }
+    #clinical-suggestions-panel .clinical-plan-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #clinical-suggestions-panel .clinical-plan-metric {
+      border-radius: 12px;
+      background: #f7f9fa;
+      padding: 8px 10px;
+      min-width: 0;
+    }
+    #clinical-suggestions-panel .clinical-plan-metric span {
+      display: block;
+      color: #73838b;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    #clinical-suggestions-panel .clinical-plan-metric strong {
+      display: block;
+      color: #1b333c;
+      font-size: .88rem;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    #clinical-suggestions-panel .clinical-plan-messages {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #6c7b83;
+      font-size: .82rem;
+    }
     #clinical-suggestions-panel .clinical-inline-actions {
       display: flex;
       flex-wrap: wrap;
@@ -299,6 +422,9 @@
       }
       #clinical-suggestions-panel .clinical-panel-body {
         padding: 0 16px 16px;
+      }
+      #clinical-suggestions-panel .clinical-plan-metrics {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -582,6 +708,7 @@
     let currentProtocolLevel = 'v1';
     let editingProtocolId = null;
     let currentProtocolFormMode = 'create';
+    const calculatedClinicalPlans = new Map();
 
     const suspicionField = document.getElementById('suspeita-clinica');
     const legacySuspicionGroup = suspicionField?.closest('.mb-3');
@@ -729,6 +856,161 @@
       `;
     }
 
+    function planStatusLabel(status) {
+      const labels = {
+        ready: 'Pronto',
+        review: 'Revisar',
+        manual: 'Manual',
+        blocked: 'Bloqueado'
+      };
+      return labels[status] || 'Revisar';
+    }
+
+    function renderStatusBadge(status, label) {
+      const safeStatus = ['ready', 'review', 'manual', 'blocked'].includes(status) ? status : 'review';
+      return `<span class="clinical-status-badge ${safeStatus}">${escapeHtml(label || planStatusLabel(safeStatus))}</span>`;
+    }
+
+    function renderPlanMessages(messages) {
+      const list = (messages || []).filter(Boolean);
+      if (!list.length) return '';
+      return `<ul class="clinical-plan-messages">${list.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+
+    function renderMetric(label, value) {
+      if (!value) return '';
+      return `
+        <div class="clinical-plan-metric">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `;
+    }
+
+    function renderMedicationPlanItem(item, protocolId) {
+      const calc = item.calculation || {};
+      const practical = calc.apresentacao_pratica || {};
+      const presentation = practical.presentation || {};
+      const readyForDraft = item.status !== 'blocked';
+      const action = readyForDraft ? `
+        <button type="button" class="btn btn-sm btn-success js-apply-plan-medication"
+          data-protocol-id="${protocolId}"
+          data-item-id="${item.protocol_item_id || item.id}">
+          Enviar para Medicamentos
+        </button>
+      ` : `
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+          Precisa ajuste
+        </button>
+      `;
+      return `
+        <div class="clinical-plan-item">
+          <div class="clinical-plan-item-head">
+            <div>
+              <div class="clinical-plan-item-title">${escapeHtml(item.nome)}</div>
+              ${item.indicacao ? `<div class="small text-muted">${escapeHtml(item.indicacao)}</div>` : ''}
+            </div>
+            ${renderStatusBadge(item.status, item.status_label)}
+          </div>
+          <div class="clinical-plan-metrics">
+            ${renderMetric('Dose prática', calc.posologia_pratica || item.draft_prescription?.dosagem)}
+            ${renderMetric('Dose calculada', calc.dose_calculada || item.dose_protocolo)}
+            ${renderMetric('Apresentação', presentation.label || presentation.nome_variante || '')}
+          </div>
+          ${item.justificativa ? `<div class="small text-muted mt-2">${escapeHtml(item.justificativa)}</div>` : ''}
+          ${renderPlanMessages(item.messages)}
+          <div class="clinical-inline-actions">${action}</div>
+        </div>
+      `;
+    }
+
+    function renderClinicalPlan(plan) {
+      const protocolId = plan?.protocol?.id;
+      const summary = plan?.summary || {};
+      const medications = plan?.medications || [];
+      const exams = plan?.exams || [];
+      const returns = plan?.returns || [];
+      const conductText = plan?.conduct?.texto || '';
+      const sendableMeds = medications.filter(item => item.status !== 'blocked').length;
+      const medicationList = medications.length
+        ? medications.map(item => renderMedicationPlanItem(item, protocolId)).join('')
+        : '<div class="clinical-card-block small text-muted">Nenhum medicamento no protocolo.</div>';
+      const examList = exams.map(item => `
+        <div class="clinical-plan-item">
+          <div class="clinical-plan-item-head">
+            <div>
+              <div class="clinical-plan-item-title">${escapeHtml(item.nome)}</div>
+              <div class="small text-muted">${escapeHtml(item.justificativa || 'Sem justificativa cadastrada.')}</div>
+            </div>
+            ${renderStatusBadge(item.status || 'ready')}
+          </div>
+          ${buildItemActions('exame', protocolId, item.id, item.nome)}
+        </div>
+      `).join('');
+      const returnList = returns.map(item => `
+        <div class="clinical-plan-item">
+          <div class="clinical-plan-item-head">
+            <div>
+              <div class="clinical-plan-item-title">${escapeHtml(item.label)}</div>
+              <div class="small text-muted">${escapeHtml(item.reason || 'Reavaliação sugerida pelo protocolo.')}</div>
+            </div>
+            ${renderStatusBadge(item.status || 'ready')}
+          </div>
+          ${buildItemActions('retorno', protocolId, item.id, item.label)}
+        </div>
+      `).join('');
+
+      return `
+        <div class="clinical-plan-preview">
+          <div class="clinical-plan-head">
+            <div>
+              <p class="clinical-plan-title">Plano clínico calculado</p>
+              <p class="clinical-plan-copy">
+                ${escapeHtml(plan?.animal?.nome || 'Paciente')} ${plan?.animal?.peso_kg ? `· ${escapeHtml(String(plan.animal.peso_kg).replace('.', ','))} kg` : '· peso pendente'}
+              </p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              ${sendableMeds ? `
+                <button type="button" class="btn btn-sm btn-success js-apply-plan-medications"
+                  data-protocol-id="${protocolId}">
+                  Enviar medicamentos ao rascunho
+                </button>
+              ` : ''}
+            </div>
+          </div>
+          <div class="clinical-plan-summary">
+            ${renderStatusBadge('ready', `${summary.ready || 0} pronto(s)`)}
+            ${summary.review ? renderStatusBadge('review', `${summary.review} revisar`) : ''}
+            ${summary.manual ? renderStatusBadge('manual', `${summary.manual} manual`) : ''}
+            ${summary.blocked ? renderStatusBadge('blocked', `${summary.blocked} bloqueado(s)`) : ''}
+            ${summary.exams_total ? `<span class="clinical-pill">${summary.exams_total} exame(s)</span>` : ''}
+            ${summary.returns_total ? `<span class="clinical-pill">${summary.returns_total} retorno(s)</span>` : ''}
+          </div>
+
+          <div class="clinical-plan-section-title">Medicamentos</div>
+          <div class="clinical-plan-grid">${medicationList}</div>
+
+          ${exams.length ? `
+            <div class="clinical-plan-section-title">Exames</div>
+            <div class="clinical-plan-grid">${examList}</div>
+          ` : ''}
+
+          ${conductText ? `
+            <div class="clinical-plan-section-title">Conduta</div>
+            <div class="clinical-plan-item">
+              <div class="small">${escapeHtml(conductText)}</div>
+              ${buildItemActions('conduta', protocolId, '', plan?.protocol?.nome || '')}
+            </div>
+          ` : ''}
+
+          ${returns.length ? `
+            <div class="clinical-plan-section-title">Retorno</div>
+            <div class="clinical-plan-grid">${returnList}</div>
+          ` : ''}
+        </div>
+      `;
+    }
+
     function renderSuggestionCard(protocol) {
       const reasons = (protocol.motivos || []).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
       const exames = (protocol.exames || []).map(item => `
@@ -776,6 +1058,10 @@
                 </div>
               </div>
               <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-sm btn-success js-load-clinical-plan"
+                  data-protocol-id="${protocol.id}">
+                  Calcular plano
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-primary js-edit-protocol"
                   data-protocol-id="${protocol.id}">
                   Editar protocolo
@@ -788,6 +1074,8 @@
                 </button>
               </div>
             </div>
+
+            <div class="clinical-plan-slot" data-plan-slot="${protocol.id}"></div>
 
             ${reasons ? `
               <details class="mb-3">
@@ -844,6 +1132,98 @@
         setStatus(error.message || 'Erro ao buscar sugestões clínicas.', 'danger');
       } finally {
         loadButton.disabled = false;
+      }
+    }
+
+    async function handleLoadClinicalPlan(button) {
+      const protocolId = button.dataset.protocolId;
+      if (!protocolId || !panel.dataset.planUrl) return;
+      const slot = panel.querySelector(`[data-plan-slot="${protocolId}"]`);
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = 'Calculando...';
+      if (slot) {
+        slot.innerHTML = '<div class="clinical-card-block small text-muted">Calculando plano para este paciente...</div>';
+      }
+      try {
+        const data = await postJson(panel.dataset.planUrl, { protocol_id: protocolId });
+        const plan = data.plan || {};
+        calculatedClinicalPlans.set(String(protocolId), plan);
+        if (slot) slot.innerHTML = renderClinicalPlan(plan);
+        setStatus(data.message || 'Plano clínico calculado. Revise os itens antes de aplicar.', 'success');
+      } catch (error) {
+        if (slot) {
+          slot.innerHTML = `<div class="clinical-card-block text-danger small">${escapeHtml(error.message || 'Erro ao calcular plano.')}</div>`;
+        }
+        setStatus(error.message || 'Erro ao calcular plano clínico.', 'danger');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function applyCalculatedMedication(item, instructions = '') {
+      const draft = {
+        ...(item.draft_prescription || {}),
+        use_weight_based_dose: false
+      };
+      const addCalculated = window.adicionarPrescricaoCalculadaAoRascunho;
+      const added = addCalculated
+        ? addCalculated(draft, instructions || '')
+        : await window.adicionarPrescricaoSugeridaAoRascunho?.(draft, instructions || '');
+      if (!added) {
+        throw new Error(`Não foi possível enviar "${item.nome || 'medicamento'}" para o rascunho.`);
+      }
+      return true;
+    }
+
+    async function handleApplyPlanMedication(button) {
+      const protocolId = String(button.dataset.protocolId || '');
+      const itemId = String(button.dataset.itemId || '');
+      const plan = calculatedClinicalPlans.get(protocolId);
+      const item = (plan?.medications || []).find(med => String(med.protocol_item_id || med.id) === itemId);
+      if (!item) {
+        setStatus('Calcule o plano novamente antes de enviar este medicamento.', 'warning');
+        return;
+      }
+      button.disabled = true;
+      try {
+        await applyCalculatedMedication(item, plan.instructions || '');
+        button.textContent = 'Enviado';
+        button.classList.remove('btn-success');
+        button.classList.add('btn-outline-success');
+        setStatus('Medicamento calculado enviado para o rascunho de Medicamentos.', 'success');
+      } catch (error) {
+        setStatus(error.message || 'Erro ao enviar medicamento calculado.', 'danger');
+        button.disabled = false;
+      }
+    }
+
+    async function handleApplyPlanMedications(button) {
+      const protocolId = String(button.dataset.protocolId || '');
+      const plan = calculatedClinicalPlans.get(protocolId);
+      const medications = (plan?.medications || []).filter(item => item.status !== 'blocked');
+      if (!medications.length) {
+        setStatus('Este plano ainda não tem medicamentos prontos para enviar.', 'warning');
+        return;
+      }
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = 'Enviando...';
+      try {
+        let count = 0;
+        for (const item of medications) {
+          await applyCalculatedMedication(item, count === 0 ? (plan.instructions || '') : '');
+          count += 1;
+        }
+        button.textContent = 'Medicamentos enviados';
+        button.classList.remove('btn-success');
+        button.classList.add('btn-outline-success');
+        setStatus(`${count} medicamento(s) enviado(s) para o rascunho de Medicamentos.`, 'success');
+      } catch (error) {
+        button.textContent = originalText;
+        button.disabled = false;
+        setStatus(error.message || 'Erro ao enviar medicamentos calculados.', 'danger');
       }
     }
 
@@ -1147,6 +1527,24 @@
       if (removeButton) {
         event.preventDefault();
         removeButton.closest('.clinical-repeater-item')?.remove();
+        return;
+      }
+      const loadPlanButton = event.target.closest('.js-load-clinical-plan');
+      if (loadPlanButton) {
+        event.preventDefault();
+        handleLoadClinicalPlan(loadPlanButton);
+        return;
+      }
+      const applyPlanMedicationsButton = event.target.closest('.js-apply-plan-medications');
+      if (applyPlanMedicationsButton) {
+        event.preventDefault();
+        handleApplyPlanMedications(applyPlanMedicationsButton);
+        return;
+      }
+      const applyPlanMedicationButton = event.target.closest('.js-apply-plan-medication');
+      if (applyPlanMedicationButton) {
+        event.preventDefault();
+        handleApplyPlanMedication(applyPlanMedicationButton);
         return;
       }
       const applyButton = event.target.closest('.js-apply-suggestion');

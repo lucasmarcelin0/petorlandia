@@ -1046,7 +1046,46 @@
     return true;
   }
 
+  function adicionarPrescricaoCalculadaAoRascunho(draft, instructions = '') {
+    const medicamento = String(draft?.medicamento || '').trim();
+    const dosagem = String(draft?.dosagem || '').trim();
+    const frequencia = String(draft?.frequencia || '').trim();
+    const duracao = String(draft?.duracao || '').trim();
+    const observacoes = String(draft?.observacoes || '').trim();
+    const textoLivre = String(draft?.texto || '').trim();
+
+    if (!medicamento) {
+      mostrarFeedback('Não foi possível enviar o medicamento calculado ao rascunho.', 'danger');
+      return false;
+    }
+    if (!dosagem && !frequencia && !duracao && !textoLivre && !observacoes) {
+      mostrarFeedback('O plano calculado ainda não trouxe posologia suficiente para este medicamento.', 'warning');
+      return false;
+    }
+
+    const texto = dosagem || frequencia || duracao
+      ? [dosagem, frequencia, duracao].filter(Boolean).join(', ')
+      : (textoLivre || observacoes);
+
+    prescricoes.push({
+      medicamento,
+      texto,
+      dosagem,
+      frequencia,
+      duracao,
+      observacoes: dosagem || frequencia || duracao ? '' : (observacoes || textoLivre),
+      apresentacao_id: draft?.apresentacao_id || null,
+      apresentacao_nome: draft?.apresentacao_nome || ''
+    });
+
+    _mesclarInstrucoesGeraisSugestao(instructions);
+    renderPrescricoesTemp();
+    mostrarFeedback('Medicamento calculado adicionado ao rascunho.');
+    return true;
+  }
+
   window.adicionarPrescricaoSugeridaAoRascunho = adicionarPrescricaoSugeridaAoRascunho;
+  window.adicionarPrescricaoCalculadaAoRascunho = adicionarPrescricaoCalculadaAoRascunho;
 
   // Debounce para evitar múltiplas requisições
   function debounce(func, wait) {

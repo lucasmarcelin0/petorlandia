@@ -30,3 +30,17 @@ def test_consulta_save_controls_stay_associated_with_form():
     assert re.search(r'<button[^>]+type="submit"[^>]+form="consulta-form"', save_section)
     assert re.search(r'<input[^>]+id="suspeita-clinica"[^>]+form="consulta-form"', consulta_template)
     assert re.search(r'<input[^>]+id="suspeita-clinica"[^>]+form="consulta-form"', panel_template)
+
+
+def test_clinical_panel_exposes_calculated_plan_controls():
+    panel_template = read_template("templates/partials/clinical_suggestions_panel.html")
+    prescription_template = read_template("templates/partials/prescricao_form.html")
+
+    assert "data-plan-url" in panel_template
+    assert "calcular_plano_sugestao_clinica" in panel_template
+    assert "js-load-clinical-plan" in panel_template
+    assert "js-apply-plan-medications" in panel_template
+    assert "js-apply-plan-medication" in panel_template
+    assert "Plano clínico calculado" in panel_template
+    assert "adicionarPrescricaoCalculadaAoRascunho" in panel_template
+    assert "window.adicionarPrescricaoCalculadaAoRascunho" in prescription_template
