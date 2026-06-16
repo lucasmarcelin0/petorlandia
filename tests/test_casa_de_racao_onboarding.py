@@ -55,6 +55,7 @@ def _setup_invite():
 
 
 def test_store_onboarding_completes_account_and_catalog(app, client):
+    app.config["MERCADOPAGO_MARKETPLACE_FEE_PERCENT"] = 10
     with app.app_context():
         token, owner_id, casa_id, product_ids, invite_id = _setup_invite()
 
@@ -63,6 +64,9 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
     html = response.get_data(as_text=True)
     assert "Vamos deixar sua loja pronta" in html
     assert "Voce nao precisa preencher tudo de uma vez" in html
+    assert "Valor que aparecera na plataforma" in html
+    assert "Valor que voce recebe" in html
+    assert "Repasse para a loja:</strong> 90%" in html
 
     response = client.post(
         f"/ativar-loja/{token}",
@@ -76,9 +80,13 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
             "modo_entrega": "propria",
             "password": "senha-segura",
             "password_confirmation": "senha-segura",
-            f"price_{product_ids[0]}": "89,90",
+            f"pricing_mode_{product_ids[0]}": "payout",
+            f"price_{product_ids[0]}": "",
+            f"payout_{product_ids[0]}": "89,90",
             f"stock_{product_ids[0]}": "5",
+            f"pricing_mode_{product_ids[1]}": "final",
             f"price_{product_ids[1]}": "",
+            f"payout_{product_ids[1]}": "",
             f"stock_{product_ids[1]}": "",
         },
     )
@@ -99,7 +107,7 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
         assert casa.modo_entrega == "propria"
         assert invite.used_at is not None
         assert by_name["Simparic"].status == "active"
-        assert by_name["Simparic"].price == 89.9
+        assert by_name["Simparic"].price == 99.89
         assert by_name["Simparic"].stock == 5
         assert by_name["Canex Original"].status == "inactive"
         assert by_name["Canex Original"].price == 0
@@ -111,6 +119,7 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
 
 
 def test_store_onboarding_requires_at_least_one_product(app, client):
+    app.config["MERCADOPAGO_MARKETPLACE_FEE_PERCENT"] = 10
     with app.app_context():
         token, _, casa_id, product_ids, _ = _setup_invite()
 
@@ -125,9 +134,13 @@ def test_store_onboarding_requires_at_least_one_product(app, client):
             "modo_entrega": "plataforma",
             "password": "senha-segura",
             "password_confirmation": "senha-segura",
+            f"pricing_mode_{product_ids[0]}": "final",
             f"price_{product_ids[0]}": "",
+            f"payout_{product_ids[0]}": "",
             f"stock_{product_ids[0]}": "",
+            f"pricing_mode_{product_ids[1]}": "payout",
             f"price_{product_ids[1]}": "",
+            f"payout_{product_ids[1]}": "",
             f"stock_{product_ids[1]}": "",
         },
     )
@@ -140,6 +153,7 @@ def test_store_onboarding_requires_at_least_one_product(app, client):
 
 
 def test_store_onboarding_prefills_store_email_from_owner_email(app, client):
+    app.config["MERCADOPAGO_MARKETPLACE_FEE_PERCENT"] = 10
     with app.app_context():
         token, owner_id, _, _, _ = _setup_invite()
         owner = db.session.get(User, owner_id)

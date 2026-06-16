@@ -19082,6 +19082,35 @@ def _onboarding_decimal(raw_value):
         return None
 
 
+def _onboarding_money_display(value):
+    if value is None:
+        return ''
+    amount = Decimal(value).quantize(Decimal('0.01'))
+    return f"{amount:.2f}".replace('.', ',')
+
+
+def _onboarding_seller_percent():
+    fee_percent = Decimal(str(current_app.config.get('MERCADOPAGO_MARKETPLACE_FEE_PERCENT') or 0))
+    seller_percent = Decimal('100') - fee_percent
+    return fee_percent, seller_percent
+
+
+def _onboarding_payout_from_final(price):
+    if price is None:
+        return None
+    _, seller_percent = _onboarding_seller_percent()
+    return (Decimal(price) * seller_percent / Decimal('100')).quantize(Decimal('0.01'))
+
+
+def _onboarding_final_from_payout(payout):
+    if payout is None:
+        return None
+    _, seller_percent = _onboarding_seller_percent()
+    if seller_percent <= 0:
+        return None
+    return (Decimal(payout) * Decimal('100') / seller_percent).quantize(Decimal('0.01'))
+
+
 def _onboarding_prefill_email(user_email):
     email = normalize_email(user_email) or ''
     return '' if email.endswith('@convite.petorlandia.local') else email
@@ -19090,17 +19119,22 @@ def _onboarding_prefill_email(user_email):
 def _onboarding_product_form_state(produtos):
     state = []
     configured_count = 0
+    fee_percent, seller_percent = _onboarding_seller_percent()
     for product in produtos:
         is_configured = bool((product.price or 0) > 0 and (product.stock or 0) >= 0 and product.status == 'active')
         if is_configured:
             configured_count += 1
+        final_price = Decimal(str(product.price or 0)) if is_configured else None
+        payout = _onboarding_payout_from_final(final_price) if is_configured else None
         state.append({
             'product': product,
-            'price_value': '' if not is_configured else f"{float(product.price):.2f}".replace('.', ','),
+            'price_value': _onboarding_money_display(final_price),
+            'payout_value': _onboarding_money_display(payout),
             'stock_value': '' if not is_configured else str(product.stock),
             'configured': is_configured,
+            'pricing_mode': 'final',
         })
-    return state, configured_count
+    return state, configured_count, fee_percent, seller_percent
 
 
 def casa_de_racao_onboarding(token):
@@ -19130,7 +19164,7 @@ def casa_de_racao_onboarding(token):
         'address': casa.endereco or owner.address or '',
         'modo_entrega': casa.modo_entrega or 'plataforma',
     }
-    product_form_state, configured_count = _onboarding_product_form_state(produtos)
+    product_form_state, configured_count, fee_percent, seller_percent = _onboarding_product_form_state(produtos)
 
     if request.method == 'POST':
         values.update({
@@ -19190,9 +19224,14 @@ def casa_de_racao_onboarding(token):
         for item in product_form_state:
             product = item['product']
             raw_price = request.form.get(f'price_{product.id}')
+            raw_payout = request.form.get(f'payout_{product.id}')
+            pricing_mode = (request.form.get(f'pricing_mode_{product.id}') or 'final').strip()
+            if pricing_mode not in {'final', 'payout'}:
+                pricing_mode = 'final'
             price = _onboarding_decimal(raw_price)
+            payout = _onboarding_decimal(raw_payout)
             raw_stock = (request.form.get(f'stock_{product.id}') or '').strip()
-            touched = bool(str(raw_price or '').strip() or raw_stock)
+            touched = bool(str(raw_price or '').strip() or str(raw_payout or '').strip() or raw_stock)
             try:
                 stock = int(raw_stock) if raw_stock else 0
             except ValueError:
@@ -19201,20 +19240,34 @@ def casa_de_racao_onboarding(token):
             if not touched:
                 product_updates.append((product, None, None, False))
                 item['price_value'] = ''
+                item['payout_value'] = ''
                 item['stock_value'] = ''
                 item['configured'] = False
+                item['pricing_mode'] = pricing_mode
                 continue
 
-            if price is None or price <= 0:
-                errors.append(f'Informe um preço válido para {product.name}.')
+            final_price = price
+            if pricing_mode == 'payout':
+                final_price = _onboarding_final_from_payout(payout)
+                if payout is None or payout <= 0:
+                    errors.append(f'Informe quanto deseja receber por {product.name}.')
+            else:
+                if price is None or price <= 0:
+                    errors.append(f'Informe um preço final válido para {product.name}.')
             if stock < 0:
                 errors.append(f'Informe um estoque válido para {product.name}.')
-            if price is not None and price > 0 and stock >= 0:
+            if final_price is not None and final_price > 0 and stock >= 0:
                 configured_products += 1
-            item['price_value'] = str(raw_price or '').strip()
+            if pricing_mode == 'payout' and payout is not None and payout > 0:
+                item['price_value'] = _onboarding_money_display(final_price)
+                item['payout_value'] = str(raw_payout or '').strip()
+            else:
+                item['price_value'] = str(raw_price or '').strip()
+                item['payout_value'] = _onboarding_money_display(_onboarding_payout_from_final(price)) if price is not None and price > 0 else str(raw_payout or '').strip()
             item['stock_value'] = raw_stock
-            item['configured'] = bool(price is not None and price > 0 and stock >= 0)
-            product_updates.append((product, price, stock, True))
+            item['configured'] = bool(final_price is not None and final_price > 0 and stock >= 0)
+            item['pricing_mode'] = pricing_mode
+            product_updates.append((product, final_price, stock, True))
 
         if configured_products == 0:
             errors.append('Preencha ao menos um produto com preço e estoque para concluir.')
@@ -19262,6 +19315,8 @@ def casa_de_racao_onboarding(token):
         values=values,
         errors=errors,
         configured_count=configured_count,
+        fee_percent=float(fee_percent),
+        seller_percent=float(seller_percent),
     )
 
 
