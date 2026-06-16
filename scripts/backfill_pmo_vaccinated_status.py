@@ -98,8 +98,7 @@ def _read_sheet_rows(service, spreadsheet_id: str, title: str) -> list[list]:
 
 
 def _get_date_cell(row: list, offset: int) -> str:
-    """Data Vacina: tenta col L primeiro, cai para col Q (carimbo de data/hora)."""
-    return _cell(row, COL_DATA_VACINA + offset) or _cell(row, COL_DATE_FALLBACK + offset)
+    return _cell(row, COL_DATA_VACINA + offset)
 
 
 def _compute_new_statuses(
