@@ -442,7 +442,7 @@ PROTOCOLS = [
                 "duracao_texto": "por 5 dias",
                 "observacoes": "Usar com cautela gastrointestinal e sempre revisar hidratacao e perfusao da paciente.",
                 "justificativa": "Controle de dor e inflamacao mamaria.",
-                "indicacao": "AINE",
+                "indicacao": "Anti-inflamatório",
             },
         ],
         "exames": [],

@@ -1721,7 +1721,8 @@ _INDICACAO_STOPWORDS = {
 _INDICACAO_SINONIMOS = (
     ('analges', {'analges', 'dor', 'pain'}),
     ('dor', {'analges', 'dor', 'pain'}),
-    ('inflam', {'inflam', 'antiinflam'}),
+    ('inflam', {'inflam', 'antiinflam', 'aine'}),
+    ('aine', {'inflam', 'antiinflam', 'aine'}),
     ('infect', {'infect', 'bacter', 'microb', 'antibiot'}),
     ('bacter', {'infect', 'bacter', 'microb', 'antibiot'}),
     ('parasit', {'paras', 'parasit', 'pulga', 'ecto', 'verme'}),

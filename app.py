@@ -18040,7 +18040,7 @@ def _normalize_protocol_medication_name(value: str | None) -> str:
 
 def _protocol_prefers_weight_based_dose(item) -> bool:
     name = _normalize_protocol_medication_name(getattr(item, 'nome_exibicao', None))
-    if name in {'sec lac', 'cefalexina'}:
+    if name in {'sec lac', 'cefalexina', 'meloxicam'}:
         return True
     return False
 
@@ -18052,6 +18052,8 @@ def _protocol_preferred_dose_mode(item) -> str:
         return 'min'
     if name == 'cefalexina':
         return 'media'
+    if name == 'meloxicam':
+        return 'min'
     return ''
 
 
