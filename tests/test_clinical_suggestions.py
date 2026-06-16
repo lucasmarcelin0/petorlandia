@@ -22,6 +22,8 @@ from models import (
     Veterinario,
 )
 from services.bulario import sugerir_dose
+from services.clinical_suggestions import recommend_protocols
+from scripts.seed_protocolos_notas import seed as seed_protocolos_notas
 from types import SimpleNamespace
 
 
@@ -858,6 +860,7 @@ def test_inline_global_protocol_can_be_loaded_as_clone_base(client, monkeypatch)
         vet_id = vet.id
         clinic_id = clinic.id
 
+
     _login(monkeypatch, _fake_vet(vet_user_id, vet_id, clinic_id))
 
     response = client.get(
@@ -869,6 +872,49 @@ def test_inline_global_protocol_can_be_loaded_as_clone_base(client, monkeypatch)
     assert payload['edit_mode'] == 'clone'
     assert payload['protocol']['nome'] == 'Dermatite Padrao'
     assert payload['protocol']['clinica_id'] is None
+
+
+def test_seeded_mastitis_pseudocyesis_protocol_is_created_and_searchable(app):
+    with flask_app.app_context():
+        result = seed_protocolos_notas(
+            db.session,
+            apply=True,
+            only_names=['Mastite / Pseudociese em cadelas'],
+        )
+        assert result['created'] == ['Mastite / Pseudociese em cadelas'] or result['skipped'] == ['Mastite / Pseudociese em cadelas']
+
+        protocolo = ProtocoloClinico.query.filter_by(
+            nome='Mastite / Pseudociese em cadelas',
+            clinica_id=None,
+        ).first()
+        assert protocolo is not None
+        assert protocolo.especie == 'cao'
+        assert [item.nome_exibicao for item in protocolo.medicamentos_sugeridos] == [
+            'Sec Lac',
+            'Cefalexina',
+            'Meloxicam',
+        ]
+        assert protocolo.retornos_sugeridos[0].tipo_retorno == 'reavaliacao'
+
+        suggestions = recommend_protocols(
+            {
+                'suspeita_clinica': 'pseudociese',
+                'queixa_principal': 'cadela com leite e mamas doloridas',
+                'historico_clinico': 'comportamento maternal e aumento mamario',
+                'exame_fisico': 'mamas quentes e doloridas',
+                'especie': 'cao',
+                'clinica_id': None,
+            },
+            clinic_id=None,
+        )
+
+        assert suggestions
+        assert suggestions[0]['nome'] == 'Mastite / Pseudociese em cadelas'
+        assert [item['nome'] for item in suggestions[0]['medicamentos']] == [
+            'Sec Lac',
+            'Cefalexina',
+            'Meloxicam',
+        ]
 
 
 def test_seed_protocolos_notas_idempotente_e_recomendavel(client):

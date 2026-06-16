@@ -391,10 +391,74 @@ PROTOCOLS = [
         ],
         "retornos": [],
     },
+    {
+        "nome": "Mastite / Pseudociese em cadelas",
+        "suspeita_principal": "mastite / pseudociese",
+        "especie": "cao",
+        "sinais_gatilho": (
+            "Cadela com aumento mamario, producao de leite, comportamento maternal, "
+            "dor mamaria, calor local, mamas endurecidas ou secrecao."
+        ),
+        "conduta_sugerida": (
+            "Correlacionar o quadro mamario com pseudociese e avaliar a intensidade da mastite. "
+            "Quando houver lactacao importante e mastite sem sinais sistemicos graves, considerar "
+            "suporte com antigalactogenico, antimicrobiano e anti-inflamatorio, com reavaliacao clinica."
+        ),
+        "orientacoes_tutor": (
+            "Evitar manipular ou estimular as mamas, impedir lambedura e retornar antes do prazo "
+            "se houver febre, prostracao, secrecao purulenta, necrose ou piora importante da dor."
+        ),
+        "alertas": (
+            "Reavaliar rapidamente se houver abscesso, secrecao sanguinolenta, sinais sistemicos "
+            "ou suspeita de mastite grave. Nao associar AINE com corticoide."
+        ),
+        "prioridade": 3,
+        "medicamentos": [
+            {
+                "nome_medicamento": "Sec Lac",
+                "dosagem_texto": "1 comprimido/5 kg (Sec Lac 5) ou 1 comprimido/20 kg (Sec Lac 20)",
+                "frequencia_texto": "a cada 12 horas",
+                "duracao_texto": "por 4 a 8 dias",
+                "observacoes": (
+                    "Metergolina por via oral; usar a apresentacao compativel com o peso "
+                    "e reavaliar a necessidade de repeticao conforme resposta clinica."
+                ),
+                "justificativa": "Controle da lactacao e suporte em quadro compativel com pseudociese.",
+                "indicacao": "Antigalactogenico",
+            },
+            {
+                "nome_medicamento": "Cefalexina",
+                "dosagem_texto": "conforme peso e apresentacao escolhida",
+                "frequencia_texto": "a cada 12 horas",
+                "duracao_texto": "por 7 a 10 dias",
+                "observacoes": "Preferir apos alimentacao e ajustar conforme a evolucao clinica do quadro mamario.",
+                "justificativa": "Cobertura antimicrobiana inicial quando houver mastite sem sinais de sepse.",
+                "indicacao": "Antibiotico",
+            },
+            {
+                "nome_medicamento": "Meloxicam",
+                "dosagem_texto": "0,1 a 0,2 mg/kg",
+                "frequencia_texto": "a cada 24 horas",
+                "duracao_texto": "por 3 a 5 dias",
+                "observacoes": "Usar com cautela gastrointestinal e sempre revisar hidratacao e perfusao da paciente.",
+                "justificativa": "Controle de dor e inflamacao mamaria.",
+                "indicacao": "AINE",
+            },
+        ],
+        "exames": [],
+        "retornos": [
+            {
+                "prazo_min_dias": 3,
+                "prazo_max_dias": 5,
+                "tipo_retorno": "reavaliacao",
+                "objetivo": "Reavaliar reducao da lactacao, dor mamaria, calor local e resposta ao tratamento.",
+            }
+        ],
+    },
 ]
 
 
-def seed(session, *, apply: bool = False) -> dict:
+def seed(session, *, apply: bool = False, only_names: list[str] | None = None) -> dict:
     """Cria os protocolos que ainda não existem (identificados por nome global)."""
     from models import (
         ProtocoloClinico,
@@ -404,7 +468,10 @@ def seed(session, *, apply: bool = False) -> dict:
     )
 
     created, skipped = [], []
+    normalized_filter = {name.strip().lower() for name in (only_names or []) if str(name).strip()}
     for data in PROTOCOLS:
+        if normalized_filter and data["nome"].strip().lower() not in normalized_filter:
+            continue
         exists = (
             session.query(ProtocoloClinico)
             .filter(
@@ -454,13 +521,19 @@ def seed(session, *, apply: bool = False) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="grava de verdade (padrão: simulação)")
+    parser.add_argument(
+        "--only-name",
+        action="append",
+        dest="only_names",
+        help="limita a execucao ao nome exato do protocolo informado; pode repetir a flag",
+    )
     args = parser.parse_args()
 
     from app import app
     from extensions import db
 
     with app.app_context():
-        result = seed(db.session, apply=args.apply)
+        result = seed(db.session, apply=args.apply, only_names=args.only_names)
     label = "CRIADOS" if result["applied"] else "SERIAM CRIADOS (simulação)"
     print(f"{label}: {len(result['created'])}")
     for nome in result["created"]:
