@@ -48,6 +48,7 @@ from services.vacina_pmo_service import (
     _row_column_offset,
     _strip_accents,
     list_vacina_pmo_sheets,
+    write_note_to_sheet,
     write_tutor_name_color_to_sheet,
     write_vaccinated_counts_to_sheet,
 )
@@ -192,6 +193,8 @@ def _apply_statuses(
     db.session.commit()
     write_vaccinated_counts_to_sheet(visit)
     write_tutor_name_color_to_sheet(visit)
+    if partial:
+        write_note_to_sheet(visit)
     return vacinados, ausentes
 
 
