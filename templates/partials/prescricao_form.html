@@ -1046,13 +1046,27 @@
     return true;
   }
 
+  function _textoCalculadoRascunho(value) {
+    if (value === null || value === undefined || value === false) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+    if (Array.isArray(value)) return value.map(_textoCalculadoRascunho).filter(Boolean).join(' - ');
+    if (typeof value === 'object') {
+      return ['principal', 'secundario', 'label', 'nome_variante', 'descricao', 'forma', 'concentracao']
+        .map(key => _textoCalculadoRascunho(value[key]))
+        .filter(Boolean)
+        .join(' - ');
+    }
+    return String(value).trim();
+  }
+
   function adicionarPrescricaoCalculadaAoRascunho(draft, instructions = '') {
-    const medicamento = String(draft?.medicamento || '').trim();
-    const dosagem = String(draft?.dosagem || '').trim();
-    const frequencia = String(draft?.frequencia || '').trim();
-    const duracao = String(draft?.duracao || '').trim();
-    const observacoes = String(draft?.observacoes || '').trim();
-    const textoLivre = String(draft?.texto || '').trim();
+    const medicamento = _textoCalculadoRascunho(draft?.medicamento);
+    const dosagem = _textoCalculadoRascunho(draft?.dosagem);
+    const frequencia = _textoCalculadoRascunho(draft?.frequencia);
+    const duracao = _textoCalculadoRascunho(draft?.duracao);
+    const observacoes = _textoCalculadoRascunho(draft?.observacoes);
+    const textoLivre = _textoCalculadoRascunho(draft?.texto);
+    const apresentacaoNome = _textoCalculadoRascunho(draft?.apresentacao_nome);
 
     if (!medicamento) {
       mostrarFeedback('Não foi possível enviar o medicamento calculado ao rascunho.', 'danger');
@@ -1066,16 +1080,19 @@
     const texto = dosagem || frequencia || duracao
       ? [dosagem, frequencia, duracao].filter(Boolean).join(', ')
       : (textoLivre || observacoes);
+    const medicamentoReceita = apresentacaoNome && !medicamento.toLowerCase().includes(apresentacaoNome.toLowerCase())
+      ? `${medicamento} — ${apresentacaoNome}`
+      : medicamento;
 
     prescricoes.push({
-      medicamento,
+      medicamento: medicamentoReceita,
       texto,
       dosagem,
       frequencia,
       duracao,
       observacoes: dosagem || frequencia || duracao ? '' : (observacoes || textoLivre),
       apresentacao_id: draft?.apresentacao_id || null,
-      apresentacao_nome: draft?.apresentacao_nome || ''
+      apresentacao_nome: apresentacaoNome
     });
 
     _mesclarInstrucoesGeraisSugestao(instructions);

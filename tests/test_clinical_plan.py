@@ -218,6 +218,127 @@ def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
         assert med["draft_prescription"]["dosagem"] == "5 mL"
 
 
+def test_build_clinical_plan_resolves_multiple_indications_by_protocol_dose(app):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome="Clinica Meloxicam")
+        tutor = User(id=1, name="Tutor", email="tutor-meloxicam@test")
+        tutor.set_password("x")
+        vet_user = User(id=2, name="Vet", email="vet-meloxicam@test", worker="veterinario")
+        vet_user.set_password("x")
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv="123", clinica_id=clinic.id)
+        species = Species(id=1, name="Cachorro")
+        animal = Animal(
+            id=1,
+            name="Luna",
+            user_id=tutor.id,
+            clinica_id=clinic.id,
+            species=species,
+            peso=10,
+        )
+        consulta = Consulta(
+            id=1,
+            animal=animal,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status="in_progress",
+        )
+        medicamento = Medicamento(
+            id=20,
+            nome="Meloxicam",
+            classificacao="Anti-inflamatório",
+            via_administracao="Oral",
+            created_by=vet_user.id,
+        )
+        apresentacao = ApresentacaoMedicamento(
+            id=20,
+            medicamento=medicamento,
+            forma="Comprimido",
+            concentracao="1 mg",
+            concentracao_valor=1,
+            concentracao_unidade="mg",
+        )
+        dose_dor = DoseMedicamento(
+            id=20,
+            medicamento=medicamento,
+            especie="Caes",
+            especie_code="CAES",
+            via="Oral",
+            dose="0,2 mg/kg",
+            dose_min=0.2,
+            dose_max=0.2,
+            dose_unidade="MG_KG",
+            intervalo_horas=24,
+            duracao_min_dias=3,
+            duracao_max_dias=3,
+            indicacao="Dor",
+            fonte="TESTE",
+            confianca="ALTA",
+        )
+        dose_inflamacao = DoseMedicamento(
+            id=21,
+            medicamento=medicamento,
+            especie="Caes",
+            especie_code="CAES",
+            via="Oral",
+            dose="0,1 mg/kg",
+            dose_min=0.1,
+            dose_max=0.1,
+            dose_unidade="MG_KG",
+            intervalo_horas=24,
+            duracao_min_dias=5,
+            duracao_max_dias=5,
+            indicacao="Inflamação",
+            fonte="TESTE",
+            confianca="ALTA",
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome="Mastite / Pseudociese em cadelas",
+            suspeita_principal="mastite / pseudociese",
+            especie="cao",
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+            prioridade=1,
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                id=1,
+                medicamento=medicamento,
+                nome_medicamento="Meloxicam",
+                dosagem_texto="0,1 mg/kg",
+                frequencia_texto="a cada 24 horas",
+                duracao_texto="por 5 dias",
+                indicacao="Anti-inflamatório",
+                justificativa="Controle de dor e inflamação mamária.",
+                prioridade=1,
+            )
+        )
+        db.session.add_all([
+            clinic,
+            tutor,
+            vet_user,
+            vet,
+            species,
+            animal,
+            consulta,
+            medicamento,
+            apresentacao,
+            dose_dor,
+            dose_inflamacao,
+            protocolo,
+        ])
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        assert med["status"] == READY
+        assert med["calculation"]["dose_calculada"] == "1 mg"
+        assert med["calculation"]["dose_pratica"] == "1 comprimido"
+        assert med["draft_prescription"]["dosagem"] == "1 comprimido"
+        assert med["status_label"] == "Pronto para revisar"
+
+
 def test_build_clinical_plan_blocks_calculation_without_weight(app):
     with flask_app.app_context():
         consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=None)

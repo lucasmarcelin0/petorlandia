@@ -46,5 +46,9 @@ def test_clinical_panel_exposes_calculated_plan_controls():
     assert "Medicamentos do protocolo (base técnica)" in panel_template
     assert "item.status === 'ready'" in panel_template
     assert "function displayText" in panel_template
+    assert "String(displayText(value) || '')" in panel_template
+    assert "const practicalDose = readyForDraft" in panel_template
     assert "adicionarPrescricaoCalculadaAoRascunho" in panel_template
+    assert "_textoCalculadoRascunho" in prescription_template
+    assert "medicamentoReceita" in prescription_template
     assert "window.adicionarPrescricaoCalculadaAoRascunho" in prescription_template

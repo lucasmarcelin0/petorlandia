@@ -195,6 +195,74 @@ def _format_dose_value(suggestion: dict[str, Any], mode: str) -> str:
     return f"{_fmt_number(value)} {unit}".strip()
 
 
+def _dose_text_matches_protocol(suggestion: dict[str, Any], item) -> bool:
+    expected = _normalize(getattr(item, "dosagem_texto", None))
+    if not expected:
+        return False
+    candidates = [
+        suggestion.get("faixa_texto"),
+        suggestion.get("dose_exibir"),
+        suggestion.get("dose_bruta"),
+        suggestion.get("observacao"),
+    ]
+    for candidate in candidates:
+        normalized = _normalize(candidate)
+        if normalized and (expected in normalized or normalized in expected):
+            return True
+    return False
+
+
+def _suggestion_protocol_score(suggestion: dict[str, Any], item, mode: str) -> float:
+    score = 100.0
+    item_indication = _normalize(getattr(item, "indicacao", None))
+    suggestion_indication = _normalize(suggestion.get("indicacao"))
+    if item_indication and suggestion_indication == item_indication:
+        score -= 35
+    if item_indication:
+        alternatives = [_normalize(value) for value in (suggestion.get("indicacoes_alternativas") or [])]
+        if item_indication in alternatives:
+            score -= 15
+    if _dose_text_matches_protocol(suggestion, item):
+        score -= 40
+
+    frequency = _frequency_text(suggestion, getattr(item, "frequencia_texto", None))
+    if frequency and _normalize(frequency) == _normalize(getattr(item, "frequencia_texto", None)):
+        score -= 10
+
+    via = _normalize(suggestion.get("via"))
+    if "oral" in via:
+        score -= 6
+    if _choose_practical_presentation(suggestion, mode):
+        score -= 6
+    return score
+
+
+def _resolve_multiplo_suggestion(
+    medication: Medicamento,
+    animal,
+    item,
+    mode: str,
+    commercial_filter: str | None,
+    indications: list[str],
+) -> dict[str, Any] | None:
+    candidates: list[tuple[float, dict[str, Any]]] = []
+    for indication in indications or []:
+        suggestion = sugerir_dose(
+            medication,
+            animal,
+            indicacao=indication,
+            nome_comercial_filtro=commercial_filter,
+        )
+        if not suggestion or suggestion.get("multiplo"):
+            continue
+        candidates.append((_suggestion_protocol_score(suggestion, item, mode), suggestion))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item_score: item_score[0])
+    return candidates[0][1]
+
+
 def _frequency_text(suggestion: dict[str, Any], override: str | None = None) -> str:
     if override and override.strip():
         return override.strip()
@@ -441,11 +509,12 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         })
         return base
 
+    commercial_filter = _commercial_filter(item, med)
     suggestion = sugerir_dose(
         med,
         animal,
         indicacao=(getattr(item, "indicacao", None) or "").strip() or None,
-        nome_comercial_filtro=_commercial_filter(item, med),
+        nome_comercial_filtro=commercial_filter,
     )
     if not suggestion:
         base.update({
@@ -455,13 +524,24 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         })
         return base
     if suggestion.get("multiplo"):
-        base.update({
-            "status": REVIEW,
-            "status_label": "Escolher indicacao",
-            "messages": ["Ha mais de uma indicacao possivel para este medicamento."],
-            "calculation": {"indicacoes": suggestion.get("indicacoes", [])},
-        })
-        return base
+        resolved = _resolve_multiplo_suggestion(
+            med,
+            animal,
+            item,
+            mode,
+            commercial_filter,
+            suggestion.get("indicacoes", []),
+        )
+        if resolved:
+            suggestion = resolved
+        else:
+            base.update({
+                "status": REVIEW,
+                "status_label": "Escolher indicacao",
+                "messages": ["Ha mais de uma indicacao possivel para este medicamento."],
+                "calculation": {"indicacoes": suggestion.get("indicacoes", [])},
+            })
+            return base
 
     practical = _choose_practical_presentation(suggestion, mode)
     frequency = _frequency_text(suggestion, getattr(item, "frequencia_texto", None))
@@ -471,10 +551,6 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
     practical_posology = " ".join(part for part in [final_dose, frequency, duration] if part) if practical else ""
     technical_posology = " ".join(part for part in [calculated_dose, frequency, duration] if part)
     final_name = base["nome"]
-    if practical:
-        presentation_name = practical["presentation"].get("nome_variante")
-        if presentation_name:
-            final_name = presentation_name
 
     fallback_draft.update({
         "medicamento_id": med.id,

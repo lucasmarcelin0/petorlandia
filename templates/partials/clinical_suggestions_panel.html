@@ -770,7 +770,7 @@
     if (legacySuspicionGroup) legacySuspicionGroup.remove();
 
     function escapeHtml(value) {
-      return String(value || '')
+      return String(displayText(value) || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -972,6 +972,7 @@
       const tutorLine = displayText(calc.posologia_pratica || draft.texto || [draft.dosagem, draft.frequencia, draft.duracao].filter(Boolean).join(' '));
       const technicalLine = displayText(calc.posologia_tecnica || [calc.dose_calculada || item.dose_protocolo, calc.frequencia, calc.duracao].filter(Boolean).join(' '));
       const presentationLabel = displayText(presentation.label || presentation.nome_variante || draft.apresentacao_nome || '');
+      const practicalDose = readyForDraft ? displayText(calc.dose_pratica || draft.dosagem) : displayText(calc.dose_pratica);
       const action = readyForDraft ? `
         <button type="button" class="btn btn-sm btn-success js-apply-plan-medication"
           data-protocol-id="${protocolId}"
@@ -1006,7 +1007,7 @@
           <div class="clinical-plan-metrics">
             ${renderMetric('Apresentação', presentationLabel)}
             ${renderMetric('Base técnica', technicalLine)}
-            ${renderMetric('Dose prática', calc.dose_pratica || draft.dosagem)}
+            ${renderMetric('Dose prática', practicalDose)}
           </div>
           ${item.justificativa ? `<div class="small text-muted mt-2">${escapeHtml(item.justificativa)}</div>` : ''}
           ${renderPlanMessages(item.messages)}
