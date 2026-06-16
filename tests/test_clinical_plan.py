@@ -200,6 +200,50 @@ def test_build_clinical_plan_formats_half_tablets_for_tutor(app):
         assert "2,5 comprimidos" not in med["draft_prescription"]["texto"]
 
 
+def test_build_clinical_plan_exposes_presentation_options_for_manual_choice(app):
+    with flask_app.app_context():
+        consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=5.0)
+        medicamento = protocolo.medicamentos_sugeridos[0].medicamento
+        db.session.add_all([
+            ApresentacaoMedicamento(
+                id=2,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="50 mg",
+                concentracao_valor=50,
+                concentracao_unidade="mg",
+            ),
+            ApresentacaoMedicamento(
+                id=3,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="100 mg",
+                concentracao_valor=100,
+                concentracao_unidade="mg",
+            ),
+            ApresentacaoMedicamento(
+                id=4,
+                medicamento=medicamento,
+                forma="Comprimido",
+                concentracao="300 mg",
+                concentracao_valor=300,
+                concentracao_unidade="mg",
+            ),
+        ])
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        options = med["calculation"]["apresentacao_opcoes"]
+        labels = [option["option_label"] for option in options]
+        assert len(options) >= 3
+        assert any("2 comprimidos e meio" in label and "50 mg" in label for label in labels)
+        assert any("meio comprimido" in label and "300 mg" in label for label in labels)
+        assert options[0]["dose_text"] == med["draft_prescription"]["dosagem"]
+        assert med["calculation"]["apresentacao_opcao_selecionada"] == 0
+
+
 def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
     with flask_app.app_context():
         consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=10.0)

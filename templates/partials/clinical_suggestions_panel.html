@@ -287,6 +287,30 @@
       line-height: 1.25;
       overflow-wrap: anywhere;
     }
+    #clinical-suggestions-panel .clinical-plan-choice {
+      margin-top: 8px;
+    }
+    #clinical-suggestions-panel .clinical-plan-choice label {
+      display: block;
+      margin-bottom: 4px;
+      color: #47616b;
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    #clinical-suggestions-panel .clinical-plan-choice select {
+      border-color: #cfe3da;
+      border-radius: 11px;
+      color: #18313a;
+      font-size: .88rem;
+      min-height: 38px;
+    }
+    #clinical-suggestions-panel .clinical-plan-choice small {
+      display: block;
+      margin-top: 4px;
+      color: #6f8189;
+      font-size: .76rem;
+    }
     #clinical-suggestions-panel .clinical-plan-prescription {
       border: 1px solid #cfe8d8;
       border-radius: 13px;
@@ -944,6 +968,39 @@
       `;
     }
 
+    function optionDoseDetail(option) {
+      const delivered = displayText(option?.delivered_dose);
+      const desired = displayText(option?.desired_dose);
+      if (!delivered || !desired || delivered === desired) return '';
+      return `entrega ${delivered}; alvo ${desired}`;
+    }
+
+    function renderPresentationChoice(item, protocolId) {
+      const calc = item.calculation || {};
+      const options = calc.apresentacao_opcoes || [];
+      if (!Array.isArray(options) || options.length <= 1) return '';
+      const selectedIndex = Number.isInteger(calc.apresentacao_opcao_selecionada)
+        ? calc.apresentacao_opcao_selecionada
+        : 0;
+      const optionTags = options.map((option, index) => {
+        const label = displayText(option.option_label || [option.dose_text, option.presentation?.label].filter(Boolean).join(' — '));
+        const detail = optionDoseDetail(option);
+        const text = detail ? `${label} (${detail})` : label;
+        return `<option value="${index}" ${index === selectedIndex ? 'selected' : ''}>${escapeHtml(text)}</option>`;
+      }).join('');
+      return `
+        <div class="clinical-plan-choice">
+          <label>Apresentação / dosagem</label>
+          <select class="form-select form-select-sm js-plan-presentation-select"
+            data-protocol-id="${protocolId}"
+            data-item-id="${item.protocol_item_id || item.id}">
+            ${optionTags}
+          </select>
+          <small>Troque para uma apresentação mais prática antes de enviar para Medicamentos.</small>
+        </div>
+      `;
+    }
+
     function buildMedicationPlanActions(protocolId, itemId, title) {
       return `
         <div class="clinical-inline-actions">
@@ -1004,6 +1061,7 @@
               <strong>Escolha uma apresentação para converter em comprimidos, mL ou gotas antes de enviar.</strong>
             </div>
           `}
+          ${renderPresentationChoice(item, protocolId)}
           <div class="clinical-plan-metrics">
             ${renderMetric('Apresentação', presentationLabel)}
             ${renderMetric('Base técnica', technicalLine)}
@@ -1261,6 +1319,51 @@
         button.disabled = false;
         button.textContent = originalText;
       }
+    }
+
+    function applyPresentationOption(item, optionIndex) {
+      const calc = item?.calculation || {};
+      const options = calc.apresentacao_opcoes || [];
+      const option = options[optionIndex];
+      if (!option) return false;
+      const draft = item.draft_prescription || {};
+      const frequency = displayText(calc.frequencia || draft.frequencia);
+      const duration = displayText(calc.duracao || draft.duracao);
+      const doseText = displayText(option.dose_text);
+      const presentation = option.presentation || {};
+      calc.apresentacao_opcao_selecionada = optionIndex;
+      calc.apresentacao_pratica = option;
+      calc.dose_pratica = doseText;
+      calc.posologia_pratica = [doseText, frequency, duration].filter(Boolean).join(' ');
+      item.status = 'ready';
+      item.status_label = 'Pronto para revisar';
+      item.draft_prescription = {
+        ...draft,
+        dosagem: doseText,
+        frequencia: frequency,
+        duracao: duration,
+        texto: [doseText, frequency, duration].filter(Boolean).join(', '),
+        use_weight_based_dose: false,
+        apresentacao_id: presentation.id || null,
+        apresentacao_nome: displayText(presentation.label || presentation.nome_variante || '')
+      };
+      return true;
+    }
+
+    function handlePlanPresentationSelect(select) {
+      const protocolId = String(select.dataset.protocolId || '');
+      const itemId = String(select.dataset.itemId || '');
+      const optionIndex = Number(select.value);
+      const plan = calculatedClinicalPlans.get(protocolId);
+      const item = (plan?.medications || []).find(med => String(med.protocol_item_id || med.id) === itemId);
+      if (!item || Number.isNaN(optionIndex)) return;
+      if (!applyPresentationOption(item, optionIndex)) {
+        setStatus('Não foi possível trocar a apresentação deste medicamento.', 'warning');
+        return;
+      }
+      const slot = panel.querySelector(`[data-plan-slot="${protocolId}"]`);
+      if (slot) slot.innerHTML = renderClinicalPlan(plan);
+      setStatus('Apresentação atualizada no plano calculado.', 'success');
     }
 
     async function applyCalculatedMedication(item, instructions = '') {
@@ -1664,6 +1767,13 @@
       if (editProtocolButton) {
         event.preventDefault();
         handleEditProtocol(editProtocolButton);
+      }
+    });
+
+    panel.addEventListener('change', function (event) {
+      const presentationSelect = event.target.closest('.js-plan-presentation-select');
+      if (presentationSelect) {
+        handlePlanPresentationSelect(presentationSelect);
       }
     });
 

@@ -232,7 +232,7 @@ def _suggestion_protocol_score(suggestion: dict[str, Any], item, mode: str) -> f
     via = _normalize(suggestion.get("via"))
     if "oral" in via:
         score -= 6
-    if _choose_practical_presentation(suggestion, mode):
+    if _practical_presentation_options(suggestion, mode):
         score -= 6
     return score
 
@@ -360,13 +360,46 @@ def _practical_score(quantity: float, desired: float, delivered: float) -> float
     return penalty + error * 100
 
 
-def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dict[str, Any] | None:
+def _practical_payload(candidate: dict[str, Any]) -> dict[str, Any]:
+    quantity = candidate["quantity"]
+    ap = candidate["presentation"]
+    dose_text = _format_practical_quantity(quantity, candidate["unit"])
+    presentation = {
+        "id": ap.get("id"),
+        "label": _presentation_label(ap),
+        "forma": ap.get("forma") or "",
+        "concentracao": ap.get("concentracao_label") or ap.get("concentracao_texto") or "",
+        "nome_variante": ap.get("nome_variante") or "",
+        "nome_comercial": ap.get("nome_comercial") or "",
+        "fabricante": ap.get("fabricante") or "",
+    }
+    delivered = _float_or_none(candidate.get("delivered"))
+    desired = _float_or_none(candidate.get("desired"))
+    delivered_text = ""
+    if delivered is not None:
+        delivered_text = f"{_fmt_number(delivered)} {candidate.get('dose_unit') or ''}".strip()
+    desired_text = ""
+    if desired is not None:
+        desired_text = f"{_fmt_number(desired)} {candidate.get('dose_unit') or ''}".strip()
+    return {
+        "quantity": quantity,
+        "unit": candidate["unit"],
+        "dose_text": dose_text,
+        "option_label": " — ".join(part for part in [dose_text, presentation["label"]] if part),
+        "delivered_dose": delivered_text,
+        "desired_dose": desired_text,
+        "score": candidate.get("score"),
+        "presentation": presentation,
+    }
+
+
+def _practical_presentation_options(suggestion: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     presentations = [
         ap for ap in (suggestion.get("apresentacoes") or [])
         if ap.get("permite_calculo_automatico")
     ]
     if not presentations:
-        return None
+        return []
 
     preferred_id = suggestion.get("apresentacao_preferida_id")
     if preferred_id:
@@ -378,9 +411,10 @@ def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dic
     dose_value = _dose_value_for_mode(suggestion, mode)
     dose_unit = (suggestion.get("dose_unit_out") or "").lower()
     if dose_value is None:
-        return None
+        return []
 
     candidates: list[dict[str, Any]] = []
+    seen: set[tuple[Any, float, str]] = set()
     for ap in presentations:
         practical_unit = (ap.get("unidade_pratica") or "unidade").strip() or "unidade"
         concentration_unit = (ap.get("concentracao_unidade") or "").lower()
@@ -417,33 +451,29 @@ def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dic
         rounded = _round_quantity(quantity, practical_unit)
         if rounded <= 0:
             continue
+        key = (ap.get("id"), rounded, practical_unit)
+        if key in seen:
+            continue
+        seen.add(key)
         candidates.append({
             "presentation": ap,
             "quantity": rounded,
             "unit": practical_unit,
+            "desired": dose_value,
+            "delivered": delivered,
+            "dose_unit": suggestion.get("dose_unit_out") or "",
             "score": _practical_score(rounded, dose_value, delivered),
         })
 
     if not candidates:
-        return None
+        return []
     candidates.sort(key=lambda item: (item["score"], item["quantity"]))
-    best = candidates[0]
-    quantity = best["quantity"]
-    ap = best["presentation"]
-    return {
-        "quantity": quantity,
-        "unit": best["unit"],
-        "dose_text": _format_practical_quantity(quantity, best["unit"]),
-        "presentation": {
-            "id": ap.get("id"),
-            "label": _presentation_label(ap),
-            "forma": ap.get("forma") or "",
-            "concentracao": ap.get("concentracao_label") or ap.get("concentracao_texto") or "",
-            "nome_variante": ap.get("nome_variante") or "",
-            "nome_comercial": ap.get("nome_comercial") or "",
-            "fabricante": ap.get("fabricante") or "",
-        },
-    }
+    return [_practical_payload(candidate) for candidate in candidates]
+
+
+def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dict[str, Any] | None:
+    options = _practical_presentation_options(suggestion, mode)
+    return options[0] if options else None
 
 
 def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
@@ -543,7 +573,8 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             })
             return base
 
-    practical = _choose_practical_presentation(suggestion, mode)
+    practical_options = _practical_presentation_options(suggestion, mode)
+    practical = practical_options[0] if practical_options else None
     frequency = _frequency_text(suggestion, getattr(item, "frequencia_texto", None))
     duration = _duration_text(suggestion, getattr(item, "duracao_texto", None))
     calculated_dose = _format_dose_value(suggestion, mode)
@@ -585,6 +616,8 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             "posologia_pratica": practical_posology,
             "posologia_tecnica": technical_posology,
             "apresentacao_pratica": practical,
+            "apresentacao_opcoes": practical_options,
+            "apresentacao_opcao_selecionada": 0 if practical_options else None,
             "raw_suggestion": suggestion,
         },
         "messages": messages,
