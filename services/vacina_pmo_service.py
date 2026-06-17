@@ -1165,6 +1165,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
             "name": animal.name,
             "species": animal.species,
             "status": animal.status,
+            "imageUrl": (animal.animal.image if animal.animal and animal.animal.image else ""),
         }
         for animal in visit.animals
     ]

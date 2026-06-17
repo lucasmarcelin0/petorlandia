@@ -430,6 +430,74 @@
     border-color: #198754;
   }
 
+  .pmo-animal-photo-thumb {
+    width: 40px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #198754;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pmo-animal-photo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .pmo-photo-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .pmo-photo-modal[hidden] {
+    display: none;
+  }
+
+  .pmo-photo-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+  }
+
+  .pmo-photo-modal__content {
+    position: relative;
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    max-width: 92vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .pmo-photo-modal__img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    border-radius: 8px;
+  }
+
+  .pmo-photo-modal__actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
   .pmo-animal-name {
     font-weight: 600;
   }
@@ -880,11 +948,53 @@
   </div>
 </div>
 
+<div class="pmo-photo-modal" id="pmo-photo-modal" hidden>
+  <div class="pmo-photo-modal__backdrop" data-action="photo-modal-close"></div>
+  <div class="pmo-photo-modal__content">
+    <img class="pmo-photo-modal__img" id="pmo-photo-modal-img" src="" alt="Foto do animal">
+    <div class="pmo-photo-modal__actions">
+      <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra foto</button>
+      <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
   const tbody = document.getElementById('pmo-tbody');
   const cardsEl = document.getElementById('pmo-cards');
   const listPanel = tbody.closest('.pmo-panel');
+
+  // --- Modal de foto do animal (ver maior / tirar outra) ---
+  const photoModal = document.getElementById('pmo-photo-modal');
+  const photoModalImg = document.getElementById('pmo-photo-modal-img');
+  const photoRetakeBtn = document.getElementById('pmo-photo-retake');
+  let photoModalInput = null;
+
+  function openPhotoModal(url, input) {
+    photoModalInput = input || null;
+    photoModalImg.src = url;
+    photoModal.hidden = false;
+  }
+  function closePhotoModal() {
+    photoModal.hidden = true;
+    photoModalImg.src = '';
+    photoModalInput = null;
+  }
+  if (photoModal) {
+    photoModal.addEventListener('click', (event) => {
+      if (event.target.dataset.action === 'photo-modal-close') closePhotoModal();
+    });
+    photoRetakeBtn.addEventListener('click', () => {
+      const input = photoModalInput;
+      closePhotoModal();
+      if (input) input.click();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !photoModal.hidden) closePhotoModal();
+    });
+  }
+
   const sheetEl = document.getElementById('pmo-sheet');
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   const shiftEl = document.getElementById('pmo-shift');
@@ -1264,6 +1374,7 @@
         throw new Error(payload.message || 'Não foi possível salvar a foto.');
       }
       animal.animalId = payload.animal_id || animal.animalId;
+      if (payload.image_url) animal.imageUrl = payload.image_url;
       if (button) {
         button.classList.remove('is-busy');
         button.classList.add('is-done');
@@ -1600,7 +1711,9 @@
           <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
             ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Tirar foto do animal" aria-label="Tirar foto do animal"><i class="fas fa-camera"></i></button>
+          ${animal.imageUrl
+            ? `<button type="button" class="pmo-animal-photo-thumb" data-action="animal-photo-view" data-animal-index="${index}" title="Ver foto ou tirar outra"><img src="${escapeHtml(animal.imageUrl)}" alt="Foto de ${escapeHtml(animal.name)}" loading="lazy"></button>`
+            : `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Tirar foto do animal" aria-label="Tirar foto do animal"><i class="fas fa-camera"></i></button>`}
           <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-animal-index="${index}" hidden>
         </div>
       </div>
@@ -1827,6 +1940,7 @@
       const button = input.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-btn');
       try {
         await uploadAnimalPhoto(animal, file, button);
+        render();
       } catch (error) {
         window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
       } finally {
@@ -1886,6 +2000,12 @@
     if (action === 'animal-photo') {
       const input = actionEl.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-input');
       if (input) input.click();
+      return;
+    }
+    if (action === 'animal-photo-view') {
+      const animal = row.animals[Number(actionEl.dataset.animalIndex)];
+      const input = actionEl.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-input');
+      if (animal && animal.imageUrl) openPhotoModal(animal.imageUrl, input);
       return;
     }
     if (action === 'animal-name-edit') {

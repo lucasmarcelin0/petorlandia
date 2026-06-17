@@ -5171,6 +5171,14 @@ def vacina_pmo_animal_photo(animal_id):
         image_url = upload_to_s3(file, filename, folder='animals')
         if not image_url:
             return jsonify({'success': False, 'message': 'Falha ao enviar a imagem.'}), 502
+        # Recusa o fallback local (efêmero no Heroku): sem armazenamento durável
+        # a foto sumiria no próximo restart. Melhor avisar para tentar de novo.
+        if not image_url.startswith('http'):
+            current_app.logger.error("Foto PMO sem armazenamento durável (S3 indisponível): %s", image_url)
+            return jsonify({
+                'success': False,
+                'message': 'Não foi possível guardar a foto agora. Tente novamente em instantes.',
+            }), 502
 
         animal.image = image_url
         # Nova foto: zera o enquadramento salvo para exibir corretamente.
