@@ -4339,7 +4339,8 @@ def openai_apps_challenge():
 def vacina_pmo():
     if current_user.role not in ('admin', 'vacinador'):
         abort(403)
-    return render_template('vacina_pmo/dashboard.html')
+    today = datetime.now(BR_TZ).date().isoformat()
+    return render_template('vacina_pmo/dashboard.html', today=today)
 
 
 @app.route('/vacina-pmo/agenda')

@@ -876,6 +876,36 @@ def test_animals_page_shows_pmo_request_and_vaccination_dates(app, monkeypatch):
         assert 'Vacinado em 29/05/2026' in body
 
 
+def test_vacina_pmo_dashboard_prefers_today_sheet(app, monkeypatch):
+    client = app.test_client()
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            current = cls(2026, 6, 17, 9, 30)
+            return current.replace(tzinfo=tz) if tz else current
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-admin@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+    monkeypatch.setattr(app_module, 'datetime', FixedDateTime)
+
+    response = client.get('/vacina-pmo')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'data-today="2026-06-17"' in body
+    assert 'const todaySheet = sortedSheets.find((sheet) => sheet.date === today);' in body
+    assert "const toSelect = todaySheet?.gid ||" in body
+
+
 def test_payment_status_updates_from_api(monkeypatch, app):
     client = app.test_client()
 

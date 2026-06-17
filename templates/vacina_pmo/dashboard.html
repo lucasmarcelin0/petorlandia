@@ -769,7 +769,7 @@
     <div class="row g-3 align-items-end">
       <div class="col-md-7 col-xl-4">
         <label for="pmo-sheet" class="form-label">Aba da planilha</label>
-        <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}">
+        <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}" data-today="{{ today }}">
           <option value="">Carregando abas...</option>
         </select>
         <div class="form-text" id="pmo-sheet-info">Carregando datas disponíveis...</div>
@@ -1035,6 +1035,14 @@
     return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
   }
 
+  function currentSheetDate() {
+    const configured = sheetEl.dataset.today || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(configured)) return configured;
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  }
+
   function googleMapsUrl(row) {
     const destination = normalizeText(row.address);
     if (!destination) return '';
@@ -1182,12 +1190,18 @@
       sheetEl.innerHTML = sortedSheets.length
         ? sortedSheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
         : '<option value="">Nenhuma aba encontrada</option>';
+      const today = currentSheetDate();
+      const todaySheet = sortedSheets.find((sheet) => sheet.date === today);
       const savedGid = localStorage.getItem('pmo_sheet_gid');
-      const toSelect = savedGid && [...sheetEl.options].some((o) => o.value === savedGid)
-        ? savedGid
-        : (sortedSheets[0]?.gid || '');
-      if (toSelect) sheetEl.value = toSelect;
-      sheetInfoEl.textContent = `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
+      const hasSavedSheet = savedGid && [...sheetEl.options].some((o) => o.value === savedGid);
+      const toSelect = todaySheet?.gid || (hasSavedSheet ? savedGid : (sortedSheets[0]?.gid || ''));
+      if (toSelect) {
+        sheetEl.value = toSelect;
+        localStorage.setItem('pmo_sheet_gid', toSelect);
+      }
+      sheetInfoEl.textContent = todaySheet
+        ? `Aba de hoje selecionada: ${displayDate(today)}.`
+        : `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
       sheetInfoEl.textContent = 'Não foi possível carregar as abas da planilha.';
