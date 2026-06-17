@@ -41,7 +41,7 @@
         </div>
     </div>
 
-    {% if current_user.role == 'parceiro' %}
+    {% if current_user.role in ['parceiro', 'admin'] %}
     <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
         <h2 class="mb-2 h5">Área do Parceiro</h2>
         <p class="text-muted small">Cadastre estabelecimentos, produtos e novos usuários.</p>
@@ -98,6 +98,18 @@
     </div>
     {% endif %}
 
+    {% if current_user.worker == 'delivery' or current_user.role == 'admin' %}
+    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
+        <h2 class="mb-2 h5">Área de Entregas</h2>
+        <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
+                🚚 Solicitações
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
     {% set owned_clinics = current_user.clinicas or [] %}
     {% set has_admin_role = current_user.role in ['admin', 'master'] %}
     {% set admin_worker_roles = ['gestor', 'administrador', 'admin_clinica', 'master'] %}
@@ -128,17 +140,6 @@
     </div>
     {% endif %}
 
-    {% if current_user.worker == 'delivery' %}
-    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-        <h2 class="mb-2 h5">Área de Entregas</h2>
-        <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
-        <div class="d-flex flex-wrap justify-content-center gap-3">
-            <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
-                🚚 Solicitações
-            </a>
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% else %}
 <section class="landing-page" aria-labelledby="landing-title">
