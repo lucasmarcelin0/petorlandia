@@ -22,6 +22,28 @@ from decimal import Decimal
 import re
 from security.crypto import MissingMasterKeyError, encrypt_text
 
+USER_ROLE_CHOICES = [
+    ('tutor', 'Tutor'),
+    ('adotante', 'Adotante'),
+    ('doador', 'Doador'),
+    ('veterinario', 'Veterinário'),
+    ('admin', 'Administrador'),
+    ('vacinador', 'Vacinador PMO'),
+    ('parceiro', 'Parceiro de cadastro'),
+]
+
+USER_WORKER_CHOICES = [
+    ('', 'Sem perfil interno'),
+    ('veterinario', 'Veterinário'),
+    ('colaborador', 'Colaborador de clínica'),
+    ('delivery', 'Entregador'),
+    ('seguradora', 'Seguradora'),
+    ('gestor', 'Gestor financeiro'),
+    ('administrador', 'Administrador financeiro'),
+    ('admin_clinica', 'Administrador de clínica'),
+    ('master', 'Master'),
+]
+
 def _is_admin():
     """Return True if the current user has the admin role."""
     return current_user.is_authenticated and current_user.role == "admin"
@@ -472,8 +494,11 @@ class UserAdminView(MyModelView):
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
 
-    form_overrides = {'role': SelectField, 'date_of_birth': DateField}
-    form_args = {'role': {'choices': [(r.name, r.value) for r in UserRole]}}
+    form_overrides = {'role': SelectField, 'worker': SelectField, 'date_of_birth': DateField}
+    form_args = {
+        'role': {'choices': USER_ROLE_CHOICES},
+        'worker': {'choices': USER_WORKER_CHOICES},
+    }
     form_columns = (
         'name', 'email', 'password_hash', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica', 'profile_photo_upload'
@@ -481,6 +506,7 @@ class UserAdminView(MyModelView):
     column_details_list = column_list
 
     def on_model_change(self, form, model, is_created):
+        model.worker = (model.worker or '').strip() or None
         if form.profile_photo_upload.data:
             file = form.profile_photo_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"

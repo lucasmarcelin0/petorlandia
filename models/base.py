@@ -124,11 +124,13 @@ class Endereco(db.Model):
 
 
 class UserRole(enum.Enum):
+    tutor = 'tutor'
     adotante = 'adotante'
     doador = 'doador'
     veterinario = 'veterinario'
     admin = 'admin'
     vacinador = 'vacinador'
+    parceiro = 'parceiro'
 
 
 # Usuário
