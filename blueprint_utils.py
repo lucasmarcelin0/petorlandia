@@ -39,6 +39,7 @@ def register_domain_blueprints(app):
         loja,
         mensagens,
         oauth,
+        parceiro,
         petsitter,
         planos,
         sfa,
@@ -104,3 +105,7 @@ def register_domain_blueprints(app):
     petsitter_bp = petsitter.get_blueprint()
     if not _is_blueprint_registered(app, petsitter_bp):
         _register_with_alias(app, petsitter_bp)
+
+    parceiro_bp = parceiro.get_blueprint()
+    if not _is_blueprint_registered(app, parceiro_bp):
+        _register_with_alias(app, parceiro_bp)

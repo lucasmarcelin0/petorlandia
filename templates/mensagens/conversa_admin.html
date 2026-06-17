@@ -108,6 +108,37 @@
             {% endif %}
           {% endif %}
         </div>
+
+        <div class="mt-4">
+          <h4 class="h6">Parceiro de cadastro</h4>
+          {% if admin.role == 'parceiro' %}
+            <div class="alert alert-success mb-0">
+              Este usuário é um parceiro de cadastro (tem acesso à Área do Parceiro).
+              {% if parceiro_demotion_form %}
+                <form method="post" action="{{ url_for('admin_remove_parceiro', user_id=admin.id) }}" class="mt-2">
+                  {{ parceiro_demotion_form.hidden_tag() }}
+                  <button type="submit" class="btn btn-outline-danger btn-sm">{{ parceiro_demotion_form.submit.label.text }}</button>
+                </form>
+              {% endif %}
+            </div>
+          {% else %}
+            <p class="mb-2">Promova este usuário para liberar a Área do Parceiro, onde ele cadastra estabelecimentos, produtos e novos usuários.</p>
+            {% if parceiro_promotion_form %}
+              <form method="post" action="{{ url_for('admin_promote_parceiro', user_id=admin.id) }}" class="row g-2 align-items-end">
+                {{ parceiro_promotion_form.hidden_tag() }}
+                <div class="col-md-8">
+                  <div class="form-check">
+                    {{ parceiro_promotion_form.confirm(class="form-check-input", id=parceiro_promotion_form.confirm.id) }}
+                    {{ parceiro_promotion_form.confirm.label(class="form-check-label", for=parceiro_promotion_form.confirm.id) }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <button type="submit" class="btn btn-outline-success w-100">{{ parceiro_promotion_form.submit.label.text }}</button>
+                </div>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
       {% endif %}
     </div>
   </div>

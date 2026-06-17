@@ -22,6 +22,16 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/admin/users/<int:user_id>/promover_parceiro",
+        view_func=lazy_view("admin_promote_parceiro"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/admin/users/<int:user_id>/remover_parceiro",
+        view_func=lazy_view("admin_remove_parceiro"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/admin/planos/dashboard",
         view_func=lazy_view("planos_dashboard"),
     )

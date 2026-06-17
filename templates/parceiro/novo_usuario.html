@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 560px;">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{{ url_for('parceiro_dashboard') }}" class="btn btn-link text-decoration-none px-0 me-2">
+      <i class="fa-solid fa-arrow-left"></i>
+    </a>
+    <div>
+      <h1 class="h3 fw-bold mb-0">Cadastrar usuário</h1>
+      <p class="text-muted mb-0">Crie uma conta. Uma senha temporária será gerada para você repassar.</p>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+          {{ form.name.label(class="form-label fw-semibold") }}
+          {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Nome completo") }}
+          {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="mb-3">
+          {{ form.email.label(class="form-label fw-semibold") }}
+          {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="email@exemplo.com") }}
+          {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6 mb-3">
+            {{ form.phone.label(class="form-label") }}
+            {{ form.phone(class="form-control", placeholder="(16) 99999-9999") }}
+          </div>
+          <div class="col-md-6 mb-3">
+            {{ form.cpf.label(class="form-label") }}
+            {{ form.cpf(class="form-control", placeholder="000.000.000-00") }}
+          </div>
+        </div>
+
+        <div class="d-grid mt-3">
+          {{ form.submit(class="btn btn-primary btn-lg") }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

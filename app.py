@@ -1683,6 +1683,8 @@ from forms import (
     DeleteAccountForm,
     DeliveryDemotionForm,
     DeliveryPromotionForm,
+    ParceiroPromotionForm,
+    ParceiroDemotionForm,
     DeliveryRequestForm,
     EditProfileForm,
     ClinicProductForm,
@@ -1730,6 +1732,8 @@ from helpers import (
     get_weekly_schedule,
     has_professional_access,
     grant_veterinarian_role,
+    is_parceiro,
+    parceiro_required,
     group_appointments_by_day,
     group_vet_schedules_by_day,
     has_conflict_for_slot,
@@ -16494,6 +16498,8 @@ def conversa_admin(user_id=None):
     promotion_form = None
     delivery_promotion_form = None
     delivery_demotion_form = None
+    parceiro_promotion_form = None
+    parceiro_demotion_form = None
     target_membership = None
     cancel_trial_form = VeterinarianMembershipCancelTrialForm()
     request_new_trial_form = VeterinarianMembershipRequestNewTrialForm()
@@ -16509,6 +16515,8 @@ def conversa_admin(user_id=None):
         promotion_form = VeterinarianPromotionForm()
         delivery_promotion_form = DeliveryPromotionForm()
         delivery_demotion_form = DeliveryDemotionForm()
+        parceiro_promotion_form = ParceiroPromotionForm()
+        parceiro_demotion_form = ParceiroDemotionForm()
         if has_veterinarian_profile(interlocutor):
             target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
             if target_membership and not hasattr(target_membership, 'is_trial_active'):
@@ -16600,6 +16608,8 @@ def conversa_admin(user_id=None):
         promotion_form=promotion_form,
         delivery_promotion_form=delivery_promotion_form,
         delivery_demotion_form=delivery_demotion_form,
+        parceiro_promotion_form=parceiro_promotion_form,
+        parceiro_demotion_form=parceiro_demotion_form,
         target_membership=target_membership,
         is_admin=is_admin,
         cancel_trial_form=cancel_trial_form,
@@ -16761,6 +16771,72 @@ def admin_remove_delivery(user_id):
         user.id,
     )
     flash('Status de entregador removido com sucesso.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
+
+
+@login_required
+def admin_promote_parceiro(user_id):
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = ParceiroPromotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.role or '').lower() == 'parceiro':
+        flash('Usuário já é um parceiro de cadastro.', 'info')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.role or '').lower() == 'admin':
+        flash('Administradores já possuem acesso total; promoção desnecessária.', 'info')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    previous_role = user.role
+    user.role = 'parceiro'
+    db.session.commit()
+
+    current_app.logger.info(
+        'Admin %s alterou role de %s para parceiro para o usuário %s.',
+        current_user.id,
+        previous_role,
+        user.id,
+    )
+    flash('Usuário promovido a parceiro de cadastro.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
+
+
+@login_required
+def admin_remove_parceiro(user_id):
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = ParceiroDemotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.role or '').lower() != 'parceiro':
+        flash('Usuário não é um parceiro de cadastro.', 'info')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    user.role = 'adotante'
+    db.session.commit()
+
+    current_app.logger.info(
+        'Admin %s removeu o status de parceiro do usuário %s.',
+        current_user.id,
+        user.id,
+    )
+    flash('Status de parceiro removido com sucesso.', 'success')
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
@@ -19271,6 +19347,8 @@ def _user_can_manage_clinic(clinica):
         return True
     if current_user.id == clinica.owner_id:
         return True
+    if current_user.id == clinica.registered_by_id:
+        return True
     if is_veterinarian(current_user) and current_user.veterinario.clinica_id == clinica.id:
         return True
     return False
@@ -19279,9 +19357,13 @@ def _user_can_manage_clinic(clinica):
 # ── Casa de Ração ─────────────────────────────────────────────────────────────
 
 def _casa_loja_access(casa_id):
-    """Retorna a CasaDeRacao ou aborta 403 se o usuário não for dono/admin."""
+    """Retorna a CasaDeRacao ou aborta 403 se o usuário não for dono/admin/parceiro."""
     casa = CasaDeRacao.query.get_or_404(casa_id)
-    if not (_is_admin() or current_user.id == casa.owner_id):
+    if not (
+        _is_admin()
+        or current_user.id == casa.owner_id
+        or current_user.id == casa.registered_by_id
+    ):
         abort(403)
     return casa
 
@@ -19997,6 +20079,204 @@ def clinic_mercadopago_direct_save(clinica_id):
     db.session.commit()
     flash('Credenciais do Mercado Pago salvas. A clínica já pode receber pagamentos.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+
+# ── Área do Parceiro (onboarding de estabelecimentos) ──────────────────────────
+
+def _parceiro_resolve_owner(form):
+    """Resolve o usuário dono conforme ``owner_mode``.
+
+    Retorna ``(owner, senha_temporaria, erro)``. ``senha_temporaria`` só é
+    preenchida quando um novo usuário é criado, para que o parceiro possa
+    repassá-la ao dono.
+    """
+    mode = (form.owner_mode.data or 'new').strip()
+    if mode == 'self':
+        return current_user, None, None
+
+    email = (form.owner_email.data or '').strip().lower()
+    if mode == 'existing':
+        owner = User.query.filter(func.lower(User.email) == email).first()
+        if not owner:
+            return None, None, 'Nenhum usuário encontrado com esse e-mail.'
+        return owner, None, None
+
+    # mode == 'new'
+    if User.query.filter(func.lower(User.email) == email).first():
+        return None, None, 'Já existe um usuário com esse e-mail. Use "vincular a um usuário existente".'
+    senha = secrets.token_urlsafe(6)
+    owner = User(
+        name=(form.owner_name.data or '').strip(),
+        email=email,
+        phone=(form.owner_phone.data or '').strip() or None,
+        role='adotante',
+        added_by=current_user,
+        is_private=True,
+    )
+    owner.set_password(senha)
+    db.session.add(owner)
+    db.session.flush()
+    return owner, senha, None
+
+
+def _parceiro_estabelecimentos(user):
+    """Lista os estabelecimentos cadastrados pelo parceiro (ou todos, se admin)."""
+    from models.petsitter import PetsitterProfile
+
+    if _is_admin():
+        clinicas = Clinica.query.order_by(Clinica.id.desc()).all()
+        casas = CasaDeRacao.query.order_by(CasaDeRacao.id.desc()).all()
+        sitters = PetsitterProfile.query.order_by(PetsitterProfile.id.desc()).all()
+    else:
+        clinicas = (
+            Clinica.query.filter_by(registered_by_id=user.id)
+            .order_by(Clinica.id.desc())
+            .all()
+        )
+        casas = (
+            CasaDeRacao.query.filter_by(registered_by_id=user.id)
+            .order_by(CasaDeRacao.id.desc())
+            .all()
+        )
+        sitters = (
+            PetsitterProfile.query.filter_by(registered_by_id=user.id)
+            .order_by(PetsitterProfile.id.desc())
+            .all()
+        )
+    return clinicas, casas, sitters
+
+
+@login_required
+@parceiro_required
+def parceiro_dashboard():
+    from services.establishments import establishment_label
+
+    clinicas, casas, sitters = _parceiro_estabelecimentos(current_user)
+    total = len(clinicas) + len(casas) + len(sitters)
+    return render_template(
+        'parceiro/dashboard.html',
+        clinicas=clinicas,
+        casas=casas,
+        sitters=sitters,
+        total=total,
+        establishment_label=establishment_label,
+    )
+
+
+@login_required
+@parceiro_required
+def parceiro_novo_estabelecimento():
+    from forms import ParceiroEstabelecimentoForm
+    from services.establishments import establishment_label
+
+    form = ParceiroEstabelecimentoForm()
+    if form.validate_on_submit():
+        owner, senha_temp, erro = _parceiro_resolve_owner(form)
+        if erro:
+            flash(erro, 'danger')
+            return render_template('parceiro/novo_estabelecimento.html', form=form)
+
+        tipo = form.tipo.data
+        nome = (form.nome.data or '').strip()
+
+        if senha_temp:
+            flash(
+                f'Usuário {owner.name} criado. Senha temporária: {senha_temp} '
+                '(oriente o dono a alterá-la no primeiro acesso).',
+                'info',
+            )
+
+        if tipo == 'clinica':
+            clinica = Clinica(
+                nome=nome,
+                cnpj=form.cnpj.data or None,
+                endereco=form.endereco.data or None,
+                telefone=form.telefone.data or None,
+                email=form.email.data or None,
+                owner_id=owner.id,
+                registered_by_id=current_user.id,
+            )
+            db.session.add(clinica)
+            db.session.commit()
+            if owner.id != current_user.id:
+                owner.clinica_id = clinica.id
+                if getattr(owner, 'veterinario', None):
+                    owner.veterinario.clinica_id = clinica.id
+                db.session.commit()
+            flash(f'Clínica "{nome}" cadastrada e ativa.', 'success')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+        if tipo == 'petsitter':
+            from models.petsitter import PetsitterProfile
+
+            if PetsitterProfile.query.filter_by(user_id=owner.id).first():
+                flash('Esse usuário já possui um perfil de pet sitter.', 'warning')
+                return redirect(url_for('parceiro_dashboard'))
+            sitter = PetsitterProfile(
+                user_id=owner.id,
+                bio=form.descricao.data or None,
+                cidade=form.cidade.data or None,
+                preco_diaria=form.preco_diaria.data or None,
+                status='aprovado',
+                registered_by_id=current_user.id,
+            )
+            db.session.add(sitter)
+            db.session.commit()
+            flash(f'Pet sitter "{owner.name}" cadastrado e aprovado.', 'success')
+            return redirect(url_for('parceiro_dashboard'))
+
+        # casa_de_racao | petshop | banho_tosa — modelo de loja compartilhado
+        casa = CasaDeRacao(
+            nome=nome,
+            tipo=tipo,
+            cnpj=form.cnpj.data or None,
+            descricao=form.descricao.data or None,
+            telefone=form.telefone.data or None,
+            email=form.email.data or None,
+            endereco=form.endereco.data or None,
+            owner_id=owner.id,
+            registered_by_id=current_user.id,
+            status='ativa',
+        )
+        db.session.add(casa)
+        db.session.commit()
+        flash(f'{establishment_label(tipo)} "{nome}" cadastrada e ativa.', 'success')
+        return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
+
+    return render_template('parceiro/novo_estabelecimento.html', form=form)
+
+
+@login_required
+@parceiro_required
+def parceiro_novo_usuario():
+    from forms import ParceiroUsuarioForm
+
+    form = ParceiroUsuarioForm()
+    if form.validate_on_submit():
+        email = (form.email.data or '').strip().lower()
+        if User.query.filter(func.lower(User.email) == email).first():
+            flash('Já existe um usuário com esse e-mail.', 'danger')
+            return render_template('parceiro/novo_usuario.html', form=form)
+        senha = secrets.token_urlsafe(6)
+        novo = User(
+            name=(form.name.data or '').strip(),
+            email=email,
+            phone=form.phone.data or None,
+            cpf=form.cpf.data or None,
+            role='adotante',
+            added_by=current_user,
+            is_private=True,
+        )
+        novo.set_password(senha)
+        db.session.add(novo)
+        db.session.commit()
+        flash(
+            f'Usuário {novo.name} criado. Senha temporária: {senha} '
+            '(oriente-o a alterá-la no primeiro acesso).',
+            'success',
+        )
+        return redirect(url_for('parceiro_dashboard'))
+    return render_template('parceiro/novo_usuario.html', form=form)
 
 
 @login_required

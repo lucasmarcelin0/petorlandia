@@ -904,6 +904,9 @@ class Clinica(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
 
+    registered_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    registered_by = db.relationship('User', foreign_keys=[registered_by_id])
+
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
     veterinarios_associados = db.relationship(
         'Veterinario',
@@ -961,6 +964,10 @@ class CasaDeRacao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
+    # Subtipo do estabelecimento de varejo: 'casa_de_racao' | 'petshop' | 'banho_tosa'.
+    # Usado apenas para rotulagem/capacidades (ver services/establishments.py);
+    # o modelo e os fluxos de loja são compartilhados entre os subtipos.
+    tipo = db.Column(db.String(20), default='casa_de_racao', nullable=False)
     razao_social = db.Column(db.String(200), nullable=True)
     cnpj = db.Column(db.String(18), nullable=True, unique=True)
     descricao = db.Column(db.Text, nullable=True)
@@ -981,6 +988,7 @@ class CasaDeRacao(db.Model):
     prazo_entrega_min = db.Column(db.Integer, nullable=True)
     prazo_entrega_max = db.Column(db.Integer, nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    registered_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     owner = db.relationship(
@@ -988,6 +996,7 @@ class CasaDeRacao(db.Model):
         backref=db.backref('casas_de_racao', foreign_keys='CasaDeRacao.owner_id'),
         foreign_keys=[owner_id],
     )
+    registered_by = db.relationship('User', foreign_keys=[registered_by_id])
 
     @validates('cnpj')
     def _normalize_cnpj(self, key, value):

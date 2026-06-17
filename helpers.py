@@ -213,7 +213,7 @@ def has_professional_access(user=None) -> bool:
         return False
 
     role = (getattr(user, 'role', None) or '').lower()
-    if role in {'admin', 'gestor'}:
+    if role in {'admin', 'gestor', 'parceiro'}:
         return True
 
     worker = (getattr(user, 'worker', None) or '').lower()
@@ -251,6 +251,38 @@ def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     if membership is None:
         return False
     return membership.is_active()
+
+
+def is_parceiro(user=None) -> bool:
+    """Return ``True`` when ``user`` is a registration partner (parceiro de cadastro)."""
+
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not user:
+        return False
+
+    return (getattr(user, 'role', None) or '').lower() == 'parceiro'
+
+
+def parceiro_required(view=None):
+    """Decorator allowing only partners (parceiro) and admins."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            if not current_user.is_authenticated:
+                abort(403)
+            role = (getattr(current_user, 'role', None) or '').lower()
+            if role not in {'parceiro', 'admin'}:
+                abort(403)
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    if view is None:
+        return decorator
+    return decorator(view)
 
 
 def veterinarian_required(view=None, *, require_membership: bool = True):

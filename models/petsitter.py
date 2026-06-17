@@ -47,6 +47,12 @@ class PetsitterProfile(db.Model):
     hospeda_em_casa = db.Column(db.Boolean, default=False, nullable=False)
     preco_diaria = db.Column(db.Numeric(10, 2), nullable=True)
     status = db.Column(db.String(20), default="pendente", nullable=False, index=True)
+    registered_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     user = db.relationship(
@@ -54,6 +60,7 @@ class PetsitterProfile(db.Model):
         backref=db.backref("petsitter_profile", uselist=False),
         foreign_keys=[user_id],
     )
+    registered_by = db.relationship("User", foreign_keys=[registered_by_id])
 
     @property
     def aprovado(self) -> bool:

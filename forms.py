@@ -714,6 +714,18 @@ class DeliveryDemotionForm(FlaskForm):
     submit = SubmitField('Cancelar status de entregador')
 
 
+class ParceiroPromotionForm(FlaskForm):
+    confirm = BooleanField(
+        'Confirmo a promoção deste usuário a parceiro de cadastro',
+        validators=[DataRequired(message='Confirme a promoção para continuar.')],
+    )
+    submit = SubmitField('Promover a Parceiro')
+
+
+class ParceiroDemotionForm(FlaskForm):
+    submit = SubmitField('Remover status de parceiro')
+
+
 class VeterinarianMembershipCheckoutForm(FlaskForm):
     submit = SubmitField('Ativar assinatura')
 
@@ -926,6 +938,76 @@ class CasaDeRacaoForm(FlaskForm):
         if len(digits) != 14:
             raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
         field.data = format_cnpj(field.data)
+
+
+class ParceiroEstabelecimentoForm(FlaskForm):
+    """Cadastro de estabelecimento pela Área do Parceiro.
+
+    Um único formulário cobre clínica, casa de ração, pet shop, banho e tosa e
+    pet sitter; campos específicos são validados conforme o ``tipo`` escolhido.
+    """
+
+    TIPO_CHOICES = [
+        ('clinica', 'Clínica veterinária'),
+        ('casa_de_racao', 'Casa de ração'),
+        ('petshop', 'Pet shop'),
+        ('banho_tosa', 'Banho e tosa'),
+        ('petsitter', 'Pet sitter'),
+    ]
+
+    tipo = SelectField('Tipo de estabelecimento', choices=TIPO_CHOICES, validators=[DataRequired()])
+    nome = StringField('Nome', validators=[DataRequired(), Length(max=120)])
+    cnpj = StringField('CNPJ', validators=[Optional()])
+    telefone = StringField('Telefone', validators=[Optional(), Length(max=20)])
+    email = StringField('E-mail de contato', validators=[Optional(), Email()])
+    endereco = StringField('Endereço', validators=[Optional(), Length(max=200)])
+    cidade = StringField('Cidade', validators=[Optional(), Length(max=120)])
+    descricao = TextAreaField('Descrição', validators=[Optional()])
+    preco_diaria = DecimalField(
+        'Preço da diária (pet sitter)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
+    )
+
+    owner_mode = RadioField(
+        'Quem é o dono?',
+        choices=[
+            ('new', 'Criar novo usuário (dono do negócio)'),
+            ('existing', 'Vincular a um usuário existente (por e-mail)'),
+            ('self', 'Manter sob minha gestão (sem dono separado)'),
+        ],
+        default='new',
+    )
+    owner_name = StringField('Nome do dono', validators=[Optional(), Length(max=120)])
+    owner_email = StringField('E-mail do dono', validators=[Optional(), Email()])
+    owner_phone = StringField('Telefone do dono', validators=[Optional(), Length(max=20)])
+    submit = SubmitField('Cadastrar estabelecimento')
+
+    def validate_cnpj(self, field):
+        if not field.data:
+            return
+        digits = only_digits(field.data)
+        if len(digits) != 14:
+            raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
+        field.data = format_cnpj(field.data)
+
+    def validate_owner_email(self, field):
+        if (self.owner_mode.data or '') in {'new', 'existing'} and not (field.data or '').strip():
+            raise ValidationError('Informe o e-mail do dono.')
+
+    def validate_owner_name(self, field):
+        if (self.owner_mode.data or '') == 'new' and not (field.data or '').strip():
+            raise ValidationError('Informe o nome do dono.')
+
+
+class ParceiroUsuarioForm(FlaskForm):
+    """Cadastro avulso de usuário pela Área do Parceiro."""
+
+    name = StringField('Nome completo', validators=[DataRequired(), Length(max=120)])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
+    phone = StringField('Telefone', validators=[Optional(), Length(max=20)])
+    cpf = StringField('CPF', validators=[Optional()])
+    submit = SubmitField('Criar usuário')
 
 
 class CasaDeRacaoProductForm(_ProductCategoryChoicesMixin, FlaskForm):

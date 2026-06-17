@@ -1,0 +1,144 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 720px;">
+
+  <div class="d-flex align-items-center mb-4">
+    <a href="{{ url_for('parceiro_dashboard') }}" class="btn btn-link text-decoration-none px-0 me-2">
+      <i class="fa-solid fa-arrow-left"></i>
+    </a>
+    <div>
+      <h1 class="h3 fw-bold mb-0">Cadastrar estabelecimento</h1>
+      <p class="text-muted mb-0">Preencha os dados — o cadastro entra ativo imediatamente.</p>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="mb-4">
+          {{ form.tipo.label(class="form-label fw-semibold") }}
+          {{ form.tipo(class="form-select" + (" is-invalid" if form.tipo.errors else ""), id="tipo-select") }}
+          {% for e in form.tipo.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <h5 class="fw-semibold mb-3 text-primary"><i class="fa-solid fa-store me-2"></i>Dados do estabelecimento</h5>
+
+        <div class="mb-3">
+          {{ form.nome.label(class="form-label fw-semibold") }}
+          {{ form.nome(class="form-control" + (" is-invalid" if form.nome.errors else ""), placeholder="Nome do estabelecimento") }}
+          {% for e in form.nome.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6 mb-3 field-empresa">
+            {{ form.cnpj.label(class="form-label") }}
+            {{ form.cnpj(class="form-control" + (" is-invalid" if form.cnpj.errors else ""), placeholder="00.000.000/0000-00") }}
+            {% for e in form.cnpj.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6 mb-3">
+            {{ form.telefone.label(class="form-label") }}
+            {{ form.telefone(class="form-control", placeholder="(16) 99999-9999") }}
+          </div>
+          <div class="col-md-6 mb-3">
+            {{ form.email.label(class="form-label") }}
+            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+            {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6 mb-3 field-cidade">
+            {{ form.cidade.label(class="form-label") }}
+            {{ form.cidade(class="form-control", placeholder="Cidade") }}
+          </div>
+        </div>
+
+        <div class="mb-3 field-endereco">
+          {{ form.endereco.label(class="form-label") }}
+          {{ form.endereco(class="form-control", placeholder="Rua, número, bairro") }}
+        </div>
+
+        <div class="mb-3">
+          {{ form.descricao.label(class="form-label") }}
+          {{ form.descricao(class="form-control", rows="2", placeholder="Breve descrição (opcional)") }}
+        </div>
+
+        <div class="mb-3 field-petsitter d-none">
+          {{ form.preco_diaria.label(class="form-label") }}
+          {{ form.preco_diaria(class="form-control", placeholder="Ex.: 80,00") }}
+        </div>
+
+        <hr class="my-4">
+
+        <h5 class="fw-semibold mb-3 text-primary"><i class="fa-solid fa-user-tag me-2"></i>Dono do estabelecimento</h5>
+
+        <div class="mb-3">
+          {% for subfield in form.owner_mode %}
+          <div class="form-check">
+            {{ subfield(class="form-check-input owner-mode-radio") }}
+            {{ subfield.label(class="form-check-label") }}
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="owner-fields border rounded-3 p-3 bg-light-subtle">
+          <div class="row g-3">
+            <div class="col-md-6 owner-field-new">
+              {{ form.owner_name.label(class="form-label") }}
+              {{ form.owner_name(class="form-control" + (" is-invalid" if form.owner_name.errors else ""), placeholder="Nome do dono") }}
+              {% for e in form.owner_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6 owner-field-email">
+              {{ form.owner_email.label(class="form-label") }}
+              {{ form.owner_email(class="form-control" + (" is-invalid" if form.owner_email.errors else ""), placeholder="email@dono.com") }}
+              {% for e in form.owner_email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6 owner-field-new">
+              {{ form.owner_phone.label(class="form-label") }}
+              {{ form.owner_phone(class="form-control", placeholder="Telefone do dono") }}
+            </div>
+          </div>
+          <p class="text-muted small mb-0 mt-2 owner-hint-self d-none">
+            O estabelecimento ficará sob a sua gestão. Você poderá vincular um dono depois.
+          </p>
+        </div>
+
+        <div class="d-grid mt-4">
+          {{ form.submit(class="btn btn-primary btn-lg") }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var tipoSelect = document.getElementById('tipo-select');
+    var petsitterField = document.querySelector('.field-petsitter');
+    var empresaField = document.querySelector('.field-empresa');
+
+    function syncTipo() {
+      var isSitter = tipoSelect.value === 'petsitter';
+      petsitterField.classList.toggle('d-none', !isSitter);
+      // Pet sitter é pessoa física: CNPJ não se aplica.
+      if (empresaField) empresaField.classList.toggle('d-none', isSitter);
+    }
+
+    function syncOwner() {
+      var mode = (document.querySelector('.owner-mode-radio:checked') || {}).value || 'new';
+      var newFields = document.querySelectorAll('.owner-field-new');
+      var emailField = document.querySelector('.owner-field-email');
+      var selfHint = document.querySelector('.owner-hint-self');
+      newFields.forEach(function (el) { el.classList.toggle('d-none', mode !== 'new'); });
+      if (emailField) emailField.classList.toggle('d-none', mode === 'self');
+      if (selfHint) selfHint.classList.toggle('d-none', mode !== 'self');
+    }
+
+    tipoSelect.addEventListener('change', syncTipo);
+    document.querySelectorAll('.owner-mode-radio').forEach(function (r) {
+      r.addEventListener('change', syncOwner);
+    });
+    syncTipo();
+    syncOwner();
+  })();
+</script>
+{% endblock %}
