@@ -399,20 +399,24 @@
   }
 
   .pmo-animal-status {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
     align-items: center;
     gap: 6px;
   }
 
   .pmo-animal-status .pmo-status-select {
-    flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
   }
 
   .pmo-animal-photo-btn {
-    flex: 0 0 auto;
-    padding: 0.25rem 0.45rem;
+    width: 40px;
+    padding: 0.25rem 0;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .pmo-animal-photo-btn.is-busy {
