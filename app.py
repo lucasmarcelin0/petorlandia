@@ -5147,6 +5147,46 @@ def vacina_pmo_animal_name(animal_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/animal/<int:animal_id>/photo', methods=['POST'])
+@login_required
+def vacina_pmo_animal_photo(animal_id):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+
+    file = request.files.get('photo')
+    if not file or not getattr(file, 'filename', ''):
+        return jsonify({'success': False, 'message': 'Nenhuma foto enviada.'}), 400
+
+    try:
+        from services.vacina_pmo_service import ensure_vacina_pmo_real_animal
+
+        animal = ensure_vacina_pmo_real_animal(animal_id)
+        if animal is None:
+            return jsonify({
+                'success': False,
+                'message': 'Este animal ainda não tem cadastro vinculado para guardar a foto.',
+            }), 400
+
+        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+        image_url = upload_to_s3(file, filename, folder='animals')
+        if not image_url:
+            return jsonify({'success': False, 'message': 'Falha ao enviar a imagem.'}), 502
+
+        animal.image = image_url
+        # Nova foto: zera o enquadramento salvo para exibir corretamente.
+        animal.photo_rotation = 0
+        animal.photo_zoom = 1.0
+        animal.photo_offset_x = 0.0
+        animal.photo_offset_y = 0.0
+        db.session.commit()
+
+        return jsonify({'success': True, 'image_url': image_url, 'animal_id': animal.id})
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao salvar foto de animal Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
 @login_required
 def vacina_pmo_visit_attended_by(visit_id):

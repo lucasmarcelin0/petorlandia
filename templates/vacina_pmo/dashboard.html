@@ -393,9 +393,37 @@
 
   .pmo-animal-item {
     display: grid;
-    grid-template-columns: minmax(90px, 1fr) 112px;
+    grid-template-columns: minmax(90px, 1fr) 154px;
     gap: 8px;
     align-items: center;
+  }
+
+  .pmo-animal-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pmo-animal-status .pmo-status-select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pmo-animal-photo-btn {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.45rem;
+    line-height: 1;
+  }
+
+  .pmo-animal-photo-btn.is-busy {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .pmo-animal-photo-btn.is-done {
+    color: #fff;
+    background-color: #198754;
+    border-color: #198754;
   }
 
   .pmo-animal-name {
@@ -507,7 +535,7 @@
     }
 
     .pmo-animal-item {
-      grid-template-columns: minmax(0, 1fr) 118px;
+      grid-template-columns: minmax(0, 1fr) 158px;
       gap: 8px;
     }
 
@@ -1211,6 +1239,40 @@
     return null;
   }
 
+  async function uploadAnimalPhoto(animal, file, button) {
+    if (!animal.id) {
+      throw new Error('Sincronize a aba antes de adicionar fotos.');
+    }
+    const formData = new FormData();
+    formData.append('photo', file);
+    if (button) button.classList.add('is-busy');
+    try {
+      const response = await fetch(`/vacina-pmo/animal/${animal.id}/photo`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível salvar a foto.');
+      }
+      animal.animalId = payload.animal_id || animal.animalId;
+      if (button) {
+        button.classList.remove('is-busy');
+        button.classList.add('is-done');
+      }
+      const msg = 'Foto do animal salva com sucesso!';
+      window.showAppToast ? window.showAppToast(msg, 'success') : null;
+      return payload;
+    } catch (error) {
+      if (button) button.classList.remove('is-busy');
+      throw error;
+    }
+  }
+
   async function saveAnimalName(animal, name) {
     if (!animal.id) {
       throw new Error('Sincronize a aba antes de corrigir nomes.');
@@ -1530,9 +1592,13 @@
           `}
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
         </div>
-        <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
-          ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
-        </select>
+        <div class="pmo-animal-status">
+          <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
+            ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Tirar foto do animal" aria-label="Tirar foto do animal"><i class="fas fa-camera"></i></button>
+          <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-animal-index="${index}" hidden>
+        </div>
       </div>
     `).join('');
   }
@@ -1749,6 +1815,19 @@
       }
       row.status = inferVisitStatus(row.animals);
       render();
+    } else if (event.target.dataset.action === 'animal-photo-input') {
+      const input = event.target;
+      const animal = row.animals[Number(input.dataset.animalIndex)];
+      const file = input.files && input.files[0];
+      if (!animal || !file) return;
+      const button = input.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-btn');
+      try {
+        await uploadAnimalPhoto(animal, file, button);
+      } catch (error) {
+        window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+      } finally {
+        input.value = '';
+      }
     }
   });
 
@@ -1800,6 +1879,11 @@
     if (!row) return;
     const actionEl = event.target.closest('[data-action]');
     const action = actionEl?.dataset.action;
+    if (action === 'animal-photo') {
+      const input = actionEl.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-input');
+      if (input) input.click();
+      return;
+    }
     if (action === 'animal-name-edit') {
       state.rows.forEach((other) => { if (other !== row) other.editingAnimalNameIndex = undefined; });
       row.editingAnimalNameIndex = Number(actionEl.dataset.animalIndex);

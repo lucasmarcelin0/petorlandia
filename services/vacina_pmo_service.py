@@ -744,6 +744,21 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     pmo_animal.animal = animal
 
 
+def ensure_vacina_pmo_real_animal(animal_id: int) -> Animal | None:
+    """Garante que o ``PmoVaccinationAnimal`` tenha um ``Animal`` real vinculado.
+
+    Usado para guardar a foto tirada pelo vacinador no cadastro do animal.
+    Retorna o ``Animal`` (criando/vinculando quando possível) ou ``None`` quando
+    não há tutor para vincular o cadastro.
+    """
+    pmo_animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
+    _ensure_real_animal(pmo_animal)
+    db.session.flush()
+    if not pmo_animal.animal_id:
+        return None
+    return db.session.get(Animal, pmo_animal.animal_id)
+
+
 def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
     if pmo_animal.status != "vacinado":
         return
