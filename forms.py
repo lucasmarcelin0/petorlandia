@@ -66,6 +66,9 @@ class ResetPasswordForm(FlaskForm):
 
 
 class FirstAccessPhoneForm(FlaskForm):
+    class Meta:
+        csrf = False
+
     phone = StringField(
         'Celular',
         validators=[DataRequired(message="Informe o celular com DDD")],
@@ -75,6 +78,9 @@ class FirstAccessPhoneForm(FlaskForm):
 
 
 class FirstAccessPasswordForm(FlaskForm):
+    class Meta:
+        csrf = False
+
     email = EmailField(
         'E-mail',
         validators=[Optional(), Email(message="Informe um e-mail válido")],

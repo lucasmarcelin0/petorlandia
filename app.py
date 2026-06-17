@@ -4187,6 +4187,7 @@ def _first_access_next_url(invite=None) -> str:
     return url_for('index')
 
 
+@csrf.exempt
 def first_access():
     if current_user.is_authenticated:
         return redirect(_sanitize_login_next_url(request.args.get('next')))
@@ -4222,6 +4223,7 @@ def first_access():
     return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '')
 
 
+@csrf.exempt
 def first_access_password():
     user_id = session.get('first_access_user_id')
     if not user_id:
