@@ -880,6 +880,53 @@ def repair_pmo_tutor_links(dry_run: bool = True) -> dict:
     return stats
 
 
+def cleanup_pmo_orphan_animals(dry_run: bool = True) -> dict:
+    """Remove registros de animais da campanha PMO que ficaram órfãos.
+
+    Um órfão é um ``Animal`` criado automaticamente pela campanha que não tem
+    mais nenhuma visita apontando para ele (vínculo perdido em re-syncs durante
+    o bug de mesclagem de tutores). Esses registros ficaram em perfis errados.
+
+    Só remove um órfão quando existe uma cópia **canônica** (vinculada a uma
+    visita PMO) com o mesmo nome — ou seja, é uma duplicata segura. Órfãos sem
+    cópia canônica são **preservados** e apenas contados, para revisão manual.
+    """
+    stats = {"orfaos": 0, "removidos": 0, "preservados": 0}
+
+    linked_animal_ids = (
+        db.session.query(PmoVaccinationAnimal.animal_id)
+        .filter(PmoVaccinationAnimal.animal_id.isnot(None))
+        .subquery()
+    )
+    orphans = (
+        Animal.query
+        .filter(Animal.description.like("Cadastro criado automaticamente pela campanha%"))
+        .filter(~Animal.id.in_(db.session.query(linked_animal_ids.c.animal_id)))
+        .all()
+    )
+
+    for animal in orphans:
+        stats["orfaos"] += 1
+        target_name = (animal.name or "").strip().lower()
+        has_canonical = (
+            db.session.query(PmoVaccinationAnimal.id)
+            .join(Animal, Animal.id == PmoVaccinationAnimal.animal_id)
+            .filter(PmoVaccinationAnimal.animal_id.isnot(None))
+            .filter(func.lower(func.trim(Animal.name)) == target_name)
+            .first()
+        )
+        if has_canonical:
+            stats["removidos"] += 1
+            if not dry_run:
+                db.session.delete(animal)
+        else:
+            stats["preservados"] += 1
+
+    if not dry_run:
+        db.session.commit()
+    return stats
+
+
 def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
     if pmo_animal.status != "vacinado":
         return
