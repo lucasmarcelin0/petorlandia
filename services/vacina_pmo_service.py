@@ -640,6 +640,10 @@ def _provisional_email(phone: str, visit_id: int | None = None) -> str:
     return f"pmo-{digits}@petorlandia.local"
 
 
+def _normalize_person_name(value: Any) -> str:
+    return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+
+
 def _find_user_by_phone(phone: str) -> User | None:
     normalized = _normalize_login_phone(phone)
     if not normalized:
@@ -648,6 +652,43 @@ def _find_user_by_phone(phone: str) -> User | None:
         if _normalize_login_phone(user.phone) == normalized:
             return user
     return None
+
+
+def _find_user_by_phone_and_name(phone: str, name: str) -> User | None:
+    """Reusa uma conta apenas quando telefone E nome batem.
+
+    Evita misturar famílias diferentes que compartilham o mesmo telefone na
+    planilha (ex.: telefone de um agente de saúde repetido em várias linhas).
+    """
+    normalized = _normalize_login_phone(phone)
+    if not normalized:
+        return None
+    target_name = _normalize_person_name(name)
+    for user in User.query.filter(User.phone.isnot(None), User.phone != "").all():
+        if _normalize_login_phone(user.phone) != normalized:
+            continue
+        if _normalize_person_name(user.name) == target_name:
+            return user
+    return None
+
+
+def _same_family(user: User | None, visit: PmoVaccinationVisit) -> bool:
+    if not user:
+        return False
+    phone = visit.phone1 or visit.phone2
+    if _normalize_login_phone(user.phone) != _normalize_login_phone(phone):
+        return False
+    return _normalize_person_name(user.name) == _normalize_person_name(visit.tutor_name)
+
+
+def _unique_provisional_email(normalized_phone: str, visit: PmoVaccinationVisit) -> str:
+    candidate = _provisional_email(normalized_phone, visit.id)
+    if not User.query.filter(func.lower(User.email) == candidate.lower()).first():
+        return candidate
+    # Telefone compartilhado entre famílias: garante e-mail único por visita.
+    digits = _digits(normalized_phone)[-13:] or "x"
+    suffix = visit.id or secrets.token_hex(4)
+    return f"pmo-{digits}-{suffix}@petorlandia.local"
 
 
 def _ensure_visit_public_token(visit: PmoVaccinationVisit) -> None:
@@ -667,18 +708,20 @@ def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
             user.address = visit.address
         return
     phone = visit.phone1 or visit.phone2
-    user = _find_user_by_phone(phone)
+    normalized_phone = _normalize_login_phone(phone)
+    if not normalized_phone:
+        return
+    # Só reaproveita uma conta existente quando telefone E nome conferem; caso
+    # contrário cria conta separada (evita juntar famílias que dividem telefone).
+    user = _find_user_by_phone_and_name(phone, visit.tutor_name)
     if user:
         visit.tutor_user = user
         if visit.address and not user.address:
             user.address = visit.address
         return
-    normalized_phone = _normalize_login_phone(phone)
-    if not normalized_phone:
-        return
     user = User(
         name=visit.tutor_name,
-        email=_provisional_email(normalized_phone, visit.id),
+        email=_unique_provisional_email(normalized_phone, visit),
         phone=normalized_phone,
         role="adotante",
         address=visit.address or None,
@@ -757,6 +800,84 @@ def ensure_vacina_pmo_real_animal(animal_id: int) -> Animal | None:
     if not pmo_animal.animal_id:
         return None
     return db.session.get(Animal, pmo_animal.animal_id)
+
+
+def repair_pmo_tutor_links(dry_run: bool = True) -> dict:
+    """Corrige perfis PMO que receberam animais de outras famílias.
+
+    Causa: contas de tutor eram reaproveitadas só pelo telefone; quando a
+    planilha repete o telefone em famílias diferentes, os animais de todas elas
+    foram parar no mesmo usuário. Esta rotina reatribui cada animal real criado
+    pelo PMO ao tutor correto da sua visita (chave telefone+nome), criando as
+    contas por família que faltarem.
+
+    Em ``dry_run`` apenas conta o que seria alterado, sem gravar nada.
+    """
+    stats = {
+        "visitas_com_animais": 0,
+        "animais_reatribuidos": 0,
+        "contas_criadas": 0,
+        "visitas_revinculadas": 0,
+    }
+    visits = PmoVaccinationVisit.query.all()
+    for visit in visits:
+        linked = [pa for pa in visit.animals if pa.animal_id]
+        if not linked:
+            continue
+        stats["visitas_com_animais"] += 1
+
+        misattached = []
+        for pmo_animal in linked:
+            animal = db.session.get(Animal, pmo_animal.animal_id)
+            if animal is None:
+                continue
+            owner = db.session.get(User, animal.user_id) if animal.user_id else None
+            if _same_family(owner, visit):
+                continue  # já está no tutor correto
+            misattached.append(animal)
+
+        owner_needs_fix = not _same_family(
+            db.session.get(User, visit.tutor_user_id) if visit.tutor_user_id else None,
+            visit,
+        )
+        if not misattached and not owner_needs_fix:
+            continue
+
+        if dry_run:
+            stats["animais_reatribuidos"] += len(misattached)
+            if owner_needs_fix:
+                stats["visitas_revinculadas"] += 1
+                if _find_user_by_phone_and_name(visit.phone1 or visit.phone2, visit.tutor_name) is None:
+                    stats["contas_criadas"] += 1
+            continue
+
+        target = _find_user_by_phone_and_name(visit.phone1 or visit.phone2, visit.tutor_name)
+        if target is None:
+            normalized_phone = _normalize_login_phone(visit.phone1 or visit.phone2)
+            if not normalized_phone:
+                continue
+            target = User(
+                name=visit.tutor_name,
+                email=_unique_provisional_email(normalized_phone, visit),
+                phone=normalized_phone,
+                role="adotante",
+                address=visit.address or None,
+            )
+            target.set_password(visit.password)
+            db.session.add(target)
+            db.session.flush()
+            stats["contas_criadas"] += 1
+
+        for animal in misattached:
+            animal.user_id = target.id
+            stats["animais_reatribuidos"] += 1
+        if visit.tutor_user_id != target.id:
+            visit.tutor_user_id = target.id
+            stats["visitas_revinculadas"] += 1
+
+    if not dry_run:
+        db.session.commit()
+    return stats
 
 
 def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
