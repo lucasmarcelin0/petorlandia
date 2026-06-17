@@ -1703,6 +1703,8 @@ from forms import (
     ProductPhotoForm,
     ProductUpdateForm,
     RegistrationForm,
+    FirstAccessPasswordForm,
+    FirstAccessPhoneForm,
     ResetPasswordForm,
     ResetPasswordRequestForm,
     SubscribePlanForm,
@@ -4107,6 +4109,168 @@ def reset_password(token):
     return render_template('auth/reset_password.html', form=form)
 
 
+_FIRST_ACCESS_EMAIL_DOMAINS = (
+    '@petorlandia.local',
+    '@cadastro.petorlandia.local',
+    '@convite.petorlandia.local',
+)
+_FIRST_ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 60
+
+
+def _is_provisional_first_access_user(user: User | None) -> bool:
+    email = normalize_email(getattr(user, 'email', None)) or ''
+    return bool(user and email.endswith(_FIRST_ACCESS_EMAIL_DOMAINS))
+
+
+def _first_access_invite_from_token(token: str | None):
+    token = (token or '').strip()
+    if not token:
+        return None
+    _ensure_external_onboarding_invite_table()
+    invite = ExternalOnboardingInvite.query.filter_by(token=token).first()
+    if not invite or invite.invite_type != 'tutor':
+        return None
+    if invite.expires_at and invite.expires_at < datetime.now(BR_TZ):
+        return None
+    return invite
+
+
+def _first_access_token_for_user(user: User) -> str:
+    return s.dumps({'user_id': user.id}, salt='first-access-salt')
+
+
+def _first_access_user_from_signed_token(token: str | None):
+    token = (token or '').strip()
+    if not token:
+        return None
+    try:
+        payload = s.loads(token, salt='first-access-salt', max_age=_FIRST_ACCESS_TOKEN_MAX_AGE)
+    except Exception:
+        return None
+    user_id = payload.get('user_id') if isinstance(payload, dict) else payload
+    try:
+        return db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_access_url_for_user(user: User, *, next_url: str | None = None, _external: bool = False) -> str:
+    kwargs = {
+        'token': _first_access_token_for_user(user),
+        '_external': _external,
+    }
+    if next_url:
+        kwargs['next'] = next_url
+    return url_for('first_access', **kwargs)
+
+
+def _first_access_user_allowed(user: User | None, invite=None, token_user: User | None = None) -> bool:
+    if not user:
+        return False
+    if token_user:
+        return token_user.id == user.id
+    if _is_provisional_first_access_user(user):
+        return True
+    return bool(invite and invite.tutor_id == user.id)
+
+
+def _first_access_next_url(invite=None) -> str:
+    raw_next = request.values.get('next') or session.get('first_access_next')
+    if raw_next:
+        return _sanitize_login_next_url(raw_next)
+    if invite and getattr(invite, 'animal_id', None):
+        return url_for('ficha_animal', animal_id=invite.animal_id)
+    return url_for('index')
+
+
+def first_access():
+    if current_user.is_authenticated:
+        return redirect(_sanitize_login_next_url(request.args.get('next')))
+
+    form = FirstAccessPhoneForm()
+    token = (request.values.get('token') or '').strip()
+    invite = _first_access_invite_from_token(token)
+    token_user = None if invite else _first_access_user_from_signed_token(token)
+    if request.method == 'GET' and token_user and token_user.phone:
+        form.phone.data = token_user.phone
+    if token and not invite and not token_user:
+        flash('Este link de primeiro acesso expirou ou é inválido.', 'warning')
+
+    if form.validate_on_submit():
+        matches = find_users_by_phone(form.phone.data)
+        if len(matches) > 1:
+            flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+        user = matches[0] if matches else None
+        if not user or not _first_access_user_allowed(user, invite, token_user):
+            flash('Não encontramos um primeiro acesso ativo para este celular.', 'danger')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+
+        session['first_access_user_id'] = user.id
+        session['first_access_invite_token'] = token if invite else ''
+        if token_user:
+            session['first_access_token_user_id'] = token_user.id
+        else:
+            session.pop('first_access_token_user_id', None)
+        session['first_access_next'] = _first_access_next_url(invite)
+        return redirect(url_for('first_access_password'))
+
+    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '')
+
+
+def first_access_password():
+    user_id = session.get('first_access_user_id')
+    if not user_id:
+        flash('Informe seu celular para começar o primeiro acesso.', 'info')
+        return redirect(url_for('first_access'))
+
+    user = db.session.get(User, int(user_id))
+    invite = _first_access_invite_from_token(session.get('first_access_invite_token'))
+    token_user_id = session.get('first_access_token_user_id')
+    token_user = db.session.get(User, int(token_user_id)) if token_user_id else None
+    if not _first_access_user_allowed(user, invite, token_user):
+        session.pop('first_access_user_id', None)
+        session.pop('first_access_invite_token', None)
+        session.pop('first_access_token_user_id', None)
+        session.pop('first_access_next', None)
+        flash('Não encontramos um primeiro acesso ativo para este celular.', 'danger')
+        return redirect(url_for('first_access'))
+
+    form = FirstAccessPasswordForm()
+    if request.method == 'GET':
+        email = normalize_email(getattr(user, 'email', None))
+        if email and not _is_provisional_first_access_user(user):
+            form.email.data = email
+
+    if form.validate_on_submit():
+        normalized_email = normalize_email(form.email.data)
+        if normalized_email:
+            existing = User.query.filter(
+                func.lower(User.email) == normalized_email,
+                User.id != user.id,
+            ).first()
+            if existing:
+                form.email.errors.append('Este e-mail já pertence a outra conta.')
+                return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+            user.email = normalized_email
+
+        user.set_password(form.password.data)
+        if invite and not invite.used_at:
+            invite.used_at = datetime.now(BR_TZ)
+        db.session.commit()
+
+        next_url = _sanitize_login_next_url(session.pop('first_access_next', None))
+        session.pop('first_access_user_id', None)
+        session.pop('first_access_invite_token', None)
+        session.pop('first_access_token_user_id', None)
+        login_user(user, remember=True)
+        session.permanent = True
+        flash('Senha cadastrada com sucesso. Você já está conectado.', 'success')
+        return redirect(next_url)
+
+    return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+
+
 
 #admin configuration
 
@@ -4259,12 +4423,20 @@ def vacina_pmo_public(token):
             pmo_animal_id=pmo_animal.id,
         )
     status_labels = _pmo_status_labels()
+    first_access_url = url_for('first_access', next=request.path, _external=True)
+    if getattr(visit, 'tutor_user', None):
+        first_access_url = _first_access_url_for_user(
+            visit.tutor_user,
+            next_url=request.path,
+            _external=True,
+        )
 
     return render_template(
         'vacina_pmo/public_certificate.html',
         visit=visit,
         token=token,
         login_phone=format_pmo_phone_for_login(visit.phone1 or visit.phone2),
+        first_access_url=first_access_url,
         evaluation_saved=evaluation_saved,
         evaluation_error=evaluation_error,
         evaluation=get_vacina_pmo_evaluation_payload(visit),
@@ -11833,7 +12005,7 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
         message=f'O laudo de {exam.nome} do paciente {animal_name} foi recebido pelo PetOrlandia.',
     )
     clinic_invite_url = _external_onboarding_url(clinic_invite)
-    tutor_invite_url = _external_onboarding_url(tutor_invite)
+    tutor_invite_url = _first_access_invite_url(tutor_invite)
     db.session.commit()
 
     clinic_url = None
@@ -13586,6 +13758,14 @@ def _external_onboarding_url(invite):
     if getattr(invite, 'invite_type', None) == 'clinic':
         return url_for('external_clinic_first_access_invite', token=invite.token, _external=True)
     return url_for('external_onboarding_invite', token=invite.token, _external=True)
+
+
+def _first_access_invite_url(invite):
+    if not invite or not has_request_context():
+        return None
+    if getattr(invite, 'invite_type', None) == 'clinic':
+        return url_for('external_clinic_first_access_invite', token=invite.token, _external=True)
+    return url_for('first_access', token=invite.token, _external=True)
 
 
 def _external_invite_exame_imagem(invite):
@@ -18974,7 +19154,11 @@ def external_onboarding_invite(token):
     invite = ExternalOnboardingInvite.query.filter_by(token=token).first_or_404()
     expired = bool(invite.expires_at and invite.expires_at < datetime.now(BR_TZ))
     referrer = invite.referrer_vet.user if invite.referrer_vet and invite.referrer_vet.user else invite.created_by
-    register_url = url_for('register', next=request.path)
+    register_url = (
+        url_for('first_access', token=invite.token, next=request.path)
+        if invite.invite_type == 'tutor'
+        else url_for('register', next=request.path)
+    )
     login_url = url_for('login_view', next=request.path)
     exame_imagem = _external_invite_exame_imagem(invite)
     document_url = _external_invite_document_url(invite, exame_imagem)
@@ -27150,6 +27334,15 @@ def imprimir_bloco_prescricao(bloco_id):
     if not clinica:
         clinica = bloco.clinica
     salvo_por = bloco.saved_by or veterinario
+    prescription_next_url = url_for('imprimir_bloco_prescricao', bloco_id=bloco.id)
+    prescription_public_url = url_for('imprimir_bloco_prescricao', bloco_id=bloco.id, _external=True)
+    first_access_url = url_for('first_access', next=prescription_next_url, _external=True)
+    if tutor:
+        first_access_url = _first_access_url_for_user(
+            tutor,
+            next_url=prescription_next_url,
+            _external=True,
+        )
 
     return render_template(
         'orcamentos/imprimir_bloco.html',
@@ -27162,6 +27355,8 @@ def imprimir_bloco_prescricao(bloco_id):
         salvo_por=salvo_por,
         printing_user=current_user,
         printed_at=datetime.now(BR_TZ),
+        first_access_url=first_access_url,
+        prescription_public_url=prescription_public_url,
         return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
 

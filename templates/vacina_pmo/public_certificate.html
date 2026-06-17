@@ -455,15 +455,14 @@
 
       <aside class="card access">
         <h2>Acesso opcional</h2>
-        <p class="lead">Se quiser entrar na sua conta PetOrlandia, use seu telefone com DDD e esta senha provisória.</p>
+        <p class="lead">Se quiser entrar na sua conta PetOrlandia, toque em primeiro acesso e informe seu celular com DDD.</p>
         <span class="label">Digite no campo e-mail ou celular</span>
         <span class="password">{{ login_phone or 'Telefone cadastrado' }}</span>
         {% if login_phone %}
           <p class="lead" style="font-size:.95rem;">Use o DDD junto com o número. Esse é o WhatsApp informado na campanha.</p>
         {% endif %}
-        <span class="label">Senha provisória</span>
-        <span class="password">{{ visit.password }}</span>
-        <a class="button" href="{{ url_for('login_view') }}">Entrar no PetOrlandia</a>
+        <a class="button" href="{{ first_access_url }}">Primeiro acesso</a>
+        <a class="button secondary" href="{{ url_for('login_view') }}">Já tenho senha</a>
         <a class="button secondary" href="#avaliar">Avaliar atendimento</a>
       </aside>
     </div>

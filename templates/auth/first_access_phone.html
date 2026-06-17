@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% from 'components/form_macros.html' import render_field, render_submit %}
+
+{% block main %}
+<div class="container d-flex justify-content-center align-items-center mt-5">
+    <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 480px;">
+        <h1 class="mb-3 text-center h3">Primeiro acesso</h1>
+        <p class="text-muted text-center mb-4">
+            Entre com o celular cadastrado para criar sua senha de acesso.
+        </p>
+        <form method="POST" action="{{ url_for('first_access') }}" class="js-auth-form">
+            {{ form.hidden_tag() }}
+            {% if token %}
+                <input type="hidden" name="token" value="{{ token }}">
+            {% endif %}
+            {% if next_url %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+            {% endif %}
+            {{ render_field(form.phone, classes='form-control rounded-pill', placeholder='Celular com DDD') }}
+            {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
+        </form>
+        <div class="text-center mt-3">
+            <a href="{{ url_for('login_view', next=next_url) if next_url else url_for('login_view') }}" class="text-decoration-none">Já tenho senha</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

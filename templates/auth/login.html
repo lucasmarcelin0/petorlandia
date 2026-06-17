@@ -18,6 +18,7 @@
             {{ render_checkbox(form.remember) }}
             {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
             <div class="text-center mt-3">
+                <a href="{{ url_for('first_access', next=next_url) }}" class="text-decoration-none fw-semibold d-block mb-2">Primeiro acesso</a>
                 <a href="{{ url_for('reset_password_request') }}" class="text-decoration-none">Esqueceu sua senha?</a>
             </div>
         </form>

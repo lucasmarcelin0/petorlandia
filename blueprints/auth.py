@@ -17,6 +17,16 @@ def get_blueprint():
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
+        "/primeiro-acesso",
+        view_func=lazy_view("first_access"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
+        "/primeiro-acesso/senha",
+        view_func=lazy_view("first_access_password"),
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
         "/register",
         view_func=lazy_view("register"),
         methods=["GET", "POST"],

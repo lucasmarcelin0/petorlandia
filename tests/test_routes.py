@@ -580,6 +580,93 @@ def test_reset_password_request_page(app):
     assert response.status_code == 200
 
 
+def test_first_access_by_phone_sets_password_and_logs_user_in(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(
+            name='Tutor Primeiro Acesso',
+            email='tutor-demo@cadastro.petorlandia.local',
+            phone='+5516999990000',
+        )
+        user.set_password('temporaria')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    response = client.post(
+        '/primeiro-acesso',
+        data={'phone': '(16) 99999-0000'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert '/primeiro-acesso/senha' in response.headers['Location']
+
+    response = client.post(
+        '/primeiro-acesso/senha',
+        data={
+            'email': '',
+            'password': 'nova-senha',
+            'confirm_password': 'nova-senha',
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with client.session_transaction() as sess:
+        assert sess.get('_user_id') == str(user_id)
+
+    with app.app_context():
+        updated = db.session.get(User, user_id)
+        assert updated.check_password('nova-senha')
+
+
+def test_first_access_signed_link_allows_existing_user(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(
+            name='Tutor Comum',
+            email='tutor-comum@example.com',
+            phone='+5516999991111',
+        )
+        user.set_password('senha-antiga')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+        token = app_module._first_access_token_for_user(user)
+
+    response = client.post(
+        f'/primeiro-acesso?token={token}',
+        data={'phone': '(16) 99999-1111'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert '/primeiro-acesso/senha' in response.headers['Location']
+
+    response = client.post(
+        '/primeiro-acesso/senha',
+        data={
+            'email': 'tutor-comum@example.com',
+            'password': 'senha-nova',
+            'confirm_password': 'senha-nova',
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with client.session_transaction() as sess:
+        assert sess.get('_user_id') == str(user_id)
+
+    with app.app_context():
+        updated = db.session.get(User, user_id)
+        assert updated.check_password('senha-nova')
+
+
 def test_logout_requires_login(app):
     client = app.test_client()
     response = client.get('/logout')

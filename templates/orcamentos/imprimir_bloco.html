@@ -152,6 +152,8 @@
 
 <script>
   const numeroWhatsApp = "{{ bloco.animal.owner.phone | digits_only if bloco.animal.owner and bloco.animal.owner.phone else '' }}";
+  const firstAccessUrl = {{ first_access_url|tojson }};
+  const prescriptionUrl = {{ prescription_public_url|tojson }};
   const btnWhats = document.getElementById('btn-whatsapp');
   if (!numeroWhatsApp && btnWhats) {
     btnWhats.style.display = 'none';
@@ -168,7 +170,7 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! Segue a receita veterinária de {{ bloco.animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! Segue a receita veterinária de {{ bloco.animal.name }}.\n\nAcesse pelo primeiro acesso PetOrlandia, confirme seu celular e crie sua senha: ${firstAccessUrl}\n\nSe você já tem senha, use o mesmo link e toque em "Já tenho senha".\n\nLink da receita: ${prescriptionUrl}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

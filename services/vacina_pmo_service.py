@@ -273,6 +273,12 @@ def format_pmo_phone_for_login(value: Any) -> str:
     return _normalize_text(value)
 
 
+def _first_access_url() -> str:
+    if has_request_context():
+        return url_for("first_access", _external=True)
+    return "/primeiro-acesso"
+
+
 def _parse_date(value: Any) -> str:
     text = _normalize_text(value)
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
@@ -1045,6 +1051,7 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
         "loginPhone": format_pmo_phone_for_login(visit.phone1 or visit.phone2),
         "certificateUrl": visit.certificate_url or public_url,
         "publicUrl": public_url,
+        "firstAccessUrl": _first_access_url(),
         "attendedBy": visit.attended_by or "",
         "losses": visit.losses or 0,
         "evaluationRating": evaluation["rating"],

@@ -65,6 +65,36 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField('Redefinir senha')
 
 
+class FirstAccessPhoneForm(FlaskForm):
+    phone = StringField(
+        'Celular',
+        validators=[DataRequired(message="Informe o celular com DDD")],
+        render_kw={"required": True},
+    )
+    submit = SubmitField('Continuar')
+
+
+class FirstAccessPasswordForm(FlaskForm):
+    email = EmailField(
+        'E-mail',
+        validators=[Optional(), Email(message="Informe um e-mail válido")],
+    )
+    password = PasswordField(
+        'Nova senha',
+        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6, message="A senha deve ter pelo menos 6 caracteres")],
+        render_kw={"required": True},
+    )
+    confirm_password = PasswordField(
+        'Confirme a nova senha',
+        validators=[
+            DataRequired(message="Confirmação de senha é obrigatória"),
+            EqualTo('password', message='As senhas devem coincidir'),
+        ],
+        render_kw={"required": True},
+    )
+    submit = SubmitField('Criar senha e entrar')
+
+
 class RegistrationForm(FlaskForm):
     name = StringField(
         'Nome',
