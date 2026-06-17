@@ -769,6 +769,7 @@
     <div class="row g-3 align-items-end">
       <div class="col-md-7 col-xl-4">
         <label for="pmo-sheet" class="form-label">Aba da planilha</label>
+        <input type="search" id="pmo-sheet-search" class="form-control form-control-sm mb-2" placeholder="Buscar outra data (ex.: 17/04 ou 2026-04)" autocomplete="off">
         <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}" data-today="{{ today }}">
           <option value="">Carregando abas...</option>
         </select>
@@ -996,7 +997,36 @@
   }
 
   const sheetEl = document.getElementById('pmo-sheet');
+  const sheetSearchEl = document.getElementById('pmo-sheet-search');
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
+  let allSheets = [];
+
+  // Mostra a aba de hoje por padrão; as demais só aparecem ao buscar.
+  function renderSheetOptions(filter, keepGid) {
+    const today = currentSheetDate();
+    const f = (filter || '').trim().toLowerCase();
+    let list;
+    if (f) {
+      list = allSheets.filter((s) =>
+        String(s.title || '').toLowerCase().includes(f) ||
+        String(s.date || '').includes(f) ||
+        displayDate(s.date || '').includes(f)
+      );
+    } else {
+      list = allSheets.filter((s) => s.date === today);
+      if (!list.length && allSheets.length) list = allSheets.slice(0, 1);
+    }
+    const selGid = keepGid || sheetEl.value;
+    if (selGid && !list.some((s) => s.gid === selGid)) {
+      const sel = allSheets.find((s) => s.gid === selGid);
+      if (sel) list = [sel, ...list];
+    }
+    sheetEl.innerHTML = list.length
+      ? list.map((s) => `<option value="${escapeHtml(s.gid)}" data-title="${escapeHtml(s.title)}" data-date="${escapeHtml(s.date)}">${escapeHtml(s.title)}</option>`).join('')
+      : '<option value="">Nenhuma aba encontrada</option>';
+    if (selGid && list.some((s) => s.gid === selGid)) sheetEl.value = selGid;
+  }
+
   const shiftEl = document.getElementById('pmo-shift');
   const statusFilterEl = document.getElementById('pmo-status-filter');
   const optimizeRouteBtn = document.getElementById('pmo-optimize-route');
@@ -1187,21 +1217,24 @@
         if (bDate) return 1;
         return String(a.title || '').localeCompare(String(b.title || ''));
       });
-      sheetEl.innerHTML = sortedSheets.length
-        ? sortedSheets.map((sheet) => `<option value="${escapeHtml(sheet.gid)}" data-title="${escapeHtml(sheet.title)}" data-date="${escapeHtml(sheet.date)}">${escapeHtml(sheet.title)}</option>`).join('')
-        : '<option value="">Nenhuma aba encontrada</option>';
+      allSheets = sortedSheets;
       const today = currentSheetDate();
       const todaySheet = sortedSheets.find((sheet) => sheet.date === today);
+      // Prioridade: aba de hoje > aba mais recente > última salva.
       const savedGid = localStorage.getItem('pmo_sheet_gid');
-      const hasSavedSheet = savedGid && [...sheetEl.options].some((o) => o.value === savedGid);
-      const toSelect = todaySheet?.gid || (hasSavedSheet ? savedGid : (sortedSheets[0]?.gid || ''));
+      const toSelect = todaySheet?.gid || sortedSheets[0]?.gid || (savedGid || '');
+      // Por padrão lista só a aba de hoje (ou a mais recente); as outras
+      // aparecem ao digitar no campo de busca.
+      renderSheetOptions('', toSelect);
       if (toSelect) {
         sheetEl.value = toSelect;
         localStorage.setItem('pmo_sheet_gid', toSelect);
       }
       sheetInfoEl.textContent = todaySheet
         ? `Aba de hoje selecionada: ${displayDate(today)}.`
-        : `${sortedSheets.length} abas carregadas. Selecione uma data e clique em Sincronizar aba.`;
+        : (sortedSheets.length
+            ? `Mostrando a aba mais recente. Busque por uma data para ver outras (${sortedSheets.length} no total).`
+            : 'Nenhuma aba encontrada.');
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
       sheetInfoEl.textContent = 'Não foi possível carregar as abas da planilha.';
@@ -2177,7 +2210,11 @@
       : 'Aba selecionada sem data reconhecida. Carregando estado salvo desta aba...';
     loadSavedState(true);
   });
-  loadSheets().then(() => loadSavedState(false));
+  if (sheetSearchEl) {
+    sheetSearchEl.addEventListener('input', () => renderSheetOptions(sheetSearchEl.value));
+  }
+  // Abre já na aba de hoje (a selecionada), não na última aba salva.
+  loadSheets().then(() => loadSavedState(true));
   render();
 })();
 </script>
