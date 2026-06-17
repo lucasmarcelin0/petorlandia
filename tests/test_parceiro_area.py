@@ -34,6 +34,19 @@ def test_dashboard_requires_parceiro_role(app, client, monkeypatch):
         assert client.get("/parceiro").status_code == 200
 
 
+def test_index_shows_partner_area_shortcuts(app, client, monkeypatch):
+    with app.app_context():
+        parceiro = _make_user("Tutor", "tutor-parceiro@example.com", role="parceiro")
+        _login(monkeypatch, parceiro)
+
+        response = client.get("/")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Área do Parceiro" in html
+    assert "/parceiro/estabelecimentos/novo" in html
+
+
 def test_parceiro_cria_casa_de_racao_ativa_com_dono_novo(app, client, monkeypatch):
     with app.app_context():
         parceiro = _make_user("Parceiro", "p1@example.com", role="parceiro")
