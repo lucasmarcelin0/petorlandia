@@ -1118,6 +1118,58 @@ def _quote_sheet_title(title: str) -> str:
     return "'" + title.replace("'", "''") + "'"
 
 
+def _column_index(column: str) -> int:
+    index = 0
+    for char in column.upper():
+        if not ("A" <= char <= "Z"):
+            raise ValueError(f"Coluna de planilha invÃ¡lida: {column}")
+        index = index * 26 + (ord(char) - ord("A") + 1)
+    return index
+
+
+def _read_sheet_values_by_gid(
+    service,
+    spreadsheet_id: str,
+    sheet_gid: str,
+    range_value: str,
+) -> list[list[Any]]:
+    match = re.fullmatch(r"([A-Za-z]+):([A-Za-z]+)", (range_value or "").strip())
+    if not match:
+        raise ValueError(
+            "PMO_VACCINE_SHEET_RANGE deve usar colunas no formato A:T "
+            "para abas identificadas por gid."
+        )
+    start_column = _column_index(match.group(1)) - 1
+    end_column = _column_index(match.group(2))
+    if end_column <= start_column:
+        raise ValueError("Intervalo de colunas da planilha PMO invÃ¡lido.")
+
+    result = (
+        service.spreadsheets()
+        .values()
+        .batchGetByDataFilter(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "dataFilters": [
+                    {
+                        "gridRange": {
+                            "sheetId": int(sheet_gid),
+                            "startColumnIndex": start_column,
+                            "endColumnIndex": end_column,
+                        }
+                    }
+                ],
+                "majorDimension": "ROWS",
+            },
+        )
+        .execute()
+    )
+    value_ranges = result.get("valueRanges", [])
+    if not value_ranges:
+        return []
+    return value_ranges[0].get("valueRange", {}).get("values", [])
+
+
 def _resolve_sheet_target(
     service,
     sheet_url: str,
@@ -2158,13 +2210,22 @@ def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoS
         sheet_gid=sheet_gid,
         sheet_title=sheet_title,
     )
-    result = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=sheet_range)
-        .execute()
-    )
-    rows = parse_vacina_pmo_rows(result.get("values", []))
+    if resolved_gid:
+        values = _read_sheet_values_by_gid(
+            service,
+            spreadsheet_id,
+            resolved_gid,
+            range_value,
+        )
+    else:
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=sheet_range)
+            .execute()
+        )
+        values = result.get("values", [])
+    rows = parse_vacina_pmo_rows(values)
     return PmoSyncResult(
         rows=rows,
         spreadsheet_id=spreadsheet_id,

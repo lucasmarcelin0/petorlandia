@@ -81,6 +81,64 @@ class _FakeSheetsExecute:
         return self.payload
 
 
+def test_pmo_reads_date_named_sheet_by_gid_without_a1_title(monkeypatch):
+    class FakeService:
+        def __init__(self):
+            self.request = None
+
+        def spreadsheets(self):
+            return self
+
+        def values(self):
+            return self
+
+        def batchGetByDataFilter(self, *, spreadsheetId, body):
+            self.request = {"spreadsheetId": spreadsheetId, "body": body}
+            return _FakeSheetsExecute(
+                {
+                    "valueRanges": [
+                        {
+                            "valueRange": {
+                                "values": [
+                                    ["Tutor", "", "", "", "", "16999999999", "", "1", "0", "Lua"]
+                                ]
+                            }
+                        }
+                    ]
+                }
+            )
+
+    service = FakeService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: service)
+    monkeypatch.setenv(
+        "PMO_VACCINE_SHEET_URL",
+        "https://docs.google.com/spreadsheets/d/test-sheet-id/edit",
+    )
+
+    result = vacina_pmo_service.sync_vacina_pmo_sheet(
+        sheet_gid="2076484491",
+        sheet_title="18/06/2026",
+    )
+
+    assert result.sheet_range == "'18/06/2026'!A:T"
+    assert result.rows[0]["tutor"] == "Tutor"
+    assert service.request == {
+        "spreadsheetId": "test-sheet-id",
+        "body": {
+            "dataFilters": [
+                {
+                    "gridRange": {
+                        "sheetId": 2076484491,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 20,
+                    }
+                }
+            ],
+            "majorDimension": "ROWS",
+        },
+    }
+
+
 def test_parse_vacina_pmo_rows_ignores_summaries_and_dates_as_counts():
     rows = [
         [
