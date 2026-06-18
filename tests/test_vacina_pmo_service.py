@@ -109,7 +109,7 @@ def test_pmo_reads_date_named_sheet_by_gid_without_a1_title(monkeypatch):
             )
 
     service = FakeService()
-    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: service)
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: service)
     monkeypatch.setenv(
         "PMO_VACCINE_SHEET_URL",
         "https://docs.google.com/spreadsheets/d/test-sheet-id/edit",

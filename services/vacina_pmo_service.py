@@ -2202,7 +2202,7 @@ def save_vacina_pmo_evaluation(
 def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoSyncResult:
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     range_value = os.getenv("PMO_VACCINE_SHEET_RANGE", DEFAULT_SHEET_RANGE)
-    service = _get_sheets_service()
+    service = _get_sheets_service_rw()
     spreadsheet_id, sheet_range, resolved_gid, resolved_title = _resolve_sheet_target(
         service,
         sheet_url,
