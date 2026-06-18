@@ -1244,7 +1244,7 @@
     }
   }
 
-  async function syncSheet(buttonId = 'pmo-sync') {
+  async function syncSheet(buttonId = 'pmo-sync', { silent = false } = {}) {
     const button = document.getElementById(buttonId);
     const syncUrl = document.getElementById('pmo-sync').dataset.syncUrl;
     const original = button.innerHTML;
@@ -1274,9 +1274,13 @@
       statusFilterEl.value = '';
       render();
       sheetInfoEl.textContent = `Aba ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada e salva: ${state.rows.length} visitas.`;
-      window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
+      if (!silent) {
+        window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
+      }
+      return true;
     } catch (error) {
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+      return false;
     } finally {
       button.disabled = false;
       if (otherButton) otherButton.disabled = false;
@@ -1373,8 +1377,18 @@
       if (state.rows.length) {
         sheetInfoEl.textContent = `Estado salvo carregado para ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || 'a aba selecionada'}: ${state.rows.length} visitas.`;
       }
+      return state.rows.length;
     } catch (error) {
       console.warn(error);
+      return null;
+    }
+  }
+
+  async function loadSelectedSheet({ syncWhenEmpty = false } = {}) {
+    const savedRows = await loadSavedState(true);
+    if (syncWhenEmpty && savedRows === 0 && sheetEl.value) {
+      sheetInfoEl.textContent = 'A aba ainda não estava carregada. Sincronizando automaticamente...';
+      await syncSheet('pmo-sync-inline', { silent: true });
     }
   }
 
@@ -2266,13 +2280,13 @@
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
       ? `Data selecionada: ${displayDate(date)}. Carregando estado salvo desta aba...`
       : 'Aba selecionada sem data reconhecida. Carregando estado salvo desta aba...';
-    loadSavedState(true);
+    loadSelectedSheet({ syncWhenEmpty: true });
   });
   if (sheetSearchEl) {
     sheetSearchEl.addEventListener('input', () => renderSheetOptions(sheetSearchEl.value));
   }
   // Abre já na aba de hoje (a selecionada), não na última aba salva.
-  loadSheets().then(() => loadSavedState(true));
+  loadSheets().then(() => loadSelectedSheet({ syncWhenEmpty: true }));
   render();
 })();
 </script>
