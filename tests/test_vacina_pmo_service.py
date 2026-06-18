@@ -1,5 +1,7 @@
 from datetime import date, timedelta
+from io import BytesIO
 
+from PIL import Image
 from services import vacina_pmo_service
 from services.vacina_pmo_service import (
     append_vacina_pmo_visit_note,
@@ -446,6 +448,86 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationInformationRating"] == 3
     assert evaluated_state["rows"][0]["evaluationSurveyRating"] == 4
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
+
+
+def _pmo_login(client, user_id):
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+
+def _test_image_file(format_name="JPEG"):
+    stream = BytesIO()
+    Image.new("RGB", (32, 24), color=(70, 130, 180)).save(stream, format=format_name)
+    stream.seek(0)
+    return stream
+
+
+def test_pmo_animal_photo_upload_persists_image_url(app, client, monkeypatch):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor Foto",
+        "address": "Rua 1, 10, Centro",
+        "phone1": "5516999999999",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Lua", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-06-18",
+        "shift": "Manha",
+        "password": "PMOA9999",
+        "certificateUrl": "",
+        "sourceRow": 2,
+    }
+    with app.app_context():
+        admin = User(name="Admin Foto", email="admin-foto@example.com", role="admin")
+        admin.set_password("senha")
+        db.session.add(admin)
+        persist_vacina_pmo_rows(
+            [row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="photo-test",
+            sheet_title="18/06/2026",
+        )
+        db.session.commit()
+        admin_id = admin.id
+        pmo_animal_id = PmoVaccinationVisit.query.filter_by(sheet_gid="photo-test").one().animals[0].id
+
+    _pmo_login(client, admin_id)
+    monkeypatch.setattr("app.upload_to_s3", lambda *_args, **_kwargs: "https://bucket.example/animals/lua.jpg")
+
+    response = client.post(
+        f"/vacina-pmo/animal/{pmo_animal_id}/photo",
+        data={"photo": (_test_image_file(), "lua.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["image_url"] == "https://bucket.example/animals/lua.jpg"
+    with app.app_context():
+        state = get_saved_vacina_pmo_rows(sheet_gid="photo-test")
+        assert state["rows"][0]["animals"][0]["imageUrl"] == "https://bucket.example/animals/lua.jpg"
+
+
+def test_pmo_animal_photo_rejects_invalid_file(app, client):
+    with app.app_context():
+        admin = User(name="Admin Foto", email="admin-foto-invalid@example.com", role="admin")
+        admin.set_password("senha")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    _pmo_login(client, admin_id)
+    response = client.post(
+        "/vacina-pmo/animal/999/photo",
+        data={"photo": (BytesIO(b"not-an-image"), "arquivo.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "O arquivo selecionado não é uma foto válida."
 
 
 def test_pmo_sync_relinks_when_sheet_row_changes_tutor_and_animals(app):

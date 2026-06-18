@@ -1174,9 +1174,11 @@
       cats: Number(row.cats) || 0,
       animals: Array.isArray(row.animals) ? row.animals.map((animal) => ({
         id: animal.id || null,
+        animalId: animal.animalId || null,
         name: animal.name || '',
         species: animal.species || 'cao',
         status: animal.status || 'pendente',
+        imageUrl: animal.imageUrl || '',
       })) : [],
       note: row.note || '',
       date: row.date || '',
@@ -1400,13 +1402,60 @@
     return null;
   }
 
-  async function uploadAnimalPhoto(animal, file, button) {
+  function canvasBlob(canvas, type, quality) {
+    return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  }
+
+  async function prepareAnimalPhoto(file) {
+    if (!file || !String(file.type || '').startsWith('image/')) {
+      throw new Error('Selecione uma foto válida.');
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      throw new Error('A foto é muito grande. Escolha uma imagem menor.');
+    }
+    if (file.size <= 2.5 * 1024 * 1024 && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      return file;
+    }
+    if (typeof createImageBitmap !== 'function') {
+      return file;
+    }
+
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      const maxSide = 1600;
+      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      if (typeof bitmap.close === 'function') bitmap.close();
+      const blob = await canvasBlob(canvas, 'image/jpeg', 0.86);
+      if (!blob) return file;
+      const baseName = String(file.name || 'foto').replace(/\.[^.]+$/, '') || 'foto';
+      return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    } catch (_error) {
+      return file;
+    }
+  }
+
+  async function uploadAnimalPhoto(animal, originalFile, button) {
     if (!animal.id) {
       throw new Error('Sincronize a aba antes de adicionar fotos.');
     }
+    const file = await prepareAnimalPhoto(originalFile);
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error('Não foi possível reduzir a foto para menos de 8 MB. Tente outra imagem.');
+    }
     const formData = new FormData();
     formData.append('photo', file);
-    if (button) button.classList.add('is-busy');
+    if (button) {
+      button.classList.add('is-busy');
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>';
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 60000);
     try {
       const response = await fetch(`/vacina-pmo/animal/${animal.id}/photo`, {
         method: 'POST',
@@ -1415,23 +1464,32 @@
           'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
         },
         body: formData,
+        signal: controller.signal,
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || 'Não foi possível salvar a foto.');
+        const fallback = response.status === 413
+          ? 'A foto é muito grande. Tente tirar outra mais leve.'
+          : 'Não foi possível salvar a foto.';
+        throw new Error(payload.message || fallback);
       }
       animal.animalId = payload.animal_id || animal.animalId;
       if (payload.image_url) animal.imageUrl = payload.image_url;
-      if (button) {
-        button.classList.remove('is-busy');
-        button.classList.add('is-done');
-      }
       const msg = 'Foto do animal salva com sucesso!';
       window.showAppToast ? window.showAppToast(msg, 'success') : null;
       return payload;
     } catch (error) {
-      if (button) button.classList.remove('is-busy');
+      if (error && error.name === 'AbortError') {
+        throw new Error('O envio demorou demais. Verifique a conexão e tente novamente.');
+      }
       throw error;
+    } finally {
+      window.clearTimeout(timeout);
+      if (button) {
+        button.classList.remove('is-busy');
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-camera"></i>';
+      }
     }
   }
 

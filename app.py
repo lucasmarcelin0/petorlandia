@@ -5159,6 +5159,36 @@ def vacina_pmo_animal_photo(animal_id):
         return jsonify({'success': False, 'message': 'Nenhuma foto enviada.'}), 400
 
     try:
+        max_photo_bytes = 8 * 1024 * 1024
+        file.stream.seek(0, os.SEEK_END)
+        photo_size = file.stream.tell()
+        file.stream.seek(0)
+        if photo_size <= 0:
+            return jsonify({'success': False, 'message': 'A foto enviada está vazia.'}), 400
+        if photo_size > max_photo_bytes:
+            return jsonify({
+                'success': False,
+                'message': 'A foto é muito grande. Use uma imagem de até 8 MB.',
+            }), 413
+
+        try:
+            with Image.open(file.stream) as uploaded_image:
+                uploaded_image.verify()
+                image_format = (uploaded_image.format or '').upper()
+        except Exception:
+            return jsonify({
+                'success': False,
+                'message': 'O arquivo selecionado não é uma foto válida.',
+            }), 400
+        finally:
+            file.stream.seek(0)
+
+        if image_format not in {'JPEG', 'PNG', 'WEBP'}:
+            return jsonify({
+                'success': False,
+                'message': 'Formato não compatível. Tire a foto novamente ou use JPG, PNG ou WebP.',
+            }), 415
+
         from services.vacina_pmo_service import ensure_vacina_pmo_real_animal
 
         animal = ensure_vacina_pmo_real_animal(animal_id)
