@@ -41,25 +41,7 @@
         </div>
     </div>
 
-    {% if current_user.role in ['parceiro', 'admin'] %}
-    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-        <h2 class="mb-2 h5">Área do Parceiro</h2>
-        <p class="text-muted small">Cadastre estabelecimentos, produtos e novos usuários.</p>
-        <div class="d-flex flex-wrap justify-content-center gap-3">
-            <a href="{{ url_for('parceiro_dashboard') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Abre o painel para acompanhar os estabelecimentos cadastrados.">
-                <i class="fa-solid fa-handshake me-1"></i> Painel do parceiro
-            </a>
-
-            <a href="{{ url_for('parceiro_novo_estabelecimento') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Cadastrar clínica, petshop, banho e tosa, casa de ração ou petsitter.">
-                <i class="fa-solid fa-store me-1"></i> Cadastrar estabelecimento
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if current_user.worker == 'colaborador' or is_active_veterinarian %}
+    {% if current_user.role == 'admin' or current_user.worker == 'colaborador' or is_active_veterinarian %}
     <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
         <h2 class="mb-2 h5">Área profissional</h2>
         <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
@@ -74,7 +56,7 @@
                 👥 Tutores
             </a>
 
-            {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
+            {% if current_user.role == 'admin' or current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
             <a href="{{ url_for('appointments') }}" class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
                 data-bs-toggle="tooltip" title="Abre a agenda para marcar e revisar atendimentos.">
                 🗓️ Agenda
@@ -84,15 +66,33 @@
     </div>
     {% endif %}
 
-    {% if current_user.role == 'vacinador' %}
+    {% if current_user.role in ['admin', 'vacinador'] %}
     <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-        <h2 class="mb-2 h5">Área profissional</h2>
+        <h2 class="mb-2 h5">Área do Vacinador</h2>
         <p class="text-muted small">Acesse a lista de animais a vacinar no dia.</p>
         <div class="d-flex flex-wrap justify-content-center gap-3">
-            <a href="https://www.petorlandia.com.br/vacina-pmo"
+            <a href="{{ url_for('vacina_pmo') }}"
                class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
                data-bs-toggle="tooltip" title="Lista de tutores e animais por turno.">
                 💉 Vacinação — Agenda de Turnos
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.role in ['parceiro', 'admin'] %}
+    <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
+        <h2 class="mb-2 h5">Área do Parceiro</h2>
+        <p class="text-muted small">Cadastre estabelecimentos, produtos e novos usuários.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="{{ url_for('parceiro_dashboard') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Abre o painel para acompanhar os estabelecimentos cadastrados.">
+                <i class="fa-solid fa-handshake me-1"></i> Painel do parceiro
+            </a>
+
+            <a href="{{ url_for('parceiro_novo_estabelecimento') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Cadastrar clínica, petshop, banho e tosa, casa de ração ou petsitter.">
+                <i class="fa-solid fa-store me-1"></i> Cadastrar estabelecimento
             </a>
         </div>
     </div>
