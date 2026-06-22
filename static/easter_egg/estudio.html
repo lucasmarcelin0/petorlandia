@@ -59,7 +59,6 @@
 <div class="toolbar">
   <select id="catalog" title="Catálogo">
     <option value="">— Catálogo —</option>
-    <option value="/surpresa/partituras/sadness_and_sorrow.musicxml">Sadness and Sorrow (Naruto)</option>
   </select>
   <label class="drop" id="drop">📂 Abrir MusicXML
     <input type="file" id="file" accept=".musicxml,.xml,.mxl">
@@ -145,6 +144,13 @@ async function loadFromUrl(url,label){
 }
 
 async function loadFromFile(file){
+  if(!/\.(musicxml|xml|mxl)$/i.test(file.name)){
+    const isPdf=/\.pdf$/i.test(file.name);
+    setStatus(isPdf
+      ? '⚠️ PDF não pode ser tocado — exporte como MusicXML (ex.: no MuseScore: Arquivo → Exportar → MusicXML) e arraste o .musicxml aqui.'
+      : '⚠️ Formato não suportado. Use MusicXML (.musicxml, .xml ou .mxl).');
+    return;
+  }
   setStatus('Carregando…');
   try{
     ensureOsmd();
@@ -360,6 +366,29 @@ $('loopBtn').addEventListener('click',function(){ loopOn=!loopOn; this.classList
 $('bpm').addEventListener('input',function(){ bpm=parseInt(this.value); $('bpmVal').textContent=bpm+' BPM'; });
 
 function setStatus(s){ $('status').textContent=s; }
+
+// ════════════════ CATÁLOGO (auto-popular da pasta partituras/) ════════════════
+const FALLBACK_CATALOG=[
+  {file:'ode_a_alegria.musicxml',     label:'Ode à Alegria (Beethoven)'},
+  {file:'sadness_and_sorrow.musicxml',label:'Sadness and Sorrow (Naruto)'},
+];
+function fillCatalog(items){
+  const sel=$('catalog');
+  sel.length=1; // mantém "— Catálogo —"
+  items.forEach(it=>{
+    const o=document.createElement('option');
+    o.value='/surpresa/partituras/'+it.file; o.textContent=it.label;
+    sel.appendChild(o);
+  });
+}
+(async function loadCatalog(){
+  try{
+    const r=await fetch('/surpresa/partituras-list',{cache:'no-store'});
+    if(!r.ok) throw 0;
+    const items=await r.json();
+    fillCatalog(items.length?items:FALLBACK_CATALOG);
+  }catch(e){ fillCatalog(FALLBACK_CATALOG); }
+})();
 </script>
 </body>
 </html>

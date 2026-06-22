@@ -1240,6 +1240,32 @@ def secret_game():
     return send_from_directory(str(EASTER_EGG_STATIC_DIR), "index.html")
 
 
+@app.route("/surpresa/partituras-list")
+def secret_game_partituras():
+    """Lista as partituras (MusicXML) disponíveis para o Estúdio de Prática."""
+    import re
+
+    folder = EASTER_EGG_STATIC_DIR / "partituras"
+    items = []
+    if folder.exists():
+        files = sorted(
+            list(folder.glob("*.musicxml"))
+            + list(folder.glob("*.xml"))
+            + list(folder.glob("*.mxl"))
+        )
+        for f in files:
+            label = f.stem.replace("_", " ").title()
+            try:
+                txt = f.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r"<work-title>(.*?)</work-title>", txt)
+                if m and m.group(1).strip():
+                    label = m.group(1).strip()
+            except Exception:
+                pass
+            items.append({"file": f.name, "label": label})
+    return jsonify(items)
+
+
 @app.route("/surpresa/<path:filename>")
 def secret_game_static(filename: str):
     return send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
