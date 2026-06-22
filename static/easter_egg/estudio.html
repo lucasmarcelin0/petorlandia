@@ -377,7 +377,7 @@ function fillCatalog(items){
   sel.length=1; // mantém "— Catálogo —"
   items.forEach(it=>{
     const o=document.createElement('option');
-    o.value='/surpresa/partituras/'+it.file; o.textContent=it.label;
+    o.value='/surpresa/partituras/'+it.file+'?v='+Date.now(); o.textContent=it.label;
     sel.appendChild(o);
   });
 }
