@@ -3,371 +3,305 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PetOrlândia · Desafio Secreto</title>
+  <title>PetOrlândia · Arcade Secreto 🎮</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * {
-      box-sizing: border-box;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f172a;
+      --surface:   rgba(30,41,59,.75);
+      --border:    rgba(148,163,184,.18);
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --accent:    #f97316;
+      --accent2:   #ef4444;
     }
 
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-      font-family: 'Poppins', sans-serif;
-      color: #fff;
-      background: #0f172a;
-    }
-
-    body.game-body {
+    html, body {
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.7s ease;
+      background: var(--bg);
+      font-family: 'Poppins', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
     }
 
-    #root {
-      width: 100%;
-      padding: 24px;
+    /* ── FUNDO ANIMADO ─────────────────────── */
+    .bg-dots {
+      position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    }
+    .dot {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle, rgba(249,115,22,.22) 0%, transparent 70%);
+      animation: float linear infinite;
+    }
+    @keyframes float {
+      0%   { transform: translateY(110vh) scale(0); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: .5; }
+      100% { transform: translateY(-20vh) scale(1.2); opacity: 0; }
     }
 
-    .game-container {
-      width: min(720px, 100%);
-      margin: 0 auto;
-      padding: 48px 32px;
-      border-radius: 28px;
-      background: rgba(15, 23, 42, 0.7);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 25px 70px rgba(15, 23, 42, 0.45);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 28px;
-      text-align: center;
+    /* ── LAYOUT ────────────────────────────── */
+    .page {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 48px 20px 40px;
+      gap: 48px;
     }
 
-    .share-box {
-      background: rgba(15, 23, 42, 0.45);
-      border-radius: 18px;
-      padding: 12px 18px;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
-      word-break: break-word;
+    /* ── HEADER ─────────────────────────────── */
+    .hero { text-align: center; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 999px;
+      background: rgba(249,115,22,.15);
+      border: 1px solid rgba(249,115,22,.35);
+      font-size: .75rem; font-weight: 600; color: #fb923c;
+      letter-spacing: .06em; text-transform: uppercase;
+      margin-bottom: 18px;
+      animation: pulse-badge 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse-badge {
+      0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,.3); }
+      50%      { box-shadow: 0 0 0 8px rgba(249,115,22,0); }
     }
 
-    .mode-switch {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: rgba(15, 23, 42, 0.45);
-      padding: 8px 16px;
-      border-radius: 999px;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
-      font-size: 0.95rem;
-      flex-wrap: wrap;
-      justify-content: center;
+    .hero-title {
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -.01em;
+      background: linear-gradient(135deg, #f8fafc 0%, #fb923c 55%, #f43f5e 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
-    .mode-switch__label {
-      font-weight: 500;
-      color: rgba(226, 232, 240, 0.92);
-    }
-
-    .mode-switch__options {
-      display: flex;
-      gap: 8px;
-    }
-
-    .mode-switch__option {
-      border: none;
-      border-radius: 999px;
-      padding: 6px 16px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      color: #f8fafc;
-      background: rgba(30, 41, 59, 0.75);
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
-      transition: transform 0.18s ease, filter 0.18s ease;
-    }
-
-    .mode-switch__option:hover:not(:disabled) {
-      transform: translateY(-1px);
-      filter: brightness(1.05);
-    }
-
-    .mode-switch__option:disabled {
-      cursor: not-allowed;
-      opacity: 0.55;
-      filter: none;
-      transform: none;
-    }
-
-    .mode-switch__option--active {
-      background: linear-gradient(135deg, #f97316, #ef4444);
-      box-shadow: 0 12px 28px rgba(249, 115, 22, 0.32);
-      transform: translateY(-1px);
-    }
-
-    .share-box code {
-      display: inline-block;
-      margin-top: 4px;
-      padding: 4px 8px;
-      background: rgba(30, 41, 59, 0.7);
-      border-radius: 8px;
-      font-size: 0.9rem;
-      color: #e2e8f0;
-    }
-
-    .game-error {
-      width: min(560px, 100%);
-      margin: 0 auto;
-      padding: 40px 28px;
-      border-radius: 24px;
-      background: rgba(15, 23, 42, 0.78);
-      box-shadow: 0 25px 70px rgba(15, 23, 42, 0.45);
-      text-align: center;
+    .hero-sub {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: clamp(.9rem, 2vw, 1.05rem);
       line-height: 1.6;
     }
 
-    .game-error__title {
-      margin: 0 0 12px;
-      font-size: clamp(1.3rem, 3vw, 1.6rem);
-      font-weight: 600;
-    }
-
-    .game-error__text {
-      margin: 0;
-      color: rgba(226, 232, 240, 0.88);
-      font-size: 1rem;
-    }
-
-    .game-title {
-      font-size: clamp(2rem, 4vw, 2.6rem);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      text-shadow: 0 4px 16px rgba(15, 23, 42, 0.6);
-    }
-
-    .status-text {
-      font-size: clamp(1.1rem, 2.5vw, 1.35rem);
-      font-weight: 500;
-      margin: 0;
-      text-shadow: 0 2px 10px rgba(15, 23, 42, 0.45);
-    }
-
-    .emoji {
-      font-size: 1.6rem;
-      margin-right: 0.25rem;
-    }
-
-    .turn-summary {
+    /* ── GRID DE JOGOS ────────────────────── */
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 360px));
+      gap: 24px;
       width: 100%;
-      margin: -12px 0 8px;
-      padding: 14px 18px;
-      border-radius: 16px;
-      background: rgba(15, 23, 42, 0.55);
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
-      text-align: left;
-    }
-
-    .turn-summary__text {
-      margin: 0 0 8px;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      color: #e2e8f0;
-    }
-
-    .turn-summary__list {
-      margin: 0;
-      padding-left: 18px;
-      color: rgba(226, 232, 240, 0.9);
-      font-size: 0.9rem;
-      line-height: 1.4;
-    }
-
-    .names-section {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
+      max-width: 800px;
       justify-content: center;
-      width: 100%;
     }
 
-    .name-field {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-      min-width: min(220px, 100%);
-    }
-
-    .name-label {
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: rgba(226, 232, 240, 0.9);
-    }
-
-    .name-input {
-      width: 100%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: none;
-      background: rgba(30, 41, 59, 0.8);
-      color: #f8fafc;
-      font-size: 0.95rem;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
-      transition: box-shadow 0.18s ease, transform 0.18s ease;
-    }
-
-    .name-input:focus {
-      outline: none;
-      box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.8);
-      transform: translateY(-1px);
-    }
-
-    .stick-board {
-      display: flex;
-      flex-direction: column;
-      gap: 22px;
-      width: 100%;
-      align-items: center;
-    }
-
-    .stick-row {
-      display: flex;
-      justify-content: center;
-      gap: 18px;
-      transition: opacity 0.3s ease;
-    }
-
-    .stick-row--disabled {
-      opacity: 0.35;
-    }
-
-    .stick-row--locked .stick {
-      box-shadow: 0 0 0 3px rgba(248, 250, 252, 0.28);
-    }
-
-    .stick {
-      width: 16px;
-      height: 78px;
-      border-radius: 999px;
-      background: var(--stick-color, #f97316);
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.45);
+    /* ── CARD ─────────────────────────────── */
+    .card {
+      position: relative; overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 36px 28px 28px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+      text-decoration: none; color: var(--text);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 20px 56px rgba(15,23,42,.45);
+      transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
       cursor: pointer;
-      transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 32px 72px rgba(15,23,42,.6);
+    }
+    .card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--card-glow, transparent);
+      opacity: 0; transition: opacity .3s;
+      border-radius: inherit;
+    }
+    .card:hover::before { opacity: 1; }
+
+    /* Card 1 – Desafio de Palitos */
+    .card--nim {
+      --card-glow: radial-gradient(ellipse at 20% 0%, rgba(34,197,94,.12) 0%, transparent 65%);
+      --tag-bg: rgba(34,197,94,.15);
+      --tag-color: #4ade80;
+      --btn-bg: linear-gradient(135deg,#22c55e,#16a34a);
+      --btn-shadow: rgba(34,197,94,.35);
+    }
+    .card--nim:hover { border-color: rgba(34,197,94,.4); }
+
+    /* Card 2 – Prática Musical */
+    .card--music {
+      --card-glow: radial-gradient(ellipse at 20% 0%, rgba(245,158,11,.12) 0%, transparent 65%);
+      --tag-bg: rgba(245,158,11,.15);
+      --tag-color: #fbbf24;
+      --btn-bg: linear-gradient(135deg,#f59e0b,#d97706);
+      --btn-shadow: rgba(245,158,11,.35);
+    }
+    .card--music:hover { border-color: rgba(245,158,11,.4); }
+
+    .card-icon {
+      font-size: 2.8rem; line-height: 1;
+      filter: drop-shadow(0 4px 12px rgba(15,23,42,.5));
     }
 
-    .stick:hover {
-      transform: translateY(-4px) scale(1.05);
-      filter: brightness(1.08);
+    .card-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      background: var(--tag-bg); color: var(--tag-color);
+      border: 1px solid var(--tag-color);
     }
 
-    .stick:active {
-      transform: scale(0.94);
+    .card-title {
+      font-size: 1.3rem; font-weight: 700; line-height: 1.2;
+      margin-top: 2px;
     }
 
-    .stick--hidden {
-      opacity: 0.25;
-      background: rgba(241, 245, 249, 0.5) !important;
-      cursor: default;
-      box-shadow: none;
-      transform: none;
-      filter: none;
+    .card-desc {
+      font-size: .87rem; color: var(--muted); line-height: 1.6;
+      flex: 1;
     }
 
-    .rule-message {
-      margin: -6px 0 12px;
-      padding: 10px 16px;
-      border-radius: 12px;
-      background: rgba(248, 250, 252, 0.12);
-      color: #f8fafc;
-      font-size: 0.95rem;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+    .card-meta {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px;
+    }
+    .card-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 999px;
+      background: rgba(148,163,184,.08);
+      border: 1px solid rgba(148,163,184,.18);
+      font-size: .72rem; color: var(--muted);
     }
 
-    .controls {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      justify-content: center;
+    .card-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      width: 100%; justify-content: center;
+      margin-top: 6px; padding: 13px 20px;
+      border: none; border-radius: 14px;
+      font-family: inherit; font-size: .95rem; font-weight: 700;
+      color: #fff; cursor: pointer;
+      background: var(--btn-bg);
+      box-shadow: 0 12px 28px var(--btn-shadow);
+      transition: transform .18s, filter .18s;
+      text-decoration: none;
+    }
+    .card-btn:hover { transform: translateY(-2px); filter: brightness(1.07); }
+    .card-btn:active { transform: scale(.97); }
+
+    /* Ribbon "NOVO" */
+    .ribbon {
+      position: absolute; top: 16px; right: -1px;
+      padding: 4px 14px; border-radius: 6px 0 0 6px;
+      background: linear-gradient(135deg,#f59e0b,#ef4444);
+      font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: #fff;
+      box-shadow: -4px 4px 12px rgba(15,23,42,.4);
     }
 
-    .button {
-      border: none;
-      border-radius: 999px;
-      padding: 12px 30px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      color: #fff;
-      transition: transform 0.18s ease, filter 0.18s ease;
+    /* ── FOOTER ─────────────────────────────── */
+    .footer {
+      text-align: center;
+      font-size: .78rem;
+      color: rgba(148,163,184,.55);
     }
+    .footer a { color: rgba(148,163,184,.75); text-decoration: none; }
+    .footer a:hover { color: var(--text); }
 
-    .button:disabled {
-      cursor: not-allowed;
-      background: rgba(148, 163, 184, 0.4);
-      transform: none;
-      filter: none;
-    }
-
-    .button--primary {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
-      box-shadow: 0 15px 35px rgba(34, 197, 94, 0.35);
-    }
-
-    .button--primary:not(:disabled):hover {
-      filter: brightness(1.05);
-      transform: translateY(-2px);
-    }
-
-    .button--secondary {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
-      box-shadow: 0 15px 35px rgba(59, 130, 246, 0.35);
-    }
-
-    .button--secondary:hover {
-      filter: brightness(1.05);
-      transform: translateY(-2px);
-    }
-
-    @media (max-width: 540px) {
-      .game-container {
-        padding: 40px 22px;
-        border-radius: 24px;
-      }
-
-      .name-field {
-        min-width: 100%;
-      }
-
-      .stick {
-        width: 14px;
-        height: 68px;
-      }
-
-      .controls {
-        gap: 10px;
-      }
-
-      .button {
-        width: 100%;
-      }
+    /* ── RESPONSIVE ─────────────────────────── */
+    @media (max-width: 480px) {
+      .page { padding: 36px 16px 32px; gap: 36px; }
+      .card { padding: 28px 20px 22px; }
     }
   </style>
-  <script
-    src="https://cdn.socket.io/4.7.5/socket.io.min.js"
-    crossorigin="anonymous"
-  ></script>
-  <script defer src="/surpresa/main.js"></script>
 </head>
-<body class="game-body">
-  <div id="root"></div>
+<body>
+
+  <!-- Bolinhas de fundo -->
+  <div class="bg-dots" id="bgDots"></div>
+
+  <main class="page">
+
+    <!-- Header -->
+    <header class="hero">
+      <div class="badge">🐾 Easter Egg · PetOrlândia</div>
+      <h1 class="hero-title">Cantinho dos Jogos</h1>
+      <p class="hero-sub">Você encontrou o arcade secreto!<br>Escolha um jogo e divirta-se 🎉</p>
+    </header>
+
+    <!-- Cards -->
+    <div class="games-grid">
+
+      <!-- Jogo 1: Desafio de Palitos (Nim) -->
+      <a class="card card--nim" href="/surpresa/desafio.html">
+        <span class="card-icon">🎮</span>
+        <span class="card-tag">Estratégia</span>
+        <div class="card-title">Desafio de Palitos</div>
+        <p class="card-desc">
+          Jogo de Nim: retire palitos das fileiras e force seu adversário a pegar o último.
+          Pode ser jogado contra a IA ou com um amigo online!
+        </p>
+        <div class="card-meta">
+          <span class="card-chip">👥 Multijogador</span>
+          <span class="card-chip">🤖 vs IA</span>
+          <span class="card-chip">♟️ Estratégia</span>
+        </div>
+        <span class="card-btn">Jogar agora →</span>
+      </a>
+
+      <!-- Jogo 2: Prática Musical -->
+      <a class="card card--music" href="/surpresa/musica.html">
+        <span class="ribbon">NOVO</span>
+        <span class="card-icon">🎵</span>
+        <span class="card-tag">Música</span>
+        <div class="card-title">Prática Musical</div>
+        <p class="card-desc">
+          Toque a melodia de <em>Naruto – Sadness and Sorrow</em> em tempo real.
+          A partitura rola automaticamente enquanto o microfone detecta as notas que você toca.
+        </p>
+        <div class="card-meta">
+          <span class="card-chip">🎤 Microfone</span>
+          <span class="card-chip">🎹 Piano / Flauta</span>
+          <span class="card-chip">📊 Feedback</span>
+        </div>
+        <span class="card-btn">Tocar agora →</span>
+      </a>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <a href="/">← Voltar ao PetOrlândia</a>
+      &nbsp;·&nbsp; Mais jogos em breve 🚀
+    </footer>
+
+  </main>
+
+  <script>
+    // Gera bolinhas flutuantes de fundo
+    (function(){
+      const wrap = document.getElementById('bgDots');
+      const N = 12;
+      for(let i=0;i<N;i++){
+        const d = document.createElement('div');
+        d.className = 'dot';
+        const size = 80 + Math.random()*220;
+        d.style.cssText = [
+          `width:${size}px`, `height:${size}px`,
+          `left:${Math.random()*100}%`,
+          `animation-duration:${10+Math.random()*14}s`,
+          `animation-delay:${-Math.random()*14}s`,
+          `opacity:${0.3+Math.random()*.5}`,
+        ].join(';');
+        wrap.appendChild(d);
+      }
+    })();
+  </script>
 </body>
 </html>
