@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estúdio de Prática 🎼 | PetOrlândia</title>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.7/build/opensheetmusicdisplay.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0f172a;--surface:#1e293b;--border:#334155;--text:#f1f5f9;--muted:#94a3b8;--accent:#f59e0b;--ok:#34d399;--bad:#ef4444}
+  html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .title{font-size:.95rem;font-weight:700;color:var(--accent);white-space:nowrap}
+  .title small{color:#64748b;font-size:.7rem;font-weight:400;margin-left:6px}
+  .spacer{flex:1}
+  .toolbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button,select{font-family:inherit;border:none;border-radius:8px;padding:8px 13px;font-size:.8rem;font-weight:700;cursor:pointer;transition:background .15s,filter .15s}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .btn-primary{background:var(--ok);color:#06281d}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
+  .btn-primary.on{background:var(--bad);color:#fff}
+  .btn-ghost{background:var(--border);color:#cbd5e1}
+  .btn-ghost:hover:not(:disabled){background:#475569}
+  .btn-ghost.on{background:var(--accent);color:#06281d}
+  select{background:var(--border);color:#e2e8f0}
+  .grp{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--muted)}
+  .grp input[type=range]{width:120px;accent-color:var(--accent);cursor:pointer}
+  .grp input[type=number]{width:54px;background:var(--bg);color:#e2e8f0;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:.8rem}
+  #bpmVal{color:var(--accent);font-weight:700;min-width:50px}
+  .drop{border:1.5px dashed var(--border);border-radius:8px;padding:8px 13px;font-size:.78rem;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(245,158,11,.08)}
+  .drop input{display:none}
+  .stage{padding:18px 16px 90px;display:flex;justify-content:center}
+  #score{background:#fbfbf8;border-radius:10px;padding:10px;width:100%;max-width:1000px;min-height:300px}
+  .placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;color:#94a3b8;text-align:center;gap:10px;padding:30px}
+  .placeholder .big{font-size:2.6rem}
+  .feedback{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:9px 16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-size:.8rem}
+  .mic-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .3s}
+  .mic-dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+  .note-now{font-size:1.05rem;font-weight:700;min-width:46px;text-align:center}
+  .note-exp{color:var(--muted)}
+  .cents{font-variant-numeric:tabular-nums}
+  .acc-bg{width:140px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+  .acc-fill{height:100%;width:0;background:linear-gradient(90deg,var(--bad),var(--accent),var(--ok));transition:width .3s}
+  .back-arcade{position:fixed;top:10px;right:14px;z-index:50;display:inline-flex;gap:5px;align-items:center;padding:6px 12px;border-radius:999px;background:rgba(15,23,42,.85);color:#cbd5e1;font-size:.74rem;font-weight:600;text-decoration:none;border:1px solid var(--border)}
+  .back-arcade:hover{background:#334155;color:#fff}
+  .hint{font-size:.72rem;color:#64748b}
+  /* OSMD cursor já é desenhado pela lib; realce de acerto/erro */
+  .ok-flash{color:var(--ok)} .bad-flash{color:var(--bad)}
+</style>
+</head>
+<body>
+<a class="back-arcade" href="/surpresa">🐾 Arcade</a>
+
+<header>
+  <div class="title">🎼 Estúdio de Prática <small id="pieceName">carregue uma partitura</small></div>
+</header>
+
+<div class="toolbar">
+  <select id="catalog" title="Catálogo">
+    <option value="">— Catálogo —</option>
+    <option value="/surpresa/partituras/sadness_and_sorrow.musicxml">Sadness and Sorrow (Naruto)</option>
+  </select>
+  <label class="drop" id="drop">📂 Abrir MusicXML
+    <input type="file" id="file" accept=".musicxml,.xml,.mxl">
+  </label>
+  <span class="spacer"></span>
+  <button class="btn-primary" id="playBtn" disabled>▶ Ouvir</button>
+  <button class="btn-ghost" id="stopBtn" disabled>■ Parar</button>
+  <button class="btn-ghost" id="practiceBtn" disabled>🎤 Praticar</button>
+</div>
+
+<div class="toolbar">
+  <div class="grp"><span>Andamento</span>
+    <input type="range" id="bpm" min="30" max="160" value="70"><span id="bpmVal">70 BPM</span>
+  </div>
+  <span class="spacer"></span>
+  <div class="grp">
+    <button class="btn-ghost" id="loopBtn" disabled>🔁 Loop</button>
+    <span>compassos</span>
+    <input type="number" id="loopStart" min="1" value="1" disabled>
+    <span>→</span>
+    <input type="number" id="loopEnd" min="1" value="1" disabled>
+    <span class="hint" id="measCount"></span>
+  </div>
+</div>
+
+<div class="stage">
+  <div id="score">
+    <div class="placeholder">
+      <div class="big">🎼</div>
+      <div><b>Carregue uma partitura</b><br>Escolha no catálogo ou abra um arquivo MusicXML (.musicxml/.xml/.mxl).</div>
+      <div class="hint">Exporte do MuseScore, Flat.io ou Musescore.com como MusicXML.</div>
+    </div>
+  </div>
+</div>
+
+<div class="feedback">
+  <span class="mic-dot" id="micDot"></span>
+  <span id="status" style="color:var(--muted)">Pronto</span>
+  <span class="spacer"></span>
+  <span class="note-exp">Esperada: <b id="expNote">—</b></span>
+  <span class="note-now" id="detNote">—</span>
+  <span class="cents" id="cents" style="color:var(--muted);min-width:64px">—</span>
+  <span class="grp">Acerto <span id="accVal" style="color:var(--ok);font-weight:700">0%</span>
+    <span class="acc-bg"><span class="acc-fill" id="accFill"></span></span>
+  </span>
+</div>
+
+<script>
+// ════════════════ ESTADO ════════════════
+let osmd=null, timeline=[], measureStart=[], totalMeasures=0;
+let bpm=70, audioCtx=null, masterGain=null;
+let playing=false, practiceMode=false, loopOn=false;
+let stepIdx=0, shownIdx=-1, nextNoteTime=0, schedTimer=null;
+let scheduledCursor=[]; // {time, idx}
+let loopStartIdx=0, loopEndIdx=0;
+let analyser=null, pitchBuf=null, micReady=false;
+let totalN=0, correctN=0, lastGradedIdx=-1;
+
+const $=id=>document.getElementById(id);
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const midiToName=m=>m==null?'—':NOTE_NAMES[m%12]+(Math.floor(m/12)-1);
+const midiToFreq=m=>440*Math.pow(2,(m-69)/12);
+
+// ════════════════ CARREGAR PARTITURA ════════════════
+function ensureOsmd(){
+  if(osmd) return;
+  $('score').innerHTML='';
+  osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay('score',{
+    autoResize:true, drawingParameters:'default', followCursor:true,
+    drawPartNames:false, drawPartAbbreviations:false,
+    cursorsOptions:[{type:0,color:'#ef4444',alpha:.45,follow:true}]
+  });
+}
+
+async function loadFromUrl(url,label){
+  setStatus('Carregando…');
+  try{
+    ensureOsmd();
+    await osmd.load(url);
+    await osmd.render();
+    afterLoad(label||url.split('/').pop());
+  }catch(e){ setStatus('Erro ao carregar: '+e.message); console.error(e); }
+}
+
+async function loadFromFile(file){
+  setStatus('Carregando…');
+  try{
+    ensureOsmd();
+    const isMxl=/\.mxl$/i.test(file.name);
+    const data = isMxl ? new Uint8Array(await file.arrayBuffer()) : await file.text();
+    await osmd.load(data);
+    await osmd.render();
+    afterLoad(file.name);
+  }catch(e){ setStatus('Erro ao carregar: '+e.message); console.error(e); }
+}
+
+function afterLoad(name){
+  stopPlayback();
+  buildTimeline();
+  $('pieceName').textContent=name.replace(/\.(musicxml|xml|mxl)$/i,'');
+  $('playBtn').disabled=false; $('practiceBtn').disabled=false;
+  $('loopBtn').disabled=false; $('loopStart').disabled=false; $('loopEnd').disabled=false;
+  $('loopStart').max=totalMeasures; $('loopEnd').max=totalMeasures;
+  $('loopStart').value=1; $('loopEnd').value=totalMeasures;
+  $('measCount').textContent='de '+totalMeasures;
+  osmd.cursor.reset(); osmd.cursor.show();
+  setStatus('Partitura pronta · '+timeline.length+' notas · '+totalMeasures+' compassos');
+}
+
+// Percorre o cursor do OSMD para montar a linha do tempo (1 passo = 1 posição do cursor)
+function buildTimeline(){
+  timeline=[]; measureStart=[]; totalMeasures=0;
+  const c=osmd.cursor; c.reset();
+  const it=c.iterator;
+  let lastMeasure=-1;
+  while(!it.EndReached){
+    const notes=c.NotesUnderCursor();
+    const measure=it.CurrentMeasureIndex;
+    if(measure!==lastMeasure){ measureStart[measure]=timeline.length; lastMeasure=measure; }
+    let best=null, dur=0;
+    notes.forEach(n=>{
+      const len=n.Length? n.Length.RealValue : 0;
+      if(len>dur) dur=len;
+      const isRest = typeof n.isRest==='function' ? n.isRest() : !!n.isRest;
+      if(!isRest && n.Pitch){
+        const ht=(typeof n.halfTone==='number')?n.halfTone:null;
+        if(ht!=null && (best==null || ht>best)) best=ht;
+      }
+    });
+    const durBeats=Math.max(dur*4, .0001);
+    timeline.push({midi: best==null?null:best+12, durBeats, measure});
+    c.next();
+  }
+  totalMeasures=measureStart.length;
+  c.reset();
+}
+
+// ════════════════ ÁUDIO / SÍNTESE ════════════════
+function ensureAudio(){
+  if(audioCtx) return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  masterGain=audioCtx.createGain(); masterGain.gain.value=.5; masterGain.connect(audioCtx.destination);
+}
+function playTone(midi,when,durSec){
+  if(midi==null) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type='triangle'; o.frequency.value=midiToFreq(midi);
+  const a=.012, r=Math.min(.12,durSec*.4);
+  g.gain.setValueAtTime(0,when);
+  g.gain.linearRampToValueAtTime(.9,when+a);
+  g.gain.setValueAtTime(.9,Math.max(when+a,when+durSec-r));
+  g.gain.linearRampToValueAtTime(0,when+durSec);
+  o.connect(g); g.connect(masterGain);
+  o.start(when); o.stop(when+durSec+.02);
+}
+
+// Agendador look-ahead
+function scheduler(){
+  const spb=60/bpm;
+  while(nextNoteTime < audioCtx.currentTime + 0.12){
+    const step=timeline[stepIdx];
+    const durSec=step.durBeats*spb;
+    if(!practiceMode) playTone(step.midi,nextNoteTime,durSec);
+    scheduledCursor.push({time:nextNoteTime, idx:stepIdx});
+    nextNoteTime+=durSec;
+    stepIdx++;
+    const endLimit=loopOn?loopEndIdx:timeline.length-1;
+    if(stepIdx>endLimit){
+      if(loopOn){ stepIdx=loopStartIdx; }
+      else { schedEnd=nextNoteTime; clearTimeout(schedTimer); schedTimer=null; return; }
+    }
+  }
+  schedTimer=setTimeout(scheduler,25);
+}
+let schedEnd=null;
+
+// rAF: move o cursor visual e roda detecção no modo prática
+function visualTick(){
+  if(!playing) return;
+  const now=audioCtx.currentTime;
+  // avança cursor conforme tempo de áudio
+  while(scheduledCursor.length && scheduledCursor[0].time<=now){
+    const c=scheduledCursor.shift();
+    moveCursorTo(c.idx);
+  }
+  if(practiceMode) gradePractice();
+  // fim natural
+  if(!loopOn && schedEnd!=null && now>=schedEnd && scheduledCursor.length===0){
+    stopPlayback(); return;
+  }
+  requestAnimationFrame(visualTick);
+}
+
+function moveCursorTo(idx){
+  const cur=osmd.cursor;
+  while(shownIdx<idx){ cur.next(); shownIdx++; }
+  if(shownIdx!==idx){ cur.reset(); shownIdx=-1; while(shownIdx<idx){cur.next();shownIdx++;} }
+  cur.show();
+  const exp=timeline[idx]?timeline[idx].midi:null;
+  $('expNote').textContent=midiToName(exp);
+}
+
+// ════════════════ MICROFONE / PRÁTICA ════════════════
+async function startMic(){
+  if(micReady) return true;
+  try{
+    ensureAudio();
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    const src=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser(); analyser.fftSize=4096;
+    src.connect(analyser); pitchBuf=new Float32Array(analyser.fftSize);
+    micReady=true; $('micDot').classList.add('on');
+    return true;
+  }catch(e){ setStatus('Microfone bloqueado'); return false; }
+}
+function detectPitch(){
+  if(!analyser) return null;
+  analyser.getFloatTimeDomainData(pitchBuf);
+  const N=pitchBuf.length,H=N>>1; let rms=0;
+  for(let i=0;i<N;i++) rms+=pitchBuf[i]*pitchBuf[i];
+  if(Math.sqrt(rms/N)<0.008) return null;
+  let best=-1,bestC=0,lastC=1,found=false;
+  for(let o=1;o<H;o++){
+    let c=0; for(let i=0;i<H;i++) c+=pitchBuf[i]*pitchBuf[i+o]; c/=H;
+    if(c>0.85&&c>lastC){found=true; if(c>bestC){bestC=c;best=o;}}
+    else if(found) break;
+    lastC=c;
+  }
+  return best>0?audioCtx.sampleRate/best:null;
+}
+const freqToMidi=f=>Math.round(69+12*Math.log2(f/440));
+function gradePractice(){
+  const f=detectPitch();
+  const idx=shownIdx;
+  const exp=timeline[idx]?timeline[idx].midi:null;
+  if(f){
+    const m=freqToMidi(f), name=midiToName(m);
+    const cents=Math.round(1200*Math.log2(f/midiToFreq(m)));
+    $('detNote').textContent=name;
+    $('cents').textContent=(cents>=0?'+':'')+cents+'¢';
+    if(exp!=null){
+      const right=(m%12)===(exp%12);
+      $('detNote').className='note-now '+(right?'ok-flash':'bad-flash');
+      if(idx!==lastGradedIdx){ totalN++; if(right) correctN++; lastGradedIdx=idx; updateAcc(); }
+    }
+  } else { $('detNote').textContent='—'; $('detNote').className='note-now'; $('cents').textContent='—'; }
+}
+function updateAcc(){
+  const p=totalN?Math.round(correctN/totalN*100):0;
+  $('accVal').textContent=p+'%'; $('accFill').style.width=p+'%';
+}
+
+// ════════════════ CONTROLES ════════════════
+function startPlayback(){
+  if(!timeline.length) return;
+  ensureAudio(); audioCtx.resume();
+  loopStartIdx = measureStart[clampMeas($('loopStart').value)-1] ?? 0;
+  loopEndIdx   = (measureStart[clampMeas($('loopEnd').value)] ?? timeline.length) - 1;
+  if(loopEndIdx<loopStartIdx) loopEndIdx=timeline.length-1;
+  stepIdx = loopOn ? loopStartIdx : 0;
+  shownIdx=-1; moveCursorTo(stepIdx);
+  scheduledCursor=[]; schedEnd=null;
+  nextNoteTime=audioCtx.currentTime+0.08;
+  playing=true;
+  $('playBtn').classList.add('on'); $('playBtn').textContent='⏸ Pausar';
+  $('stopBtn').disabled=false;
+  scheduler(); requestAnimationFrame(visualTick);
+  setStatus(practiceMode?'Praticando — toque junto!':'Tocando…');
+}
+function stopPlayback(){
+  playing=false; clearTimeout(schedTimer); schedTimer=null; scheduledCursor=[];
+  $('playBtn').classList.remove('on'); $('playBtn').textContent='▶ Ouvir';
+  if(osmd){ osmd.cursor.reset(); osmd.cursor.show(); shownIdx=-1; }
+  setStatus('Parado');
+}
+function clampMeas(v){ v=parseInt(v)||1; return Math.max(1,Math.min(totalMeasures,v)); }
+
+// ════════════════ EVENTOS ════════════════
+$('catalog').addEventListener('change',e=>{ if(e.target.value) loadFromUrl(e.target.value, e.target.selectedOptions[0].textContent); });
+$('file').addEventListener('change',e=>{ if(e.target.files[0]) loadFromFile(e.target.files[0]); });
+const drop=$('drop');
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) loadFromFile(e.dataTransfer.files[0]); });
+
+$('playBtn').addEventListener('click',()=>{ if(playing) stopPlayback(); else startPlayback(); });
+$('stopBtn').addEventListener('click',stopPlayback);
+$('practiceBtn').addEventListener('click',async function(){
+  practiceMode=!practiceMode; this.classList.toggle('on',practiceMode);
+  this.textContent=practiceMode?'🎤 Praticando':'🎤 Praticar';
+  if(practiceMode){ const ok=await startMic(); if(!ok){practiceMode=false;this.classList.remove('on');this.textContent='🎤 Praticar';return;}
+    totalN=0;correctN=0;lastGradedIdx=-1;updateAcc(); }
+  setStatus(practiceMode?'Modo prática: aperte ▶ e toque junto':'Modo audição');
+});
+$('loopBtn').addEventListener('click',function(){ loopOn=!loopOn; this.classList.toggle('on',loopOn);
+  setStatus(loopOn?('Loop compassos '+$('loopStart').value+'–'+$('loopEnd').value):'Loop desligado');
+  if(playing){ stopPlayback(); startPlayback(); } });
+$('bpm').addEventListener('input',function(){ bpm=parseInt(this.value); $('bpmVal').textContent=bpm+' BPM'; });
+
+function setStatus(s){ $('status').textContent=s; }
+</script>
+</body>
+</html>
