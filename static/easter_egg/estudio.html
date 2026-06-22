@@ -182,22 +182,29 @@ function buildTimeline(){
   const it=c.iterator;
   let lastMeasure=-1;
   while(!it.EndReached){
-    const notes=c.NotesUnderCursor();
+    const notesUC=c.NotesUnderCursor();
     const measure=it.CurrentMeasureIndex;
     if(measure!==lastMeasure){ measureStart[measure]=timeline.length; lastMeasure=measure; }
-    let best=null, dur=0;
-    notes.forEach(n=>{
-      const len=n.Length? n.Length.RealValue : 0;
-      if(len>dur) dur=len;
+    const ts = it.currentTimeStamp ? it.currentTimeStamp.RealValue*4 : timeline.length;
+    const ns=[]; let top=null, maxDur=0;
+    notesUC.forEach(n=>{
+      const durBeats=(n.Length? n.Length.RealValue:0)*4;
+      if(durBeats>maxDur) maxDur=durBeats;
       const isRest = typeof n.isRest==='function' ? n.isRest() : !!n.isRest;
-      if(!isRest && n.Pitch){
-        const ht=(typeof n.halfTone==='number')?n.halfTone:null;
-        if(ht!=null && (best==null || ht>best)) best=ht;
+      if(!isRest && n.Pitch && typeof n.halfTone==='number'){
+        const midi=n.halfTone+12;
+        ns.push({midi, durBeats:Math.max(durBeats,.05)});
+        if(top==null || midi>top) top=midi;
       }
     });
-    const durBeats=Math.max(dur*4, .0001);
-    timeline.push({midi: best==null?null:best+12, durBeats, measure});
+    timeline.push({ts, measure, notes:ns, top, maxDur:Math.max(maxDur,.05)});
     c.next();
+  }
+  // duração de cada passo até o próximo onset (em tempos); último = sua maior nota
+  for(let i=0;i<timeline.length;i++){
+    timeline[i].gap = (i+1<timeline.length)
+      ? Math.max(timeline[i+1].ts - timeline[i].ts, .001)
+      : timeline[i].maxDur;
   }
   totalMeasures=measureStart.length;
   c.reset();
@@ -207,16 +214,16 @@ function buildTimeline(){
 function ensureAudio(){
   if(audioCtx) return;
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  masterGain=audioCtx.createGain(); masterGain.gain.value=.5; masterGain.connect(audioCtx.destination);
+  masterGain=audioCtx.createGain(); masterGain.gain.value=.32; masterGain.connect(audioCtx.destination);
 }
 function playTone(midi,when,durSec){
   if(midi==null) return;
   const o=audioCtx.createOscillator(), g=audioCtx.createGain();
   o.type='triangle'; o.frequency.value=midiToFreq(midi);
-  const a=.012, r=Math.min(.12,durSec*.4);
+  const peak=.5, a=.008, r=Math.min(.18,durSec*.5);
   g.gain.setValueAtTime(0,when);
-  g.gain.linearRampToValueAtTime(.9,when+a);
-  g.gain.setValueAtTime(.9,Math.max(when+a,when+durSec-r));
+  g.gain.linearRampToValueAtTime(peak,when+a);
+  g.gain.setValueAtTime(peak,Math.max(when+a,when+durSec-r));
   g.gain.linearRampToValueAtTime(0,when+durSec);
   o.connect(g); g.connect(masterGain);
   o.start(when); o.stop(when+durSec+.02);
@@ -227,10 +234,9 @@ function scheduler(){
   const spb=60/bpm;
   while(nextNoteTime < audioCtx.currentTime + 0.12){
     const step=timeline[stepIdx];
-    const durSec=step.durBeats*spb;
-    if(!practiceMode) playTone(step.midi,nextNoteTime,durSec);
+    if(!practiceMode){ step.notes.forEach(n=> playTone(n.midi, nextNoteTime, n.durBeats*spb)); }
     scheduledCursor.push({time:nextNoteTime, idx:stepIdx});
-    nextNoteTime+=durSec;
+    nextNoteTime+=step.gap*spb;
     stepIdx++;
     const endLimit=loopOn?loopEndIdx:timeline.length-1;
     if(stepIdx>endLimit){
@@ -264,7 +270,7 @@ function moveCursorTo(idx){
   while(shownIdx<idx){ cur.next(); shownIdx++; }
   if(shownIdx!==idx){ cur.reset(); shownIdx=-1; while(shownIdx<idx){cur.next();shownIdx++;} }
   cur.show();
-  const exp=timeline[idx]?timeline[idx].midi:null;
+  const exp=timeline[idx]?timeline[idx].top:null;
   $('expNote').textContent=midiToName(exp);
 }
 
@@ -300,7 +306,7 @@ const freqToMidi=f=>Math.round(69+12*Math.log2(f/440));
 function gradePractice(){
   const f=detectPitch();
   const idx=shownIdx;
-  const exp=timeline[idx]?timeline[idx].midi:null;
+  const exp=timeline[idx]?timeline[idx].top:null;
   if(f){
     const m=freqToMidi(f), name=midiToName(m);
     const cents=Math.round(1200*Math.log2(f/midiToFreq(m)));
