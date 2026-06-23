@@ -562,16 +562,43 @@ def _is_summary_or_header(row: list[Any]) -> bool:
     )
 
 
-# Separadores que delimitam animais diferentes: vírgula, ponto e vírgula, quebra
-# de linha e a conjunção " e ".  Cada um deve ser IGNORADO quando aparece dentro de
-# parênteses, pois os tutores escrevem descrições como "Branca (mais nova e braba)" —
-# sem isso o "e"/vírgula da descrição quebra um nome em vários animais fantasmas.
-_ANIMAL_SEPARATOR_RE = re.compile(r",|;|\n|\se\s", re.IGNORECASE)
+# Separadores que delimitam animais diferentes: vírgula, ponto e vírgula, quebra de
+# linha, barra/barra-vertical, bullets e a conjunção " e ".  Os tutores misturam tudo
+# ("Mia / Amber", "Rex; Thor", "Lisa\nLulu", "• Mel"). Cada separador é IGNORADO quando
+# aparece dentro de parênteses, pois os tutores escrevem descrições como
+# "Branca (mais nova e braba)" — sem isso o "e"/vírgula da descrição quebra um nome em
+# vários animais fantasmas.
+_ANIMAL_SEPARATOR_RE = re.compile(r",|;|/|\||\n|•|·|•|\se\s", re.IGNORECASE)
+
+# Dicas de espécie no próprio texto, normalmente entre parênteses ("Lisa (gata)") ou
+# soltas ("a cachorra Mel"). Usadas para casar a espécie pelo conteúdo, não só pela
+# posição na lista — a contagem de cães/gatos da planilha continua sendo autoritativa.
+_CAT_HINT_RE = re.compile(r"\bgat[oa]s?\b", re.IGNORECASE)
+_DOG_HINT_RE = re.compile(r"\b(c[ãa]es?|c[ãa]o|cachorr[oa]s?|cadela)\b", re.IGNORECASE)
+# Parêntese (e similares) com anotação que não faz parte do nome.
+_ANNOTATION_RE = re.compile(r"[\(\[\{][^\)\]\}]*[\)\]\}]")
 
 
-def _split_animals(value: Any) -> list[str]:
-    text = _normalize_text(value)
-    if not text:
+def _species_hint(part: str) -> str | None:
+    """Retorna 'gato'/'cao' se o trecho menciona a espécie, senão None."""
+    if _CAT_HINT_RE.search(part):
+        return "gato"
+    if _DOG_HINT_RE.search(part):
+        return "cao"
+    return None
+
+
+def _split_animals_detailed(value: Any) -> list[dict[str, str | None]]:
+    """Divide a célula em animais, devolvendo nome limpo + dica de espécie.
+
+    O nome é higienizado (anotações entre parênteses removidas); a dica de espécie é
+    extraída ANTES da limpeza para não se perder.
+    """
+    # IMPORTANTE: operar no texto CRU. _normalize_text colapsa "\n" em espaço, e os
+    # tutores listam um animal por linha — normalizar antes apagaria o separador e
+    # grudaria todos os nomes num só.
+    text = str(value or "")
+    if not text.strip():
         return []
     parts: list[str] = []
     depth = 0
@@ -592,29 +619,109 @@ def _split_animals(value: Any) -> list[str]:
                 continue
         i += 1
     parts.append(text[start:])
-    return [_normalize_text(part) for part in parts if _normalize_text(part)]
+
+    detailed: list[dict[str, str | None]] = []
+    for raw in parts:
+        raw = _normalize_text(raw)
+        if not raw:
+            continue
+        hint = _species_hint(raw)
+        # Nome final = sem anotações entre parênteses.
+        name = _normalize_text(_ANNOTATION_RE.sub("", raw))
+        if not name:
+            continue
+        detailed.append({"name": name, "species": hint})
+    return detailed
 
 
-def _build_animals(names: list[str], dogs: int, cats: int) -> list[dict[str, str]]:
+def _split_animals(value: Any) -> list[str]:
+    """Lista só de nomes — usada pela validação de edição de nome de animal."""
+    return [str(item["name"]) for item in _split_animals_detailed(value)]
+
+
+def _build_animals(
+    names: list[str] | list[dict[str, str | None]], dogs: int, cats: int
+) -> list[dict[str, str]]:
     # As quantidades de cães/gatos vêm de colunas próprias da planilha e são a
     # contagem AUTORITATIVA de animais. Só usamos o número de nomes encontrados no
     # texto livre quando nenhuma quantidade foi informada — assim uma descrição
     # bagunçada nunca infla a contagem de animais (o que deixaria pets fantasmas
     # presos em "pendente" e marcaria a visita inteira como "parcial").
+    # Aceita tanto a lista antiga de strings quanto a lista detalhada com dica de
+    # espécie; quando há dica, ela tem prioridade sobre a posição.
+    detailed: list[dict[str, str | None]] = [
+        {"name": n, "species": None} if isinstance(n, str) else n for n in names
+    ]
     count = dogs + cats
-    total = count if count > 0 else len(names)
+    total = count if count > 0 else len(detailed)
+
+    # 1ª passada: encaixa cada nome com dica de espécie explícita nos slots dessa
+    # espécie. 2ª passada: distribui o resto por posição (cães primeiro, depois gatos).
+    slots: list[dict[str, str] | None] = [None] * total
+    cao_slots = [i for i in range(total) if i < dogs] or (
+        list(range(total)) if dogs == 0 and cats == 0 else []
+    )
+    gato_slots = [i for i in range(total) if i >= dogs]
+
+    leftover = list(detailed)
+    for pool, species in ((cao_slots, "cao"), (gato_slots, "gato")):
+        free = [i for i in pool if slots[i] is None]
+        hinted = [d for d in leftover if d.get("species") == species]
+        for slot, item in zip(free, hinted):
+            slots[slot] = {"name": str(item["name"]), "species": species}
+            leftover.remove(item)
+
+    leftover_iter = iter(leftover)
     animals: list[dict[str, str]] = []
     for index in range(total):
-        species = "cao" if index < dogs else "gato"
-        fallback = f"Cao {index + 1}" if species == "cao" else f"Gato {index - dogs + 1}"
+        filled = slots[index]
+        if filled is not None:
+            name, species = filled["name"], filled["species"]
+        else:
+            species = "cao" if index < dogs else "gato"
+            nxt = next(leftover_iter, None)
+            fallback = (
+                f"Cao {index + 1}" if species == "cao" else f"Gato {index - dogs + 1}"
+            )
+            name = str(nxt["name"]) if nxt else fallback
         animals.append(
             {
-                "name": (names[index] if index < len(names) else fallback)[:PMO_ANIMAL_NAME_MAX],
+                "name": name[:PMO_ANIMAL_NAME_MAX],
                 "species": species,
                 "status": "pendente",
             }
         )
     return animals
+
+
+def parse_animals(value: Any, dogs: int, cats: int) -> list[dict[str, str]]:
+    """Ponto único de entrada para transformar a célula de animais em registros.
+
+    Tenta primeiro uma camada de IA (gancho para o Gemini gratuito); se ela não estiver
+    configurada ou falhar, cai nas regras determinísticas — que já cobrem a maioria dos
+    casos e nunca dependem de rede.
+    """
+    ai = _parse_animals_ai(value, dogs, cats)
+    if ai is not None:
+        return ai
+    return _build_animals(_split_animals_detailed(value), dogs, cats)
+
+
+def _parse_animals_ai(value: Any, dogs: int, cats: int) -> list[dict[str, str]] | None:
+    """Gancho para um parser via LLM gratuito (ex.: Google Gemini free tier).
+
+    Retorna None enquanto não há GEMINI_API_KEY configurada — assim o fluxo cai nas
+    regras determinísticas sem custo nem dependência externa. Para ativar, implemente
+    a chamada ao Gemini aqui devolvendo uma lista de {"name", "species", "status"} no
+    mesmo formato de _build_animals (mande SÓ a célula de animais + as contagens
+    dogs/cats; nada de tutor/endereço/telefone) e respeite dogs+cats como total.
+    """
+    if not os.environ.get("GEMINI_API_KEY"):
+        return None
+    # TODO(gemini): montar prompt com o texto da célula + (dogs, cats), pedir JSON
+    # [{"name","species"}] e mapear para o formato de _build_animals. Em qualquer erro
+    # ou timeout, retornar None para usar o fallback determinístico.
+    return None
 
 
 def _cell(row: list[Any], index: int) -> str:
@@ -1070,7 +1177,7 @@ def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
         phone2 = _normalize_phone(_cell(row, 6 + offset))
         dogs = _parse_count(_cell(row, 7 + offset))
         cats = _parse_count(_cell(row, 8 + offset))
-        animals = _build_animals(_split_animals(_cell(row, 9 + offset)), dogs, cats)
+        animals = parse_animals(_cell(row, 9 + offset), dogs, cats)
         address = ", ".join(
             item
             for item in (

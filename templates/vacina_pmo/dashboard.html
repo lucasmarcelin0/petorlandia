@@ -1037,29 +1037,45 @@
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
   let allSheets = [];
 
-  // Mostra a aba de hoje por padrão; as demais só aparecem ao buscar.
+  // Lista sempre visível, agrupada em "Próximos dias" e "Dias anteriores".
+  // Mais próximo de hoje aparece primeiro em cada grupo.
   function renderSheetOptions(filter, keepGid) {
     const today = currentSheetDate();
     const f = (filter || '').trim().toLowerCase();
-    let list;
-    if (f) {
-      list = allSheets.filter((s) =>
-        String(s.title || '').toLowerCase().includes(f) ||
-        String(s.date || '').includes(f) ||
-        displayDate(s.date || '').includes(f)
-      );
-    } else {
-      list = allSheets.filter((s) => s.date === today);
-      if (!list.length && allSheets.length) list = allSheets.slice(0, 1);
-    }
+    let list = f
+      ? allSheets.filter((s) =>
+          String(s.title || '').toLowerCase().includes(f) ||
+          String(s.date || '').includes(f) ||
+          displayDate(s.date || '').includes(f)
+        )
+      : allSheets.slice();
+
     const selGid = keepGid || sheetEl.value;
     if (selGid && !list.some((s) => s.gid === selGid)) {
       const sel = allSheets.find((s) => s.gid === selGid);
       if (sel) list = [sel, ...list];
     }
-    sheetEl.innerHTML = list.length
-      ? list.map((s) => `<option value="${escapeHtml(s.gid)}" data-title="${escapeHtml(s.title)}" data-date="${escapeHtml(s.date)}">${escapeHtml(s.title)}</option>`).join('')
-      : '<option value="">Nenhuma aba encontrada</option>';
+
+    const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s.date || '');
+    // Futuro/hoje: crescente (o próximo primeiro). Passado: decrescente (o mais recente primeiro).
+    const upcoming = list.filter((s) => isDate(s) && s.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const past = list.filter((s) => isDate(s) && s.date < today)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const undated = list.filter((s) => !isDate(s));
+
+    const optionFor = (s) =>
+      `<option value="${escapeHtml(s.gid)}" data-title="${escapeHtml(s.title)}" data-date="${escapeHtml(s.date)}">${escapeHtml(s.title)}</option>`;
+    const groupFor = (label, items) =>
+      items.length ? `<optgroup label="${escapeHtml(label)}">${items.map(optionFor).join('')}</optgroup>` : '';
+
+    const html = [
+      groupFor('Próximos dias', upcoming),
+      groupFor('Dias anteriores', past),
+      groupFor('Outras abas', undated),
+    ].join('');
+    sheetEl.innerHTML = html || '<option value="">Nenhuma aba encontrada</option>';
+
     if (selGid && list.some((s) => s.gid === selGid)) sheetEl.value = selGid;
   }
 
@@ -1351,12 +1367,17 @@
       });
       allSheets = sortedSheets;
       const today = currentSheetDate();
+      const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s.date || '');
       const todaySheet = sortedSheets.find((sheet) => sheet.date === today);
-      // Prioridade: aba de hoje > aba mais recente > última salva.
+      // Próximo dia = menor data >= hoje (a mais próxima, não a mais distante).
+      const nextSheet = sortedSheets
+        .filter((s) => isDate(s) && s.date > today)
+        .sort((a, b) => a.date.localeCompare(b.date))[0];
+      // Passado mais recente, caso não exista nada de hoje em diante.
+      const recentPast = sortedSheets.find((s) => isDate(s) && s.date < today);
+      // Prioridade: aba de hoje > próximo dia > passado mais recente > última salva.
       const savedGid = localStorage.getItem('pmo_sheet_gid');
-      const toSelect = todaySheet?.gid || sortedSheets[0]?.gid || (savedGid || '');
-      // Por padrão lista só a aba de hoje (ou a mais recente); as outras
-      // aparecem ao digitar no campo de busca.
+      const toSelect = todaySheet?.gid || nextSheet?.gid || recentPast?.gid || (savedGid || '');
       renderSheetOptions('', toSelect);
       if (toSelect) {
         sheetEl.value = toSelect;
@@ -1364,9 +1385,11 @@
       }
       sheetInfoEl.textContent = todaySheet
         ? `Aba de hoje selecionada: ${displayDate(today)}.`
-        : (sortedSheets.length
-            ? `Mostrando a aba mais recente. Busque por uma data para ver outras (${sortedSheets.length} no total).`
-            : 'Nenhuma aba encontrada.');
+        : (nextSheet
+            ? `Sem aba para hoje. Próximo dia: ${displayDate(nextSheet.date)} (${sortedSheets.length} abas no total).`
+            : (sortedSheets.length
+                ? `Mostrando a aba mais recente. Busque por uma data para ver outras (${sortedSheets.length} no total).`
+                : 'Nenhuma aba encontrada.'));
     } catch (error) {
       sheetEl.innerHTML = '<option value="">Erro ao carregar abas</option>';
       sheetInfoEl.textContent = 'Não foi possível carregar as abas da planilha.';
