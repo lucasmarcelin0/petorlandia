@@ -711,6 +711,29 @@ def _looks_uncertain(animals: list[dict[str, str]], value: Any) -> bool:
     return any(_GENERIC_ANIMAL_RE.match(a["name"]) for a in animals)
 
 
+def _split_on_whitespace_if_matches(
+    value: Any, total: int
+) -> list[dict[str, str | None]] | None:
+    """Fallback para células com nomes separados só por espaço (ex.: "Mia Amber Lua").
+
+    Os separadores normais (vírgula, /, quebra de linha…) não pegam isso e o espaço
+    não pode virar separador genérico (quebraria "Maria Clara"). Mas quando a
+    contagem AUTORITATIVA de animais (dogs+cats) bate exatamente com o número de
+    tokens, dividir por espaço é seguro. Retorna a lista detalhada ou None.
+
+    Usa \\s+ (regex), que também quebra em espaço não-quebrável (\\xa0) — comum em
+    texto copiado de planilha e causa frequente desse bug.
+    """
+    if total <= 1:
+        return None
+    # Remove anotações entre parênteses antes de tokenizar.
+    cleaned = _normalize_text(_ANNOTATION_RE.sub(" ", str(value or "")))
+    tokens = [t for t in re.split(r"\s+", cleaned) if t]
+    if len(tokens) != total:
+        return None
+    return [{"name": t, "species": _species_hint(t)} for t in tokens]
+
+
 def parse_animals(
     value: Any, dogs: int, cats: int, *, force_ai: bool = False
 ) -> list[dict[str, str]]:
@@ -724,7 +747,20 @@ def parse_animals(
     mesmo nas que parecem ok — útil quando o operador sabe que estão erradas. Em
     qualquer falha da IA, cai nas regras.
     """
-    rules = _build_animals(_split_animals_detailed(value), dogs, cats)
+    detailed = _split_animals_detailed(value)
+    rules = _build_animals(detailed, dogs, cats)
+
+    # Fallback offline para nomes separados só por espaço: se as regras ficaram
+    # duvidosas mas a contagem casa com os tokens, divide por espaço. Conserta o
+    # caso "Mia Amber Lecter Ozzy Mischa Lisa" sem depender do Gemini.
+    if _looks_uncertain(rules, value):
+        total = dogs + cats if (dogs + cats) > 0 else len(detailed)
+        ws = _split_on_whitespace_if_matches(value, total)
+        if ws is not None:
+            ws_rules = _build_animals(ws, dogs, cats)
+            if not any(_GENERIC_ANIMAL_RE.match(a["name"]) for a in ws_rules):
+                rules = ws_rules
+
     if not force_ai and not _looks_uncertain(rules, value):
         return rules
     ai = _parse_animals_ai(value, dogs, cats)
