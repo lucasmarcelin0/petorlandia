@@ -6,6 +6,7 @@ import os
 import re
 import math
 import json
+import time
 import secrets
 import string
 import unicodedata
@@ -694,34 +695,120 @@ def _build_animals(
     return animals
 
 
+# Nome genérico gerado pelo fallback quando falta nome para um slot ("Cao 2", "Gato 1").
+_GENERIC_ANIMAL_RE = re.compile(r"^(Cao|Gato)\s+\d+$", re.IGNORECASE)
+
+
+def _looks_uncertain(animals: list[dict[str, str]], value: Any) -> bool:
+    """True quando as regras provavelmente erraram e vale tentar a IA.
+
+    Critério: existe texto na célula MAS algum animal ficou com nome genérico
+    (sinal de que a divisão não casou com a contagem de cães/gatos). Mantém as
+    chamadas à IA restritas aos casos realmente bagunçados — preserva a cota grátis.
+    """
+    if not str(value or "").strip():
+        return False
+    return any(_GENERIC_ANIMAL_RE.match(a["name"]) for a in animals)
+
+
 def parse_animals(value: Any, dogs: int, cats: int) -> list[dict[str, str]]:
     """Ponto único de entrada para transformar a célula de animais em registros.
 
-    Tenta primeiro uma camada de IA (gancho para o Gemini gratuito); se ela não estiver
-    configurada ou falhar, cai nas regras determinísticas — que já cobrem a maioria dos
-    casos e nunca dependem de rede.
+    Roda as regras determinísticas (rápidas, offline) e só recorre à IA gratuita
+    (Gemini) quando o resultado parece duvidoso — assim o sync não depende de rede
+    no caso comum e a cota grátis é gasta só onde faz diferença.
     """
+    rules = _build_animals(_split_animals_detailed(value), dogs, cats)
+    if not _looks_uncertain(rules, value):
+        return rules
     ai = _parse_animals_ai(value, dogs, cats)
-    if ai is not None:
-        return ai
-    return _build_animals(_split_animals_detailed(value), dogs, cats)
+    return ai if ai is not None else rules
+
+
+# Schema de saída do Gemini: lista de animais já casados com a espécie.
+_GEMINI_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING"},
+            "species": {"type": "STRING", "enum": ["cao", "gato"]},
+        },
+        "required": ["name", "species"],
+    },
+}
 
 
 def _parse_animals_ai(value: Any, dogs: int, cats: int) -> list[dict[str, str]] | None:
-    """Gancho para um parser via LLM gratuito (ex.: Google Gemini free tier).
+    """Parser via Gemini (free tier). Retorna None em qualquer falha → cai no fallback.
 
-    Retorna None enquanto não há GEMINI_API_KEY configurada — assim o fluxo cai nas
-    regras determinísticas sem custo nem dependência externa. Para ativar, implemente
-    a chamada ao Gemini aqui devolvendo uma lista de {"name", "species", "status"} no
-    mesmo formato de _build_animals (mande SÓ a célula de animais + as contagens
-    dogs/cats; nada de tutor/endereço/telefone) e respeite dogs+cats como total.
+    Manda SÓ o texto da célula de animais + as contagens dogs/cats — nada de tutor,
+    endereço ou telefone. Em ausência de chave, erro de rede, timeout ou resposta
+    inesperada, devolve None e o chamador usa as regras determinísticas.
     """
-    if not os.environ.get("GEMINI_API_KEY"):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    text = str(value or "").strip()
+    if not api_key or not text:
         return None
-    # TODO(gemini): montar prompt com o texto da célula + (dogs, cats), pedir JSON
-    # [{"name","species"}] e mapear para o formato de _build_animals. Em qualquer erro
-    # ou timeout, retornar None para usar o fallback determinístico.
-    return None
+
+    total = dogs + cats
+    instrucao = (
+        "Você extrai nomes de animais de uma célula de planilha de uma campanha de "
+        "vacinação. O texto é livre e bagunçado: os tutores separam os nomes por "
+        "vírgula, barra (/), quebra de linha, ';', 'e' ou bullets, e às vezes incluem "
+        "anotações entre parênteses. Devolva um nome por animal, limpo (sem as "
+        "anotações). A campanha registrou "
+        f"{dogs} cão(es) e {cats} gato(s) (total {total}). "
+        "Use exatamente esse total de itens e respeite a quantidade de cada espécie; "
+        "quando o texto indicar a espécie de um animal, honre-a. Se faltar nome para "
+        "algum slot, devolva o nome vazio para ele.\n\n"
+        f"Texto da célula:\n{text}"
+    )
+    body = {
+        "contents": [{"parts": [{"text": instrucao}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": _GEMINI_SCHEMA,
+            "temperature": 0,
+        },
+    }
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
+    headers = {"Content-Type": "application/json", "X-goog-api-key": api_key}
+    parsed = None
+    for attempt in range(3):  # 503/429 são comuns no free tier; retry curto ajuda
+        try:
+            resp = requests.post(url, headers=headers, json=body, timeout=8)
+            if resp.status_code in (429, 500, 503) and attempt < 2:
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            parsed = json.loads(raw)
+            break
+        except Exception:  # rede, timeout, JSON inesperado, cota — usa o fallback
+            return None
+    if parsed is None:
+        return None
+
+    if not isinstance(parsed, list):
+        return None
+    # Reaproveita _build_animals para travar contagem/espécie de forma autoritativa:
+    # a IA dá os nomes + dicas, mas a planilha continua mandando no total.
+    detailed = [
+        {
+            "name": _normalize_text(item.get("name")),
+            "species": item.get("species") if item.get("species") in ("cao", "gato") else None,
+        }
+        for item in parsed
+        if isinstance(item, dict) and _normalize_text(item.get("name"))
+    ]
+    if not detailed:
+        return None
+    return _build_animals(detailed, dogs, cats)
 
 
 def _cell(row: list[Any], index: int) -> str:
