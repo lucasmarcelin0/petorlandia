@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div id="calendar"></div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const csrfToken = "{{ csrf_token() }}";
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      events: '/api/events',
+      selectable: true,
+      editable: true,
+      select: function (selectionInfo) {
+        const title = prompt('Título do evento:');
+        if (title) {
+          fetch('/api/events', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              title: title,
+              start: selectionInfo.startStr,
+              end: selectionInfo.endStr
+            })
+          })
+            .then(() => calendar.refetchEvents())
+            .catch(err => console.error('Erro ao adicionar evento:', err));
+        }
+        calendar.unselect();
+      },
+      eventDrop: function (info) {
+        updateEvent(info.event);
+      },
+      eventResize: function (info) {
+        updateEvent(info.event);
+      },
+      eventClick: function (info) {
+        if (confirm('Excluir este evento?')) {
+          fetch(`/api/events/${info.event.id}`, {
+            method: 'DELETE',
+            headers: {
+              'X-CSRFToken': csrfToken
+            }
+          })
+            .then(() => calendar.refetchEvents())
+            .catch(err => console.error('Erro ao remover evento:', err));
+        }
+      }
+    });
+
+    function updateEvent(event) {
+      fetch(`/api/events/${event.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+          title: event.title,
+          start: event.startStr,
+          end: event.endStr
+        })
+      })
+        .then(() => calendar.refetchEvents())
+        .catch(err => console.error('Erro ao atualizar evento:', err));
+    }
+
+    calendar.render();
+  });
+</script>
+{% endblock %}
+
