@@ -964,6 +964,24 @@
           </div>
         </div>
       </div>
+      <div class="mt-3">
+        <h3 class="h6 mb-2">Respostas individuais</h3>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0" id="pmo-eval-responses-table">
+            <thead>
+              <tr class="text-muted small">
+                <th scope="col">Morador</th>
+                <th scope="col" class="text-center" title="Satisfação geral">Geral</th>
+                <th scope="col" class="text-center" title="Cadastro e agendamento">Cadastro</th>
+                <th scope="col" class="text-center" title="Atendimento no dia">Atend.</th>
+                <th scope="col" class="text-center" title="Informações e carteirinha">Infos</th>
+                <th scope="col" class="text-center" title="Pesquisa">Pesquisa</th>
+              </tr>
+            </thead>
+            <tbody id="pmo-eval-responses"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </section>
 </div>
@@ -1097,6 +1115,7 @@
   const evalSummaryEl = document.querySelector('[data-eval-summary]');
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
+  const evalResponsesEl = document.getElementById('pmo-eval-responses');
   const evalScopeDayBtn = document.getElementById('pmo-eval-scope-day');
   const evalScopeAllBtn = document.getElementById('pmo-eval-scope-all');
   // Escopo do painel de avaliações: 'day' (aba atual) ou 'all' (todas as abas).
@@ -2232,6 +2251,32 @@
         `;
         }).join('')
       : `<div class="text-muted small">Nenhum comentário registrado para ${applyFilters ? 'os filtros atuais' : 'nenhuma aba ainda'}.</div>`;
+
+    if (evalResponsesEl) {
+      const ratingCell = (value) => {
+        const n = numericRating(value);
+        return `<td class="text-center">${n === null ? '<span class="text-muted">–</span>' : formatScore(n)}</td>`;
+      };
+      const respondents = answered
+        .slice()
+        .sort((a, b) => String(b.evaluatedAt || '').localeCompare(String(a.evaluatedAt || '')));
+      evalResponsesEl.innerHTML = respondents.length
+        ? respondents.map((row) => {
+            const ctx = !applyFilters && (row.sheetTitle || row.date)
+              ? `<div class="text-muted small">${escapeHtml(row.sheetTitle || displayDate(row.date))}</div>`
+              : '';
+            return `
+              <tr>
+                <td><div class="fw-semibold">${escapeHtml(row.tutor || 'Morador')}</div>${ctx}</td>
+                ${ratingCell(row.evaluationRating)}
+                ${ratingCell(row.evaluationRegistrationRating)}
+                ${ratingCell(row.evaluationServiceRating)}
+                ${ratingCell(row.evaluationInformationRating)}
+                ${ratingCell(row.evaluationSurveyRating)}
+              </tr>`;
+          }).join('')
+        : `<tr><td colspan="6" class="text-muted small">${applyFilters ? 'Nenhuma resposta para os filtros atuais.' : 'Nenhuma resposta registrada ainda.'}</td></tr>`;
+    }
 
     const weakest = evaluationMetrics
       .map(([key, label]) => ({ label, score: average(answered.map((row) => row[key])) }))
