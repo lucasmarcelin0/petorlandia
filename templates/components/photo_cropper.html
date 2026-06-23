@@ -29,9 +29,10 @@
     <button type="button" class="btn btn-primary btn-sm mb-3" onclick="document.getElementById('{{ id }}').click()">
       <i class="fas fa-upload me-1"></i> Escolher imagem
     </button>
-    <p class="text-muted small mb-1">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
+    <p class="text-muted small mb-1 pc-hint-desktop">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
+    <p class="text-muted small mb-1 pc-hint-touch">Arraste para reposicionar e use dois dedos (pinça) para ajustar o zoom.</p>
 
-    <div id="{{ id }}-controls" class="d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
+    <div id="{{ id }}-controls" class="pc-controls d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
       <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda" aria-label="Girar 90° à esquerda">
         <i class="fas fa-undo"></i>
       </button>
@@ -58,6 +59,21 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    // Estilos mobile injetados uma única vez, mesmo com o partial reutilizado.
+    if (!document.getElementById('pc-mobile-styles')) {
+      const pcStyle = document.createElement('style');
+      pcStyle.id = 'pc-mobile-styles';
+      pcStyle.textContent =
+        '.pc-hint-touch{display:none;}' +
+        '@media (hover: none) and (pointer: coarse){' +
+        '.pc-hint-desktop{display:none;}' +
+        '.pc-hint-touch{display:block;}' +
+        '.pc-controls .btn{padding:.5rem .8rem;font-size:1rem;}' +
+        '.pc-controls .btn i{font-size:1.1rem;}' +
+        '}';
+      document.head.appendChild(pcStyle);
+    }
+
     const editor = document.getElementById('{{ id }}-editor');
     const toggleBtn = document.getElementById('{{ id }}-toggle');
     const preview = document.getElementById('{{ id }}-preview');
@@ -186,25 +202,46 @@
         img.style.cursor = 'grab';
       });
       
-      img.addEventListener('touchstart', (e) => { 
-        dragging = true; 
-        const t = e.touches[0]; 
-        startX = t.clientX - offsetX; 
-        startY = t.clientY - offsetY; 
+      // Toque: 1 dedo arrasta (reposiciona), 2 dedos pinçam (zoom).
+      let pinching = false, startDist = 0, startZoom = 1;
+      const touchDist = (touches) => {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.hypot(dx, dy);
+      };
+
+      img.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          pinching = true;
+          dragging = false;
+          startDist = touchDist(e.touches);
+          startZoom = zoom;
+        } else {
+          dragging = true;
+          const t = e.touches[0];
+          startX = t.clientX - offsetX;
+          startY = t.clientY - offsetY;
+        }
         e.preventDefault();
       });
-      
-      document.addEventListener('touchmove', (e) => { 
-        if (dragging) { 
-          const t = e.touches[0]; 
-          offsetX = t.clientX - startX; 
-          offsetY = t.clientY - startY; 
-          update(); 
+
+      document.addEventListener('touchmove', (e) => {
+        if (pinching && e.touches.length === 2) {
+          const ratio = touchDist(e.touches) / (startDist || 1);
+          zoom = Math.min(Math.max(startZoom * ratio, 0.5), 3);
+          update();
+          e.preventDefault();
+        } else if (dragging) {
+          const t = e.touches[0];
+          offsetX = t.clientX - startX;
+          offsetY = t.clientY - startY;
+          update();
         }
-      });
-      
-      document.addEventListener('touchend', () => { 
-        dragging = false; 
+      }, { passive: false });
+
+      document.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) pinching = false;
+        if (e.touches.length === 0) dragging = false;
       });
     }
 
