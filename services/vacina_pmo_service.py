@@ -404,18 +404,86 @@ def _pmo_extract_best_nominatim_coords(payload: list[dict[str, Any]]) -> tuple[f
     return None
 
 
+# Geração do geocoder: o sufixo invalida caches antigos quando trocamos a fonte de
+# geocodificação. "g2" = Google primário (antes era só Nominatim). Bumpar isto força
+# re-geocodificação de todos os endereços na próxima otimização de rota.
+_PMO_GEOCODE_GENERATION = "g2"
+
+
+def _pmo_geocode_cache_key(address: str) -> str:
+    base = _strip_accents(_normalize_text(address)).lower()
+    return f"{base}|{_PMO_GEOCODE_GENERATION}" if base else ""
+
+
+def _pmo_geocode_google(address: str) -> tuple[float, float] | None:
+    """Geocodifica via Google Geocoding API, ancorado em Orlândia/SP.
+
+    Cobertura de número de casa muito melhor que o Nominatim no Brasil. Usa
+    `components` para travar em Orlândia e só aceita resultado dentro dos limites
+    da cidade. Sem GOOGLE_MAPS_API_KEY (ou em erro/timeout), retorna None e o
+    chamador cai no Nominatim.
+    """
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY") or os.environ.get(
+        "GOOGLE_GEOCODING_API_KEY"
+    )
+    normalized = _normalize_text(address)
+    if not api_key or not normalized:
+        return None
+    full = f"{normalized}, Orlândia, SP, Brasil"
+    try:
+        response = requests.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={
+                "address": full,
+                "components": "locality:Orlandia|administrative_area:SP|country:BR",
+                "region": "br",
+                "language": "pt-BR",
+                "key": api_key,
+            },
+            timeout=6,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    if data.get("status") != "OK":
+        return None
+    # Prefere o resultado mais preciso (ROOFTOP/RANGE_INTERPOLATED) dentro de Orlândia.
+    precise: tuple[float, float] | None = None
+    fallback: tuple[float, float] | None = None
+    for result in data.get("results", []):
+        geometry = result.get("geometry") or {}
+        location = geometry.get("location") or {}
+        try:
+            coords = (float(location["lat"]), float(location["lng"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not _pmo_coords_in_orlandia(coords):
+            continue
+        if geometry.get("location_type") in ("ROOFTOP", "RANGE_INTERPOLATED"):
+            precise = precise or coords
+        fallback = fallback or coords
+    return precise or fallback
+
+
 def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
     """Geocode a free-text PMO address.
 
-    Tries helpers.geocode_address (structured Nominatim, 5 s timeout) first,
-    then falls back to PMO-specific free-text queries.
+    Tries Google Geocoding API (best house-number coverage) first, then the
+    structured Nominatim helper, then PMO-specific free-text Nominatim queries.
     """
     normalized = _normalize_text(address)
     if not normalized:
         return None
-    cache_key = _strip_accents(normalized).lower()
+    cache_key = _pmo_geocode_cache_key(normalized)
     if cache_key in _PMO_ROUTE_COORDS_CACHE:
         return _PMO_ROUTE_COORDS_CACHE[cache_key]
+
+    # 1. Google (preciso). Já filtra por Orlândia internamente.
+    coords = _pmo_geocode_google(normalized)
+    if coords:
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
 
     parts = _pmo_address_parts(normalized)
     rua = _pmo_clean_address_fragment(parts["rua"])
@@ -460,7 +528,7 @@ def _pmo_geocode_visit(visit: PmoVaccinationVisit) -> tuple[float, float] | None
     redundant DB reads within the same request.
     """
     address = visit.address or ""
-    cache_key = _strip_accents(_normalize_text(address)).lower()
+    cache_key = _pmo_geocode_cache_key(address)
     if not cache_key:
         return None
 
@@ -1704,7 +1772,7 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
     for visit in selected:
         coords = None
         # Always use DB cache even beyond the fresh-geocode limit
-        cache_key = _strip_accents(_normalize_text(visit.address or "")).lower()
+        cache_key = _pmo_geocode_cache_key(visit.address or "")
         if cache_key and (
             cache_key in _PMO_ROUTE_COORDS_CACHE
             or (
