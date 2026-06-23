@@ -712,6 +712,47 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         app.logger.exception("Upload failed: %s", exc)
         return None
 
+
+def bake_image_rotation(image_url: str, degrees, folder: str = "uploads") -> str:
+    """Grava a rotação nos pixels da imagem e regrava no S3.
+
+    A rotação do cropper é aplicada por CSS na exibição, mas `transform: rotate()`
+    combinado com `object-fit: cover` renderiza diferente conforme o formato do
+    container (o editor é quadrado; os cards são retangulares), então a foto
+    aparece deitada fora do editor. Gravando a rotação na própria imagem (e zerando
+    a rotação CSS) ela fica igual em qualquer lugar.
+
+    `degrees` segue o sentido do CSS (horário). Retorna a nova URL, ou a original
+    em caso de falha (degrada sem quebrar o salvamento).
+    """
+    try:
+        degrees = int(round(float(degrees or 0))) % 360
+        if degrees == 0 or not image_url:
+            return image_url
+        if image_url.startswith("/"):
+            src = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT)) / image_url.lstrip("/")
+            source_image = Image.open(src)
+        else:
+            response = requests.get(image_url, timeout=10)
+            response.raise_for_status()
+            source_image = Image.open(BytesIO(response.content))
+        source_image = ImageOps.exif_transpose(source_image).convert("RGB")
+        # CSS gira no sentido horário; PIL.rotate gira anti-horário -> negar.
+        rotated = source_image.rotate(-degrees, expand=True)
+        buffer = BytesIO()
+        rotated.save(buffer, format="JPEG", optimize=True, quality=90)
+        buffer.seek(0)
+        baked = FileStorage(
+            stream=buffer,
+            filename=f"{uuid.uuid4().hex}_rot.jpg",
+            content_type="image/jpeg",
+        )
+        new_url = upload_to_s3(baked, baked.filename, folder=folder)
+        return new_url or image_url
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Falha ao gravar rotação na imagem: %s", exc)
+        return image_url
+
 # ------------------------ Background S3 upload -------------------------
 executor = ThreadPoolExecutor(max_workers=2)
 
@@ -9698,6 +9739,12 @@ def add_animal():
         if idade_numero is not None:
             idade_formatada = _formatar_idade(idade_numero, unidade_valor)
 
+        # Grava a rotação nos pixels para a foto ficar igual em qualquer container
+        # (o card é retangular; o editor é quadrado).
+        rotation_add = int(form.photo_rotation.data or 0) % 360
+        if rotation_add and image_url:
+            image_url = bake_image_rotation(image_url, rotation_add, folder="animals")
+
         # Criação do animal
         animal = Animal(
             name=form.name.data,
@@ -9708,7 +9755,7 @@ def add_animal():
             sex=form.sex.data,
             description=form.description.data,
             image=image_url,
-            photo_rotation=form.photo_rotation.data,
+            photo_rotation=0,
             photo_zoom=form.photo_zoom.data,
             photo_offset_x=form.photo_offset_x.data,
             photo_offset_y=form.photo_offset_y.data,
@@ -16381,9 +16428,13 @@ def editar_animal(animal_id):
             if image_url:
                 animal.image = image_url
 
-        # Persiste o enquadramento do cropper (rotação/zoom/deslocamento). Sem isto a
-        # rotação feita no editor é descartada e a foto aparece virada no card.
-        animal.photo_rotation = form.photo_rotation.data or 0
+        # Grava a rotação nos pixels (para ficar igual em cards retangulares) e
+        # persiste zoom/deslocamento do cropper. Sem isto a rotação feita no editor
+        # era descartada/renderizada deitada fora do editor.
+        rotation = int(form.photo_rotation.data or 0) % 360
+        if rotation and animal.image:
+            animal.image = bake_image_rotation(animal.image, rotation, folder="animals")
+        animal.photo_rotation = 0
         animal.photo_zoom = form.photo_zoom.data or 1
         animal.photo_offset_x = form.photo_offset_x.data or 0
         animal.photo_offset_y = form.photo_offset_y.data or 0
