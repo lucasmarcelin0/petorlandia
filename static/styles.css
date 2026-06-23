@@ -1,8 +1,4 @@
 /* Campos de data + idade */
-body {
-  background-color: #d4af37;
-}
-
 .data-idade .input-group {
   align-items: stretch;
 }
