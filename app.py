@@ -30872,6 +30872,63 @@ def servicos_vacinas_admin_item():
     return redirect(url_for('servicos_vacinas_admin'))
 
 
+def _vacinas_parceiro_serializer():
+    from itsdangerous import URLSafeSerializer
+    return URLSafeSerializer(app.config['SECRET_KEY'], salt='vacinas-parceiro')
+
+
+def vacinas_parceiro_token(vet_id: int) -> str:
+    return _vacinas_parceiro_serializer().dumps(int(vet_id))
+
+
+@app.route('/parceiro/vacinas/<token>', methods=['GET', 'POST'])
+def parceiro_vacinas_precos(token):
+    """Página tokenizada (sem login) para o veterinário definir só os preços dele."""
+    from decimal import Decimal as _Dec
+    from models import VaccineServiceItem
+    from models.base import Veterinario
+    from services.vaccine_service_paid import public_price_from_vet_price
+
+    try:
+        vet_id = _vacinas_parceiro_serializer().loads(token)
+    except Exception:
+        abort(404)
+    vet = Veterinario.query.get_or_404(vet_id)
+    items = (
+        VaccineServiceItem.query
+        .filter_by(provider_vet_id=vet_id)
+        .order_by(VaccineServiceItem.position, VaccineServiceItem.nome)
+        .all()
+    )
+
+    if request.method == 'POST':
+        updated = 0
+        for item in items:
+            raw = (request.form.get(f'preco_vet_{item.id}') or '').replace(',', '.').strip()
+            if not raw:
+                continue
+            try:
+                vet_price = _Dec(raw)
+            except Exception:
+                continue
+            if vet_price < 0:
+                continue
+            item.valor_repasse = vet_price
+            item.preco = public_price_from_vet_price(vet_price)
+            item.ativo = vet_price > 0
+            updated += 1
+        if updated:
+            db.session.commit()
+            flash('Preços salvos! Suas vacinas já estão no ar para os tutores da sua cidade.', 'success')
+        return redirect(url_for('parceiro_vacinas_precos', token=token))
+
+    vet_name = getattr(getattr(vet, 'user', None), 'name', None) or 'Veterinário(a)'
+    return render_template(
+        'vacinas_servico/parceiro_precos.html',
+        vet=vet, vet_name=vet_name, items=items, token=token,
+    )
+
+
 @app.route('/servicos/exames')
 @login_required
 def servicos_exames():

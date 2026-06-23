@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4" style="max-width: 640px;">
+
+  <div class="text-center mb-4">
+    <div class="display-6">💉</div>
+    <h1 class="h4 fw-bold mb-1">Olá, {{ vet_name }}!</h1>
+    <p class="text-muted mb-0">Defina o preço de cada vacina. É só preencher o valor que <strong>você quer receber</strong> — o preço que o tutor paga é calculado automaticamente.</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ 'success' if category == 'success' else category }} rounded-3">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not items %}
+  <div class="alert alert-info rounded-3">
+    Ainda não há vacinas cadastradas no seu nome. Fale com a equipe PetOrlândia para incluir as vacinas que você oferece.
+  </div>
+  {% else %}
+  <form method="post" id="precos-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for item in items %}
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-3 d-flex gap-3 align-items-center">
+        {% if item.image_url %}
+        <img src="{{ item.image_url }}" alt="{{ item.nome }}" class="rounded-3" style="width:64px;height:64px;object-fit:cover;">
+        {% else %}
+        <div class="rounded-3 d-flex align-items-center justify-content-center bg-light" style="width:64px;height:64px;font-size:1.5rem;">💉</div>
+        {% endif %}
+        <div class="flex-grow-1">
+          <div class="fw-semibold">{{ item.nome }}</div>
+          {% if item.fabricante %}<div class="text-muted small">{{ item.fabricante }}</div>{% endif %}
+          <div class="text-muted small">
+            {% if 'cao' in item.especies %}🐕{% endif %}{% if 'gato' in item.especies %} 🐈{% endif %}
+            {% if item.doses_info %} · {{ item.doses_info }}{% endif %}
+          </div>
+          <div class="input-group input-group-sm mt-2" style="max-width: 280px;">
+            <span class="input-group-text">Você recebe R$</span>
+            <input type="text" inputmode="decimal" name="preco_vet_{{ item.id }}"
+                   class="form-control preco-vet"
+                   data-target="pub-{{ item.id }}"
+                   value="{{ '%.2f'|format(item.valor_repasse) if item.valor_repasse is not none else '' }}"
+                   placeholder="0,00" autocomplete="off">
+          </div>
+          <div class="small text-success mt-1">
+            Tutor paga: <strong id="pub-{{ item.id }}">{{ ('R$ %.2f'|format(item.preco)) if item.valor_repasse is not none else '—' }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill mt-2">
+      <i class="fa-solid fa-floppy-disk me-2"></i>Salvar meus preços
+    </button>
+    <p class="text-muted small text-center mt-2">
+      O preço ao tutor é o seu valor + 10%, arredondado para cima no múltiplo de 5.
+    </p>
+  </form>
+
+  <script>
+    (function () {
+      function publicPrice(vet) {
+        if (!(vet > 0)) return null;
+        var base = vet * 1.10;
+        return Math.ceil(base / 5) * 5;
+      }
+      function fmt(v) { return 'R$ ' + v.toFixed(2).replace('.', ','); }
+      document.querySelectorAll('.preco-vet').forEach(function (input) {
+        function update() {
+          var vet = parseFloat((input.value || '').replace(',', '.'));
+          var out = document.getElementById(input.dataset.target);
+          var p = publicPrice(vet);
+          out.textContent = p === null ? '—' : fmt(p);
+        }
+        input.addEventListener('input', update);
+      });
+    })();
+  </script>
+  {% endif %}
+
+</div>
+{% endblock %}
