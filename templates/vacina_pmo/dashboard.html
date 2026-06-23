@@ -805,7 +805,10 @@
     <div class="row g-3 align-items-end">
       <div class="col-md-7 col-xl-4">
         <label for="pmo-sheet" class="form-label">Aba da planilha</label>
-        <input type="search" id="pmo-sheet-search" class="form-control form-control-sm mb-2" placeholder="Buscar outra data (ex.: 17/04 ou 2026-04)" autocomplete="off">
+        <button type="button" id="pmo-ai-fix" class="btn btn-outline-success btn-sm w-100 mb-2"
+          title="Reprocessa a aba selecionada usando IA (Gemini) para corrigir os nomes dos animais. Use quando os nomes vierem bagunçados.">
+          <i class="fas fa-wand-magic-sparkles me-1"></i> Corrigir nomes com IA
+        </button>
         <select id="pmo-sheet" class="form-select" data-sheets-url="{{ url_for('vacina_pmo_sheets') }}" data-state-url="{{ url_for('vacina_pmo_state') }}" data-today="{{ today }}">
           <option value="">Carregando abas...</option>
         </select>
@@ -1397,14 +1400,19 @@
     }
   }
 
-  async function syncSheet(buttonId = 'pmo-sync', { silent = false } = {}) {
+  async function syncSheet(buttonId = 'pmo-sync', { silent = false, forceAi = false } = {}) {
     const button = document.getElementById(buttonId);
     const syncUrl = document.getElementById('pmo-sync').dataset.syncUrl;
     const original = button.innerHTML;
-    const otherButton = buttonId === 'pmo-sync' ? document.getElementById('pmo-sync-inline') : document.getElementById('pmo-sync');
+    // Desabilita todos os botões de ação enquanto roda.
+    const actionButtons = ['pmo-sync', 'pmo-sync-inline', 'pmo-ai-fix']
+      .map((id) => document.getElementById(id))
+      .filter((el) => el && el !== button);
     button.disabled = true;
-    if (otherButton) otherButton.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando';
+    actionButtons.forEach((el) => { el.disabled = true; });
+    button.innerHTML = forceAi
+      ? '<span class="spinner-border spinner-border-sm me-1"></span>Corrigindo com IA'
+      : '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando';
     try {
       const response = await fetch(syncUrl, {
         method: 'POST',
@@ -1416,6 +1424,7 @@
         body: JSON.stringify({
           sheet_gid: sheetEl.value,
           sheet_title: sheetEl.selectedOptions[0]?.dataset.title || '',
+          force_ai: forceAi,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -1429,7 +1438,10 @@
       hydrateQueuedPhotos();
       sheetInfoEl.textContent = `Aba ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada e salva: ${state.rows.length} visitas.`;
       if (!silent) {
-        window.showAppToast ? window.showAppToast(`Planilha sincronizada: ${state.rows.length} visitas carregadas.`, 'success') : alert('Planilha sincronizada.');
+        const msg = forceAi
+          ? `Nomes reprocessados com IA: ${state.rows.length} visitas.`
+          : `Planilha sincronizada: ${state.rows.length} visitas carregadas.`;
+        window.showAppToast ? window.showAppToast(msg, 'success') : alert(msg);
       }
       return true;
     } catch (error) {
@@ -1437,7 +1449,7 @@
       return false;
     } finally {
       button.disabled = false;
-      if (otherButton) otherButton.disabled = false;
+      actionButtons.forEach((el) => { el.disabled = false; });
       button.innerHTML = original;
     }
   }
@@ -2524,6 +2536,20 @@
 
   document.getElementById('pmo-sync').addEventListener('click', () => syncSheet('pmo-sync'));
   document.getElementById('pmo-sync-inline').addEventListener('click', () => syncSheet('pmo-sync-inline'));
+  const aiFixBtn = document.getElementById('pmo-ai-fix');
+  if (aiFixBtn) {
+    aiFixBtn.addEventListener('click', () => {
+      if (!sheetEl.value) {
+        window.showAppToast ? window.showAppToast('Selecione uma aba primeiro.', 'warning') : alert('Selecione uma aba primeiro.');
+        return;
+      }
+      const label = sheetEl.selectedOptions[0]?.dataset.title || 'esta aba';
+      if (!window.confirm(`Reprocessar os nomes dos animais de "${label}" usando IA?\n\nIsso re-sincroniza a aba e sobrescreve os nomes a partir da planilha.`)) {
+        return;
+      }
+      syncSheet('pmo-ai-fix', { forceAi: true });
+    });
+  }
   setupCreateDay();
   document.getElementById('pmo-clear').addEventListener('click', () => {
     loadSavedState(true);

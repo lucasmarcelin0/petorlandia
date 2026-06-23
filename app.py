@@ -4839,6 +4839,7 @@ def vacina_pmo_sync():
         result = sync_vacina_pmo_sheet(
             sheet_gid=(payload.get('sheet_gid') or '').strip(),
             sheet_title=(payload.get('sheet_title') or '').strip(),
+            force_ai=bool(payload.get('force_ai')),
         )
         rows = persist_vacina_pmo_rows(
             result.rows,

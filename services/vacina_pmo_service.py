@@ -711,15 +711,21 @@ def _looks_uncertain(animals: list[dict[str, str]], value: Any) -> bool:
     return any(_GENERIC_ANIMAL_RE.match(a["name"]) for a in animals)
 
 
-def parse_animals(value: Any, dogs: int, cats: int) -> list[dict[str, str]]:
+def parse_animals(
+    value: Any, dogs: int, cats: int, *, force_ai: bool = False
+) -> list[dict[str, str]]:
     """Ponto único de entrada para transformar a célula de animais em registros.
 
     Roda as regras determinísticas (rápidas, offline) e só recorre à IA gratuita
     (Gemini) quando o resultado parece duvidoso — assim o sync não depende de rede
     no caso comum e a cota grátis é gasta só onde faz diferença.
+
+    Com force_ai=True (botão "Corrigir nomes com IA"), tenta a IA em TODA linha,
+    mesmo nas que parecem ok — útil quando o operador sabe que estão erradas. Em
+    qualquer falha da IA, cai nas regras.
     """
     rules = _build_animals(_split_animals_detailed(value), dogs, cats)
-    if not _looks_uncertain(rules, value):
+    if not force_ai and not _looks_uncertain(rules, value):
         return rules
     ai = _parse_animals_ai(value, dogs, cats)
     return ai if ai is not None else rules
@@ -1251,7 +1257,9 @@ def _clear_pmo_animal_links(animal: PmoVaccinationAnimal) -> None:
     animal.vaccinated_at = None
 
 
-def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
+def parse_vacina_pmo_rows(
+    values: list[list[Any]], *, force_ai: bool = False
+) -> list[dict[str, Any]]:
     parsed: list[dict[str, Any]] = []
     for index, row in enumerate(values):
         if _is_summary_or_header(row):
@@ -1264,7 +1272,7 @@ def parse_vacina_pmo_rows(values: list[list[Any]]) -> list[dict[str, Any]]:
         phone2 = _normalize_phone(_cell(row, 6 + offset))
         dogs = _parse_count(_cell(row, 7 + offset))
         cats = _parse_count(_cell(row, 8 + offset))
-        animals = parse_animals(_cell(row, 9 + offset), dogs, cats)
+        animals = parse_animals(_cell(row, 9 + offset), dogs, cats, force_ai=force_ai)
         address = ", ".join(
             item
             for item in (
@@ -2393,7 +2401,9 @@ def save_vacina_pmo_evaluation(
     return visit
 
 
-def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoSyncResult:
+def sync_vacina_pmo_sheet(
+    *, sheet_gid: str = "", sheet_title: str = "", force_ai: bool = False
+) -> PmoSyncResult:
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
     range_value = os.getenv("PMO_VACCINE_SHEET_RANGE", DEFAULT_SHEET_RANGE)
     service = _get_sheets_service_rw()
@@ -2419,7 +2429,7 @@ def sync_vacina_pmo_sheet(*, sheet_gid: str = "", sheet_title: str = "") -> PmoS
             .execute()
         )
         values = result.get("values", [])
-    rows = parse_vacina_pmo_rows(values)
+    rows = parse_vacina_pmo_rows(values, force_ai=force_ai)
     return PmoSyncResult(
         rows=rows,
         spreadsheet_id=spreadsheet_id,
