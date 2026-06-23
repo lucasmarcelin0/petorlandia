@@ -648,9 +648,26 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         project_root = pathlib.Path(_runtime_module_attr("PROJECT_ROOT", PROJECT_ROOT))
         s3_factory = _runtime_module_attr("_s3", _s3)
 
-        if content_type and content_type.startswith("image"):
+        # Detecta imagem pelo content_type OU tentando abrir com o PIL. Não dá para
+        # confiar só no content_type: fotos de celular, colagens (Ctrl+V) e alguns
+        # navegadores mobile enviam content_type vazio ou "application/octet-stream".
+        # Se a orientação EXIF não for normalizada aqui, a foto fica de lado no site.
+        is_image = bool(content_type and content_type.startswith("image"))
+        if not is_image:
+            try:
+                file.stream.seek(0)
+                probe = Image.open(file.stream)
+                probe.verify()
+                is_image = True
+            except Exception:
+                is_image = False
+            finally:
+                file.stream.seek(0)
+
+        if is_image:
+            file.stream.seek(0)
             image = Image.open(file.stream)
-            image = ImageOps.exif_transpose(image)
+            image = ImageOps.exif_transpose(image)  # baixa o EXIF: pixels já saem na orientação certa
             image = image.convert("RGB")
             image.thumbnail((1280, 1280))
             buffer = BytesIO()
