@@ -4862,6 +4862,20 @@ def vacina_pmo_sync():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/avaliacoes', methods=['GET'])
+@login_required
+def vacina_pmo_avaliacoes():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    try:
+        from services.vacina_pmo_service import get_all_vacina_pmo_evaluations
+        data = get_all_vacina_pmo_evaluations()
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        current_app.logger.exception("Falha ao agregar avaliações Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @app.route('/vacina-pmo/criar-dia', methods=['POST'])
 @login_required
 def vacina_pmo_criar_dia():

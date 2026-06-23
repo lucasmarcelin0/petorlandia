@@ -1581,6 +1581,35 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
     }
 
 
+def get_all_vacina_pmo_evaluations() -> dict[str, Any]:
+    """Avaliações agregadas de TODAS as abas (compilado geral, leve).
+
+    Devolve só os campos usados pelo painel de avaliações — nada de telefone,
+    endereço ou senha — de cada visita já cadastrada, independente da aba.
+    """
+    visits = (
+        PmoVaccinationVisit.query.order_by(
+            PmoVaccinationVisit.id.desc()
+        ).all()
+    )
+    rows = [
+        {
+            "tutor": visit.tutor_name,
+            "sheetTitle": visit.sheet_title or "",
+            "date": visit.vaccine_date.isoformat() if visit.vaccine_date else "",
+            "evaluationRating": visit.evaluation_rating,
+            "evaluationRegistrationRating": visit.evaluation_registration_rating,
+            "evaluationServiceRating": visit.evaluation_service_rating,
+            "evaluationInformationRating": visit.evaluation_information_rating,
+            "evaluationSurveyRating": visit.evaluation_survey_rating,
+            "evaluationComment": visit.evaluation_comment or "",
+            "evaluatedAt": visit.evaluated_at.isoformat() if visit.evaluated_at else "",
+        }
+        for visit in visits
+    ]
+    return {"rows": rows, "total_visits": len(rows)}
+
+
 def _route_preview_item(visit: PmoVaccinationVisit, coords: tuple[float, float] | None, order: int) -> dict[str, Any]:
     return {
         "visitId": visit.id,

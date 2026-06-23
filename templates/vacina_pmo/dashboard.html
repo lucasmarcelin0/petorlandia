@@ -940,7 +940,13 @@
         <h2 class="h5 mb-0">Avaliações dos moradores</h2>
         <div class="text-muted small">Notas de 1 a 5 sobre cadastro, atendimento, informações e a própria pesquisa.</div>
       </div>
-      <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
+      <div class="d-flex flex-column align-items-lg-end gap-1">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Escopo das avaliações">
+          <button type="button" class="btn btn-outline-primary active" id="pmo-eval-scope-day" data-scope="day">Do dia</button>
+          <button type="button" class="btn btn-outline-primary" id="pmo-eval-scope-all" data-scope="all">Geral (todas as abas)</button>
+        </div>
+        <div class="text-muted small" data-eval-summary>Sem respostas carregadas.</div>
+      </div>
     </div>
     <div class="pmo-panel__body">
       <div class="pmo-eval-grid mb-3" id="pmo-eval-grid"></div>
@@ -1091,6 +1097,10 @@
   const evalSummaryEl = document.querySelector('[data-eval-summary]');
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
   const evalInsightsEl = document.getElementById('pmo-eval-insights');
+  const evalScopeDayBtn = document.getElementById('pmo-eval-scope-day');
+  const evalScopeAllBtn = document.getElementById('pmo-eval-scope-all');
+  // Escopo do painel de avaliações: 'day' (aba atual) ou 'all' (todas as abas).
+  const evalState = { scope: 'day', allRows: null, loading: false };
   const state = { rows: [] };
   const PHOTO_QUEUE_DB = 'petorlandia-pmo-photo-queue';
   const PHOTO_QUEUE_STORE = 'photos';
@@ -2183,12 +2193,13 @@
     return value === null ? '-' : value.toFixed(1).replace('.', ',');
   }
 
-  function renderEvaluations(rows) {
-    const visible = rows.filter(rowMatchesFilters);
+  function renderEvaluations(rows, { applyFilters = true } = {}) {
+    const visible = applyFilters ? rows.filter(rowMatchesFilters) : rows.slice();
     const answered = visible.filter((row) => numericRating(row.evaluationRating) !== null);
+    const escopo = applyFilters ? 'visitas filtradas' : 'visitas no total (todas as abas)';
     evalSummaryEl.textContent = answered.length
-      ? `${answered.length} resposta${answered.length === 1 ? '' : 's'} de ${visible.length} visitas filtradas`
-      : `0 respostas de ${visible.length} visitas filtradas`;
+      ? `${answered.length} resposta${answered.length === 1 ? '' : 's'} de ${visible.length} ${escopo}`
+      : `0 respostas de ${visible.length} ${escopo}`;
 
     evalGridEl.innerHTML = evaluationMetrics.map(([key, label]) => {
       const values = answered.map((row) => row[key]);
@@ -2208,13 +2219,19 @@
       .sort((a, b) => String(b.evaluatedAt || '').localeCompare(String(a.evaluatedAt || '')))
       .slice(0, 8);
     evalCommentsEl.innerHTML = comments.length
-      ? comments.map((row) => `
+      ? comments.map((row) => {
+          const ctx = !applyFilters && (row.sheetTitle || row.date)
+            ? `<div class="text-muted small">${escapeHtml(row.sheetTitle || displayDate(row.date))}</div>`
+            : '';
+          return `
           <div class="pmo-comment">
             <div class="fw-semibold">${escapeHtml(row.tutor || 'Morador')}</div>
+            ${ctx}
             <div>${escapeHtml(row.evaluationComment)}</div>
           </div>
-        `).join('')
-      : '<div class="text-muted small">Nenhum comentário registrado para os filtros atuais.</div>';
+        `;
+        }).join('')
+      : `<div class="text-muted small">Nenhum comentário registrado para ${applyFilters ? 'os filtros atuais' : 'nenhuma aba ainda'}.</div>`;
 
     const weakest = evaluationMetrics
       .map(([key, label]) => ({ label, score: average(answered.map((row) => row[key])) }))
@@ -2226,11 +2243,59 @@
       .sort((a, b) => b.score - a.score)[0];
 
     if (!answered.length) {
-      evalInsightsEl.textContent = 'Ainda não há avaliações respondidas para a aba e filtros atuais.';
+      evalInsightsEl.textContent = applyFilters
+        ? 'Ainda não há avaliações respondidas para a aba e filtros atuais.'
+        : 'Ainda não há avaliações respondidas em nenhuma aba.';
     } else if (weakest && strongest && weakest.label !== strongest.label) {
       evalInsightsEl.innerHTML = `Melhor ponto: <strong>${escapeHtml(strongest.label)}</strong> (${formatScore(strongest.score)}). Ponto que merece mais atenção: <strong>${escapeHtml(weakest.label)}</strong> (${formatScore(weakest.score)}).`;
     } else {
       evalInsightsEl.innerHTML = `Média geral das respostas: <strong>${formatScore(average(answered.map((row) => row.evaluationRating)))}</strong>.`;
+    }
+  }
+
+  // Decide o que mostrar no painel conforme o escopo selecionado (dia vs geral).
+  function renderEvaluationScope() {
+    if (evalState.scope === 'all') {
+      if (evalState.loading) {
+        evalSummaryEl.textContent = 'Carregando avaliações de todas as abas...';
+        return;
+      }
+      renderEvaluations(evalState.allRows || [], { applyFilters: false });
+    } else {
+      renderEvaluations(state.rows, { applyFilters: true });
+    }
+  }
+
+  async function loadAllEvaluations() {
+    if (evalState.allRows || evalState.loading) return;
+    evalState.loading = true;
+    renderEvaluationScope();
+    try {
+      const response = await fetch('{{ url_for("vacina_pmo_avaliacoes") }}', {
+        headers: { 'Accept': 'application/json' },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível carregar as avaliações.');
+      }
+      evalState.allRows = payload.rows || [];
+    } catch (error) {
+      evalState.allRows = null;
+      window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+    } finally {
+      evalState.loading = false;
+      renderEvaluationScope();
+    }
+  }
+
+  function setEvalScope(scope) {
+    evalState.scope = scope;
+    evalScopeDayBtn?.classList.toggle('active', scope === 'day');
+    evalScopeAllBtn?.classList.toggle('active', scope === 'all');
+    if (scope === 'all') {
+      loadAllEvaluations();
+    } else {
+      renderEvaluationScope();
     }
   }
 
@@ -2250,7 +2315,7 @@
 
   function render() {
     renderStats(state.rows);
-    renderEvaluations(state.rows);
+    renderEvaluationScope();
     const visible = state.rows.filter(rowMatchesFilters);
     if (!visible.length) {
       tbody.innerHTML = '<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div></td></tr>';
@@ -2559,6 +2624,8 @@
   undoRouteBtn.addEventListener('click', undoRoute);
   openNextRouteBtn.addEventListener('click', openNextRoute);
   [shiftEl, statusFilterEl].forEach((el) => el.addEventListener('change', render));
+  evalScopeDayBtn?.addEventListener('click', () => setEvalScope('day'));
+  evalScopeAllBtn?.addEventListener('click', () => setEvalScope('all'));
   sheetEl.addEventListener('change', () => {
     if (sheetEl.value) localStorage.setItem('pmo_sheet_gid', sheetEl.value);
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
