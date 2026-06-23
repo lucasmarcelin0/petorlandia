@@ -16381,6 +16381,13 @@ def editar_animal(animal_id):
             if image_url:
                 animal.image = image_url
 
+        # Persiste o enquadramento do cropper (rotação/zoom/deslocamento). Sem isto a
+        # rotação feita no editor é descartada e a foto aparece virada no card.
+        animal.photo_rotation = form.photo_rotation.data or 0
+        animal.photo_zoom = form.photo_zoom.data or 1
+        animal.photo_offset_x = form.photo_offset_x.data or 0
+        animal.photo_offset_y = form.photo_offset_y.data or 0
+
         db.session.commit()
         flash('Animal atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
