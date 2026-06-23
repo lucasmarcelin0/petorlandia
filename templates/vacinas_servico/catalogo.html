@@ -130,7 +130,48 @@
       </a>
       {% endfor %}
     </div>
+    <button type="button" id="vacserv-geo-btn" class="btn btn-sm btn-outline-primary rounded-pill ms-auto"
+            data-geo-url="{{ url_for('servicos_vacinas_cidade_por_local') }}">
+      <i class="fa-solid fa-location-crosshairs me-1"></i> Usar minha localização
+    </button>
   </div>
+  <div id="vacserv-geo-msg" class="small text-muted mb-3 d-none"></div>
+  <script>
+    (function () {
+      const btn = document.getElementById('vacserv-geo-btn');
+      const msg = document.getElementById('vacserv-geo-msg');
+      if (!btn) return;
+      const showMsg = (text) => { msg.textContent = text; msg.classList.remove('d-none'); };
+      btn.addEventListener('click', () => {
+        if (!navigator.geolocation) { showMsg('Seu navegador não suporta localização.'); return; }
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Localizando...';
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          try {
+            const url = `${btn.dataset.geoUrl}?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
+            const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            const data = await r.json();
+            if (data.cidade) {
+              window.location.href = `?cidade=${encodeURIComponent(data.cidade)}`;
+              return;
+            }
+            const det = data.cidade_detectada ? ` (detectamos “${data.cidade_detectada}”)` : '';
+            showMsg(`Ainda não atendemos vacinas na sua cidade${det}. Escolha uma cidade disponível acima.`);
+          } catch (e) {
+            showMsg('Não foi possível detectar sua cidade agora.');
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+          }
+        }, () => {
+          showMsg('Permissão de localização negada. Escolha a cidade manualmente.');
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+      });
+    })();
+  </script>
   {% endif %}
 
   {# ── Banner de localização ────────────────────────────────────────────── #}

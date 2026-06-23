@@ -150,12 +150,17 @@
             <input type="hidden" name="item_id" value="{{ item.id }}">
             <div class="d-flex gap-2 mb-2">
               <input type="text" name="nome" class="form-control form-control-sm fw-semibold" value="{{ item.nome }}" required>
-              <input type="text" name="preco" class="form-control form-control-sm" style="max-width:100px;" value="{{ '%.2f'|format(item.preco) }}" required>
+            </div>
+            <div class="d-flex gap-2 mb-1">
+              <input type="text" name="preco_vet" class="form-control form-control-sm" style="max-width:160px;"
+                     placeholder="Preço do veterinário"
+                     value="{{ '%.2f'|format(item.valor_repasse) if item.valor_repasse is not none else '' }}">
+              <span class="form-text small text-muted align-self-center">
+                Público atual: <strong>R$ {{ '%.2f'|format(item.preco) }}</strong> (vet +10%, arredonda p/ múltiplo de 5)
+              </span>
             </div>
             <div class="d-flex gap-2 mb-2">
               <input type="text" name="fabricante" class="form-control form-control-sm" placeholder="Fabricante" value="{{ item.fabricante or '' }}">
-              <input type="text" name="valor_repasse" class="form-control form-control-sm" style="max-width:130px;"
-                     placeholder="Repasse" value="{{ '%.2f'|format(item.valor_repasse) if item.valor_repasse is not none else '' }}">
             </div>
             <input type="text" name="descricao" class="form-control form-control-sm mb-2" placeholder="Descrição" value="{{ item.descricao or '' }}">
             <input type="text" name="doses_info" class="form-control form-control-sm mb-2" placeholder="Ex.: Dose única anual" value="{{ item.doses_info or '' }}">
@@ -183,9 +188,9 @@
       <form method="post" action="{{ url_for('servicos_vacinas_admin_item') }}" class="row g-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-4"><input type="text" name="nome" class="form-control form-control-sm" placeholder="Nome (ex.: V10)" required></div>
-        <div class="col-md-2"><input type="text" name="preco" class="form-control form-control-sm" placeholder="Preço" required></div>
+        <div class="col-md-3"><input type="text" name="preco_vet" class="form-control form-control-sm" placeholder="Preço do veterinário" required></div>
+        <div class="col-md-2"><input type="number" name="provider_vet_id" class="form-control form-control-sm" placeholder="ID do vet"></div>
         <div class="col-md-3"><input type="text" name="fabricante" class="form-control form-control-sm" placeholder="Fabricante"></div>
-        <div class="col-md-3"><input type="text" name="valor_repasse" class="form-control form-control-sm" placeholder="Repasse"></div>
         <div class="col-md-6"><input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição curta"></div>
         <div class="col-md-3"><input type="text" name="doses_info" class="form-control form-control-sm" placeholder="Ex.: Dose única anual"></div>
         <div class="col-md-3"><input type="text" name="cidade" class="form-control form-control-sm" placeholder="Cidade (ex.: Orlândia)" value="Orlândia"></div>

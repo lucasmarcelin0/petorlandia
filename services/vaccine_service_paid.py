@@ -10,11 +10,25 @@ from __future__ import annotations
 
 import secrets
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from typing import Any, Callable
 
 from extensions import db
 from time_utils import utcnow
+
+
+# Margem da plataforma: o veterinário define o preço que recebe (valor_repasse) e o
+# preço público é esse valor + 10%, arredondado PARA CIMA no próximo múltiplo de 5.
+# Ex.: 110 -> 121 -> 125; 30 -> 33 -> 35; 100 -> 110 -> 110.
+PLATFORM_MARKUP = Decimal('1.10')
+PRICE_ROUND_STEP = Decimal('5')
+
+
+def public_price_from_vet_price(vet_price) -> Decimal:
+    """Converte o preço do veterinário no preço público (com margem e arredondamento)."""
+    base = Decimal(str(vet_price)) * PLATFORM_MARKUP
+    steps = (base / PRICE_ROUND_STEP).to_integral_value(rounding=ROUND_CEILING)
+    return (steps * PRICE_ROUND_STEP).quantize(Decimal('0.01'))
 
 
 EVENT_LABELS = {

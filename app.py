@@ -30609,6 +30609,58 @@ def servicos_vacinas():
     )
 
 
+@app.route('/servicos/vacinas/cidade-por-local')
+@login_required
+def servicos_vacinas_cidade_por_local():
+    """Reverse-geocode da localização do visitante -> cidade do catálogo.
+
+    Recebe lat/lng (geolocalização do navegador), descobre a cidade via Nominatim e,
+    se ela tiver vacinas cadastradas, devolve o nome exato usado no catálogo.
+    """
+    from services.vaccine_service_paid import list_cidades
+
+    try:
+        lat = float(request.args.get('lat', ''))
+        lng = float(request.args.get('lng', ''))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Coordenadas inválidas.'}), 400
+
+    def _norm(value):
+        import unicodedata
+        text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode()
+        return text.strip().lower()
+
+    cidade_detectada = None
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/reverse',
+            params={'lat': lat, 'lon': lng, 'format': 'json', 'addressdetails': 1, 'zoom': 10},
+            headers={'User-Agent': 'PetOrlandia/1.0 (+https://petorlandia.com)'},
+            timeout=6,
+        )
+        resp.raise_for_status()
+        address = (resp.json() or {}).get('address', {})
+        cidade_detectada = (
+            address.get('city') or address.get('town') or address.get('municipality')
+            or address.get('village') or address.get('county')
+        )
+    except (requests.RequestException, ValueError):
+        cidade_detectada = None
+
+    cidades = list_cidades()
+    match = None
+    if cidade_detectada:
+        alvo = _norm(cidade_detectada)
+        match = next((c for c in cidades if _norm(c) == alvo), None)
+    return jsonify({
+        'success': True,
+        'cidade_detectada': cidade_detectada,
+        'cidade': match,            # nome exato do catálogo, ou null se não atendida
+        'atendida': bool(match),
+        'cidades': cidades,
+    })
+
+
 @app.route('/servicos/vacinas/pedido/<token>')
 def servicos_vacinas_pedido(token):
     from models import VaccineServiceRequest
@@ -30762,26 +30814,43 @@ def servicos_vacinas_admin_item():
         flash(f'"{item.nome}" {"reativada" if item.ativo else "desativada"}.', 'success')
         return redirect(url_for('servicos_vacinas_admin'))
 
+    from services.vaccine_service_paid import public_price_from_vet_price
+
     nome = (request.form.get('nome') or '').strip()
+    # Preferimos o "preço do veterinário": o público sai com a margem aplicada.
+    preco_vet_raw = (request.form.get('preco_vet') or '').replace(',', '.').strip()
     preco_raw = (request.form.get('preco') or '').replace(',', '.').strip()
-    if not nome or not preco_raw:
-        flash('Informe nome e preço da vacina.', 'warning')
-        return redirect(url_for('servicos_vacinas_admin'))
-    try:
-        preco = _Dec(preco_raw)
-    except Exception:
-        flash('Preço inválido.', 'warning')
+    if not nome or (not preco_vet_raw and not preco_raw):
+        flash('Informe o nome e o preço do veterinário.', 'warning')
         return redirect(url_for('servicos_vacinas_admin'))
 
-    repasse_raw = (request.form.get('valor_repasse') or '').replace(',', '.').strip()
-    try:
-        valor_repasse = _Dec(repasse_raw) if repasse_raw else None
-    except Exception:
-        flash('Valor de repasse inválido.', 'warning')
-        return redirect(url_for('servicos_vacinas_admin'))
-    if valor_repasse is not None and (valor_repasse < 0 or valor_repasse > preco):
-        flash('O repasse deve ficar entre zero e o preço cobrado.', 'warning')
-        return redirect(url_for('servicos_vacinas_admin'))
+    if preco_vet_raw:
+        # Fluxo novo: o vet informa o que recebe; a plataforma calcula o público.
+        try:
+            valor_repasse = _Dec(preco_vet_raw)
+        except Exception:
+            flash('Preço do veterinário inválido.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
+        if valor_repasse < 0:
+            flash('O preço do veterinário não pode ser negativo.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
+        preco = public_price_from_vet_price(valor_repasse)
+    else:
+        # Fluxo manual (retrocompatível): admin informa preço público e repasse.
+        try:
+            preco = _Dec(preco_raw)
+        except Exception:
+            flash('Preço inválido.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
+        repasse_raw = (request.form.get('valor_repasse') or '').replace(',', '.').strip()
+        try:
+            valor_repasse = _Dec(repasse_raw) if repasse_raw else None
+        except Exception:
+            flash('Valor de repasse inválido.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
+        if valor_repasse is not None and (valor_repasse < 0 or valor_repasse > preco):
+            flash('O repasse deve ficar entre zero e o preço cobrado.', 'warning')
+            return redirect(url_for('servicos_vacinas_admin'))
 
     especies = ','.join(request.form.getlist('especies')) or 'cao,gato'
     if item is None:
@@ -30796,6 +30865,8 @@ def servicos_vacinas_admin_item():
     item.valor_repasse = valor_repasse
     item.doses_info = (request.form.get('doses_info') or '').strip() or None
     item.cidade = (request.form.get('cidade') or '').strip() or None
+    provider_vet_id = request.form.get('provider_vet_id', type=int)
+    item.provider_vet_id = provider_vet_id or None
     db.session.commit()
     flash(f'Vacina "{nome}" salva.', 'success')
     return redirect(url_for('servicos_vacinas_admin'))
