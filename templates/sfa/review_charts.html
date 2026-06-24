@@ -73,6 +73,23 @@
       background: #fffaf5;
       font-size: .82rem;
     }
+    .question-map {
+      margin: .65rem 0 1rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .question-map summary {
+      cursor: pointer;
+      padding: .75rem .9rem;
+      font-weight: 900;
+      color: var(--teal);
+      background: #f7fbfb;
+    }
+    .question-map table { margin-top: 0; }
+    .question-map td:first-child { width: 120px; white-space: nowrap; }
+    .question-map td:last-child { width: 110px; white-space: nowrap; color: var(--muted); }
     .full { grid-column: 1 / -1; }
     table { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .9rem; }
     th, td { border: 1px solid var(--line); padding: .45rem; text-align: left; vertical-align: top; }
@@ -149,12 +166,38 @@
         <h3>{{ section.title }}</h3>
         <p class="muted">{{ section.description }}</p>
         <div class="examples">
+          <strong class="muted" style="align-self:center">Graficos/tabelas neste bloco:</strong>
           {% for item in section["items"] %}
           {% if item %}<span class="pill">{{ item }}</span>{% endif %}
           {% else %}
           <span class="pill">Sem exemplos neste momento</span>
           {% endfor %}
         </div>
+        <details class="question-map" open>
+          <summary>Perguntas e campos usados neste bloco</summary>
+          <table>
+            <thead>
+              <tr>
+                <th>Origem</th>
+                <th>Pergunta ou campo</th>
+                <th>Como alimenta o grafico</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for question in section.questions %}
+              <tr>
+                <td>{{ question.stage }}</td>
+                <td>{{ question.label }}</td>
+                <td>{{ question.use }}</td>
+                <td>{{ question.required }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="muted">Nenhuma pergunta mapeada para este bloco.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
         <div class="review-grid">
           <div>
             <label>Utilidade</label>

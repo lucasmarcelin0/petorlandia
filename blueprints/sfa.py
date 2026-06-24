@@ -1332,31 +1332,190 @@ def _collect_question_review_payload(kind: str, schema: dict) -> dict:
     }
 
 
+def _review_form_field_index() -> dict[str, dict[str, str]]:
+    from services.sfa_service import (
+        carregar_t0_form_schema,
+        carregar_t10_form_schema,
+        carregar_t30_form_schema,
+        iterar_campos_form,
+    )
+
+    index = {}
+    for stage, schema in [
+        ("T0", carregar_t0_form_schema()),
+        ("T10", carregar_t10_form_schema()),
+        ("T30", carregar_t30_form_schema()),
+    ]:
+        for field in iterar_campos_form(schema):
+            key = str(field.get("key") or "").strip()
+            if not key:
+                continue
+            index[f"{stage.lower()}:{key}"] = {
+                "stage": stage,
+                "label": str(field.get("label") or key).strip(),
+                "required": "Obrigatoria" if field.get("required") else "Opcional",
+            }
+    cadastro_fields = {
+        "grupo": "Classificacao operacional: Grupo A, Grupo B ou pendente",
+        "bairro": "Bairro do cadastro/SINAN",
+        "data_nascimento": "Data de nascimento",
+        "data_t0": "Data em que T0 foi registrado",
+        "data_t10": "Data em que T10 foi registrado",
+        "data_t30": "Data em que T30 foi registrado",
+        "status_t0": "Status operacional do T0",
+        "status_t10": "Status operacional do T10",
+        "status_t30": "Status operacional do T30",
+    }
+    for key, label in cadastro_fields.items():
+        index[f"cadastro:{key}"] = {
+            "stage": "Cadastro/SINAN",
+            "label": label,
+            "required": "Dado operacional",
+        }
+    return index
+
+
+def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, str]]:
+    index = _review_form_field_index()
+    questions = []
+    seen = set()
+    for stage, key, use in refs:
+        lookup_key = f"{stage.lower()}:{key}"
+        if lookup_key in seen:
+            continue
+        seen.add(lookup_key)
+        field = index.get(
+            lookup_key,
+            {
+                "stage": stage.upper(),
+                "label": key,
+                "required": "",
+            },
+        )
+        questions.append({**field, "key": key, "use": use})
+    return questions
+
+
 def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
     return [
         {
-            "key": "resumo_executivo",
-            "title": "Resumo executivo",
-            "description": "Cards, alertas, hipoteses, linha do tempo e custos medios.",
+            "key": "cards_principais",
+            "title": "Cards principais do painel",
+            "description": "Mostram tamanho do lote, grupos, dias incapacitantes, custo medio e recuperacao final.",
             "items": [card.get("label") for card in dashboard_testes.get("research_cards", [])],
+            "questions": _review_question_refs(
+                ("cadastro", "grupo", "separa Grupo A e Grupo B"),
+                ("t0", "dias_incap", "calcula dias incapacitantes iniciais"),
+                ("t30", "dias_incap_novos", "calcula dias incapacitantes acumulados"),
+                ("t30", "estado_saude_final", "define recuperacao alta no T30"),
+                ("t30", "custo_remedios", "entra no custo medio final"),
+                ("t30", "custo_consultas", "entra no custo medio final"),
+                ("t30", "custo_transporte", "entra no custo medio final"),
+                ("t30", "custo_outros", "entra no custo medio final"),
+            ),
+        },
+        {
+            "key": "linha_tempo",
+            "title": "Linha do tempo T0/T10/T30",
+            "description": "Calcula quantos dias se passaram entre inicio dos sintomas e cada acompanhamento.",
+            "items": [item.get("label") for item in dashboard_testes.get("timeline_cards", [])],
+            "questions": _review_question_refs(
+                ("t0", "data_inicio_sintomas", "marca o inicio da doenca"),
+                ("cadastro", "data_t0", "calcula dias ate T0"),
+                ("cadastro", "data_t10", "calcula dias ate T10"),
+                ("cadastro", "data_t30", "calcula dias ate T30"),
+            ),
+        },
+        {
+            "key": "custos_t30",
+            "title": "Custos medios no T30",
+            "description": "Resume os gastos acumulados por categoria no fechamento de 30 dias.",
+            "items": [item.get("label") for item in dashboard_testes.get("cost_breakdown", [])],
+            "questions": _review_question_refs(
+                ("t30", "custo_remedios", "medicamentos"),
+                ("t30", "custo_consultas", "consultas e exames"),
+                ("t30", "custo_transporte", "transporte"),
+                ("t30", "custo_outros", "outros gastos"),
+            ),
         },
         {
             "key": "comparacao_grupos",
             "title": "Comparacao entre grupos",
             "description": "Diferencas entre Grupo A e Grupo B, sintomas discriminantes e recuperacao.",
             "items": [row.get("metric") for row in dashboard_testes.get("group_comparison", [])],
+            "questions": _review_question_refs(
+                ("cadastro", "grupo", "define os grupos comparados"),
+                ("t30", "custo_remedios", "compoe custo final medio"),
+                ("t30", "custo_consultas", "compoe custo final medio"),
+                ("t30", "custo_transporte", "compoe custo final medio"),
+                ("t30", "custo_outros", "compoe custo final medio"),
+                ("t30", "dias_incap_novos", "compara incapacidade acumulada"),
+                ("t30", "estado_saude_final", "compara recuperacao alta"),
+            ),
         },
         {
-            "key": "sintomas_perfil",
-            "title": "Sintomas e perfil",
-            "description": "Prevalencia de sintomas, clusters e distribuicoes demograficas.",
+            "key": "sintomas_exposicoes",
+            "title": "Sintomas e exposicoes no T0",
+            "description": "Mostra sintomas principais e exposicoes animal, ambiental e alimentar, com recorte por grupo.",
             "items": [item.get("label") for item in dashboard_testes.get("symptom_prevalence", [])[:8]],
+            "questions": _review_question_refs(
+                ("t0", "sintomas_principais", "prevalencia de sintomas e sintomas discriminantes"),
+                ("t0", "exposicao_animal", "contato animal"),
+                ("t0", "exposicao_ambiental", "risco ambiental"),
+                ("t0", "exposicao_alimentar", "risco alimentar/hidrico"),
+                ("t0", "contato_agua_suja", "reforca risco ambiental"),
+                ("t0", "contato_carrapato_mata", "reforca risco ambiental e animal"),
+                ("t0", "atividades_recentes", "reforca risco ambiental"),
+                ("t0", "tipo_residencia", "ajuda a inferir moradia rural"),
+                ("t0", "ocupacao_principal", "ajuda a inferir ocupacao agropecuaria"),
+            ),
+        },
+        {
+            "key": "perfil_demografico",
+            "title": "Perfil demografico",
+            "description": "Distribui participantes por sexo biologico, faixa etaria, ocupacao e bairro.",
+            "items": [chart.get("title") for chart in dashboard_testes.get("demographic_distributions", [])],
+            "questions": _review_question_refs(
+                ("t0", "sexo_biologico", "distribuicao por sexo e recuperacao por segmento"),
+                ("cadastro", "data_nascimento", "calcula faixa etaria"),
+                ("t0", "ocupacao_principal", "distribuicao por ocupacao"),
+                ("cadastro", "bairro", "distribuicao por bairro"),
+            ),
+        },
+        {
+            "key": "recuperacao_clusters",
+            "title": "Recuperacao, retorno e clusters",
+            "description": "Resume recuperacao alta, retorno as atividades, custo por retorno e padroes de evolucao.",
+            "items": [item.get("title") for item in dashboard_testes.get("hypothesis_cards", [])],
+            "questions": _review_question_refs(
+                ("t0", "data_inicio_sintomas", "base temporal para melhora/fechamento"),
+                ("t10", "classificacao_melhora", "identifica melhora intermediaria"),
+                ("t30", "estado_saude_final", "classifica recuperacao final"),
+                ("t30", "retorno_atividades_normais", "mede retorno funcional"),
+                ("t30", "dias_incap_novos", "mede limitacao funcional acumulada"),
+                ("t30", "custo_remedios", "compoe custo por retorno"),
+                ("t30", "custo_consultas", "compoe custo por retorno"),
+                ("t30", "custo_transporte", "compoe custo por retorno"),
+                ("t30", "custo_outros", "compoe custo por retorno"),
+            ),
         },
         {
             "key": "perguntas_distribuicao",
             "title": "Perguntas com distribuicao de respostas",
             "description": "Tabelas por pergunta, com total e recorte por grupo.",
             "items": [chart.get("title") for chart in dashboard_testes.get("distributions", [])[:10]],
+            "questions": _review_question_refs(
+                ("t10", "classificacao_melhora", "evolucao percebida no T10"),
+                ("t30", "estado_saude_final", "estado final no T30"),
+                ("t30", "retorno_atividades_normais", "retorno as atividades"),
+                ("t0", "tipo_residencia", "tipo de residencia"),
+                ("t0", "exposicao_animal", "contato com animais"),
+                ("t0", "exposicao_ambiental", "riscos ambientais"),
+                ("t0", "exposicao_alimentar", "riscos alimentares"),
+                ("t0", "contato_agua_suja", "dominio ambiental"),
+                ("t0", "contato_carrapato_mata", "dominio ambiental/animal"),
+                ("cadastro", "bairro", "bairros do lote"),
+            ),
         },
     ]
 

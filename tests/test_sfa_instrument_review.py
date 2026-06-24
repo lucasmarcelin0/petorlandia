@@ -58,15 +58,17 @@ def test_sfa_chart_review_records_feedback(app, client):
     assert response.status_code == 200
     assert b"Revisao colaborativa dos graficos" in response.data
     assert b"Resumo visual atual" in response.data
+    assert b"Perguntas e campos usados neste bloco" in response.data
+    assert b"Sintomas principais no inicio" in response.data
 
     response = client.post(
         "/sfa/revisao/graficos",
         data={
             "reviewer_name": "Bruno",
-            "usefulness__resumo_executivo": "Util",
-            "chart_clarity__resumo_executivo": "Precisa melhorar",
-            "chart_redundancy__resumo_executivo": "Nao parece redundante",
-            "chart_comment__resumo_executivo": "Explicar melhor a leitura rapida.",
+            "usefulness__cards_principais": "Util",
+            "chart_clarity__cards_principais": "Precisa melhorar",
+            "chart_redundancy__cards_principais": "Nao parece redundante",
+            "chart_comment__cards_principais": "Explicar melhor a leitura rapida.",
         },
     )
     assert response.status_code == 200
@@ -75,6 +77,6 @@ def test_sfa_chart_review_records_feedback(app, client):
         review = SfaInstrumentReview.query.one()
         payload = json.loads(review.payload_json)
         assert review.kind == "graficos"
-        resumo = next(chart for chart in payload["charts"] if chart["key"] == "resumo_executivo")
+        resumo = next(chart for chart in payload["charts"] if chart["key"] == "cards_principais")
         assert resumo["clarity"] == "Precisa melhorar"
         assert resumo["comment"] == "Explicar melhor a leitura rapida."
