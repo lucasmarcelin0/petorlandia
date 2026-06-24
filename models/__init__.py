@@ -45,6 +45,7 @@ from .fiscal import (
 )
 from .sfa import (
     SfaAuditoria,
+    SfaInstrumentReview,
     SfaPaciente,
     SfaRespostaT0,
     SfaRespostaT10,
@@ -126,6 +127,7 @@ __all__ = [
     "ProtocoloClinicoRetorno",
     "AuditoriaSugestaoClinica",
     "SfaAuditoria",
+    "SfaInstrumentReview",
     "SfaPaciente",
     "SfaRespostaT0",
     "SfaRespostaT10",

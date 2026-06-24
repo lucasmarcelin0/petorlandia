@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 import hmac
 import hashlib
+import io
 import json
 import os
 from functools import wraps
@@ -33,6 +34,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
     current_app,
 )
@@ -1222,6 +1224,254 @@ def _formularios_impressao_sfa() -> list[dict[str, object]]:
         )
     return itens
 
+
+REVIEW_KIND_LABELS = {
+    "t0": "Formulario T0",
+    "t10": "Formulario T10",
+    "t30": "Formulario T30",
+    "graficos": "Graficos da pesquisa",
+}
+
+
+def _review_schema_loader(kind: str):
+    from services.sfa_service import carregar_t0_form_schema, carregar_t10_form_schema, carregar_t30_form_schema
+
+    loaders = {
+        "t0": carregar_t0_form_schema,
+        "t10": carregar_t10_form_schema,
+        "t30": carregar_t30_form_schema,
+    }
+    return loaders.get(kind)
+
+
+def _review_kind_or_404(kind: str) -> str:
+    normalized = str(kind or "").strip().lower()
+    if normalized not in REVIEW_KIND_LABELS:
+        abort(404)
+    return normalized
+
+
+def _client_ip() -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return str(request.remote_addr or "").strip()
+
+
+def _field_answer_mode(field: dict) -> str:
+    field_type = str(field.get("type") or "text").strip()
+    if field_type == "checkboxes":
+        return "Pode marcar mais de uma opcao."
+    if field_type in {"radio", "select"}:
+        return "Marcar ou escolher somente uma opcao."
+    if field_type == "textarea":
+        return "Resposta aberta longa."
+    if field_type == "date":
+        return "Informar uma data."
+    if field_type == "number":
+        return "Informar um numero."
+    return "Resposta aberta curta."
+
+
+def _collect_reviewer_identity() -> dict[str, str]:
+    return {
+        "name": str(request.form.get("reviewer_name") or "").strip(),
+        "email": str(request.form.get("reviewer_email") or "").strip(),
+        "profile": str(request.form.get("reviewer_profile") or "").strip(),
+        "overall_comment": str(request.form.get("overall_comment") or "").strip(),
+    }
+
+
+def _save_instrument_review(kind: str, payload: dict):
+    from extensions import db
+    from models.sfa import SfaInstrumentReview
+
+    identity = payload.get("reviewer") or {}
+    review = SfaInstrumentReview(
+        kind=kind,
+        reviewer_name=identity.get("name"),
+        reviewer_email=identity.get("email"),
+        reviewer_profile=identity.get("profile"),
+        payload_json=json.dumps(payload, ensure_ascii=False),
+        ip_address=_client_ip(),
+        user_agent=str(request.headers.get("User-Agent") or "").strip(),
+    )
+    db.session.add(review)
+    db.session.commit()
+    return review
+
+
+def _collect_question_review_payload(kind: str, schema: dict) -> dict:
+    from services.sfa_service import iterar_campos_form
+
+    questions = []
+    for field in iterar_campos_form(schema):
+        key = str(field.get("key") or "").strip()
+        if not key:
+            continue
+        sample_value = request.form.getlist(f"answer__{key}") if field.get("type") == "checkboxes" else str(request.form.get(f"answer__{key}") or "").strip()
+        questions.append(
+            {
+                "key": key,
+                "label": str(field.get("label") or "").strip(),
+                "required": bool(field.get("required")),
+                "type": str(field.get("type") or "text").strip(),
+                "answer_mode": _field_answer_mode(field),
+                "sample_answer": sample_value,
+                "necessity": str(request.form.get(f"necessity__{key}") or "").strip(),
+                "redundancy": str(request.form.get(f"redundancy__{key}") or "").strip(),
+                "clarity": str(request.form.get(f"clarity__{key}") or "").strip(),
+                "comment": str(request.form.get(f"comment__{key}") or "").strip(),
+            }
+        )
+    return {
+        "kind": kind,
+        "label": REVIEW_KIND_LABELS[kind],
+        "reviewer": _collect_reviewer_identity(),
+        "questions": questions,
+    }
+
+
+def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
+    return [
+        {
+            "key": "resumo_executivo",
+            "title": "Resumo executivo",
+            "description": "Cards, alertas, hipoteses, linha do tempo e custos medios.",
+            "items": [card.get("label") for card in dashboard_testes.get("research_cards", [])],
+        },
+        {
+            "key": "comparacao_grupos",
+            "title": "Comparacao entre grupos",
+            "description": "Diferencas entre Grupo A e Grupo B, sintomas discriminantes e recuperacao.",
+            "items": [row.get("metric") for row in dashboard_testes.get("group_comparison", [])],
+        },
+        {
+            "key": "sintomas_perfil",
+            "title": "Sintomas e perfil",
+            "description": "Prevalencia de sintomas, clusters e distribuicoes demograficas.",
+            "items": [item.get("label") for item in dashboard_testes.get("symptom_prevalence", [])[:8]],
+        },
+        {
+            "key": "perguntas_distribuicao",
+            "title": "Perguntas com distribuicao de respostas",
+            "description": "Tabelas por pergunta, com total e recorte por grupo.",
+            "items": [chart.get("title") for chart in dashboard_testes.get("distributions", [])[:10]],
+        },
+    ]
+
+
+def _collect_chart_review_payload(sections: list[dict[str, object]]) -> dict:
+    reviews = []
+    for section in sections:
+        key = str(section.get("key") or "").strip()
+        reviews.append(
+            {
+                "key": key,
+                "title": section.get("title"),
+                "usefulness": str(request.form.get(f"usefulness__{key}") or "").strip(),
+                "clarity": str(request.form.get(f"chart_clarity__{key}") or "").strip(),
+                "redundancy": str(request.form.get(f"chart_redundancy__{key}") or "").strip(),
+                "comment": str(request.form.get(f"chart_comment__{key}") or "").strip(),
+            }
+        )
+    return {
+        "kind": "graficos",
+        "label": REVIEW_KIND_LABELS["graficos"],
+        "reviewer": _collect_reviewer_identity(),
+        "charts": reviews,
+    }
+
+
+def _parse_review_payload(review) -> dict:
+    try:
+        payload = json.loads(review.payload_json or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _review_created_at_label(value) -> str:
+    if not value:
+        return ""
+    try:
+        return value.strftime("%d/%m/%Y %H:%M")
+    except AttributeError:
+        return str(value)
+
+
+def _build_review_summary(reviews) -> dict:
+    by_kind = {}
+    entries = []
+    for review in reviews:
+        payload = _parse_review_payload(review)
+        kind = review.kind
+        item = {
+            "id": review.id,
+            "kind": kind,
+            "kind_label": REVIEW_KIND_LABELS.get(kind, kind.upper()),
+            "created_at": _review_created_at_label(review.created_at),
+            "reviewer_name": review.reviewer_name or "Nao informado",
+            "reviewer_email": review.reviewer_email or "",
+            "reviewer_profile": review.reviewer_profile or "",
+            "overall_comment": (payload.get("reviewer") or {}).get("overall_comment", ""),
+            "payload": payload,
+        }
+        entries.append(item)
+        bucket = by_kind.setdefault(
+            kind,
+            {
+                "kind": kind,
+                "label": REVIEW_KIND_LABELS.get(kind, kind.upper()),
+                "total": 0,
+                "low_necessity": [],
+                "redundant": [],
+                "unclear": [],
+                "comments": [],
+            },
+        )
+        bucket["total"] += 1
+        for question in payload.get("questions", []):
+            label = question.get("label") or question.get("key")
+            necessity = str(question.get("necessity") or "")
+            redundancy = str(question.get("redundancy") or "")
+            clarity = str(question.get("clarity") or "")
+            comment = str(question.get("comment") or "").strip()
+            if necessity in {"Pouco necessaria", "Nao acrescenta"}:
+                bucket["low_necessity"].append(label)
+            if redundancy in {"Talvez redundante", "Redundante"}:
+                bucket["redundant"].append(label)
+            if clarity in {"Confusa", "Precisa melhorar"}:
+                bucket["unclear"].append(label)
+            if comment:
+                bucket["comments"].append(
+                    {
+                        "label": label,
+                        "comment": comment,
+                        "reviewer": item["reviewer_name"],
+                        "created_at": item["created_at"],
+                    }
+                )
+        for chart in payload.get("charts", []):
+            label = chart.get("title") or chart.get("key")
+            redundancy = str(chart.get("redundancy") or "")
+            clarity = str(chart.get("clarity") or "")
+            comment = str(chart.get("comment") or "").strip()
+            if redundancy in {"Talvez redundante", "Redundante"}:
+                bucket["redundant"].append(label)
+            if clarity in {"Confuso", "Precisa melhorar"}:
+                bucket["unclear"].append(label)
+            if comment:
+                bucket["comments"].append(
+                    {
+                        "label": label,
+                        "comment": comment,
+                        "reviewer": item["reviewer_name"],
+                        "created_at": item["created_at"],
+                    }
+                )
+    return {"total": len(entries), "by_kind": list(by_kind.values()), "entries": entries}
+
 @bp.route("/pacientes")
 @require_sfa_internal_access
 def pacientes():
@@ -1263,6 +1513,107 @@ def formularios_print():
         "sfa/print_form_questions.html",
         formularios=_formularios_impressao_sfa(),
         generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@bp.route("/revisao/links")
+@require_sfa_internal_access
+def revisao_links():
+    links = []
+    for kind, label in REVIEW_KIND_LABELS.items():
+        endpoint = "sfa_routes.revisao_graficos" if kind == "graficos" else "sfa_routes.revisao_formulario"
+        params = {} if kind == "graficos" else {"kind": kind}
+        links.append(
+            {
+                "kind": kind,
+                "label": label,
+                "url": url_for(endpoint, _external=True, **params),
+                "qr_url": url_for("sfa_routes.revisao_qrcode", kind=kind),
+            }
+        )
+    return render_template("sfa/review_links.html", links=links)
+
+
+@bp.route("/revisao/resumo")
+@require_sfa_internal_access
+def revisao_resumo():
+    from models.sfa import SfaInstrumentReview
+
+    reviews = (
+        SfaInstrumentReview.query
+        .order_by(SfaInstrumentReview.created_at.desc(), SfaInstrumentReview.id.desc())
+        .all()
+    )
+    return render_template("sfa/review_summary.html", summary=_build_review_summary(reviews))
+
+
+@bp.route("/revisao/qrcode/<kind>.png")
+@require_sfa_internal_access
+def revisao_qrcode(kind: str):
+    kind = _review_kind_or_404(kind)
+    import qrcode
+
+    if kind == "graficos":
+        target_url = url_for("sfa_routes.revisao_graficos", _external=True)
+    else:
+        target_url = url_for("sfa_routes.revisao_formulario", kind=kind, _external=True)
+    image = qrcode.make(target_url)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return send_file(buffer, mimetype="image/png", download_name=f"sfa_revisao_{kind}.png")
+
+
+@bp.route("/revisao/<kind>", methods=["GET", "POST"])
+@csrf.exempt
+def revisao_formulario(kind: str):
+    kind = _review_kind_or_404(kind)
+    if kind == "graficos":
+        return redirect(url_for("sfa_routes.revisao_graficos"))
+    loader = _review_schema_loader(kind)
+    if not loader:
+        abort(404)
+    schema = loader()
+    if request.method == "POST":
+        payload = _collect_question_review_payload(kind, schema)
+        _save_instrument_review(kind, payload)
+        return render_template(
+            "sfa/review_submitted.html",
+            title=REVIEW_KIND_LABELS[kind],
+            links_url=url_for("sfa_routes.revisao_formulario", kind=kind),
+        )
+    return render_template(
+        "sfa/review_form.html",
+        kind=kind,
+        title=REVIEW_KIND_LABELS[kind],
+        schema=schema,
+        answer_mode=_field_answer_mode,
+    )
+
+
+@bp.route("/revisao/graficos", methods=["GET", "POST"])
+@csrf.exempt
+def revisao_graficos():
+    from models.sfa import SfaPaciente
+    from services.sfa_service import filtrar_pacientes_teste_sfa
+
+    pacientes = filtrar_pacientes_teste_sfa(SfaPaciente.query.all())
+    dashboard_testes = _montar_dashboard_testes_sfa(pacientes)
+    sections = _chart_review_sections(dashboard_testes)
+    if request.method == "POST":
+        payload = _collect_chart_review_payload(sections)
+        _save_instrument_review("graficos", payload)
+        return render_template(
+            "sfa/review_submitted.html",
+            title=REVIEW_KIND_LABELS["graficos"],
+            links_url=url_for("sfa_routes.revisao_graficos"),
+        )
+    return render_template(
+        "sfa/review_charts.html",
+        title=REVIEW_KIND_LABELS["graficos"],
+        dashboard_testes=dashboard_testes,
+        sections=sections,
+        has_test_data=bool(pacientes),
     )
 
 
@@ -1514,10 +1865,14 @@ def criar_paciente_manual():
     return redirect(url_for("sfa_routes.paciente_detail", id_estudo=resultado))
 
 
-@bp.route("/teste-dados/gerar", methods=["POST"])
+@bp.route("/teste-dados/gerar", methods=["GET", "POST"])
 @require_sfa_internal_access
 def gerar_teste_dados():
     from services.sfa_service import gerar_lote_pacientes_teste_sfa
+
+    if request.method == "GET":
+        flash("Use o botao do painel para gerar ou renovar o lote de validacao.", "info")
+        return redirect(url_for("sfa_routes.dashboard"))
 
     quantidade = request.form.get("quantidade", 10, type=int) or 10
     resumo = gerar_lote_pacientes_teste_sfa(quantidade)

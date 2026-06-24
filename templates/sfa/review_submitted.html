@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avaliacao enviada</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: #17313a;
+      background: linear-gradient(180deg, #f8fbfb 0%, #f7efe3 100%);
+    }
+    .card {
+      width: min(680px, calc(100% - 2rem));
+      padding: 2rem;
+      border-radius: 18px;
+      border: 1px solid #d7e1de;
+      background: white;
+      box-shadow: 0 16px 34px rgba(23,49,58,.08);
+    }
+    h1 { margin: 0 0 .6rem; }
+    p { line-height: 1.55; color: rgba(23,49,58,.72); }
+    a {
+      display: inline-block;
+      margin-top: .8rem;
+      color: #0b6b73;
+      font-weight: 800;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Avaliacao enviada</h1>
+    <p>Obrigado por revisar {{ title }}. Suas respostas entraram no compilado da pesquisa e vao ajudar a deixar o instrumento mais claro.</p>
+    <a href="{{ links_url }}">Enviar outra avaliacao</a>
+  </main>
+</body>
+</html>

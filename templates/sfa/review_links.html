@@ -1,0 +1,41 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Revisao dos instrumentos{% endblock %}
+{% block page_title %}Revisao dos instrumentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">Links publicos para colaboradores</h4>
+    <p class="text-muted mb-0">Compartilhe os links ou QR codes para receber avaliacoes dos formularios e dos graficos.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{{ url_for('sfa_routes.revisao_resumo') }}">
+    <i class="fas fa-list-check me-1"></i> Ver compilado
+  </a>
+</div>
+
+<div class="row g-3">
+  {% for item in links %}
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex gap-3 align-items-start">
+          <img src="{{ item.qr_url }}" alt="QR code {{ item.label }}" width="128" height="128" class="border rounded p-1 bg-white">
+          <div class="flex-grow-1">
+            <h5 class="mb-2">{{ item.label }}</h5>
+            <p class="text-muted small mb-2">Link publico de revisao colaborativa.</p>
+            <input class="form-control form-control-sm mb-2" value="{{ item.url }}" readonly onclick="this.select()">
+            <a class="btn btn-sm btn-primary" href="{{ item.url }}" target="_blank" rel="noopener">
+              Abrir link
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ item.qr_url }}" target="_blank" rel="noopener">
+              Abrir QR
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

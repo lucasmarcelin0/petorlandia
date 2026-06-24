@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revisao - {{ title }}</title>
+  <style>
+    :root {
+      --ink: #17313a;
+      --teal: #0b6b73;
+      --line: #d7e1de;
+      --sand: #f7efe3;
+      --muted: rgba(23,49,58,.68);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8fbfb 0%, var(--sand) 100%);
+    }
+    .wrap { width: min(1120px, calc(100% - 2rem)); margin: 2rem auto 3rem; }
+    .hero, .panel, .review-block {
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 14px 32px rgba(23,49,58,.07);
+    }
+    .hero, .panel { padding: 1.2rem; margin-bottom: 1rem; }
+    h1 { margin: .35rem 0; font-size: clamp(1.7rem, 3vw, 2.6rem); }
+    h2 { margin: 0 0 .4rem; font-size: 1.18rem; }
+    h3 { margin: 0 0 .45rem; color: var(--teal); }
+    p { line-height: 1.55; }
+    .muted { color: var(--muted); }
+    .kicker {
+      color: #08484d;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: .78rem;
+    }
+    .identity, .cards, .review-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .8rem;
+    }
+    .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      padding: .9rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .card .label { color: var(--muted); font-size: .86rem; }
+    .card .value { margin-top: .3rem; font-size: 1.4rem; font-weight: 900; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: .78rem .9rem;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 92px; resize: vertical; }
+    label { font-weight: 800; font-size: .92rem; }
+    .review-block { padding: 1rem; margin-bottom: .9rem; }
+    .examples { display: flex; flex-wrap: wrap; gap: .35rem; margin: .55rem 0 .9rem; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .28rem .55rem;
+      background: #fffaf5;
+      font-size: .82rem;
+    }
+    .full { grid-column: 1 / -1; }
+    table { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .9rem; }
+    th, td { border: 1px solid var(--line); padding: .45rem; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: .9rem 1.4rem;
+      font: inherit;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, var(--teal), #0a4e54);
+      cursor: pointer;
+    }
+    @media (max-width: 860px) {
+      .identity, .cards, .review-grid { grid-template-columns: 1fr; }
+      .wrap { width: min(100% - 1rem, 100%); margin-top: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="kicker">Revisao colaborativa dos graficos</div>
+      <h1>{{ title }}</h1>
+      <p class="muted">
+        Abaixo estao os blocos da visao de testes. Avalie se os graficos e tabelas ajudam,
+        se estao claros, se repetem informacao ou se deveriam ser melhorados.
+      </p>
+      {% if not has_test_data %}
+      <p class="muted"><strong>Observacao:</strong> ainda nao ha lote de teste carregado. A avaliacao pode ser feita pela estrutura, mas os numeros aparecerao vazios.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Resumo visual atual</h2>
+      <div class="cards">
+        {% for card in dashboard_testes.cards %}
+        <div class="card">
+          <div class="label">{{ card.label }}</div>
+          <div class="value">{{ card.value }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Exemplo: comparacao entre grupos</h2>
+      <table>
+        <thead><tr><th>Metrica</th><th>Grupo A</th><th>Grupo B</th></tr></thead>
+        <tbody>
+          {% for row in dashboard_testes.group_comparison %}
+          <tr><td>{{ row.metric }}</td><td>{{ row.a }}</td><td>{{ row.b }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <form method="POST">
+      <section class="panel">
+        <h2>Quem esta avaliando?</h2>
+        <div class="identity">
+          <div><label>Nome</label><input name="reviewer_name" type="text"></div>
+          <div><label>E-mail</label><input name="reviewer_email" type="email"></div>
+          <div><label>Perfil</label><input name="reviewer_profile" type="text" placeholder="Ex.: pesquisador, profissional de saude"></div>
+        </div>
+      </section>
+
+      {% for section in sections %}
+      <article class="review-block">
+        <h3>{{ section.title }}</h3>
+        <p class="muted">{{ section.description }}</p>
+        <div class="examples">
+          {% for item in section["items"] %}
+          {% if item %}<span class="pill">{{ item }}</span>{% endif %}
+          {% else %}
+          <span class="pill">Sem exemplos neste momento</span>
+          {% endfor %}
+        </div>
+        <div class="review-grid">
+          <div>
+            <label>Utilidade</label>
+            <select name="usefulness__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Essencial</option>
+              <option>Util</option>
+              <option>Pouco util</option>
+              <option>Nao acrescenta</option>
+            </select>
+          </div>
+          <div>
+            <label>Clareza</label>
+            <select name="chart_clarity__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Claro</option>
+              <option>Precisa melhorar</option>
+              <option>Confuso</option>
+            </select>
+          </div>
+          <div>
+            <label>Redundancia</label>
+            <select name="chart_redundancy__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Nao parece redundante</option>
+              <option>Talvez redundante</option>
+              <option>Redundante</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Comentario ou sugestao</label>
+            <textarea name="chart_comment__{{ section.key }}" placeholder="O que este grafico deveria explicar melhor? Voce tiraria, juntaria ou mudaria algo?"></textarea>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+
+      <section class="panel">
+        <label>Comentario geral sobre os graficos</label>
+        <textarea name="overall_comment"></textarea>
+      </section>
+
+      <div class="actions"><button type="submit">Enviar avaliacao dos graficos</button></div>
+    </form>
+  </main>
+</body>
+</html>

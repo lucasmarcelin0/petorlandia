@@ -1607,10 +1607,21 @@ def registrar_auditoria(nivel: str, categoria: str, funcao: str,
 # ---------------------------------------------------------------------------
 
 def proximo_id_estudo() -> str:
-    """Gera o próximo id_estudo sequencial (ex: SFA-042)."""
+    """Gera o proximo id_estudo sequencial (ex: SFA-042)."""
+    return reservar_ids_estudo(1)[0]
+
+
+def reservar_ids_estudo(quantidade: int = 1) -> list[str]:
+    """Reserva IDs sequenciais considerando o maior SFA-xxx ja usado."""
     from models.sfa import SfaPaciente
-    total = SfaPaciente.query.count()
-    return f"SFA-{(total + 1):03d}"
+
+    total = max(1, int(quantidade or 1))
+    maior = 0
+    for (id_estudo,) in SfaPaciente.query.with_entities(SfaPaciente.id_estudo).all():
+        match = re.fullmatch(r"SFA-(\d+)", str(id_estudo or "").strip())
+        if match:
+            maior = max(maior, int(match.group(1)))
+    return [f"SFA-{numero:03d}" for numero in range(maior + 1, maior + total + 1)]
 
 
 def diagnostico_configuracao() -> dict:
@@ -1820,6 +1831,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
         ["Area rural/chacara", "Mata/trilha/camping"],
         ["Nenhuma exposicao ambiental"],
     ]
+    ids_reservados = reservar_ids_estudo(total)
     ids_estudo: list[str] = []
 
     for indice in range(total):
@@ -1851,7 +1863,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "Importante - impede varias atividades",
             "Incapacitante - impede atividades basicas",
         ][indice % 5]
-        id_estudo = proximo_id_estudo()
+        id_estudo = ids_reservados[indice]
         ficha_sinan = f"TESTE-{batch_id[-6:]}-{seq:03d}"
         nome = f"{SFA_TEST_NAME_PREFIX} Painel {seq:02d}"
         telefone = f"551699900{seq:04d}"

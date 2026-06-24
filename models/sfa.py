@@ -251,3 +251,17 @@ class SfaAuditoria(db.Model):
     id_estudo = db.Column(db.String(30))
     mensagem = db.Column(db.Text)
     detalhes_json = db.Column(db.Text)
+
+
+class SfaInstrumentReview(db.Model):
+    __tablename__ = "sfa_instrument_review"
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(20), nullable=False, index=True)
+    reviewer_name = db.Column(db.String(160))
+    reviewer_email = db.Column(db.String(180))
+    reviewer_profile = db.Column(db.String(180))
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, index=True)
+    payload_json = db.Column(db.Text)
+    ip_address = db.Column(db.String(60))
+    user_agent = db.Column(db.Text)

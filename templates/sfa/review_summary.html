@@ -1,0 +1,92 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Compilado das revisoes{% endblock %}
+{% block page_title %}Compilado das revisoes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">Compilado das avaliacoes</h4>
+    <p class="text-muted mb-0">{{ summary.total }} avaliacao(oes) recebida(s).</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('sfa_routes.revisao_links') }}">
+    <i class="fas fa-qrcode me-1"></i> Links e QR codes
+  </a>
+</div>
+
+{% if not summary.total %}
+<div class="alert alert-info">Ainda nao ha avaliacoes registradas.</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  {% for group in summary.by_kind %}
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white">
+        <strong>{{ group.label }}</strong>
+        <span class="badge bg-primary ms-1">{{ group.total }}</span>
+      </div>
+      <div class="card-body">
+        <h6>Pontos de atencao</h6>
+        <div class="small mb-2">
+          <strong>Pouco necessarias ou sem acrescimo:</strong>
+          {% if group.low_necessity %}{{ group.low_necessity | unique | list | join("; ") }}{% else %}<span class="text-muted">nenhum apontamento</span>{% endif %}
+        </div>
+        <div class="small mb-2">
+          <strong>Possivelmente redundantes:</strong>
+          {% if group.redundant %}{{ group.redundant | unique | list | join("; ") }}{% else %}<span class="text-muted">nenhum apontamento</span>{% endif %}
+        </div>
+        <div class="small mb-3">
+          <strong>Clareza a melhorar:</strong>
+          {% if group.unclear %}{{ group.unclear | unique | list | join("; ") }}{% else %}<span class="text-muted">nenhum apontamento</span>{% endif %}
+        </div>
+
+        <h6>Comentarios importantes</h6>
+        {% for comment in group.comments[:8] %}
+        <div class="border rounded p-2 mb-2 small">
+          <strong>{{ comment.label }}</strong>
+          <div>{{ comment.comment }}</div>
+          <div class="text-muted">por {{ comment.reviewer }}{% if comment.created_at %}, em {{ comment.created_at }}{% endif %}</div>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">Sem comentarios especificos.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white"><strong>Avaliacoes individuais</strong></div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Instrumento</th>
+          <th>Avaliador</th>
+          <th>Perfil</th>
+          <th>Comentario geral</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in summary.entries %}
+        <tr>
+          <td style="white-space:nowrap">{{ entry.created_at }}</td>
+          <td>{{ entry.kind_label }}</td>
+          <td>
+            {{ entry.reviewer_name }}
+            {% if entry.reviewer_email %}<br><span class="text-muted small">{{ entry.reviewer_email }}</span>{% endif %}
+          </td>
+          <td>{{ entry.reviewer_profile }}</td>
+          <td>{{ entry.overall_comment or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">Nenhuma avaliacao registrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
