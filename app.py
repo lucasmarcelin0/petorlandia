@@ -5325,6 +5325,47 @@ def vacina_pmo_animal_photo(animal_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@app.route('/vacina-pmo/animal/<int:animal_id>/photo-src')
+@login_required
+def vacina_pmo_animal_photo_src(animal_id):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+
+    from models import PmoVaccinationAnimal
+
+    pmo_animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
+    animal = db.session.get(Animal, pmo_animal.animal_id) if pmo_animal.animal_id else None
+    image_url = (animal.image or '').strip() if animal else ''
+    if not image_url:
+        abort(404)
+
+    parsed = urlparse(image_url)
+    if not parsed.scheme and image_url.startswith('/static/'):
+        requested = (PROJECT_ROOT / image_url.lstrip('/')).resolve()
+        uploads_root = (PROJECT_ROOT / 'static' / 'uploads').resolve()
+        if not str(requested).startswith(str(uploads_root)):
+            abort(404)
+        return send_file(requested)
+
+    if parsed.scheme not in {'http', 'https'}:
+        abort(404)
+
+    try:
+        upstream = requests.get(image_url, timeout=8)
+        upstream.raise_for_status()
+    except requests.RequestException:
+        current_app.logger.exception("Falha ao buscar foto PMO para video")
+        abort(502)
+
+    content_type = (upstream.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower()
+    if content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
+        abort(415)
+    if len(upstream.content) > 10 * 1024 * 1024:
+        abort(413)
+
+    return send_file(BytesIO(upstream.content), mimetype=content_type, max_age=3600)
+
+
 @app.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
 @login_required
 def vacina_pmo_visit_attended_by(visit_id):

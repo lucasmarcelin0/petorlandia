@@ -509,6 +509,25 @@ def test_pmo_animal_photo_upload_persists_image_url(app, client, monkeypatch):
     with app.app_context():
         state = get_saved_vacina_pmo_rows(sheet_gid="photo-test")
         assert state["rows"][0]["animals"][0]["imageUrl"] == "https://bucket.example/animals/lua.jpg"
+        assert state["rows"][0]["animals"][0]["imageProxyUrl"].endswith(
+            f"/vacina-pmo/animal/{pmo_animal_id}/photo-src"
+        )
+
+    image_bytes = _test_image_file().read()
+
+    class _FakeImageResponse:
+        headers = {"Content-Type": "image/jpeg"}
+        content = image_bytes
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr("app.requests.get", lambda *_args, **_kwargs: _FakeImageResponse())
+    photo_response = client.get(f"/vacina-pmo/animal/{pmo_animal_id}/photo-src")
+
+    assert photo_response.status_code == 200
+    assert photo_response.mimetype == "image/jpeg"
+    assert photo_response.data == image_bytes
 
 
 def test_pmo_animal_photo_rejects_invalid_file(app, client):
