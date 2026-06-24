@@ -1241,14 +1241,66 @@
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 
-  function drawPetFaceCoverImage(ctx, img, x, y, w, h) {
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function estimatePetFocus(img) {
+    const probe = document.createElement('canvas');
+    const sampleW = 72;
+    const sampleH = 96;
+    probe.width = sampleW;
+    probe.height = sampleH;
+    const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+    if (!probeCtx) return { x: 0.5, y: 0.36 };
+
+    let data;
+    try {
+      probeCtx.drawImage(img, 0, 0, sampleW, sampleH);
+      data = probeCtx.getImageData(0, 0, sampleW, sampleH).data;
+    } catch (error) {
+      return { x: 0.5, y: 0.36 };
+    }
+    let total = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 14; y < 66; y += 2) {
+      for (let x = 8; x < sampleW - 8; x += 2) {
+        const index = (y * sampleW + x) * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        const rightIndex = (y * sampleW + x + 1) * 4;
+        const downIndex = ((y + 1) * sampleW + x) * 4;
+        const brightness = (r + g + b) / 3;
+        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+        const contrast =
+          Math.abs(brightness - (data[rightIndex] + data[rightIndex + 1] + data[rightIndex + 2]) / 3) +
+          Math.abs(brightness - (data[downIndex] + data[downIndex + 1] + data[downIndex + 2]) / 3);
+        const centerBias = 1 - Math.min(0.72, Math.abs(x / sampleW - 0.5) * 1.35);
+        const upperBias = 1 - Math.min(0.5, Math.abs(y / sampleH - 0.34) * 1.1);
+        const score = (contrast * 1.8 + saturation * 0.55 + Math.abs(brightness - 128) * 0.18) * centerBias * upperBias;
+        if (score <= 0) continue;
+        total += score;
+        weightedX += score * (x / sampleW);
+        weightedY += score * (y / sampleH);
+      }
+    }
+
+    if (!total) return { x: 0.5, y: 0.36 };
+    return {
+      x: clamp(weightedX / total, 0.28, 0.72),
+      y: clamp(weightedY / total, 0.24, 0.58),
+    };
+  }
+
+  function drawPetFaceCoverImage(ctx, img, x, y, w, h, focus = { x: 0.5, y: 0.36 }) {
     const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
     const sw = w / scale;
     const sh = h / scale;
-    const focalX = 0.5;
-    const focalY = 0.36;
-    const sx = Math.max(0, Math.min(img.naturalWidth - sw, img.naturalWidth * focalX - sw / 2));
-    const sy = Math.max(0, Math.min(img.naturalHeight - sh, img.naturalHeight * focalY - sh / 2));
+    const sx = clamp(img.naturalWidth * focus.x - sw / 2, 0, img.naturalWidth - sw);
+    const sy = clamp(img.naturalHeight * focus.y - sh / 2, 0, img.naturalHeight - sh);
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 
@@ -1268,13 +1320,13 @@
     ctx.quadraticCurveTo(x, y, x + r, y);
   }
 
-  function drawPhotoTile(ctx, item, img, rect) {
+  function drawPhotoTile(ctx, item, img, rect, focus) {
     const { x, y, w, h } = rect;
     ctx.save();
     ctx.beginPath();
     addRoundedRect(ctx, x, y, w, h, 22);
     ctx.clip();
-    drawPetFaceCoverImage(ctx, img, x, y, w, h);
+    drawPetFaceCoverImage(ctx, img, x, y, w, h, focus);
     const grad = ctx.createLinearGradient(0, y + h * 0.55, 0, y + h);
     grad.addColorStop(0, 'rgba(15,23,42,0)');
     grad.addColorStop(1, 'rgba(15,23,42,0.82)');
@@ -1333,9 +1385,20 @@
         { x: margin, y: top, w: width, h },
         { x: margin, y: top + h + gap, w: width, h },
       ];
-    } else {
+    } else if (count === 3) {
       const h = Math.floor((areaHeight - gap * 2) / 3);
       slots = [0, 1, 2].map((i) => ({ x: margin, y: top + i * (h + gap), w: width, h }));
+    } else {
+      const cols = 2;
+      const rows = count <= 4 ? 2 : 3;
+      const cellW = Math.floor((width - gap) / cols);
+      const cellH = Math.floor((areaHeight - gap * (rows - 1)) / rows);
+      slots = Array.from({ length: count }, (_, i) => ({
+        x: margin + (i % cols) * (cellW + gap),
+        y: top + Math.floor(i / cols) * (cellH + gap),
+        w: cellW,
+        h: cellH,
+      }));
     }
     return slots.map((slot, index) => fitTileIntoSlot(slot, targetTileAspect(images[index])));
   }
@@ -1358,11 +1421,11 @@
     ctx.fillText(subtitle, canvas.width / 2, 172);
   }
 
-  function drawSlide(ctx, canvas, group, images, slideIndex, totalSlides) {
+  function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
     drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Orlandia - ${videoDateLabel()}`);
     const rects = slideRects(images, canvas);
-    group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index]));
+    group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
     ctx.fillStyle = '#334155';
     ctx.font = '600 24px Arial, sans-serif';
     ctx.textAlign = 'center';
@@ -1439,15 +1502,16 @@
     });
 
     const groups = [];
-    for (let i = 0; i < items.length; i += 3) groups.push(items.slice(i, i + 3));
+    for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
     recorder.start();
     await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600);
     for (let i = 0; i < groups.length; i += 1) {
       setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
       const group = groups[i];
       const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
+      const focuses = images.map((img) => estimatePetFocus(img));
       setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, i, groups.length), 2800);
+      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800);
     }
     await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300);
     recorder.stop();
