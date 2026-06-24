@@ -110,15 +110,24 @@
     }
 
     .animal {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-areas:
+        "id badge action"
+        "micro micro micro";
       align-items: center;
-      gap: 10px;
+      column-gap: 12px;
+      row-gap: 8px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 12px;
+      border-radius: 10px;
+      padding: 12px;
       background: #ffffff;
     }
+
+    .animal-id { grid-area: id; }
+    .animal .badge { grid-area: badge; justify-self: end; }
+    .animal .animal-action { grid-area: action; white-space: nowrap; }
+    .animal .microcopy { grid-area: micro; margin: 0; }
 
     .animal .badge {
       display: inline-flex;
@@ -168,6 +177,61 @@
       font-size: 1.6rem;
       line-height: 1;
       opacity: .65;
+    }
+
+    .pet-avatar.is-zoomable {
+      cursor: zoom-in;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .pet-avatar.is-zoomable:hover {
+      transform: scale(1.06);
+      box-shadow: 0 6px 16px rgba(15, 103, 255, .28);
+    }
+
+    .pmo-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1080;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .pmo-lightbox[hidden] { display: none; }
+
+    .pmo-lightbox__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, .82);
+    }
+
+    .pmo-lightbox__img {
+      position: relative;
+      max-width: 94vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    }
+
+    .pmo-lightbox__close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255, 255, 255, .94);
+      color: #14213d;
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .access {
@@ -429,9 +493,16 @@
       }
 
       .animal {
-        align-items: flex-start;
-        flex-direction: column;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "id badge"
+          "action action"
+          "micro micro";
+        justify-items: start;
+        align-items: center;
       }
+
+      .animal .animal-action { justify-self: stretch; text-align: center; }
     }
   </style>
 {% endblock %}
@@ -473,8 +544,9 @@
           {% for animal in visit.animals %}
             <div class="animal">
               <div class="animal-id">
-                <div class="pet-avatar"
-                     {% if animal.animal %}style="--offset-x: {{ animal.animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.animal.photo_offset_y or 0 }}px; --rotation: {{ animal.animal.photo_rotation or 0 }}deg; --zoom: {{ animal.animal.photo_zoom or 1 }};"{% endif %}>
+                <div class="pet-avatar{% if animal.animal and animal.animal.image %} is-zoomable{% endif %}"
+                     {% if animal.animal %}style="--offset-x: {{ animal.animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.animal.photo_offset_y or 0 }}px; --rotation: {{ animal.animal.photo_rotation or 0 }}deg; --zoom: {{ animal.animal.photo_zoom or 1 }};"{% endif %}
+                     {% if animal.animal and animal.animal.image %}data-zoom-src="{{ animal.animal.image }}" data-zoom-alt="Foto de {{ animal.name }}" role="button" tabindex="0" aria-label="Ampliar foto de {{ animal.name }}"{% endif %}>
                   {% if animal.animal and animal.animal.image %}
                     <img src="{{ animal.animal.image }}" loading="lazy" alt="Foto de {{ animal.name }}">
                   {% else %}
@@ -489,7 +561,7 @@
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
                 {{ status_labels.get(animal.status, animal.status|capitalize) }}
               </span>
-              <a class="button secondary" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>
+              <a class="button secondary animal-action" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>
               <p class="microcopy">Comprovante simples para o tutor, sem abrir a ficha clínica.</p>
             </div>
           {% endfor %}
@@ -669,4 +741,45 @@
     </section>
   </div>
   </div>
+
+  <div class="pmo-lightbox" id="pmoLightbox" hidden>
+    <div class="pmo-lightbox__backdrop" data-lightbox-close></div>
+    <button type="button" class="pmo-lightbox__close" data-lightbox-close aria-label="Fechar">&times;</button>
+    <img class="pmo-lightbox__img" alt="">
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      var lb = document.getElementById('pmoLightbox');
+      if (!lb) return;
+      var img = lb.querySelector('.pmo-lightbox__img');
+      function open(src, alt) {
+        img.setAttribute('src', src);
+        img.setAttribute('alt', alt || '');
+        lb.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lb.hidden = true;
+        img.removeAttribute('src');
+        document.body.style.overflow = '';
+      }
+      document.querySelectorAll('[data-zoom-src]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          open(el.getAttribute('data-zoom-src'), el.getAttribute('data-zoom-alt'));
+        });
+        el.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+        });
+      });
+      lb.querySelectorAll('[data-lightbox-close]').forEach(function (el) {
+        el.addEventListener('click', close);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !lb.hidden) close();
+      });
+    })();
+  </script>
 {% endblock %}
