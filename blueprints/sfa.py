@@ -146,9 +146,19 @@ def dashboard():
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
     )
 
-    stats = stats_painel()
+    mes_selecionado = request.args.get("mes", "").strip()
+    mes_valido = _parse_month_filter(mes_selecionado)
+    if mes_selecionado and not mes_valido:
+        mes_selecionado = ""
+    mes_label = ""
+    if mes_valido:
+        year, month = mes_valido
+        mes_label = f"{month:02d}/{year}"
+
+    stats = stats_painel(mes_inicio_sintomas=mes_selecionado)
     diagnostico = diagnostico_configuracao()
     resumo_testes = resumo_dados_teste_sfa()
+    filtros_mes_pacientes = {"mes_inicio_sintomas": mes_selecionado} if mes_selecionado else {}
 
     # Enriquece a fila com links WhatsApp prontos
     for p in stats["fila"]:
@@ -170,7 +180,15 @@ def dashboard():
             except Exception:
                 pass
 
-    return render_template("sfa/dashboard.html", stats=stats, diagnostico=diagnostico, resumo_testes=resumo_testes)
+    return render_template(
+        "sfa/dashboard.html",
+        stats=stats,
+        diagnostico=diagnostico,
+        resumo_testes=resumo_testes,
+        mes_selecionado=mes_selecionado,
+        mes_label=mes_label,
+        filtros_mes_pacientes=filtros_mes_pacientes,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +375,14 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
         parsed_month = _parse_month_filter(mes_inicio_sintomas)
         if parsed_month:
             year, month = parsed_month
-            filtros_t0.append(SfaRespostaT0.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+            q = q.filter(
+                exists()
+                .where(SfaRespostaT0.id_estudo == SfaPaciente.id_estudo)
+                .where(SfaRespostaT0.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+                | exists()
+                .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+                .where(SfaSinanLog.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+            )
     if data_inicio_sintomas:
         parsed_date = parse_data(data_inicio_sintomas)
         if parsed_date:

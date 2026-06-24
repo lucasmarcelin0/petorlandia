@@ -4,6 +4,32 @@
 {% block page_title %}Painel Operacional{% endblock %}
 
 {% block content %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-3">
+    <form method="GET" action="{{ url_for('sfa_routes.dashboard') }}" class="row g-2 align-items-end">
+      <div class="col-sm-6 col-md-4 col-lg-3">
+        <label class="form-label form-label-sm mb-1" for="dashboard-mes">Mes de inicio dos sintomas</label>
+        <input id="dashboard-mes" type="month" name="mes" value="{{ mes_selecionado or '' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar mes</button>
+      </div>
+      <div class="col-auto">
+        <a href="{{ url_for('sfa_routes.dashboard') }}" class="btn btn-sm btn-outline-secondary">Mostrar todos</a>
+      </div>
+      <div class="col">
+        <div class="small text-muted">
+          {% if mes_label %}
+            Mostrando apenas pacientes com T0 indicando inicio dos sintomas em <strong>{{ mes_label }}</strong>.
+          {% else %}
+            Mostrando todos os pacientes reais cadastrados.
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- KPIs -->
 <div class="row g-3 mb-4">
   {% set kpis = [
@@ -38,8 +64,8 @@
       <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
         <span><i class="fas fa-list-check me-2"></i>Fila do Dia (top 25)</span>
         <div class="d-flex flex-wrap gap-2">
-          <a href="{{ url_for('sfa_routes.export_analitico_csv') }}" class="btn btn-sm btn-outline-light">Exportar analitico</a>
-          <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-light">Ver todos</a>
+          <a href="{{ url_for('sfa_routes.export_analitico_csv', **filtros_mes_pacientes) }}" class="btn btn-sm btn-outline-light">Exportar analitico</a>
+          <a href="{{ url_for('sfa_routes.pacientes', **filtros_mes_pacientes) }}" class="btn btn-sm btn-outline-light">Ver todos</a>
         </div>
       </div>
       <div class="card-body p-0">
