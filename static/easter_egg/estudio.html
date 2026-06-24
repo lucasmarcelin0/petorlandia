@@ -22,6 +22,7 @@
   .btn-ghost{background:var(--border);color:#cbd5e1}
   .btn-ghost:hover:not(:disabled){background:#475569}
   .btn-ghost.on{background:var(--accent);color:#06281d}
+  .btn-mic.on{background:var(--ok);color:#06281d}
   select{background:var(--border);color:#e2e8f0}
   .grp{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--muted)}
   .grp input[type=range]{width:120px;accent-color:var(--accent);cursor:pointer}
@@ -63,6 +64,7 @@
   <label class="drop" id="drop">📂 Abrir MusicXML
     <input type="file" id="file" accept=".musicxml,.xml,.mxl">
   </label>
+  <button class="btn-ghost btn-mic" id="micBtn" type="button">🎤 Ativar microfone</button>
   <span class="spacer"></span>
   <button class="btn-primary" id="playBtn" disabled>▶ Ouvir</button>
   <button class="btn-ghost" id="stopBtn" disabled>■ Parar</button>
@@ -114,7 +116,7 @@ let playing=false, practiceMode=false, loopOn=false;
 let stepIdx=0, shownIdx=-1, nextNoteTime=0, schedTimer=null;
 let scheduledCursor=[]; // {time, idx}
 let loopStartIdx=0, loopEndIdx=0;
-let analyser=null, pitchBuf=null, micReady=false;
+let analyser=null, pitchBuf=null, micReady=false, micStream=null, micSource=null;
 let totalN=0, correctN=0, lastGradedIdx=-1;
 
 const $=id=>document.getElementById(id);
@@ -276,16 +278,41 @@ function moveCursorTo(idx){
 
 // ════════════════ MICROFONE / PRÁTICA ════════════════
 async function startMic(){
-  if(micReady) return true;
+  if(micReady){
+    setStatus('Microfone ativo');
+    return true;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    setStatus('Microfone indisponivel neste navegador');
+    return false;
+  }
   try{
     ensureAudio();
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    const src=audioCtx.createMediaStreamSource(stream);
-    analyser=audioCtx.createAnalyser(); analyser.fftSize=4096;
-    src.connect(analyser); pitchBuf=new Float32Array(analyser.fftSize);
-    micReady=true; $('micDot').classList.add('on');
+    if(audioCtx.state==='suspended') await audioCtx.resume();
+    if(!micStream){
+      micStream=await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},
+        video:false
+      });
+    }
+    if(!analyser){
+      micSource=audioCtx.createMediaStreamSource(micStream);
+      analyser=audioCtx.createAnalyser(); analyser.fftSize=4096;
+      micSource.connect(analyser); pitchBuf=new Float32Array(analyser.fftSize);
+    }
+    micReady=true;
+    $('micDot').classList.add('on');
+    $('micBtn').classList.add('on');
+    $('micBtn').textContent='🎤 Microfone ativo';
+    setStatus('Microfone ativo');
     return true;
-  }catch(e){ setStatus('Microfone bloqueado'); return false; }
+  }catch(e){
+    $('micDot').classList.remove('on');
+    $('micBtn').classList.remove('on');
+    $('micBtn').textContent='🎤 Tentar microfone';
+    setStatus('Microfone bloqueado');
+    return false;
+  }
 }
 function detectPitch(){
   if(!analyser) return null;
@@ -359,6 +386,7 @@ drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) loadFromFile(e.dat
 
 $('playBtn').addEventListener('click',()=>{ if(playing) stopPlayback(); else startPlayback(); });
 $('stopBtn').addEventListener('click',stopPlayback);
+$('micBtn').addEventListener('click',startMic);
 $('practiceBtn').addEventListener('click',async function(){
   practiceMode=!practiceMode; this.classList.toggle('on',practiceMode);
   this.textContent=practiceMode?'🎤 Praticando':'🎤 Praticar';
