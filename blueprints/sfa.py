@@ -1332,7 +1332,7 @@ def _collect_question_review_payload(kind: str, schema: dict) -> dict:
     }
 
 
-def _review_form_field_index() -> dict[str, dict[str, str]]:
+def _review_form_field_index() -> dict[str, dict[str, object]]:
     from services.sfa_service import (
         carregar_t0_form_schema,
         carregar_t10_form_schema,
@@ -1354,6 +1354,13 @@ def _review_form_field_index() -> dict[str, dict[str, str]]:
                 "stage": stage,
                 "label": str(field.get("label") or key).strip(),
                 "required": "Obrigatoria" if field.get("required") else "Opcional",
+                "mode": _field_answer_mode(field),
+                "help_text": str(field.get("help_text") or "").strip(),
+                "options": [
+                    str(option or "").strip()
+                    for option in field.get("options", [])
+                    if str(option or "").strip()
+                ],
             }
     cadastro_fields = {
         "grupo": "Classificacao operacional: Grupo A, Grupo B ou pendente",
@@ -1371,11 +1378,14 @@ def _review_form_field_index() -> dict[str, dict[str, str]]:
             "stage": "Cadastro/SINAN",
             "label": label,
             "required": "Dado operacional",
+            "mode": "Dado ja existente no cadastro ou no acompanhamento.",
+            "help_text": "",
+            "options": [],
         }
     return index
 
 
-def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, str]]:
+def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, object]]:
     index = _review_form_field_index()
     questions = []
     seen = set()
@@ -1390,9 +1400,19 @@ def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, str]]:
                 "stage": stage.upper(),
                 "label": key,
                 "required": "",
+                "mode": "",
+                "help_text": "",
+                "options": [],
             },
         )
-        questions.append({**field, "key": key, "use": use})
+        questions.append(
+            {
+                **field,
+                "key": key,
+                "review_id": f"{stage.lower()}__{key}",
+                "use": use,
+            }
+        )
     return questions
 
 
@@ -1402,6 +1422,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "cards_principais",
             "title": "Cards principais do painel",
             "description": "Mostram tamanho do lote, grupos, dias incapacitantes, custo medio e recuperacao final.",
+            "review_prompt": "Os cards contam rapidamente a historia do lote ou faltam indicadores mais uteis?",
             "items": [card.get("label") for card in dashboard_testes.get("research_cards", [])],
             "questions": _review_question_refs(
                 ("cadastro", "grupo", "separa Grupo A e Grupo B"),
@@ -1418,6 +1439,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "linha_tempo",
             "title": "Linha do tempo T0/T10/T30",
             "description": "Calcula quantos dias se passaram entre inicio dos sintomas e cada acompanhamento.",
+            "review_prompt": "Essa linha do tempo ajuda a entender se o acompanhamento esta acontecendo no momento certo?",
             "items": [item.get("label") for item in dashboard_testes.get("timeline_cards", [])],
             "questions": _review_question_refs(
                 ("t0", "data_inicio_sintomas", "marca o inicio da doenca"),
@@ -1430,6 +1452,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "custos_t30",
             "title": "Custos medios no T30",
             "description": "Resume os gastos acumulados por categoria no fechamento de 30 dias.",
+            "review_prompt": "As categorias de custo sao suficientes para explicar o impacto economico?",
             "items": [item.get("label") for item in dashboard_testes.get("cost_breakdown", [])],
             "questions": _review_question_refs(
                 ("t30", "custo_remedios", "medicamentos"),
@@ -1442,6 +1465,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "comparacao_grupos",
             "title": "Comparacao entre grupos",
             "description": "Diferencas entre Grupo A e Grupo B, sintomas discriminantes e recuperacao.",
+            "review_prompt": "A comparacao A/B ajuda no diagnostico diferencial ou precisa de outro recorte?",
             "items": [row.get("metric") for row in dashboard_testes.get("group_comparison", [])],
             "questions": _review_question_refs(
                 ("cadastro", "grupo", "define os grupos comparados"),
@@ -1457,6 +1481,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "sintomas_exposicoes",
             "title": "Sintomas e exposicoes no T0",
             "description": "Mostra sintomas principais e exposicoes animal, ambiental e alimentar, com recorte por grupo.",
+            "review_prompt": "As perguntas de sintomas, animais, ambiente e alimentacao capturam exposicoes realmente relevantes?",
             "items": [item.get("label") for item in dashboard_testes.get("symptom_prevalence", [])[:8]],
             "questions": _review_question_refs(
                 ("t0", "sintomas_principais", "prevalencia de sintomas e sintomas discriminantes"),
@@ -1474,6 +1499,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "perfil_demografico",
             "title": "Perfil demografico",
             "description": "Distribui participantes por sexo biologico, faixa etaria, ocupacao e bairro.",
+            "review_prompt": "Esse perfil ajuda a interpretar risco e recuperacao ou esta apenas descrevendo a amostra?",
             "items": [chart.get("title") for chart in dashboard_testes.get("demographic_distributions", [])],
             "questions": _review_question_refs(
                 ("t0", "sexo_biologico", "distribuicao por sexo e recuperacao por segmento"),
@@ -1486,6 +1512,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "recuperacao_clusters",
             "title": "Recuperacao, retorno e clusters",
             "description": "Resume recuperacao alta, retorno as atividades, custo por retorno e padroes de evolucao.",
+            "review_prompt": "Esses padroes ajudam a transformar respostas em hipoteses de pesquisa?",
             "items": [item.get("title") for item in dashboard_testes.get("hypothesis_cards", [])],
             "questions": _review_question_refs(
                 ("t0", "data_inicio_sintomas", "base temporal para melhora/fechamento"),
@@ -1503,6 +1530,7 @@ def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
             "key": "perguntas_distribuicao",
             "title": "Perguntas com distribuicao de respostas",
             "description": "Tabelas por pergunta, com total e recorte por grupo.",
+            "review_prompt": "Quais distribuicoes merecem virar grafico principal e quais podem ficar apenas como apoio?",
             "items": [chart.get("title") for chart in dashboard_testes.get("distributions", [])[:10]],
             "questions": _review_question_refs(
                 ("t10", "classificacao_melhora", "evolucao percebida no T10"),
@@ -1524,6 +1552,21 @@ def _collect_chart_review_payload(sections: list[dict[str, object]]) -> dict:
     reviews = []
     for section in sections:
         key = str(section.get("key") or "").strip()
+        question_reviews = []
+        for question in section.get("questions", []):
+            review_id = str(question.get("review_id") or "").strip()
+            if not review_id:
+                continue
+            question_reviews.append(
+                {
+                    "key": question.get("key"),
+                    "stage": question.get("stage"),
+                    "label": question.get("label"),
+                    "graph_need": str(request.form.get(f"question_need__{key}__{review_id}") or "").strip(),
+                    "graph_reuse": str(request.form.get(f"question_reuse__{key}__{review_id}") or "").strip(),
+                    "comment": str(request.form.get(f"question_comment__{key}__{review_id}") or "").strip(),
+                }
+            )
         reviews.append(
             {
                 "key": key,
@@ -1532,6 +1575,7 @@ def _collect_chart_review_payload(sections: list[dict[str, object]]) -> dict:
                 "clarity": str(request.form.get(f"chart_clarity__{key}") or "").strip(),
                 "redundancy": str(request.form.get(f"chart_redundancy__{key}") or "").strip(),
                 "comment": str(request.form.get(f"chart_comment__{key}") or "").strip(),
+                "questions": question_reviews,
             }
         )
     return {

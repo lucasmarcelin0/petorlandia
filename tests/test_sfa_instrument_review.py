@@ -58,8 +58,12 @@ def test_sfa_chart_review_records_feedback(app, client):
     assert response.status_code == 200
     assert b"Revisao colaborativa dos graficos" in response.data
     assert b"Resumo visual atual" in response.data
-    assert b"Perguntas e campos usados neste bloco" in response.data
+    assert b"Perguntas reais usadas neste bloco" in response.data
     assert b"Sintomas principais no inicio" in response.data
+    assert b"Contato animal nos 15 dias antes dos sintomas" in response.data
+    assert b"Caes" in response.data
+    assert b"Gatos" in response.data
+    assert b"Leite cru/queijo nao pasteurizado" in response.data
 
     response = client.post(
         "/sfa/revisao/graficos",
@@ -69,6 +73,9 @@ def test_sfa_chart_review_records_feedback(app, client):
             "chart_clarity__cards_principais": "Precisa melhorar",
             "chart_redundancy__cards_principais": "Nao parece redundante",
             "chart_comment__cards_principais": "Explicar melhor a leitura rapida.",
+            "question_need__sintomas_exposicoes__t0__exposicao_animal": "Essencial",
+            "question_reuse__sintomas_exposicoes__t0__exposicao_animal": "Manter como esta",
+            "question_comment__sintomas_exposicoes__t0__exposicao_animal": "As especies precisam aparecer.",
         },
     )
     assert response.status_code == 200
@@ -80,3 +87,7 @@ def test_sfa_chart_review_records_feedback(app, client):
         resumo = next(chart for chart in payload["charts"] if chart["key"] == "cards_principais")
         assert resumo["clarity"] == "Precisa melhorar"
         assert resumo["comment"] == "Explicar melhor a leitura rapida."
+        exposicoes = next(chart for chart in payload["charts"] if chart["key"] == "sintomas_exposicoes")
+        animal = next(question for question in exposicoes["questions"] if question["key"] == "exposicao_animal")
+        assert animal["graph_need"] == "Essencial"
+        assert animal["comment"] == "As especies precisam aparecer."
