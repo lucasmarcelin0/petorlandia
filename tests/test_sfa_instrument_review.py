@@ -40,12 +40,19 @@ def test_sfa_review_form_records_question_feedback(app, client):
     assert response.status_code == 200
     assert "Pergunta clara e necessaria.".encode() in response.data
 
+    response = client.get("/sfa/revisao/resumo?kind=t0")
+    assert response.status_code == 200
+    assert b"Formulario T0" in response.data
+    assert "Pergunta clara e necessaria.".encode() in response.data
+
 
 def test_sfa_review_links_and_qrcode_render(client):
     response = client.get("/sfa/revisao/links")
     assert response.status_code == 200
     assert b"/sfa/revisao/t0" in response.data
     assert b"/sfa/revisao/graficos" in response.data
+    assert b"Ver resumo" in response.data
+    assert b"/sfa/revisao/resumo?kind=t0" in response.data
 
     response = client.get("/sfa/revisao/qrcode/t0.png")
     assert response.status_code == 200

@@ -1732,6 +1732,7 @@ def revisao_links():
                 "label": label,
                 "url": url_for(endpoint, _external=True, **params),
                 "qr_url": url_for("sfa_routes.revisao_qrcode", kind=kind),
+                "summary_url": url_for("sfa_routes.revisao_resumo", kind=kind),
             }
         )
     return render_template("sfa/review_links.html", links=links)
@@ -1742,12 +1743,20 @@ def revisao_links():
 def revisao_resumo():
     from models.sfa import SfaInstrumentReview
 
-    reviews = (
-        SfaInstrumentReview.query
-        .order_by(SfaInstrumentReview.created_at.desc(), SfaInstrumentReview.id.desc())
-        .all()
+    kind = str(request.args.get("kind") or "").strip().lower()
+    if kind and kind not in REVIEW_KIND_LABELS:
+        abort(404)
+    query = SfaInstrumentReview.query
+    if kind:
+        query = query.filter(SfaInstrumentReview.kind == kind)
+    reviews = query.order_by(SfaInstrumentReview.created_at.desc(), SfaInstrumentReview.id.desc()).all()
+    return render_template(
+        "sfa/review_summary.html",
+        summary=_build_review_summary(reviews),
+        current_kind=kind,
+        current_kind_label=REVIEW_KIND_LABELS.get(kind, ""),
+        kind_labels=REVIEW_KIND_LABELS,
     )
-    return render_template("sfa/review_summary.html", summary=_build_review_summary(reviews))
 
 
 @bp.route("/revisao/qrcode/<kind>.png")
