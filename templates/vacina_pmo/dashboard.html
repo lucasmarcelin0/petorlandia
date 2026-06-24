@@ -1292,25 +1292,52 @@
     ctx.restore();
   }
 
-  function slideRects(count, canvas) {
+  function targetTileAspect(img) {
+    const aspect = img.naturalWidth / img.naturalHeight;
+    if (aspect < 0.82) return 0.9;
+    if (aspect < 1.15) return 1.08;
+    if (aspect < 1.55) return 1.35;
+    return 1.75;
+  }
+
+  function fitTileIntoSlot(slot, aspect) {
+    let w = slot.w;
+    let h = w / aspect;
+    if (h > slot.h) {
+      h = slot.h;
+      w = h * aspect;
+    }
+    return {
+      x: slot.x + (slot.w - w) / 2,
+      y: slot.y + (slot.h - h) / 2,
+      w,
+      h,
+    };
+  }
+
+  function slideRects(images, canvas) {
+    const count = images.length;
     const margin = 72;
     const top = 360;
     const bottom = 170;
     const gap = 28;
     const width = canvas.width - margin * 2;
     const areaHeight = canvas.height - top - bottom;
+    let slots;
     if (count === 1) {
-      return [{ x: margin, y: top + 80, w: width, h: Math.min(980, areaHeight - 120) }];
-    }
-    if (count === 2) {
+      const h = Math.min(980, areaHeight - 120);
+      slots = [{ x: margin, y: top + 80, w: width, h }];
+    } else if (count === 2) {
       const h = Math.floor((areaHeight - gap) / 2);
-      return [
+      slots = [
         { x: margin, y: top, w: width, h },
         { x: margin, y: top + h + gap, w: width, h },
       ];
+    } else {
+      const h = Math.floor((areaHeight - gap * 2) / 3);
+      slots = [0, 1, 2].map((i) => ({ x: margin, y: top + i * (h + gap), w: width, h }));
     }
-    const h = Math.floor((areaHeight - gap * 2) / 3);
-    return [0, 1, 2].map((i) => ({ x: margin, y: top + i * (h + gap), w: width, h }));
+    return slots.map((slot, index) => fitTileIntoSlot(slot, targetTileAspect(images[index])));
   }
 
   function drawVideoBackground(ctx, canvas) {
@@ -1334,7 +1361,7 @@
   function drawSlide(ctx, canvas, group, images, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
     drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Orlandia - ${videoDateLabel()}`);
-    const rects = slideRects(group.length, canvas);
+    const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index]));
     ctx.fillStyle = '#334155';
     ctx.font = '600 24px Arial, sans-serif';
