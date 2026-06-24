@@ -44,12 +44,38 @@
 
     .hero-band {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 16px;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
       align-items: center;
       padding: 22px;
       background: linear-gradient(135deg, #e7f8f5, #edf4ff);
       border-bottom: 1px solid var(--line);
+    }
+
+    .pet-portrait {
+      flex: 0 0 auto;
+      width: 108px;
+      height: 108px;
+      border-radius: 22px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(15, 103, 255, .16), rgba(8, 127, 91, .18));
+      box-shadow: 0 10px 26px rgba(20, 33, 61, .14), inset 0 0 0 2px #ffffff;
+    }
+
+    .pet-portrait img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: translate(var(--offset-x, 0), var(--offset-y, 0)) rotate(var(--rotation, 0)) scale(var(--zoom, 1));
+    }
+
+    .pet-portrait__placeholder {
+      font-size: 3rem;
+      line-height: 1;
+      opacity: .65;
     }
 
     h1 {
@@ -277,6 +303,11 @@
         width: 78px;
         height: 78px;
       }
+
+      .hero-band {
+        justify-items: center;
+        text-align: center;
+      }
     }
   </style>
 {% endblock %}
@@ -286,6 +317,14 @@
   <div class="pmo-pet-main">
     <section class="hero-card">
       <div class="hero-band">
+        <div class="pet-portrait"
+             {% if animal %}style="--offset-x: {{ animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.photo_offset_y or 0 }}px; --rotation: {{ animal.photo_rotation or 0 }}deg; --zoom: {{ animal.photo_zoom or 1 }};"{% endif %}>
+          {% if animal and animal.image %}
+            <img src="{{ animal.image }}" loading="lazy" alt="Foto de {{ pmo_animal.name }}">
+          {% else %}
+            <span class="pet-portrait__placeholder" aria-hidden="true">🐾</span>
+          {% endif %}
+        </div>
         <div>
           <h1>Carteirinha de {{ pmo_animal.name }}</h1>
           <p class="subtitle">Comprovante digital da campanha municipal de vacinação antirrábica.</p>

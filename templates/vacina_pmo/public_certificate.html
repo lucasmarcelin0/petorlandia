@@ -137,6 +137,39 @@
       color: #92580a !important;
     }
 
+    .animal-id {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .pet-avatar {
+      flex: 0 0 auto;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(15, 103, 255, .14), rgba(21, 170, 191, .2));
+      box-shadow: inset 0 0 0 1px rgba(15, 103, 255, .18);
+    }
+
+    .pet-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: translate(var(--offset-x, 0), var(--offset-y, 0)) rotate(var(--rotation, 0)) scale(var(--zoom, 1));
+    }
+
+    .pet-avatar__placeholder {
+      font-size: 1.6rem;
+      line-height: 1;
+      opacity: .65;
+    }
+
     .access {
       display: grid;
       gap: 10px;
@@ -439,9 +472,19 @@
         <div class="animal-list">
           {% for animal in visit.animals %}
             <div class="animal">
-              <div>
-                <strong>{{ animal.name }}</strong>
-                <div class="label">{{ 'Cão' if animal.species == 'cao' else 'Gato' }}</div>
+              <div class="animal-id">
+                <div class="pet-avatar"
+                     {% if animal.animal %}style="--offset-x: {{ animal.animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.animal.photo_offset_y or 0 }}px; --rotation: {{ animal.animal.photo_rotation or 0 }}deg; --zoom: {{ animal.animal.photo_zoom or 1 }};"{% endif %}>
+                  {% if animal.animal and animal.animal.image %}
+                    <img src="{{ animal.animal.image }}" loading="lazy" alt="Foto de {{ animal.name }}">
+                  {% else %}
+                    <span class="pet-avatar__placeholder" aria-hidden="true">🐾</span>
+                  {% endif %}
+                </div>
+                <div>
+                  <strong>{{ animal.name }}</strong>
+                  <div class="label">{{ 'Cão' if animal.species == 'cao' else 'Gato' }}</div>
+                </div>
               </div>
               <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
                 {{ status_labels.get(animal.status, animal.status|capitalize) }}
