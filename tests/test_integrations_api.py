@@ -335,7 +335,7 @@ def test_image_exam_flow_releases_pdf_to_clinic_and_tutor_only(app, client):
     assert forbidden_other_pet.status_code == 404
 
 
-def test_attach_image_exam_pdf_accepts_attachment_id_contract(app, client, monkeypatch):
+def test_attach_image_exam_pdf_accepts_arquivo_pdf_contract(app, client, monkeypatch):
     app_module = sys.modules[app.import_name]
 
     class FakeDownloadResponse:
@@ -388,7 +388,7 @@ def test_attach_image_exam_pdf_accepts_attachment_id_contract(app, client, monke
         headers=_auth_header(token_value),
         json={
             "exame_id": exame_id,
-            "attachment_id": {
+            "arquivo_pdf": {
                 "download_url": "https://files.example.test/sid.pdf",
                 "file_id": "file_sid_pdf",
                 "mime_type": "application/pdf",
@@ -1748,6 +1748,12 @@ def test_mcp_importar_laudo_volante_creates_clinic_patient_and_exam(app, client)
     assert result["exame"]["data_realizacao"] == "2026-06-07"
     assert result["exame"]["arquivo_status"] == "sem_arquivo"
     assert "Laudo finalizado" in result["mensagem_sugerida_para_clinica"]
+    assert result["links"]["clinica"] == result["links_primeiro_acesso"]["clinica"]
+    assert result["links"]["tutor"] == result["links_primeiro_acesso"]["tutor"]
+    assert result["comunicacao"]["clinica"]["url"] == result["links_primeiro_acesso"]["clinica"]
+    assert result["comunicacao"]["tutor"]["url"] == result["links_primeiro_acesso"]["tutor"]
+    assert result["comunicacao"]["tutor"]["whatsapp_url"].startswith("https://wa.me/55")
+    assert "mensagem_sugerida_para_tutor" in result
     assert payload["result"]["structuredContent"]["animal"]["nome"] == "Luna"
 
 
@@ -1964,6 +1970,48 @@ def test_mcp_importar_laudo_volante_ignores_unreachable_chatgpt_local_path(app, 
     assert result["exame"]["arquivo_status"] == "caminho_local_ignorado"
 
 
+def test_mcp_open_laudo_widget_strips_unreachable_chatgpt_local_path(app, client):
+    with app.app_context():
+        professional = User(
+            name="Dra. Widget Local",
+            email="widget-local-laudo@example.com",
+            role="veterinario",
+            worker="veterinario",
+        )
+        professional.set_password("secret123")
+        db.session.add(professional)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-WIDGET"))
+        db.session.commit()
+        token_value = _create_token(professional.id, scope="profile")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 431,
+            "method": "tools/call",
+            "params": {
+                "name": "abrir_importador_laudo_volante",
+                "arguments": {
+                    "clinica": {"nome": "Clinica Local Path"},
+                    "tutor": {"nome": "Tutor Local"},
+                    "animal": {"nome": "SID", "especie": "canina"},
+                    "exame": {"nome": "Ultrassom"},
+                    "laudo_url": "/mnt/data/Ultrassom SID,Rosa.pdf",
+                    "laudo_filename": "Ultrassom SID,Rosa.pdf",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    draft = response.get_json()["result"]["structuredContent"]["rascunho"]
+    assert draft["laudo_url"] == ""
+    assert draft["laudo_filename"] == "Ultrassom SID,Rosa.pdf"
+
+
 def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
     with app.app_context():
         professional = User(name="Dra. Modelo", email="modelo-laudo@example.com", role="veterinario", worker="veterinario")
@@ -2100,15 +2148,21 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     document_tool = next(tool for tool in tools if tool["name"] == "obter_documento_clinico")
     assert "shareable_url" in document_tool["description"]
     assert "URL de API protegida" in document_tool["description"]
+    pdf_tool = next(tool for tool in tools if tool["name"] == "anexar_pdf_exame_imagem")
+    assert pdf_tool["_meta"]["openai/fileParams"] == ["arquivo_pdf"]
+    assert "attachment_id" not in (pdf_tool["inputSchema"].get("required") or [])
+    assert pdf_tool["inputSchema"]["properties"]["arquivo_pdf"]["required"] == ["download_url", "file_id"]
     render_tool = next(tool for tool in tools if tool["name"] == "abrir_importador_laudo_volante")
-    assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
-    assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v1.html"
+    assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v2.html"
+    assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v2.html"
     assert render_tool["_meta"]["openai/widgetAccessible"] is True
     assert render_tool["_meta"]["openai/fileParams"] == ["laudo_arquivo"]
     assert render_tool["inputSchema"]["properties"]["laudo_arquivo"]["required"] == ["download_url", "file_id"]
+    assert "mensagem_tutor" in render_tool["inputSchema"]["properties"]
     import_tool = next(tool for tool in tools if tool["name"] == "importar_laudo_volante")
     assert import_tool["_meta"]["openai/fileParams"] == ["laudo_arquivo"]
     assert import_tool["outputSchema"]["properties"]["exame"]["type"] == "object"
+    assert import_tool["outputSchema"]["properties"]["comunicacao"]["type"] == "object"
     assert render_tool["annotations"]["readOnlyHint"] is True
 
     resource_response = client.post(
@@ -2118,7 +2172,7 @@ def test_mcp_laudo_volante_widget_contract(app, client):
             "jsonrpc": "2.0",
             "id": 53,
             "method": "resources/read",
-            "params": {"uri": "ui://petorlandia/laudo-volante-v1.html"},
+            "params": {"uri": "ui://petorlandia/laudo-volante-v2.html"},
         },
     )
     resource = resource_response.get_json()["result"]["contents"][0]
@@ -2126,9 +2180,13 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert 'window.openai.callTool("importar_laudo_volante"' in resource["text"]
     assert 'window.openai.selectFiles' in resource["text"]
     assert 'window.openai.uploadFile' in resource["text"]
+    assert "Enviar WhatsApp" in resource["text"]
+    assert "mensagem_tutor" in resource["text"]
+    assert "window.openai?.openExternal" in resource["text"]
     assert resource["_meta"]["ui"]["prefersBorder"] is True
     assert resource["_meta"]["ui"]["domain"]
     assert resource["_meta"]["openai/widgetDomain"] == resource["_meta"]["ui"]["domain"]
+    assert "https://wa.me" in resource["_meta"]["openai/widgetCSP"]["redirect_domains"]
 
     render_response = client.post(
         "/mcp",
@@ -2153,7 +2211,7 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     render_payload = render_response.get_json()["result"]
     assert render_payload["structuredContent"]["rascunho"]["animal"]["nome"] == "Nina"
     assert render_payload["structuredContent"]["campos_a_confirmar"] == ["telefone do tutor"]
-    assert render_payload["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v1.html"
+    assert render_payload["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v2.html"
 
 
 def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):

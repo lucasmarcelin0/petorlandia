@@ -73,6 +73,22 @@
           ]
         },
         {
+          "key": "grau_escolaridade",
+          "label": "Grau de escolaridade",
+          "type": "select",
+          "required": true,
+          "options": [
+            "Sem escolaridade / Analfabeto(a)",
+            "Ensino fundamental incompleto",
+            "Ensino fundamental completo",
+            "Ensino medio incompleto",
+            "Ensino medio completo",
+            "Ensino superior incompleto",
+            "Ensino superior completo",
+            "Pos-graduacao"
+          ]
+        },
+        {
           "key": "ocupacao_principal",
           "label": "Ocupacao principal",
           "type": "select",

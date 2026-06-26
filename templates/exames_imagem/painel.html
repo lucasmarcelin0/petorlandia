@@ -93,6 +93,31 @@
     padding: .65rem;
   }
 
+  .exame-imagem-page .history-filters {
+    background: #f8fafc;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+  }
+
+  .exame-imagem-page .metric-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+
+  .exame-imagem-page .metric-chip {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    color: #334155;
+    display: inline-flex;
+    font-size: .84rem;
+    gap: .45rem;
+    min-height: 34px;
+    padding: .35rem .6rem;
+  }
+
   .exame-imagem-page .link-box input {
     background: transparent;
     border: 0;
@@ -286,10 +311,73 @@
     </div>
 
     <div class="col-xl-7">
-      <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-        <h2 class="h5 fw-bold mb-0">Laudos recentes</h2>
-        <span class="badge bg-light text-dark border">{{ exam_cards|length }}</span>
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+        <div>
+          <h2 class="h5 fw-bold mb-1">Historico de laudos</h2>
+          <div class="metric-strip">
+            <span class="metric-chip">
+              <i class="fa-solid fa-list-check text-primary" aria-hidden="true"></i>
+              {{ history_stats.filtered_total }} de {{ history_stats.total }}
+            </span>
+            <span class="metric-chip">
+              <i class="fa-solid fa-file-pdf text-danger" aria-hidden="true"></i>
+              {{ history_stats.pdf_total }} PDF{{ '' if history_stats.pdf_total == 1 else 's' }}
+            </span>
+          </div>
+        </div>
+        {% if history_stats.filtered_total > history_stats.limit %}
+        <span class="badge bg-warning-subtle text-dark border">Mostrando {{ history_stats.limit }}</span>
+        {% endif %}
       </div>
+
+      <form class="history-filters p-3 mb-3" method="get" action="{{ url_for('exames_imagem_painel') }}">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-6 col-lg-4">
+            <label class="form-label" for="filtro_clinica_id">Clinica</label>
+            <select class="form-select" id="filtro_clinica_id" name="clinica_id">
+              <option value="">Todas</option>
+              {% for clinic in history_filter_options.clinicas %}
+              <option value="{{ clinic.id }}" {% if history_filters.clinica_id == clinic.id %}selected{% endif %}>{{ clinic.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <label class="form-label" for="filtro_tutor_id">Tutor</label>
+            <select class="form-select" id="filtro_tutor_id" name="tutor_id">
+              <option value="">Todos</option>
+              {% for tutor in history_filter_options.tutores %}
+              <option value="{{ tutor.id }}" {% if history_filters.tutor_id == tutor.id %}selected{% endif %}>{{ tutor.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <label class="form-label" for="filtro_animal_id">Animal</label>
+            <select class="form-select" id="filtro_animal_id" name="animal_id">
+              <option value="">Todos</option>
+              {% for animal in history_filter_options.animais %}
+              <option value="{{ animal.id }}" {% if history_filters.animal_id == animal.id %}selected{% endif %}>{{ animal.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <label class="form-label" for="filtro_inicio">Inicio</label>
+            <input class="form-control" id="filtro_inicio" name="inicio" type="date" value="{{ history_filters.inicio }}">
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <label class="form-label" for="filtro_fim">Fim</label>
+            <input class="form-control" id="filtro_fim" name="fim" type="date" value="{{ history_filters.fim }}">
+          </div>
+          <div class="col-md-6 col-lg-4 d-flex gap-2">
+            <button class="btn btn-primary flex-fill btn-icon" type="submit">
+              <i class="fa-solid fa-filter" aria-hidden="true"></i>
+              Filtrar
+            </button>
+            <a class="btn btn-outline-secondary btn-icon" href="{{ url_for('exames_imagem_painel') }}" title="Limpar filtros">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </a>
+          </div>
+        </div>
+      </form>
 
       {% if exam_cards %}
       <div class="d-grid gap-3">

@@ -1,9 +1,12 @@
 import io
 import sys
+from datetime import date
 
 from extensions import db
 from models import (
+    Animal,
     AnimalDocumento,
+    Clinica,
     ExameImagem,
     ExternalOnboardingInvite,
     User,
@@ -102,3 +105,77 @@ def test_veterinarian_creates_image_exam_and_public_links(app, client, monkeypat
     assert '/primeiro-acesso-clinica/' in html
     assert '/acesso-laudo/' in html
     assert '/api/integrations/clinical-document' not in html
+
+
+def test_exames_imagem_history_filters_by_clinic_tutor_animal_and_period(app, client):
+    with app.app_context():
+        vet_user = User(
+            name='Robson Oliveira',
+            email='robson-history-filter@example.com',
+            role='veterinario',
+            worker='veterinario',
+        )
+        vet_user.set_password('secret123')
+        clinic_a = Clinica(nome='Clinica Alfa')
+        clinic_b = Clinica(nome='Clinica Beta')
+        tutor_a = User(name='Rosa Alfa', email='rosa-alfa@example.com', role='adotante')
+        tutor_a.set_password('secret123')
+        tutor_b = User(name='Marta Beta', email='marta-beta@example.com', role='adotante')
+        tutor_b.set_password('secret123')
+        db.session.add_all([vet_user, clinic_a, clinic_b, tutor_a, tutor_b])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=vet_user.id, crmv='CRMV-MG 26136'))
+        animal_a = Animal(name='Sid', user_id=tutor_a.id, clinica_id=clinic_a.id)
+        animal_b = Animal(name='Luna', user_id=tutor_b.id, clinica_id=clinic_b.id)
+        db.session.add_all([animal_a, animal_b])
+        db.session.flush()
+        db.session.add_all([
+            ExameImagem(
+                animal_id=animal_a.id,
+                tutor_id=tutor_a.id,
+                clinica_requisitante_id=clinic_a.id,
+                profissional_id=vet_user.id,
+                tipo_exame='Ultrassonografia abdominal',
+                data_exame=date(2026, 2, 16),
+                titulo='Ultrassonografia abdominal',
+                impressao_diagnostica='Achado filtrado no historico.',
+                arquivo_pdf_url='/static/uploads/laudos_exames/sid.pdf',
+                arquivo_pdf_filename='sid.pdf',
+                status='finalizado',
+            ),
+            ExameImagem(
+                animal_id=animal_b.id,
+                tutor_id=tutor_b.id,
+                clinica_requisitante_id=clinic_b.id,
+                profissional_id=vet_user.id,
+                tipo_exame='Ultrassonografia cervical',
+                data_exame=date(2026, 3, 20),
+                titulo='Ultrassonografia cervical',
+                impressao_diagnostica='Achado fora do filtro.',
+                status='finalizado',
+            ),
+        ])
+        db.session.commit()
+        vet_user_id = vet_user.id
+        clinic_a_id = clinic_a.id
+        tutor_a_id = tutor_a.id
+        animal_a_id = animal_a.id
+
+    _login(client, vet_user_id)
+    response = client.get(
+        '/exames-imagem',
+        query_string={
+            'clinica_id': clinic_a_id,
+            'tutor_id': tutor_a_id,
+            'animal_id': animal_a_id,
+            'inicio': '2026-02-01',
+            'fim': '2026-02-28',
+        },
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'Achado filtrado no historico.' in html
+    assert 'Achado fora do filtro.' not in html
+    assert '1 de 2' in html
+    assert '1 PDF' in html

@@ -1831,6 +1831,7 @@ from helpers import (
     vaccine_to_event,
     veterinarian_required,
     geocode_address,
+    reverse_geocode_city,
 )
 from services import (
     build_usage_history,
@@ -1891,6 +1892,109 @@ def _normalize_public_text(value):
 def _vet_public_city(vet):
     end = getattr(getattr(vet, 'user', None), 'endereco', None)
     return (end.cidade or '').strip() if end and end.cidade else None
+
+
+def _vet_coverage_city_keys(vet):
+    """Conjunto de cidades (normalizadas) que o veterinário atende.
+
+    Usa ``cidades_atendidas`` quando houver; senão cai para a cidade do
+    endereço (preserva o comportamento dos profissionais já cadastrados).
+    """
+    keys = {
+        _normalize_public_text(c.cidade)
+        for c in (getattr(vet, 'cidades_atendidas', None) or [])
+        if c and c.cidade
+    }
+    keys.discard('')
+    if keys:
+        return keys
+    fallback = _normalize_public_text(_vet_public_city(vet))
+    return {fallback} if fallback else set()
+
+
+def _vet_serves_city(vet, city):
+    """True se o veterinário atende a cidade (cobertura cadastrada ou endereço)."""
+    city_key = _normalize_public_text(city)
+    if not city_key:
+        return False
+    return city_key in _vet_coverage_city_keys(vet)
+
+
+def _vet_all_public_cities(vet):
+    """Cidades de exibição do veterinário (cobertura ou, na falta, o endereço)."""
+    cidades = [
+        (c.cidade or '').strip()
+        for c in (getattr(vet, 'cidades_atendidas', None) or [])
+        if c and (c.cidade or '').strip()
+    ]
+    if cidades:
+        seen = set()
+        unique = []
+        for nome in cidades:
+            key = _normalize_public_text(nome)
+            if key not in seen:
+                seen.add(key)
+                unique.append(nome)
+        return unique
+    cidade = _vet_public_city(vet)
+    return [cidade] if cidade else []
+
+
+def _is_ultrasound_vet(vet):
+    """True se o profissional oferece ultrassonografia / diagnóstico por imagem."""
+    return any(
+        'ultrass' in _normalize_public_text(s.nome)
+        or 'imagem' in _normalize_public_text(s.nome)
+        for s in (getattr(vet, 'specialties', None) or [])
+    )
+
+
+def _parse_coverage_cities(raw):
+    """Texto livre (linhas/vírgulas, 'Cidade' ou 'Cidade/UF') → lista de (cidade, uf)."""
+    if not raw:
+        return []
+    out = []
+    seen = set()
+    for part in re.split(r'[\n,;]+', raw):
+        part = part.strip()
+        if not part:
+            continue
+        uf = None
+        if '/' in part:
+            cidade, _, uf_raw = part.rpartition('/')
+            cidade, uf_raw = cidade.strip(), uf_raw.strip().upper()
+            if len(uf_raw) == 2:
+                uf = uf_raw
+            else:
+                cidade = part.strip()
+        else:
+            cidade = part
+        if not cidade:
+            continue
+        key = _normalize_public_text(cidade)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append((cidade, uf))
+    return out
+
+
+def _set_vet_coverage_cities(vet, raw):
+    """Substitui as cidades atendidas do veterinário pelo conteúdo do textarea."""
+    from models import VeterinarioAtendeCidade
+
+    vet.cidades_atendidas = [
+        VeterinarioAtendeCidade(cidade=cidade, uf=uf)
+        for cidade, uf in _parse_coverage_cities(raw)
+    ]
+
+
+def _format_vet_coverage_cities(vet):
+    """Serializa as cidades atendidas para preencher o textarea (uma por linha)."""
+    return '\n'.join(
+        f'{c.cidade}/{c.uf}' if c.uf else c.cidade
+        for c in (getattr(vet, 'cidades_atendidas', None) or [])
+    )
 
 
 def _is_public_veterinarian(vet):
@@ -4400,6 +4504,17 @@ def support():
         'support.html',
         support_email=app.config.get('SUPPORT_EMAIL'),
         support_phone=app.config.get('SUPPORT_PHONE'),
+    )
+
+
+@app.route('/chatgpt')
+def chatgpt_onboarding():
+    issuer = _oauth_issuer()
+    return render_template(
+        'chatgpt_onboarding.html',
+        mcp_url=f'{issuer}/mcp',
+        auth_url=f'{issuer}/oauth/authorize',
+        token_url=f'{issuer}/oauth/token',
     )
 
 
@@ -10195,9 +10310,22 @@ def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool
 
     for allowed_uri in client.redirect_uri_list():
         if allowed_uri in {
+            'https://chatgpt.com/connector/oauth/*',
+            'https://chat.openai.com/connector/oauth/*',
             'https://chatgpt.com/aip/*/oauth/callback',
             'https://chat.openai.com/aip/*/oauth/callback',
         }:
+            if allowed_uri.endswith('/connector/oauth/*'):
+                expected_host = urlparse(allowed_uri).netloc
+                if (
+                    parsed.scheme == 'https'
+                    and parsed.netloc == expected_host
+                    and re.fullmatch(r'/connector/oauth/[^/?#]+', parsed.path or '')
+                    and not parsed.params
+                    and not parsed.query
+                ):
+                    return True
+                continue
             if (
                 parsed.scheme == 'https'
                 and parsed.netloc in {'chatgpt.com', 'chat.openai.com'}
@@ -14196,7 +14324,7 @@ def _web_exame_imagem_card(exame: ExameImagem, highlight_id: int | None = None):
     }
 
 
-def _web_exame_imagem_cards(highlight_id: int | None = None):
+def _web_exame_imagem_scoped_query():
     query = ExameImagem.query.options(
         joinedload(ExameImagem.animal),
         joinedload(ExameImagem.tutor),
@@ -14204,15 +14332,90 @@ def _web_exame_imagem_cards(highlight_id: int | None = None):
     )
     if (getattr(current_user, 'role', '') or '').lower() != 'admin':
         query = query.filter(ExameImagem.profissional_id == current_user.id)
-    exames = query.order_by(ExameImagem.created_at.desc(), ExameImagem.id.desc()).limit(80).all()
-    return [_web_exame_imagem_card(exame, highlight_id) for exame in exames]
+    return query
 
+
+def _web_exame_imagem_filter_state():
+    data_inicio_raw = (request.args.get('inicio') or '').strip()
+    data_fim_raw = (request.args.get('fim') or '').strip()
+    data_inicio = _integration_parse_flexible_date(data_inicio_raw)
+    data_fim = _integration_parse_flexible_date(data_fim_raw)
+    return {
+        'clinica_id': request.args.get('clinica_id', type=int),
+        'tutor_id': request.args.get('tutor_id', type=int),
+        'animal_id': request.args.get('animal_id', type=int),
+        'inicio': data_inicio.isoformat() if data_inicio else data_inicio_raw,
+        'fim': data_fim.isoformat() if data_fim else data_fim_raw,
+        'inicio_data': data_inicio,
+        'fim_data': data_fim,
+    }
+
+
+def _web_exame_imagem_apply_filters(query, filters: dict):
+    if filters.get('clinica_id'):
+        query = query.filter(ExameImagem.clinica_requisitante_id == filters['clinica_id'])
+    if filters.get('tutor_id'):
+        query = query.filter(ExameImagem.tutor_id == filters['tutor_id'])
+    if filters.get('animal_id'):
+        query = query.filter(ExameImagem.animal_id == filters['animal_id'])
+    if filters.get('inicio_data'):
+        query = query.filter(ExameImagem.data_exame >= filters['inicio_data'])
+    if filters.get('fim_data'):
+        query = query.filter(ExameImagem.data_exame <= filters['fim_data'])
+    return query
+
+
+def _web_exame_imagem_unique_options(exames: list[ExameImagem], relation_name: str, label_attr: str):
+    options = {}
+    for exame in exames:
+        entity = getattr(exame, relation_name, None)
+        entity_id = getattr(entity, 'id', None)
+        if not entity or not entity_id or entity_id in options:
+            continue
+        label = getattr(entity, label_attr, None) or f'#{entity_id}'
+        options[entity_id] = {'id': entity_id, 'label': label}
+    return sorted(options.values(), key=lambda item: _integration_normalize_match_text(item['label']))
+
+
+def _web_exame_imagem_history_context(highlight_id: int | None = None):
+    scoped_query = _web_exame_imagem_scoped_query()
+    filters = _web_exame_imagem_filter_state()
+    all_exames = scoped_query.order_by(ExameImagem.created_at.desc(), ExameImagem.id.desc()).all()
+    filtered_query = _web_exame_imagem_apply_filters(_web_exame_imagem_scoped_query(), filters)
+    filtered_total = filtered_query.order_by(None).count()
+    pdf_total = filtered_query.filter(ExameImagem.arquivo_pdf_url.isnot(None)).order_by(None).count()
+    filtered_exames = (
+        filtered_query
+        .order_by(ExameImagem.data_exame.desc().nullslast(), ExameImagem.created_at.desc(), ExameImagem.id.desc())
+        .limit(200)
+        .all()
+    )
+
+    return {
+        'filters': filters,
+        'filter_options': {
+            'clinicas': _web_exame_imagem_unique_options(all_exames, 'clinica_requisitante', 'nome'),
+            'tutores': _web_exame_imagem_unique_options(all_exames, 'tutor', 'name'),
+            'animais': _web_exame_imagem_unique_options(all_exames, 'animal', 'name'),
+        },
+        'stats': {
+            'total': len(all_exames),
+            'filtered_total': filtered_total,
+            'pdf_total': pdf_total,
+            'limit': 200,
+        },
+        'cards': [_web_exame_imagem_card(exame, highlight_id) for exame in filtered_exames],
+    }
 
 def _web_render_exames_imagem(highlight_id: int | None = None):
     vet_profile = getattr(current_user, 'veterinario', None)
+    history = _web_exame_imagem_history_context(highlight_id)
     return render_template(
         'exames_imagem/painel.html',
-        exam_cards=_web_exame_imagem_cards(highlight_id),
+        exam_cards=history['cards'],
+        history_filters=history['filters'],
+        history_filter_options=history['filter_options'],
+        history_stats=history['stats'],
         today=date.today().isoformat(),
         profissional_nome=getattr(current_user, 'name', '') or '',
         profissional_crmv=getattr(vet_profile, 'crmv', '') or '',
@@ -21522,6 +21725,7 @@ def clinic_detail(clinica_id):
             form.crmv.data = v.crmv or ''
             form.crmv_estado.data = v.crmv_estado or ''
             form.specialties.data = [s.id for s in v.specialties]
+            form.cidades_atendidas.data = _format_vet_coverage_cities(v)
         vet_profile_forms[v.id] = form
 
     for s in staff_members:
@@ -23618,7 +23822,7 @@ def veterinarios():
     def vet_city(v):
         return _vet_public_city(v)
 
-    cidades = sorted({c for v in vets if (c := vet_city(v))})
+    cidades = sorted({c for v in vets for c in _vet_all_public_cities(v)})
 
     user_cidade = None
     if current_user.is_authenticated and getattr(current_user, 'endereco', None):
@@ -23631,13 +23835,12 @@ def veterinarios():
     selected = (selected or '').strip()
 
     if selected:
-        selected_key = _normalize_public_text(selected)
-        filtrados = [v for v in vets if _normalize_public_text(vet_city(v)) == selected_key]
+        filtrados = [v for v in vets if _vet_serves_city(v, selected)]
     else:
-        # "Todas as cidades": mesma cidade do usuário primeiro.
+        # "Todas as cidades": profissionais que atendem a cidade do usuário primeiro.
         filtrados = sorted(
             vets,
-            key=lambda v: (vet_city(v) != user_cidade, (v.user.name or '').lower()),
+            key=lambda v: (not _vet_serves_city(v, user_cidade), (v.user.name or '').lower()),
         )
 
     return render_template(
@@ -24590,6 +24793,7 @@ def update_vet_profile(veterinario_id):
         vet.crmv_estado = form.crmv_estado.data or None
         selected_ids = form.specialties.data or []
         vet.specialties = Specialty.query.filter(Specialty.id.in_(selected_ids)).all()
+        _set_vet_coverage_cities(vet, form.cidades_atendidas.data)
         db.session.commit()
         flash('Perfil atualizado com sucesso.', 'success')
     else:
@@ -30468,7 +30672,206 @@ def servicos():
     compra). Reúne o que antes ficava solto na home — vacina PMO e banho &
     tosa — junto de consultas, exames e pet sitter.
     """
-    return render_template('servicos.html')
+    from services.vaccine_service_paid import list_cidades as list_vaccine_service_cities
+
+    vets = _public_veterinarians_query().all()
+    vet_cities = {
+        city
+        for vet in vets
+        for city in _vet_all_public_cities(vet)
+    }
+    vaccine_cities = set(list_vaccine_service_cities())
+    cities_by_key = {
+        _normalize_public_text(city): city
+        for city in vet_cities | vaccine_cities | {'Orlândia'}
+        if city
+    }
+    cities = sorted(cities_by_key.values(), key=_normalize_public_text)
+
+    requested_city = (request.args.get('cidade') or '').strip()
+    user_city = None
+    if getattr(current_user, 'endereco', None):
+        user_city = (current_user.endereco.cidade or '').strip() or None
+
+    if requested_city:
+        selected_city = cities_by_key.get(
+            _normalize_public_text(requested_city),
+            requested_city,
+        )
+    elif user_city and _normalize_public_text(user_city) in cities_by_key:
+        selected_city = cities_by_key[_normalize_public_text(user_city)]
+    else:
+        selected_city = cities_by_key.get('belo horizonte') or (cities[0] if cities else '')
+
+    selected_city_key = _normalize_public_text(selected_city)
+    city_vets = [vet for vet in vets if _vet_serves_city(vet, selected_city)]
+    ultrasound_vets = [vet for vet in city_vets if _is_ultrasound_vet(vet)]
+    vaccine_city_keys = {_normalize_public_text(city) for city in vaccine_cities}
+    has_paid_vaccines = selected_city_key in vaccine_city_keys
+    is_orlandia = selected_city_key == _normalize_public_text('Orlândia')
+
+    localized_services = []
+    if is_orlandia:
+        localized_services.append({
+            'icon': 'fa-syringe',
+            'color': 'danger',
+            'title': 'Vacina Antirrábica (PMO)',
+            'description': 'Vacina antirrábica gratuita da Prefeitura de Orlândia para o seu pet.',
+            'badge': 'Gratuito',
+            'url': url_for('vacina_pmo_solicitar'),
+            'cta': 'Solicitar',
+        })
+
+    localized_services.extend([
+        {
+            'icon': 'fa-shield-dog',
+            'color': 'success',
+            'title': 'Vacinas em domicílio',
+            'description': (
+                f'Escolha as vacinas disponíveis em {selected_city}, informe os pets e conclua '
+                'o pagamento online.'
+                if has_paid_vaccines
+                else f'O catálogo de vacinas em domicílio para {selected_city} está em preparação.'
+            ),
+            'url': url_for('servicos_vacinas', cidade=selected_city),
+            'cta': 'Escolher vacina',
+            'soon': not has_paid_vaccines,
+        },
+        {
+            'icon': 'fa-stethoscope',
+            'color': 'info',
+            'title': 'Consultas',
+            'description': f'Encontre veterinários que atendem em {selected_city}.',
+            'url': url_for('veterinarios', cidade=selected_city),
+            'cta': 'Ver profissionais',
+            'soon': not city_vets,
+        },
+        {
+            'icon': 'fa-microscope',
+            'color': 'primary',
+            'title': 'Exames',
+            'description': f'Escolha o pet e solicite exames com profissionais de {selected_city}.',
+            'url': url_for('servicos_exames', cidade=selected_city),
+            'cta': 'Escolher pet',
+            'soon': not city_vets,
+        },
+    ])
+
+    # Ultrassom só aparece quando há ultrassonografista atendendo a cidade.
+    if ultrasound_vets:
+        localized_services.append({
+            'icon': 'fa-wave-square',
+            'color': 'info',
+            'title': 'Ultrassom a domicílio',
+            'description': (
+                f'Ultrassonografia para o seu pet em {selected_city}, na clínica ou em '
+                'casa, com laudo digital.'
+            ),
+            'url': url_for('servicos_ultrassom', cidade=selected_city),
+            'cta': 'Ver e contratar',
+        })
+
+    other_services = [
+        {
+            'icon': 'fa-scissors',
+            'color': 'warning',
+            'title': 'Banho & Tosa',
+            'description': 'Planos mensais de banho e tosa nas clínicas e casas parceiras.',
+            'url': url_for('grooming_planos_publicos'),
+            'cta': 'Ver planos',
+        },
+        {
+            'icon': 'fa-dog',
+            'color': 'secondary',
+            'title': 'Pet sitter',
+            'description': 'Cuidador aprovado para o seu pet enquanto você viaja, em casa ou hospedagem.',
+            'url': url_for('petsitter_routes.petsitter_home'),
+            'cta': 'Conhecer',
+        },
+    ]
+
+    return render_template(
+        'servicos.html',
+        cities=cities,
+        selected_city=selected_city,
+        localized_services=localized_services,
+        other_services=other_services,
+        # Sem cidade no pedido nem no cadastro → oferecer geolocalização automática.
+        auto_locate=(not requested_city and not user_city),
+    )
+
+
+@app.route('/servicos/ultrassom')
+@login_required
+def servicos_ultrassom():
+    """Contratação de ultrassonografia volante (na clínica ou a domicílio).
+
+    Lista os profissionais públicos com especialidade de imagem, filtrados pela
+    cidade, com CTA de WhatsApp (tutor e clínica) e de solicitação interna de
+    exame. Pensado para tutores e donos de clínica contratarem o serviço.
+    """
+    vets = [vet for vet in _public_veterinarians_query().all() if _is_ultrasound_vet(vet)]
+
+    cities = sorted(
+        {c for vet in vets for c in _vet_all_public_cities(vet)},
+        key=_normalize_public_text,
+    )
+
+    requested_city = (request.args.get('cidade') or '').strip()
+    user_city = None
+    if getattr(current_user, 'endereco', None):
+        user_city = (current_user.endereco.cidade or '').strip() or None
+
+    selected_city = ''
+    if requested_city:
+        selected_city = requested_city
+    elif user_city and any(_vet_serves_city(v, user_city) for v in vets):
+        selected_city = user_city
+
+    if selected_city:
+        providers_source = [vet for vet in vets if _vet_serves_city(vet, selected_city)]
+    else:
+        providers_source = vets
+
+    providers = []
+    for vet in providers_source:
+        phone = getattr(vet.user, 'phone', None)
+        local = f' em {selected_city}' if selected_city else ''
+        tutor_msg = (
+            f'Olá {vet.user.name}, vim pela PetOrlândia e gostaria de agendar um '
+            f'ultrassom para o meu pet{local}.'
+        )
+        clinica_msg = (
+            f'Olá {vet.user.name}, sou de uma clínica e gostaria de combinar '
+            f'ultrassonografias para os nossos pacientes{local}.'
+        )
+        providers.append({
+            'vet': vet,
+            'cidades': _vet_all_public_cities(vet),
+            'whatsapp_tutor_url': _web_whatsapp_url(phone, tutor_msg),
+            'whatsapp_clinica_url': _web_whatsapp_url(phone, clinica_msg),
+            'solicitar_url': url_for('solicitar_agendamento', veterinario_id=vet.id),
+        })
+
+    return render_template(
+        'servicos_ultrassom.html',
+        providers=providers,
+        cities=cities,
+        selected_city=selected_city,
+    )
+
+
+@app.route('/api/geo/cidade')
+@login_required
+def api_geo_cidade():
+    """Reverse geocode da localização do navegador (lat/lon) → cidade.
+
+    Alimenta o botão 'usar minha localização' nas páginas de serviços.
+    """
+    cidade = reverse_geocode_city(request.args.get('lat'), request.args.get('lon'))
+    if not cidade:
+        return jsonify({'cidade': None}), 404
+    return jsonify({'cidade': cidade})
 
 
 # ──────────────────── Serviço de Vacinas Pagas ────────────────────
@@ -30490,11 +30893,12 @@ def servicos_vacinas():
     cidades = list_cidades()
     # Prioridade: query param > cidade do endereço do usuário > primeira cidade disponível
     cidade_param = (request.args.get('cidade') or request.form.get('cidade') or '').strip()
+    explicit_city = bool(cidade_param)
     if not cidade_param and current_user.endereco and current_user.endereco.cidade:
         cidade_param = current_user.endereco.cidade.strip()
     if not cidade_param and cidades:
         cidade_param = cidades[0]
-    cidade_selecionada = cidade_param if cidade_param in cidades else (cidades[0] if cidades else None)
+    cidade_selecionada = cidade_param if explicit_city or cidade_param in cidades else (cidades[0] if cidades else None)
     items = list_active_items(cidade=cidade_selecionada)
     animals = (
         Animal.query.filter_by(user_id=current_user.id)
@@ -30947,6 +31351,16 @@ def servicos_exames():
     selected_animal = None
     exames = []
     especialistas = []
+    # Presença do parâmetro = escolha explícita do usuário. Vazio ("Todas as
+    # cidades") mostra todos os profissionais; ausente deixa auto-detectar.
+    city_param_present = 'cidade' in request.args
+    selected_city = (request.args.get('cidade') or '').strip() or None
+
+    public_vets = _public_veterinarians_query().all()
+    cities = sorted(
+        {c for vet in public_vets for c in _vet_all_public_cities(vet)},
+        key=_normalize_public_text,
+    )
 
     if selected_animal_id:
         selected_animal = next((animal for animal in animals if animal.id == selected_animal_id), None)
@@ -30963,18 +31377,17 @@ def servicos_exames():
                 exames = ordenar_por_species_scope(exames, scope_alvo)
         except Exception:
             current_app.logger.exception("Erro ao ordenar exames por especie para servicos/exames")
-        selected_city = None
-        if getattr(selected_animal, 'owner', None) and getattr(selected_animal.owner, 'endereco', None):
-            selected_city = (selected_animal.owner.endereco.cidade or '').strip() or None
-        if not selected_city and getattr(current_user, 'endereco', None):
-            selected_city = (current_user.endereco.cidade or '').strip() or None
+        if not selected_city and not city_param_present:
+            if getattr(selected_animal, 'owner', None) and getattr(selected_animal.owner, 'endereco', None):
+                selected_city = (selected_animal.owner.endereco.cidade or '').strip() or None
+            if not selected_city and getattr(current_user, 'endereco', None):
+                selected_city = (current_user.endereco.cidade or '').strip() or None
 
-        especialistas = _public_veterinarians_query().all()
+        especialistas = public_vets
         if selected_city:
-            selected_city_key = _normalize_public_text(selected_city)
             especialistas = [
                 vet for vet in especialistas
-                if _normalize_public_text(_vet_public_city(vet)) == selected_city_key
+                if _vet_serves_city(vet, selected_city)
             ]
 
     return render_template(
@@ -30983,7 +31396,8 @@ def servicos_exames():
         selected_animal=selected_animal,
         exames=exames,
         especialistas=especialistas,
-        selected_city=selected_city if selected_animal else None,
+        selected_city=selected_city,
+        cities=cities,
     )
 
 
@@ -36284,7 +36698,7 @@ def schedule_exam(animal_id):
             animal_city = (animal.owner.endereco.cidade or '').strip() or None
         if not animal_city and getattr(current_user, 'endereco', None):
             animal_city = (current_user.endereco.cidade or '').strip() or None
-        if animal_city and _normalize_public_text(_vet_public_city(vet)) != _normalize_public_text(animal_city):
+        if animal_city and not _vet_serves_city(vet, animal_city):
             abort(404)
     if animal.user_id != current_user.id and not same_user:
         animal = get_animal_or_404(animal_id)

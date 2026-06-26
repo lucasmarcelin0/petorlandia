@@ -357,6 +357,54 @@ def test_chatgpt_cached_oidc_scope_is_expanded_to_clinical_consent_and_token(app
         assert {'pets:read', 'exams:write'}.issubset(set(stored_client.scopes.split()))
 
 
+def test_chatgpt_dynamic_client_connector_redirect_reaches_clinical_consent(app, client):
+    redirect_uri = 'https://chatgpt.com/connector/oauth/petorlandia-callback-123'
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'ChatGPT PetOrlandia MCP',
+            'redirect_uris': [redirect_uri],
+            'token_endpoint_auth_method': 'none',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+            'scope': 'openid profile email',
+            'resource': 'https://www.petorlandia.com.br/mcp',
+        },
+    )
+    assert registration.status_code == 201
+    client_id = registration.get_json()['client_id']
+
+    with app.app_context():
+        user = User(name='Dr. Connector', email='chatgpt-connector@example.com', role='veterinario', worker='veterinario')
+        user.set_password('secret123')
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-CONNECTOR'))
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    consent_response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'scope': 'openid profile email',
+            'state': 'state-chatgpt-connector',
+            'code_challenge': 'iMnq5o6zALKXGivsnlom_0F5_WYda32GHkxlV7mq7hQ',
+            'code_challenge_method': 'S256',
+            'resource': 'https://www.petorlandia.com.br/mcp',
+        },
+    )
+
+    assert consent_response.status_code == 200
+    html = consent_response.get_data(as_text=True)
+    assert 'Autorizar acesso' in html
+    consent_scopes = re.findall(r'name="consent_scopes" value="([^"]+)"', html)
+    assert {'openid', 'profile', 'email', 'pets:read', 'exams:write'}.issubset(set(consent_scopes))
+
+
 def test_chatgpt_oidc_only_refresh_token_self_heals_for_veterinarian(app, client):
     with app.app_context():
         user = User(name='Dr. Refresh', email='chatgpt-refresh@example.com', role='veterinario', worker='veterinario')

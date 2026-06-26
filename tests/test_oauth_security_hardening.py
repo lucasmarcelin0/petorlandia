@@ -56,39 +56,47 @@ def test_oauth_authorize_rejects_wildcard_redirect(app, client):
     assert response.get_json()['error'] == 'invalid_request'
 
 
-def test_oauth_authorize_allows_limited_chatgpt_action_callback_pattern(app, client):
+def test_oauth_authorize_allows_limited_chatgpt_callback_patterns(app, client):
     with app.app_context():
-        user = User(name='ChatGPT OAuth User', email='chatgpt-oauth@example.com', role='adotante')
+        user = User(name='ChatGPT OAuth User', email='chatgpt-oauth@example.com', role='veterinario', worker='veterinario')
         user.set_password('secret123')
         oauth_client = OAuthClient(
             client_id='client-chatgpt-pattern',
             name='ChatGPT Actions client',
             redirect_uris=(
+                'https://chatgpt.com/connector/oauth/*\n'
                 'https://chatgpt.com/aip/*/oauth/callback\n'
+                'https://chat.openai.com/connector/oauth/*\n'
                 'https://chat.openai.com/aip/*/oauth/callback'
             ),
             scopes='openid profile email',
         )
         db.session.add_all([user, oauth_client])
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-CHATGPT-CALLBACK'))
         db.session.commit()
         user_id = user.id
 
     _login(client, user_id)
-    response = client.get(
-        '/oauth/authorize',
-        query_string={
-            'response_type': 'code',
-            'client_id': 'client-chatgpt-pattern',
-            'redirect_uri': 'https://chatgpt.com/aip/g-petorlandia123/oauth/callback',
-            'scope': 'openid profile email',
-            'state': 'abc',
-            'code_challenge': 'challenge',
-            'code_challenge_method': 'S256',
-        },
-    )
+    for redirect_uri in (
+        'https://chatgpt.com/connector/oauth/petorlandia-callback-123',
+        'https://chatgpt.com/aip/g-petorlandia123/oauth/callback',
+    ):
+        response = client.get(
+            '/oauth/authorize',
+            query_string={
+                'response_type': 'code',
+                'client_id': 'client-chatgpt-pattern',
+                'redirect_uri': redirect_uri,
+                'scope': 'openid profile email',
+                'state': 'abc',
+                'code_challenge': 'challenge',
+                'code_challenge_method': 'S256',
+            },
+        )
 
-    assert response.status_code == 200
-    assert 'Autorizar acesso' in response.get_data(as_text=True)
+        assert response.status_code == 200
+        assert 'Autorizar acesso' in response.get_data(as_text=True)
 
 
 def test_oauth_authorize_rejects_chatgpt_pattern_on_untrusted_host(app, client):

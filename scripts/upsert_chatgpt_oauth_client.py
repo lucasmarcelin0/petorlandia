@@ -15,7 +15,9 @@ DEFAULT_SCOPES = (
 
 CHATGPT_REDIRECT_URIS = "\n".join(
     [
+        "https://chatgpt.com/connector/oauth/*",
         "https://chatgpt.com/aip/*/oauth/callback",
+        "https://chat.openai.com/connector/oauth/*",
         "https://chat.openai.com/aip/*/oauth/callback",
     ]
 )

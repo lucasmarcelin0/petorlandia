@@ -99,6 +99,7 @@ __all__ = [
     "User",
     "UserRole",
     "Veterinario",
+    "VeterinarioAtendeCidade",
     "VeterinarianMembership",
     "VeterinarianSettings",
     "OAuthAccessToken",

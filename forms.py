@@ -811,6 +811,10 @@ class VetProfileForm(FlaskForm):
     crmv = StringField('Número do CRMV', validators=[DataRequired(), Length(max=20)])
     crmv_estado = SelectField('UF do CRMV', choices=_UF_CHOICES, default='')
     specialties = SelectMultipleField('Especialidades', coerce=int, validators=[Optional()])
+    cidades_atendidas = TextAreaField(
+        'Cidades atendidas',
+        validators=[Optional(), Length(max=2000)],
+    )
     submit = SubmitField('Salvar perfil')
 
 

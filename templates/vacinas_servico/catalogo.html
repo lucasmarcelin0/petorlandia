@@ -83,7 +83,7 @@
 <div class="container mt-4 vacserv-page">
 
   <div class="d-flex align-items-center gap-3 mb-4">
-    <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ url_for('servicos', cidade=cidade_selecionada) if cidade_selecionada else url_for('servicos') }}" class="btn btn-outline-secondary btn-sm">
       <i class="fa-solid fa-arrow-left me-1"></i> Voltar
     </a>
     <h1 class="h4 fw-bold mb-0">Vacinação em domicílio</h1>
@@ -202,7 +202,7 @@
   <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4 text-center text-muted">
       <i class="fa-solid fa-syringe fs-3 d-block mb-2"></i>
-      Nenhuma vacina disponível no momento. Volte em breve!
+      Nenhuma vacina disponível{% if cidade_selecionada %} em {{ cidade_selecionada }}{% endif %} no momento. Volte em breve!
     </div>
   </div>
   {% else %}

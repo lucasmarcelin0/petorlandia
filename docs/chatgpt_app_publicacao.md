@@ -7,7 +7,7 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, widget de revisao d
 - Arquitetura: `submission-ready` com MCP server existente em Flask.
 - Endpoint principal: `/mcp`.
 - Autenticacao: OAuth/OIDC do proprio PetOrlandia.
-- UI Apps SDK: widget HTML em `ui://petorlandia/laudo-volante-v1.html`.
+- UI Apps SDK: widget HTML em `ui://petorlandia/laudo-volante-v2.html`.
 - App icon sugerido: `static/chatgpt_app_icon.png`.
 - Arquivo de submissao: `chatgpt-app-submission.json`.
 
@@ -34,6 +34,12 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, widget de revisao d
 - `gerar_handoff_clinico`
 
 Todas as tools agora recebem hints explicitos (`readOnlyHint`, `destructiveHint`, `openWorldHint`), `outputSchema` e security schemes OAuth quando aplicavel.
+
+## Arquivos no ChatGPT
+
+- Para anexos de PDF no ChatGPT atual, use `arquivo_pdf` ou `laudo_arquivo` como file reference com `download_url` e `file_id`.
+- `attachment_id` permanece apenas como compatibilidade legada e nao deve ser o `fileParam` principal.
+- Caminhos locais do sandbox, como `/mnt/data/...`, nao devem ser enviados ao PetOrlandia.
 
 ## Developer Mode
 
@@ -69,14 +75,15 @@ Token URL: https://www.petorlandia.com.br/oauth/token
 Token endpoint auth method: client_secret_post
 ```
 
-6. Rode o script de client OAuth com o redirect URI que o ChatGPT mostrar:
+6. Rode o script de client OAuth no banco de producao. Ele registra o callback atual do ChatGPT (`https://chatgpt.com/connector/oauth/*`) e mantem compatibilidade com o callback legado (`/aip/*/oauth/callback`):
 
 ```powershell
-$env:CHATGPT_OAUTH_REDIRECT_URI="https://callback-exato-informado-pelo-chatgpt"
 python scripts/upsert_chatgpt_oauth_client.py
 ```
 
-7. Depois de alterar descriptors, widget ou scopes, atualize/reconecte o app no ChatGPT para recarregar metadados.
+7. Use no ChatGPT o `client_id` exibido pelo script (`petorlandia-chatgpt` por padrao) e o `client_secret` exibido quando o client for criado ou quando voce rodar com `--rotate-secret`.
+
+8. Depois de alterar descriptors, widget ou scopes, atualize/reconecte o app no ChatGPT para recarregar metadados.
 
 ## Producao publica
 
@@ -86,6 +93,7 @@ Antes de submeter para o publico:
 - Confirme que `/mcp`, `/.well-known/oauth-protected-resource`, `/.well-known/openid-configuration`, `/oauth/authorize`, `/oauth/token` e `/oauth/userinfo` respondem no dominio final.
 - Configure logs para chamadas MCP, latencia, erros OAuth e falhas de tool.
 - Use secrets fora do repositorio.
+- Confirme que o client OAuth `petorlandia-chatgpt` inclui `openid profile email` e os escopos clinicos (`pets:read`, `exams:read`, `exams:write`, etc.).
 - Publique e revise a politica de privacidade em `https://www.petorlandia.com.br/privacy`.
 - Publique o contato de suporte em `https://www.petorlandia.com.br/support` e defina `SUPPORT_EMAIL` antes da submissao.
 - Prepare usuario e dados demonstrativos para revisao, sem dados reais de clientes.

@@ -4,7 +4,7 @@
 <section class="pb-2 pb-lg-4">
   <div class="d-flex flex-column flex-md-row align-items-md-end justify-content-between gap-3">
     <div>
-      <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary btn-sm rounded-pill mb-3">
+      <a href="{{ url_for('servicos', cidade=selected_city) if selected_city else url_for('servicos') }}" class="btn btn-outline-secondary btn-sm rounded-pill mb-3">
         <i class="fa-solid fa-arrow-left me-1"></i> Voltar aos servi&ccedil;os
       </a>
       <h1 class="fw-bold mb-2 text-primary">
@@ -20,6 +20,58 @@
   </div>
 </section>
 
+<section class="mb-3 p-3 rounded-4 border bg-white">
+  <form method="get" class="row align-items-end g-2">
+    {% if selected_animal %}<input type="hidden" name="animal_id" value="{{ selected_animal.id }}">{% endif %}
+    <div class="col-12 col-md">
+      <label for="exames-city" class="form-label fw-bold mb-1">
+        <i class="fa-solid fa-location-dot text-primary me-1"></i> Cidade dos profissionais
+      </label>
+      <p class="text-muted small mb-0">Filtra os profissionais por cidade. Escolha &ldquo;Todas as cidades&rdquo; para ver todos.</p>
+    </div>
+    <div class="col-12 col-md-5 col-lg-4">
+      <select id="exames-city" name="cidade" class="form-select" onchange="this.form.submit()">
+        <option value="" {% if not selected_city %}selected{% endif %}>Todas as cidades</option>
+        {% for city in cities %}
+        <option value="{{ city }}" {% if city == selected_city %}selected{% endif %}>{{ city }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-auto">
+      <button type="button" class="btn btn-outline-primary w-100" id="exames-locate-btn">
+        <i class="fa-solid fa-location-crosshairs me-1"></i> Usar minha localiza&ccedil;&atilde;o
+      </button>
+    </div>
+  </form>
+</section>
+
+<script>
+(function () {
+  var btn = document.getElementById('exames-locate-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    if (!navigator.geolocation) { alert('Geolocalização não suportada pelo navegador.'); return; }
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Localizando...';
+    function restore() { btn.disabled = false; btn.innerHTML = original; }
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      fetch('/api/geo/cidade?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude,
+            { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.cidade) {
+            var url = new URL(window.location.href);
+            url.searchParams.set('cidade', data.cidade);
+            window.location.href = url.toString();
+          } else { alert('Não foi possível identificar sua cidade.'); restore(); }
+        })
+        .catch(function () { alert('Erro ao obter localização.'); restore(); });
+    }, function () { alert('Permissão de localização negada.'); restore(); }, { timeout: 10000 });
+  });
+})();
+</script>
+
 {% if animals %}
 <div class="row g-4 mt-1">
   <div class="col-12 col-xl-4">
@@ -31,7 +83,7 @@
       <div class="d-grid gap-3">
         {% for animal in animals %}
         {% set is_selected = selected_animal and selected_animal.id == animal.id %}
-        <a href="{{ url_for('servicos_exames', animal_id=animal.id) }}"
+        <a href="{{ url_for('servicos_exames', animal_id=animal.id, cidade=selected_city) if selected_city else url_for('servicos_exames', animal_id=animal.id) }}"
            class="service-pet-select {% if is_selected %}is-selected{% endif %}">
           <div class="service-pet-select__avatar">
             {% if animal.image %}

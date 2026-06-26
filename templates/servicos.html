@@ -1,14 +1,13 @@
 {% extends "layout.html" %}
 {% block main %}
 
-<!-- Cabeçalho -->
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
     <h1 class="fw-bold mb-2 text-primary">
       <i class="fa-solid fa-paw me-2"></i> Serviços PetOrlândia
     </h1>
     <p class="text-muted mx-auto" style="max-width: 780px;">
-      Agende e solicite serviços para o seu pet em um só lugar. Para comprar produtos, acesse a Loja.
+      Escolha a cidade e siga para o fluxo completo de cada serviço.
     </p>
 
     <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mt-3">
@@ -19,52 +18,92 @@
   </div>
 </section>
 
-<!-- Grade de serviços -->
-{% set servicos = [
-  {'icon':'fa-hand-holding-medical','color':'primary','title':'Castracao (PMO)',
-   'desc':'Cadastro de interesse para castracao pela Prefeitura de Orlandia.',
-   'badge':'Gratuito','url':url_for('castracao_pmo_solicitar'),'cta':'Solicitar'},
-  {'icon':'fa-syringe','color':'danger','title':'Vacina Antirrábica (PMO)',
-   'desc':'Vacina antirrábica gratuita da Prefeitura de Orlândia para o seu pet.',
-   'badge':'Gratuito','url':url_for('vacina_pmo_solicitar'),'cta':'Solicitar'},
-  {'icon':'fa-shield-dog','color':'success','title':'Vacinas em domicílio',
-   'desc':'V8, V10, gripe e outras vacinas aplicadas na sua casa por veterinários parceiros. Pagamento online.',
-   'url':url_for('servicos_vacinas'),'cta':'Escolher vacina'},
-  {'icon':'fa-scissors','color':'warning','title':'Banho & Tosa',
-   'desc':'Planos mensais de banho e tosa nas clínicas e casas parceiras.',
-   'url':url_for('grooming_planos_publicos'),'cta':'Ver planos'},
-  {'icon':'fa-stethoscope','color':'info','title':'Consultas',
-   'desc':'Agende uma consulta com os veterinários cadastrados na plataforma.',
-   'url':url_for('veterinarios'),'cta':'Agendar'},
-  {'icon':'fa-microscope','color':'primary','title':'Exames',
-   'desc':'Agende exames para o seu pet — escolha o animal para começar.',
-   'url':url_for('servicos_exames'),'cta':'Escolher pet'},
-  {'icon':'fa-dog','color':'secondary','title':'Pet sitter',
-   'desc':'Cuidador aprovado para o seu pet enquanto você viaja — em casa ou hospedagem.',
-   'url':url_for('petsitter_routes.petsitter_home'),'cta':'Conhecer'},
-] %}
+<section class="service-city-picker mb-4">
+  <form method="get" class="row align-items-end g-3">
+    <div class="col-12 col-md">
+      <label for="service-city" class="form-label fw-bold mb-1">
+        <i class="fa-solid fa-location-dot text-primary me-1"></i> Cidade do atendimento
+      </label>
+      <p class="text-muted small mb-0">
+        Vacinas, consultas e exames serão abertos já filtrados para esta cidade.
+      </p>
+    </div>
+    <div class="col-12 col-md-5 col-lg-4">
+      <select id="service-city" name="cidade" class="form-select form-select-lg" onchange="this.form.submit()">
+        {% for city in cities %}
+        <option value="{{ city }}" {% if city == selected_city %}selected{% endif %}>{{ city }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-auto">
+      <button type="button" class="btn btn-outline-primary btn-lg w-100" id="service-locate-btn"
+              data-auto-locate="{{ '1' if auto_locate else '0' }}">
+        <i class="fa-solid fa-location-crosshairs me-1"></i> Usar minha localiza&ccedil;&atilde;o
+      </button>
+    </div>
+  </form>
+</section>
+
+<script>
+(function () {
+  var btn = document.getElementById('service-locate-btn');
+  if (!btn) return;
+  function locate() {
+    if (!navigator.geolocation) { return; }
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Localizando...';
+    function restore() { btn.disabled = false; btn.innerHTML = original; }
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      fetch('/api/geo/cidade?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude,
+            { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.cidade) {
+            var url = new URL(window.location.href);
+            url.searchParams.set('cidade', data.cidade);
+            window.location.href = url.toString();
+          } else { restore(); }
+        })
+        .catch(function () { restore(); });
+    }, function () { restore(); }, { timeout: 10000 });
+  }
+  btn.addEventListener('click', locate);
+  if (btn.dataset.autoLocate === '1' && !sessionStorage.getItem('svc_geo_tried')) {
+    sessionStorage.setItem('svc_geo_tried', '1');
+    locate();
+  }
+})();
+</script>
+
+<div class="mb-3">
+  <h2 class="h4 fw-bold mb-1">Serviços em {{ selected_city }}</h2>
+  <p class="text-muted small mb-0">A disponibilidade e os profissionais são confirmados dentro de cada serviço.</p>
+</div>
 
 <div class="row g-3 g-md-4 mt-1">
-  {% for s in servicos %}
+  {% for service in localized_services %}
   <div class="col-12 col-sm-6 col-lg-4">
-    <div class="card service-card h-100 {% if s.soon %}service-soon{% endif %}">
+    <div class="card service-card h-100 {% if service.soon %}service-soon{% endif %}">
       <div class="card-body d-flex flex-column">
-        <div class="service-icon text-{{ s.color }} mb-3">
-          <i class="fa-solid {{ s.icon }}"></i>
+        <div class="service-icon text-{{ service.color }} mb-3">
+          <i class="fa-solid {{ service.icon }}"></i>
         </div>
-        <h2 class="h5 fw-bold mb-1">
-          {{ s.title }}
-          {% if s.badge %}<span class="badge bg-success ms-1 align-middle">{{ s.badge }}</span>{% endif %}
-        </h2>
-        <p class="text-muted small flex-grow-1 mb-3">{{ s.desc }}</p>
+        <h3 class="h5 fw-bold mb-1">
+          {{ service.title }}
+          {% if service.badge %}
+          <span class="badge bg-success ms-1 align-middle">{{ service.badge }}</span>
+          {% endif %}
+        </h3>
+        <p class="text-muted small flex-grow-1 mb-3">{{ service.description }}</p>
 
-        {% if s.soon %}
+        {% if service.soon %}
         <button class="btn btn-outline-secondary w-100" disabled>
-          <i class="fa-regular fa-clock me-1"></i> Em breve
+          <i class="fa-regular fa-clock me-1"></i> Catálogo em preparação
         </button>
         {% else %}
-        <a href="{{ s.url }}" class="btn btn-{{ s.color }} w-100 service-cta">
-          {{ s.cta }} <i class="fa-solid fa-arrow-right ms-1"></i>
+        <a href="{{ service.url }}" class="btn btn-{{ service.color }} w-100 service-cta">
+          {{ service.cta }} <i class="fa-solid fa-arrow-right ms-1"></i>
         </a>
         {% endif %}
       </div>
@@ -73,16 +112,66 @@
   {% endfor %}
 </div>
 
+<section class="mt-5 pt-4 border-top">
+  <h2 class="h4 fw-bold mb-1">Outros cuidados</h2>
+  <p class="text-muted small mb-3">Estes serviços possuem seleção própria de parceiros e disponibilidade.</p>
+
+  <div class="row g-3 g-md-4">
+    {% for service in other_services %}
+    <div class="col-12 col-sm-6 col-lg-4">
+      <div class="card service-card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="service-icon text-{{ service.color }} mb-3">
+            <i class="fa-solid {{ service.icon }}"></i>
+          </div>
+          <h3 class="h5 fw-bold mb-1">{{ service.title }}</h3>
+          <p class="text-muted small flex-grow-1 mb-3">{{ service.description }}</p>
+          <a href="{{ service.url }}" class="btn btn-{{ service.color }} w-100 service-cta">
+            {{ service.cta }} <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
 <style>
-  .service-card { border:none; border-radius:16px; background:#fff;
-                  box-shadow:0 2px 12px rgba(0,0,0,.06);
-                  transition:transform .2s ease, box-shadow .2s ease; }
-  .service-card:hover { transform:translateY(-4px); box-shadow:0 12px 26px rgba(0,0,0,.12); }
-  .service-icon { font-size:2.4rem; line-height:1; }
-  .service-soon { opacity:.7; }
-  .service-soon:hover { transform:none; box-shadow:0 2px 12px rgba(0,0,0,.06); }
-  .service-cta { font-weight:600; }
-  .btn-secondary.service-cta, .btn-warning.service-cta { color:#fff; }
+  .service-city-picker {
+    padding: 1.25rem;
+    border: 1px solid rgba(13, 110, 253, .12);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(13, 110, 253, .07), rgba(25, 135, 84, .05));
+  }
+  .service-card {
+    border: none;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, .12);
+  }
+  .service-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+  }
+  .service-soon {
+    opacity: .72;
+  }
+  .service-soon:hover {
+    transform: none;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+  }
+  .service-cta {
+    font-weight: 600;
+  }
+  .btn-secondary.service-cta,
+  .btn-warning.service-cta {
+    color: #fff;
+  }
 </style>
 
 {% endblock %}

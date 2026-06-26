@@ -1804,6 +1804,12 @@ class Veterinario(db.Model):
         secondary='veterinario_clinica',
         back_populates='veterinarios_associados',
     )
+    cidades_atendidas = db.relationship(
+        'VeterinarioAtendeCidade',
+        backref='veterinario',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
 
     @property
     def specialty_list(self):
@@ -1811,6 +1817,31 @@ class Veterinario(db.Model):
 
     def __str__(self):
         return f"{self.user.name} (CRMV: {self.crmv})"
+
+
+class VeterinarioAtendeCidade(db.Model):
+    """Cidade atendida por um veterinário volante (ex.: ultrassonografista).
+
+    Permite que um profissional cubra várias cidades além da do seu endereço.
+    Quando não há nenhuma linha, o filtro cai para a cidade do endereço (compat).
+    """
+    __tablename__ = 'veterinario_atende_cidade'
+    __table_args__ = (
+        db.UniqueConstraint('veterinario_id', 'cidade', name='uq_vet_atende_cidade'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    cidade = db.Column(db.String(120), nullable=False)
+    uf = db.Column(db.String(2), nullable=True)
+
+    def __str__(self):
+        return f"{self.cidade}{'/' + self.uf if self.uf else ''}"
 
 
 class VeterinarianMembership(db.Model):

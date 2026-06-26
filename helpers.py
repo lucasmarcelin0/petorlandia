@@ -18,6 +18,47 @@ from time_utils import BR_TZ, normalize_to_utc, utcnow
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
 
+def reverse_geocode_city(lat, lon):
+    """Return the city name for coordinates via OpenStreetMap reverse geocoding.
+
+    Used to resolve the browser's geolocation into a city. Returns ``None`` on
+    any failure so callers never need to handle exceptions.
+    """
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except (TypeError, ValueError):
+        return None
+
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": lat_f,
+                "lon": lon_f,
+                "format": "json",
+                "addressdetails": 1,
+                "zoom": 10,
+                "accept-language": "pt-BR",
+            },
+            headers={"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"},
+            timeout=5,
+        )
+        response.raise_for_status()
+        address = (response.json() or {}).get("address") or {}
+    except (requests.RequestException, ValueError):
+        return None
+
+    cidade = (
+        address.get("city")
+        or address.get("town")
+        or address.get("municipality")
+        or address.get("village")
+        or address.get("county")
+    )
+    return cidade or None
+
+
 def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None, estado=None):
     """Return latitude/longitude using OpenStreetMap with multiple fallbacks.
 

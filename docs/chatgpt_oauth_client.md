@@ -33,27 +33,19 @@ openid profile email tutors:write pets:write exams:write
 3. No ChatGPT, ative Developer Mode em **Settings -> Apps & Connectors -> Advanced settings**.
 4. Crie um app apontando o MCP URL para `https://<ngrok-ou-dominio>/mcp`.
 5. Configure OAuth com as URLs acima.
-6. Copie o callback/redirect URI exato exibido pelo ChatGPT.
-7. Registre esse callback no PetOrlandia:
+6. Registre ou atualize o client OAuth no PetOrlandia. O script aceita o callback atual do ChatGPT (`https://chatgpt.com/connector/oauth/*`) e tambem o callback legado `/aip/*/oauth/callback`:
 
 ```powershell
-$env:CHATGPT_OAUTH_REDIRECT_URI="https://callback-exato-informado-pelo-chatgpt"
 python scripts/upsert_chatgpt_oauth_client.py
 ```
 
-O script cria ou atualiza o client `petorlandia-chatgpt-connector`, preservando o `client_secret` existente. Para gerar outro segredo:
+O script cria ou atualiza o client `petorlandia-chatgpt`, preservando o `client_secret` existente. Para gerar outro segredo:
 
 ```powershell
 python scripts/upsert_chatgpt_oauth_client.py --rotate-secret
 ```
 
-Tambem e possivel sobrescrever os valores por ambiente:
-
-- `CHATGPT_OAUTH_CLIENT_ID`
-- `CHATGPT_OAUTH_CLIENT_NAME`
-- `CHATGPT_OAUTH_CLIENT_SECRET`
-- `CHATGPT_OAUTH_REDIRECT_URI`
-- `CHATGPT_OAUTH_SCOPES`
+7. Use no ChatGPT o `client_id` exibido pelo script e o `client_secret` exibido quando o client for criado ou quando voce rodar com `--rotate-secret`.
 
 ## Fluxo inicial recomendado
 

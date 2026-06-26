@@ -745,6 +745,11 @@
         {{ pf.specialties(class="form-select", size=6) }}
         <div class="form-text">Segure Ctrl (ou Cmd) para selecionar múltiplas especialidades.</div>
       </div>
+      <div class="mb-3">
+        {{ pf.cidades_atendidas.label(class_="form-label fw-semibold") }}
+        {{ pf.cidades_atendidas(class="form-control", rows=3, placeholder="Belo Horizonte/MG&#10;Contagem/MG&#10;Brumadinho/MG") }}
+        <div class="form-text">Uma cidade por linha (ex.: Belo Horizonte/MG). Use para profissionais que atendem em mais de uma cidade. Se ficar vazio, vale a cidade do endereço.</div>
+      </div>
       <div class="d-grid">
         {{ pf.submit(class="btn btn-primary") }}
       </div>
