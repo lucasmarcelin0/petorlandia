@@ -1,20 +1,41 @@
 {% extends 'layout.html' %}
 {% block main %}
 <div class="container py-4">
-  <h2 class="mb-4">📝 Editar Bloco de Prescrição</h2>
+  <h2 class="mb-4">Editar Bloco de Prescricao</h2>
 
   <div id="form-edicao">
-    <!-- Lista Temporária de Medicamentos (com edição) -->
     <div id="prescricao-lista" class="mb-3"></div>
 
     <div class="form-group mb-3">
-      <label for="instrucoes-gerais">Instruções Gerais</label>
+      <label for="instrucoes-gerais">Instrucoes Gerais</label>
       <textarea id="instrucoes-gerais" class="form-control" rows="3">{{ bloco.instrucoes_gerais or '' }}</textarea>
     </div>
 
-    <button class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">➕ Adicionar Medicamento</button>
-    <button class="btn btn-success mb-3" onclick="salvarEdicaoBloco({{ bloco.id }})">💾 Salvar alterações</button>
-    <button class="btn btn-secondary mb-3" onclick="history.back()">↩️ Cancelar</button>
+    <button type="button" class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">Adicionar Medicamento</button>
+    <button type="button" class="btn btn-success mb-3" onclick="salvarEdicaoBloco({{ bloco.id }})">Salvar alteracoes</button>
+    <button type="button" class="btn btn-secondary mb-3" onclick="history.back()">Cancelar</button>
+  </div>
+</div>
+
+<div class="modal fade" id="modalBularioPrescricao" tabindex="-1" aria-labelledby="modalBularioPrescricaoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBularioPrescricaoLabel">Escolher medicamento do bulario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="busca-bulario-prescricao" class="form-label">Buscar no bulario cadastrado</label>
+          <input type="search" id="busca-bulario-prescricao" class="form-control" placeholder="Digite o nome, principio ativo ou fabricante">
+        </div>
+        <div id="resultado-bulario-prescricao" class="list-group"></div>
+        <p id="estado-bulario-prescricao" class="text-muted small mb-0">Digite pelo menos 2 letras para buscar.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -23,18 +44,20 @@ const ANIMAL_ID = {{ bloco.animal_id }};
 let medicamentos = [
   {% for p in bloco.prescricoes %}
     {
-      medicamento: "{{ p.medicamento|default('', true)|escape }}",
-      dosagem: "{{ p.dosagem|default('', true)|escape }}",
-      frequencia: "{{ p.frequencia|default('', true)|escape }}",
-      duracao: "{{ p.duracao|default('', true)|escape }}",
-      observacoes: `{{ p.observacoes|default('', true)|escape }}`,
+      medicamento: {{ p.medicamento|default('', true)|tojson }},
+      dosagem: {{ p.dosagem|default('', true)|tojson }},
+      frequencia: {{ p.frequencia|default('', true)|tojson }},
+      duracao: {{ p.duracao|default('', true)|tojson }},
+      observacoes: {{ p.observacoes|default('', true)|tojson }},
       modoLivre: false,
       textoLivre: ''
     },
   {% endfor %}
 ];
+let indiceBularioAtual = null;
+let bularioTimer = null;
+let bularioModal = null;
 
-// Converte prescrições antigas que usavam "observações" como texto livre
 medicamentos.forEach(m => {
   if (!m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
     m.modoLivre = true;
@@ -43,6 +66,27 @@ medicamentos.forEach(m => {
   }
 });
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char]));
+}
+
+function nomeVisivelMedicamento(item) {
+  return item?.nome_exibicao_busca || item?.nome || '';
+}
+
+function resumoMedicamento(item) {
+  return [
+    item?.principio_ativo ? `Principio ativo: ${item.principio_ativo}` : '',
+    item?.classificacao ? `Classe: ${item.classificacao}` : '',
+    item?.via_administracao ? `Via: ${item.via_administracao}` : ''
+  ].filter(Boolean).join(' | ');
+}
 
 function renderListaEdicao() {
   const container = document.getElementById('prescricao-lista');
@@ -58,7 +102,7 @@ function renderListaEdicao() {
         <span><strong>Medicamento ${i + 1}</strong></span>
         <div class="d-flex align-items-center gap-2">
           <small class="text-muted">Arraste para reordenar</small>
-          <button class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
         </div>
       </div>
       <div class="card-body">
@@ -68,28 +112,33 @@ function renderListaEdicao() {
         </div>
         <div class="form-group mb-3 position-relative">
           <label>Medicamento</label>
-          <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${m.medicamento}" oninput="medicamentos[${i}].medicamento = this.value">
-          <small class="form-text text-muted">Digite para buscar sugestões.</small>
+          <div class="input-group">
+            <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${escapeHtml(m.medicamento)}" oninput="medicamentos[${i}].medicamento = this.value">
+            <button type="button" class="btn btn-outline-primary" onclick="abrirBulario(${i})">
+              <i class="fa fa-book-medical me-1"></i>Escolher do bulario
+            </button>
+          </div>
+          <small class="form-text text-muted">Digite para buscar sugestoes ou escolha um item do bulario cadastrado.</small>
           <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
         </div>
         ${m.modoLivre ? `
           <div class="form-group">
-            <label>Prescrição</label>
-            <textarea class="form-control" rows="3" placeholder="Digite a prescrição completa" oninput="medicamentos[${i}].textoLivre = this.value">${m.textoLivre}</textarea>
+            <label>Prescricao</label>
+            <textarea class="form-control" rows="3" placeholder="Digite a prescricao completa" oninput="medicamentos[${i}].textoLivre = this.value">${escapeHtml(m.textoLivre)}</textarea>
           </div>
         ` : `
           <div class="row g-2 mb-3">
             <div class="col-md-4">
               <label>Dosagem</label>
-              <input class="form-control" placeholder="Ex: 5mg/kg" value="${m.dosagem}" oninput="medicamentos[${i}].dosagem = this.value">
+              <input class="form-control" placeholder="Ex: 5mg/kg" value="${escapeHtml(m.dosagem)}" oninput="medicamentos[${i}].dosagem = this.value">
             </div>
             <div class="col-md-4">
-              <label>Frequência</label>
-              <input class="form-control" placeholder="Ex: 2x ao dia" value="${m.frequencia}" oninput="medicamentos[${i}].frequencia = this.value">
+              <label>Frequencia</label>
+              <input class="form-control" placeholder="Ex: 2x ao dia" value="${escapeHtml(m.frequencia)}" oninput="medicamentos[${i}].frequencia = this.value">
             </div>
             <div class="col-md-4">
-              <label>Duração</label>
-              <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" oninput="medicamentos[${i}].duracao = this.value">
+              <label>Duracao</label>
+              <input class="form-control" placeholder="Ex: 7 dias" value="${escapeHtml(m.duracao)}" oninput="medicamentos[${i}].duracao = this.value">
             </div>
           </div>
         `}
@@ -123,17 +172,11 @@ function toggleModoLivre(index, checked) {
 function validarMedicamentos() {
   for (let i = 0; i < medicamentos.length; i++) {
     const m = medicamentos[i];
-    if (m.modoLivre) {
-      if (!m.medicamento || !m.medicamento.trim()) {
-        return `O nome do medicamento ${i + 1} está vazio.`;
-      }
-      if (!m.textoLivre || !m.textoLivre.trim()) {
-        return `O texto do medicamento ${i + 1} está vazio.`;
-      }
-    } else {
-      if (!m.medicamento || !m.medicamento.trim()) {
-        return `O nome do medicamento ${i + 1} está vazio.`;
-      }
+    if (!m.medicamento || !m.medicamento.trim()) {
+      return `O nome do medicamento ${i + 1} esta vazio.`;
+    }
+    if (m.modoLivre && (!m.textoLivre || !m.textoLivre.trim())) {
+      return `O texto do medicamento ${i + 1} esta vazio.`;
     }
   }
   return null;
@@ -156,47 +199,128 @@ function salvarEdicaoBloco(bloco_id) {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      window.showAppToast ? window.showAppToast('Prescrição atualizada com sucesso.', 'success') : alert('Prescrição atualizada com sucesso.');
+      window.showAppToast ? window.showAppToast('Prescricao atualizada com sucesso.', 'success') : alert('Prescricao atualizada com sucesso.');
       localStorage.setItem('abaAtivaConsulta', 'medicamentos');
       window.location.href = `/consulta/${ANIMAL_ID}`;
     } else {
-      window.showAppToast ? window.showAppToast('Não foi possível atualizar a prescrição.', 'danger') : alert('Não foi possível atualizar a prescrição.');
+      window.showAppToast ? window.showAppToast('Nao foi possivel atualizar a prescricao.', 'danger') : alert('Nao foi possivel atualizar a prescricao.');
     }
   });
 }
 
 function ativarAutocomplete() {
   document.querySelectorAll('.medicamento-input').forEach(input => {
-    const index = input.getAttribute('data-index');
-    const sugestoes = input.parentElement.querySelector('.sugestoes');
+    const index = Number(input.getAttribute('data-index'));
+    const sugestoes = input.closest('.form-group').querySelector('.sugestoes');
 
     input.addEventListener('input', function () {
-      const query = this.value;
-      if (query.length < 2) return sugestoes.innerHTML = '';
+      const query = this.value.trim();
+      if (query.length < 2) {
+        sugestoes.innerHTML = '';
+        return;
+      }
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}`)
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}&animal_id=${encodeURIComponent(ANIMAL_ID)}`)
         .then(res => res.json())
         .then(data => {
           sugestoes.innerHTML = '';
           data.forEach(item => {
             const li = document.createElement('li');
             li.className = 'list-group-item list-group-item-action';
-            li.textContent = item.nome;
-            li.onclick = () => {
-              input.value = item.nome;
-              medicamentos[index].medicamento = item.nome;
-              medicamentos[index].dosagem = item.dosagem_recomendada || '';
-              medicamentos[index].frequencia = '';
-              medicamentos[index].duracao = item.duracao_tratamento || '';
-              medicamentos[index].observacoes = item.observacoes || '';
-              renderListaEdicao();
-            };
+            li.innerHTML = `
+              <div class="fw-semibold">${escapeHtml(nomeVisivelMedicamento(item))}</div>
+              <small class="text-muted">${escapeHtml(resumoMedicamento(item))}</small>
+            `;
+            li.onclick = () => aplicarMedicamentoDoBulario(index, item);
             sugestoes.appendChild(li);
           });
         });
     });
   });
 }
+
+function abrirBulario(index) {
+  indiceBularioAtual = index;
+  const input = document.getElementById('busca-bulario-prescricao');
+  const estado = document.getElementById('estado-bulario-prescricao');
+  const lista = document.getElementById('resultado-bulario-prescricao');
+  input.value = medicamentos[index]?.medicamento || '';
+  lista.innerHTML = '';
+  estado.textContent = 'Digite pelo menos 2 letras para buscar.';
+  bularioModal = bularioModal || new bootstrap.Modal(document.getElementById('modalBularioPrescricao'));
+  bularioModal.show();
+  setTimeout(() => {
+    input.focus();
+    input.select();
+    if (input.value.trim().length >= 2) buscarMedicamentosBulario(input.value.trim());
+  }, 250);
+}
+
+function buscarMedicamentosBulario(query) {
+  const estado = document.getElementById('estado-bulario-prescricao');
+  const lista = document.getElementById('resultado-bulario-prescricao');
+  if (query.length < 2) {
+    lista.innerHTML = '';
+    estado.textContent = 'Digite pelo menos 2 letras para buscar.';
+    return;
+  }
+
+  estado.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando no bulario...';
+  lista.innerHTML = '';
+
+  fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}&animal_id=${encodeURIComponent(ANIMAL_ID)}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Erro na busca');
+      return res.json();
+    })
+    .then(data => {
+      lista.innerHTML = '';
+      if (!data.length) {
+        estado.textContent = 'Nenhum medicamento encontrado no bulario.';
+        return;
+      }
+      estado.textContent = `${data.length} medicamento(s) encontrado(s).`;
+      data.forEach(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action text-start';
+        button.innerHTML = `
+          <div class="d-flex justify-content-between gap-3">
+            <div>
+              <div class="fw-semibold">${escapeHtml(nomeVisivelMedicamento(item))}</div>
+              <small class="text-muted">${escapeHtml(resumoMedicamento(item))}</small>
+            </div>
+            <span class="badge text-bg-light align-self-start">${item.apresentacoes?.length || 0} apresent.</span>
+          </div>
+        `;
+        button.onclick = () => {
+          aplicarMedicamentoDoBulario(indiceBularioAtual, item);
+          if (bularioModal) bularioModal.hide();
+        };
+        lista.appendChild(button);
+      });
+    })
+    .catch(() => {
+      lista.innerHTML = '';
+      estado.textContent = 'Nao foi possivel buscar medicamentos agora.';
+    });
+}
+
+function aplicarMedicamentoDoBulario(index, item) {
+  if (index === null || index === undefined || !medicamentos[index]) return;
+  medicamentos[index].medicamento = nomeVisivelMedicamento(item);
+  medicamentos[index].dosagem = item.dosagem_recomendada || medicamentos[index].dosagem || '';
+  medicamentos[index].frequencia = item.frequencia || medicamentos[index].frequencia || '';
+  medicamentos[index].duracao = item.duracao_tratamento || medicamentos[index].duracao || '';
+  medicamentos[index].observacoes = item.observacoes || medicamentos[index].observacoes || '';
+  renderListaEdicao();
+}
+
+document.getElementById('busca-bulario-prescricao').addEventListener('input', function () {
+  clearTimeout(bularioTimer);
+  const query = this.value.trim();
+  bularioTimer = setTimeout(() => buscarMedicamentosBulario(query), 300);
+});
 
 function handleDragStart(event) {
   event.dataTransfer.effectAllowed = 'move';
