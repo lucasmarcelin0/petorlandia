@@ -19101,7 +19101,7 @@ def consulta_direct(animal_id):
     if consulta:
         from models import Veterinario
 
-        appointment_form = AppointmentForm(clinic_ids=clinica_id)
+        appointment_form = AppointmentForm(clinic_ids=clinica_id, tutor=tutor)
         appointment_form.populate_animals(
             [animal],
             restrict_tutors=True,
