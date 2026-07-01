@@ -3900,6 +3900,22 @@ from models import User   # noqa: E402  (import depois de alias)
 
 @login.user_loader
 def load_user(user_id):
+    # TEMP: instrumentation for the /consulta/<id> perf investigation.
+    if has_request_context() and request.path.startswith("/consulta/"):
+        calls = g.setdefault("_load_user_calls", [])
+        calls.append(user_id)
+        if len(calls) in (1, 2, 5, 578):
+            current_app.logger.warning(
+                "PERF_LOAD_USER path=%s call_number=%d user_id=%s distinct_so_far=%s stack=%s",
+                request.path,
+                len(calls),
+                user_id,
+                len(set(calls)),
+                " <- ".join(
+                    f"{f.filename.split(chr(92))[-1].split('/')[-1]}:{f.lineno}:{f.name}"
+                    for f in _traceback_profiling.extract_stack()[-8:-1]
+                ),
+            )
     return User.query.get(int(user_id))
 
 login.login_view = "login_view"
