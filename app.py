@@ -345,13 +345,17 @@ def _profile_after_cursor_execute(conn, cursor, statement, parameters, context, 
         start_times = conn.info.get("query_start_time")
         if start_times:
             elapsed = _time_profiling.perf_counter() - start_times.pop()
-            key = statement.split(" FROM ")[-1][:60] if " FROM " in statement else statement.strip()[:60]
+            shape = statement.split(" FROM ")[-1][:60] if " FROM " in statement else statement.strip()[:60]
+            # Group by (query shape, calling location) -- NOT just query shape,
+            # since different call sites can produce identical parameterized
+            # SQL text (e.g. two different `Model.query.get(id)` calls), which
+            # would otherwise get merged under whichever call happened first.
+            where = _app_stack_frame_profiling()
+            key = (shape, where)
             bucket = g.setdefault("_profile_by_shape", {})
-            entry = bucket.setdefault(key, [0, 0.0, None])
+            entry = bucket.setdefault(key, [0, 0.0])
             entry[0] += 1
             entry[1] += elapsed
-            if entry[2] is None:
-                entry[2] = _app_stack_frame_profiling()
 
 
 @app.after_request
@@ -367,7 +371,7 @@ def _log_consulta_query_profile(response):
                 request.path,
                 total_count,
                 total_ms,
-                [(cnt, round(ms * 1000, 1), where, key) for key, (cnt, ms, where) in top],
+                [(cnt, round(ms * 1000, 1), where, shape) for (shape, where), (cnt, ms) in top],
             )
     return response
 
