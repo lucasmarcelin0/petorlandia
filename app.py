@@ -308,6 +308,46 @@ def _set_request_id_header(response):
     return response
 
 
+# TEMP: query profiling for the /consulta/<id> perf investigation. Logs total
+# SQL query count + cumulative DB time per request for that path only.
+# Remove once the bottleneck is confirmed and fixed.
+from sqlalchemy import event as _sa_event
+from sqlalchemy.engine import Engine as _SAEngine
+import time as _time_profiling
+
+
+@_sa_event.listens_for(_SAEngine, "before_cursor_execute")
+def _profile_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    if has_request_context() and request.path.startswith("/consulta/"):
+        conn.info.setdefault("query_start_time", []).append(_time_profiling.perf_counter())
+
+
+@_sa_event.listens_for(_SAEngine, "after_cursor_execute")
+def _profile_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    if has_request_context() and request.path.startswith("/consulta/"):
+        start_times = conn.info.get("query_start_time")
+        if start_times:
+            elapsed = _time_profiling.perf_counter() - start_times.pop()
+            g.setdefault("_profile_queries", []).append((elapsed, statement.strip().split("\n")[0][:160]))
+
+
+@app.after_request
+def _log_consulta_query_profile(response):
+    if request.path.startswith("/consulta/"):
+        queries = g.get("_profile_queries", [])
+        if queries:
+            total = sum(e for e, _ in queries)
+            top = sorted(queries, key=lambda q: q[0], reverse=True)[:8]
+            current_app.logger.warning(
+                "PERF_PROFILE path=%s count=%d total_ms=%.1f top=%s",
+                request.path,
+                len(queries),
+                total * 1000,
+                [(round(e * 1000, 1), s) for e, s in top],
+            )
+    return response
+
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(err):
     current_app.logger.warning(
