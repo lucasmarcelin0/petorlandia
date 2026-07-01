@@ -1117,6 +1117,15 @@ class AppointmentRequestResponseForm(FlaskForm):
     submit = SubmitField('Confirmar')
 
 
+APPOINTMENT_KIND_CHOICES = [
+    ('consulta', 'Consulta'),
+    ('retorno', 'Retorno'),
+    ('exame', 'Exame'),
+    ('banho_tosa', 'Banho e Tosa'),
+    ('vacina', 'Vacina'),
+]
+
+
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 
@@ -1155,13 +1164,7 @@ class AppointmentForm(FlaskForm):
 
     kind = SelectField(
         'Tipo',
-        choices=[
-            ('consulta', 'Consulta'),
-            ('retorno', 'Retorno'),
-            ('exame', 'Exame'),
-            ('banho_tosa', 'Banho e Tosa'),
-            ('vacina', 'Vacina'),
-        ],
+        choices=APPOINTMENT_KIND_CHOICES,
         validators=[DataRequired()],
         default='consulta',
     )

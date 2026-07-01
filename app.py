@@ -1749,6 +1749,7 @@ def animal_size_token(weight) -> str:
 from forms import (
     AddToCartForm,
     AnimalForm,
+    APPOINTMENT_KIND_CHOICES,
     AppointmentDeleteForm,
     AppointmentForm,
     AppointmentRequestForm,
@@ -19182,7 +19183,7 @@ def agendar_retorno(consulta_id):
         abort(403)
     from models import Veterinario
 
-    form = AppointmentForm()
+    form = AppointmentForm(clinic_ids=consulta.clinica_id, tutor=consulta.animal.owner)
     form.populate_animals(
         [consulta.animal],
         restrict_tutors=True,
@@ -21690,12 +21691,7 @@ def clinic_detail(clinica_id):
     status_labels = dict(APPOINTMENT_STATUS_LABELS)
     kind_labels = dict(APPOINTMENT_KIND_LABELS)
 
-    try:
-        appointment_kind_choices = AppointmentForm().kind.choices
-    except Exception:  # noqa: BLE001
-        appointment_kind_choices = []
-
-    for value, label in appointment_kind_choices:
+    for value, label in APPOINTMENT_KIND_CHOICES:
         if value:
             kind_labels.setdefault(value, label)
 
@@ -27380,6 +27376,13 @@ def buscar_medicamentos():
 
     resultados = (
         Medicamento.query
+        .options(
+            # .doses is read for every row below (orphan filtering + scoring)
+            # and .apresentacoes is read for every serialized result further
+            # down -- eager-load both in batch instead of one query per row.
+            selectinload(Medicamento.doses),
+            selectinload(Medicamento.apresentacoes),
+        )
         .filter(or_(*filtros_busca))
         .order_by(Medicamento.nome)
         .limit(120)

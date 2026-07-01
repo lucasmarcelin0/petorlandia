@@ -261,7 +261,7 @@ def finalize_consulta_flow(
 
 
 def _build_return_form(consulta, clinic_id: Optional[int]) -> AppointmentForm:
-    form = AppointmentForm()
+    form = AppointmentForm(clinic_ids=clinic_id, tutor=consulta.animal.owner)
     form.populate_animals(
         [consulta.animal],
         restrict_tutors=True,
