@@ -202,7 +202,7 @@ class TestTutorRegistrationAndLogin:
             assert sess.get('_fresh') is True
 
         response_text = response.data.decode('utf-8', errors='ignore').lower()
-        assert 'bem-vindo' in response_text or email.lower() in response_text
+        assert 'olá' in response_text or 'bem-vindo' in response_text or email.lower() in response_text
     
     def test_password_reset_flow(self, client, tutor, app):
         """Test password reset request workflow."""

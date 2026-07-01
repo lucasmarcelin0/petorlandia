@@ -8,25 +8,92 @@
 
 {% block main %}
 {% if current_user.is_authenticated %}
-<div class="container text-center">
+<div class="container">
+    {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
     <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
-        <h1 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h1>
-        <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <h1 class="h3 mb-0">Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
+            <a href="{{ url_for('add_animal') }}" class="btn btn-success rounded-pill shadow-sm px-4">
+                <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
+            </a>
+        </div>
 
+        {% if meus_pets %}
+        <p class="text-muted small mb-3">Aqui está um resumo dos seus pets e do que precisa de atenção.</p>
+        <div class="row g-3 text-start">
+            {% for pet in meus_pets %}
+            {% set atrasadas = doses_atrasadas.get(pet.id) %}
+            {% set proxima_vacina = proximas_vacinas.get(pet.id) %}
+            {% set proxima_consulta = proximos_agendamentos.get(pet.id) %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <a href="{{ url_for('ficha_animal', animal_id=pet.id) }}" class="pet-hub-card d-block h-100 text-decoration-none">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div class="pet-hub-avatar {% if pet.image %}has-image{% endif %}">
+                            {% if pet.image %}
+                            <img src="{{ pet.image }}" alt="Foto de {{ pet.name }}" loading="lazy">
+                            {% else %}
+                            {{ (pet.name or 'P')[0]|upper }}
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold text-dark text-truncate">{{ pet.name }}</div>
+                            <div class="text-muted small text-truncate">
+                                {{ [pet.species.name if pet.species else None, pet.breed.name if pet.breed else None, pet.age_display]|select|join(' • ') }}
+                            </div>
+                        </div>
+                    </div>
+                    <ul class="list-unstyled small mb-2">
+                        {% if atrasadas %}
+                        <li class="text-danger mb-1">
+                            <i class="fa-solid fa-syringe me-1"></i>
+                            {% if atrasadas|length == 1 %}
+                            Vacina atrasada: {{ atrasadas[0].nome }}
+                            {% else %}
+                            {{ atrasadas|length }} vacinas atrasadas
+                            {% endif %}
+                        </li>
+                        {% endif %}
+                        {% if proxima_vacina %}
+                        <li class="text-primary mb-1">
+                            <i class="fa-solid fa-calendar-check me-1"></i>
+                            Próxima vacina: {{ proxima_vacina.nome }} em {{ proxima_vacina.aplicada_em.strftime('%d/%m') }}
+                        </li>
+                        {% endif %}
+                        {% if proxima_consulta %}
+                        <li class="text-primary mb-1">
+                            <i class="fa-solid fa-stethoscope me-1"></i>
+                            Consulta dia {{ proxima_consulta.scheduled_at|format_datetime_brazil('%d/%m às %H:%M') }}
+                        </li>
+                        {% endif %}
+                        {% if not atrasadas and not proxima_vacina and not proxima_consulta %}
+                        <li class="text-success mb-1">
+                            <i class="fa-solid fa-circle-check me-1"></i> Tudo em dia por aqui
+                        </li>
+                        {% endif %}
+                    </ul>
+                    <span class="small fw-semibold pet-hub-link">Abrir ficha de {{ pet.name }} <i class="fa-solid fa-arrow-right ms-1"></i></span>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <div class="display-6 mb-2">🐶🐱</div>
+            <p class="mb-1 fw-semibold">Você ainda não cadastrou nenhum pet.</p>
+            <p class="text-muted small mb-3">Cadastrando seu pet, você acompanha vacinas, consultas e histórico em um só lugar.</p>
+            <a href="{{ url_for('add_animal') }}" class="btn btn-success rounded-pill shadow-sm px-4 py-2">
+                ➕ Cadastrar meu primeiro pet
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center">
+        <h2 class="h5 mb-2">O que você deseja fazer hoje?</h2>
         <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
-            <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Abre o formulário para registrar um novo pet.">
-                ➕ Cadastrar novo animal
-            </a>
-
-            <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
-                📋 Ver todos os animais
-            </a>
-
-            <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
-                ❤️ Plano de Saúde Pet
+            <a href="{{ url_for('servicos') }}" class="btn btn-outline-danger rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Agende vacinas, banho & tosa, consultas, exames e mais.">
+                🐾 Agendar um serviço
             </a>
 
             <a href="{{ url_for('loja') }}" class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
@@ -34,12 +101,55 @@
                 🛍️ Loja Pet
             </a>
 
-            <a href="{{ url_for('servicos') }}" class="btn btn-outline-danger rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Agende vacina antirrábica (PMO), banho & tosa, consultas, exames e mais.">
-                🐾 Serviços
+            <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
+                ❤️ Plano de Saúde Pet
+            </a>
+
+            <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
+                data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
+                📋 Ver todos os animais
             </a>
         </div>
     </div>
+
+    <style>
+        .pet-hub-card {
+            border: 1px solid rgba(13, 110, 253, .15);
+            border-radius: 16px;
+            background: #fff;
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .05);
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+        .pet-hub-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .1);
+        }
+        .pet-hub-avatar {
+            width: 56px;
+            height: 56px;
+            flex: 0 0 56px;
+            border-radius: 50%;
+            background: rgba(13, 110, 253, .12);
+            color: #0d6efd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.4rem;
+            overflow: hidden;
+        }
+        .pet-hub-avatar.has-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .pet-hub-link {
+            color: #0d6efd;
+        }
+        .min-w-0 { min-width: 0; }
+    </style>
 
     {% if current_user.role == 'admin' or current_user.worker == 'colaborador' or is_active_veterinarian %}
     <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">

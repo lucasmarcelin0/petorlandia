@@ -4490,7 +4490,57 @@ def painel_dashboard():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    if not current_user.is_authenticated:
+        return render_template('index.html')
+
+    meus_pets = (
+        Animal.query
+        .filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .filter(Animal.is_alive.isnot(False))
+        .order_by(Animal.date_added.desc())
+        .all()
+    )
+
+    doses_atrasadas = {}
+    proximas_vacinas = {}
+    proximos_agendamentos = {}
+    pet_ids = [pet.id for pet in meus_pets]
+    if pet_ids:
+        hoje = date.today()
+        vacinas_pendentes = (
+            Vacina.query
+            .filter(Vacina.animal_id.in_(pet_ids))
+            .filter(Vacina.aplicada.is_(False))
+            .filter(Vacina.aplicada_em.isnot(None))
+            .order_by(Vacina.aplicada_em)
+            .all()
+        )
+        for vacina in vacinas_pendentes:
+            if vacina.aplicada_em < hoje:
+                doses_atrasadas.setdefault(vacina.animal_id, []).append(vacina)
+            elif vacina.animal_id not in proximas_vacinas:
+                proximas_vacinas[vacina.animal_id] = vacina
+
+        agendamentos = (
+            Appointment.query
+            .filter(Appointment.animal_id.in_(pet_ids))
+            .filter(Appointment.scheduled_at >= utcnow())
+            .filter(Appointment.status.in_(["scheduled", "accepted"]))
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        for agendamento in agendamentos:
+            if agendamento.animal_id not in proximos_agendamentos:
+                proximos_agendamentos[agendamento.animal_id] = agendamento
+
+    return render_template(
+        'index.html',
+        meus_pets=meus_pets,
+        doses_atrasadas=doses_atrasadas,
+        proximas_vacinas=proximas_vacinas,
+        proximos_agendamentos=proximos_agendamentos,
+    )
 
 
 @app.route('/privacy')
