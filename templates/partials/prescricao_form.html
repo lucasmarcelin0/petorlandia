@@ -126,7 +126,7 @@
       <label for="nome-medicamento" class="form-label mb-0">Medicamento</label>
     </div>
     <input type="text" id="nome-medicamento" class="form-control" placeholder="Ex: Dipirona, Doxiciclina...">
-    <ul id="sugestoes-medicamentos" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
+    <ul id="sugestoes-medicamentos" class="list-group w-100 prescription-search-results" style="display: none;"></ul>
   </div>
 
    <!-- Formulário para adicionar novo medicamento removido e substituído pelo container acima -->
@@ -3640,11 +3640,13 @@
       if (q.length < 2) {
         sugestoes.innerHTML = '';
         sugestoes.style.display = 'none';
+        sugestoes.classList.remove('is-short');
         return;
       }
 
       sugestoes.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoes.style.display = 'block';
+      sugestoes.classList.remove('is-short');
 
       fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
         .then(res => {
@@ -3659,7 +3661,9 @@
             none.className = 'list-group-item text-muted';
             none.textContent = 'Nenhum medicamento encontrado';
             sugestoes.appendChild(none);
+            sugestoes.classList.remove('is-short');
           } else {
+            sugestoes.classList.toggle('is-short', data.length < 4);
             data.forEach(item => {
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
@@ -3681,6 +3685,7 @@
                 atualizarPreviewPrescricao();
                 sugestoes.innerHTML = '';
                 sugestoes.style.display = 'none';
+                sugestoes.classList.remove('is-short');
               };
               sugestoes.appendChild(li);
             });
@@ -3692,11 +3697,13 @@
             addLi.onclick = () => {
               openMedicacaoCard({ nome: input.value.trim() });
               sugestoes.style.display = 'none';
+              sugestoes.classList.remove('is-short');
             };
             sugestoes.appendChild(addLi);
         })
         .catch(err => {
           sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
+          sugestoes.classList.remove('is-short');
           console.error("Erro ao buscar medicamentos:", err);
         });
     }, 300));
@@ -3770,6 +3777,18 @@
   #sugestoes-busca-nova {
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     border-radius: 0.25rem;
+  }
+
+  #sugestoes-medicamentos.prescription-search-results {
+    margin-top: .65rem;
+    max-height: 420px;
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  #sugestoes-medicamentos.prescription-search-results.is-short {
+    min-height: 230px;
   }
 
   #sugestoes-medicamentos .list-group-item:hover,
