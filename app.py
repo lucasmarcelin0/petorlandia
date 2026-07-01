@@ -4269,6 +4269,7 @@ def inject_site_flags():
             'plano_saude_em_breve': SiteFlag.get('plano_saude_em_breve', default=True),
         }
     except Exception:
+        db.session.rollback()
         flags = {'loja_em_breve': True, 'plano_saude_em_breve': True}
     return dict(site_flags=flags)
 
