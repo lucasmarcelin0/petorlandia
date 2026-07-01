@@ -1378,33 +1378,6 @@ body {
   font-weight: 700;
 }
 
-.prescription-assistant__patient {
-  min-width: 220px;
-  border: 1px solid #d7e3ea;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: .65rem .75rem;
-  color: #475569;
-  font-size: .82rem;
-}
-
-.prescription-assistant__patient strong,
-.prescription-assistant__patient span {
-  display: block;
-}
-
-.prescription-assistant__patient strong {
-  color: #111827;
-  font-size: .95rem;
-}
-
-.prescription-assistant__patient-label {
-  color: #64748b;
-  font-size: .68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
 .prescription-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1421,6 +1394,18 @@ body {
   background: #ffffff;
   padding: .65rem;
   color: #64748b;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.prescription-step:hover,
+.prescription-step:focus-visible {
+  border-color: #99f6e4;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .12);
+  outline: none;
 }
 
 .prescription-step > span {
@@ -1459,9 +1444,63 @@ body {
   background: #f0fdfa;
 }
 
+.prescription-step.is-selected {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, .18);
+}
+
 .prescription-step.is-complete > span {
   background: #0f766e;
   color: #ffffff;
+}
+
+.prescription-panel {
+  min-height: 12rem;
+}
+
+.prescription-panel.is-active {
+  animation: prescription-panel-in .18s ease both;
+}
+
+.prescription-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.prescription-empty-state i {
+  color: #0f766e;
+  font-size: 1.6rem;
+  margin-bottom: .45rem;
+}
+
+.prescription-empty-state strong {
+  color: #334155;
+  font-size: .95rem;
+}
+
+.prescription-empty-state span {
+  font-size: .82rem;
+}
+
+@keyframes prescription-panel-in {
+  from {
+    opacity: .75;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .prescription-stage__label {
@@ -1558,11 +1597,6 @@ body {
 @media (max-width: 767.98px) {
   .prescription-assistant__header {
     display: block;
-  }
-
-  .prescription-assistant__patient {
-    margin-top: .75rem;
-    min-width: 0;
   }
 
   .prescription-steps {

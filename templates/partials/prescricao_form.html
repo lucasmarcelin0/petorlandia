@@ -17,35 +17,28 @@
         <p class="prescription-assistant__eyebrow">Prescri&ccedil;&atilde;o assistida</p>
         <h6 class="prescription-assistant__title">Monte a receita em etapas clinicas</h6>
       </div>
-      <div class="prescription-assistant__patient">
-        <span class="prescription-assistant__patient-label">Paciente</span>
-        <strong>{{ animal.name if animal else 'Paciente nao selecionado' }}</strong>
-        <span>
-          {{ animal.species.name if animal and animal.species else 'Especie nao informada' }}
-          {% if animal and animal.peso %}&middot; {{ ('%.2f'|format(animal.peso)).replace('.', ',') }} kg{% else %}&middot; peso pendente{% endif %}
-        </span>
-      </div>
     </div>
     <div class="prescription-steps" aria-label="Etapas da prescricao">
-      <div class="prescription-step is-active" data-prescription-step="medicamento">
+      <button type="button" class="prescription-step is-active is-selected" data-prescription-step="medicamento" onclick="mostrarEtapaPrescricao('medicamento')">
         <span>1</span>
         <div><strong>Medicamento</strong><small>Busque produto ou principio ativo</small></div>
-      </div>
-      <div class="prescription-step" data-prescription-step="apresentacao">
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="apresentacao" onclick="mostrarEtapaPrescricao('apresentacao')">
         <span>2</span>
         <div><strong>Apresentacao</strong><small>Defina o que sera administrado</small></div>
-      </div>
-      <div class="prescription-step" data-prescription-step="posologia">
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="posologia" onclick="mostrarEtapaPrescricao('posologia')">
         <span>3</span>
         <div><strong>Posologia</strong><small>Calcule ou preencha manualmente</small></div>
-      </div>
-      <div class="prescription-step" data-prescription-step="revisao">
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="revisao" onclick="mostrarEtapaPrescricao('revisao')">
         <span>4</span>
         <div><strong>Revisao</strong><small>Confira antes do rascunho</small></div>
-      </div>
+      </button>
     </div>
   </div>
 
+  <div id="prescription-panel-medicamento" class="prescription-panel is-active" data-prescription-panel-content="medicamento">
   <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
     <button type="button" class="btn btn-outline-primary" onclick="toggleNovaMedicacao()">➕ Nova medicação</button>
     <button type="button" id="btn-frequentes" class="btn btn-outline-secondary d-none" onclick="ciclarPainel()">
@@ -139,7 +132,7 @@
    <!-- Formulário para adicionar novo medicamento removido e substituído pelo container acima -->
 
   <!-- Card de informações do medicamento (monografia / referência) -->
-  <div id="info-medicamento" class="card border-success mb-3 d-none prescription-stage" data-prescription-panel="apresentacao">
+  <div id="info-medicamento" class="card border-success mb-3 d-none prescription-stage" data-prescription-panel="medicamento">
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0" id="med-nome-card"></h5>
       <div class="d-flex align-items-center gap-2">
@@ -230,7 +223,19 @@
     </div>
   </div>
 
+  </div>
+
+  <div id="prescription-panel-apresentacao" class="prescription-panel d-none" data-prescription-panel-content="apresentacao">
+    <div id="prescription-presentation-slot"></div>
+    <div id="prescription-presentation-empty" class="prescription-empty-state">
+      <i class="bi bi-capsule"></i>
+      <strong>Escolha um medicamento primeiro</strong>
+      <span>A apresentacao disponivel para prescricao aparecera aqui.</span>
+    </div>
+  </div>
+
   <!-- Card de sugestão clínica de dose (bulário) -->
+  <div id="prescription-panel-posologia" class="prescription-panel d-none" data-prescription-panel-content="posologia">
   <div id="sugestao-dose-card" class="card border-info mb-3 d-none prescription-stage" data-prescription-panel="posologia">
     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
       <span>
@@ -461,7 +466,9 @@
     <label for="instrucao-unica" class="form-label">Prescrição personalizada</label>
     <textarea id="instrucao-unica" class="form-control" rows="2" placeholder="Ex: Administrar 25mg/kg de 12/12h por 3 dias."></textarea>
   </div>
+  </div>
 
+  <div id="prescription-panel-revisao" class="prescription-panel d-none" data-prescription-panel-content="revisao">
   <div class="prescription-final-preview mb-3" data-prescription-panel="revisao">
     <div class="prescription-final-preview__head">
       <div>
@@ -498,6 +505,7 @@
 
   <!-- Botão para finalizar -->
   <button type="button" class="btn btn-primary mt-2" id="btn-finalizar">💾 Finalizar Prescrição</button>
+  </div>
 </form>
 
 <!-- Histórico -->
@@ -727,11 +735,51 @@
     let _duracaoDias = null;
     let _opcaoRecomendadaEscolhida = null;
 
+  let _prescriptionCurrentPanel = 'medicamento';
+
   function _setPrescriptionStep(step, active) {
     const el = document.querySelector(`[data-prescription-step="${step}"]`);
     if (!el) return;
     el.classList.toggle('is-active', !!active);
     el.classList.toggle('is-complete', !!active);
+  }
+
+  function mostrarEtapaPrescricao(panel) {
+    const target = panel || 'medicamento';
+    const panels = document.querySelectorAll('[data-prescription-panel-content]');
+    if (!panels.length) return;
+
+    _prescriptionCurrentPanel = target;
+    panels.forEach((el) => {
+      const isCurrent = el.dataset.prescriptionPanelContent === target;
+      el.classList.toggle('d-none', !isCurrent);
+      el.classList.toggle('is-active', isCurrent);
+    });
+
+    document.querySelectorAll('[data-prescription-step]').forEach((el) => {
+      el.classList.toggle('is-selected', el.dataset.prescriptionStep === target);
+    });
+
+    atualizarPreviewPrescricao();
+  }
+
+  function _moverApresentacaoParaPainel() {
+    const wrap = document.getElementById('presc-apresentacao-wrap');
+    const slot = document.getElementById('prescription-presentation-slot');
+    if (wrap && slot && wrap.parentElement !== slot) {
+      slot.appendChild(wrap);
+    }
+  }
+
+  function _atualizarEstadoPainelApresentacao() {
+    const wrap = document.getElementById('presc-apresentacao-wrap');
+    const empty = document.getElementById('prescription-presentation-empty');
+    if (!empty) return;
+    const temApresentacoes = _apresentacoesDisponiveis.length > 0;
+    empty.classList.toggle('d-none', temApresentacoes);
+    if (wrap) {
+      wrap.classList.toggle('d-none', !temApresentacoes);
+    }
   }
 
   function _textoCampo(id) {
@@ -745,6 +793,9 @@
   }
 
   function atualizarPreviewPrescricao() {
+    _moverApresentacaoParaPainel();
+    _atualizarEstadoPainelApresentacao();
+
     const nomeEl = document.getElementById('presc-preview-medicamento');
     const textoEl = document.getElementById('presc-preview-texto');
     const apEl = document.getElementById('presc-preview-apresentacao');
@@ -2282,6 +2333,7 @@
     select.classList.remove('is-invalid');
     wrap.classList.remove('d-none');
     atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('apresentacao');
   }
 
   function onApresentacaoPrescricaoChange() {
@@ -2303,6 +2355,9 @@
       try { onApresentacaoEscolhida(_apresentacaoPrescricao.id); } catch (_) {}
     }
     atualizarPreviewPrescricao();
+    if (_apresentacaoPrescricao) {
+      mostrarEtapaPrescricao('posologia');
+    }
   }
 
   // Rótulo curto da apresentação escolhida para anexar ao nome na receita.
@@ -2991,6 +3046,7 @@
     if (durStr)  document.getElementById('duracao').value = durStr;
     _registrarUsoDoseBulario(s);
     atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('revisao');
     mostrarFeedback('Sugestão clínica aplicada. Revise e ajuste antes de prescrever.', 'success');
   }
 
@@ -3253,6 +3309,7 @@
     _renderMonografiaEstruturada(m.monografia_estruturada || null);
     document.getElementById('info-medicamento').classList.remove('d-none');
     atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao(_apresentacoesDisponiveis.length ? 'apresentacao' : 'posologia');
   }
 
 
@@ -3558,6 +3615,8 @@
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', atualizarPreviewPrescricao);
       });
+      _moverApresentacaoParaPainel();
+      mostrarEtapaPrescricao('medicamento');
       atualizarPreviewPrescricao();
 
     // Busca de medicamentos com debounce
