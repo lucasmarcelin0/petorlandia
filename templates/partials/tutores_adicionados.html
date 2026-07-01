@@ -102,6 +102,7 @@
           {% set status_tokens = status_tokens + ' professional' %}
         {% endif %}
         <div class="col-md-6 d-flex"
+             data-tutor-id="{{ tutor.id }}"
              data-name="{{ tutor.name|lower }}"
              data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}"
              data-cpf="{{ tutor.cpf or '' }}"

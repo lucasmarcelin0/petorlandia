@@ -489,6 +489,7 @@
         const col = document.createElement('div');
         const cardStatus = normalizeStatus(tutor);
         col.className = 'col-md-6 d-flex';
+        col.dataset.tutorId = tutor.id || '';
         col.dataset.name = (tutor.name || '').toLowerCase();
         col.dataset.date = tutor.created_at || '';
         col.dataset.cpf = tutor.cpf || '';
@@ -689,7 +690,12 @@
       ev.preventDefault();
       if(data.html){
         const cont=document.getElementById('animais-adicionados');
-        if(cont) cont.innerHTML=data.html;
+        if(cont) {
+          cont.innerHTML=data.html;
+          if(window.PetorlandiaPanels && typeof window.PetorlandiaPanels.refreshListings === 'function'){
+            window.PetorlandiaPanels.refreshListings();
+          }
+        }
       }
       form.reset();
       setFeedbackIdle(form.querySelector('button[type="submit"]'));

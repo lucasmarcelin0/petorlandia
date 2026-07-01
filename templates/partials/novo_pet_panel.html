@@ -1,5 +1,35 @@
-<div class="row g-4 align-items-start">
-  <div class="col-12 d-flex flex-column gap-4">
+{% set active_panel = active_record_panel|default('create') %}
+<div class="record-workspace"
+     data-record-panels
+     data-record-panel-key="animais"
+     data-active-panel="{{ active_panel }}"
+     data-panel-param="panel">
+  <div class="record-switch mb-4" role="tablist" aria-label="Animais">
+    <button type="button"
+            class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
+            role="tab"
+            aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
+            aria-controls="animais-panel-cadastro"
+            data-record-panel-button="create">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+      <span>Novo cadastro</span>
+    </button>
+    <button type="button"
+            class="record-switch__button {% if active_panel == 'list' %}active{% endif %}"
+            role="tab"
+            aria-selected="{{ 'true' if active_panel == 'list' else 'false' }}"
+            aria-controls="animais-panel-listagem"
+            data-record-panel-button="list">
+      <i class="fa-solid fa-paw" aria-hidden="true"></i>
+      <span>Animais cadastrados</span>
+    </button>
+  </div>
+
+  <section id="animais-panel-cadastro"
+           class="record-panel-section"
+           role="tabpanel"
+           data-record-panel-section="create"
+           {% if active_panel != 'create' %}hidden{% endif %}>
     <div class="card shadow-sm border-0 rounded-4 h-100">
       <div class="card-body p-4">
         <div class="mb-4">
@@ -9,17 +39,29 @@
         {% include 'partials/animal_register_form.html' %}
       </div>
     </div>
-  </div>
-  <div class="col-12">
-    <div class="d-flex flex-column gap-4">
-      <div id="animais-adicionados">
+  </section>
+
+  <section id="animais-panel-listagem"
+           class="record-panel-section"
+           role="tabpanel"
+           data-record-panel-section="list"
+           {% if active_panel != 'list' %}hidden{% endif %}>
+    <div id="animais-adicionados" data-record-listing-container>
+      {% if defer_animal_listing %}
+        <div class="record-listing-placeholder"
+             data-record-listing-placeholder
+             data-fetch-url="{{ animal_listing_fetch_url|default(url_for('novo_animal')) }}">
+          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+          <span>Carregando animais...</span>
+        </div>
+      {% else %}
         {% with compact=True,
                 fetch_url=url_for('novo_animal'),
                 can_create_animals=True,
                 new_animal_url=url_for('novo_animal') %}
           {% include 'partials/animais_adicionados.html' %}
         {% endwith %}
-      </div>
+      {% endif %}
     </div>
-  </div>
+  </section>
 </div>

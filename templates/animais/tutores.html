@@ -1,23 +1,65 @@
 {% extends 'layout.html' %}
 {% block main %}
+{% set active_panel = active_record_panel|default('create') %}
 <div class="container-fluid py-4">
-  <div class="row g-4">
-    <div class="col-12">
+  <div class="record-workspace"
+       data-record-panels
+       data-record-panel-key="tutores"
+       data-active-panel="{{ active_panel }}"
+       data-panel-param="panel">
+    <div class="record-switch mb-4" role="tablist" aria-label="Tutores">
+      <button type="button"
+              class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
+              role="tab"
+              aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
+              aria-controls="tutores-panel-cadastro"
+              data-record-panel-button="create">
+        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+        <span>Novo cadastro</span>
+      </button>
+      <button type="button"
+              class="record-switch__button {% if active_panel == 'list' %}active{% endif %}"
+              role="tab"
+              aria-selected="{{ 'true' if active_panel == 'list' else 'false' }}"
+              aria-controls="tutores-panel-listagem"
+              data-record-panel-button="list">
+        <i class="fa-solid fa-users" aria-hidden="true"></i>
+        <span>Tutores cadastrados</span>
+      </button>
+    </div>
+
+    <section id="tutores-panel-cadastro"
+             class="record-panel-section"
+             role="tabpanel"
+             data-record-panel-section="create"
+             {% if active_panel != 'create' %}hidden{% endif %}>
       <div class="card shadow-sm border-0 rounded-4">
         <div class="card-body p-4">
           {% include 'partials/tutor_management_panel.html' %}
         </div>
       </div>
-    </div>
-  </div>
-  <div class="row g-4 mt-1">
-    <div class="col-12">
-      <div id="tutores-adicionados">
-        {% with compact=True, fetch_url=url_for('tutores') %}
-          {% include 'partials/tutores_adicionados.html' %}
-        {% endwith %}
+    </section>
+
+    <section id="tutores-panel-listagem"
+             class="record-panel-section"
+             role="tabpanel"
+             data-record-panel-section="list"
+             {% if active_panel != 'list' %}hidden{% endif %}>
+      <div id="tutores-adicionados" data-record-listing-container>
+        {% if defer_tutor_listing %}
+          <div class="record-listing-placeholder"
+               data-record-listing-placeholder
+               data-fetch-url="{{ tutor_listing_fetch_url|default(url_for('tutores')) }}">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span>Carregando tutores...</span>
+          </div>
+        {% else %}
+          {% with compact=True, fetch_url=url_for('tutores') %}
+            {% include 'partials/tutores_adicionados.html' %}
+          {% endwith %}
+        {% endif %}
       </div>
-    </div>
+    </section>
   </div>
 </div>
 {% endblock %}

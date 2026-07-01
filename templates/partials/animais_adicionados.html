@@ -77,7 +77,7 @@
     <div id="animal-cards" class="row g-3 flex-grow-1">
       {% if animais_adicionados %}
         {% for animal in animais_adicionados %}
-        <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
+        <div class="col-md-6 d-flex" data-animal-id="{{ animal.id }}" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
           <div class="card shadow-sm rounded-4 h-100 flex-fill border-0">
             {% if animal.image %}
             <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">

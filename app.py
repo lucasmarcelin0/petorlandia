@@ -25034,6 +25034,20 @@ def tutor_detail(tutor_id):
     return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
 
+def _resolve_record_panel(args, listing_params=(), default='create'):
+    raw_panel = (args.get('panel') or '').strip().lower()
+    create_values = {'create', 'form', 'new', 'novo', 'cadastro'}
+    list_values = {'list', 'listing', 'records', 'cadastrados', 'listagem'}
+
+    if raw_panel in create_values:
+        return 'create'
+    if raw_panel in list_values:
+        return 'list'
+    if any(param in args for param in listing_params):
+        return 'list'
+    return default
+
+
 @app.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
@@ -25216,20 +25230,38 @@ def tutores():
     # — GET com paginação —
     tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
     tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
-    tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
-        scope,
-        page,
-        clinic_id=clinic_scope,
-        user_id=effective_user_id,
-        require_appointments=require_appointments,
-        veterinario_id=veterinarian_scope_id,
-        search=tutor_search,
-        sort_option=tutor_sort,
-    )
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+    wants_listing_payload = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
         request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-    ):
+    )
+    active_record_panel = _resolve_record_panel(
+        request.args,
+        listing_params=('scope', 'tutor_search', 'tutor_sort', 'page'),
+        default='create',
+    )
+    defer_tutor_listing = active_record_panel != 'list' and not wants_listing_payload
+
+    if defer_tutor_listing:
+        tutores_adicionados = []
+        pagination = None
+        resolved_scope = scope
+        shared_access_map = {}
+    else:
+        tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
+            scope,
+            page,
+            clinic_id=clinic_scope,
+            user_id=effective_user_id,
+            require_appointments=require_appointments,
+            veterinario_id=veterinarian_scope_id,
+            search=tutor_search,
+            sort_option=tutor_sort,
+        )
+        shared_access_map = {
+            t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope)
+            for t in tutores_adicionados
+        }
+
+    if wants_listing_payload:
         html = render_template(
             'partials/tutores_adicionados.html',
             tutores_adicionados=tutores_adicionados,
@@ -25241,10 +25273,18 @@ def tutores():
             page_param=request.args.get('page_param', 'page'),
             fetch_url=url_for('tutores'),
             compact=True,
-            shared_access_map={t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope) for t in tutores_adicionados},
+            shared_access_map=shared_access_map,
             viewer_clinic_id=clinic_id,
         )
         return jsonify(html=html, scope=resolved_scope)
+
+    tutor_listing_args = {'scope': scope}
+    if tutor_search:
+        tutor_listing_args['tutor_search'] = tutor_search
+    if tutor_sort:
+        tutor_listing_args['tutor_sort'] = tutor_sort
+    if page > 1:
+        tutor_listing_args['page'] = page
 
     return render_template(
         'animais/tutores.html',
@@ -25254,7 +25294,10 @@ def tutores():
         tutor_search=tutor_search,
         tutor_sort=tutor_sort,
         viewer_clinic_id=clinic_id,
-        shared_access_map={t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope) for t in tutores_adicionados},
+        shared_access_map=shared_access_map,
+        active_record_panel=active_record_panel,
+        defer_tutor_listing=defer_tutor_listing,
+        tutor_listing_fetch_url=url_for('tutores', **tutor_listing_args),
     )
 
 
@@ -29083,24 +29126,37 @@ def novo_animal():
     scope_param = request.args.get('scope', 'all')
     animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
     animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
-    animais_adicionados, pagination, scope = _get_recent_animais(
-        scope_param,
-        page,
-        clinic_id=clinic_scope,
-        user_id=current_user_id,
-        require_appointments=require_appointments,
-        veterinario_id=veterinarian_scope_id,
-        search=animal_search,
-        sort_option=animal_sort,
+    wants_listing_payload = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
     )
+    active_record_panel = _resolve_record_panel(
+        request.args,
+        listing_params=('scope', 'animal_search', 'animal_sort', 'page'),
+        default='create',
+    )
+    defer_animal_listing = active_record_panel != 'list' and not wants_listing_payload
+
+    if defer_animal_listing:
+        animais_adicionados = []
+        pagination = None
+        scope = scope_param
+    else:
+        animais_adicionados, pagination, scope = _get_recent_animais(
+            scope_param,
+            page,
+            clinic_id=clinic_scope,
+            user_id=current_user_id,
+            require_appointments=require_appointments,
+            veterinario_id=veterinarian_scope_id,
+            search=animal_search,
+            sort_option=animal_sort,
+        )
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
     breed_list = list_breeds()
 
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
-        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-    ):
+    if wants_listing_payload:
         html = render_template(
             'partials/animais_adicionados.html',
             animais_adicionados=animais_adicionados,
@@ -29117,6 +29173,14 @@ def novo_animal():
         )
         return jsonify(html=html, scope=scope)
 
+    animal_listing_args = {'scope': scope_param}
+    if animal_search:
+        animal_listing_args['animal_search'] = animal_search
+    if animal_sort:
+        animal_listing_args['animal_sort'] = animal_sort
+    if page > 1:
+        animal_listing_args['page'] = page
+
     return render_template(
         'animais/novo_animal.html',
         animais_adicionados=animais_adicionados,
@@ -29126,6 +29190,9 @@ def novo_animal():
         scope=scope,
         animal_search=animal_search,
         animal_sort=animal_sort,
+        active_record_panel=active_record_panel,
+        defer_animal_listing=defer_animal_listing,
+        animal_listing_fetch_url=url_for('novo_animal', **animal_listing_args),
     )
 
 
