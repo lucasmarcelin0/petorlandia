@@ -2893,6 +2893,27 @@ body {
   box-shadow: 0 0 0 0.22rem rgba(15, 118, 110, 0.12);
 }
 
+/* === UX mobile: alvos de toque confortáveis em telas sensíveis === */
+@media (pointer: coarse) {
+  .btn:not(.btn-sm):not(.btn-close):not(.navbar-toggler) {
+    min-height: 44px;
+  }
+
+  .form-control:not(.form-control-sm),
+  .form-select:not(.form-select-sm) {
+    min-height: 44px;
+    /* 16px evita o zoom automático do iOS ao focar o campo */
+    font-size: max(1rem, 16px);
+  }
+
+  .nav-link,
+  .dropdown-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
 .consultation-workspace .tab-pane .btn {
   border-radius: 0.82rem;
   font-weight: 700;
