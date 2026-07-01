@@ -2000,19 +2000,27 @@ def _format_vet_coverage_cities(vet):
 
 def _is_public_veterinarian(vet):
     profile_type = _normalize_public_text(getattr(vet, 'public_profile_type', None) or 'profissional')
-    return bool(getattr(vet, 'public_visible', True)) and profile_type == 'profissional'
+    membership = getattr(vet, 'membership', None)
+    return (
+        bool(getattr(vet, 'public_visible', True))
+        and profile_type == 'profissional'
+        and bool(membership and membership.is_active())
+    )
 
 
 def _public_veterinarians_query():
     return (
         Veterinario.query
         .join(User, Veterinario.user_id == User.id)
+        .join(VeterinarianMembership, VeterinarianMembership.veterinario_id == Veterinario.id)
         .options(
             db.joinedload(Veterinario.user).joinedload(User.endereco),
+            db.joinedload(Veterinario.membership),
             db.selectinload(Veterinario.specialties),
         )
         .filter(Veterinario.public_visible.is_(True))
         .filter(Veterinario.public_profile_type == 'profissional')
+        .filter(VeterinarianMembership.is_active_flag.is_(True))
         .order_by(User.name)
     )
 
@@ -24643,9 +24651,13 @@ def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
     veterinario = Veterinario.query.get_or_404(veterinario_id)
+    has_internal_access = _user_is_clinic_professional(veterinario_id)
+
+    if not _is_public_veterinarian(veterinario) and not has_internal_access:
+        abort(404)
 
     # Privacidade: tutores/visitantes nunca veem a agenda nem dados internos.
-    if not _user_is_clinic_professional(veterinario_id):
+    if not has_internal_access:
         return _render_vet_public_profile(veterinario)
 
     calendar_access_scope = get_calendar_access_scope(current_user)
@@ -30856,6 +30868,15 @@ def servicos():
 
     localized_services = []
     if is_orlandia:
+        localized_services.append({
+            'icon': 'fa-hand-holding-medical',
+            'color': 'primary',
+            'title': 'Castração (PMO)',
+            'description': 'Cadastro de interesse para castração gratuita pela Prefeitura de Orlândia.',
+            'badge': 'Gratuito',
+            'url': url_for('castracao_pmo_solicitar'),
+            'cta': 'Solicitar',
+        })
         localized_services.append({
             'icon': 'fa-syringe',
             'color': 'danger',
