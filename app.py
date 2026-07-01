@@ -27346,19 +27346,43 @@ def buscar_medicamentos():
     if len(q) < 2:
         return jsonify([])
 
+    q_lower = q.lower()
+    q_norm = unicodedata.normalize("NFKD", q_lower)
+    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
+
+    def _norm_busca(valor):
+        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        texto = re.sub(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b", "neomicina", texto)
+        return texto
+
+    q_norm = _norm_busca(q_norm)
+    tokens_busca = [
+        token
+        for token in re.findall(r"[a-z0-9]{3,}", q_norm)
+        if token not in {"com", "para", "por", "uso", "mg", "ml"}
+    ]
+
     # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
     like = f"%{q}%"
+    filtros_busca = [
+        Medicamento.nome.ilike(like),
+        Medicamento.principio_ativo.ilike(like),
+        cast(Medicamento.conteudo_estruturado, Text).ilike(like),
+    ]
+    for token in tokens_busca:
+        token_like = f"%{token}%"
+        filtros_busca.extend([
+            Medicamento.nome.ilike(token_like),
+            Medicamento.principio_ativo.ilike(token_like),
+            cast(Medicamento.conteudo_estruturado, Text).ilike(token_like),
+        ])
+
     resultados = (
         Medicamento.query
-        .filter(
-            or_(
-                Medicamento.nome.ilike(like),
-                Medicamento.principio_ativo.ilike(like),
-                cast(Medicamento.conteudo_estruturado, Text).ilike(like),
-            )
-        )
+        .filter(or_(*filtros_busca))
         .order_by(Medicamento.nome)
-        .limit(40)
+        .limit(120)
         .all()
     )
 
@@ -27376,14 +27400,6 @@ def buscar_medicamentos():
                 continue
         filtrados.append(m)
 
-    q_lower = q.lower()
-    q_norm = unicodedata.normalize("NFKD", q_lower)
-    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
-
-    def _norm_busca(valor):
-        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
-        return "".join(c for c in texto if not unicodedata.combining(c))
-
     def _produto_vetsmart_match_info(m):
         conteudo = getattr(m, "conteudo_estruturado", None) or {}
         produtos = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
@@ -27394,18 +27410,47 @@ def buscar_medicamentos():
                 continue
             if any(q_norm in _norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo")):
                 return prod
+            produto_haystack = " ".join(_norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo"))
+            if tokens_busca and all(token in produto_haystack for token in tokens_busca):
+                return prod
         return None
+
+    def _haystack_medicamento(m):
+        partes = [
+            m.nome,
+            m.principio_ativo,
+            m.classificacao,
+            m.via_administracao,
+            m.dosagem_recomendada,
+            m.frequencia,
+            m.duracao_tratamento,
+        ]
+        conteudo = getattr(m, "conteudo_estruturado", None) or {}
+        if isinstance(conteudo, dict):
+            produtos = conteudo.get("produtos_vetsmart")
+            if isinstance(produtos, list):
+                for prod in produtos:
+                    if isinstance(prod, dict):
+                        partes.extend([prod.get("nome"), prod.get("fabricante"), prod.get("principio_ativo")])
+        else:
+            partes.append(conteudo)
+        return " ".join(_norm_busca(parte) for parte in partes if parte)
 
     def _score(m):
         # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
         # (3) princípio ativo coincide exatamente, (4) tem dados básicos preenchidos
         tem_doses = 1 if m.doses else 0
-        prefixo = 1 if m.nome.lower().startswith(q_lower) else 0
-        pa_exato = 1 if (m.principio_ativo or "").lower() == q_lower else 0
+        nome_norm = _norm_busca(m.nome)
+        pa_norm = _norm_busca(m.principio_ativo)
+        prefixo = 1 if nome_norm.startswith(q_norm) else 0
+        pa_exato = 1 if pa_norm == q_norm else 0
         produto_match = _produto_vetsmart_match_info(m)
         produto_match_score = 1 if produto_match else 0
+        haystack = _haystack_medicamento(m)
+        todos_tokens = 1 if tokens_busca and all(token in haystack for token in tokens_busca) else 0
+        qtd_tokens = sum(1 for token in tokens_busca if token in haystack)
         tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
-        return (produto_match_score, tem_doses, prefixo, pa_exato, tem_dados)
+        return (todos_tokens, produto_match_score, qtd_tokens, tem_doses, prefixo, pa_exato, tem_dados)
 
     filtrados.sort(key=_score, reverse=True)
 
