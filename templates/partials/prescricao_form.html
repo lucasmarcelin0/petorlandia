@@ -536,6 +536,56 @@
     cursor: grab;
   }
 
+  .prescricao-item__content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .prescricao-item__main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .prescricao-item__text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .prescricao-item__medicamento {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.25;
+    max-width: 100%;
+  }
+
+  .prescricao-item__actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: .5rem;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .prescricao-item__actions .btn {
+    min-width: 42px;
+  }
+
+  @media (max-width: 575.98px) {
+    .prescricao-item__main {
+      display: block;
+    }
+
+    .prescricao-item__actions {
+      justify-content: flex-start;
+      margin-top: .75rem;
+      white-space: normal;
+    }
+  }
+
   .historico-recarga-alert {
     border-style: dashed;
   }
@@ -3347,14 +3397,14 @@
           <div class="drag-handle text-muted me-3" aria-label="Reordenar prescrição">
             <i class="bi bi-grip-vertical fs-4"></i>
           </div>
-          <div class="flex-grow-1">
-            <div class="d-flex justify-content-between">
-              <div>
-                <h6 class="card-title text-primary mb-1">${p.medicamento}</h6>
+          <div class="prescricao-item__content">
+            <div class="prescricao-item__main">
+              <div class="prescricao-item__text">
+                <h6 class="card-title text-primary mb-1 prescricao-item__medicamento">${p.medicamento}</h6>
                 <p class="card-text mb-2">${p.texto}</p>
               </div>
-              <div class="text-end">
-                <button class="btn btn-sm btn-warning me-2" onclick="editarPrescricao(${i})">✏️ Editar</button>
+              <div class="prescricao-item__actions">
+                <button class="btn btn-sm btn-warning" onclick="editarPrescricao(${i})">✏️ Editar</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="removerPrescricao(${i})">
                   <i class="bi bi-trash"></i>
                 </button>
