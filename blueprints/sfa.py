@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 import hmac
 import hashlib
+import io
 import json
 import os
 from functools import wraps
@@ -33,6 +34,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
     current_app,
 )
@@ -144,9 +146,19 @@ def dashboard():
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30, ACOES_QUE_GERAM_CONTATO
     )
 
-    stats = stats_painel()
+    mes_selecionado = request.args.get("mes", "").strip()
+    mes_valido = _parse_month_filter(mes_selecionado)
+    if mes_selecionado and not mes_valido:
+        mes_selecionado = ""
+    mes_label = ""
+    if mes_valido:
+        year, month = mes_valido
+        mes_label = f"{month:02d}/{year}"
+
+    stats = stats_painel(mes_inicio_sintomas=mes_selecionado)
     diagnostico = diagnostico_configuracao()
     resumo_testes = resumo_dados_teste_sfa()
+    filtros_mes_pacientes = {"mes_inicio_sintomas": mes_selecionado} if mes_selecionado else {}
 
     # Enriquece a fila com links WhatsApp prontos
     for p in stats["fila"]:
@@ -168,7 +180,15 @@ def dashboard():
             except Exception:
                 pass
 
-    return render_template("sfa/dashboard.html", stats=stats, diagnostico=diagnostico, resumo_testes=resumo_testes)
+    return render_template(
+        "sfa/dashboard.html",
+        stats=stats,
+        diagnostico=diagnostico,
+        resumo_testes=resumo_testes,
+        mes_selecionado=mes_selecionado,
+        mes_label=mes_label,
+        filtros_mes_pacientes=filtros_mes_pacientes,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +375,14 @@ def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
         parsed_month = _parse_month_filter(mes_inicio_sintomas)
         if parsed_month:
             year, month = parsed_month
-            filtros_t0.append(SfaRespostaT0.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+            q = q.filter(
+                exists()
+                .where(SfaRespostaT0.id_estudo == SfaPaciente.id_estudo)
+                .where(SfaRespostaT0.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+                | exists()
+                .where(SfaSinanLog.id_estudo_vinculado == SfaPaciente.id_estudo)
+                .where(SfaSinanLog.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+            )
     if data_inicio_sintomas:
         parsed_date = parse_data(data_inicio_sintomas)
         if parsed_date:
@@ -1222,6 +1249,457 @@ def _formularios_impressao_sfa() -> list[dict[str, object]]:
         )
     return itens
 
+
+REVIEW_KIND_LABELS = {
+    "t0": "Formulario T0",
+    "t10": "Formulario T10",
+    "t30": "Formulario T30",
+    "graficos": "Graficos da pesquisa",
+}
+
+
+def _review_schema_loader(kind: str):
+    from services.sfa_service import carregar_t0_form_schema, carregar_t10_form_schema, carregar_t30_form_schema
+
+    loaders = {
+        "t0": carregar_t0_form_schema,
+        "t10": carregar_t10_form_schema,
+        "t30": carregar_t30_form_schema,
+    }
+    return loaders.get(kind)
+
+
+def _review_kind_or_404(kind: str) -> str:
+    normalized = str(kind or "").strip().lower()
+    if normalized not in REVIEW_KIND_LABELS:
+        abort(404)
+    return normalized
+
+
+def _client_ip() -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return str(request.remote_addr or "").strip()
+
+
+def _field_answer_mode(field: dict) -> str:
+    field_type = str(field.get("type") or "text").strip()
+    if field_type == "checkboxes":
+        return "Pode marcar mais de uma opcao."
+    if field_type in {"radio", "select"}:
+        return "Marcar ou escolher somente uma opcao."
+    if field_type == "textarea":
+        return "Resposta aberta longa."
+    if field_type == "date":
+        return "Informar uma data."
+    if field_type == "number":
+        return "Informar um numero."
+    return "Resposta aberta curta."
+
+
+def _collect_reviewer_identity() -> dict[str, str]:
+    return {
+        "name": str(request.form.get("reviewer_name") or "").strip(),
+        "email": str(request.form.get("reviewer_email") or "").strip(),
+        "profile": str(request.form.get("reviewer_profile") or "").strip(),
+        "overall_comment": str(request.form.get("overall_comment") or "").strip(),
+    }
+
+
+def _save_instrument_review(kind: str, payload: dict):
+    from extensions import db
+    from models.sfa import SfaInstrumentReview
+
+    identity = payload.get("reviewer") or {}
+    review = SfaInstrumentReview(
+        kind=kind,
+        reviewer_name=identity.get("name"),
+        reviewer_email=identity.get("email"),
+        reviewer_profile=identity.get("profile"),
+        payload_json=json.dumps(payload, ensure_ascii=False),
+        ip_address=_client_ip(),
+        user_agent=str(request.headers.get("User-Agent") or "").strip(),
+    )
+    db.session.add(review)
+    db.session.commit()
+    return review
+
+
+def _collect_question_review_payload(kind: str, schema: dict) -> dict:
+    from services.sfa_service import iterar_campos_form
+
+    questions = []
+    for field in iterar_campos_form(schema):
+        key = str(field.get("key") or "").strip()
+        if not key:
+            continue
+        sample_value = request.form.getlist(f"answer__{key}") if field.get("type") == "checkboxes" else str(request.form.get(f"answer__{key}") or "").strip()
+        questions.append(
+            {
+                "key": key,
+                "label": str(field.get("label") or "").strip(),
+                "required": bool(field.get("required")),
+                "type": str(field.get("type") or "text").strip(),
+                "answer_mode": _field_answer_mode(field),
+                "sample_answer": sample_value,
+                "necessity": str(request.form.get(f"necessity__{key}") or "").strip(),
+                "redundancy": str(request.form.get(f"redundancy__{key}") or "").strip(),
+                "clarity": str(request.form.get(f"clarity__{key}") or "").strip(),
+                "comment": str(request.form.get(f"comment__{key}") or "").strip(),
+            }
+        )
+    return {
+        "kind": kind,
+        "label": REVIEW_KIND_LABELS[kind],
+        "reviewer": _collect_reviewer_identity(),
+        "questions": questions,
+    }
+
+
+def _review_form_field_index() -> dict[str, dict[str, object]]:
+    from services.sfa_service import (
+        carregar_t0_form_schema,
+        carregar_t10_form_schema,
+        carregar_t30_form_schema,
+        iterar_campos_form,
+    )
+
+    index = {}
+    for stage, schema in [
+        ("T0", carregar_t0_form_schema()),
+        ("T10", carregar_t10_form_schema()),
+        ("T30", carregar_t30_form_schema()),
+    ]:
+        for field in iterar_campos_form(schema):
+            key = str(field.get("key") or "").strip()
+            if not key:
+                continue
+            index[f"{stage.lower()}:{key}"] = {
+                "stage": stage,
+                "label": str(field.get("label") or key).strip(),
+                "required": "Obrigatoria" if field.get("required") else "Opcional",
+                "mode": _field_answer_mode(field),
+                "help_text": str(field.get("help_text") or "").strip(),
+                "options": [
+                    str(option or "").strip()
+                    for option in field.get("options", [])
+                    if str(option or "").strip()
+                ],
+            }
+    cadastro_fields = {
+        "grupo": "Classificacao operacional: Grupo A, Grupo B ou pendente",
+        "bairro": "Bairro do cadastro/SINAN",
+        "data_nascimento": "Data de nascimento",
+        "data_t0": "Data em que T0 foi registrado",
+        "data_t10": "Data em que T10 foi registrado",
+        "data_t30": "Data em que T30 foi registrado",
+        "status_t0": "Status operacional do T0",
+        "status_t10": "Status operacional do T10",
+        "status_t30": "Status operacional do T30",
+    }
+    for key, label in cadastro_fields.items():
+        index[f"cadastro:{key}"] = {
+            "stage": "Cadastro/SINAN",
+            "label": label,
+            "required": "Dado operacional",
+            "mode": "Dado ja existente no cadastro ou no acompanhamento.",
+            "help_text": "",
+            "options": [],
+        }
+    return index
+
+
+def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, object]]:
+    index = _review_form_field_index()
+    questions = []
+    seen = set()
+    for stage, key, use in refs:
+        lookup_key = f"{stage.lower()}:{key}"
+        if lookup_key in seen:
+            continue
+        seen.add(lookup_key)
+        field = index.get(
+            lookup_key,
+            {
+                "stage": stage.upper(),
+                "label": key,
+                "required": "",
+                "mode": "",
+                "help_text": "",
+                "options": [],
+            },
+        )
+        questions.append(
+            {
+                **field,
+                "key": key,
+                "review_id": f"{stage.lower()}__{key}",
+                "use": use,
+            }
+        )
+    return questions
+
+
+def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
+    return [
+        {
+            "key": "cards_principais",
+            "title": "Cards principais do painel",
+            "description": "Mostram tamanho do lote, grupos, dias incapacitantes, custo medio e recuperacao final.",
+            "review_prompt": "Os cards contam rapidamente a historia do lote ou faltam indicadores mais uteis?",
+            "items": [card.get("label") for card in dashboard_testes.get("research_cards", [])],
+            "questions": _review_question_refs(
+                ("cadastro", "grupo", "separa Grupo A e Grupo B"),
+                ("t0", "dias_incap", "calcula dias incapacitantes iniciais"),
+                ("t30", "dias_incap_novos", "calcula dias incapacitantes acumulados"),
+                ("t30", "estado_saude_final", "define recuperacao alta no T30"),
+                ("t30", "custo_remedios", "entra no custo medio final"),
+                ("t30", "custo_consultas", "entra no custo medio final"),
+                ("t30", "custo_transporte", "entra no custo medio final"),
+                ("t30", "custo_outros", "entra no custo medio final"),
+            ),
+        },
+        {
+            "key": "linha_tempo",
+            "title": "Linha do tempo T0/T10/T30",
+            "description": "Calcula quantos dias se passaram entre inicio dos sintomas e cada acompanhamento.",
+            "review_prompt": "Essa linha do tempo ajuda a entender se o acompanhamento esta acontecendo no momento certo?",
+            "items": [item.get("label") for item in dashboard_testes.get("timeline_cards", [])],
+            "questions": _review_question_refs(
+                ("t0", "data_inicio_sintomas", "marca o inicio da doenca"),
+                ("cadastro", "data_t0", "calcula dias ate T0"),
+                ("cadastro", "data_t10", "calcula dias ate T10"),
+                ("cadastro", "data_t30", "calcula dias ate T30"),
+            ),
+        },
+        {
+            "key": "custos_t30",
+            "title": "Custos medios no T30",
+            "description": "Resume os gastos acumulados por categoria no fechamento de 30 dias.",
+            "review_prompt": "As categorias de custo sao suficientes para explicar o impacto economico?",
+            "items": [item.get("label") for item in dashboard_testes.get("cost_breakdown", [])],
+            "questions": _review_question_refs(
+                ("t30", "custo_remedios", "medicamentos"),
+                ("t30", "custo_consultas", "consultas e exames"),
+                ("t30", "custo_transporte", "transporte"),
+                ("t30", "custo_outros", "outros gastos"),
+            ),
+        },
+        {
+            "key": "comparacao_grupos",
+            "title": "Comparacao entre grupos",
+            "description": "Diferencas entre Grupo A e Grupo B, sintomas discriminantes e recuperacao.",
+            "review_prompt": "A comparacao A/B ajuda no diagnostico diferencial ou precisa de outro recorte?",
+            "items": [row.get("metric") for row in dashboard_testes.get("group_comparison", [])],
+            "questions": _review_question_refs(
+                ("cadastro", "grupo", "define os grupos comparados"),
+                ("t30", "custo_remedios", "compoe custo final medio"),
+                ("t30", "custo_consultas", "compoe custo final medio"),
+                ("t30", "custo_transporte", "compoe custo final medio"),
+                ("t30", "custo_outros", "compoe custo final medio"),
+                ("t30", "dias_incap_novos", "compara incapacidade acumulada"),
+                ("t30", "estado_saude_final", "compara recuperacao alta"),
+            ),
+        },
+        {
+            "key": "sintomas_exposicoes",
+            "title": "Sintomas e exposicoes no T0",
+            "description": "Mostra sintomas principais e exposicoes animal, ambiental e alimentar, com recorte por grupo.",
+            "review_prompt": "As perguntas de sintomas, animais, ambiente e alimentacao capturam exposicoes realmente relevantes?",
+            "items": [item.get("label") for item in dashboard_testes.get("symptom_prevalence", [])[:8]],
+            "questions": _review_question_refs(
+                ("t0", "sintomas_principais", "prevalencia de sintomas e sintomas discriminantes"),
+                ("t0", "exposicao_animal", "contato animal"),
+                ("t0", "exposicao_ambiental", "risco ambiental"),
+                ("t0", "exposicao_alimentar", "risco alimentar/hidrico"),
+                ("t0", "contato_agua_suja", "reforca risco ambiental"),
+                ("t0", "contato_carrapato_mata", "reforca risco ambiental e animal"),
+                ("t0", "atividades_recentes", "reforca risco ambiental"),
+                ("t0", "tipo_residencia", "ajuda a inferir moradia rural"),
+                ("t0", "ocupacao_principal", "ajuda a inferir ocupacao agropecuaria"),
+            ),
+        },
+        {
+            "key": "perfil_demografico",
+            "title": "Perfil demografico",
+            "description": "Distribui participantes por sexo biologico, faixa etaria, ocupacao e bairro.",
+            "review_prompt": "Esse perfil ajuda a interpretar risco e recuperacao ou esta apenas descrevendo a amostra?",
+            "items": [chart.get("title") for chart in dashboard_testes.get("demographic_distributions", [])],
+            "questions": _review_question_refs(
+                ("t0", "sexo_biologico", "distribuicao por sexo e recuperacao por segmento"),
+                ("cadastro", "data_nascimento", "calcula faixa etaria"),
+                ("t0", "ocupacao_principal", "distribuicao por ocupacao"),
+                ("cadastro", "bairro", "distribuicao por bairro"),
+            ),
+        },
+        {
+            "key": "recuperacao_clusters",
+            "title": "Recuperacao, retorno e clusters",
+            "description": "Resume recuperacao alta, retorno as atividades, custo por retorno e padroes de evolucao.",
+            "review_prompt": "Esses padroes ajudam a transformar respostas em hipoteses de pesquisa?",
+            "items": [item.get("title") for item in dashboard_testes.get("hypothesis_cards", [])],
+            "questions": _review_question_refs(
+                ("t0", "data_inicio_sintomas", "base temporal para melhora/fechamento"),
+                ("t10", "classificacao_melhora", "identifica melhora intermediaria"),
+                ("t30", "estado_saude_final", "classifica recuperacao final"),
+                ("t30", "retorno_atividades_normais", "mede retorno funcional"),
+                ("t30", "dias_incap_novos", "mede limitacao funcional acumulada"),
+                ("t30", "custo_remedios", "compoe custo por retorno"),
+                ("t30", "custo_consultas", "compoe custo por retorno"),
+                ("t30", "custo_transporte", "compoe custo por retorno"),
+                ("t30", "custo_outros", "compoe custo por retorno"),
+            ),
+        },
+        {
+            "key": "perguntas_distribuicao",
+            "title": "Perguntas com distribuicao de respostas",
+            "description": "Tabelas por pergunta, com total e recorte por grupo.",
+            "review_prompt": "Quais distribuicoes merecem virar grafico principal e quais podem ficar apenas como apoio?",
+            "items": [chart.get("title") for chart in dashboard_testes.get("distributions", [])[:10]],
+            "questions": _review_question_refs(
+                ("t10", "classificacao_melhora", "evolucao percebida no T10"),
+                ("t30", "estado_saude_final", "estado final no T30"),
+                ("t30", "retorno_atividades_normais", "retorno as atividades"),
+                ("t0", "tipo_residencia", "tipo de residencia"),
+                ("t0", "exposicao_animal", "contato com animais"),
+                ("t0", "exposicao_ambiental", "riscos ambientais"),
+                ("t0", "exposicao_alimentar", "riscos alimentares"),
+                ("t0", "contato_agua_suja", "dominio ambiental"),
+                ("t0", "contato_carrapato_mata", "dominio ambiental/animal"),
+                ("cadastro", "bairro", "bairros do lote"),
+            ),
+        },
+    ]
+
+
+def _collect_chart_review_payload(sections: list[dict[str, object]]) -> dict:
+    reviews = []
+    for section in sections:
+        key = str(section.get("key") or "").strip()
+        question_reviews = []
+        for question in section.get("questions", []):
+            review_id = str(question.get("review_id") or "").strip()
+            if not review_id:
+                continue
+            question_reviews.append(
+                {
+                    "key": question.get("key"),
+                    "stage": question.get("stage"),
+                    "label": question.get("label"),
+                    "graph_need": str(request.form.get(f"question_need__{key}__{review_id}") or "").strip(),
+                    "graph_reuse": str(request.form.get(f"question_reuse__{key}__{review_id}") or "").strip(),
+                    "comment": str(request.form.get(f"question_comment__{key}__{review_id}") or "").strip(),
+                }
+            )
+        reviews.append(
+            {
+                "key": key,
+                "title": section.get("title"),
+                "usefulness": str(request.form.get(f"usefulness__{key}") or "").strip(),
+                "clarity": str(request.form.get(f"chart_clarity__{key}") or "").strip(),
+                "redundancy": str(request.form.get(f"chart_redundancy__{key}") or "").strip(),
+                "comment": str(request.form.get(f"chart_comment__{key}") or "").strip(),
+                "questions": question_reviews,
+            }
+        )
+    return {
+        "kind": "graficos",
+        "label": REVIEW_KIND_LABELS["graficos"],
+        "reviewer": _collect_reviewer_identity(),
+        "charts": reviews,
+    }
+
+
+def _parse_review_payload(review) -> dict:
+    try:
+        payload = json.loads(review.payload_json or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _review_created_at_label(value) -> str:
+    if not value:
+        return ""
+    try:
+        return value.strftime("%d/%m/%Y %H:%M")
+    except AttributeError:
+        return str(value)
+
+
+def _build_review_summary(reviews) -> dict:
+    by_kind = {}
+    entries = []
+    for review in reviews:
+        payload = _parse_review_payload(review)
+        kind = review.kind
+        item = {
+            "id": review.id,
+            "kind": kind,
+            "kind_label": REVIEW_KIND_LABELS.get(kind, kind.upper()),
+            "created_at": _review_created_at_label(review.created_at),
+            "reviewer_name": review.reviewer_name or "Nao informado",
+            "reviewer_email": review.reviewer_email or "",
+            "reviewer_profile": review.reviewer_profile or "",
+            "overall_comment": (payload.get("reviewer") or {}).get("overall_comment", ""),
+            "payload": payload,
+        }
+        entries.append(item)
+        bucket = by_kind.setdefault(
+            kind,
+            {
+                "kind": kind,
+                "label": REVIEW_KIND_LABELS.get(kind, kind.upper()),
+                "total": 0,
+                "low_necessity": [],
+                "redundant": [],
+                "unclear": [],
+                "comments": [],
+            },
+        )
+        bucket["total"] += 1
+        for question in payload.get("questions", []):
+            label = question.get("label") or question.get("key")
+            necessity = str(question.get("necessity") or "")
+            redundancy = str(question.get("redundancy") or "")
+            clarity = str(question.get("clarity") or "")
+            comment = str(question.get("comment") or "").strip()
+            if necessity in {"Pouco necessaria", "Nao acrescenta"}:
+                bucket["low_necessity"].append(label)
+            if redundancy in {"Talvez redundante", "Redundante"}:
+                bucket["redundant"].append(label)
+            if clarity in {"Confusa", "Precisa melhorar"}:
+                bucket["unclear"].append(label)
+            if comment:
+                bucket["comments"].append(
+                    {
+                        "label": label,
+                        "comment": comment,
+                        "reviewer": item["reviewer_name"],
+                        "created_at": item["created_at"],
+                    }
+                )
+        for chart in payload.get("charts", []):
+            label = chart.get("title") or chart.get("key")
+            redundancy = str(chart.get("redundancy") or "")
+            clarity = str(chart.get("clarity") or "")
+            comment = str(chart.get("comment") or "").strip()
+            if redundancy in {"Talvez redundante", "Redundante"}:
+                bucket["redundant"].append(label)
+            if clarity in {"Confuso", "Precisa melhorar"}:
+                bucket["unclear"].append(label)
+            if comment:
+                bucket["comments"].append(
+                    {
+                        "label": label,
+                        "comment": comment,
+                        "reviewer": item["reviewer_name"],
+                        "created_at": item["created_at"],
+                    }
+                )
+    return {"total": len(entries), "by_kind": list(by_kind.values()), "entries": entries}
+
 @bp.route("/pacientes")
 @require_sfa_internal_access
 def pacientes():
@@ -1263,6 +1741,116 @@ def formularios_print():
         "sfa/print_form_questions.html",
         formularios=_formularios_impressao_sfa(),
         generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@bp.route("/revisao/links")
+@require_sfa_internal_access
+def revisao_links():
+    links = []
+    for kind, label in REVIEW_KIND_LABELS.items():
+        endpoint = "sfa_routes.revisao_graficos" if kind == "graficos" else "sfa_routes.revisao_formulario"
+        params = {} if kind == "graficos" else {"kind": kind}
+        links.append(
+            {
+                "kind": kind,
+                "label": label,
+                "url": url_for(endpoint, _external=True, **params),
+                "qr_url": url_for("sfa_routes.revisao_qrcode", kind=kind),
+                "summary_url": url_for("sfa_routes.revisao_resumo", kind=kind),
+            }
+        )
+    return render_template("sfa/review_links.html", links=links)
+
+
+@bp.route("/revisao/resumo")
+@require_sfa_internal_access
+def revisao_resumo():
+    from models.sfa import SfaInstrumentReview
+
+    kind = str(request.args.get("kind") or "").strip().lower()
+    if kind and kind not in REVIEW_KIND_LABELS:
+        abort(404)
+    query = SfaInstrumentReview.query
+    if kind:
+        query = query.filter(SfaInstrumentReview.kind == kind)
+    reviews = query.order_by(SfaInstrumentReview.created_at.desc(), SfaInstrumentReview.id.desc()).all()
+    return render_template(
+        "sfa/review_summary.html",
+        summary=_build_review_summary(reviews),
+        current_kind=kind,
+        current_kind_label=REVIEW_KIND_LABELS.get(kind, ""),
+        kind_labels=REVIEW_KIND_LABELS,
+    )
+
+
+@bp.route("/revisao/qrcode/<kind>.png")
+@require_sfa_internal_access
+def revisao_qrcode(kind: str):
+    kind = _review_kind_or_404(kind)
+    import qrcode
+
+    if kind == "graficos":
+        target_url = url_for("sfa_routes.revisao_graficos", _external=True)
+    else:
+        target_url = url_for("sfa_routes.revisao_formulario", kind=kind, _external=True)
+    image = qrcode.make(target_url)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return send_file(buffer, mimetype="image/png", download_name=f"sfa_revisao_{kind}.png")
+
+
+@bp.route("/revisao/<kind>", methods=["GET", "POST"])
+@csrf.exempt
+def revisao_formulario(kind: str):
+    kind = _review_kind_or_404(kind)
+    if kind == "graficos":
+        return redirect(url_for("sfa_routes.revisao_graficos"))
+    loader = _review_schema_loader(kind)
+    if not loader:
+        abort(404)
+    schema = loader()
+    if request.method == "POST":
+        payload = _collect_question_review_payload(kind, schema)
+        _save_instrument_review(kind, payload)
+        return render_template(
+            "sfa/review_submitted.html",
+            title=REVIEW_KIND_LABELS[kind],
+            links_url=url_for("sfa_routes.revisao_formulario", kind=kind),
+        )
+    return render_template(
+        "sfa/review_form.html",
+        kind=kind,
+        title=REVIEW_KIND_LABELS[kind],
+        schema=schema,
+        answer_mode=_field_answer_mode,
+    )
+
+
+@bp.route("/revisao/graficos", methods=["GET", "POST"])
+@csrf.exempt
+def revisao_graficos():
+    from models.sfa import SfaPaciente
+    from services.sfa_service import filtrar_pacientes_teste_sfa
+
+    pacientes = filtrar_pacientes_teste_sfa(SfaPaciente.query.all())
+    dashboard_testes = _montar_dashboard_testes_sfa(pacientes)
+    sections = _chart_review_sections(dashboard_testes)
+    if request.method == "POST":
+        payload = _collect_chart_review_payload(sections)
+        _save_instrument_review("graficos", payload)
+        return render_template(
+            "sfa/review_submitted.html",
+            title=REVIEW_KIND_LABELS["graficos"],
+            links_url=url_for("sfa_routes.revisao_graficos"),
+        )
+    return render_template(
+        "sfa/review_charts.html",
+        title=REVIEW_KIND_LABELS["graficos"],
+        dashboard_testes=dashboard_testes,
+        sections=sections,
+        has_test_data=bool(pacientes),
     )
 
 
@@ -1514,10 +2102,14 @@ def criar_paciente_manual():
     return redirect(url_for("sfa_routes.paciente_detail", id_estudo=resultado))
 
 
-@bp.route("/teste-dados/gerar", methods=["POST"])
+@bp.route("/teste-dados/gerar", methods=["GET", "POST"])
 @require_sfa_internal_access
 def gerar_teste_dados():
     from services.sfa_service import gerar_lote_pacientes_teste_sfa
+
+    if request.method == "GET":
+        flash("Use o botao do painel para gerar ou renovar o lote de validacao.", "info")
+        return redirect(url_for("sfa_routes.dashboard"))
 
     quantidade = request.form.get("quantidade", 10, type=int) or 10
     resumo = gerar_lote_pacientes_teste_sfa(quantidade)

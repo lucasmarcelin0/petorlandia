@@ -2,6 +2,7 @@ import os
 
 from extensions import db
 from models import User
+from models.sfa import SfaPaciente, SfaRespostaT0, SfaSinanLog
 from services.sfa_service import T0_CONSENT_ACCEPTED
 
 
@@ -48,6 +49,48 @@ def test_sfa_dashboard_allows_admin_token(app, client, monkeypatch):
     response = client.get("/sfa/", headers={"X-SFA-Token": "token-sfa-teste"})
 
     assert response.status_code == 200
+
+
+def test_sfa_dashboard_filters_by_symptom_month(app, client, monkeypatch):
+    monkeypatch.setenv("SFA_ALLOW_OPEN_ACCESS", "1")
+    app.config["TESTING"] = False
+
+    with app.app_context():
+        db.session.add_all(
+            [
+                SfaPaciente(id_estudo="SFA-MAR", nome="Paciente Marco", grupo="A"),
+                SfaPaciente(id_estudo="SFA-ABR", nome="Paciente Abril", grupo="B"),
+                SfaPaciente(id_estudo="SFA-SINAN-MAR", nome="Paciente SINAN Marco", grupo="A"),
+            ]
+        )
+        db.session.add_all(
+            [
+                SfaRespostaT0(id_estudo="SFA-MAR", data_inicio_sintomas="18/03/2026"),
+                SfaRespostaT0(id_estudo="SFA-ABR", data_inicio_sintomas="02/04/2026"),
+                SfaSinanLog(
+                    id_estudo_vinculado="SFA-SINAN-MAR",
+                    data_inicio_sintomas="20/03/2026",
+                    chave_dedup="sinan-mar-dashboard",
+                ),
+            ]
+        )
+        db.session.commit()
+
+    response = client.get("/sfa/?mes=2026-03")
+
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "value=\"2026-03\"" in html
+    assert "03/2026" in html
+    assert "Total no cadastro" in html
+    assert "mes_inicio_sintomas=2026-03" in html
+    assert "Paciente Abril" not in html
+
+    patient_response = client.get("/sfa/pacientes?mes_inicio_sintomas=2026-03")
+    patient_html = patient_response.data.decode("utf-8")
+    assert "Paciente Marco" in patient_html
+    assert "Paciente SINAN Marco" in patient_html
+    assert "Paciente Abril" not in patient_html
 
 
 def test_sfa_webhook_requires_secret_outside_testing(app, client, monkeypatch):

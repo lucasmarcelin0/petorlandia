@@ -44,12 +44,110 @@
 
     .hero-band {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 16px;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
       align-items: center;
       padding: 22px;
       background: linear-gradient(135deg, #e7f8f5, #edf4ff);
       border-bottom: 1px solid var(--line);
+    }
+
+    .pet-portrait {
+      position: relative;
+      flex: 0 0 auto;
+      width: 148px;
+      height: 148px;
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(15, 103, 255, .16), rgba(8, 127, 91, .18));
+      box-shadow: 0 12px 30px rgba(20, 33, 61, .16), inset 0 0 0 2px #ffffff;
+    }
+
+    .pet-portrait img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: translate(var(--offset-x, 0), var(--offset-y, 0)) rotate(var(--rotation, 0)) scale(var(--zoom, 1));
+    }
+
+    .pet-portrait__placeholder {
+      font-size: 3.6rem;
+      line-height: 1;
+      opacity: .65;
+    }
+
+    .pet-portrait.is-zoomable {
+      cursor: zoom-in;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .pet-portrait.is-zoomable:hover {
+      transform: scale(1.03);
+      box-shadow: 0 18px 38px rgba(20, 33, 61, .24), inset 0 0 0 2px #ffffff;
+    }
+
+    .pet-portrait__hint {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(20, 33, 61, .62);
+      color: #fff;
+      font-size: .85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .pmo-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1080;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .pmo-lightbox[hidden] { display: none; }
+
+    .pmo-lightbox__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, .82);
+    }
+
+    .pmo-lightbox__img {
+      position: relative;
+      max-width: 94vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    }
+
+    .pmo-lightbox__close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255, 255, 255, .94);
+      color: #14213d;
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     h1 {
@@ -277,6 +375,11 @@
         width: 78px;
         height: 78px;
       }
+
+      .hero-band {
+        justify-items: center;
+        text-align: center;
+      }
     }
   </style>
 {% endblock %}
@@ -286,6 +389,16 @@
   <div class="pmo-pet-main">
     <section class="hero-card">
       <div class="hero-band">
+        <div class="pet-portrait{% if animal and animal.image %} is-zoomable{% endif %}"
+             {% if animal %}style="--offset-x: {{ animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.photo_offset_y or 0 }}px; --rotation: {{ animal.photo_rotation or 0 }}deg; --zoom: {{ animal.photo_zoom or 1 }};"{% endif %}
+             {% if animal and animal.image %}data-zoom-src="{{ animal.image }}" data-zoom-alt="Foto de {{ pmo_animal.name }}" role="button" tabindex="0" aria-label="Ampliar foto de {{ pmo_animal.name }}"{% endif %}>
+          {% if animal and animal.image %}
+            <img src="{{ animal.image }}" loading="lazy" alt="Foto de {{ pmo_animal.name }}">
+            <span class="pet-portrait__hint" aria-hidden="true">⤢</span>
+          {% else %}
+            <span class="pet-portrait__placeholder" aria-hidden="true">🐾</span>
+          {% endif %}
+        </div>
         <div>
           <h1>Carteirinha de {{ pmo_animal.name }}</h1>
           <p class="subtitle">Comprovante digital da campanha municipal de vacinação antirrábica.</p>
@@ -433,4 +546,45 @@
     </section>
   </div>
   </div>
+
+  <div class="pmo-lightbox" id="pmoLightbox" hidden>
+    <div class="pmo-lightbox__backdrop" data-lightbox-close></div>
+    <button type="button" class="pmo-lightbox__close" data-lightbox-close aria-label="Fechar">&times;</button>
+    <img class="pmo-lightbox__img" alt="">
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      var lb = document.getElementById('pmoLightbox');
+      if (!lb) return;
+      var img = lb.querySelector('.pmo-lightbox__img');
+      function open(src, alt) {
+        img.setAttribute('src', src);
+        img.setAttribute('alt', alt || '');
+        lb.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
+      function close() {
+        lb.hidden = true;
+        img.removeAttribute('src');
+        document.body.style.overflow = '';
+      }
+      document.querySelectorAll('[data-zoom-src]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          open(el.getAttribute('data-zoom-src'), el.getAttribute('data-zoom-alt'));
+        });
+        el.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+        });
+      });
+      lb.querySelectorAll('[data-lightbox-close]').forEach(function (el) {
+        el.addEventListener('click', close);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !lb.hidden) close();
+      });
+    })();
+  </script>
 {% endblock %}

@@ -244,6 +244,48 @@ def test_build_clinical_plan_exposes_presentation_options_for_manual_choice(app)
         assert med["calculation"]["apresentacao_opcao_selecionada"] == 0
 
 
+def test_build_clinical_plan_keeps_commercial_variants_with_same_strength(app):
+    with flask_app.app_context():
+        consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=6.0)
+        medicamento = protocolo.medicamentos_sugeridos[0].medicamento
+        db.session.add_all([
+            ApresentacaoMedicamento(
+                id=2,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="75 mg",
+                concentracao_valor=75,
+                concentracao_unidade="mg",
+                nome_variante="Cefaseptin 75 mg",
+                nome_comercial="Cefaseptin",
+                fabricante="Vetoquinol",
+            ),
+            ApresentacaoMedicamento(
+                id=3,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="75 mg",
+                concentracao_valor=75,
+                concentracao_unidade="mg",
+                nome_variante="Cefalexina 75 mg",
+                nome_comercial="Cefa-Cure",
+                fabricante="Duprat",
+            ),
+        ])
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        labels = [option["option_label"] for option in med["calculation"]["apresentacao_opcoes"]]
+        presentation_ids = {
+            option["presentation"]["id"]
+            for option in med["calculation"]["apresentacao_opcoes"]
+        }
+        assert any("Cefaseptin" in label and "Vetoquinol" in label for label in labels)
+        assert {2, 3}.issubset(presentation_ids)
+
+
 def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
     with flask_app.app_context():
         consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=10.0)
@@ -260,6 +302,115 @@ def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
         assert med["status"] == READY
         assert med["calculation"]["dose_pratica"] == "5 mL"
         assert med["draft_prescription"]["dosagem"] == "5 mL"
+
+
+def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome="Clinica Dermato")
+        tutor = User(id=1, name="Tutor", email="tutor-dermato@test")
+        tutor.set_password("x")
+        vet_user = User(id=2, name="Vet", email="vet-dermato@test", worker="veterinario")
+        vet_user.set_password("x")
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv="123", clinica_id=clinic.id)
+        species = Species(id=1, name="Cachorro")
+        animal = Animal(
+            id=1,
+            name="Luna",
+            user_id=tutor.id,
+            clinica_id=clinic.id,
+            species=species,
+            peso=10,
+        )
+        consulta = Consulta(
+            id=1,
+            animal=animal,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status="in_progress",
+        )
+        medicamento = Medicamento(
+            id=30,
+            nome="Cetoconazol + Betametasona + Neomicina",
+            classificacao="Dermatologico",
+            via_administracao="Topica",
+            created_by=vet_user.id,
+        )
+        apresentacao = ApresentacaoMedicamento(
+            id=30,
+            medicamento=medicamento,
+            forma="Pomada",
+            concentracao="Cetoconazol 20 mg/g + Betametasona 0,64 mg/g + Neomicina 2,5 mg/g",
+            concentracao_valor=20,
+            concentracao_unidade="mg/g",
+        )
+        dose = DoseMedicamento(
+            id=30,
+            medicamento=medicamento,
+            especie="Caes",
+            especie_code="CAES",
+            via="Topica",
+            dose="Aplicar fina camada sobre a regiao acometida",
+            dose_min=1,
+            dose_max=1,
+            dose_unidade="CAMADA_TOPICA",
+            intervalo_horas=12,
+            duracao_min_dias=10,
+            duracao_max_dias=10,
+            indicacao="Uso topico dermatologico",
+            fonte="TESTE",
+            confianca="ALTA",
+        )
+        protocolo = ProtocoloClinico(
+            id=1,
+            nome="Protocolo Inicial para Dermatites",
+            suspeita_principal="dermatite",
+            especie="cao",
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+            prioridade=1,
+        )
+        protocolo.medicamentos_sugeridos.append(
+            ProtocoloClinicoMedicamento(
+                id=1,
+                medicamento=medicamento,
+                nome_medicamento="Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g + Sulfato de Neomicina 2,5mg/g Generico C",
+                dosagem_texto="Aplicar uma camada fina sobre a area afetada",
+                frequencia_texto="2 vezes ao dia",
+                duracao_texto="10 dias",
+                indicacao="Uso topico dermatologico",
+                justificativa="Uso topico em lesoes localizadas quando houver indicacao clinica.",
+                prioridade=1,
+            )
+        )
+        db.session.add_all([
+            clinic,
+            tutor,
+            vet_user,
+            vet,
+            species,
+            animal,
+            consulta,
+            medicamento,
+            apresentacao,
+            dose,
+            protocolo,
+        ])
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        assert med["status"] == READY
+        assert med["status_label"] == "Pronto para revisar"
+        assert med["calculation"]["dose_pratica"] == "Aplicar sobre a região acometida"
+        assert med["calculation"]["frequencia"] == "12/12h"
+        assert med["calculation"]["duracao"] == "por 10 dias"
+        assert med["calculation"]["posologia_pratica"] == "Aplicar sobre a região acometida 12/12h por 10 dias"
+        assert med["calculation"]["apresentacao_pratica"]["presentation"]["forma"] == "Pomada"
+        assert med["draft_prescription"]["dosagem"] == "Aplicar sobre a região acometida"
+        assert med["draft_prescription"]["frequencia"] == "12/12h"
+        assert med["draft_prescription"]["duracao"] == "por 10 dias"
+        assert med["draft_prescription"]["use_weight_based_dose"] is False
 
 
 def test_build_clinical_plan_resolves_multiple_indications_by_protocol_dose(app):

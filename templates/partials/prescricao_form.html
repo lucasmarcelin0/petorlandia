@@ -11,6 +11,34 @@
   </div>
 
   <!-- Botões de ação -->
+  <div class="prescription-assistant mb-4">
+    <div class="prescription-assistant__header">
+      <div>
+        <p class="prescription-assistant__eyebrow">Prescri&ccedil;&atilde;o assistida</p>
+        <h6 class="prescription-assistant__title">Monte a receita em etapas clinicas</h6>
+      </div>
+    </div>
+    <div class="prescription-steps" aria-label="Etapas da prescricao">
+      <button type="button" class="prescription-step is-active is-selected" data-prescription-step="medicamento" onclick="mostrarEtapaPrescricao('medicamento')">
+        <span>1</span>
+        <div><strong>Medicamento</strong><small>Busque produto ou principio ativo</small></div>
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="apresentacao" onclick="mostrarEtapaPrescricao('apresentacao')">
+        <span>2</span>
+        <div><strong>Apresentacao</strong><small>Defina o que sera administrado</small></div>
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="posologia" onclick="mostrarEtapaPrescricao('posologia')">
+        <span>3</span>
+        <div><strong>Posologia</strong><small>Calcule ou preencha manualmente</small></div>
+      </button>
+      <button type="button" class="prescription-step" data-prescription-step="revisao" onclick="mostrarEtapaPrescricao('revisao')">
+        <span>4</span>
+        <div><strong>Revisao</strong><small>Confira antes do rascunho</small></div>
+      </button>
+    </div>
+  </div>
+
+  <div id="prescription-panel-medicamento" class="prescription-panel is-active" data-prescription-panel-content="medicamento">
   <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
     <button type="button" class="btn btn-outline-primary" onclick="toggleNovaMedicacao()">➕ Nova medicação</button>
     <button type="button" id="btn-frequentes" class="btn btn-outline-secondary d-none" onclick="ciclarPainel()">
@@ -92,16 +120,19 @@
    </div>
 
    <!-- Campo com autocomplete -->
-   <div class="mb-3 position-relative">
-    <label for="nome-medicamento" class="form-label">Nome do Medicamento</label>
+   <div class="mb-3 position-relative prescription-stage prescription-stage--search" data-prescription-panel="medicamento">
+    <div class="prescription-stage__label">
+      <span>1</span>
+      <label for="nome-medicamento" class="form-label mb-0">Medicamento</label>
+    </div>
     <input type="text" id="nome-medicamento" class="form-control" placeholder="Ex: Dipirona, Doxiciclina...">
-    <ul id="sugestoes-medicamentos" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
+    <ul id="sugestoes-medicamentos" class="list-group w-100 prescription-search-results" style="display: none;"></ul>
   </div>
 
    <!-- Formulário para adicionar novo medicamento removido e substituído pelo container acima -->
 
   <!-- Card de informações do medicamento (monografia / referência) -->
-  <div id="info-medicamento" class="card border-success mb-3 d-none">
+  <div id="info-medicamento" class="card border-success mb-3 d-none prescription-stage" data-prescription-panel="medicamento">
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0" id="med-nome-card"></h5>
       <div class="d-flex align-items-center gap-2">
@@ -136,7 +167,7 @@
            250 mg comprimido ≠ 250 mg/5 mL suspensão.  Aparece sempre que o
            medicamento tem apresentações cadastradas, logo após a escolha do
            medicamento (não fica escondida atrás da dose pré-calculada). -->
-      <div id="presc-apresentacao-wrap" class="mb-2 d-none"
+      <div id="presc-apresentacao-wrap" class="mb-2 d-none prescription-presentation-box"
            style="border:1px solid #c3e6cb;border-left:3px solid #198754;border-radius:7px;padding:10px 12px;background:#f3fbf5;">
         <label for="presc-apresentacao" class="form-label small fw-semibold mb-1 d-flex align-items-center gap-1"
                style="color:#0f5132;">
@@ -192,8 +223,20 @@
     </div>
   </div>
 
+  </div>
+
+  <div id="prescription-panel-apresentacao" class="prescription-panel d-none" data-prescription-panel-content="apresentacao">
+    <div id="prescription-presentation-slot"></div>
+    <div id="prescription-presentation-empty" class="prescription-empty-state">
+      <i class="bi bi-capsule"></i>
+      <strong>Escolha um medicamento primeiro</strong>
+      <span>A apresentacao disponivel para prescricao aparecera aqui.</span>
+    </div>
+  </div>
+
   <!-- Card de sugestão clínica de dose (bulário) -->
-  <div id="sugestao-dose-card" class="card border-info mb-3 d-none">
+  <div id="prescription-panel-posologia" class="prescription-panel d-none" data-prescription-panel-content="posologia">
+  <div id="sugestao-dose-card" class="card border-info mb-3 d-none prescription-stage" data-prescription-panel="posologia">
     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
       <span>
         <i class="bi bi-calculator-fill me-1"></i>
@@ -392,13 +435,13 @@
   </div>
 
   <!-- Alternador de modo -->
-  <div class="form-check form-switch mb-3">
+  <div class="form-check form-switch mb-3 prescription-manual-toggle">
     <input class="form-check-input" type="checkbox" id="modo-personalizado">
     <label class="form-check-label" for="modo-personalizado">Usar campo único de prescrição personalizada</label>
   </div>
 
   <!-- Modo detalhado — campos da prescrição individualizada do paciente -->
-  <div id="modo-detalhado">
+  <div id="modo-detalhado" class="prescription-stage prescription-stage--dose" data-prescription-panel="posologia">
     <div class="row mb-3">
       <div class="col-md-4">
         <label for="dose" class="form-label">Dose</label>
@@ -419,14 +462,34 @@
   </div>
 
   <!-- Modo personalizado -->
-  <div id="modo-simplificado" class="mb-3 d-none">
+  <div id="modo-simplificado" class="mb-3 d-none prescription-stage prescription-stage--dose" data-prescription-panel="posologia">
     <label for="instrucao-unica" class="form-label">Prescrição personalizada</label>
     <textarea id="instrucao-unica" class="form-control" rows="2" placeholder="Ex: Administrar 25mg/kg de 12/12h por 3 dias."></textarea>
   </div>
 
-  <!-- Botão para adicionar à lista -->
-  <button type="button" class="btn btn-success mb-4" id="btn-adicionar">➕ Adicionar Prescrição</button>
+  <div class="prescription-final-preview mb-3" data-prescription-panel="posologia">
+    <div class="prescription-final-preview__head">
+      <div>
+        <span>Receita para o tutor</span>
+        <strong id="presc-preview-medicamento">Escolha um medicamento</strong>
+      </div>
+      <span class="prescription-final-preview__status" id="presc-preview-status">em edição</span>
+    </div>
+    <p id="presc-preview-texto">A posologia final aparecerá aqui antes de adicionar ao rascunho.</p>
+    <div class="prescription-final-preview__meta">
+      <span id="presc-preview-apresentacao">Apresentação pendente</span>
+      <span id="presc-preview-origem">Revise os dados antes de finalizar</span>
+    </div>
+  </div>
 
+  <div class="prescription-panel-actions">
+    <button type="button" class="btn btn-success prescription-add-button" id="btn-adicionar">
+      <i class="bi bi-plus-circle me-1"></i>Adicionar ao rascunho
+    </button>
+  </div>
+  </div>
+
+  <div id="prescription-panel-revisao" class="prescription-panel d-none" data-prescription-panel-content="revisao">
   <!-- Lista temporária -->
   <div id="medicamentos-lista" class="mb-4">
     <div class="text-center py-4 text-muted">
@@ -434,6 +497,10 @@
       <p class="mt-2">Nenhuma prescrição adicionada</p>
     </div>
   </div>
+
+  <button type="button" class="btn btn-outline-success mb-4" id="btn-novo-medicamento-prescricao" onclick="prepararNovoMedicamentoPrescricao()">
+    <i class="bi bi-plus-circle me-1"></i>Adicionar outro medicamento
+  </button>
 
   <!-- Instruções gerais -->
   <div class="mb-3">
@@ -443,6 +510,7 @@
 
   <!-- Botão para finalizar -->
   <button type="button" class="btn btn-primary mt-2" id="btn-finalizar">💾 Finalizar Prescrição</button>
+  </div>
 </form>
 
 <!-- Histórico -->
@@ -466,6 +534,56 @@
 
   .drag-handle {
     cursor: grab;
+  }
+
+  .prescricao-item__content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .prescricao-item__main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .prescricao-item__text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .prescricao-item__medicamento {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.25;
+    max-width: 100%;
+  }
+
+  .prescricao-item__actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: .5rem;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .prescricao-item__actions .btn {
+    min-width: 42px;
+  }
+
+  @media (max-width: 575.98px) {
+    .prescricao-item__main {
+      display: block;
+    }
+
+    .prescricao-item__actions {
+      justify-content: flex-start;
+      margin-top: .75rem;
+      white-space: normal;
+    }
   }
 
   .historico-recarga-alert {
@@ -671,6 +789,109 @@
     // Dias calculados da sugestão atual (para passagem ao form). null = sem faixa.
     let _duracaoDias = null;
     let _opcaoRecomendadaEscolhida = null;
+
+  let _prescriptionCurrentPanel = 'medicamento';
+
+  function _setPrescriptionStep(step, active) {
+    const el = document.querySelector(`[data-prescription-step="${step}"]`);
+    if (!el) return;
+    el.classList.toggle('is-active', !!active);
+    el.classList.toggle('is-complete', !!active);
+  }
+
+  function mostrarEtapaPrescricao(panel) {
+    const target = panel || 'medicamento';
+    const panels = document.querySelectorAll('[data-prescription-panel-content]');
+    if (!panels.length) return;
+
+    _prescriptionCurrentPanel = target;
+    panels.forEach((el) => {
+      const isCurrent = el.dataset.prescriptionPanelContent === target;
+      el.classList.toggle('d-none', !isCurrent);
+      el.classList.toggle('is-active', isCurrent);
+    });
+
+    document.querySelectorAll('[data-prescription-step]').forEach((el) => {
+      el.classList.toggle('is-selected', el.dataset.prescriptionStep === target);
+    });
+
+    atualizarPreviewPrescricao();
+  }
+
+  function _moverApresentacaoParaPainel() {
+    const wrap = document.getElementById('presc-apresentacao-wrap');
+    const slot = document.getElementById('prescription-presentation-slot');
+    if (wrap && slot && wrap.parentElement !== slot) {
+      slot.appendChild(wrap);
+    }
+  }
+
+  function _atualizarEstadoPainelApresentacao() {
+    const wrap = document.getElementById('presc-apresentacao-wrap');
+    const empty = document.getElementById('prescription-presentation-empty');
+    if (!empty) return;
+    const temApresentacoes = _apresentacoesDisponiveis.length > 0;
+    empty.classList.toggle('d-none', temApresentacoes);
+    if (wrap) {
+      wrap.classList.toggle('d-none', !temApresentacoes);
+    }
+  }
+
+  function _textoCampo(id) {
+    return (document.getElementById(id)?.value || '').trim();
+  }
+
+  function _textoApresentacaoAtual() {
+    if (_apresentacaoPrescricao) return _rotuloApresentacaoParaReceita(_apresentacaoPrescricao);
+    if (_apresentacoesDisponiveis.length) return 'Apresentacao pendente';
+    return 'Sem apresentacao cadastrada';
+  }
+
+  function atualizarPreviewPrescricao() {
+    _moverApresentacaoParaPainel();
+    _atualizarEstadoPainelApresentacao();
+
+    const nomeEl = document.getElementById('presc-preview-medicamento');
+    const textoEl = document.getElementById('presc-preview-texto');
+    const apEl = document.getElementById('presc-preview-apresentacao');
+    const statusEl = document.getElementById('presc-preview-status');
+    const origemEl = document.getElementById('presc-preview-origem');
+    if (!nomeEl || !textoEl || !apEl || !statusEl || !origemEl) return;
+
+    const nome = _textoCampo('nome-medicamento');
+    const modoPersonalizado = !!document.getElementById('modo-personalizado')?.checked;
+    const dose = _textoCampo('dose');
+    const frequencia = _textoCampo('frequencia');
+    const duracao = _textoCampo('duracao');
+    const textoLivre = _textoCampo('instrucao-unica');
+    const apresentacao = _textoApresentacaoAtual();
+    const precisaApresentacao = _apresentacoesDisponiveis.length > 0 && !_apresentacaoPrescricao;
+
+    let texto = 'A posologia final aparecera aqui antes de adicionar ao rascunho.';
+    if (modoPersonalizado && textoLivre) {
+      texto = textoLivre;
+    } else if (dose || frequencia || duracao) {
+      const duracaoNormalizada = duracao && !duracao.toLowerCase().startsWith('por ') ? `por ${duracao}` : duracao;
+      texto = [dose, frequencia, duracaoNormalizada].filter(Boolean).join(', ');
+    }
+
+    nomeEl.textContent = nome || 'Escolha um medicamento';
+    textoEl.textContent = texto;
+    apEl.textContent = apresentacao;
+
+    const posologiaOk = modoPersonalizado ? !!textoLivre : !!(dose && frequencia && duracao);
+    const pronto = !!nome && posologiaOk && !precisaApresentacao;
+    statusEl.textContent = pronto ? 'pronta para rascunho' : 'em edicao';
+    statusEl.classList.toggle('is-ready', pronto);
+    origemEl.textContent = _dosePraticaCalculada
+      ? 'Dose calculada para este paciente'
+      : (sugestaoDoseAtual ? 'Sugestao do bulario aplicada/revisavel' : 'Revise os dados antes de finalizar');
+
+    _setPrescriptionStep('medicamento', !!nome);
+    _setPrescriptionStep('apresentacao', !_apresentacoesDisponiveis.length || !!_apresentacaoPrescricao);
+    _setPrescriptionStep('posologia', posologiaOk);
+    _setPrescriptionStep('revisao', pronto);
+  }
 
   function aplicarHistoricoPrescricoes(html) {
     const container = document.getElementById('historico-prescricoes');
@@ -2143,6 +2364,7 @@
     if (!_apresentacoesDisponiveis.length) {
       wrap.classList.add('d-none');
       select.innerHTML = '<option value="">— sem apresentação cadastrada —</option>';
+      atualizarPreviewPrescricao();
       return;
     }
     // Agrupa por categoria_label (Comprimidos, Suspensões, Líquidos, …)
@@ -2165,6 +2387,8 @@
     select.innerHTML = html;
     select.classList.remove('is-invalid');
     wrap.classList.remove('d-none');
+    atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('apresentacao');
   }
 
   function onApresentacaoPrescricaoChange() {
@@ -2184,6 +2408,10 @@
         && typeof onApresentacaoEscolhida === 'function'
         && (sugestaoDoseAtual?.apresentacoes || []).some(a => a.id === _apresentacaoPrescricao.id)) {
       try { onApresentacaoEscolhida(_apresentacaoPrescricao.id); } catch (_) {}
+    }
+    atualizarPreviewPrescricao();
+    if (_apresentacaoPrescricao) {
+      mostrarEtapaPrescricao('posologia');
     }
   }
 
@@ -2872,6 +3100,8 @@
     if (freqStr) document.getElementById('frequencia').value = freqStr;
     if (durStr)  document.getElementById('duracao').value = durStr;
     _registrarUsoDoseBulario(s);
+    atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('revisao');
     mostrarFeedback('Sugestão clínica aplicada. Revise e ajuste antes de prescrever.', 'success');
   }
 
@@ -3133,21 +3363,24 @@
 
     _renderMonografiaEstruturada(m.monografia_estruturada || null);
     document.getElementById('info-medicamento').classList.remove('d-none');
+    atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao(_apresentacoesDisponiveis.length ? 'apresentacao' : 'posologia');
   }
 
-    
+
 
   // Alternar entre modos de prescrição
   function alternarModo() {
     const custom = document.getElementById('modo-personalizado').checked;
     document.getElementById('modo-detalhado').classList.toggle('d-none', custom);
     document.getElementById('modo-simplificado').classList.toggle('d-none', !custom);
+    atualizarPreviewPrescricao();
   }
 
   // Renderizar lista de prescrições temporárias
   function renderPrescricoesTemp() {
     const lista = document.getElementById('medicamentos-lista');
-    
+
     if (prescricoes.length === 0) {
       lista.innerHTML = `
         <div class="text-center py-4 text-muted">
@@ -3157,21 +3390,21 @@
       `;
       return;
     }
-    
+
     lista.innerHTML = prescricoes.map((p, i) => `
       <div class="card mb-2 prescricao-item" id="prescricao-${i}" draggable="true" data-index="${i}">
         <div class="card-body d-flex align-items-start">
           <div class="drag-handle text-muted me-3" aria-label="Reordenar prescrição">
             <i class="bi bi-grip-vertical fs-4"></i>
           </div>
-          <div class="flex-grow-1">
-            <div class="d-flex justify-content-between">
-              <div>
-                <h6 class="card-title text-primary mb-1">${p.medicamento}</h6>
+          <div class="prescricao-item__content">
+            <div class="prescricao-item__main">
+              <div class="prescricao-item__text">
+                <h6 class="card-title text-primary mb-1 prescricao-item__medicamento">${p.medicamento}</h6>
                 <p class="card-text mb-2">${p.texto}</p>
               </div>
-              <div class="text-end">
-                <button class="btn btn-sm btn-warning me-2" onclick="editarPrescricao(${i})">✏️ Editar</button>
+              <div class="prescricao-item__actions">
+                <button class="btn btn-sm btn-warning" onclick="editarPrescricao(${i})">✏️ Editar</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="removerPrescricao(${i})">
                   <i class="bi bi-trash"></i>
                 </button>
@@ -3331,6 +3564,13 @@
     _renderDropdownApresentacaoPrescricao([]);
     medicamentoSelecionado = null;
     fecharSugestaoDose();
+    atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('revisao');
+  }
+
+  function prepararNovoMedicamentoPrescricao() {
+    mostrarEtapaPrescricao('medicamento');
+    setTimeout(() => document.getElementById('nome-medicamento')?.focus(), 80);
   }
 
   // Remover prescrição da lista
@@ -3432,6 +3672,14 @@
       const buscarNova = document.getElementById('buscar-medicamento-nova');
       const sugestoesNova = document.getElementById('sugestoes-busca-nova');
 
+      ['nome-medicamento', 'dose', 'frequencia', 'duracao', 'instrucao-unica'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', atualizarPreviewPrescricao);
+      });
+      _moverApresentacaoParaPainel();
+      mostrarEtapaPrescricao('medicamento');
+      atualizarPreviewPrescricao();
+
     // Busca de medicamentos com debounce
     input.addEventListener('input', debounce(function() {
       const q = this.value.trim();
@@ -3442,11 +3690,13 @@
       if (q.length < 2) {
         sugestoes.innerHTML = '';
         sugestoes.style.display = 'none';
+        sugestoes.classList.remove('is-short');
         return;
       }
 
       sugestoes.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoes.style.display = 'block';
+      sugestoes.classList.remove('is-short');
 
       fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
         .then(res => {
@@ -3461,7 +3711,9 @@
             none.className = 'list-group-item text-muted';
             none.textContent = 'Nenhum medicamento encontrado';
             sugestoes.appendChild(none);
+            sugestoes.classList.remove('is-short');
           } else {
+            sugestoes.classList.toggle('is-short', data.length < 4);
             data.forEach(item => {
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
@@ -3480,8 +3732,10 @@
                 document.getElementById('dose').value = '';
                 document.getElementById('frequencia').value = '';
                 document.getElementById('duracao').value = '';
+                atualizarPreviewPrescricao();
                 sugestoes.innerHTML = '';
                 sugestoes.style.display = 'none';
+                sugestoes.classList.remove('is-short');
               };
               sugestoes.appendChild(li);
             });
@@ -3493,11 +3747,13 @@
             addLi.onclick = () => {
               openMedicacaoCard({ nome: input.value.trim() });
               sugestoes.style.display = 'none';
+              sugestoes.classList.remove('is-short');
             };
             sugestoes.appendChild(addLi);
         })
         .catch(err => {
           sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
+          sugestoes.classList.remove('is-short');
           console.error("Erro ao buscar medicamentos:", err);
         });
     }, 300));
@@ -3558,7 +3814,7 @@
 
     // Alternador de modo
     document.getElementById('modo-personalizado').addEventListener('change', alternarModo);
-    
+
     // Botões
       document.getElementById('btn-adicionar').addEventListener('click', adicionarMedicamento);
       document.getElementById('btn-finalizar').addEventListener('click', finalizarBlocoPrescricoes);
@@ -3573,16 +3829,28 @@
     border-radius: 0.25rem;
   }
 
+  #sugestoes-medicamentos.prescription-search-results {
+    margin-top: .65rem;
+    max-height: 420px;
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  #sugestoes-medicamentos.prescription-search-results.is-short {
+    min-height: 230px;
+  }
+
   #sugestoes-medicamentos .list-group-item:hover,
   #sugestoes-busca-nova .list-group-item:hover {
     background-color: #f8f9fa;
     cursor: pointer;
   }
-  
+
   #modo-detalhado, #modo-simplificado {
     transition: opacity 0.3s ease;
   }
-  
+
   .card-title.text-primary {
     font-weight: 600;
   }

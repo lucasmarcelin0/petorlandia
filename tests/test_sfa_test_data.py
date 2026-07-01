@@ -1,6 +1,7 @@
 import json
 from types import SimpleNamespace
 
+from extensions import db
 from models.sfa import SfaPaciente, SfaRespostaT0, SfaRespostaT10, SfaRespostaT30, SfaSinanLog
 from services.sfa_service import (
     apagar_lote_pacientes_teste_sfa,
@@ -52,6 +53,17 @@ def test_sfa_test_batch_generation_and_cleanup(app):
         assert SfaRespostaT10.query.count() == 0
         assert SfaRespostaT30.query.count() == 0
         assert SfaSinanLog.query.count() == 0
+
+
+def test_sfa_test_batch_uses_next_available_numeric_id(app):
+    with app.app_context():
+        existente = SfaPaciente(id_estudo="SFA-010", nome="Paciente existente")
+        db.session.add(existente)
+        db.session.commit()
+
+        resumo = gerar_lote_pacientes_teste_sfa(2)
+
+        assert resumo["ids_estudo"] == ["SFA-011", "SFA-012"]
 
 
 def test_paciente_eh_teste_sfa_reconhece_marcadores_antigos():

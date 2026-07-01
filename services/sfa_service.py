@@ -1607,10 +1607,21 @@ def registrar_auditoria(nivel: str, categoria: str, funcao: str,
 # ---------------------------------------------------------------------------
 
 def proximo_id_estudo() -> str:
-    """Gera o próximo id_estudo sequencial (ex: SFA-042)."""
+    """Gera o proximo id_estudo sequencial (ex: SFA-042)."""
+    return reservar_ids_estudo(1)[0]
+
+
+def reservar_ids_estudo(quantidade: int = 1) -> list[str]:
+    """Reserva IDs sequenciais considerando o maior SFA-xxx ja usado."""
     from models.sfa import SfaPaciente
-    total = SfaPaciente.query.count()
-    return f"SFA-{(total + 1):03d}"
+
+    total = max(1, int(quantidade or 1))
+    maior = 0
+    for (id_estudo,) in SfaPaciente.query.with_entities(SfaPaciente.id_estudo).all():
+        match = re.fullmatch(r"SFA-(\d+)", str(id_estudo or "").strip())
+        if match:
+            maior = max(maior, int(match.group(1)))
+    return [f"SFA-{numero:03d}" for numero in range(maior + 1, maior + total + 1)]
 
 
 def diagnostico_configuracao() -> dict:
@@ -1820,6 +1831,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
         ["Area rural/chacara", "Mata/trilha/camping"],
         ["Nenhuma exposicao ambiental"],
     ]
+    ids_reservados = reservar_ids_estudo(total)
     ids_estudo: list[str] = []
 
     for indice in range(total):
@@ -1851,7 +1863,7 @@ def gerar_lote_pacientes_teste_sfa(quantidade: int = 20) -> dict[str, object]:
             "Importante - impede varias atividades",
             "Incapacitante - impede atividades basicas",
         ][indice % 5]
-        id_estudo = proximo_id_estudo()
+        id_estudo = ids_reservados[indice]
         ficha_sinan = f"TESTE-{batch_id[-6:]}-{seq:03d}"
         nome = f"{SFA_TEST_NAME_PREFIX} Painel {seq:02d}"
         telefone = f"551699900{seq:04d}"
@@ -3278,11 +3290,56 @@ def contatos_do_dia() -> dict:
 # Estatísticas do painel (equivale a atualizarPainelOperacional)
 # ---------------------------------------------------------------------------
 
-def stats_painel() -> dict:
+def _parse_month_value(value: str) -> tuple[int, int] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.strptime(text, "%Y-%m")
+    except ValueError:
+        return None
+    return parsed.year, parsed.month
+
+
+def _paciente_no_mes_inicio_sintomas(paciente, month_value: str, sinan_ids_no_mes: set[str] | None = None) -> bool:
+    parsed_month = _parse_month_value(month_value)
+    if not parsed_month:
+        return True
+    if getattr(paciente, "id_estudo", "") in (sinan_ids_no_mes or set()):
+        return True
+    resposta_t0 = getattr(paciente, "resposta_t0", None)
+    data_inicio = parse_data(getattr(resposta_t0, "data_inicio_sintomas", ""))
+    if not data_inicio:
+        return False
+    year, month = parsed_month
+    return data_inicio.year == year and data_inicio.month == month
+
+
+def stats_painel(mes_inicio_sintomas: str = "") -> dict:
     """Retorna KPIs e fila do dia para o dashboard Flask."""
-    from models.sfa import SfaAuditoria, SfaPaciente
+    from models.sfa import SfaAuditoria, SfaPaciente, SfaSinanLog
 
     todos = filtrar_pacientes_reais_sfa(_safe_query_all(SfaPaciente))
+    sinan_ids_no_mes = set()
+    parsed_month = _parse_month_value(mes_inicio_sintomas)
+    if parsed_month:
+        year, month = parsed_month
+        try:
+            sinan_logs = (
+                SfaSinanLog.query
+                .filter(SfaSinanLog.data_inicio_sintomas.like(f"__/{month:02d}/{year:04d}"))
+                .all()
+            )
+            sinan_ids_no_mes = {
+                log.id_estudo_vinculado
+                for log in sinan_logs
+                if log.id_estudo_vinculado
+            }
+        except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+            db.session.rollback()
+            log.warning("SFA: tabela 'sfa_sinan_log' nÃ£o encontrada em stats_painel", exc_info=False)
+            sinan_ids_no_mes = set()
+    todos = [p for p in todos if _paciente_no_mes_inicio_sintomas(p, mes_inicio_sintomas, sinan_ids_no_mes)]
     total = len(todos)
 
     def cnt(fn):

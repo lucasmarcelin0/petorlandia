@@ -772,6 +772,59 @@
   .pmo-losses__value.is-positive {
     color: #b91c1c;
   }
+
+  .pmo-video-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .pmo-video-modal[hidden] {
+    display: none;
+  }
+
+  .pmo-video-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .pmo-video-modal__content {
+    position: relative;
+    width: min(94vw, 520px);
+    max-height: 92vh;
+    overflow: auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  }
+
+  .pmo-video-preview {
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    background: #0f172a;
+    border-radius: 8px;
+    display: block;
+  }
+
+  .pmo-video-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .pmo-video-status {
+    min-height: 1.2rem;
+    margin-top: 8px;
+    color: #64748b;
+    font-size: 0.85rem;
+  }
 </style>
 {% endblock %}
 
@@ -799,6 +852,12 @@
         <i class="fas fa-file-export me-1"></i> Copiar exportação
       </button>
     </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 justify-content-end mb-3">
+    <button type="button" class="btn btn-success" id="pmo-video-generate">
+      <i class="fas fa-video me-1"></i> Video do dia
+    </button>
   </div>
 
   <div class="pmo-toolbar mb-3">
@@ -1023,6 +1082,30 @@
   </div>
 </div>
 
+<div class="pmo-video-modal" id="pmo-video-modal" hidden>
+  <div class="pmo-video-modal__backdrop" data-action="video-modal-close"></div>
+  <div class="pmo-video-modal__content">
+    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+      <div>
+        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Video do dia</h5>
+        <div class="text-muted small">Gera um .webm com as fotos dos animais vacinados visiveis nos filtros atuais.</div>
+      </div>
+      <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
+    </div>
+    <video class="pmo-video-preview" id="pmo-video-preview" controls playsinline hidden></video>
+    <div class="pmo-video-status" id="pmo-video-status">Pronto para gerar.</div>
+    <div class="pmo-video-actions">
+      <button type="button" class="btn btn-success" id="pmo-video-start">
+        <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar video
+      </button>
+      <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.webm" aria-disabled="true">
+        <i class="fas fa-download me-1"></i> Baixar
+      </a>
+      <button type="button" class="btn btn-outline-secondary" data-action="video-modal-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
   const tbody = document.getElementById('pmo-tbody');
@@ -1056,6 +1139,418 @@
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !photoModal.hidden) closePhotoModal();
+    });
+  }
+
+  // --- Video automatico dos animais vacinados no dia ---
+  const videoGenerateBtn = document.getElementById('pmo-video-generate');
+  const videoModal = document.getElementById('pmo-video-modal');
+  const videoStartBtn = document.getElementById('pmo-video-start');
+  const videoPreview = document.getElementById('pmo-video-preview');
+  const videoDownload = document.getElementById('pmo-video-download');
+  const videoStatus = document.getElementById('pmo-video-status');
+  let videoObjectUrl = '';
+
+  function setVideoStatus(message) {
+    if (videoStatus) videoStatus.textContent = message;
+  }
+
+  function clearGeneratedVideo() {
+    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = '';
+    if (videoPreview) {
+      videoPreview.hidden = true;
+      videoPreview.removeAttribute('src');
+      videoPreview.load();
+    }
+    if (videoDownload) {
+      videoDownload.removeAttribute('href');
+      videoDownload.classList.add('disabled');
+      videoDownload.setAttribute('aria-disabled', 'true');
+    }
+  }
+
+  function openVideoModal() {
+    if (!videoModal) return;
+    videoModal.hidden = false;
+    setVideoStatus('Pronto para gerar.');
+  }
+
+  function closeVideoModal() {
+    if (!videoModal) return;
+    videoModal.hidden = true;
+  }
+
+  function videoDateLabel() {
+    const selectedDate = sheetEl.selectedOptions[0]?.dataset.date || '';
+    const rowDate = state.rows.find((row) => row.date)?.date || '';
+    return displayDate(selectedDate || rowDate || currentSheetDate());
+  }
+
+  function selectedSheetTitleSlug() {
+    const label = videoDateLabel() || 'dia';
+    return label.replace(/\D+/g, '-').replace(/^-|-$/g, '') || 'dia';
+  }
+
+  function collectVaccinatedVideoItems() {
+    const items = [];
+    state.rows.filter(rowMatchesFilters).forEach((row) => {
+      row.animals.forEach((animal) => {
+        if (animal.status !== 'vacinado') return;
+        const imageSrc = animal.pendingImageUrl || animal.imageProxyUrl || animal.imageUrl || '';
+        if (!imageSrc) return;
+        items.push({
+          name: animal.name || 'Animal',
+          species: animal.species || 'cao',
+          tutor: row.tutor || '',
+          imageSrc,
+        });
+      });
+    });
+    return items;
+  }
+
+  function loadVideoImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Nao foi possivel carregar uma das fotos do video.'));
+      img.src = src;
+    });
+  }
+
+  function fitCenterText(ctx, text, x, y, maxWidth, fontSize, weight = 800) {
+    let size = fontSize;
+    do {
+      ctx.font = `${weight} ${size}px Arial, sans-serif`;
+      if (ctx.measureText(text).width <= maxWidth || size <= 28) break;
+      size -= 2;
+    } while (size > 28);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+  }
+
+  function drawCoverImage(ctx, img, x, y, w, h) {
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (img.naturalWidth - sw) / 2;
+    const sy = (img.naturalHeight - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function estimatePetFocus(img) {
+    const probe = document.createElement('canvas');
+    const sampleW = 72;
+    const sampleH = 96;
+    probe.width = sampleW;
+    probe.height = sampleH;
+    const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+    if (!probeCtx) return { x: 0.5, y: 0.36 };
+
+    let data;
+    try {
+      probeCtx.drawImage(img, 0, 0, sampleW, sampleH);
+      data = probeCtx.getImageData(0, 0, sampleW, sampleH).data;
+    } catch (error) {
+      return { x: 0.5, y: 0.36 };
+    }
+    let total = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 14; y < 66; y += 2) {
+      for (let x = 8; x < sampleW - 8; x += 2) {
+        const index = (y * sampleW + x) * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        const rightIndex = (y * sampleW + x + 1) * 4;
+        const downIndex = ((y + 1) * sampleW + x) * 4;
+        const brightness = (r + g + b) / 3;
+        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+        const contrast =
+          Math.abs(brightness - (data[rightIndex] + data[rightIndex + 1] + data[rightIndex + 2]) / 3) +
+          Math.abs(brightness - (data[downIndex] + data[downIndex + 1] + data[downIndex + 2]) / 3);
+        const centerBias = 1 - Math.min(0.72, Math.abs(x / sampleW - 0.5) * 1.35);
+        const upperBias = 1 - Math.min(0.5, Math.abs(y / sampleH - 0.34) * 1.1);
+        const score = (contrast * 1.8 + saturation * 0.55 + Math.abs(brightness - 128) * 0.18) * centerBias * upperBias;
+        if (score <= 0) continue;
+        total += score;
+        weightedX += score * (x / sampleW);
+        weightedY += score * (y / sampleH);
+      }
+    }
+
+    if (!total) return { x: 0.5, y: 0.36 };
+    return {
+      x: clamp(weightedX / total, 0.28, 0.72),
+      y: clamp(weightedY / total, 0.24, 0.58),
+    };
+  }
+
+  function drawPetFaceCoverImage(ctx, img, x, y, w, h, focus = { x: 0.5, y: 0.36 }) {
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = clamp(img.naturalWidth * focus.x - sw / 2, 0, img.naturalWidth - sw);
+    const sy = clamp(img.naturalHeight * focus.y - sh / 2, 0, img.naturalHeight - sh);
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function addRoundedRect(ctx, x, y, w, h, r) {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+  }
+
+  function drawPhotoTile(ctx, item, img, rect, focus) {
+    const { x, y, w, h } = rect;
+    ctx.save();
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, w, h, 22);
+    ctx.clip();
+    drawPetFaceCoverImage(ctx, img, x, y, w, h, focus);
+    const grad = ctx.createLinearGradient(0, y + h * 0.55, 0, y + h);
+    grad.addColorStop(0, 'rgba(15,23,42,0)');
+    grad.addColorStop(1, 'rgba(15,23,42,0.82)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    fitCenterText(ctx, item.name, x + w / 2, y + h - 62, w - 54, 54);
+    ctx.font = '600 28px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillText(item.species === 'gato' ? 'Gato vacinado' : 'Cao vacinado', x + w / 2, y + h - 28);
+    ctx.restore();
+  }
+
+  function targetTileAspect(img) {
+    const aspect = img.naturalWidth / img.naturalHeight;
+    if (aspect < 0.82) return 0.9;
+    if (aspect < 1.15) return 1.08;
+    if (aspect < 1.55) return 1.35;
+    return 1.75;
+  }
+
+  function fitTileIntoSlot(slot, aspect) {
+    let w = slot.w;
+    let h = w / aspect;
+    if (h > slot.h) {
+      h = slot.h;
+      w = h * aspect;
+    }
+    return {
+      x: slot.x + (slot.w - w) / 2,
+      y: slot.y + (slot.h - h) / 2,
+      w,
+      h,
+    };
+  }
+
+  function slideRects(images, canvas) {
+    const count = images.length;
+    const margin = 72;
+    const top = 360;
+    const bottom = 170;
+    const gap = 28;
+    const width = canvas.width - margin * 2;
+    const areaHeight = canvas.height - top - bottom;
+    let slots;
+    if (count === 1) {
+      const h = Math.min(980, areaHeight - 120);
+      slots = [{ x: margin, y: top + 80, w: width, h }];
+    } else if (count === 2) {
+      const h = Math.floor((areaHeight - gap) / 2);
+      slots = [
+        { x: margin, y: top, w: width, h },
+        { x: margin, y: top + h + gap, w: width, h },
+      ];
+    } else if (count === 3) {
+      const h = Math.floor((areaHeight - gap * 2) / 3);
+      slots = [0, 1, 2].map((i) => ({ x: margin, y: top + i * (h + gap), w: width, h }));
+    } else {
+      const cols = 2;
+      const rows = count <= 4 ? 2 : 3;
+      const cellW = Math.floor((width - gap) / cols);
+      const cellH = Math.floor((areaHeight - gap * (rows - 1)) / rows);
+      slots = Array.from({ length: count }, (_, i) => ({
+        x: margin + (i % cols) * (cellW + gap),
+        y: top + Math.floor(i / cols) * (cellH + gap),
+        w: cellW,
+        h: cellH,
+      }));
+    }
+    return slots.map((slot, index) => fitTileIntoSlot(slot, targetTileAspect(images[index])));
+  }
+
+  function drawVideoBackground(ctx, canvas) {
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0f766e';
+    ctx.fillRect(0, 0, canvas.width, 250);
+    ctx.fillStyle = '#134e4a';
+    ctx.fillRect(0, 250, canvas.width, 10);
+  }
+
+  function drawVideoTitle(ctx, canvas, title, subtitle) {
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    fitCenterText(ctx, title, canvas.width / 2, 104, canvas.width - 100, 60, 900);
+    ctx.font = '600 34px Arial, sans-serif';
+    ctx.fillText(subtitle, canvas.width / 2, 172);
+  }
+
+  function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
+    drawVideoBackground(ctx, canvas);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Orlandia - ${videoDateLabel()}`);
+    const rects = slideRects(images, canvas);
+    group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
+    ctx.fillStyle = '#334155';
+    ctx.font = '600 24px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Campanha municipal de vacinacao antirrabica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
+  }
+
+  function drawIntro(ctx, canvas, count) {
+    drawVideoBackground(ctx, canvas);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura de Orlandia - ${videoDateLabel()}`);
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    fitCenterText(ctx, `${count} animal${count === 1 ? '' : 'is'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
+    ctx.font = '600 38px Arial, sans-serif';
+    ctx.fillStyle = '#475569';
+    ctx.fillText('Campanha municipal de vacinacao antirrabica', canvas.width / 2, 930);
+  }
+
+  function drawOutro(ctx, canvas, count) {
+    drawVideoBackground(ctx, canvas);
+    drawVideoTitle(ctx, canvas, 'Obrigado pela participacao', `Prefeitura de Orlandia - ${videoDateLabel()}`);
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    fitCenterText(ctx, 'Vacina em dia protege o animal, a familia e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
+    ctx.font = '600 32px Arial, sans-serif';
+    ctx.fillStyle = '#475569';
+    ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste video`, canvas.width / 2, 950);
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function holdCanvasFrame(drawFn, durationMs) {
+    const frameMs = 1000 / 30;
+    const started = performance.now();
+    while (performance.now() - started < durationMs) {
+      drawFn();
+      await delay(frameMs);
+    }
+  }
+
+  function mediaRecorderMimeType() {
+    const options = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    return options.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+  }
+
+  async function generateVaccinationVideo() {
+    if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+      throw new Error('Este navegador nao consegue gerar video automaticamente. Tente pelo Chrome ou Edge.');
+    }
+    const items = collectVaccinatedVideoItems();
+    if (!items.length) {
+      throw new Error('Nao ha animais vacinados com foto nos filtros atuais.');
+    }
+
+    clearGeneratedVideo();
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+    const chunks = [];
+    const stream = canvas.captureStream(30);
+    const mimeType = mediaRecorderMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size) chunks.push(event.data);
+    };
+    const stopped = new Promise((resolve) => {
+      recorder.onstop = resolve;
+    });
+
+    const groups = [];
+    for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
+    recorder.start();
+    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600);
+    for (let i = 0; i < groups.length; i += 1) {
+      setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
+      const group = groups[i];
+      const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
+      const focuses = images.map((img) => estimatePetFocus(img));
+      setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
+      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800);
+    }
+    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300);
+    recorder.stop();
+    stream.getTracks().forEach((track) => track.stop());
+    await stopped;
+
+    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+    videoObjectUrl = URL.createObjectURL(blob);
+    videoPreview.src = videoObjectUrl;
+    videoPreview.hidden = false;
+    videoPreview.load();
+    videoDownload.href = videoObjectUrl;
+    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
+    videoDownload.classList.remove('disabled');
+    videoDownload.removeAttribute('aria-disabled');
+    setVideoStatus(`Video pronto com ${items.length} animal${items.length === 1 ? '' : 'is'}.`);
+  }
+
+  if (videoModal) {
+    videoGenerateBtn?.addEventListener('click', () => openVideoModal());
+    videoModal.addEventListener('click', (event) => {
+      if (event.target.dataset.action === 'video-modal-close') closeVideoModal();
+    });
+    videoStartBtn?.addEventListener('click', async () => {
+      const original = videoStartBtn.innerHTML;
+      videoStartBtn.disabled = true;
+      videoStartBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Gerando';
+      try {
+        await generateVaccinationVideo();
+      } catch (error) {
+        setVideoStatus(error.message);
+        window.showAppToast ? window.showAppToast(error.message, 'warning') : alert(error.message);
+      } finally {
+        videoStartBtn.disabled = false;
+        videoStartBtn.innerHTML = original;
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !videoModal.hidden) closeVideoModal();
     });
   }
 
@@ -1357,6 +1852,7 @@
         species: animal.species || 'cao',
         status: animal.status || 'pendente',
         imageUrl: animal.imageUrl || '',
+        imageProxyUrl: animal.imageProxyUrl || '',
       })) : [],
       note: row.note || '',
       date: row.date || '',

@@ -1749,6 +1749,7 @@ def animal_size_token(weight) -> str:
 from forms import (
     AddToCartForm,
     AnimalForm,
+    APPOINTMENT_KIND_CHOICES,
     AppointmentDeleteForm,
     AppointmentForm,
     AppointmentRequestForm,
@@ -3192,7 +3193,11 @@ def _get_inbox_messages():
 
     mensagens = (
         Message.query.options(
-            selectinload(Message.sender),
+            # sent_messages is lazy='select' by default now (see models/base.py);
+            # the mensagens.html template reads msg.sender.sent_messages per row
+            # to compute per-conversation unread counts, so eager-load it here
+            # in batch instead of paying that tax on every User load site-wide.
+            selectinload(Message.sender).selectinload(User.sent_messages),
             selectinload(Message.animal),
         )
         .filter_by(receiver_id=current_user.id)
@@ -5488,6 +5493,47 @@ def vacina_pmo_animal_photo(animal_id):
         db.session.rollback()
         current_app.logger.exception("Falha ao salvar foto de animal Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@app.route('/vacina-pmo/animal/<int:animal_id>/photo-src')
+@login_required
+def vacina_pmo_animal_photo_src(animal_id):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+
+    from models import PmoVaccinationAnimal
+
+    pmo_animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
+    animal = db.session.get(Animal, pmo_animal.animal_id) if pmo_animal.animal_id else None
+    image_url = (animal.image or '').strip() if animal else ''
+    if not image_url:
+        abort(404)
+
+    parsed = urlparse(image_url)
+    if not parsed.scheme and image_url.startswith('/static/'):
+        requested = (PROJECT_ROOT / image_url.lstrip('/')).resolve()
+        uploads_root = (PROJECT_ROOT / 'static' / 'uploads').resolve()
+        if not str(requested).startswith(str(uploads_root)):
+            abort(404)
+        return send_file(requested)
+
+    if parsed.scheme not in {'http', 'https'}:
+        abort(404)
+
+    try:
+        upstream = requests.get(image_url, timeout=8)
+        upstream.raise_for_status()
+    except requests.RequestException:
+        current_app.logger.exception("Falha ao buscar foto PMO para video")
+        abort(502)
+
+    content_type = (upstream.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower()
+    if content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
+        abort(415)
+    if len(upstream.content) > 10 * 1024 * 1024:
+        abort(413)
+
+    return send_file(BytesIO(upstream.content), mimetype=content_type, max_age=3600)
 
 
 @app.route('/vacina-pmo/visit/<int:visit_id>/attended-by', methods=['POST'])
@@ -16566,6 +16612,7 @@ def list_animals():
 
     context = dict(
         animals=animals,
+        pagination=pagination,
         page=page,
         total_pages=pagination.pages,
         modo=modo,
@@ -19228,7 +19275,7 @@ def consulta_direct(animal_id):
     if consulta:
         from models import Veterinario
 
-        appointment_form = AppointmentForm()
+        appointment_form = AppointmentForm(clinic_ids=clinica_id, tutor=tutor)
         appointment_form.populate_animals(
             [animal],
             restrict_tutors=True,
@@ -19389,7 +19436,7 @@ def agendar_retorno(consulta_id):
         abort(403)
     from models import Veterinario
 
-    form = AppointmentForm()
+    form = AppointmentForm(clinic_ids=consulta.clinica_id, tutor=consulta.animal.owner)
     form.populate_animals(
         [consulta.animal],
         restrict_tutors=True,
@@ -21898,12 +21945,7 @@ def clinic_detail(clinica_id):
     status_labels = dict(APPOINTMENT_STATUS_LABELS)
     kind_labels = dict(APPOINTMENT_KIND_LABELS)
 
-    try:
-        appointment_kind_choices = AppointmentForm().kind.choices
-    except Exception:  # noqa: BLE001
-        appointment_kind_choices = []
-
-    for value, label in appointment_kind_choices:
+    for value, label in APPOINTMENT_KIND_CHOICES:
         if value:
             kind_labels.setdefault(value, label)
 
@@ -27554,19 +27596,50 @@ def buscar_medicamentos():
     if len(q) < 2:
         return jsonify([])
 
+    q_lower = q.lower()
+    q_norm = unicodedata.normalize("NFKD", q_lower)
+    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
+
+    def _norm_busca(valor):
+        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        texto = re.sub(r"\bneom?c?icina\b|\bneonicina\b|\bneomicicina\b", "neomicina", texto)
+        return texto
+
+    q_norm = _norm_busca(q_norm)
+    tokens_busca = [
+        token
+        for token in re.findall(r"[a-z0-9]{3,}", q_norm)
+        if token not in {"com", "para", "por", "uso", "mg", "ml"}
+    ]
+
     # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
     like = f"%{q}%"
+    filtros_busca = [
+        Medicamento.nome.ilike(like),
+        Medicamento.principio_ativo.ilike(like),
+        cast(Medicamento.conteudo_estruturado, Text).ilike(like),
+    ]
+    for token in tokens_busca:
+        token_like = f"%{token}%"
+        filtros_busca.extend([
+            Medicamento.nome.ilike(token_like),
+            Medicamento.principio_ativo.ilike(token_like),
+            cast(Medicamento.conteudo_estruturado, Text).ilike(token_like),
+        ])
+
     resultados = (
         Medicamento.query
-        .filter(
-            or_(
-                Medicamento.nome.ilike(like),
-                Medicamento.principio_ativo.ilike(like),
-                cast(Medicamento.conteudo_estruturado, Text).ilike(like),
-            )
+        .options(
+            # .doses is read for every row below (orphan filtering + scoring)
+            # and .apresentacoes is read for every serialized result further
+            # down -- eager-load both in batch instead of one query per row.
+            selectinload(Medicamento.doses),
+            selectinload(Medicamento.apresentacoes),
         )
+        .filter(or_(*filtros_busca))
         .order_by(Medicamento.nome)
-        .limit(40)
+        .limit(120)
         .all()
     )
 
@@ -27584,14 +27657,6 @@ def buscar_medicamentos():
                 continue
         filtrados.append(m)
 
-    q_lower = q.lower()
-    q_norm = unicodedata.normalize("NFKD", q_lower)
-    q_norm = "".join(c for c in q_norm if not unicodedata.combining(c))
-
-    def _norm_busca(valor):
-        texto = unicodedata.normalize("NFKD", str(valor or "").lower())
-        return "".join(c for c in texto if not unicodedata.combining(c))
-
     def _produto_vetsmart_match_info(m):
         conteudo = getattr(m, "conteudo_estruturado", None) or {}
         produtos = conteudo.get("produtos_vetsmart") if isinstance(conteudo, dict) else []
@@ -27602,18 +27667,47 @@ def buscar_medicamentos():
                 continue
             if any(q_norm in _norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo")):
                 return prod
+            produto_haystack = " ".join(_norm_busca(prod.get(campo)) for campo in ("nome", "fabricante", "principio_ativo"))
+            if tokens_busca and all(token in produto_haystack for token in tokens_busca):
+                return prod
         return None
+
+    def _haystack_medicamento(m):
+        partes = [
+            m.nome,
+            m.principio_ativo,
+            m.classificacao,
+            m.via_administracao,
+            m.dosagem_recomendada,
+            m.frequencia,
+            m.duracao_tratamento,
+        ]
+        conteudo = getattr(m, "conteudo_estruturado", None) or {}
+        if isinstance(conteudo, dict):
+            produtos = conteudo.get("produtos_vetsmart")
+            if isinstance(produtos, list):
+                for prod in produtos:
+                    if isinstance(prod, dict):
+                        partes.extend([prod.get("nome"), prod.get("fabricante"), prod.get("principio_ativo")])
+        else:
+            partes.append(conteudo)
+        return " ".join(_norm_busca(parte) for parte in partes if parte)
 
     def _score(m):
         # Prioridade: (1) tem doses estruturadas, (2) match no início do nome,
         # (3) princípio ativo coincide exatamente, (4) tem dados básicos preenchidos
         tem_doses = 1 if m.doses else 0
-        prefixo = 1 if m.nome.lower().startswith(q_lower) else 0
-        pa_exato = 1 if (m.principio_ativo or "").lower() == q_lower else 0
+        nome_norm = _norm_busca(m.nome)
+        pa_norm = _norm_busca(m.principio_ativo)
+        prefixo = 1 if nome_norm.startswith(q_norm) else 0
+        pa_exato = 1 if pa_norm == q_norm else 0
         produto_match = _produto_vetsmart_match_info(m)
         produto_match_score = 1 if produto_match else 0
+        haystack = _haystack_medicamento(m)
+        todos_tokens = 1 if tokens_busca and all(token in haystack for token in tokens_busca) else 0
+        qtd_tokens = sum(1 for token in tokens_busca if token in haystack)
         tem_dados = 1 if (m.via_administracao or m.dosagem_recomendada or m.frequencia) else 0
-        return (produto_match_score, tem_doses, prefixo, pa_exato, tem_dados)
+        return (todos_tokens, produto_match_score, qtd_tokens, tem_doses, prefixo, pa_exato, tem_dados)
 
     filtrados.sort(key=_score, reverse=True)
 

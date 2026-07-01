@@ -1571,6 +1571,11 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
             "species": animal.species,
             "status": animal.status,
             "imageUrl": (animal.animal.image if animal.animal and animal.animal.image else ""),
+            "imageProxyUrl": (
+                url_for("vacina_pmo_animal_photo_src", animal_id=animal.id)
+                if has_request_context() and animal.animal and animal.animal.image
+                else ""
+            ),
         }
         for animal in visit.animals
     ]

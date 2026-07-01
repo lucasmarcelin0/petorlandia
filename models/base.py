@@ -188,19 +188,22 @@ class User(UserMixin, db.Model):
 
 
     # Correção dos campos:
+    # lazy='select' (default) on purpose -- these used to be lazy='selectin',
+    # which taxed EVERY User load site-wide with 2 extra Message queries even
+    # though the collections are only read in delete_account() (rare) and the
+    # mensagens.html inbox template (which eager-loads sent_messages itself
+    # via the Message.sender selectinload option in _get_inbox_messages()).
     sent_messages = db.relationship(
         'Message',
         foreign_keys='Message.sender_id',
         back_populates='sender',
         cascade='all, delete-orphan',
-        lazy='selectin',
     )
     received_messages = db.relationship(
         'Message',
         foreign_keys='Message.receiver_id',
         back_populates='receiver',
         cascade='all, delete-orphan',
-        lazy='selectin',
     )
 
     given_reviews = db.relationship(

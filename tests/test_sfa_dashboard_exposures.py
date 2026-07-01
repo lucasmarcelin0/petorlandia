@@ -2,6 +2,9 @@ import json
 from types import SimpleNamespace
 
 from blueprints.sfa import _montar_dashboard_testes_sfa
+from extensions import db
+from models.sfa import SfaPaciente, SfaRespostaT0, SfaSinanLog
+from services.sfa_service import stats_painel
 
 
 def test_dashboard_testes_expoe_contato_animal_pelas_opcoes_atuais():
@@ -71,3 +74,34 @@ def test_dashboard_testes_expoe_contato_animal_pelas_opcoes_atuais():
     assert animal_items["Carrapato"]["count"] == 1
     assert "Caes ou gatos domesticos" not in animal_items
     assert "Gatos filhotes ou limpeza de fezes de gato" not in animal_items
+
+
+def test_stats_painel_filtra_pacientes_por_mes_de_inicio_dos_sintomas(app):
+    with app.app_context():
+        db.session.add_all(
+            [
+                SfaPaciente(id_estudo="SFA-MAR", nome="Paciente Marco", grupo="A"),
+                SfaPaciente(id_estudo="SFA-ABR", nome="Paciente Abril", grupo="B"),
+                SfaPaciente(id_estudo="SFA-SEM-T0", nome="Paciente Sem T0", grupo="A"),
+            ]
+        )
+        db.session.add_all(
+            [
+                SfaRespostaT0(id_estudo="SFA-MAR", data_inicio_sintomas="18/03/2026"),
+                SfaRespostaT0(id_estudo="SFA-ABR", data_inicio_sintomas="02/04/2026"),
+                SfaSinanLog(
+                    id_estudo_vinculado="SFA-SEM-T0",
+                    data_inicio_sintomas="22/03/2026",
+                    chave_dedup="sinan-sem-t0",
+                ),
+            ]
+        )
+        db.session.commit()
+
+        stats = stats_painel(mes_inicio_sintomas="2026-03")
+        stats_sem_filtro = stats_painel()
+
+    assert stats["total"] == 2
+    assert stats["grupo_a"] == 2
+    assert stats["grupo_b"] == 0
+    assert stats_sem_filtro["total"] == 3

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revisao - {{ title }}</title>
+  <style>
+    :root {
+      --ink: #17313a;
+      --teal: #0b6b73;
+      --teal-soft: #e8f6f5;
+      --orange: #e8711c;
+      --orange-soft: #fff2e8;
+      --line: #d7e1de;
+      --sand: #f7efe3;
+      --cream: #fffaf5;
+      --muted: rgba(23,49,58,.68);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 4%, rgba(11,107,115,.13), transparent 28%),
+        radial-gradient(circle at 88% 12%, rgba(232,113,28,.16), transparent 24%),
+        linear-gradient(180deg, #f8fbfb 0%, var(--sand) 100%);
+    }
+    .wrap { width: min(1180px, calc(100% - 2rem)); margin: 2rem auto 3rem; }
+    .hero, .panel, .review-block {
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 14px 32px rgba(23,49,58,.07);
+    }
+    .hero, .panel { padding: 1.25rem; margin-bottom: 1rem; }
+    .hero { position: relative; overflow: hidden; }
+    h1 { margin: .35rem 0; font-size: clamp(1.7rem, 3vw, 2.6rem); }
+    h2 { margin: 0 0 .4rem; font-size: 1.18rem; }
+    h3 { margin: 0 0 .45rem; color: var(--teal); }
+    p { line-height: 1.55; }
+    .muted { color: var(--muted); }
+    .kicker {
+      color: #08484d;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: .78rem;
+    }
+    .guide, .identity, .cards, .review-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .8rem;
+    }
+    .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      padding: .9rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .card .label { color: var(--muted); font-size: .86rem; }
+    .card .value { margin-top: .3rem; font-size: 1.4rem; font-weight: 900; }
+    .guide-card {
+      padding: .95rem;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .guide-card strong { display: block; margin-bottom: .25rem; color: var(--teal); }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: .78rem .9rem;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 92px; resize: vertical; }
+    label { font-weight: 800; font-size: .92rem; }
+    .review-block { padding: 1rem; margin-bottom: 1rem; }
+    .block-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 1rem;
+      align-items: start;
+      margin-bottom: .7rem;
+    }
+    .block-number {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--teal), #0a4e54);
+      box-shadow: 0 10px 20px rgba(11,107,115,.18);
+    }
+    .review-prompt {
+      border: 1px solid rgba(232,113,28,.25);
+      border-left: 5px solid var(--orange);
+      border-radius: 14px;
+      padding: .8rem .9rem;
+      background: var(--orange-soft);
+      margin: .75rem 0;
+      font-weight: 800;
+    }
+    .examples { display: flex; flex-wrap: wrap; gap: .35rem; margin: .55rem 0 .9rem; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .28rem .55rem;
+      background: #fffaf5;
+      font-size: .82rem;
+    }
+    .question-map {
+      margin: .65rem 0 1rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .question-map summary {
+      cursor: pointer;
+      padding: .75rem .9rem;
+      font-weight: 900;
+      color: var(--teal);
+      background: #f7fbfb;
+    }
+    .question-deck {
+      display: grid;
+      gap: .85rem;
+      padding: .85rem;
+      background: #fbfdfd;
+    }
+    .question-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: .9rem;
+      background: #fff;
+    }
+    .question-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      align-items: center;
+      margin-bottom: .5rem;
+    }
+    .stage-badge, .type-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: .25rem .55rem;
+      font-size: .78rem;
+      font-weight: 900;
+      border: 1px solid var(--line);
+      background: var(--teal-soft);
+      color: #08484d;
+    }
+    .type-badge { background: var(--cream); color: rgba(23,49,58,.72); }
+    .question-title { font-size: 1rem; font-weight: 900; margin: .15rem 0 .35rem; }
+    .question-use {
+      margin: .35rem 0 .55rem;
+      padding: .58rem .7rem;
+      border-radius: 12px;
+      background: #f6f8fa;
+      color: rgba(23,49,58,.78);
+      font-size: .92rem;
+    }
+    .option-list { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
+    .option-chip {
+      display: inline-flex;
+      border-radius: 999px;
+      border: 1px solid #cfdeda;
+      background: #fff;
+      padding: .25rem .5rem;
+      font-size: .8rem;
+      line-height: 1.25;
+    }
+    .mini-review {
+      display: grid;
+      grid-template-columns: .8fr .9fr minmax(220px, 1.3fr);
+      gap: .65rem;
+      align-items: end;
+      margin-top: .75rem;
+      padding-top: .75rem;
+      border-top: 1px dashed var(--line);
+    }
+    .full { grid-column: 1 / -1; }
+    table { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .9rem; }
+    th, td { border: 1px solid var(--line); padding: .45rem; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: .9rem 1.4rem;
+      font: inherit;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, var(--teal), #0a4e54);
+      cursor: pointer;
+    }
+    @media (max-width: 860px) {
+      .guide, .identity, .cards, .review-grid, .mini-review { grid-template-columns: 1fr; }
+      .block-head { grid-template-columns: 1fr; }
+      .wrap { width: min(100% - 1rem, 100%); margin-top: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="kicker">Revisao colaborativa dos graficos</div>
+      <h1>{{ title }}</h1>
+      <p class="muted">
+        Esta revisao mostra os graficos da visao de testes e abre, logo abaixo,
+        as perguntas reais que alimentam cada leitura. A ideia e descobrir o que
+        e essencial, o que esta redundante e o que pode ser melhor aproveitado.
+      </p>
+      {% if not has_test_data %}
+      <p class="muted"><strong>Observacao:</strong> ainda nao ha lote de teste carregado. A avaliacao pode ser feita pela estrutura, mas os numeros aparecerao vazios.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Como avaliar sem sofrer</h2>
+      <div class="guide">
+        <div class="guide-card">
+          <strong>1. Olhe o bloco</strong>
+          Veja qual grafico, tabela ou leitura aquele bloco tenta responder.
+        </div>
+        <div class="guide-card">
+          <strong>2. Confira as perguntas</strong>
+          As perguntas reais e suas opcoes aparecem abertas, inclusive animais, alimentacao e ambiente.
+        </div>
+        <div class="guide-card">
+          <strong>3. Decida o destino</strong>
+          Marque se a pergunta deve ficar, melhorar, mudar de grafico ou sair.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Resumo visual atual</h2>
+      <div class="cards">
+        {% for card in dashboard_testes.cards %}
+        <div class="card">
+          <div class="label">{{ card.label }}</div>
+          <div class="value">{{ card.value }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Exemplo: comparacao entre grupos</h2>
+      <table>
+        <thead><tr><th>Metrica</th><th>Grupo A</th><th>Grupo B</th></tr></thead>
+        <tbody>
+          {% for row in dashboard_testes.group_comparison %}
+          <tr><td>{{ row.metric }}</td><td>{{ row.a }}</td><td>{{ row.b }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Sem dados suficientes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <form method="POST">
+      <section class="panel">
+        <h2>Quem esta avaliando?</h2>
+        <div class="identity">
+          <div><label>Nome</label><input name="reviewer_name" type="text"></div>
+          <div><label>E-mail</label><input name="reviewer_email" type="email"></div>
+          <div><label>Perfil</label><input name="reviewer_profile" type="text" placeholder="Ex.: pesquisador, profissional de saude"></div>
+        </div>
+      </section>
+
+      {% for section in sections %}
+      <article class="review-block">
+        <div class="block-head">
+          <div>
+            <h3>{{ section.title }}</h3>
+            <p class="muted">{{ section.description }}</p>
+          </div>
+          <div class="block-number">{{ loop.index }}</div>
+        </div>
+        <div class="review-prompt">{{ section.review_prompt }}</div>
+        <div class="examples">
+          <strong class="muted" style="align-self:center">Graficos/tabelas neste bloco:</strong>
+          {% for item in section["items"] %}
+          {% if item %}<span class="pill">{{ item }}</span>{% endif %}
+          {% else %}
+          <span class="pill">Sem exemplos neste momento</span>
+          {% endfor %}
+        </div>
+        <details class="question-map" open>
+          <summary>Perguntas reais usadas neste bloco</summary>
+          <div class="question-deck">
+            {% for question in section.questions %}
+            <div class="question-card">
+              <div class="question-top">
+                <span class="stage-badge">{{ question.stage }}</span>
+                <span class="type-badge">{{ question.required }}</span>
+                {% if question.mode %}<span class="type-badge">{{ question.mode }}</span>{% endif %}
+              </div>
+              <div class="question-title">{{ question.label }}</div>
+              <div class="question-use"><strong>Uso no grafico:</strong> {{ question.use }}</div>
+              {% if question.help_text %}
+              <p class="muted">{{ question.help_text }}</p>
+              {% endif %}
+              {% if question.options %}
+              <div class="option-list" aria-label="Opcoes de resposta">
+                {% for option in question.options %}
+                <span class="option-chip">{{ option }}</span>
+                {% endfor %}
+              </div>
+              {% else %}
+              <p class="muted">Sem lista fixa de opcoes: resposta livre, numerica, data ou dado operacional.</p>
+              {% endif %}
+              <div class="mini-review">
+                <div>
+                  <label>Para este grafico</label>
+                  <select name="question_need__{{ section.key }}__{{ question.review_id }}">
+                    <option value="">Avaliar</option>
+                    <option>Essencial</option>
+                    <option>Util, mas pode melhorar</option>
+                    <option>Talvez dispensavel</option>
+                    <option>Nao deveria entrar neste grafico</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Melhor destino</label>
+                  <select name="question_reuse__{{ section.key }}__{{ question.review_id }}">
+                    <option value="">Escolher</option>
+                    <option>Manter como esta</option>
+                    <option>Reescrever pergunta</option>
+                    <option>Juntar com outra pergunta</option>
+                    <option>Virar grafico separado</option>
+                    <option>Remover do instrumento</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Comentario sobre esta pergunta</label>
+                  <input name="question_comment__{{ section.key }}__{{ question.review_id }}" type="text" placeholder="Ex.: faltou especie, opcao confusa, bom indicador...">
+                </div>
+              </div>
+            </div>
+            {% else %}
+            <p class="muted">Nenhuma pergunta mapeada para este bloco.</p>
+            {% endfor %}
+          </div>
+        </details>
+        <div class="review-grid">
+          <div>
+            <label>Utilidade</label>
+            <select name="usefulness__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Essencial</option>
+              <option>Util</option>
+              <option>Pouco util</option>
+              <option>Nao acrescenta</option>
+            </select>
+          </div>
+          <div>
+            <label>Clareza</label>
+            <select name="chart_clarity__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Claro</option>
+              <option>Precisa melhorar</option>
+              <option>Confuso</option>
+            </select>
+          </div>
+          <div>
+            <label>Redundancia</label>
+            <select name="chart_redundancy__{{ section.key }}">
+              <option value="">Avaliar</option>
+              <option>Nao parece redundante</option>
+              <option>Talvez redundante</option>
+              <option>Redundante</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Comentario ou sugestao</label>
+            <textarea name="chart_comment__{{ section.key }}" placeholder="O que este grafico deveria explicar melhor? Voce tiraria, juntaria ou mudaria algo?"></textarea>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+
+      <section class="panel">
+        <label>Comentario geral sobre os graficos</label>
+        <textarea name="overall_comment"></textarea>
+      </section>
+
+      <div class="actions"><button type="submit">Enviar avaliacao dos graficos</button></div>
+    </form>
+  </main>
+</body>
+</html>

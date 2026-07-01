@@ -16,6 +16,7 @@ from extensions import db
 from models import Medicamento
 from services.bulario import sugerir_dose
 from services.clinical_suggestions import build_followup_prefill
+from services.posologia_normalizacao import normalizar_frequencia
 from services.prescricao_alias import resolver_alias
 
 
@@ -252,6 +253,7 @@ def _resolve_multiplo_suggestion(
             animal,
             indicacao=indication,
             nome_comercial_filtro=commercial_filter,
+            preservar_variantes_comerciais=True,
         )
         if not suggestion or suggestion.get("multiplo"):
             continue
@@ -278,6 +280,17 @@ def _duration_text(suggestion: dict[str, Any], override: str | None = None) -> s
         _fmt_range(suggestion.get("duracao_min_dias"), suggestion.get("duracao_max_dias"), "dias")
         or (suggestion.get("duracao_texto") or "").strip()
     )
+
+
+def _normalize_textual_duration(value: str) -> str:
+    text = _text_value(value)
+    if not text:
+        return ""
+    if _normalize(text).startswith(("por ", "ate ", "criterio ")):
+        return text
+    if re.match(r"^\d+(?:\s+a\s+\d+)?\s+dias?$", _normalize(text)):
+        return f"por {text}"
+    return text
 
 
 def _preferred_dose_mode(item) -> str:
@@ -471,6 +484,71 @@ def _practical_presentation_options(suggestion: dict[str, Any], mode: str) -> li
     return [_practical_payload(candidate) for candidate in candidates]
 
 
+def _is_topical_textual_suggestion(suggestion: dict[str, Any]) -> bool:
+    dose_unit = _normalize(suggestion.get("dose_unit_out"))
+    via = _normalize(suggestion.get("via"))
+    faixa = _normalize(suggestion.get("faixa_texto"))
+    dose_text = _normalize(suggestion.get("dose_exibir"))
+    return (
+        "camada fina" in dose_unit
+        or "aplicacao topica" in faixa
+        or "topica" in via
+        or "topico" in via
+        or "camada fina" in dose_text
+    )
+
+
+def _normalize_topical_application_text(value: str | None) -> str:
+    text = _text_value(value)
+    normalized = _normalize(text)
+    if not text or not normalized:
+        return ""
+    if any(token in normalized for token in (
+        "area afetada",
+        "regiao acometida",
+        "regiao afetada",
+        "lesao",
+        "lesoes",
+    )):
+        return "Aplicar sobre a região acometida"
+    return text
+
+
+def _textual_presentation_options(
+    suggestion: dict[str, Any],
+    dose_text: str,
+) -> list[dict[str, Any]]:
+    if not _is_topical_textual_suggestion(suggestion):
+        return []
+    presentations = [
+        ap for ap in (suggestion.get("apresentacoes") or [])
+        if (ap.get("categoria") or "") in {"topico", "otico", "oftalmico"}
+    ]
+    if len(presentations) != 1:
+        return []
+    ap = presentations[0]
+    dose_text = dose_text or "Aplicar sobre a região acometida"
+    presentation = {
+        "id": ap.get("id"),
+        "label": _presentation_label(ap),
+        "forma": ap.get("forma") or "",
+        "concentracao": ap.get("concentracao_label") or ap.get("concentracao_texto") or "",
+        "nome_variante": ap.get("nome_variante") or "",
+        "nome_comercial": ap.get("nome_comercial") or "",
+        "fabricante": ap.get("fabricante") or "",
+    }
+    return [{
+        "quantity": 1,
+        "unit": ap.get("unidade_pratica") or "aplicação",
+        "dose_text": dose_text,
+        "option_label": " — ".join(part for part in [dose_text, presentation["label"]] if part),
+        "delivered_dose": "",
+        "desired_dose": "",
+        "score": 0,
+        "presentation": presentation,
+    }]
+
+
 def _choose_practical_presentation(suggestion: dict[str, Any], mode: str) -> dict[str, Any] | None:
     options = _practical_presentation_options(suggestion, mode)
     return options[0] if options else None
@@ -545,6 +623,7 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         animal,
         indicacao=(getattr(item, "indicacao", None) or "").strip() or None,
         nome_comercial_filtro=commercial_filter,
+        preservar_variantes_comerciais=True,
     )
     if not suggestion:
         base.update({
@@ -573,12 +652,19 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
             })
             return base
 
+    protocol_dose_text = _normalize_topical_application_text(getattr(item, "dosagem_texto", None))
     practical_options = _practical_presentation_options(suggestion, mode)
+    if not practical_options and protocol_dose_text:
+        practical_options = _textual_presentation_options(suggestion, protocol_dose_text)
     practical = practical_options[0] if practical_options else None
+    has_textual_practical = bool(practical and practical.get("delivered_dose") == "" and practical.get("desired_dose") == "")
     frequency = _frequency_text(suggestion, getattr(item, "frequencia_texto", None))
     duration = _duration_text(suggestion, getattr(item, "duracao_texto", None))
+    if has_textual_practical:
+        frequency = normalizar_frequencia(frequency) or frequency
+        duration = _normalize_textual_duration(duration)
     calculated_dose = _format_dose_value(suggestion, mode)
-    final_dose = practical["dose_text"] if practical else calculated_dose
+    final_dose = practical["dose_text"] if practical else (protocol_dose_text or calculated_dose)
     practical_posology = " ".join(part for part in [final_dose, frequency, duration] if part) if practical else ""
     technical_posology = " ".join(part for part in [calculated_dose, frequency, duration] if part)
     final_name = base["nome"]

@@ -1629,6 +1629,7 @@ def listar_apresentacoes_medicamento(
     dose_unit_out: Optional[str] = None,
     dose_media: Optional[float] = None,
     nome_comercial_filtro: Optional[str] = None,
+    preservar_variantes_comerciais: bool = False,
 ) -> List[Dict[str, Any]]:
     """Lista deduplicada/ordenada de apresentações do medicamento (sem precisar
     de animal/dose).  Reutilizada por:
@@ -1647,10 +1648,12 @@ def listar_apresentacoes_medicamento(
     todas_apresentacoes = getattr(medicamento, 'apresentacoes', None) or []
     if nome_comercial_filtro:
         nc_lower = nome_comercial_filtro.strip().lower()
-        todas_apresentacoes = [
+        apresentacoes_filtradas = [
             ap for ap in todas_apresentacoes
             if (getattr(ap, 'nome_comercial', None) or '').strip().lower() == nc_lower
         ]
+        if apresentacoes_filtradas:
+            todas_apresentacoes = apresentacoes_filtradas
     for ap in todas_apresentacoes:
         fabricante = getattr(ap, 'fabricante', None)
         categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
@@ -1714,6 +1717,14 @@ def listar_apresentacoes_medicamento(
     apres_unicas: Dict[tuple, Dict[str, Any]] = {}
     for ap_info in sorted(apres_info, key=_ordenar_apresentacao_info):
         chave = _chave_visual_apresentacao(ap_info)
+        if preservar_variantes_comerciais:
+            chave = chave + (
+                _texto_norm(ap_info.get('nome_variante') or ''),
+                _texto_norm(ap_info.get('nome_comercial') or ''),
+                _texto_norm(ap_info.get('fabricante') or ''),
+                _texto_norm(ap_info.get('rotulo_secundario') or ''),
+                _texto_norm(ap_info.get('concentracao_texto') or ''),
+            )
         existente = apres_unicas.get(chave)
         fabricante_atual = ap_info.get('fabricante') or ''
         if not existente:
@@ -2068,6 +2079,7 @@ def sugerir_dose(
     animal,
     indicacao: Optional[str] = None,
     nome_comercial_filtro: Optional[str] = None,
+    preservar_variantes_comerciais: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Retorna dict com sugestão de dose, ou None se não aplicável.
 
@@ -2420,6 +2432,7 @@ def sugerir_dose(
     apres_info = listar_apresentacoes_medicamento(
         medicamento, dose_unit_out, dose_media,
         nome_comercial_filtro=nome_comercial_filtro,
+        preservar_variantes_comerciais=preservar_variantes_comerciais,
     )
 
     indicacoes_disp = _indicacoes_disponiveis(medicamento, animal)
