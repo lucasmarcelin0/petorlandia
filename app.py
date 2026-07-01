@@ -3088,7 +3088,11 @@ def _get_inbox_messages():
 
     mensagens = (
         Message.query.options(
-            selectinload(Message.sender),
+            # sent_messages is lazy='select' by default now (see models/base.py);
+            # the mensagens.html template reads msg.sender.sent_messages per row
+            # to compute per-conversation unread counts, so eager-load it here
+            # in batch instead of paying that tax on every User load site-wide.
+            selectinload(Message.sender).selectinload(User.sent_messages),
             selectinload(Message.animal),
         )
         .filter_by(receiver_id=current_user.id)
