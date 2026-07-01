@@ -337,13 +337,19 @@ def _log_consulta_query_profile(response):
         queries = g.get("_profile_queries", [])
         if queries:
             total = sum(e for e, _ in queries)
-            top = sorted(queries, key=lambda q: q[0], reverse=True)[:8]
+            grouped = {}
+            for elapsed, stmt in queries:
+                key = stmt.split(" FROM ")[-1][:60] if " FROM " in stmt else stmt[:60]
+                bucket = grouped.setdefault(key, [0, 0.0])
+                bucket[0] += 1
+                bucket[1] += elapsed
+            top_grouped = sorted(grouped.items(), key=lambda kv: kv[1][0], reverse=True)[:12]
             current_app.logger.warning(
-                "PERF_PROFILE path=%s count=%d total_ms=%.1f top=%s",
+                "PERF_PROFILE path=%s count=%d total_ms=%.1f grouped_by_count=%s",
                 request.path,
                 len(queries),
                 total * 1000,
-                [(round(e * 1000, 1), s) for e, s in top],
+                [(cnt, round(ms * 1000, 1), key) for key, (cnt, ms) in top_grouped],
             )
     return response
 
