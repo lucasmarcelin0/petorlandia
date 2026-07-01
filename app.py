@@ -30866,9 +30866,9 @@ def servicos():
     has_paid_vaccines = selected_city_key in vaccine_city_keys
     is_orlandia = selected_city_key == _normalize_public_text('Orlândia')
 
-    localized_services = []
+    pmo_services = []
     if is_orlandia:
-        localized_services.append({
+        pmo_services.append({
             'icon': 'fa-hand-holding-medical',
             'color': 'primary',
             'title': 'Castração (PMO)',
@@ -30877,7 +30877,7 @@ def servicos():
             'url': url_for('castracao_pmo_solicitar'),
             'cta': 'Solicitar',
         })
-        localized_services.append({
+        pmo_services.append({
             'icon': 'fa-syringe',
             'color': 'danger',
             'title': 'Vacina Antirrábica (PMO)',
@@ -30887,6 +30887,7 @@ def servicos():
             'cta': 'Solicitar',
         })
 
+    localized_services = []
     localized_services.extend([
         {
             'icon': 'fa-shield-dog',
@@ -30959,6 +30960,7 @@ def servicos():
         'servicos.html',
         cities=cities,
         selected_city=selected_city,
+        pmo_services=pmo_services,
         localized_services=localized_services,
         other_services=other_services,
         # Sem cidade no pedido nem no cadastro → oferecer geolocalização automática.
