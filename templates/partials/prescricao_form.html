@@ -466,10 +466,8 @@
     <label for="instrucao-unica" class="form-label">Prescrição personalizada</label>
     <textarea id="instrucao-unica" class="form-control" rows="2" placeholder="Ex: Administrar 25mg/kg de 12/12h por 3 dias."></textarea>
   </div>
-  </div>
 
-  <div id="prescription-panel-revisao" class="prescription-panel d-none" data-prescription-panel-content="revisao">
-  <div class="prescription-final-preview mb-3" data-prescription-panel="revisao">
+  <div class="prescription-final-preview mb-3" data-prescription-panel="posologia">
     <div class="prescription-final-preview__head">
       <div>
         <span>Receita para o tutor</span>
@@ -484,11 +482,14 @@
     </div>
   </div>
 
-  <!-- Botão para adicionar à lista -->
-  <button type="button" class="btn btn-success mb-4 prescription-add-button" id="btn-adicionar">
-    <i class="bi bi-plus-circle me-1"></i>Adicionar ao rascunho
-  </button>
+  <div class="prescription-panel-actions">
+    <button type="button" class="btn btn-success prescription-add-button" id="btn-adicionar">
+      <i class="bi bi-plus-circle me-1"></i>Adicionar ao rascunho
+    </button>
+  </div>
+  </div>
 
+  <div id="prescription-panel-revisao" class="prescription-panel d-none" data-prescription-panel-content="revisao">
   <!-- Lista temporária -->
   <div id="medicamentos-lista" class="mb-4">
     <div class="text-center py-4 text-muted">
@@ -496,6 +497,10 @@
       <p class="mt-2">Nenhuma prescrição adicionada</p>
     </div>
   </div>
+
+  <button type="button" class="btn btn-outline-success mb-4" id="btn-novo-medicamento-prescricao" onclick="prepararNovoMedicamentoPrescricao()">
+    <i class="bi bi-plus-circle me-1"></i>Adicionar outro medicamento
+  </button>
 
   <!-- Instruções gerais -->
   <div class="mb-3">
@@ -3510,6 +3515,12 @@
     medicamentoSelecionado = null;
     fecharSugestaoDose();
     atualizarPreviewPrescricao();
+    mostrarEtapaPrescricao('revisao');
+  }
+
+  function prepararNovoMedicamentoPrescricao() {
+    mostrarEtapaPrescricao('medicamento');
+    setTimeout(() => document.getElementById('nome-medicamento')?.focus(), 80);
   }
 
   // Remover prescrição da lista
