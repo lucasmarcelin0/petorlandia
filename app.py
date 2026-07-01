@@ -9981,7 +9981,7 @@ def add_animal():
         try:
             db.session.commit()
             current_app.logger.info("Animal cadastrado com ID %s", animal.id)
-            flash('Animal cadastrado com sucesso!', 'success')
+            flash(f'Prontinho! {animal.name} agora faz parte da PetOrlândia. 🐾', 'success')
             return redirect(url_for('index'))
         except Exception as e:
             db.session.rollback()
@@ -16740,7 +16740,7 @@ def editar_animal(animal_id):
         animal.photo_offset_y = form.photo_offset_y.data or 0
 
         db.session.commit()
-        flash('Animal atualizado com sucesso!', 'success')
+        flash(f'Os dados de {animal.name} foram atualizados!', 'success')
         return redirect(url_for('profile'))
 
     return render_template('animais/editar_animal.html',
@@ -33215,7 +33215,11 @@ def appointments():
                     )
                     db.session.add(appt)
                     db.session.commit()
-                    flash('Agendamento criado com sucesso.', 'success')
+                    flash(
+                        f'Agendamento de {animal.name} criado para '
+                        f'{format_datetime_brazil(scheduled_at, "%d/%m às %H:%M")}. 🐾',
+                        'success',
+                    )
             return redirect(appointments_url)
         horarios = VetSchedule.query.filter_by(
             veterinario_id=veterinario.id
@@ -33816,7 +33820,11 @@ def appointments():
                     )
                     db.session.add(appt)
                     db.session.commit()
-                    flash('Agendamento criado com sucesso.', 'success')
+                    flash(
+                        f'Agendamento de {animal.name} criado para '
+                        f'{format_datetime_brazil(scheduled_at, "%d/%m às %H:%M")}. 🐾',
+                        'success',
+                    )
                 return _redirect_to_current_appointments()
             appointments = (
                 Appointment.query
