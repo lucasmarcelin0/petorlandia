@@ -1347,6 +1347,229 @@ body {
   }
 }
 
+.prescription-assistant {
+  border: 1px solid #d7e3ea;
+  border-radius: 8px;
+  background: #f7fbfc;
+  padding: 1rem;
+}
+
+.prescription-assistant__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prescription-assistant__eyebrow {
+  margin: 0 0 .2rem;
+  color: #0f766e;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.prescription-assistant__title {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.prescription-assistant__patient {
+  min-width: 220px;
+  border: 1px solid #d7e3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: .65rem .75rem;
+  color: #475569;
+  font-size: .82rem;
+}
+
+.prescription-assistant__patient strong,
+.prescription-assistant__patient span {
+  display: block;
+}
+
+.prescription-assistant__patient strong {
+  color: #111827;
+  font-size: .95rem;
+}
+
+.prescription-assistant__patient-label {
+  color: #64748b;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.prescription-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+.prescription-step {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: .65rem;
+  color: #64748b;
+}
+
+.prescription-step > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: .78rem;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.prescription-step strong,
+.prescription-step small {
+  display: block;
+  white-space: normal;
+}
+
+.prescription-step strong {
+  color: #334155;
+  font-size: .82rem;
+}
+
+.prescription-step small {
+  color: #64748b;
+  font-size: .7rem;
+  line-height: 1.25;
+}
+
+.prescription-step.is-complete {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.prescription-step.is-complete > span {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.prescription-stage__label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .45rem;
+}
+
+.prescription-stage__label > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.prescription-final-preview {
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid #0f766e;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.prescription-final-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+
+.prescription-final-preview__head span {
+  display: block;
+  color: #64748b;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.prescription-final-preview__head strong {
+  display: block;
+  color: #111827;
+  font-size: 1rem;
+}
+
+.prescription-final-preview__status {
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569 !important;
+  padding: .25rem .55rem;
+  white-space: nowrap;
+}
+
+.prescription-final-preview__status.is-ready {
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.prescription-final-preview p {
+  margin: 0;
+  color: #1f2937;
+  font-size: .98rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.prescription-final-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .75rem;
+}
+
+.prescription-final-preview__meta span {
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  padding: .22rem .55rem;
+  font-size: .74rem;
+}
+
+.prescription-add-button {
+  min-height: 42px;
+}
+
+@media (max-width: 767.98px) {
+  .prescription-assistant__header {
+    display: block;
+  }
+
+  .prescription-assistant__patient {
+    margin-top: .75rem;
+    min-width: 0;
+  }
+
+  .prescription-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
 .prescricao-card {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 0.85rem;

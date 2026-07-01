@@ -1647,10 +1647,12 @@ def listar_apresentacoes_medicamento(
     todas_apresentacoes = getattr(medicamento, 'apresentacoes', None) or []
     if nome_comercial_filtro:
         nc_lower = nome_comercial_filtro.strip().lower()
-        todas_apresentacoes = [
+        apresentacoes_filtradas = [
             ap for ap in todas_apresentacoes
             if (getattr(ap, 'nome_comercial', None) or '').strip().lower() == nc_lower
         ]
+        if apresentacoes_filtradas:
+            todas_apresentacoes = apresentacoes_filtradas
     for ap in todas_apresentacoes:
         fabricante = getattr(ap, 'fabricante', None)
         categoria, categoria_label = _forma_categoria_apresentacao_servico(ap.forma, ap.concentracao)
