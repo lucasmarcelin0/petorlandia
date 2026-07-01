@@ -244,6 +244,48 @@ def test_build_clinical_plan_exposes_presentation_options_for_manual_choice(app)
         assert med["calculation"]["apresentacao_opcao_selecionada"] == 0
 
 
+def test_build_clinical_plan_keeps_commercial_variants_with_same_strength(app):
+    with flask_app.app_context():
+        consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=6.0)
+        medicamento = protocolo.medicamentos_sugeridos[0].medicamento
+        db.session.add_all([
+            ApresentacaoMedicamento(
+                id=2,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="75 mg",
+                concentracao_valor=75,
+                concentracao_unidade="mg",
+                nome_variante="Cefaseptin 75 mg",
+                nome_comercial="Cefaseptin",
+                fabricante="Vetoquinol",
+            ),
+            ApresentacaoMedicamento(
+                id=3,
+                medicamento=medicamento,
+                forma="Comprimido sulcado",
+                concentracao="75 mg",
+                concentracao_valor=75,
+                concentracao_unidade="mg",
+                nome_variante="Cefalexina 75 mg",
+                nome_comercial="Cefa-Cure",
+                fabricante="Duprat",
+            ),
+        ])
+        db.session.commit()
+
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+
+        med = plan["medications"][0]
+        labels = [option["option_label"] for option in med["calculation"]["apresentacao_opcoes"]]
+        presentation_ids = {
+            option["presentation"]["id"]
+            for option in med["calculation"]["apresentacao_opcoes"]
+        }
+        assert any("Cefaseptin" in label and "Vetoquinol" in label for label in labels)
+        assert {2, 3}.issubset(presentation_ids)
+
+
 def test_build_clinical_plan_formats_liquid_dose_in_ml(app):
     with flask_app.app_context():
         consulta, protocolo, _vet_user, _vet, _clinic = _seed_calculable_protocol(animal_weight=10.0)

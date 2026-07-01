@@ -246,6 +246,48 @@ def test_sugerir_dose_deduplica_forcas_e_preserva_suspensao():
     assert suspensoes[0]['tipo_origem'] == 'manipulado'
 
 
+def test_listar_apresentacoes_preserva_variantes_comerciais_quando_solicitado():
+    ap_75_a = _apresentacao(
+        'Comprimido',
+        '75 mg',
+        fabricante='Duprat',
+        nome_variante='Cefalexina Duprat 75 mg',
+    )
+    ap_75_a.id = 101
+    ap_75_a.concentracao_valor = 75
+    ap_75_a.concentracao_unidade = 'mg'
+    ap_75_a.nome_comercial = 'Cefalexina Duprat'
+
+    ap_75_b = _apresentacao(
+        'Comprimido',
+        '75 mg',
+        fabricante='Cepav',
+        nome_variante='Cefalexina Cepav 75 mg',
+    )
+    ap_75_b.id = 102
+    ap_75_b.concentracao_valor = 75
+    ap_75_b.concentracao_unidade = 'mg'
+    ap_75_b.nome_comercial = 'Cefalexina Cepav'
+
+    med = SimpleNamespace(
+        id=42,
+        via_administracao='Oral',
+        apresentacoes=[ap_75_a, ap_75_b],
+    )
+
+    deduplicadas = listar_apresentacoes_medicamento(med)
+    preservadas = listar_apresentacoes_medicamento(
+        med,
+        preservar_variantes_comerciais=True,
+    )
+
+    assert len(deduplicadas) == 1
+    assert deduplicadas[0]['source_count'] == 2
+    assert len(preservadas) == 2
+    assert {ap['id'] for ap in preservadas} == {101, 102}
+    assert all(ap['source_count'] == 1 for ap in preservadas)
+
+
 def test_listar_apresentacoes_cefalexina_preserva_concentracao_clinica_e_filtra_embalagem():
     sol_250 = _apresentacao('Solucao oral', '250 mg / 5mL, solucao', fabricante='VetSmart Prescritor')
     sol_250.id = 201

@@ -253,6 +253,7 @@ def _resolve_multiplo_suggestion(
             animal,
             indicacao=indication,
             nome_comercial_filtro=commercial_filter,
+            preservar_variantes_comerciais=True,
         )
         if not suggestion or suggestion.get("multiplo"):
             continue
@@ -622,6 +623,7 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         animal,
         indicacao=(getattr(item, "indicacao", None) or "").strip() or None,
         nome_comercial_filtro=commercial_filter,
+        preservar_variantes_comerciais=True,
     )
     if not suggestion:
         base.update({
