@@ -1,13 +1,13 @@
 """add trigram indexes to speed up medication search
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 472cb32f374e
 Revises: e4f5a6b7c8d9
 Create Date: 2026-07-01
 """
 from alembic import op
 
 
-revision = "a1b2c3d4e5f6"
+revision = "472cb32f374e"
 down_revision = "e4f5a6b7c8d9"
 branch_labels = None
 depends_on = None
