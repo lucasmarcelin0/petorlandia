@@ -16354,6 +16354,7 @@ def list_animals():
 
     context = dict(
         animals=animals,
+        pagination=pagination,
         page=page,
         total_pages=pagination.pages,
         modo=modo,

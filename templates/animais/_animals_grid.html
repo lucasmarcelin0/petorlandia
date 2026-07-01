@@ -193,23 +193,29 @@
   {% endfor %}
 </div>
 
-{% if total_pages > 1 %}
-<nav class="mt-4">
+{% if pagination and pagination.pages > 1 %}
+<nav class="mt-4 pagination-responsive">
   <ul class="pagination justify-content-center">
-    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-      <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=page-1) }}" data-page="{{ page - 1 }}" aria-label="Anterior">
+    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=pagination.prev_num) if pagination.has_prev else '#' }}" data-page="{{ pagination.prev_num if pagination.has_prev else page }}" aria-label="Anterior">
         <span aria-hidden="true">&laquo; Anterior</span>
       </a>
     </li>
 
-    {% for p in range(1, total_pages + 1) %}
-    <li class="page-item {% if p == page %}active{% endif %}">
-      <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=p) }}" data-page="{{ p }}">{{ p }}</a>
-    </li>
+    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+      <li class="page-item {% if p == pagination.page %}active{% endif %}">
+        <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=p) }}" data-page="{{ p }}">{{ p }}</a>
+      </li>
+      {% else %}
+      <li class="page-item disabled">
+        <span class="page-link">...</span>
+      </li>
+      {% endif %}
     {% endfor %}
 
-    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-      <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=page+1) }}" data-page="{{ page + 1 }}" aria-label="Próxima">
+    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=pagination.next_num) if pagination.has_next else '#' }}" data-page="{{ pagination.next_num if pagination.has_next else page }}" aria-label="Próxima">
         <span aria-hidden="true">Próxima &raquo;</span>
       </a>
     </li>

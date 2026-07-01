@@ -591,6 +591,26 @@ body {
   overflow-x: auto;
 }
 
+.pagination-responsive .pagination {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pagination-responsive .page-link {
+  border-radius: 0.375rem;
+}
+
+@media (max-width: 576px) {
+  .pagination-responsive .pagination {
+    justify-content: center;
+  }
+
+  .pagination-responsive .page-link {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.875rem;
+  }
+}
+
 /* Alternância entre calendário e agendamento */
 .calendar-tabs {
   --calendar-tab-border: rgba(148, 163, 184, 0.18);
