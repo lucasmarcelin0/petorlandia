@@ -7,14 +7,8 @@
       <i class="fa-solid fa-paw me-2"></i> Serviços PetOrlândia
     </h1>
     <p class="text-muted mx-auto" style="max-width: 780px;">
-      Escolha a cidade e siga para o fluxo completo de cada serviço.
+      Agende vacinas, consultas, exames e outros cuidados para o seu pet.
     </p>
-
-    <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mt-3">
-      <a href="{{ url_for('loja') }}" class="btn btn-outline-primary btn-lg d-flex align-items-center">
-        <i class="fa-solid fa-shop me-2"></i> Ir para a Loja
-      </a>
-    </div>
   </div>
 </section>
 
@@ -114,7 +108,10 @@
 
 <section class="mt-5 pt-4 border-top">
   <h2 class="h4 fw-bold mb-1">Outros cuidados</h2>
-  <p class="text-muted small mb-3">Estes serviços possuem seleção própria de parceiros e disponibilidade.</p>
+  <p class="text-muted small mb-3">
+    Estes serviços possuem seleção própria de parceiros e disponibilidade.
+    Procurando ração ou produtos? <a href="{{ url_for('loja') }}">Visite a Loja Pet</a>.
+  </p>
 
   <div class="row g-3 g-md-4">
     {% for service in other_services %}
