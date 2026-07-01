@@ -308,74 +308,6 @@ def _set_request_id_header(response):
     return response
 
 
-# TEMP: query profiling for the /consulta/<id> perf investigation. Logs total
-# SQL query count + cumulative DB time per request for that path only, plus
-# the calling app-code line for the dominant repeated query shape.
-# Remove once the bottleneck is confirmed and fixed.
-from sqlalchemy import event as _sa_event
-from sqlalchemy.engine import Engine as _SAEngine
-import time as _time_profiling
-import traceback as _traceback_profiling
-import os as _os_profiling
-
-_APP_DIR_PROFILING = _os_profiling.path.dirname(_os_profiling.path.abspath(__file__))
-
-
-def _app_stack_frame_profiling():
-    for frame in reversed(_traceback_profiling.extract_stack()):
-        if not frame.filename.startswith(_APP_DIR_PROFILING):
-            continue
-        if "site-packages" in frame.filename or "jinja2" in frame.filename:
-            continue
-        if frame.name.startswith("_profile") or frame.name == "_app_stack_frame_profiling":
-            continue
-        return f"{_os_profiling.path.relpath(frame.filename, _APP_DIR_PROFILING)}:{frame.lineno} in {frame.name}"
-    return "?"
-
-
-@_sa_event.listens_for(_SAEngine, "before_cursor_execute")
-def _profile_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    if has_request_context() and request.path.startswith("/consulta/"):
-        conn.info.setdefault("query_start_time", []).append(_time_profiling.perf_counter())
-
-
-@_sa_event.listens_for(_SAEngine, "after_cursor_execute")
-def _profile_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    if has_request_context() and request.path.startswith("/consulta/"):
-        start_times = conn.info.get("query_start_time")
-        if start_times:
-            elapsed = _time_profiling.perf_counter() - start_times.pop()
-            shape = statement.split(" FROM ")[-1][:60] if " FROM " in statement else statement.strip()[:60]
-            # Group by (query shape, calling location) -- NOT just query shape,
-            # since different call sites can produce identical parameterized
-            # SQL text (e.g. two different `Model.query.get(id)` calls), which
-            # would otherwise get merged under whichever call happened first.
-            where = _app_stack_frame_profiling()
-            key = (shape, where)
-            bucket = g.setdefault("_profile_by_shape", {})
-            entry = bucket.setdefault(key, [0, 0.0])
-            entry[0] += 1
-            entry[1] += elapsed
-
-
-@app.after_request
-def _log_consulta_query_profile(response):
-    if request.path.startswith("/consulta/"):
-        bucket = g.get("_profile_by_shape", {})
-        if bucket:
-            total_count = sum(e[0] for e in bucket.values())
-            total_ms = sum(e[1] for e in bucket.values()) * 1000
-            top = sorted(bucket.items(), key=lambda kv: kv[1][0], reverse=True)[:12]
-            current_app.logger.warning(
-                "PERF_PROFILE path=%s count=%d total_ms=%.1f top=%s",
-                request.path,
-                total_count,
-                total_ms,
-                [(cnt, round(ms * 1000, 1), where, shape) for (shape, where), (cnt, ms) in top],
-            )
-    return response
-
-
 @app.errorhandler(HTTPException)
 def handle_http_exception(err):
     current_app.logger.warning(
@@ -3904,22 +3836,6 @@ from models import User   # noqa: E402  (import depois de alias)
 
 @login.user_loader
 def load_user(user_id):
-    # TEMP: instrumentation for the /consulta/<id> perf investigation.
-    if has_request_context() and request.path.startswith("/consulta/"):
-        calls = g.setdefault("_load_user_calls", [])
-        calls.append(user_id)
-        if len(calls) in (1, 2, 5, 578):
-            current_app.logger.warning(
-                "PERF_LOAD_USER path=%s call_number=%d user_id=%s distinct_so_far=%s stack=%s",
-                request.path,
-                len(calls),
-                user_id,
-                len(set(calls)),
-                " <- ".join(
-                    f"{f.filename.split(chr(92))[-1].split('/')[-1]}:{f.lineno}:{f.name}"
-                    for f in _traceback_profiling.extract_stack()[-8:-1]
-                ),
-            )
     return User.query.get(int(user_id))
 
 login.login_view = "login_view"
