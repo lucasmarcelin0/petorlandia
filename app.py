@@ -309,11 +309,28 @@ def _set_request_id_header(response):
 
 
 # TEMP: query profiling for the /consulta/<id> perf investigation. Logs total
-# SQL query count + cumulative DB time per request for that path only.
+# SQL query count + cumulative DB time per request for that path only, plus
+# the calling app-code line for the dominant repeated query shape.
 # Remove once the bottleneck is confirmed and fixed.
 from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _SAEngine
 import time as _time_profiling
+import traceback as _traceback_profiling
+import os as _os_profiling
+
+_APP_DIR_PROFILING = _os_profiling.path.dirname(_os_profiling.path.abspath(__file__))
+
+
+def _app_stack_frame_profiling():
+    for frame in reversed(_traceback_profiling.extract_stack()):
+        if not frame.filename.startswith(_APP_DIR_PROFILING):
+            continue
+        if "site-packages" in frame.filename or "jinja2" in frame.filename:
+            continue
+        if frame.name.startswith("_profile") or frame.name == "_app_stack_frame_profiling":
+            continue
+        return f"{_os_profiling.path.relpath(frame.filename, _APP_DIR_PROFILING)}:{frame.lineno} in {frame.name}"
+    return "?"
 
 
 @_sa_event.listens_for(_SAEngine, "before_cursor_execute")
@@ -328,28 +345,29 @@ def _profile_after_cursor_execute(conn, cursor, statement, parameters, context, 
         start_times = conn.info.get("query_start_time")
         if start_times:
             elapsed = _time_profiling.perf_counter() - start_times.pop()
-            g.setdefault("_profile_queries", []).append((elapsed, statement.strip().split("\n")[0][:160]))
+            key = statement.split(" FROM ")[-1][:60] if " FROM " in statement else statement.strip()[:60]
+            bucket = g.setdefault("_profile_by_shape", {})
+            entry = bucket.setdefault(key, [0, 0.0, None])
+            entry[0] += 1
+            entry[1] += elapsed
+            if entry[2] is None:
+                entry[2] = _app_stack_frame_profiling()
 
 
 @app.after_request
 def _log_consulta_query_profile(response):
     if request.path.startswith("/consulta/"):
-        queries = g.get("_profile_queries", [])
-        if queries:
-            total = sum(e for e, _ in queries)
-            grouped = {}
-            for elapsed, stmt in queries:
-                key = stmt.split(" FROM ")[-1][:60] if " FROM " in stmt else stmt[:60]
-                bucket = grouped.setdefault(key, [0, 0.0])
-                bucket[0] += 1
-                bucket[1] += elapsed
-            top_grouped = sorted(grouped.items(), key=lambda kv: kv[1][0], reverse=True)[:12]
+        bucket = g.get("_profile_by_shape", {})
+        if bucket:
+            total_count = sum(e[0] for e in bucket.values())
+            total_ms = sum(e[1] for e in bucket.values()) * 1000
+            top = sorted(bucket.items(), key=lambda kv: kv[1][0], reverse=True)[:12]
             current_app.logger.warning(
-                "PERF_PROFILE path=%s count=%d total_ms=%.1f grouped_by_count=%s",
+                "PERF_PROFILE path=%s count=%d total_ms=%.1f top=%s",
                 request.path,
-                len(queries),
-                total * 1000,
-                [(cnt, round(ms * 1000, 1), key) for key, (cnt, ms) in top_grouped],
+                total_count,
+                total_ms,
+                [(cnt, round(ms * 1000, 1), where, key) for key, (cnt, ms, where) in top],
             )
     return response
 
