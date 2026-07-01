@@ -37,31 +37,33 @@
           <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</span>
 
           {% if product.clinica %}
-          <div class="mb-1">
+          <div class="product-seller-row mb-1">
             <a href="{{ url_for('loja', vendedor='c_' ~ product.clinica.id) }}"
-               class="badge rounded-pill text-decoration-none"
+               class="badge rounded-pill text-decoration-none product-seller-badge product-seller-badge--clinic"
+               title="{{ product.clinica.nome }}"
                style="background:#e8f0fe;color:#3d5bd6;font-weight:600;font-size:.78rem;">
               {% if product.clinica.logo_url %}
               <img src="{{ product.clinica.logo_url }}" alt=""
-                   class="rounded-circle me-1" style="width:14px;height:14px;object-fit:cover;">
+                   class="rounded-circle product-seller-icon" style="width:14px;height:14px;object-fit:cover;">
               {% else %}
-              <i class="fa-solid fa-clinic-medical me-1"></i>
+              <i class="fa-solid fa-clinic-medical product-seller-icon"></i>
               {% endif %}
-              {{ product.clinica.nome }}
+              <span class="product-seller-name">{{ product.clinica.nome }}</span>
             </a>
           </div>
           {% elif product.casa_de_racao %}
-          <div class="mb-1">
+          <div class="product-seller-row mb-1">
             <a href="{{ url_for('loja', vendedor='r_' ~ product.casa_de_racao.id) }}"
-               class="badge rounded-pill text-decoration-none"
+               class="badge rounded-pill text-decoration-none product-seller-badge product-seller-badge--store"
+               title="{{ product.casa_de_racao.nome }}"
                style="background:#e8f5e9;color:#2e7d32;font-weight:600;font-size:.78rem;">
               {% if product.casa_de_racao.logo_url %}
               <img src="{{ product.casa_de_racao.logo_url }}" alt=""
-                   class="rounded-circle me-1" style="width:14px;height:14px;object-fit:cover;">
+                   class="rounded-circle product-seller-icon" style="width:14px;height:14px;object-fit:cover;">
               {% else %}
-              <i class="fa-solid fa-seedling me-1"></i>
+              <i class="fa-solid fa-seedling product-seller-icon"></i>
               {% endif %}
-              {{ product.casa_de_racao.nome }}
+              <span class="product-seller-name">{{ product.casa_de_racao.nome }}</span>
             </a>
           </div>
           {% endif %}

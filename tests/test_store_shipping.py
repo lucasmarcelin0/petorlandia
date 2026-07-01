@@ -80,3 +80,47 @@ def test_checkout_adds_one_shipping_item_per_feed_store(app, client, monkeypatch
         titles = [item["title"] for item in captured["payload"]["items"]]
         assert "Frete - Racoes A" in titles
         assert "Frete - Racoes B" in titles
+
+
+def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
+    with app.app_context():
+        buyer = User(name="Comprador Loja", email="buyer-store-card@example.com")
+        buyer.set_password("x")
+        owner = User(name="Dono Loja", email="owner-store-card@example.com")
+        owner.set_password("x")
+        db.session.add_all([buyer, owner])
+        db.session.flush()
+
+        casa = CasaDeRacao(
+            nome="Casa de Racao Teste PetOrlandia",
+            owner_id=owner.id,
+            status="ativa",
+        )
+        db.session.add(casa)
+        db.session.flush()
+
+        product = Product(
+            name="Teste - Areia Higienica Granulada 4kg",
+            description="Areia sanitaria para gatos com controle de odores.",
+            price=29.9,
+            stock=10,
+            status="active",
+            casa_de_racao_id=casa.id,
+        )
+        db.session.add(product)
+        db.session.commit()
+        buyer_id = buyer.id
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(buyer_id)
+            sess["_fresh"] = True
+        monkeypatch.setattr(login_utils, "_get_user", lambda: User.query.get(buyer_id))
+
+    resp = client.get("/loja")
+    html = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert "Casa de Racao Teste PetOrlandia" in html
+    assert "product-seller-badge product-seller-badge--store" in html
+    assert "product-seller-name" in html
+    assert "text-overflow:ellipsis" in html

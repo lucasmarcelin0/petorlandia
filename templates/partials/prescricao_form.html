@@ -596,6 +596,13 @@
     let medicamentoSelecionado = null;
     let prescricoes = [];
     let prescricaoArrastando = null;
+    const _MEDICATION_CACHE_TTL_MS = 5 * 60 * 1000;
+    const _medicationSearchCache = new Map();
+    const _medicationDetailCache = new Map();
+    let _medicationSearchController = null;
+    let _medicationNovaSearchController = null;
+    let _medicationSearchSeq = 0;
+    let _medicationNovaSearchSeq = 0;
 
   // === MEDICAMENTOS FREQUENTES + FAVORITOS ===
   // Estado do painel: 0=fechado, 1=mais usados, 2=favoritos
@@ -745,14 +752,22 @@
     });
   }
 
-  function selecionarMedicamentoFrequente(med) {
+  async function selecionarMedicamentoFrequente(med) {
     const inputNome = document.getElementById('nome-medicamento');
     if (!inputNome) return;
-    inputNome.value = med.nome;
+    inputNome.value = _nomeVisivelMedicamento(med) || med.nome;
     if (med.id) {
       medicamentoSelecionado = med;
-      preencherCardMedicamento(med);
-      _atualizarIconeFavorito(med.id);
+      try {
+        const detalhado = await _carregarDetalhesMedicamento(med);
+        medicamentoSelecionado = detalhado;
+        inputNome.value = _nomeVisivelMedicamento(detalhado) || med.nome;
+        preencherCardMedicamento(detalhado);
+        _atualizarIconeFavorito(detalhado.id);
+      } catch (err) {
+        console.error('Erro ao carregar medicamento frequente:', err);
+        mostrarFeedback('Nao foi possivel carregar os detalhes do medicamento.', 'danger');
+      }
     } else {
       medicamentoSelecionado = null;
       inputNome.dispatchEvent(new Event('input'));
@@ -1164,6 +1179,104 @@
     return `<div class="fw-semibold">${nomeVisivel}</div>${principio}`;
   }
 
+  function _cacheGet(map, key) {
+    const entry = map.get(key);
+    if (!entry) return null;
+    if ((Date.now() - entry.ts) > _MEDICATION_CACHE_TTL_MS) {
+      map.delete(key);
+      return null;
+    }
+    return entry.value;
+  }
+
+  function _cacheSet(map, key, value) {
+    if (map.size > 80) {
+      const firstKey = map.keys().next().value;
+      if (firstKey) map.delete(firstKey);
+    }
+    map.set(key, { value, ts: Date.now() });
+    return value;
+  }
+
+  function _medicationSearchCacheKey(q) {
+    const animalId = (typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA)
+      ? String(ANIMAL_ID_CONSULTA)
+      : '';
+    return `${q.trim().toLocaleLowerCase('pt-BR')}|${animalId}`;
+  }
+
+  async function _buscarMedicamentosAutocomplete(q, options = {}) {
+    const key = _medicationSearchCacheKey(q);
+    const cached = _cacheGet(_medicationSearchCache, key);
+    if (cached) return cached;
+
+    const params = new URLSearchParams({ q });
+    if (typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) {
+      params.set('animal_id', String(ANIMAL_ID_CONSULTA));
+    }
+    const resp = await fetch(`/buscar_medicamentos?${params.toString()}`, {
+      headers: { 'Accept': 'application/json' },
+      signal: options.signal,
+    });
+    if (!resp.ok) throw new Error('Erro na busca');
+    const data = await resp.json();
+    return _cacheSet(_medicationSearchCache, key, Array.isArray(data) ? data : []);
+  }
+
+  async function _carregarDetalhesMedicamento(item) {
+    if (!item?.id) return item;
+    if (item.monografia_estruturada || Array.isArray(item.apresentacoes)) return item;
+
+    const nomeExibicao = _nomeVisivelMedicamento(item);
+    const detailKey = [
+      item.id,
+      item.nome_comercial_filtro || '',
+      nomeExibicao || '',
+      item.produto_match_vetsmart_id || '',
+    ].join('|');
+    const cached = _cacheGet(_medicationDetailCache, detailKey);
+    if (cached) return cached;
+
+    const params = new URLSearchParams();
+    if (nomeExibicao) params.set('nome_exibicao', nomeExibicao);
+    if (item.nome_comercial_filtro) params.set('nome_comercial_filtro', item.nome_comercial_filtro);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const resp = await fetch(`/medicamento/${encodeURIComponent(item.id)}/detalhe${suffix}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!resp.ok) throw new Error('Erro ao carregar medicamento');
+    const data = await resp.json();
+    const merged = {
+      ...data,
+      produto_match_nome: item.produto_match_nome || data.produto_match_nome,
+      produto_match_fabricante: item.produto_match_fabricante || data.produto_match_fabricante,
+      produto_match_vetsmart_id: item.produto_match_vetsmart_id || data.produto_match_vetsmart_id,
+      nome_exibicao_busca: item.nome_exibicao_busca || data.nome_exibicao_busca,
+      nome_comercial_filtro: item.nome_comercial_filtro || data.nome_comercial_filtro,
+    };
+    return _cacheSet(_medicationDetailCache, detailKey, merged);
+  }
+
+  async function _selecionarMedicamentoComDetalhes(item, inputEl, sugestoesEl) {
+    medicamentoSelecionado = item;
+    if (inputEl) inputEl.value = _nomeVisivelMedicamento(item);
+    if (sugestoesEl) {
+      sugestoesEl.innerHTML = '';
+      sugestoesEl.style.display = 'none';
+      sugestoesEl.classList.remove('is-short');
+    }
+
+    try {
+      const detalhado = await _carregarDetalhesMedicamento(item);
+      medicamentoSelecionado = detalhado;
+      if (inputEl) inputEl.value = _nomeVisivelMedicamento(detalhado);
+      preencherCardMedicamento(detalhado);
+    } catch (err) {
+      console.error('Erro ao carregar medicamento:', err);
+      mostrarFeedback('Nao foi possivel carregar os detalhes do medicamento.', 'danger');
+    }
+  }
+
   async function _resolverMedicamentoParaSugestao(draft) {
     if (draft?.medicamento_id) {
       return {
@@ -1176,13 +1289,8 @@
     if (nome.length < 2) return null;
 
     try {
-      const _params = new URLSearchParams({ q: nome });
-      if (typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) {
-        _params.set('animal_id', String(ANIMAL_ID_CONSULTA));
-      }
-      const resp = await fetch(`/buscar_medicamentos?${_params.toString()}`);
-      const data = await resp.json().catch(() => []);
-      if (!resp.ok || !Array.isArray(data)) return null;
+      const data = await _buscarMedicamentosAutocomplete(nome);
+      if (!Array.isArray(data)) return null;
 
       const alvo = _normalizarTextoSugestaoClinica(nome);
       const exato = data.find(item => _normalizarTextoSugestaoClinica(item?.nome) === alvo);
@@ -3688,6 +3796,8 @@
         fecharSugestaoDose();
       }
       if (q.length < 2) {
+        if (_medicationSearchController) _medicationSearchController.abort();
+        _medicationSearchSeq += 1;
         sugestoes.innerHTML = '';
         sugestoes.style.display = 'none';
         sugestoes.classList.remove('is-short');
@@ -3698,12 +3808,13 @@
       sugestoes.style.display = 'block';
       sugestoes.classList.remove('is-short');
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
-        .then(res => {
-          if (!res.ok) throw new Error('Erro na busca');
-          return res.json();
-        })
+      if (_medicationSearchController) _medicationSearchController.abort();
+      _medicationSearchController = new AbortController();
+      const seq = ++_medicationSearchSeq;
+
+      _buscarMedicamentosAutocomplete(q, { signal: _medicationSearchController.signal })
         .then(data => {
+          if (seq !== _medicationSearchSeq || input.value.trim() !== q) return;
           sugestoes.innerHTML = '';
 
           if (data.length === 0) {
@@ -3719,9 +3830,7 @@
               li.className = 'list-group-item list-group-item-action';
               li.innerHTML = _renderOpcaoMedicamentoBusca(item);
               li.onclick = () => {
-                medicamentoSelecionado = item;
-                preencherCardMedicamento(item);
-                input.value = _nomeVisivelMedicamento(item);
+                _selecionarMedicamentoComDetalhes(item, input, sugestoes);
                 // NÃO copia dosagem/frequência/duração da monografia para os
                 // campos da prescrição — esses textos são a referência genérica
                 // da bula ("0,5-1 mg/kg", "Alergia: 12h / Uso prolongado: 48h")
@@ -3733,9 +3842,6 @@
                 document.getElementById('frequencia').value = '';
                 document.getElementById('duracao').value = '';
                 atualizarPreviewPrescricao();
-                sugestoes.innerHTML = '';
-                sugestoes.style.display = 'none';
-                sugestoes.classList.remove('is-short');
               };
               sugestoes.appendChild(li);
             });
@@ -3752,6 +3858,8 @@
             sugestoes.appendChild(addLi);
         })
         .catch(err => {
+          if (err?.name === 'AbortError') return;
+          if (seq !== _medicationSearchSeq) return;
           sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
           sugestoes.classList.remove('is-short');
           console.error("Erro ao buscar medicamentos:", err);
@@ -3762,6 +3870,8 @@
     buscarNova.addEventListener('input', debounce(function() {
       const q = this.value.trim();
       if (q.length < 2) {
+        if (_medicationNovaSearchController) _medicationNovaSearchController.abort();
+        _medicationNovaSearchSeq += 1;
         sugestoesNova.innerHTML = '';
         sugestoesNova.style.display = 'none';
         return;
@@ -3770,12 +3880,13 @@
       sugestoesNova.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoesNova.style.display = 'block';
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}${(typeof ANIMAL_ID_CONSULTA !== 'undefined' && ANIMAL_ID_CONSULTA) ? `&animal_id=${encodeURIComponent(ANIMAL_ID_CONSULTA)}` : ''}`)
-        .then(res => {
-          if (!res.ok) throw new Error('Erro na busca');
-          return res.json();
-        })
+      if (_medicationNovaSearchController) _medicationNovaSearchController.abort();
+      _medicationNovaSearchController = new AbortController();
+      const seq = ++_medicationNovaSearchSeq;
+
+      _buscarMedicamentosAutocomplete(q, { signal: _medicationNovaSearchController.signal })
         .then(data => {
+          if (seq !== _medicationNovaSearchSeq || buscarNova.value.trim() !== q) return;
           sugestoesNova.innerHTML = '';
           if (data.length === 0) {
             const none = document.createElement('li');
@@ -3787,8 +3898,13 @@
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
               li.innerHTML = _renderOpcaoMedicamentoBusca(item);
-              li.onclick = () => {
-                openMedicacaoCard(item);
+              li.onclick = async () => {
+                try {
+                  openMedicacaoCard(await _carregarDetalhesMedicamento(item));
+                } catch (err) {
+                  console.error('Erro ao carregar medicamento:', err);
+                  mostrarFeedback('Nao foi possivel carregar os detalhes do medicamento.', 'danger');
+                }
                 sugestoesNova.innerHTML = '';
                 sugestoesNova.style.display = 'none';
               };
@@ -3797,6 +3913,8 @@
           }
         })
         .catch(err => {
+          if (err?.name === 'AbortError') return;
+          if (seq !== _medicationNovaSearchSeq) return;
           sugestoesNova.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
           console.error('Erro ao buscar medicamentos:', err);
         });

@@ -1,5 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
+import time as _stdlib_time
 import subprocess
 import requests
 from collections import defaultdict, Counter
@@ -62,7 +63,7 @@ except ImportError:
     from .document_utils import format_cnpj as format_cnpj_value, only_digits
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text, cast, Text
 from sqlalchemy.exc import IntegrityError, NoSuchTableError, OperationalError, ProgrammingError
-from sqlalchemy.orm import joinedload, selectinload, aliased, defer
+from sqlalchemy.orm import joinedload, selectinload, aliased, defer, load_only
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -305,6 +306,13 @@ def _attach_request_id():
 @app.after_request
 def _set_request_id_header(response):
     response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+    if request.endpoint == "static":
+        if request.args.get("v"):
+            max_age = int(current_app.config.get("SEND_FILE_VERSIONED_MAX_AGE", 31536000))
+            response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"
+        else:
+            max_age = int(current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 3600))
+            response.headers["Cache-Control"] = f"public, max-age={max_age}"
     return response
 
 
@@ -4205,6 +4213,10 @@ def inject_has_clinic_access():
     if not current_user.is_authenticated:
         return dict(has_clinic_access=False)
 
+    cached = _get_cached_context(current_user.id, 'has_clinic_access')
+    if cached is not None:
+        return dict(has_clinic_access=bool(cached))
+
     from models import Clinica
 
     has_clinic_access = (
@@ -4214,6 +4226,7 @@ def inject_has_clinic_access():
         .first()
         is not None
     )
+    _set_cached_context(current_user.id, 'has_clinic_access', has_clinic_access)
     return dict(has_clinic_access=has_clinic_access)
 
 
@@ -4222,8 +4235,22 @@ def inject_minha_casa_de_racao():
     """Expõe a casa de ração do usuário logado para os templates."""
     if not current_user.is_authenticated:
         return dict(minha_casa_de_racao=None)
+    cached = _get_cached_context(current_user.id, 'minha_casa_de_racao')
+    if cached is not None:
+        return dict(
+            minha_casa_de_racao=(
+                SimpleNamespace(**cached)
+                if cached
+                else None
+            )
+        )
     casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
-    return dict(minha_casa_de_racao=casa)
+    if casa:
+        cached_casa = {'id': casa.id, 'nome': casa.nome}
+        _set_cached_context(current_user.id, 'minha_casa_de_racao', cached_casa)
+        return dict(minha_casa_de_racao=SimpleNamespace(**cached_casa))
+    _set_cached_context(current_user.id, 'minha_casa_de_racao', False)
+    return dict(minha_casa_de_racao=None)
 
 
 @app.context_processor
@@ -18454,6 +18481,10 @@ def delete_document(animal_id, doc_id):
 def editar_ficha_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
+    if getattr(current_user, 'worker', None) != 'veterinario' and current_user.role != 'admin':
+        flash("Acesso restrito a veterinarios.", "danger")
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
     # Dados fictícios para fins de edição simples (substituir por formulário real depois)
     if request.method == 'POST':
         nova_vacina = request.form.get("vacina")
@@ -18464,7 +18495,7 @@ def editar_ficha_animal(animal_id):
         print(f"Consulta adicionada: {nova_consulta}")
         print(f"Medicação adicionada: {novo_medicamento}")
 
-        flash("Informacões adicionadas com sucesso (simulação).", "success")
+        flash("Informacoes adicionadas com sucesso.", "success")
         return redirect(url_for('ficha_animal', animal_id=animal.id))
 
     return render_template("editar_ficha.html", animal=animal)
@@ -27526,6 +27557,7 @@ def criar_medicamento():
         )
         db.session.add(novo)
         db.session.commit()
+        _clear_medication_search_cache()
         return jsonify({
             "success": True,
             "id": novo.id,
@@ -27554,6 +27586,7 @@ def alterar_medicamento(med_id):
     if request.method == "DELETE":
         db.session.delete(medicamento)
         db.session.commit()
+        _clear_medication_search_cache()
         return jsonify({"success": True})
 
     data = request.get_json(silent=True) or {}
@@ -27574,6 +27607,7 @@ def alterar_medicamento(med_id):
             setattr(medicamento, attr, val or None)
 
     db.session.commit()
+    _clear_medication_search_cache()
     return jsonify({"success": True})
 
 
@@ -27595,15 +27629,73 @@ def criar_apresentacao_medicamento():
         )
         db.session.add(apresentacao)
         db.session.commit()
+        _clear_medication_search_cache()
         return jsonify({"success": True, "id": apresentacao.id})
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+_MEDICATION_SEARCH_CACHE = {}
+_MEDICATION_SEARCH_CACHE_TTL = 180
+_MEDICATION_SEARCH_CACHE_MAX = 256
+
+
+def _clear_medication_search_cache():
+    _MEDICATION_SEARCH_CACHE.clear()
+
+
+def _get_medication_search_cache(cache_key):
+    entry = _MEDICATION_SEARCH_CACHE.get(cache_key)
+    if not entry:
+        return None
+    payload, ts = entry
+    if _stdlib_time.monotonic() - ts > _MEDICATION_SEARCH_CACHE_TTL:
+        _MEDICATION_SEARCH_CACHE.pop(cache_key, None)
+        return None
+    return payload
+
+
+def _set_medication_search_cache(cache_key, payload):
+    if len(_MEDICATION_SEARCH_CACHE) >= _MEDICATION_SEARCH_CACHE_MAX:
+        oldest_key = min(
+            _MEDICATION_SEARCH_CACHE,
+            key=lambda key: _MEDICATION_SEARCH_CACHE[key][1],
+        )
+        _MEDICATION_SEARCH_CACHE.pop(oldest_key, None)
+    _MEDICATION_SEARCH_CACHE[cache_key] = (payload, _stdlib_time.monotonic())
+    return payload
+
+
+@app.route("/medicamento/<int:med_id>/detalhe")
+def detalhe_medicamento_busca(med_id):
+    med = (
+        Medicamento.query
+        .options(
+            selectinload(Medicamento.doses),
+            selectinload(Medicamento.apresentacoes),
+        )
+        .get_or_404(med_id)
+    )
+    nome_exibicao = (request.args.get("nome_exibicao") or "").strip() or None
+    nome_comercial_filtro = (request.args.get("nome_comercial_filtro") or "").strip() or None
+
+    from services.bulario import serializar_medicamento_busca
+
+    return jsonify(
+        serializar_medicamento_busca(
+            med,
+            nome_exibicao=nome_exibicao,
+            nome_comercial_filtro=nome_comercial_filtro,
+        )
+    )
+
+
 @app.route("/buscar_medicamentos")
 def buscar_medicamentos():
     q = (request.args.get("q") or "").strip()
+    limit = request.args.get("limit", 15, type=int) or 15
+    limit = min(max(limit, 1), 20)
 
     if len(q) < 2:
         return jsonify([])
@@ -27625,6 +27717,16 @@ def buscar_medicamentos():
         if token not in {"com", "para", "por", "uso", "mg", "ml"}
     ]
 
+    from services.species_ranking import (
+        resolver_species_scope_do_animal,
+        ordenar_por_species_scope,
+    )
+    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+    cache_key = (q_norm, tuple(tokens_busca), scope_alvo or "", limit)
+    cached = _get_medication_search_cache(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
     # Busca ampla por nome OU princípio ativo — pool maior para poder re-ranquear
     like = f"%{q}%"
     filtros_busca = [
@@ -27643,11 +27745,26 @@ def buscar_medicamentos():
     resultados = (
         Medicamento.query
         .options(
-            # .doses is read for every row below (orphan filtering + scoring)
-            # and .apresentacoes is read for every serialized result further
-            # down -- eager-load both in batch instead of one query per row.
-            selectinload(Medicamento.doses),
-            selectinload(Medicamento.apresentacoes),
+            load_only(
+                Medicamento.id,
+                Medicamento.nome,
+                Medicamento.principio_ativo,
+                Medicamento.classificacao,
+                Medicamento.via_administracao,
+                Medicamento.dosagem_recomendada,
+                Medicamento.frequencia,
+                Medicamento.duracao_tratamento,
+                Medicamento.conteudo_estruturado,
+                Medicamento.species_scope,
+            ),
+            selectinload(Medicamento.doses).load_only(
+                DoseMedicamento.id,
+                DoseMedicamento.medicamento_id,
+            ),
+            selectinload(Medicamento.apresentacoes).load_only(
+                ApresentacaoMedicamento.id,
+                ApresentacaoMedicamento.medicamento_id,
+            ),
         )
         .filter(or_(*filtros_busca))
         .order_by(Medicamento.nome)
@@ -27724,20 +27841,14 @@ def buscar_medicamentos():
     filtrados.sort(key=_score, reverse=True)
 
     # Re-ranqueamento opcional pela espécie do animal sob consulta. Não filtra
-    # nada — apenas eleva itens compatíveis. Sem animal_id, comportamento idêntico
-    # ao histórico (compatibilidade total com chamadas pré-existentes).
-    from services.species_ranking import (
-        resolver_species_scope_do_animal,
-        ordenar_por_species_scope,
-    )
-    scope_alvo = resolver_species_scope_do_animal(request.args.get('animal_id'))
+    # nada — apenas eleva itens compatíveis.
     if scope_alvo:
         filtrados = ordenar_por_species_scope(filtrados, scope_alvo)
 
-    from services.bulario import serializar_medicamento_busca
+    from services.bulario import serializar_medicamento_autocomplete
     saida = []
-    for med in filtrados[:15]:
-        item = serializar_medicamento_busca(med)
+    for med in filtrados[:limit]:
+        item = serializar_medicamento_autocomplete(med)
         produto_match = _produto_vetsmart_match_info(med)
         if produto_match:
             item["produto_match_nome"] = produto_match.get("nome")
@@ -27745,7 +27856,7 @@ def buscar_medicamentos():
             item["produto_match_vetsmart_id"] = produto_match.get("vetsmart_produto_id")
             item["nome_exibicao_busca"] = produto_match.get("nome") or item.get("nome")
         saida.append(item)
-    return jsonify(saida)
+    return jsonify(_set_medication_search_cache(cache_key, saida))
 
 
 
@@ -27792,12 +27903,33 @@ def listar_medicamentos_favoritos():
         .order_by(MedicamentoFavorito.criado_em.desc())
         .all()
     )
-    from services.bulario import serializar_medicamento_busca
+    med_ids = [f.medicamento_id for f in favs]
+    meds = {}
+    if med_ids:
+        meds = {
+            med.id: med
+            for med in (
+                Medicamento.query
+                .options(
+                    selectinload(Medicamento.doses).load_only(
+                        DoseMedicamento.id,
+                        DoseMedicamento.medicamento_id,
+                    ),
+                    selectinload(Medicamento.apresentacoes).load_only(
+                        ApresentacaoMedicamento.id,
+                        ApresentacaoMedicamento.medicamento_id,
+                    ),
+                )
+                .filter(Medicamento.id.in_(med_ids))
+                .all()
+            )
+        }
+    from services.bulario import serializar_medicamento_autocomplete
     resultado = []
     for f in favs:
-        med = Medicamento.query.get(f.medicamento_id)
+        med = meds.get(f.medicamento_id)
         if med:
-            entry = serializar_medicamento_busca(med)
+            entry = serializar_medicamento_autocomplete(med)
             entry["favorito"] = True
             resultado.append(entry)
     return jsonify(resultado)
@@ -27841,7 +27973,7 @@ def medicamentos_frequentes():
     try:
         from sqlalchemy import text as sql_text
         from services.prescricao_alias import resolver_e_persistir
-        from services.bulario import serializar_medicamento_busca
+        from services.bulario import serializar_medicamento_autocomplete
 
         rows = db.session.execute(sql_text("""
             SELECT p.medicamento, COUNT(*) AS total
@@ -27868,9 +28000,22 @@ def medicamentos_frequentes():
                 if med_id in ids_incluidos:
                     nomes_vistos.add(nome_key)
                     continue
-                med = Medicamento.query.get(med_id)
+                med = (
+                    Medicamento.query
+                    .options(
+                        selectinload(Medicamento.doses).load_only(
+                            DoseMedicamento.id,
+                            DoseMedicamento.medicamento_id,
+                        ),
+                        selectinload(Medicamento.apresentacoes).load_only(
+                            ApresentacaoMedicamento.id,
+                            ApresentacaoMedicamento.medicamento_id,
+                        ),
+                    )
+                    .get(med_id)
+                )
                 if med:
-                    entry = serializar_medicamento_busca(med)
+                    entry = serializar_medicamento_autocomplete(med)
                     entry["total_prescricoes"] = total
                     entry["nome_prescrito_original"] = nome_prescrito
                     saida.append(entry)

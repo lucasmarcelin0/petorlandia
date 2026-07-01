@@ -1,24 +1,65 @@
-@app.route('/animal/<int:animal_id>/editar_ficha', methods=['GET', 'POST'])
-@login_required
-def editar_ficha_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+{% extends "layout.html" %}
 
-    # Apenas veterinários podem acessar
-    if current_user.role != 'veterinario':
-        flash("Acesso restrito a veterinários.", "danger")
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Editar ficha de {{ animal.name }}</h1>
+      <p class="text-muted mb-0">Registre uma atualizacao rapida no historico clinico.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('ficha_animal', animal_id=animal.id) }}">
+      <i class="fa-solid fa-arrow-left me-1"></i>Voltar
+    </a>
+  </div>
 
-    # Dados fictícios para fins de edição simples (substituir por formulário real depois)
-    if request.method == 'POST':
-        nova_vacina = request.form.get("vacina")
-        nova_consulta = request.form.get("consulta")
-        novo_medicamento = request.form.get("medicamento")
+  <form method="post" action="{{ url_for('editar_ficha_animal', animal_id=animal.id) }}" class="card shadow-sm border-0">
+    <div class="card-body">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        print(f"Vacina adicionada: {nova_vacina}")
-        print(f"Consulta adicionada: {nova_consulta}")
-        print(f"Medicação adicionada: {novo_medicamento}")
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-semibold" for="vacina">Vacina</label>
+          <input
+            class="form-control"
+            id="vacina"
+            name="vacina"
+            type="text"
+            placeholder="Ex.: V10, antirrabica"
+          >
+        </div>
 
-        flash("Informacões adicionadas com sucesso (simulação).", "success")
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-semibold" for="consulta">Consulta</label>
+          <input
+            class="form-control"
+            id="consulta"
+            name="consulta"
+            type="text"
+            placeholder="Ex.: retorno dermatologico"
+          >
+        </div>
 
-    return render_template("editar_ficha.html", animal=animal)
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-semibold" for="medicamento">Medicamento</label>
+          <input
+            class="form-control"
+            id="medicamento"
+            name="medicamento"
+            type="text"
+            placeholder="Ex.: dipirona"
+          >
+        </div>
+      </div>
+    </div>
+
+    <div class="card-footer bg-white border-0 d-flex justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('ficha_animal', animal_id=animal.id) }}">
+        Cancelar
+      </a>
+      <button class="btn btn-primary" type="submit">
+        <i class="fa-solid fa-check me-1"></i>Salvar
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

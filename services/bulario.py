@@ -1160,6 +1160,35 @@ def serializar_medicamento_busca(
     }
 
 
+def serializar_medicamento_autocomplete(
+    medicamento,
+    nome_exibicao: Optional[str] = None,
+    nome_comercial_filtro: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Payload pequeno para autocomplete.
+
+    A monografia e as apresentacoes completas ficam para o endpoint de detalhe,
+    chamado somente depois que o veterinario escolhe um item.
+    """
+    doses = getattr(medicamento, "doses", None) or []
+    apresentacoes = getattr(medicamento, "apresentacoes", None) or []
+    return {
+        "id": medicamento.id,
+        "nome": medicamento.nome,
+        "nome_exibicao_busca": nome_exibicao or medicamento.nome,
+        "nome_comercial_filtro": nome_comercial_filtro,
+        "classificacao": getattr(medicamento, "classificacao", None),
+        "principio_ativo": getattr(medicamento, "principio_ativo", None),
+        "via_administracao": getattr(medicamento, "via_administracao", None),
+        "dosagem_recomendada": getattr(medicamento, "dosagem_recomendada", None),
+        "frequencia": getattr(medicamento, "frequencia", None),
+        "duracao_tratamento": getattr(medicamento, "duracao_tratamento", None),
+        "tem_doses": bool(doses),
+        "tem_apresentacoes": bool(apresentacoes),
+        "apresentacoes_count": len(apresentacoes),
+    }
+
+
 _UNIDADE_PRATICA_POR_FORMA = {
     # Orais sólidas
     'capsula': 'cápsula', 'capsulas': 'cápsula',

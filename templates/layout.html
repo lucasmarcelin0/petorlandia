@@ -5,7 +5,7 @@
 <head>
   {% block head %}
   {% endblock %}
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato-32.png') }}">
 
   <meta charset="UTF-8">
   <title>PetOrlândia 🐶</title>
@@ -95,12 +95,12 @@
       {% if current_user.is_authenticated and current_user.role == "admin" %}
       <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
 
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+        <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
         <span>PetOrlândia</span>
       </a>
       {% else %}
       <a href="{{ url_for('index') }}" class="navbar-brand">
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+        <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
         <span>PetOrlândia</span>
 
       </a>

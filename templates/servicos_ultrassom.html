@@ -1,0 +1,169 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<section class="pb-2 pb-lg-3">
+  <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary btn-sm rounded-pill mb-3">
+    <i class="fa-solid fa-arrow-left me-1"></i> Voltar aos serviços
+  </a>
+  <div>
+    <h1 class="fw-bold mb-2 text-primary">
+      <i class="fa-solid fa-wave-square me-2"></i> Ultrassonografia veterinária
+    </h1>
+    <p class="text-muted mb-2" style="max-width: 780px;">
+      Ultrassom para o seu pet <strong>na clínica ou a domicílio</strong>, com laudo digital
+      entregue pela plataforma. Atende tutores e clínicas que precisam de exame de imagem.
+    </p>
+    <div class="d-flex flex-wrap gap-2">
+      <span class="badge rounded-pill text-bg-light border"><i class="fa-solid fa-house-medical me-1 text-info"></i> A domicílio ou na clínica</span>
+      <span class="badge rounded-pill text-bg-light border"><i class="fa-solid fa-file-waveform me-1 text-info"></i> Laudo digital</span>
+      <span class="badge rounded-pill text-bg-light border"><i class="fa-solid fa-hospital me-1 text-info"></i> Atende clínicas parceiras</span>
+    </div>
+  </div>
+</section>
+
+{% if cities %}
+<section class="ultra-city-picker my-3">
+  <form method="get" class="row align-items-end g-2">
+    <div class="col-12 col-md">
+      <label for="ultra-city" class="form-label fw-bold mb-1">
+        <i class="fa-solid fa-location-dot text-primary me-1"></i> Cidade do atendimento
+      </label>
+      <p class="text-muted small mb-0">Mostramos os profissionais que atendem a cidade escolhida.</p>
+    </div>
+    <div class="col-12 col-md-5 col-lg-4">
+      <select id="ultra-city" name="cidade" class="form-select form-select-lg" onchange="this.form.submit()">
+        <option value="">Todas as cidades</option>
+        {% for city in cities %}
+        <option value="{{ city }}" {% if city == selected_city %}selected{% endif %}>{{ city }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if providers %}
+<div class="d-grid gap-3 gap-md-4 mt-2">
+  {% for p in providers %}
+  {% set vet = p.vet %}
+  <div class="card ultra-card">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        {% if vet.user.profile_photo %}
+        <img src="{{ vet.user.profile_photo }}" alt="{{ vet.user.name }}"
+             class="rounded-circle" style="width:64px;height:64px;object-fit:cover;border:2px solid #eef0f5;">
+        {% else %}
+        <span class="rounded-circle d-inline-flex align-items-center justify-content-center"
+              style="width:64px;height:64px;background:#e0f2fe;color:#0369a1;font-size:1.6rem;">
+          <i class="fa-solid fa-user-doctor"></i>
+        </span>
+        {% endif %}
+        <div class="min-w-0">
+          <h2 class="h5 fw-bold mb-1">{{ vet.user.name }}</h2>
+          <div class="text-muted small">
+            {% if vet.crmv %}<span class="me-3"><i class="fa-solid fa-id-card me-1 text-primary"></i>CRMV {{ vet.crmv }}{% if vet.crmv_estado %}/{{ vet.crmv_estado }}{% endif %}</span>{% endif %}
+            {% for s in vet.specialties %}<span class="badge rounded-pill text-bg-light border me-1">{{ s.nome }}</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {% if p.cidades %}
+      <div class="mb-3">
+        <span class="text-muted small me-1"><i class="fa-solid fa-map-location-dot me-1 text-info"></i>Atende em:</span>
+        {% for cidade in p.cidades %}
+        <span class="badge rounded-pill ultra-city-chip">{{ cidade }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-6">
+          <div class="ultra-audience h-100">
+            <div class="fw-bold mb-2"><i class="fa-solid fa-user me-1 text-primary"></i> Sou tutor</div>
+            <p class="text-muted small mb-3">Agende o ultrassom do seu pet na clínica ou em casa.</p>
+            <div class="d-grid gap-2">
+              {% if p.whatsapp_tutor_url %}
+              <a class="btn btn-success" href="{{ p.whatsapp_tutor_url }}" target="_blank" rel="noopener">
+                <i class="fa-brands fa-whatsapp me-1"></i> Chamar no WhatsApp
+              </a>
+              {% endif %}
+              <a class="btn btn-outline-primary" href="{{ p.solicitar_url }}">
+                <i class="fa-solid fa-calendar-plus me-1"></i> Solicitar pela plataforma
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="ultra-audience h-100">
+            <div class="fw-bold mb-2"><i class="fa-solid fa-hospital me-1 text-info"></i> Sou clínica</div>
+            <p class="text-muted small mb-3">Combine ultrassonografias para os seus pacientes — o laudo é entregue digital pela plataforma.</p>
+            <div class="d-grid gap-2">
+              {% if p.whatsapp_clinica_url %}
+              <a class="btn btn-success" href="{{ p.whatsapp_clinica_url }}" target="_blank" rel="noopener">
+                <i class="fa-brands fa-whatsapp me-1"></i> Falar com o profissional
+              </a>
+              {% else %}
+              <span class="text-muted small fst-italic">Contato por WhatsApp indisponível.</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="ultra-empty mt-3">
+  <div class="display-6 text-info mb-3"><i class="fa-solid fa-wave-square"></i></div>
+  <h2 class="h4 fw-bold">Ainda não há ultrassonografista{% if selected_city %} em {{ selected_city }}{% endif %}</h2>
+  <p class="text-muted mb-3 mx-auto" style="max-width: 560px;">
+    {% if selected_city %}
+    Tente outra cidade ou veja todos os profissionais disponíveis.
+    {% else %}
+    Em breve teremos profissionais de ultrassonografia disponíveis aqui.
+    {% endif %}
+  </p>
+  {% if selected_city %}
+  <a href="{{ url_for('servicos_ultrassom') }}" class="btn btn-outline-primary rounded-pill">
+    Ver todas as cidades
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+<style>
+  .ultra-city-picker {
+    padding: 1.1rem 1.25rem;
+    border: 1px solid rgba(13, 110, 253, .12);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(3, 105, 161, .07), rgba(13, 110, 253, .05));
+  }
+  .ultra-card {
+    border: none;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+  }
+  .ultra-city-chip {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 600;
+    margin-right: .25rem;
+  }
+  .ultra-audience {
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 14px;
+    padding: 1rem;
+    background: #fbfdff;
+  }
+  .ultra-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    border: 1px dashed rgba(15, 23, 42, .15);
+    border-radius: 16px;
+    background: #fff;
+  }
+</style>
+
+{% endblock %}

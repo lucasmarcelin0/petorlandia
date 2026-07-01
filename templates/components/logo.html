@@ -12,7 +12,7 @@
     </span>
   {% elif fallback == 'none' %}
   {% else %}
-    <img src="{{ url_for('static', filename='logo_pet.png') }}" alt="{{ alt_text or 'Logo PetOrlândia' }}" class="logo-img rounded-0" />
+    <img src="{{ url_for('static', filename='logo_pet-320.png') }}" alt="{{ alt_text or 'Logo PetOrlândia' }}" class="logo-img rounded-0" width="320" height="320" />
   {% endif %}
   {% if text %}
     <span class="{{ text_class }}">{{ text }}</span>

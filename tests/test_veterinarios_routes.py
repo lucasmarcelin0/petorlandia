@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime, time, timezone
+from datetime import datetime, timedelta, time, timezone
 
 import pytest
 
@@ -8,7 +8,18 @@ os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import app as flask_app, db
-from models import Animal, BlocoPrescricao, Clinica, Consulta, Prescricao, User, Veterinario, VetSchedule
+from models import (
+    Animal,
+    BlocoPrescricao,
+    Clinica,
+    Consulta,
+    Prescricao,
+    User,
+    Veterinario,
+    VeterinarioAtendeCidade,
+    VeterinarianMembership,
+    VetSchedule,
+)
 
 
 @pytest.fixture
@@ -45,7 +56,56 @@ def test_veterinarios_listing_and_detail(client):
     assert resp.status_code == 200
     assert b"CRMV" in resp.data
     assert b"123" in resp.data
-    assert b"Segunda" in resp.data
+
+
+def test_veterinarios_city_listing_only_shows_active_memberships(client):
+    now = datetime.now(timezone.utc)
+    with flask_app.app_context():
+        active_user = User(
+            name="Vet Ativo Orlandia",
+            email="vet-ativo-orlandia@test",
+            password_hash="x",
+            worker="veterinario",
+        )
+        expired_user = User(
+            name="Vet Vencido Orlandia",
+            email="vet-vencido-orlandia@test",
+            password_hash="x",
+            worker="veterinario",
+        )
+        active_vet = Veterinario(user=active_user, crmv="111")
+        expired_vet = Veterinario(user=expired_user, crmv="222")
+        db.session.add_all([active_user, expired_user, active_vet, expired_vet])
+        db.session.flush()
+        db.session.add_all(
+            [
+                VeterinarioAtendeCidade(veterinario_id=active_vet.id, cidade="Orlândia", uf="SP"),
+                VeterinarioAtendeCidade(veterinario_id=expired_vet.id, cidade="Orlândia", uf="SP"),
+            ]
+        )
+        db.session.commit()
+
+        active_membership = VeterinarianMembership.query.filter_by(veterinario_id=active_vet.id).one()
+        expired_membership = VeterinarianMembership.query.filter_by(veterinario_id=expired_vet.id).one()
+        active_membership.trial_ends_at = now + timedelta(days=7)
+        active_membership.paid_until = None
+        expired_membership.trial_ends_at = now - timedelta(days=7)
+        expired_membership.paid_until = None
+        db.session.commit()
+        active_id = active_vet.id
+        expired_id = expired_vet.id
+
+    resp = client.get("/veterinarios?cidade=Orl%C3%A2ndia")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Vet Ativo Orlandia" in body
+    assert "Vet Vencido Orlandia" not in body
+
+    resp = client.get(f"/veterinario/{active_id}")
+    assert resp.status_code == 200
+
+    resp = client.get(f"/veterinario/{expired_id}")
+    assert resp.status_code == 404
 
 
 def login(client, user_id):

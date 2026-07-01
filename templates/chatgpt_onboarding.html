@@ -1,0 +1,194 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<style>
+  .chatgpt-page {
+    color: #172033;
+  }
+
+  .chatgpt-page .kicker {
+    color: #047857;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .chatgpt-page .setup-panel,
+  .chatgpt-page .info-panel {
+    background: #fff;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+  }
+
+  .chatgpt-page .copy-box {
+    align-items: stretch;
+    background: #f8fafc;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: .6rem;
+  }
+
+  .chatgpt-page .copy-value,
+  .chatgpt-page .copy-box textarea {
+    background: transparent;
+    border: 0;
+    color: #0f172a;
+    font-size: .9rem;
+    min-width: 0;
+    outline: 0;
+  }
+
+  .chatgpt-page .copy-value {
+    align-items: center;
+    display: flex;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    padding: .35rem .1rem;
+    word-break: break-word;
+  }
+
+  .chatgpt-page .copy-box textarea {
+    min-height: 118px;
+    resize: vertical;
+  }
+
+  .chatgpt-page .step {
+    border-left: 3px solid #14b8a6;
+    padding-left: .9rem;
+  }
+
+  .chatgpt-page .btn-icon {
+    align-items: center;
+    display: inline-flex;
+    gap: .4rem;
+    justify-content: center;
+    min-height: 38px;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 575.98px) {
+    .chatgpt-page .copy-box {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="chatgpt-page py-4">
+  <header class="mb-4">
+    <div class="kicker">PetOrlandia no ChatGPT</div>
+    <h1 class="h3 fw-bold mb-2">Comece a usar no ChatGPT</h1>
+    <p class="text-muted mb-0">Use esta pagina para conectar o PetOrlandia como app/connector de teste no ChatGPT.</p>
+  </header>
+
+  <div class="row g-4 align-items-start">
+    <div class="col-lg-7">
+      <section class="setup-panel p-3 p-md-4">
+        <h2 class="h5 fw-bold mb-3">Dados para conectar</h2>
+
+        <label class="form-label fw-semibold" for="mcp-url">MCP URL</label>
+        <div class="copy-box mb-3">
+          <div class="copy-value" id="mcp-url">{{ mcp_url }}</div>
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ mcp_url }}">
+            <i class="fa-regular fa-copy" aria-hidden="true"></i>
+            Copiar
+          </button>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="auth-url">Authorization URL</label>
+            <div class="copy-box">
+              <div class="copy-value" id="auth-url">{{ auth_url }}</div>
+              <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ auth_url }}">
+                <i class="fa-regular fa-copy" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="token-url">Token URL</label>
+            <div class="copy-box">
+              <div class="copy-value" id="token-url">{{ token_url }}</div>
+              <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ token_url }}">
+                <i class="fa-regular fa-copy" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="col-lg-5">
+      <section class="info-panel p-3 p-md-4">
+        <h2 class="h5 fw-bold mb-3">Passo a passo</h2>
+        <div class="d-grid gap-3">
+          <div class="step">
+            <div class="fw-semibold">1. Abra o ChatGPT</div>
+            <div class="text-muted small">Entre na conta que vai usar o PetOrlandia.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">2. Ative Developer Mode</div>
+            <div class="text-muted small">Settings -> Apps & Connectors -> Advanced settings.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">3. Crie um connector</div>
+            <div class="text-muted small">Use o nome PetOrlandia e cole a MCP URL acima.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">4. Conecte sua conta</div>
+            <div class="text-muted small">Faca login com uma conta veterinaria do PetOrlandia.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="info-panel p-3 p-md-4 mt-4">
+    <h2 class="h5 fw-bold mb-3">Mensagem pronta para enviar</h2>
+    <div class="copy-box">
+      <textarea id="client-message" readonly>Oi! Para testar o PetOrlandia no ChatGPT, abra este link: {{ request.url }}.
+
+Na pagina, copie a MCP URL e crie um connector no ChatGPT em Settings -> Apps & Connectors. Depois conecte com sua conta veterinaria do PetOrlandia.</textarea>
+      <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="client-message">
+        <i class="fa-regular fa-copy" aria-hidden="true"></i>
+        Copiar texto
+      </button>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-copy').forEach(function (button) {
+      button.addEventListener('click', async function () {
+        const targetId = button.dataset.copyTarget;
+        const target = targetId ? document.getElementById(targetId) : null;
+        const value = target ? target.value : (button.dataset.copy || '');
+        try {
+          await navigator.clipboard.writeText(value);
+          button.classList.remove('btn-outline-secondary');
+          button.classList.add('btn-success');
+          const original = button.innerHTML;
+          button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          window.setTimeout(function () {
+            button.classList.add('btn-outline-secondary');
+            button.classList.remove('btn-success');
+            button.innerHTML = original;
+          }, 1600);
+        } catch (error) {
+          if (target) {
+            target.focus();
+          }
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

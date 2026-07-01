@@ -224,6 +224,21 @@ def test_ficha_animal_ajax_sections(client, monkeypatch):
     assert 'Prescrições' in history_data['html']
     assert 'Vacinas Aplicadas' in history_data['html']
 
+def test_editar_ficha_animal_renders_form(client, monkeypatch):
+    with flask_app.app_context():
+        admin, tutor, vet_user, vet, animal, clinic = create_basic_clinic_data()
+        animal_id = animal.id
+        vet_user_id = vet_user.id
+    login(monkeypatch, vet_user_id)
+
+    response = client.get(f'/animal/{animal_id}/editar_ficha')
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'Editar ficha de Rex' in body
+    assert '@app.route' not in body
+    assert f'/animal/{animal_id}/editar_ficha' in body
+
 
 def test_realizacao_exames_accepts_laudo_upload_and_notifies(client, monkeypatch):
     with flask_app.app_context():

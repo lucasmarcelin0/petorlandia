@@ -89,10 +89,13 @@
        Seção do tutor — todos os usuários veem
        ================================================================ -->
   <div class="d-flex justify-content-center mb-3">
-    <img src="{{ url_for('static', filename='plano_saude_banner1.png') }}"
-         class="rounded-4 shadow-sm"
-         style="height:200px;width:auto;max-width:100%;object-fit:cover;"
-         alt="Banner Plano de Saúde Pet" loading="lazy">
+    <picture>
+      <source srcset="{{ url_for('static', filename='plano_saude_banner1-640.webp') }}" type="image/webp">
+      <img src="{{ url_for('static', filename='plano_saude_banner1.png') }}"
+           class="rounded-4 shadow-sm"
+           style="height:200px;width:auto;max-width:100%;object-fit:cover;"
+           alt="Banner Plano de Saúde Pet" loading="lazy" width="640" height="427">
+    </picture>
   </div>
 
   <div class="row text-center mb-5 g-4">

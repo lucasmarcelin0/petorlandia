@@ -82,8 +82,11 @@ class Config:
         ),
     )
 
-    # Performance: cache static files for 1 hour (overridden by env var for dev)
-    SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
+    # Performance: cache static files longer outside debug. Versioned URLs can
+    # be cached aggressively by browsers/proxies without slowing deploy fixes.
+    _STATIC_CACHE_DEFAULT = "3600" if _env_bool("FLASK_DEBUG", False) else "604800"
+    SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", _STATIC_CACHE_DEFAULT))
+    SEND_FILE_VERSIONED_MAX_AGE = int(os.environ.get("SEND_FILE_VERSIONED_MAX_AGE", "31536000"))
 
     # Performance: disable template auto-reload unless in debug mode
     TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
