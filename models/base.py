@@ -3969,3 +3969,49 @@ class VaccineServiceEvent(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     actor = db.relationship('User', foreign_keys=[actor_user_id])
+
+
+# ─────────────────────────────────────────────────────────
+#  SiteFlag — feature flags on/off controlados pelo admin
+# ─────────────────────────────────────────────────────────
+
+class SiteFlag(db.Model):
+    """Chave-valor booleano para flags de funcionamento do site.
+
+    Exemplos de chaves:
+        loja_em_breve          — True = mostra overlay "em breve" na /loja
+        plano_saude_em_breve   — True = mostra overlay "em breve" no /plano-saude
+    """
+    __tablename__ = 'site_flag'
+
+    id    = db.Column(db.Integer, primary_key=True)
+    key   = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    value = db.Column(db.Boolean, nullable=False, default=False)
+    label = db.Column(db.String(120), nullable=True)   # descrição legível para o admin
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    @classmethod
+    def get(cls, key: str, default: bool = False) -> bool:
+        try:
+            row = cls.query.filter_by(key=key).first()
+            return row.value if row else default
+        except Exception:
+            return default
+
+    @classmethod
+    def set(cls, key: str, value: bool, label: str | None = None) -> 'SiteFlag':
+        row = cls.query.filter_by(key=key).first()
+        if row is None:
+            row = cls(key=key, value=value, label=label)
+            db.session.add(row)
+        else:
+            row.value = value
+            if label is not None:
+                row.label = label
+        db.session.commit()
+        return row

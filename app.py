@@ -4259,6 +4259,20 @@ def inject_current_app():
     return dict(current_app=current_app)
 
 
+@app.context_processor
+def inject_site_flags():
+    """Injeta feature flags do banco no contexto de todos os templates."""
+    from models.base import SiteFlag
+    try:
+        flags = {
+            'loja_em_breve': SiteFlag.get('loja_em_breve', default=True),
+            'plano_saude_em_breve': SiteFlag.get('plano_saude_em_breve', default=True),
+        }
+    except Exception:
+        flags = {'loja_em_breve': True, 'plano_saude_em_breve': True}
+    return dict(site_flags=flags)
+
+
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
 def reset_password_request():
@@ -17994,6 +18008,35 @@ def planos_dashboard():
     history = build_usage_history(limit=25, include_display=True)
     return render_template('planos/dashboard.html', metrics=metrics, history=history)
 
+
+# ── Admin: toggle de site flags (em breve) ────────────────
+@login_required
+def admin_toggle_site_flag():
+    """Toggle de feature flags (loja_em_breve, plano_saude_em_breve).
+
+    Aceita POST JSON: {"key": "loja_em_breve", "value": true}
+    Retorna JSON: {"key": "loja_em_breve", "value": true}
+    Só admin pode usar.
+    """
+    from admin import _is_admin
+    from models.base import SiteFlag
+
+    if not _is_admin():
+        return jsonify({'error': 'Acesso negado'}), 403
+
+    data = request.get_json(silent=True) or {}
+    key = (data.get('key') or '').strip()
+    ALLOWED_KEYS = {
+        'loja_em_breve': 'Loja PetOrlândia — Em breve',
+        'plano_saude_em_breve': 'Plano de Saúde — Em breve',
+    }
+    if key not in ALLOWED_KEYS:
+        return jsonify({'error': f'Flag desconhecida: {key}'}), 400
+
+    new_value = bool(data.get('value', not SiteFlag.get(key)))
+    SiteFlag.set(key, new_value, label=ALLOWED_KEYS[key])
+    return jsonify({'key': key, 'value': new_value})
+
 @login_required
 def planosaude_animal(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -31052,19 +31095,19 @@ def servicos():
             'icon': 'fa-stethoscope',
             'color': 'info',
             'title': 'Consultas',
-            'description': f'Encontre veterinários que atendem em {selected_city}.',
+            'description': f'Agendamento de consultas veterinárias em {selected_city} em breve.',
             'url': url_for('veterinarios', cidade=selected_city),
             'cta': 'Ver profissionais',
-            'soon': not city_vets,
+            'soon': True,
         },
         {
             'icon': 'fa-microscope',
             'color': 'primary',
             'title': 'Exames',
-            'description': f'Escolha o pet e solicite exames com profissionais de {selected_city}.',
+            'description': f'Solicitação de exames com profissionais de {selected_city} em breve.',
             'url': url_for('servicos_exames', cidade=selected_city),
             'cta': 'Escolher pet',
-            'soon': not city_vets,
+            'soon': True,
         },
     ])
 
@@ -31087,9 +31130,10 @@ def servicos():
             'icon': 'fa-scissors',
             'color': 'warning',
             'title': 'Banho & Tosa',
-            'description': 'Planos mensais de banho e tosa nas clínicas e casas parceiras.',
+            'description': 'Planos mensais de banho e tosa nas clínicas e casas parceiras. Em breve disponível.',
             'url': url_for('grooming_planos_publicos'),
             'cta': 'Ver planos',
+            'soon': True,
         },
         {
             'icon': 'fa-dog',
@@ -31098,6 +31142,7 @@ def servicos():
             'description': 'Cuidador aprovado para o seu pet enquanto você viaja, em casa ou hospedagem.',
             'url': url_for('petsitter_routes.petsitter_home'),
             'cta': 'Conhecer',
+            'soon': False,
         },
     ]
 

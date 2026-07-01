@@ -1,0 +1,210 @@
+{#
+Partial: _em_breve_overlay.html
+Parâmetros:
+flag_key — chave da SiteFlag (ex: 'loja_em_breve')
+ativo — boolean True/False (ex: site_flags.loja_em_breve)
+titulo — texto do h2 (ex: 'Loja PetOrlândia')
+descricao — parágrafo abaixo (opcional)
+is_admin — boolean (ex: is_admin)
+#}
+{% if ativo %}
+<div id="emBreveOverlay" class="em-breve-overlay" aria-live="polite">
+    <div class="em-breve-card">
+        <div class="em-breve-icon-wrap">
+            <i class="fa-solid fa-hourglass-half em-breve-icon"></i>
+        </div>
+        <h2 class="em-breve-title">{{ titulo }}</h2>
+        <p class="em-breve-sub">
+            {% if descricao %}{{ descricao }}{% else %}Estamos preparando tudo com carinho. Em breve você poderá acessar
+            esta funcionalidade!{% endif %}
+        </p>
+        <span class="badge em-breve-badge">
+            <i class="fa-regular fa-clock me-1"></i> Em breve
+        </span>
+        <div class="mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-sm">
+                <i class="fa-solid fa-house me-1"></i> Voltar ao início
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% set _is_site_admin = current_user.is_authenticated and current_user.role == 'admin' %}
+{% if _is_site_admin %}
+<div id="adminFlagToggle" class="admin-flag-toggle" title="Toggle admin: ativar/desativar 'Em breve'">
+    <form id="flagToggleForm" class="d-flex align-items-center gap-2">
+        <span class="admin-flag-label">
+            <i class="fa-solid fa-toggle-{% if ativo %}on text-warning{% else %}off text-success{% endif %}"
+                id="flagIcon"></i>
+            <span id="flagText" class="small fw-semibold">{% if ativo %}Em breve: ON{% else %}Em breve: OFF{% endif
+                %}</span>
+        </span>
+        <button type="button" id="flagToggleBtn"
+            class="btn btn-sm {% if ativo %}btn-warning{% else %}btn-success{% endif %}" data-flag-key="{{ flag_key }}"
+            data-flag-value="{{ 'true' if ativo else 'false' }}"
+            title="{% if ativo %}Desativar 'Em breve' (publicar página){% else %}Ativar 'Em breve' (esconder página){% endif %}">
+            {% if ativo %}
+            <i class="fa-solid fa-eye me-1"></i> Publicar
+            {% else %}
+            <i class="fa-solid fa-eye-slash me-1"></i> Ocultar
+            {% endif %}
+        </button>
+        <span id="flagFeedback" class="small text-muted d-none">Salvando...</span>
+    </form>
+</div>
+
+<script>
+    (function () {
+        var btn = document.getElementById('flagToggleBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', function () {
+            var key = btn.dataset.flagKey;
+            var current = btn.dataset.flagValue === 'true';
+            var newVal = !current;
+            var feedback = document.getElementById('flagFeedback');
+            var icon = document.getElementById('flagIcon');
+            var text = document.getElementById('flagText');
+            var overlay = document.getElementById('emBreveOverlay');
+
+            btn.disabled = true;
+            if (feedback) { feedback.textContent = 'Salvando...'; feedback.classList.remove('d-none'); }
+
+            fetch('/admin/site-flags/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ key: key, value: newVal })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var isOn = data.value;
+                    btn.dataset.flagValue = isOn ? 'true' : 'false';
+                    btn.classList.toggle('btn-warning', isOn);
+                    btn.classList.toggle('btn-success', !isOn);
+                    btn.innerHTML = isOn
+                        ? '<i class="fa-solid fa-eye me-1"></i> Publicar'
+                        : '<i class="fa-solid fa-eye-slash me-1"></i> Ocultar';
+                    if (icon) {
+                        icon.className = 'fa-solid fa-toggle-' + (isOn ? 'on text-warning' : 'off text-success');
+                    }
+                    if (text) { text.textContent = isOn ? 'Em breve: ON' : 'Em breve: OFF'; }
+                    if (overlay) { overlay.style.display = isOn ? '' : 'none'; }
+                    if (feedback) { feedback.textContent = 'Salvo!'; setTimeout(function () { feedback.classList.add('d-none'); }, 1200); }
+                    btn.disabled = false;
+                })
+                .catch(function () {
+                    if (feedback) { feedback.textContent = 'Erro ao salvar.'; }
+                    btn.disabled = false;
+                });
+        });
+    })();
+</script>
+{% endif %}
+
+<style>
+    /* ──────────────────── Overlay Em Breve ──────────────────── */
+    .em-breve-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1080;
+        background: linear-gradient(135deg, #0d1b2a 0%, #1a3a5c 60%, #0d2137 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        animation: ebFadeIn .4s ease;
+    }
+
+    @keyframes ebFadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .em-breve-card {
+        text-align: center;
+        color: #fff;
+        max-width: 480px;
+    }
+
+    .em-breve-icon-wrap {
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .08);
+        border: 2px solid rgba(255, 255, 255, .15);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+        animation: ebPulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes ebPulse {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 255, 255, .08);
+        }
+
+        50% {
+            box-shadow: 0 0 0 16px rgba(255, 255, 255, 0);
+        }
+    }
+
+    .em-breve-icon {
+        font-size: 2.6rem;
+        color: #ffd166;
+    }
+
+    .em-breve-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: .5rem;
+    }
+
+    .em-breve-sub {
+        font-size: 1.05rem;
+        opacity: .8;
+        margin-bottom: 1.25rem;
+    }
+
+    .em-breve-badge {
+        background: rgba(255, 209, 102, .15);
+        border: 1px solid rgba(255, 209, 102, .35);
+        color: #ffd166;
+        font-size: .85rem;
+        padding: .4rem .9rem;
+        border-radius: 999px;
+    }
+
+    /* ──────────────────── Admin Toggle ──────────────────── */
+    .admin-flag-toggle {
+        position: fixed;
+        bottom: 1.25rem;
+        right: 1.25rem;
+        z-index: 1090;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, .12);
+        border-radius: 12px;
+        padding: .6rem 1rem;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .admin-flag-label {
+        font-size: .82rem;
+        color: #444;
+        display: flex;
+        align-items: center;
+        gap: .35rem;
+    }
+</style>

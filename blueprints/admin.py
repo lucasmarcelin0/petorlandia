@@ -31,8 +31,13 @@ def get_blueprint():
         view_func=lazy_view("admin_remove_parceiro"),
         methods=["POST"],
     )
-    bp.add_url_rule(
+    bp.add_url_rule(\
         "/admin/planos/dashboard",
         view_func=lazy_view("planos_dashboard"),
+    )
+    bp.add_url_rule(
+        "/admin/site-flags/toggle",
+        view_func=lazy_view("admin_toggle_site_flag"),
+        methods=["POST"],
     )
     return bp
