@@ -2031,7 +2031,14 @@ def _is_bh_or_contagem_public_city(city):
 
 def _is_robson_santos_public_profile(vet):
     name_key = _vet_public_name_key(vet)
-    return 'robson' in name_key and 'santos' in name_key
+    return (
+        'robson' in name_key
+        and (
+            'santos' in name_key
+            or 'oliveira' in name_key
+            or _is_ultrasound_vet(vet)
+        )
+    )
 
 
 def _is_bh_consulta_extra_public_profile(vet):
@@ -2092,6 +2099,7 @@ def _public_veterinarians_query():
             db.joinedload(Veterinario.user).joinedload(User.endereco),
             db.joinedload(Veterinario.membership),
             db.selectinload(Veterinario.specialties),
+            db.selectinload(Veterinario.cidades_atendidas),
         )
         .filter(Veterinario.public_visible.is_(True))
         .filter(Veterinario.public_profile_type == 'profissional')
@@ -31169,6 +31177,10 @@ def servicos():
         for vet in vets
         for city in _vet_all_public_cities(vet)
     }
+    if any(_is_robson_santos_public_profile(vet) for vet in vets):
+        vet_cities.update({'Belo Horizonte', 'Contagem'})
+    if any(_is_bh_consulta_extra_public_profile(vet) for vet in vets):
+        vet_cities.add('Belo Horizonte')
     vaccine_cities = set(list_vaccine_service_cities())
     cities_by_key = {
         _normalize_public_text(city): city
@@ -31193,10 +31205,24 @@ def servicos():
         selected_city = cities_by_key.get('belo horizonte') or (cities[0] if cities else '')
 
     selected_city_key = _normalize_public_text(selected_city)
-    city_vets = [vet for vet in vets if _vet_serves_city(vet, selected_city)]
-    ultrasound_vets = [vet for vet in city_vets if _is_ultrasound_vet(vet)]
+    city_vets = [vet for vet in vets if _vet_matches_public_city(vet, selected_city, kind='consulta')]
+    exam_vets = [vet for vet in vets if _vet_matches_public_city(vet, selected_city, kind='exame')]
+    ultrasound_vets = [
+        vet for vet in exam_vets
+        if _is_ultrasound_vet(vet) or _is_robson_santos_public_profile(vet)
+    ]
     vaccine_city_keys = {_normalize_public_text(city) for city in vaccine_cities}
     has_paid_vaccines = selected_city_key in vaccine_city_keys
+    has_consultas = bool(city_vets)
+    has_exames = bool(ultrasound_vets)
+    consulta_names = ', '.join(
+        getattr(getattr(vet, 'user', None), 'name', '') for vet in city_vets[:3]
+        if getattr(getattr(vet, 'user', None), 'name', '')
+    )
+    exame_names = ', '.join(
+        getattr(getattr(vet, 'user', None), 'name', '') for vet in ultrasound_vets[:3]
+        if getattr(getattr(vet, 'user', None), 'name', '')
+    )
     is_orlandia = selected_city_key == _normalize_public_text('Orlândia')
 
     pmo_services = []
@@ -31240,19 +31266,35 @@ def servicos():
             'icon': 'fa-stethoscope',
             'color': 'info',
             'title': 'Consultas',
-            'description': f'Agendamento de consultas veterinárias em {selected_city} em breve.',
+            'description': (
+                f'Agende consultas veterinárias em {selected_city}'
+                + (f' com {consulta_names}.' if consulta_names else '.')
+                if has_consultas
+                else f'Agendamento de consultas veterinárias em {selected_city} em breve.'
+            ),
             'url': url_for('veterinarios', cidade=selected_city),
             'cta': 'Ver profissionais',
-            'soon': True,
+            'soon': not has_consultas,
+            'highlight': consulta_names if has_consultas else None,
         },
         {
             'icon': 'fa-microscope',
             'color': 'primary',
             'title': 'Exames',
-            'description': f'Solicitação de exames com profissionais de {selected_city} em breve.',
+            'description': (
+                f'Solicite exames em {selected_city}'
+                + (f' com {exame_names}. Ultrassonografia disponivel.' if exame_names else '.')
+                if has_exames
+                else f'Solicitação de exames com profissionais de {selected_city} em breve.'
+            ),
             'url': url_for('servicos_exames', cidade=selected_city),
             'cta': 'Escolher pet',
-            'soon': True,
+            'soon': not has_exames,
+            'highlight': (
+                'Ultrassonografia com Robson Santos'
+                if any(_is_robson_santos_public_profile(vet) for vet in ultrasound_vets)
+                else exame_names
+            ),
         },
     ])
 
@@ -31892,6 +31934,7 @@ def servicos_exames():
             especialistas = [
                 vet for vet in especialistas
                 if _vet_matches_public_city(vet, selected_city, kind='exame')
+                and (_is_ultrasound_vet(vet) or _is_robson_santos_public_profile(vet))
             ]
 
     return render_template(

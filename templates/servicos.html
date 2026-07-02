@@ -128,6 +128,11 @@
           <span class="badge bg-success ms-1 align-middle">{{ service.badge }}</span>
           {% endif %}
         </h3>
+        {% if service.highlight %}
+        <div class="service-highlight mb-2">
+          <i class="fa-solid fa-circle-check me-1"></i>{{ service.highlight }}
+        </div>
+        {% endif %}
         <p class="text-muted small flex-grow-1 mb-3">{{ service.description }}</p>
 
         {% if service.soon %}
@@ -216,6 +221,22 @@
   .service-soon:hover {
     transform: none;
     box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+  }
+
+  .service-highlight {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 100%;
+    padding: .28rem .6rem;
+    border-radius: 999px;
+    background: rgba(25, 135, 84, .1);
+    border: 1px solid rgba(25, 135, 84, .16);
+    color: #0f5132;
+    font-size: .78rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .service-cta {
