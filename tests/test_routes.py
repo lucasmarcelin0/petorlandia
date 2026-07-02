@@ -3017,7 +3017,7 @@ def test_upload_document(monkeypatch, app):
         tutor.set_password('x')
         vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
         vet.set_password('x')
-        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=vet.id)
         db.session.add_all([tutor, vet, animal])
         db.session.commit()
         animal_id = animal.id
@@ -3025,6 +3025,7 @@ def test_upload_document(monkeypatch, app):
 
     import flask_login.utils as login_utils
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+    monkeypatch.setattr(app_module, 'is_veterinarian', lambda *args, **kwargs: True)
     monkeypatch.setattr(app_module, 'upload_to_s3', lambda *a, **k: 'http://doc')
 
     resp = client.post(
@@ -3038,6 +3039,78 @@ def test_upload_document(monkeypatch, app):
         assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 1
 
 
+def test_upload_multiple_documents(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=vet.id)
+        db.session.add_all([tutor, vet, animal])
+        db.session.commit()
+        animal_id = animal.id
+        vet_id = vet.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+    monkeypatch.setattr(app_module, 'is_veterinarian', lambda *args, **kwargs: True)
+    monkeypatch.setattr(app_module, 'upload_to_s3', lambda *a, **k: 'http://doc')
+
+    resp = client.post(
+        f'/animal/{animal_id}/documentos',
+        data={
+            'documento': [
+                (BytesIO(b'img1'), 'imagem-1.jpg'),
+                (BytesIO(b'img2'), 'imagem-2.jpg'),
+            ],
+        },
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 2
+
+
+def test_upload_documents_limits_to_five(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=vet.id)
+        db.session.add_all([tutor, vet, animal])
+        db.session.commit()
+        animal_id = animal.id
+        vet_id = vet.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+    monkeypatch.setattr(app_module, 'is_veterinarian', lambda *args, **kwargs: True)
+    monkeypatch.setattr(app_module, 'upload_to_s3', lambda *a, **k: 'http://doc')
+
+    resp = client.post(
+        f'/animal/{animal_id}/documentos',
+        data={
+            'documento': [
+                (BytesIO(f'img{i}'.encode()), f'imagem-{i}.jpg')
+                for i in range(6)
+            ],
+        },
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 0
+
+
 def test_upload_document_redirects_to_referrer(app, monkeypatch):
     client = app.test_client()
     with app.app_context():
@@ -3047,7 +3120,7 @@ def test_upload_document_redirects_to_referrer(app, monkeypatch):
         tutor.set_password('x')
         vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
         vet.set_password('x')
-        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=vet.id)
         db.session.add_all([tutor, vet, animal])
         db.session.commit()
         animal_id = animal.id
@@ -3055,6 +3128,7 @@ def test_upload_document_redirects_to_referrer(app, monkeypatch):
 
     import flask_login.utils as login_utils
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+    monkeypatch.setattr(app_module, 'is_veterinarian', lambda *args, **kwargs: True)
     monkeypatch.setattr(app_module, 'upload_to_s3', lambda *a, **k: 'http://doc')
 
     resp = client.post(

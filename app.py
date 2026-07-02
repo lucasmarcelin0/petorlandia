@@ -18903,37 +18903,48 @@ def upload_document(animal_id):
         flash('Apenas veterinários podem enviar documentos.', 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
-    file = request.files.get('documento')
-    if not file or file.filename == '':
+    files = [file for file in request.files.getlist('documento') if file and file.filename]
+    if not files:
         flash('Nenhum arquivo enviado.', 'danger')
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
+    if len(files) > 5:
+        flash('Envie no máximo 5 documentos por vez.', 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     descricao = (request.form.get('descricao') or '').strip().lower()
     tipo_termo = (request.form.get('tipo') or descricao)
-    filename_base = secure_filename(file.filename)
-    ext = os.path.splitext(filename_base)[1]
-    if tipo_termo in ['termo_interesse', 'termo_transferencia']:
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        filename = f"{tipo_termo}_{animal.id}_{timestamp}{ext}"
-    else:
-        filename = f"{uuid.uuid4().hex}_{filename_base}"
+    documentos_criados = []
+    for index, file in enumerate(files, start=1):
+        filename_base = secure_filename(file.filename)
+        ext = os.path.splitext(filename_base)[1]
+        if tipo_termo in ['termo_interesse', 'termo_transferencia']:
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            suffix = f"_{index}" if len(files) > 1 else ""
+            filename = f"{tipo_termo}_{animal.id}_{timestamp}{suffix}{ext}"
+        else:
+            filename = f"{uuid.uuid4().hex}_{filename_base}"
 
-    file_url = upload_to_s3(file, filename, folder='documentos')
-    if not file_url:
-        flash('Falha ao enviar arquivo.', 'danger')
-        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
+        file_url = upload_to_s3(file, filename, folder='documentos')
+        if not file_url:
+            db.session.rollback()
+            flash('Falha ao enviar arquivo.', 'danger')
+            return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
-    documento = AnimalDocumento(
-        animal_id=animal.id,
-        veterinario_id=current_user.id,
-        filename=filename,
-        file_url=file_url,
-        descricao=descricao
-    )
-    db.session.add(documento)
+        documento = AnimalDocumento(
+            animal_id=animal.id,
+            veterinario_id=current_user.id,
+            filename=filename,
+            file_url=file_url,
+            descricao=descricao
+        )
+        db.session.add(documento)
+        documentos_criados.append(documento)
     db.session.commit()
 
-    flash('Documento enviado com sucesso!', 'success')
+    if len(documentos_criados) == 1:
+        flash('Documento enviado com sucesso!', 'success')
+    else:
+        flash(f'{len(documentos_criados)} documentos enviados com sucesso!', 'success')
     return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
 
