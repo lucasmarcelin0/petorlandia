@@ -39,6 +39,27 @@
     </div>
   </div>
 
+  {% if services %}
+  <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-3"><i class="fa-solid fa-briefcase-medical me-2 text-success"></i>Serviços disponíveis</h2>
+      <div class="d-grid gap-3">
+        {% for service in services %}
+        <div class="public-service-row">
+          <div class="fw-bold">{{ service.title }}</div>
+          <p class="text-muted small mb-2">{{ service.description or 'Serviço disponível para solicitação.' }}</p>
+          <div class="d-flex flex-wrap gap-2">
+            {% for option in price_options(service, audience) %}
+            <span class="public-service-price">{{ option.label }}: <strong>{{ format_reais(option.public) }}</strong></span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Solicitação de agendamento -->
   <div class="card border-0 shadow-sm" style="border-radius:16px;">
     <div class="card-body">
@@ -96,4 +117,23 @@
     </a>
   </div>
 </div>
+<style>
+  .public-service-row {
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 12px;
+    padding: 1rem;
+    background: #fbfdff;
+  }
+  .public-service-price {
+    display: inline-flex;
+    align-items: center;
+    padding: .28rem .6rem;
+    border-radius: 999px;
+    background: rgba(25, 135, 84, .1);
+    color: #0f5132;
+    border: 1px solid rgba(25, 135, 84, .16);
+    font-size: .78rem;
+    font-weight: 700;
+  }
+</style>
 {% endblock %}

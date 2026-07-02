@@ -77,6 +77,19 @@
       {% endif %}
 
       <div class="row g-3">
+        {% if p.price_options %}
+        <div class="col-12">
+          <div class="ultra-price-strip">
+            {% for option in p.price_options %}
+            <div>
+              <span>{{ option.label }}</span>
+              <strong>{{ format_reais(option.public) }}</strong>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% if audience == 'tutor' %}
         <div class="col-12 col-lg-6">
           <div class="ultra-audience h-100">
             <div class="fw-bold mb-2"><i class="fa-solid fa-user me-1 text-primary"></i> Sou tutor</div>
@@ -93,6 +106,8 @@
             </div>
           </div>
         </div>
+        {% endif %}
+        {% if audience == 'clinic' %}
         <div class="col-12 col-lg-6">
           <div class="ultra-audience h-100">
             <div class="fw-bold mb-2"><i class="fa-solid fa-hospital me-1 text-info"></i> Sou clínica</div>
@@ -108,6 +123,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -156,6 +172,28 @@
     border-radius: 14px;
     padding: 1rem;
     background: #fbfdff;
+  }
+  .ultra-price-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: .75rem;
+  }
+  .ultra-price-strip div {
+    border: 1px solid rgba(25, 135, 84, .16);
+    border-radius: 12px;
+    background: rgba(25, 135, 84, .06);
+    padding: .75rem;
+  }
+  .ultra-price-strip span {
+    display: block;
+    color: #64748b;
+    font-size: .78rem;
+    font-weight: 700;
+  }
+  .ultra-price-strip strong {
+    display: block;
+    color: #0f5132;
+    font-size: 1.15rem;
   }
   .ultra-empty {
     text-align: center;

@@ -143,6 +143,9 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='adotante', nullable=True)
 
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=True)
+    last_login = db.Column(db.DateTime(timezone=True), nullable=True)
+
 
 
     phone = db.Column(db.String(20))
@@ -1845,6 +1848,50 @@ class VeterinarioAtendeCidade(db.Model):
 
     def __str__(self):
         return f"{self.cidade}{'/' + self.uf if self.uf else ''}"
+
+
+class ProfessionalService(db.Model):
+    """Serviço publicado por um profissional, com preços por público-alvo."""
+
+    __tablename__ = 'professional_service'
+
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    service_type = db.Column(db.String(40), nullable=False, default='consulta')
+    title = db.Column(db.String(140), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    audience = db.Column(db.String(20), nullable=False, default='tutor')
+    mode = db.Column(db.String(40), nullable=True)
+    duration_minutes = db.Column(db.Integer, nullable=True)
+    active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    business_start = db.Column(db.Time, nullable=True)
+    business_end = db.Column(db.Time, nullable=True)
+    tutor_price = db.Column(db.Numeric(10, 2), nullable=True)
+    clinic_business_price = db.Column(db.Numeric(10, 2), nullable=True)
+    clinic_after_hours_price = db.Column(db.Numeric(10, 2), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    veterinario = db.relationship(
+        'Veterinario',
+        backref=db.backref('professional_services', cascade='all, delete-orphan', lazy='selectin'),
+    )
+
+    @property
+    def is_for_tutors(self):
+        return self.audience in {'tutor', 'both'}
+
+    @property
+    def is_for_clinics(self):
+        return self.audience in {'clinic', 'both'}
+
+    def __str__(self):
+        return f"{self.title} ({self.service_type})"
 
 
 class VeterinarianMembership(db.Model):

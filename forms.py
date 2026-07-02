@@ -818,6 +818,50 @@ class VetProfileForm(FlaskForm):
     submit = SubmitField('Salvar perfil')
 
 
+class ProfessionalServiceForm(FlaskForm):
+    service_id = HiddenField(validators=[Optional()])
+    title = StringField('Nome do serviço', validators=[DataRequired(), Length(max=140)])
+    service_type = SelectField(
+        'Tipo',
+        choices=[
+            ('consulta', 'Consulta'),
+            ('ultrassom', 'Ultrassonografia'),
+            ('exame', 'Exame'),
+            ('outro', 'Outro'),
+        ],
+        validators=[DataRequired()],
+    )
+    description = TextAreaField('Descrição pública', validators=[Optional(), Length(max=2000)])
+    audience = SelectField(
+        'Quem pode ver',
+        choices=[
+            ('tutor', 'Somente tutores'),
+            ('clinic', 'Somente donos de clínica'),
+            ('both', 'Tutores e donos de clínica'),
+        ],
+        validators=[DataRequired()],
+    )
+    mode = SelectField(
+        'Modalidade',
+        choices=[
+            ('domicilio', 'Domicílio'),
+            ('clinica', 'Clínica'),
+            ('clinica_ou_domicilio', 'Clínica ou domicílio'),
+            ('online', 'Online'),
+            ('outro', 'Outro'),
+        ],
+        validators=[Optional()],
+    )
+    duration_minutes = IntegerField('Duração padrão (min)', validators=[Optional(), NumberRange(min=5, max=600)])
+    business_start = TimeField('Início do horário comercial', validators=[Optional()])
+    business_end = TimeField('Fim do horário comercial', validators=[Optional()])
+    tutor_price = DecimalField('Repasse tutor (R$)', places=2, validators=[Optional(), NumberRange(min=0)])
+    clinic_business_price = DecimalField('Repasse clínica - horário comercial (R$)', places=2, validators=[Optional(), NumberRange(min=0)])
+    clinic_after_hours_price = DecimalField('Repasse clínica - fora do comercial (R$)', places=2, validators=[Optional(), NumberRange(min=0)])
+    active = BooleanField('Publicado', default=True)
+    submit = SubmitField('Salvar serviço')
+
+
 class EditAddressForm(FlaskForm):
     """Formulário simples para atualizar o endereço de entrega de um pedido."""
     shipping_address = TextAreaField('Endereço', validators=[DataRequired(), Length(max=200)])

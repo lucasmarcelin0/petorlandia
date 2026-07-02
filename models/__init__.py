@@ -101,6 +101,7 @@ __all__ = [
     "UserRole",
     "Veterinario",
     "VeterinarioAtendeCidade",
+    "ProfessionalService",
     "VeterinarianMembership",
     "VeterinarianSettings",
     "OAuthAccessToken",

@@ -1,0 +1,204 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<div class="container py-4 professional-services-page">
+  <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Meus serviços</h1>
+      <p class="text-muted mb-0">Controle o que você oferece, quem pode ver e os valores publicados na plataforma.</p>
+    </div>
+    <a href="{{ url_for('servicos') }}" class="btn btn-outline-secondary">
+      <i class="fa-solid fa-eye me-1"></i> Ver página pública
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-5">
+      <div class="service-editor">
+        <h2 class="h5 fw-bold mb-3">{{ 'Editar serviço' if editing_service else 'Novo serviço' }}</h2>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ form.service_id() }}
+          <div class="mb-3">
+            {{ form.title.label(class="form-label fw-semibold") }}
+            {{ form.title(class="form-control", placeholder="Ex.: Ultrassonografia veterinária") }}
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              {{ form.service_type.label(class="form-label fw-semibold") }}
+              {{ form.service_type(class="form-select") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.audience.label(class="form-label fw-semibold") }}
+              {{ form.audience(class="form-select") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.mode.label(class="form-label fw-semibold") }}
+              {{ form.mode(class="form-select") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.duration_minutes.label(class="form-label fw-semibold") }}
+              {{ form.duration_minutes(class="form-control", placeholder="60") }}
+            </div>
+          </div>
+          <div class="mt-3">
+            {{ form.description.label(class="form-label fw-semibold") }}
+            {{ form.description(class="form-control", rows=3) }}
+          </div>
+
+          <div class="service-price-box mt-4">
+            <div class="fw-bold mb-2">Repasses e preço público</div>
+            <p class="text-muted small mb-3">A plataforma adiciona 10% e arredonda o preço público para o próximo múltiplo de R$ 5.</p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                {{ form.tutor_price.label(class="form-label") }}
+                {{ form.tutor_price(class="form-control", placeholder="160,00") }}
+              </div>
+              <div class="col-md-6">
+                {{ form.clinic_business_price.label(class="form-label") }}
+                {{ form.clinic_business_price(class="form-control", placeholder="170,00") }}
+              </div>
+              <div class="col-md-6">
+                {{ form.clinic_after_hours_price.label(class="form-label") }}
+                {{ form.clinic_after_hours_price(class="form-control", placeholder="270,00") }}
+              </div>
+              <div class="col-md-3">
+                {{ form.business_start.label(class="form-label") }}
+                {{ form.business_start(class="form-control", type="time") }}
+              </div>
+              <div class="col-md-3">
+                {{ form.business_end.label(class="form-label") }}
+                {{ form.business_end(class="form-control", type="time") }}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-check form-switch mt-3">
+            {{ form.active(class="form-check-input", role="switch") }}
+            {{ form.active.label(class="form-check-label") }}
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            {{ form.submit(class="btn btn-primary") }}
+            {% if editing_service %}
+            <a href="{{ url_for('professional_services_manage') }}" class="btn btn-outline-secondary">Cancelar</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+      <div class="d-grid gap-3">
+        {% for service in services %}
+        <div class="service-row">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+            <div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h2 class="h5 fw-bold mb-0">{{ service.title }}</h2>
+                <span class="badge rounded-pill text-bg-light border">{{ service.service_type }}</span>
+                <span class="badge rounded-pill {{ 'text-bg-success' if service.active else 'text-bg-secondary' }}">{{ 'Publicado' if service.active else 'Pausado' }}</span>
+              </div>
+              <p class="text-muted small mb-2">{{ service.description or 'Sem descrição pública.' }}</p>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="service-mini"><i class="fa-solid fa-users me-1"></i>{{ {'tutor':'Tutores', 'clinic':'Clínicas', 'both':'Tutores e clínicas'}.get(service.audience, service.audience) }}</span>
+                {% if service.business_start and service.business_end %}
+                <span class="service-mini"><i class="fa-regular fa-clock me-1"></i>{{ service.business_start.strftime('%H:%M') }}-{{ service.business_end.strftime('%H:%M') }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="service-actions">
+              <a href="{{ url_for('professional_services_manage', editar=service.id) }}" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-pen me-1"></i> Editar
+              </a>
+              <form method="post" class="d-inline" onsubmit="return confirm('Remover este serviço?');">
+                {{ form.csrf_token }}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="service_id" value="{{ service.id }}">
+                <button class="btn btn-outline-danger btn-sm" type="submit">
+                  <i class="fa-solid fa-trash me-1"></i> Remover
+                </button>
+              </form>
+            </div>
+          </div>
+          <div class="service-prices mt-3">
+            {% if service.tutor_price is not none %}
+            <div><span>Tutor</span><strong>{{ format_reais(public_price_from_professional_price(service.tutor_price)) }}</strong><small>repasse {{ format_reais(service.tutor_price) }}</small></div>
+            {% endif %}
+            {% if service.clinic_business_price is not none %}
+            <div><span>Clínica comercial</span><strong>{{ format_reais(public_price_from_professional_price(service.clinic_business_price)) }}</strong><small>repasse {{ format_reais(service.clinic_business_price) }}</small></div>
+            {% endif %}
+            {% if service.clinic_after_hours_price is not none %}
+            <div><span>Clínica fora do horário</span><strong>{{ format_reais(public_price_from_professional_price(service.clinic_after_hours_price)) }}</strong><small>repasse {{ format_reais(service.clinic_after_hours_price) }}</small></div>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="service-empty">
+          <h2 class="h5 fw-bold">Nenhum serviço cadastrado</h2>
+          <p class="text-muted mb-0">Cadastre o primeiro serviço para ele aparecer nas páginas públicas conforme o público escolhido.</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .service-editor,
+  .service-row,
+  .service-empty {
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
+    padding: 1.25rem;
+  }
+  .service-price-box {
+    border: 1px solid rgba(13, 110, 253, .12);
+    border-radius: 12px;
+    background: rgba(13, 110, 253, .04);
+    padding: 1rem;
+  }
+  .service-mini {
+    display: inline-flex;
+    align-items: center;
+    padding: .25rem .55rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, .08);
+    color: #475569;
+    font-size: .78rem;
+    font-weight: 700;
+  }
+  .service-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-content: flex-start;
+  }
+  .service-prices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: .75rem;
+  }
+  .service-prices div {
+    border: 1px solid rgba(25, 135, 84, .16);
+    background: rgba(25, 135, 84, .06);
+    border-radius: 12px;
+    padding: .75rem;
+  }
+  .service-prices span,
+  .service-prices small {
+    display: block;
+    color: #64748b;
+    font-size: .78rem;
+  }
+  .service-prices strong {
+    display: block;
+    color: #0f5132;
+    font-size: 1.1rem;
+  }
+</style>
+
+{% endblock %}

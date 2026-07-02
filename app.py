@@ -8,7 +8,7 @@ import math
 from types import SimpleNamespace
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from functools import wraps
 from urllib.parse import quote_plus, urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
@@ -418,6 +418,104 @@ _inventory_movement_table_checked = False
 _inventory_movement_columns_checked = False
 _clinic_notifications_table_checked = False
 _plantao_modelos_table_checked = False
+_professional_services_table_checked = False
+
+
+PLATFORM_SERVICE_FEE_RATE = Decimal("0.10")
+PLATFORM_SERVICE_ROUNDING_STEP = Decimal("5")
+
+
+def public_price_from_professional_price(value) -> Decimal | None:
+    """Add platform fee and round up to the next R$ 5 multiple."""
+    if value is None:
+        return None
+    amount = Decimal(str(value))
+    if amount < 0:
+        return None
+    gross = amount * (Decimal("1") + PLATFORM_SERVICE_FEE_RATE)
+    return (
+        (gross / PLATFORM_SERVICE_ROUNDING_STEP).to_integral_value(rounding=ROUND_CEILING)
+        * PLATFORM_SERVICE_ROUNDING_STEP
+    ).quantize(Decimal("0.01"))
+
+
+def _ensure_professional_services_table() -> None:
+    """Create professional_service defensively when migrations were skipped."""
+    global _professional_services_table_checked
+    if _professional_services_table_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+    except Exception:
+        return
+
+    if not inspector.has_table("professional_service"):
+        try:
+            ProfessionalService.__table__.create(bind=db.engine, checkfirst=True)
+        except ProgrammingError:
+            pass
+
+    _professional_services_table_checked = True
+
+
+def _seed_robson_professional_services_if_needed() -> None:
+    """Seed Robson's first two services for the initial production evaluation."""
+    _ensure_professional_services_table()
+    try:
+        robson = (
+            Veterinario.query
+            .join(User, Veterinario.user_id == User.id)
+            .filter(func.lower(User.name).like('%robson%'))
+            .order_by(
+                case(
+                    (func.lower(User.name).like('%santos%'), 0),
+                    (func.lower(User.name).like('%oliveira%'), 1),
+                    else_=2,
+                ),
+                Veterinario.id,
+            )
+            .first()
+        )
+        if not robson:
+            return
+        existing = ProfessionalService.query.filter_by(veterinario_id=robson.id).first()
+        if existing:
+            return
+        db.session.add_all([
+            ProfessionalService(
+                veterinario_id=robson.id,
+                service_type='ultrassom',
+                title='Ultrassonografia veterinária',
+                description='Exame ultrassonográfico para clínicas e tutores, com laudo digital pela plataforma.',
+                audience='both',
+                mode='clinica_ou_domicilio',
+                duration_minutes=60,
+                business_start=time(9, 0),
+                business_end=time(19, 0),
+                tutor_price=Decimal('260.00'),
+                clinic_business_price=Decimal('170.00'),
+                clinic_after_hours_price=Decimal('270.00'),
+                active=True,
+            ),
+            ProfessionalService(
+                veterinario_id=robson.id,
+                service_type='consulta',
+                title='Consulta veterinária domiciliar',
+                description='Consulta veterinária em domicílio para tutores.',
+                audience='tutor',
+                mode='domicilio',
+                duration_minutes=60,
+                business_start=time(9, 0),
+                business_end=time(19, 0),
+                tutor_price=Decimal('160.00'),
+                active=True,
+            ),
+        ])
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falha ao semear serviços profissionais do Robson')
 
 
 def _ensure_inventory_threshold_columns() -> None:
@@ -1797,6 +1895,7 @@ from forms import (
     PlantonistaEscalaForm,
     ProductPhotoForm,
     ProductUpdateForm,
+    ProfessionalServiceForm,
     RegistrationForm,
     FirstAccessPasswordForm,
     FirstAccessPhoneForm,
@@ -2006,6 +2105,38 @@ def _format_vet_coverage_cities(vet):
     )
 
 
+def _populate_professional_service_form(form, service=None):
+    if service:
+        form.service_id.data = str(service.id)
+        form.title.data = service.title
+        form.service_type.data = service.service_type
+        form.description.data = service.description
+        form.audience.data = service.audience
+        form.mode.data = service.mode
+        form.duration_minutes.data = service.duration_minutes
+        form.business_start.data = service.business_start
+        form.business_end.data = service.business_end
+        form.tutor_price.data = service.tutor_price
+        form.clinic_business_price.data = service.clinic_business_price
+        form.clinic_after_hours_price.data = service.clinic_after_hours_price
+        form.active.data = service.active
+
+
+def _apply_professional_service_form(service, form):
+    service.title = (form.title.data or '').strip()
+    service.service_type = form.service_type.data or 'consulta'
+    service.description = (form.description.data or '').strip() or None
+    service.audience = form.audience.data or 'tutor'
+    service.mode = form.mode.data or None
+    service.duration_minutes = form.duration_minutes.data or None
+    service.business_start = form.business_start.data
+    service.business_end = form.business_end.data
+    service.tutor_price = form.tutor_price.data
+    service.clinic_business_price = form.clinic_business_price.data
+    service.clinic_after_hours_price = form.clinic_after_hours_price.data
+    service.active = bool(form.active.data)
+
+
 def _vet_public_name_key(vet):
     return _normalize_public_text(getattr(getattr(vet, 'user', None), 'name', None))
 
@@ -2106,6 +2237,99 @@ def _public_veterinarians_query():
         .filter(VeterinarianMembership.is_active_flag.is_(True))
         .order_by(User.name)
     )
+
+
+def _current_professional_service_audience():
+    if current_user.is_authenticated and _user_is_clinic_owner(current_user):
+        return 'clinic'
+    return 'tutor'
+
+
+def _service_visible_for_audience(service, audience):
+    target = (getattr(service, 'audience', None) or 'tutor').strip().lower()
+    return target == 'both' or target == audience
+
+
+def _professional_service_query(*, audience=None, service_type=None, city=None, active_only=True):
+    _seed_robson_professional_services_if_needed()
+    query = (
+        ProfessionalService.query
+        .join(Veterinario, ProfessionalService.veterinario_id == Veterinario.id)
+        .join(User, Veterinario.user_id == User.id)
+        .join(VeterinarianMembership, VeterinarianMembership.veterinario_id == Veterinario.id)
+        .options(
+            db.joinedload(ProfessionalService.veterinario).joinedload(Veterinario.user).joinedload(User.endereco),
+            db.joinedload(ProfessionalService.veterinario).joinedload(Veterinario.membership),
+            db.joinedload(ProfessionalService.veterinario).selectinload(Veterinario.specialties),
+            db.joinedload(ProfessionalService.veterinario).selectinload(Veterinario.cidades_atendidas),
+        )
+        .filter(Veterinario.public_visible.is_(True))
+        .filter(Veterinario.public_profile_type == 'profissional')
+        .filter(VeterinarianMembership.is_active_flag.is_(True))
+        .order_by(User.name, ProfessionalService.service_type, ProfessionalService.title)
+    )
+    if active_only:
+        query = query.filter(ProfessionalService.active.is_(True))
+    if service_type:
+        if isinstance(service_type, (list, tuple, set)):
+            query = query.filter(ProfessionalService.service_type.in_(list(service_type)))
+        else:
+            query = query.filter(ProfessionalService.service_type == service_type)
+    services = query.all()
+    if audience:
+        services = [service for service in services if _service_visible_for_audience(service, audience)]
+    if city:
+        services = [
+            service for service in services
+            if _vet_matches_public_city(
+                service.veterinario,
+                city,
+                kind='exame' if service.service_type in {'ultrassom', 'exame'} else 'consulta',
+            )
+        ]
+    return services
+
+
+def _service_public_price_options(service, audience):
+    options = []
+    if audience == 'clinic':
+        if service.clinic_business_price is not None:
+            options.append({
+                'label': 'Horário comercial',
+                'professional': service.clinic_business_price,
+                'public': public_price_from_professional_price(service.clinic_business_price),
+            })
+        if service.clinic_after_hours_price is not None:
+            options.append({
+                'label': 'Fora do comercial',
+                'professional': service.clinic_after_hours_price,
+                'public': public_price_from_professional_price(service.clinic_after_hours_price),
+            })
+    else:
+        if service.tutor_price is not None:
+            options.append({
+                'label': 'Preço ao tutor',
+                'professional': service.tutor_price,
+                'public': public_price_from_professional_price(service.tutor_price),
+            })
+    return options
+
+
+def _service_lowest_public_price(services, audience):
+    prices = [
+        option['public']
+        for service in services
+        for option in _service_public_price_options(service, audience)
+        if option.get('public') is not None
+    ]
+    return min(prices) if prices else None
+
+
+def _format_reais(value):
+    if value is None:
+        return None
+    amount = Decimal(str(value)).quantize(Decimal('0.01'))
+    return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 FISCAL_UF_CODES = {
@@ -4037,6 +4261,21 @@ from models import User   # noqa: E402  (import depois de alias)
 @login.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+from flask_login import user_logged_in  # noqa: E402
+
+
+@user_logged_in.connect_via(app)
+def _registrar_ultimo_login(sender, user, **extra):
+    # Cobre todos os pontos de login (formulário, OAuth, primeiro acesso).
+    try:
+        user.last_login = datetime.now(BR_TZ)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Falha ao registrar last_login do usuário %s', getattr(user, 'id', '?'))
+
 
 login.login_view = "login_view"
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
@@ -17283,6 +17522,69 @@ def api_conversa_admin_message(user_id=None):
     return render_template('components/message.html', msg=nova_msg)
 
 
+@app.route('/veterinario/servicos', methods=['GET', 'POST'])
+@login_required
+def professional_services_manage():
+    if not has_veterinarian_profile(current_user):
+        flash('Complete seu cadastro de veterinário para gerenciar serviços.', 'warning')
+        return redirect(url_for('mensagens'))
+
+    _ensure_professional_services_table()
+    vet = current_user.veterinario
+    editing_id = request.args.get('editar', type=int)
+    editing_service = None
+    if editing_id:
+        editing_service = ProfessionalService.query.filter_by(
+            id=editing_id,
+            veterinario_id=vet.id,
+        ).first_or_404()
+
+    if request.method == 'POST' and request.form.get('action') == 'delete':
+        service_id = request.form.get('service_id', type=int)
+        service = ProfessionalService.query.filter_by(
+            id=service_id,
+            veterinario_id=vet.id,
+        ).first_or_404()
+        db.session.delete(service)
+        db.session.commit()
+        flash('Serviço removido.', 'success')
+        return redirect(url_for('professional_services_manage'))
+
+    form = ProfessionalServiceForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        service_id = request.form.get('service_id', type=int)
+        if service_id:
+            service = ProfessionalService.query.filter_by(
+                id=service_id,
+                veterinario_id=vet.id,
+            ).first_or_404()
+        else:
+            service = ProfessionalService(veterinario_id=vet.id)
+            db.session.add(service)
+        _apply_professional_service_form(service, form)
+        db.session.commit()
+        flash('Serviço salvo e disponibilidade pública atualizada.', 'success')
+        return redirect(url_for('professional_services_manage'))
+
+    if request.method == 'GET' and editing_service:
+        _populate_professional_service_form(form, editing_service)
+
+    services = (
+        ProfessionalService.query
+        .filter_by(veterinario_id=vet.id)
+        .order_by(ProfessionalService.active.desc(), ProfessionalService.service_type, ProfessionalService.title)
+        .all()
+    )
+    return render_template(
+        'veterinarios/professional_services.html',
+        form=form,
+        editing_service=editing_service,
+        services=services,
+        public_price_from_professional_price=public_price_from_professional_price,
+        format_reais=_format_reais,
+    )
+
+
 @login_required
 def admin_promote_veterinarian(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -17771,6 +18073,54 @@ PLANTONISTA_STATUS_STYLES = {
     'realizado': 'badge bg-success',
     'cancelado': 'badge bg-secondary',
 }
+
+
+def registrar_feedback_solicitacao(user, texto, kind, *, enviar_email=True):
+    """Registra o feedback de uma solicitação para o usuário.
+
+    Adiciona um ``Notification`` (fica no histórico do usuário e visível no
+    admin) e, quando possível, envia o mesmo texto por e-mail. Nunca levanta
+    exceção — o fluxo da solicitação não pode quebrar por falha de aviso.
+    A sessão NÃO é commitada aqui; o chamador controla a transação.
+    """
+    from models import Notification
+
+    try:
+        db.session.add(Notification(
+            user_id=user.id, message=texto, channel='sistema', kind=kind,
+        ))
+    except Exception:
+        current_app.logger.exception('Falha ao registrar Notification (%s)', kind)
+
+    if enviar_email and getattr(user, 'email', None) and app.config.get('MAIL_DEFAULT_SENDER'):
+        try:
+            mail.send(MailMessage(
+                subject='PetOrlândia — confirmação da sua solicitação',
+                sender=app.config['MAIL_DEFAULT_SENDER'],
+                recipients=[user.email],
+                body=texto,
+            ))
+        except Exception:
+            current_app.logger.exception('Falha ao enviar e-mail de confirmação (%s)', kind)
+
+
+def avisar_admin_nova_solicitacao(assunto, corpo):
+    """Envia e-mail ao admin (ADMIN_NOTIFY_EMAIL) sobre uma nova solicitação.
+
+    Nunca levanta exceção; sem ADMIN_NOTIFY_EMAIL configurado, não faz nada.
+    """
+    destino = app.config.get('ADMIN_NOTIFY_EMAIL')
+    if not destino or not app.config.get('MAIL_DEFAULT_SENDER'):
+        return
+    try:
+        mail.send(MailMessage(
+            subject=f'[PetOrlândia] {assunto}',
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[destino],
+            body=corpo,
+        ))
+    except Exception:
+        current_app.logger.exception('Falha ao avisar admin sobre solicitação')
 
 
 def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
@@ -24174,7 +24524,26 @@ def solicitar_agendamento(veterinario_id):
             + (f" Obs.: {req.notes}" if req.notes else "")
         ),
     ))
+    registrar_feedback_solicitacao(
+        current_user,
+        (
+            f"Recebemos sua solicitação de {req.kind_label.lower()} para {animal.name} "
+            f"(preferência: {quando}). Você será avisado assim que o profissional confirmar. "
+            f"Acompanhe em Minhas Solicitações."
+        ),
+        kind='appointment_request',
+    )
     db.session.commit()
+    avisar_admin_nova_solicitacao(
+        f'Nova solicitação de {req.kind_label.lower()}',
+        (
+            f'Tutor: {getattr(current_user, "name", "?")} ({getattr(current_user, "email", "?")})\n'
+            f'Pet: {animal.name}\n'
+            f'Profissional: {veterinario.user.name if veterinario.user else veterinario.id}\n'
+            f'Preferência: {quando}\n'
+            + (f'Observações: {req.notes}\n' if req.notes else '')
+        ),
+    )
     flash('Solicitação enviada! O profissional vai confirmar e você será avisado.', 'success')
     return redirect(url_for('minhas_solicitacoes'))
 
@@ -24301,6 +24670,14 @@ def responder_solicitacao(request_id):
                 f"não pôde ser atendida." + (f" {note}" if note else "")
             ),
         ))
+        registrar_feedback_solicitacao(
+            req.tutor,
+            (
+                f"Sua solicitação de {req.kind_label.lower()} para {req.animal.name} "
+                f"não pôde ser atendida." + (f" {note}" if note else "")
+            ),
+            kind='appointment_request',
+        )
         db.session.commit()
         flash('Solicitação recusada e tutor avisado.', 'info')
         return redirect(url_for('solicitacoes_recebidas'))
@@ -24346,6 +24723,14 @@ def responder_solicitacao(request_id):
             f"{scheduled_local.strftime('%d/%m/%Y %H:%M')}." + (f" {note}" if note else "")
         ),
     ))
+    registrar_feedback_solicitacao(
+        req.tutor,
+        (
+            f"Seu {req.kind_label.lower()} para {req.animal.name} foi confirmado para "
+            f"{scheduled_local.strftime('%d/%m/%Y %H:%M')}." + (f" {note}" if note else "")
+        ),
+        kind='appointment_request',
+    )
     db.session.commit()
     flash('Agendamento confirmado e tutor avisado.', 'success')
     return redirect(url_for('solicitacoes_recebidas'))
@@ -24797,6 +25182,14 @@ def _render_vet_public_profile(veterinario):
 
     end = getattr(veterinario.user, 'endereco', None)
     cidade = end.cidade.strip() if end and end.cidade else None
+    audience = _current_professional_service_audience()
+    services = [
+        service for service in _professional_service_query(
+            audience=audience,
+            active_only=True,
+        )
+        if service.veterinario_id == veterinario.id
+    ]
 
     return render_template(
         'veterinarios/vet_public.html',
@@ -24804,6 +25197,10 @@ def _render_vet_public_profile(veterinario):
         form=form,
         animals=animals,
         cidade=cidade,
+        services=services,
+        audience=audience,
+        price_options=_service_public_price_options,
+        format_reais=_format_reais,
     )
 
 
@@ -31171,11 +31568,18 @@ def servicos():
     """
     from services.vaccine_service_paid import list_cidades as list_vaccine_service_cities
 
+    audience = _current_professional_service_audience()
     vets = _public_veterinarians_query().all()
+    professional_services_all = _professional_service_query(active_only=True)
     vet_cities = {
         city
         for vet in vets
         for city in _vet_all_public_cities(vet)
+    }
+    service_cities = {
+        city
+        for service in professional_services_all
+        for city in _vet_all_public_cities(service.veterinario)
     }
     if any(_is_robson_santos_public_profile(vet) for vet in vets):
         vet_cities.update({'Belo Horizonte', 'Contagem'})
@@ -31184,7 +31588,7 @@ def servicos():
     vaccine_cities = set(list_vaccine_service_cities())
     cities_by_key = {
         _normalize_public_text(city): city
-        for city in vet_cities | vaccine_cities | {'Orlândia'}
+        for city in vet_cities | service_cities | vaccine_cities | {'Orlândia'}
         if city
     }
     cities = sorted(cities_by_key.values(), key=_normalize_public_text)
@@ -31205,24 +31609,32 @@ def servicos():
         selected_city = cities_by_key.get('belo horizonte') or (cities[0] if cities else '')
 
     selected_city_key = _normalize_public_text(selected_city)
-    city_vets = [vet for vet in vets if _vet_matches_public_city(vet, selected_city, kind='consulta')]
-    exam_vets = [vet for vet in vets if _vet_matches_public_city(vet, selected_city, kind='exame')]
-    ultrasound_vets = [
-        vet for vet in exam_vets
-        if _is_ultrasound_vet(vet) or _is_robson_santos_public_profile(vet)
+    city_services = _professional_service_query(audience=audience, city=selected_city)
+    consulta_services = [service for service in city_services if service.service_type == 'consulta']
+    exam_services = [
+        service for service in city_services
+        if service.service_type in {'ultrassom', 'exame'}
+    ]
+    ultrasound_services = [
+        service for service in exam_services
+        if service.service_type == 'ultrassom'
+        or _is_ultrasound_vet(service.veterinario)
+        or _is_robson_santos_public_profile(service.veterinario)
     ]
     vaccine_city_keys = {_normalize_public_text(city) for city in vaccine_cities}
     has_paid_vaccines = selected_city_key in vaccine_city_keys
-    has_consultas = bool(city_vets)
-    has_exames = bool(ultrasound_vets)
+    has_consultas = bool(consulta_services)
+    has_exames = bool(ultrasound_services)
     consulta_names = ', '.join(
-        getattr(getattr(vet, 'user', None), 'name', '') for vet in city_vets[:3]
-        if getattr(getattr(vet, 'user', None), 'name', '')
+        getattr(getattr(service.veterinario, 'user', None), 'name', '') for service in consulta_services[:3]
+        if getattr(getattr(service.veterinario, 'user', None), 'name', '')
     )
     exame_names = ', '.join(
-        getattr(getattr(vet, 'user', None), 'name', '') for vet in ultrasound_vets[:3]
-        if getattr(getattr(vet, 'user', None), 'name', '')
+        getattr(getattr(service.veterinario, 'user', None), 'name', '') for service in ultrasound_services[:3]
+        if getattr(getattr(service.veterinario, 'user', None), 'name', '')
     )
+    consulta_lowest_price = _format_reais(_service_lowest_public_price(consulta_services, audience))
+    exame_lowest_price = _format_reais(_service_lowest_public_price(ultrasound_services, audience))
     is_orlandia = selected_city_key == _normalize_public_text('Orlândia')
 
     pmo_services = []
@@ -31269,6 +31681,7 @@ def servicos():
             'description': (
                 f'Agende consultas veterinárias em {selected_city}'
                 + (f' com {consulta_names}.' if consulta_names else '.')
+                + (f' A partir de {consulta_lowest_price}.' if consulta_lowest_price else '')
                 if has_consultas
                 else f'Agendamento de consultas veterinárias em {selected_city} em breve.'
             ),
@@ -31283,23 +31696,28 @@ def servicos():
             'title': 'Exames',
             'description': (
                 f'Solicite exames em {selected_city}'
-                + (f' com {exame_names}. Ultrassonografia disponivel.' if exame_names else '.')
+                + (f' com {exame_names}. Ultrassonografia disponível.' if exame_names else '.')
+                + (f' A partir de {exame_lowest_price}.' if exame_lowest_price else '')
                 if has_exames
                 else f'Solicitação de exames com profissionais de {selected_city} em breve.'
             ),
-            'url': url_for('servicos_exames', cidade=selected_city),
-            'cta': 'Escolher pet',
+            'url': (
+                url_for('servicos_ultrassom', cidade=selected_city)
+                if audience == 'clinic'
+                else url_for('servicos_exames', cidade=selected_city)
+            ),
+            'cta': 'Ver profissionais' if audience == 'clinic' else 'Escolher pet',
             'soon': not has_exames,
             'highlight': (
                 'Ultrassonografia com Robson Santos'
-                if any(_is_robson_santos_public_profile(vet) for vet in ultrasound_vets)
+                if any(_is_robson_santos_public_profile(service.veterinario) for service in ultrasound_services)
                 else exame_names
             ),
         },
     ])
 
     # Ultrassom só aparece quando há ultrassonografista atendendo a cidade.
-    if ultrasound_vets:
+    if ultrasound_services:
         localized_services.append({
             'icon': 'fa-wave-square',
             'color': 'info',
@@ -31354,10 +31772,11 @@ def servicos_ultrassom():
     cidade, com CTA de WhatsApp (tutor e clínica) e de solicitação interna de
     exame. Pensado para tutores e donos de clínica contratarem o serviço.
     """
-    vets = [vet for vet in _public_veterinarians_query().all() if _is_ultrasound_vet(vet)]
+    audience = _current_professional_service_audience()
+    services = _professional_service_query(audience=audience, service_type='ultrassom')
 
     cities = sorted(
-        {c for vet in vets for c in _vet_all_public_cities(vet)},
+        {c for service in services for c in _vet_all_public_cities(service.veterinario)},
         key=_normalize_public_text,
     )
 
@@ -31369,16 +31788,20 @@ def servicos_ultrassom():
     selected_city = ''
     if requested_city:
         selected_city = requested_city
-    elif user_city and any(_vet_serves_city(v, user_city) for v in vets):
+    elif user_city and any(_vet_matches_public_city(service.veterinario, user_city, kind='exame') for service in services):
         selected_city = user_city
 
     if selected_city:
-        providers_source = [vet for vet in vets if _vet_serves_city(vet, selected_city)]
+        providers_source = [
+            service for service in services
+            if _vet_matches_public_city(service.veterinario, selected_city, kind='exame')
+        ]
     else:
-        providers_source = vets
+        providers_source = services
 
     providers = []
-    for vet in providers_source:
+    for service in providers_source:
+        vet = service.veterinario
         phone = getattr(vet.user, 'phone', None)
         local = f' em {selected_city}' if selected_city else ''
         tutor_msg = (
@@ -31391,10 +31814,12 @@ def servicos_ultrassom():
         )
         providers.append({
             'vet': vet,
+            'service': service,
             'cidades': _vet_all_public_cities(vet),
             'whatsapp_tutor_url': _web_whatsapp_url(phone, tutor_msg),
             'whatsapp_clinica_url': _web_whatsapp_url(phone, clinica_msg),
             'solicitar_url': url_for('solicitar_agendamento', veterinario_id=vet.id),
+            'price_options': _service_public_price_options(service, audience),
         })
 
     return render_template(
@@ -31402,6 +31827,8 @@ def servicos_ultrassom():
         providers=providers,
         cities=cities,
         selected_city=selected_city,
+        audience=audience,
+        format_reais=_format_reais,
     )
 
 
@@ -31900,7 +32327,17 @@ def servicos_exames():
     city_param_present = 'cidade' in request.args
     selected_city = (request.args.get('cidade') or '').strip() or None
 
-    public_vets = _public_veterinarians_query().all()
+    audience = _current_professional_service_audience()
+    service_candidates = _professional_service_query(
+        audience=audience,
+        service_type=('ultrassom', 'exame'),
+    )
+    public_vets = []
+    seen_vets = set()
+    for service in service_candidates:
+        if service.veterinario_id not in seen_vets:
+            seen_vets.add(service.veterinario_id)
+            public_vets.append(service.veterinario)
     cities_set = {c for vet in public_vets for c in _vet_all_public_cities(vet)}
     if any(_is_robson_santos_public_profile(vet) for vet in public_vets):
         cities_set.update({'Belo Horizonte', 'Contagem'})
@@ -31929,13 +32366,20 @@ def servicos_exames():
             if not selected_city and getattr(current_user, 'endereco', None):
                 selected_city = (current_user.endereco.cidade or '').strip() or None
 
-        especialistas = public_vets
+        selected_services = service_candidates
         if selected_city:
-            especialistas = [
-                vet for vet in especialistas
-                if _vet_matches_public_city(vet, selected_city, kind='exame')
-                and (_is_ultrasound_vet(vet) or _is_robson_santos_public_profile(vet))
+            selected_services = [
+                service for service in selected_services
+                if _vet_matches_public_city(service.veterinario, selected_city, kind='exame')
             ]
+        especialistas = []
+        seen_vets = set()
+        for service in selected_services:
+            vet = service.veterinario
+            if vet.id in seen_vets:
+                continue
+            seen_vets.add(vet.id)
+            especialistas.append(vet)
 
     return render_template(
         'servicos_exames.html',
@@ -32827,6 +33271,30 @@ def notificacoes_mercado_pago():
                                 casa_de_racao_id=casa_id,
                                 tipo_entrega=tipo,
                             ))
+
+                        # Feedback do pedido pago: confirma ao comprador e
+                        # avisa o admin. Roda só na 1ª notificação (o guard de
+                        # DeliveryRequest acima evita duplicar em retries).
+                        comprador = order.user
+                        if comprador:
+                            registrar_feedback_solicitacao(
+                                comprador,
+                                (
+                                    f"Pagamento confirmado! Seu pedido #{order.id} "
+                                    f"(R$ {order.total_value():.2f}) já está em preparação "
+                                    f"e você será avisado sobre a entrega."
+                                ),
+                                kind='order_paid',
+                            )
+                        avisar_admin_nova_solicitacao(
+                            f'Pedido #{order.id} pago',
+                            (
+                                f'Cliente: {comprador.name if comprador else "?"} '
+                                f'({comprador.email if comprador else "?"})\n'
+                                f'Valor: R$ {order.total_value():.2f}\n'
+                                f'Itens: ' + ', '.join(f'{i.item_name} x{i.quantity}' for i in order.items)
+                            ),
+                        )
 
                     # Decrementa estoque das clínicas para produtos vinculados
                     if order:

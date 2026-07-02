@@ -30,6 +30,16 @@
   <link href="{{ url_for('static', filename='styles.css', v='20260701b') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
 
+  {% if config.GA_MEASUREMENT_ID %}
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GA_MEASUREMENT_ID }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ config.GA_MEASUREMENT_ID }}', { 'anonymize_ip': true });
+  </script>
+  {% endif %}
 </head>
 
 {% set flash_messages = get_flashed_messages(with_categories=true) %}
@@ -186,6 +196,11 @@
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('solicitacoes_recebidas') }}">
               <i class="fas fa-inbox me-1 text-primary"></i> Solicitações
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('professional_services_manage') }}">
+              <i class="fas fa-briefcase-medical me-1 text-success"></i> Meus serviços
             </a>
           </li>
           <li class="nav-item">
