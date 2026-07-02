@@ -18,12 +18,22 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    existing_columns = {column['name'] for column in sa.inspect(bind).get_columns('user')}
+
     with op.batch_alter_table('user', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('created_at', sa.DateTime(timezone=True), nullable=True))
-        batch_op.add_column(sa.Column('last_login', sa.DateTime(timezone=True), nullable=True))
+        if 'created_at' not in existing_columns:
+            batch_op.add_column(sa.Column('created_at', sa.DateTime(timezone=True), nullable=True))
+        if 'last_login' not in existing_columns:
+            batch_op.add_column(sa.Column('last_login', sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade():
+    bind = op.get_bind()
+    existing_columns = {column['name'] for column in sa.inspect(bind).get_columns('user')}
+
     with op.batch_alter_table('user', schema=None) as batch_op:
-        batch_op.drop_column('last_login')
-        batch_op.drop_column('created_at')
+        if 'last_login' in existing_columns:
+            batch_op.drop_column('last_login')
+        if 'created_at' in existing_columns:
+            batch_op.drop_column('created_at')
