@@ -37,8 +37,9 @@
   <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 g-md-4">
     {% for v in veterinarios %}
     {% set cidade = vet_city(v) %}
+    {% set service_notes = vet_service_notes(v, selected_cidade) if vet_service_notes is defined else [] %}
     <div class="col">
-      <div class="card vet-card h-100">
+      <div class="card vet-card h-100 {% if service_notes %}vet-card--featured{% endif %}">
         <div class="card-body d-flex flex-column">
           <div class="d-flex align-items-center gap-3 mb-3">
             {% if v.user.profile_photo %}
@@ -68,6 +69,14 @@
             <i class="fa-solid fa-location-dot me-1"></i>
             {% if cidade %}{{ cidade }}{% else %}Cidade não informada{% endif %}
           </div>
+
+          {% if service_notes %}
+          <div class="vet-service-strip mb-3">
+            {% for note in service_notes %}
+            <span><i class="{{ note.icon }} me-1"></i>{{ note.label }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
 
           <a href="{{ url_for('solicitar_agendamento', veterinario_id=v.id) }}"
              class="btn btn-primary w-100 mt-auto"
@@ -99,12 +108,18 @@
 <style>
   .vet-card { border:none; border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,.06);
               transition:transform .2s ease, box-shadow .2s ease; }
+  .vet-card--featured { border:1px solid rgba(13,110,253,.18);
+              box-shadow:0 10px 30px rgba(13,110,253,.1); }
   .vet-card:hover { transform:translateY(-4px); box-shadow:0 12px 26px rgba(0,0,0,.12); }
   .vet-avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; flex:0 0 auto;
                 border:2px solid #eef0f5; }
   .vet-avatar--placeholder { display:inline-flex; align-items:center; justify-content:center;
                 background:#eef2ff; color:#4e73df; font-size:1.6rem; }
   .vet-badge { background:#eef2ff; color:#3d5bd6; font-weight:600; font-size:.72rem; }
+  .vet-service-strip { display:flex; flex-wrap:wrap; gap:.45rem; }
+  .vet-service-strip span { display:inline-flex; align-items:center; padding:.35rem .65rem;
+                border-radius:999px; background:rgba(25,135,84,.1); color:#0f5132;
+                border:1px solid rgba(25,135,84,.16); font-size:.78rem; font-weight:700; }
   .min-w-0 { min-width:0; }
 </style>
 {% endblock %}

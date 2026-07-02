@@ -2006,6 +2006,73 @@ def _format_vet_coverage_cities(vet):
     )
 
 
+def _vet_public_name_key(vet):
+    return _normalize_public_text(getattr(getattr(vet, 'user', None), 'name', None))
+
+
+def _public_city_key(city):
+    key = _normalize_public_text(city)
+    if 'belo horizonte' in key:
+        return 'belo horizonte'
+    if 'contagem' in key:
+        return 'contagem'
+    if 'orlandia' in key:
+        return 'orlandia'
+    return key
+
+
+def _is_bh_public_city(city):
+    return _public_city_key(city) == 'belo horizonte'
+
+
+def _is_bh_or_contagem_public_city(city):
+    return _public_city_key(city) in {'belo horizonte', 'contagem'}
+
+
+def _is_robson_santos_public_profile(vet):
+    name_key = _vet_public_name_key(vet)
+    return 'robson' in name_key and 'santos' in name_key
+
+
+def _is_bh_consulta_extra_public_profile(vet):
+    name_key = _vet_public_name_key(vet)
+    return any(name in name_key for name in {'tereza', 'teresa', 'amanda'})
+
+
+def _vet_matches_public_city(vet, city, *, kind='consulta'):
+    if not city:
+        return True
+    city_key = _public_city_key(city)
+    if _vet_serves_city(vet, city):
+        return True
+    if any(_public_city_key(vet_city) == city_key for vet_city in _vet_all_public_cities(vet)):
+        return True
+    if _is_robson_santos_public_profile(vet) and city_key in {'belo horizonte', 'contagem'}:
+        return True
+    if kind == 'consulta' and city_key == 'belo horizonte' and _is_bh_consulta_extra_public_profile(vet):
+        return True
+    return False
+
+
+def _vet_public_service_notes(vet, selected_city=None):
+    notes = []
+    if selected_city and _is_robson_santos_public_profile(vet) and _is_bh_or_contagem_public_city(selected_city):
+        notes.append({
+            'icon': 'fa-solid fa-stethoscope',
+            'label': 'Consultas em Belo Horizonte e Contagem',
+        })
+        notes.append({
+            'icon': 'fa-solid fa-wave-square',
+            'label': 'Exame ultrassonografico',
+        })
+    if selected_city and _is_bh_public_city(selected_city) and _is_bh_consulta_extra_public_profile(vet):
+        notes.append({
+            'icon': 'fa-solid fa-calendar-check',
+            'label': 'Consultas em Belo Horizonte',
+        })
+    return notes
+
+
 def _is_public_veterinarian(vet):
     profile_type = _normalize_public_text(getattr(vet, 'public_profile_type', None) or 'profissional')
     membership = getattr(vet, 'membership', None)
@@ -23997,7 +24064,12 @@ def veterinarios():
     def vet_city(v):
         return _vet_public_city(v)
 
-    cidades = sorted({c for v in vets for c in _vet_all_public_cities(v)})
+    cidades_set = {c for v in vets for c in _vet_all_public_cities(v)}
+    if any(_is_robson_santos_public_profile(v) for v in vets):
+        cidades_set.update({'Belo Horizonte', 'Contagem'})
+    if any(_is_bh_consulta_extra_public_profile(v) for v in vets):
+        cidades_set.add('Belo Horizonte')
+    cidades = sorted(cidades_set)
 
     user_cidade = None
     if current_user.is_authenticated and getattr(current_user, 'endereco', None):
@@ -24006,11 +24078,15 @@ def veterinarios():
     selected = request.args.get('cidade')
     if selected is None:
         # Sem filtro explícito: prioriza a cidade do usuário logado, se houver vets nela.
-        selected = user_cidade if user_cidade in cidades else ''
+        matching_user_city = next(
+            (city for city in cidades if _public_city_key(city) == _public_city_key(user_cidade)),
+            None,
+        )
+        selected = matching_user_city or ''
     selected = (selected or '').strip()
 
     if selected:
-        filtrados = [v for v in vets if _vet_serves_city(v, selected)]
+        filtrados = [v for v in vets if _vet_matches_public_city(v, selected, kind='consulta')]
     else:
         # "Todas as cidades": profissionais que atendem a cidade do usuário primeiro.
         filtrados = sorted(
@@ -24025,6 +24101,7 @@ def veterinarios():
         selected_cidade=selected,
         user_cidade=user_cidade,
         vet_city=vet_city,
+        vet_service_notes=_vet_public_service_notes,
     )
 
 
@@ -31782,10 +31859,12 @@ def servicos_exames():
     selected_city = (request.args.get('cidade') or '').strip() or None
 
     public_vets = _public_veterinarians_query().all()
-    cities = sorted(
-        {c for vet in public_vets for c in _vet_all_public_cities(vet)},
-        key=_normalize_public_text,
-    )
+    cities_set = {c for vet in public_vets for c in _vet_all_public_cities(vet)}
+    if any(_is_robson_santos_public_profile(vet) for vet in public_vets):
+        cities_set.update({'Belo Horizonte', 'Contagem'})
+    if any(_is_bh_consulta_extra_public_profile(vet) for vet in public_vets):
+        cities_set.add('Belo Horizonte')
+    cities = sorted(cities_set, key=_normalize_public_text)
 
     if selected_animal_id:
         selected_animal = next((animal for animal in animals if animal.id == selected_animal_id), None)
@@ -31812,7 +31891,7 @@ def servicos_exames():
         if selected_city:
             especialistas = [
                 vet for vet in especialistas
-                if _vet_serves_city(vet, selected_city)
+                if _vet_matches_public_city(vet, selected_city, kind='exame')
             ]
 
     return render_template(
@@ -31823,6 +31902,7 @@ def servicos_exames():
         especialistas=especialistas,
         selected_city=selected_city,
         cities=cities,
+        vet_service_notes=_vet_public_service_notes,
     )
 
 
@@ -37252,7 +37332,7 @@ def schedule_exam(animal_id):
             animal_city = (animal.owner.endereco.cidade or '').strip() or None
         if not animal_city and getattr(current_user, 'endereco', None):
             animal_city = (current_user.endereco.cidade or '').strip() or None
-        if animal_city and not _vet_serves_city(vet, animal_city):
+        if animal_city and not _vet_matches_public_city(vet, animal_city, kind='exame'):
             abort(404)
     if animal.user_id != current_user.id and not same_user:
         animal = get_animal_or_404(animal_id)
