@@ -2,6 +2,7 @@
 
 {% block main %}
 {% set calendar_pets_endpoint = url_for('api_clinic_pets', view_as='veterinario', veterinario_id=veterinario.id) %}
+{% set calendar_events_endpoint = url_for('api_my_appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
 {% set calendar_summary_vets = calendar_summary_vets if calendar_summary_vets else [{
   'id': veterinario.id,
   'name': veterinario.user.name,

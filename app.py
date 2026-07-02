@@ -29090,7 +29090,7 @@ def novo_animal():
                 page_param=request.args.get('page_param', 'page'),
                 fetch_url=url_for('novo_animal'),
                 compact=True,
-                can_create_animals=True,
+                can_create_animals=False,
                 new_animal_url=url_for('novo_animal'),
             )
 
@@ -29168,7 +29168,7 @@ def novo_animal():
             page_param=request.args.get('page_param', 'page'),
             fetch_url=url_for('novo_animal'),
             compact=True,
-            can_create_animals=True,
+            can_create_animals=False,
             new_animal_url=url_for('novo_animal'),
         )
         return jsonify(html=html, scope=scope)

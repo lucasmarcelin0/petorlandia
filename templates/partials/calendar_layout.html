@@ -99,22 +99,24 @@
           {% include 'partials/tutor_calendar.html' %}
         {% endwith %}
       </div>
-      <div
-        class="tab-pane fade calendar-tab-pane pt-2"
-        id="{{ calendar_full_pane_id }}"
-        role="tabpanel"
-        aria-labelledby="{{ calendar_full_tab_id }}"
-        tabindex="0"
-      >
-        {% with
-          clinic_id = schedule_toggle_clinic_id,
-          calendar_redirect_url = schedule_toggle_calendar_redirect_url,
-          prefer_user_vet_source = schedule_toggle_prefer_user_vet_source,
-          include_assets = schedule_toggle_include_assets
-        %}
-          {% include 'partials/schedule_toggle.html' %}
-        {% endwith %}
-      </div>
+      {% if should_render_tab_nav %}
+        <div
+          class="tab-pane fade calendar-tab-pane pt-2"
+          id="{{ calendar_full_pane_id }}"
+          role="tabpanel"
+          aria-labelledby="{{ calendar_full_tab_id }}"
+          tabindex="0"
+        >
+          {% with
+            clinic_id = schedule_toggle_clinic_id,
+            calendar_redirect_url = schedule_toggle_calendar_redirect_url,
+            prefer_user_vet_source = schedule_toggle_prefer_user_vet_source,
+            include_assets = schedule_toggle_include_assets
+          %}
+            {% include 'partials/schedule_toggle.html' %}
+          {% endwith %}
+        </div>
+      {% endif %}
     </div>
   </div>
   <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>

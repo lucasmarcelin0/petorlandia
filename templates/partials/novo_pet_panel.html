@@ -57,7 +57,7 @@
       {% else %}
         {% with compact=True,
                 fetch_url=url_for('novo_animal'),
-                can_create_animals=True,
+                can_create_animals=False,
                 new_animal_url=url_for('novo_animal') %}
           {% include 'partials/animais_adicionados.html' %}
         {% endwith %}
