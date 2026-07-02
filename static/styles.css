@@ -3,6 +3,63 @@ body {
   background-color: #d4af37;
 }
 
+.phone-whatsapp-inline,
+.whatsapp-input-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.whatsapp-input-inline {
+  display: flex;
+  width: 100%;
+}
+
+.whatsapp-input-inline > .form-control,
+.whatsapp-input-inline > .form-select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.whatsapp-contact-btn,
+.whatsapp-input-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  border-color: #1f9d55;
+  color: #147a3d;
+}
+
+.whatsapp-contact-btn:hover,
+.whatsapp-input-action:hover {
+  background: #1f9d55;
+  border-color: #1f9d55;
+  color: #fff;
+}
+
+.whatsapp-contact-btn--compact {
+  padding: 0.2rem 0.5rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 576px) {
+  .phone-whatsapp-inline,
+  .whatsapp-input-inline {
+    align-items: stretch;
+  }
+
+  .phone-whatsapp-inline {
+    flex-wrap: wrap;
+  }
+
+  .whatsapp-input-action span {
+    display: none;
+  }
+}
+
 .data-idade .input-group {
   align-items: stretch;
 }

@@ -1639,6 +1639,27 @@ def digits_only(value):
     return "".join(filter(str.isdigit, value)) if value else ""
 
 
+def whatsapp_chat_url(phone: str | None, message: str | None = None) -> str | None:
+    """Build a public WhatsApp chat URL for Brazilian phone numbers."""
+    digits = digits_only(phone)
+    if not digits:
+        return None
+
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) in {11, 12}:
+        digits = digits[1:]
+    if not digits.startswith("55") and len(digits) in {10, 11}:
+        digits = f"55{digits}"
+    if len(digits) < 12:
+        return None
+
+    url = f"https://wa.me/{digits}"
+    if message:
+        url = f"{url}?text={quote_plus(str(message))}"
+    return url
+
+
 def normalize_email(value: str | None) -> str | None:
     """Normalize an email for case-insensitive lookups."""
     if value is None:
@@ -4571,6 +4592,11 @@ def inject_minha_casa_de_racao():
 def inject_current_app():
     """Make current_app available in templates for view_functions checks."""
     return dict(current_app=current_app)
+
+
+@app.context_processor
+def inject_whatsapp_helpers():
+    return dict(whatsapp_chat_url=whatsapp_chat_url)
 
 
 @app.context_processor

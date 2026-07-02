@@ -1,0 +1,27 @@
+{% macro whatsapp_button(phone, label='WhatsApp', message=None, compact=False, class_name='') -%}
+  {% set url = whatsapp_chat_url(phone, message) %}
+  {% if url %}
+    <a href="{{ url }}"
+       target="_blank"
+       rel="noopener"
+       class="btn btn-sm btn-outline-success whatsapp-contact-btn {{ 'whatsapp-contact-btn--compact' if compact else '' }} {{ class_name }}"
+       title="Abrir conversa no WhatsApp"
+       aria-label="Abrir conversa no WhatsApp">
+      <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+      {% if label %}
+        <span>{{ label }}</span>
+      {% endif %}
+    </a>
+  {% endif %}
+{%- endmacro %}
+
+{% macro phone_with_whatsapp(phone, empty='Telefone nao informado', label='WhatsApp', message=None, class_name='') -%}
+  {% if phone %}
+    <span class="phone-whatsapp-inline {{ class_name }}">
+      <span class="phone-whatsapp-inline__number">{{ phone }}</span>
+      {{ whatsapp_button(phone, label, message, True) }}
+    </span>
+  {% else %}
+    <span class="text-muted">{{ empty }}</span>
+  {% endif %}
+{%- endmacro %}

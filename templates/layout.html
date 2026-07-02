@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='styles.css', v='20260701b') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css', v='20260702wa') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
@@ -95,6 +95,79 @@
         setIfMissing(el, 'inputmode', 'email');
         setIfMissing(el, 'autocomplete', 'email');
       }
+    });
+  });
+</script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const phoneSelector = 'input:not([type="hidden"]):not([type="search"])';
+    const isPhoneField = (el) => {
+      const key = `${el.name || ''} ${el.id || ''} ${el.placeholder || ''}`.toLowerCase();
+      return /phone|telefone|celular|whats/.test(key);
+    };
+    const whatsappUrlFromValue = (value) => {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return '';
+      if (digits.startsWith('00')) digits = digits.slice(2);
+      if (digits.startsWith('0') && (digits.length === 11 || digits.length === 12)) digits = digits.slice(1);
+      if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) digits = `55${digits}`;
+      if (digits.length < 12) return '';
+      return `https://wa.me/${digits}`;
+    };
+
+    document.querySelectorAll(phoneSelector).forEach((input) => {
+      if (!isPhoneField(input) || input.dataset.whatsappEnhanced === 'true' || input.dataset.noWhatsapp === 'true') {
+        return;
+      }
+      if (input.closest('[data-no-whatsapp]')) {
+        return;
+      }
+      if (input.classList.contains('d-none') || input.closest('.d-none')) {
+        return;
+      }
+
+      const button = document.createElement('a');
+      button.className = 'btn btn-outline-success whatsapp-input-action';
+      button.target = '_blank';
+      button.rel = 'noopener';
+      button.title = 'Abrir conversa no WhatsApp';
+      button.setAttribute('aria-label', 'Abrir conversa no WhatsApp');
+      button.innerHTML = '<i class="fa-brands fa-whatsapp" aria-hidden="true"></i><span>WhatsApp</span>';
+
+      const syncButton = () => {
+        const url = whatsappUrlFromValue(input.value);
+        if (url) {
+          button.href = url;
+          button.classList.remove('disabled');
+          button.removeAttribute('aria-disabled');
+          button.tabIndex = 0;
+        } else {
+          button.removeAttribute('href');
+          button.classList.add('disabled', 'd-none');
+          button.setAttribute('aria-disabled', 'true');
+          button.tabIndex = -1;
+        }
+        if (url) {
+          button.classList.remove('d-none');
+        }
+      };
+
+      const inputGroup = input.closest('.input-group');
+      if (inputGroup) {
+        inputGroup.appendChild(button);
+      } else {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'whatsapp-input-inline';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+        wrapper.appendChild(button);
+      }
+
+      input.dataset.whatsappEnhanced = 'true';
+      input.addEventListener('input', syncButton);
+      input.addEventListener('change', syncButton);
+      syncButton();
     });
   });
 </script>

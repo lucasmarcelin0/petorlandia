@@ -1,4 +1,5 @@
 {% extends "sfa/base.html" %}
+{% from 'components/whatsapp.html' import phone_with_whatsapp %}
 
 {% block title %}{{ p.id_estudo }} - SFA Orlandia{% endblock %}
 {% block page_title %}Paciente {{ p.id_estudo }}{% endblock %}
@@ -94,7 +95,7 @@
           </div>
           <div class="col-sm-4">
             <div class="patient-panel-label">Telefone</div>
-            <div>{{ p.telefone or "-" }}</div>
+            <div>{{ phone_with_whatsapp(p.telefone, empty='-') }}</div>
           </div>
           <div class="col-sm-4">
             <div class="patient-panel-label">Bairro</div>

@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/whatsapp.html' import phone_with_whatsapp %}
 {% block main %}
 <div class="container mt-4" style="max-width: 980px;">
   <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
@@ -65,7 +66,7 @@
                 <tr>
                   <td class="fw-semibold">{{ tutor.name }}</td>
                   <td>
-                    <div>{{ tutor.phone or 'Sem telefone' }}</div>
+                    <div>{{ phone_with_whatsapp(tutor.phone, empty='Sem telefone') }}</div>
                     {% if tutor.email and not tutor.email.endswith('@petorlandia.local') %}
                     <small class="text-muted">{{ tutor.email }}</small>
                     {% endif %}
