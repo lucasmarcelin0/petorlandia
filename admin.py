@@ -16,10 +16,12 @@ from wtforms import (
 from markupsafe import Markup
 import os
 import uuid
+from datetime import timedelta
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from decimal import Decimal
 import re
+from time_utils import now_in_brazil, coerce_to_brazil_tz
 from security.crypto import MissingMasterKeyError, encrypt_text
 
 USER_ROLE_CHOICES = [
@@ -95,6 +97,7 @@ try:
         Order,
         OrderItem,
         DeliveryRequest,
+        AppointmentRequest,
         HealthPlan,
         HealthSubscription,
         PickupLocation,
@@ -146,6 +149,7 @@ except ImportError:
         Order,
         OrderItem,
         DeliveryRequest,
+        AppointmentRequest,
         HealthPlan,
         HealthSubscription,
         PickupLocation,
@@ -204,15 +208,85 @@ class AdminDashboard(BaseView):
     @expose('/')
     @login_required
     def index(self):
-        total_users = User.query.count()
-        total_animals = Animal.query.count()
-        total_consultas = Consulta.query.count()
+        agora = now_in_brazil()
+
+        def _coerce(dt):
+            try:
+                return coerce_to_brazil_tz(dt) if dt else None
+            except Exception:
+                return None
+
+        # ── Crescimento de usuários (últimas 8 semanas) ──────────────────
+        inicio_janela = agora - timedelta(weeks=8)
+        datas_cadastro = [
+            _coerce(c)
+            for (c,) in db.session.query(User.created_at)
+            .filter(User.created_at.isnot(None))
+            .all()
+        ]
+        datas_cadastro = [c for c in datas_cadastro if c]
+
+        semana_labels, semana_counts = [], []
+        for i in range(8):
+            inicio = inicio_janela + timedelta(weeks=i)
+            fim = inicio + timedelta(weeks=1)
+            semana_labels.append(inicio.strftime('%d/%m'))
+            semana_counts.append(sum(1 for c in datas_cadastro if inicio <= c < fim))
+
+        d7 = agora - timedelta(days=7)
+        d30 = agora - timedelta(days=30)
+        novos_usuarios_7d = sum(1 for c in datas_cadastro if c >= d7)
+        novos_usuarios_30d = sum(1 for c in datas_cadastro if c >= d30)
+
+        logins_7d = sum(
+            1
+            for (l,) in db.session.query(User.last_login).filter(User.last_login.isnot(None)).all()
+            if (_coerce(l) or inicio_janela) >= d7
+        )
+
+        # ── Atividade recente (solicitações e cadastros) ─────────────────
+        atividades = []
+
+        def _add(quando, icone, cor, texto, url=None):
+            quando = _coerce(quando)
+            if quando:
+                atividades.append(
+                    {'quando': quando, 'icone': icone, 'cor': cor, 'texto': texto, 'url': url}
+                )
+
+        for u in (
+            User.query.filter(User.created_at.isnot(None))
+            .order_by(User.created_at.desc())
+            .limit(10)
+        ):
+            _add(u.created_at, 'bi-person-plus-fill', 'primary',
+                 f'Novo usuário: {u.name}', url_for('user.index_view'))
+
+        for o in Order.query.order_by(Order.created_at.desc()).limit(10):
+            nome = o.user.name if o.user else 'Usuário removido'
+            _add(o.created_at, 'bi-cart-fill', 'success',
+                 f'Pedido #{o.id} — {nome} (R$ {o.total_value():.2f})',
+                 url_for('order.index_view'))
+
+        for dr in DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).limit(10):
+            solicitante = dr.requested_by.name if dr.requested_by else '—'
+            _add(dr.requested_at, 'bi-truck', 'warning',
+                 f'Entrega do pedido #{dr.order_id} ({dr.status}) — {solicitante}',
+                 url_for('deliveryrequest.index_view'))
+
+        for ar in AppointmentRequest.query.order_by(AppointmentRequest.created_at.desc()).limit(10):
+            _add(ar.created_at, 'bi-calendar-plus', 'info',
+                 f'Solicitação de {ar.kind_label.lower()} — {ar.tutor.name} '
+                 f'para {ar.animal.name} ({ar.status_display.lower()})')
+
+        atividades.sort(key=lambda a: a['quando'], reverse=True)
+        atividades = atividades[:15]
 
         return self.render(
             'admin/home_admin.html',
-            total_users=total_users,
-            total_animals=total_animals,
-            total_consultas=total_consultas,
+            total_users=User.query.count(),
+            total_animals=Animal.query.count(),
+            total_consultas=Consulta.query.count(),
             total_orders = Order.query.count(),
             completed_orders = Order.query.join(DeliveryRequest).filter(DeliveryRequest.status == 'concluida').count(),
             pending_deliveries = DeliveryRequest.query.filter_by(status='pendente').count(),
@@ -221,7 +295,14 @@ class AdminDashboard(BaseView):
             total_revenue = db.session.query(func.sum(Payment.amount)).filter(Payment.status == PaymentStatus.COMPLETED).scalar() or 0,
             pending_payments = Payment.query.filter_by(status=PaymentStatus.PENDING).count(),
             active_health_plans = HealthSubscription.query.filter_by(active=True).count(),
-
+            novos_usuarios_7d=novos_usuarios_7d,
+            novos_usuarios_30d=novos_usuarios_30d,
+            logins_7d=logins_7d,
+            semana_labels=semana_labels,
+            semana_counts=semana_counts,
+            atividades=atividades,
+            pending_requests=AppointmentRequest.query.filter_by(status='pending').count(),
+            agora=agora,
         )
 
 # --------------------------------------------------------------------------

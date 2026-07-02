@@ -2,6 +2,90 @@
 
 {% block body %}
 <div class="container-fluid">
+
+  <!-- ─── Pendências: o que precisa de ação agora ─────────────────── -->
+  {% set total_pendencias = pending_deliveries + pending_payments + pending_requests %}
+  <div class="alert {{ 'alert-warning' if total_pendencias else 'alert-success' }} d-flex flex-wrap align-items-center gap-3 shadow-sm">
+    <strong class="me-2">
+      <i class="bi bi-bell-fill me-1"></i>
+      {% if total_pendencias %}Pendências aguardando ação:{% else %}Nenhuma pendência no momento 🎉{% endif %}
+    </strong>
+    <a href="{{ url_for('deliveryrequest.index_view') }}" class="text-decoration-none">
+      <span class="badge {{ 'bg-danger' if pending_deliveries else 'bg-secondary' }}">Entregas pendentes: {{ pending_deliveries }}</span>
+    </a>
+    <span class="badge {{ 'bg-warning text-dark' if pending_payments else 'bg-secondary' }}">Pagamentos pendentes: {{ pending_payments }}</span>
+    <span class="badge {{ 'bg-info text-dark' if pending_requests else 'bg-secondary' }}">Agendamentos aguardando confirmação: {{ pending_requests }}</span>
+  </div>
+
+  <!-- ─── Crescimento ─────────────────────────────────────────────── -->
+  <div class="row g-4 mb-2">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h6 class="text-muted mb-1"><i class="bi bi-graph-up-arrow me-2"></i>Novos cadastros (7 dias)</h6>
+          <h2 class="fw-bold mb-0">{{ novos_usuarios_7d }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h6 class="text-muted mb-1"><i class="bi bi-calendar-month me-2"></i>Novos cadastros (30 dias)</h6>
+          <h2 class="fw-bold mb-0">{{ novos_usuarios_30d }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h6 class="text-muted mb-1"><i class="bi bi-box-arrow-in-right me-2"></i>Usuários ativos (login em 7 dias)</h6>
+          <h2 class="fw-bold mb-0">{{ logins_7d }}</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <!-- Gráfico de cadastros por semana -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h6 class="text-muted mb-3"><i class="bi bi-bar-chart-fill me-2"></i>Novos cadastros por semana (últimas 8 semanas)</h6>
+          <canvas id="graficoCadastros" height="110"></canvas>
+          <small class="text-muted d-block mt-2">
+            Contabiliza contas criadas a partir de {{ agora.strftime('%d/%m/%Y') }} para trás;
+            usuários antigos (antes do rastreamento) não aparecem no gráfico.
+          </small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Atividade recente -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h6 class="text-muted mb-3"><i class="bi bi-activity me-2"></i>Atividade recente</h6>
+          {% if atividades %}
+          <ul class="list-group list-group-flush" style="max-height: 320px; overflow-y: auto;">
+            {% for a in atividades %}
+            <li class="list-group-item d-flex align-items-start gap-2 px-0">
+              <i class="bi {{ a.icone }} text-{{ a.cor }} mt-1"></i>
+              <div class="flex-grow-1">
+                {% if a.url %}<a href="{{ a.url }}" class="text-decoration-none text-body">{{ a.texto }}</a>
+                {% else %}{{ a.texto }}{% endif %}
+                <div><small class="text-muted">{{ a.quando.strftime('%d/%m/%Y %H:%M') }}</small></div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">Nenhuma atividade registrada ainda.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="row g-4">
 
     <!-- Usuários Registrados -->
@@ -186,4 +270,28 @@
     </div>
   </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('graficoCadastros');
+    if (!el || typeof Chart === 'undefined') return;
+    new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: {{ semana_labels | tojson }},
+        datasets: [{
+          label: 'Novos cadastros',
+          data: {{ semana_counts | tojson }},
+          backgroundColor: 'rgba(78, 115, 223, 0.7)',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  });
+</script>
 {% endblock %}

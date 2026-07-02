@@ -107,6 +107,14 @@ class Config:
         else None
     )
 
+    # Google Analytics 4 (medição de visitantes). Sem o ID definido, nenhum
+    # script de analytics é carregado nas páginas.
+    GA_MEASUREMENT_ID = _env_optional("GA_MEASUREMENT_ID")
+
+    # E-mail que recebe o aviso de novas solicitações (pedidos pagos,
+    # agendamentos). Sem valor definido, nenhum aviso é enviado.
+    ADMIN_NOTIFY_EMAIL = _env_optional("ADMIN_NOTIFY_EMAIL")
+
     # Token de acesso do Mercado Pago usado na integração de pagamentos
     MERCADOPAGO_ACCESS_TOKEN = _env_optional("MERCADOPAGO_ACCESS_TOKEN")
     MERCADOPAGO_PUBLIC_KEY = _env_optional("MERCADOPAGO_PUBLIC_KEY")

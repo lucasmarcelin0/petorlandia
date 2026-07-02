@@ -187,12 +187,27 @@ def _can(user: Any, resource: str, action: str) -> bool:
     return bool(allowed_roles)
 
 
+def _is_global_admin(user: Any) -> bool:
+    """Admins têm escopo global: operam sobre qualquer clínica.
+
+    A matriz RBAC já concede view/manage total ao admin; o requisito extra de
+    pertencer operacionalmente à clínica existe para restringir donos, equipe e
+    veterinários, e não deve re-limitar o admin (que não é vinculado a nenhuma
+    clínica específica) a um escopo vazio.
+    """
+    return "admin" in _user_roles(user)
+
+
 def can_view_clinic(user: Any, clinic_id: int | None) -> bool:
-    return bool(clinic_id) and _can(user, "clinic", "view") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    if not clinic_id or not _can(user, "clinic", "view"):
+        return False
+    return _is_global_admin(user) or int(clinic_id) in _viewer_operational_clinic_ids(user)
 
 
 def can_manage_clinic(user: Any, clinic_id: int | None) -> bool:
-    return bool(clinic_id) and _can(user, "clinic", "manage") and int(clinic_id) in _viewer_operational_clinic_ids(user)
+    if not clinic_id or not _can(user, "clinic", "manage"):
+        return False
+    return _is_global_admin(user) or int(clinic_id) in _viewer_operational_clinic_ids(user)
 
 
 def can_view_budget(user: Any, clinic_id: int | None, consultation_id: int | None = None) -> bool:

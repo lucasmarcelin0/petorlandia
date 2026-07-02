@@ -368,11 +368,21 @@ class TestAnimalManagement:
             db.session.commit()
             animal_id = animal.id
         
-        # View medical history
+        # View medical history. A página carrega o histórico de forma assíncrona,
+        # então a ficha principal traz o cabeçalho e a seção detalhada vem via
+        # ?section=history (JSON com o partial renderizado).
         response = client.get(f'/animal/{animal_id}/ficha')
         assert response.status_code == 200
         assert b'Bobby' in response.data
-        assert b'Check-up de rotina' in response.data or b'consulta' in response.data.lower()
+
+        history = client.get(f'/animal/{animal_id}/ficha?section=history')
+        assert history.status_code == 200
+        payload = history.get_json()
+        assert payload['success'] is True
+        history_html = payload['html']
+        # A consulta finalizada deve aparecer listada (seção não vazia).
+        assert 'Consultas Veterinárias' in history_html
+        assert 'Nenhuma consulta registrada' not in history_html
 
 
 class TestAppointmentWorkflow:
