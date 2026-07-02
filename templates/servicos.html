@@ -1,6 +1,205 @@
 {% extends "layout.html" %}
 {% block main %}
 
+{% if is_admin %}
+<section class="mb-4">
+  <div class="card border-primary shadow-sm">
+    <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
+      <i class="fa-solid fa-share-nodes"></i>
+      <strong>Recomendar serviços a um tutor (WhatsApp)</strong>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Escolha um tutor, os pets e os serviços. Geramos uma mensagem com links
+        personalizados: no primeiro acesso o tutor define uma senha e cai direto
+        na página do serviço.
+      </p>
+
+      <!-- Tutor -->
+      <div class="mb-3 position-relative">
+        <label class="form-label fw-bold mb-1">Tutor</label>
+        <input type="text" id="rec-tutor-busca" class="form-control"
+               placeholder="Buscar por nome, e-mail ou celular…" autocomplete="off">
+        <div id="rec-tutor-resultados" class="list-group position-absolute w-100 shadow"
+             style="z-index: 1050; max-height: 260px; overflow-y: auto; display: none;"></div>
+        <div id="rec-tutor-selecionado" class="form-text mt-1"></div>
+        <input type="hidden" id="rec-tutor-id">
+      </div>
+
+      <!-- Animais -->
+      <div class="mb-3">
+        <label class="form-label fw-bold mb-1">Pets</label>
+        <div id="rec-animais" class="d-flex flex-wrap gap-3">
+          <span class="text-muted small">Selecione um tutor para listar os pets.</span>
+        </div>
+      </div>
+
+      <!-- Serviços + cidade -->
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-md-7">
+          <label class="form-label fw-bold mb-1">Serviços recomendados</label>
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check"><input class="form-check-input rec-servico" type="checkbox" value="vacinas" id="rec-s-vacinas"><label class="form-check-label" for="rec-s-vacinas">Vacinas (agendamento)</label></div>
+            <div class="form-check"><input class="form-check-input rec-servico" type="checkbox" value="pmo" id="rec-s-pmo"><label class="form-check-label" for="rec-s-pmo">Antirrábica gratuita (PMO)</label></div>
+            <div class="form-check"><input class="form-check-input rec-servico" type="checkbox" value="consultas" id="rec-s-consultas"><label class="form-check-label" for="rec-s-consultas">Consulta</label></div>
+            <div class="form-check"><input class="form-check-input rec-servico" type="checkbox" value="exames" id="rec-s-exames"><label class="form-check-label" for="rec-s-exames">Exames / ultrassom</label></div>
+          </div>
+        </div>
+        <div class="col-12 col-md-5">
+          <label for="rec-cidade" class="form-label fw-bold mb-1">Cidade</label>
+          <select id="rec-cidade" class="form-select">
+            {% for city in cities %}
+            <option value="{{ city }}" {% if city == selected_city %}selected{% endif %}>{{ city }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Texto livre -->
+      <div class="mb-3">
+        <label for="rec-texto" class="form-label fw-bold mb-1">Mensagem adicional (opcional)</label>
+        <textarea id="rec-texto" class="form-control" rows="2" placeholder="Ex.: Passe qualquer dúvida por aqui!"></textarea>
+      </div>
+
+      <button type="button" id="rec-gerar" class="btn btn-primary">
+        <i class="fa-brands fa-whatsapp me-1"></i> Gerar mensagem
+      </button>
+
+      <!-- Resultado -->
+      <div id="rec-resultado" class="mt-3" style="display: none;">
+        <label class="form-label fw-bold mb-1">Prévia da mensagem</label>
+        <textarea id="rec-preview" class="form-control mb-2" rows="7" readonly></textarea>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <a id="rec-whatsapp" class="btn btn-success" target="_blank" rel="noopener">
+            <i class="fa-brands fa-whatsapp me-1"></i> Abrir WhatsApp
+          </a>
+          <button type="button" id="rec-copiar" class="btn btn-outline-secondary">Copiar mensagem</button>
+          <span id="rec-aviso" class="text-danger small"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  const buscaEl = document.getElementById('rec-tutor-busca');
+  if (!buscaEl) return;
+  const resultadosEl = document.getElementById('rec-tutor-resultados');
+  const selecionadoEl = document.getElementById('rec-tutor-selecionado');
+  const tutorIdEl = document.getElementById('rec-tutor-id');
+  const animaisEl = document.getElementById('rec-animais');
+  const resultadoEl = document.getElementById('rec-resultado');
+  const previewEl = document.getElementById('rec-preview');
+  const whatsappEl = document.getElementById('rec-whatsapp');
+  const avisoEl = document.getElementById('rec-aviso');
+  const csrf = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = csrf ? csrf.getAttribute('content') : '';
+
+  let buscaTimer = null;
+
+  buscaEl.addEventListener('input', function () {
+    const q = buscaEl.value.trim();
+    clearTimeout(buscaTimer);
+    if (q.length < 2) { resultadosEl.style.display = 'none'; return; }
+    buscaTimer = setTimeout(async () => {
+      try {
+        const resp = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`, { headers: { 'Accept': 'application/json' } });
+        const tutores = await resp.json();
+        resultadosEl.innerHTML = '';
+        if (!tutores.length) { resultadosEl.style.display = 'none'; return; }
+        tutores.forEach(t => {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'list-group-item list-group-item-action';
+          item.innerHTML = `<strong>${t.name || 'Sem nome'}</strong><br><small class="text-muted">${t.details || ''}</small>`;
+          item.addEventListener('click', () => selecionarTutor(t));
+          resultadosEl.appendChild(item);
+        });
+        resultadosEl.style.display = 'block';
+      } catch (e) { resultadosEl.style.display = 'none'; }
+    }, 250);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!resultadosEl.contains(e.target) && e.target !== buscaEl) resultadosEl.style.display = 'none';
+  });
+
+  async function selecionarTutor(t) {
+    tutorIdEl.value = t.id;
+    buscaEl.value = t.name || '';
+    resultadosEl.style.display = 'none';
+    selecionadoEl.innerHTML = t.phone
+      ? `Selecionado: <strong>${t.name}</strong> — ${t.phone}`
+      : `Selecionado: <strong>${t.name}</strong> — <span class="text-danger">sem telefone cadastrado</span>`;
+    animaisEl.innerHTML = '<span class="text-muted small">Carregando pets…</span>';
+    try {
+      const resp = await fetch(`/buscar_animais?tutor_id=${t.id}`, { headers: { 'Accept': 'application/json' } });
+      const animais = await resp.json();
+      if (!animais.length) {
+        animaisEl.innerHTML = '<span class="text-muted small">Este tutor não tem pets cadastrados.</span>';
+        return;
+      }
+      animaisEl.innerHTML = '';
+      animais.forEach(a => {
+        const div = document.createElement('div');
+        div.className = 'form-check';
+        div.innerHTML = `<input class="form-check-input rec-animal" type="checkbox" value="${a.id}" id="rec-animal-${a.id}" checked>
+                         <label class="form-check-label" for="rec-animal-${a.id}">${a.name || 'Pet'}</label>`;
+        animaisEl.appendChild(div);
+      });
+    } catch (e) {
+      animaisEl.innerHTML = '<span class="text-danger small">Erro ao carregar pets.</span>';
+    }
+  }
+
+  document.getElementById('rec-gerar').addEventListener('click', async function () {
+    if (!tutorIdEl.value) { alert('Selecione um tutor.'); return; }
+    const services = Array.from(document.querySelectorAll('.rec-servico:checked')).map(el => el.value);
+    if (!services.length) { alert('Escolha ao menos um serviço.'); return; }
+    const animal_ids = Array.from(document.querySelectorAll('.rec-animal:checked')).map(el => el.value);
+    const payload = {
+      tutor_id: tutorIdEl.value,
+      services: services,
+      animal_ids: animal_ids,
+      cidade: document.getElementById('rec-cidade').value,
+      texto_livre: document.getElementById('rec-texto').value,
+    };
+    this.disabled = true;
+    try {
+      const resp = await fetch('/servicos/recomendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!data.success) { alert(data.message || 'Não foi possível gerar a mensagem.'); return; }
+      previewEl.value = data.message;
+      resultadoEl.style.display = 'block';
+      if (data.whatsapp_url) {
+        whatsappEl.href = data.whatsapp_url;
+        whatsappEl.style.display = '';
+        avisoEl.textContent = '';
+      } else {
+        whatsappEl.style.display = 'none';
+        avisoEl.textContent = 'Tutor sem telefone válido — copie a mensagem e envie manualmente.';
+      }
+    } catch (e) {
+      alert('Erro ao gerar a mensagem.');
+    } finally {
+      this.disabled = false;
+    }
+  });
+
+  document.getElementById('rec-copiar').addEventListener('click', () => {
+    previewEl.select();
+    navigator.clipboard && navigator.clipboard.writeText(previewEl.value);
+  });
+})();
+</script>
+{% endif %}
+
+
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
     <h1 class="fw-bold mb-2 text-primary">

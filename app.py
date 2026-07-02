@@ -31593,6 +31593,7 @@ def servicos():
     tosa — junto de consultas, exames e pet sitter.
     """
     from services.vaccine_service_paid import list_cidades as list_vaccine_service_cities
+    from admin import _is_admin
 
     audience = _current_professional_service_audience()
     vets = _public_veterinarians_query().all()
@@ -31784,9 +31785,126 @@ def servicos():
         pmo_services=pmo_services,
         localized_services=localized_services,
         other_services=other_services,
+        is_admin=_is_admin(),
         # Sem cidade no pedido nem no cadastro → oferecer geolocalização automática.
         auto_locate=(not requested_city and not user_city),
     )
+
+
+# Rótulos e catálogo de serviços recomendáveis pelo admin (mensagem WhatsApp).
+SERVICE_RECOMMENDATION_CATALOG = {
+    'vacinas': 'Vacinas (agendamento)',
+    'pmo': 'Vacina antirrábica gratuita (PMO)',
+    'consultas': 'Consulta com veterinário',
+    'exames': 'Exames e ultrassonografia',
+}
+
+
+def _service_recommendation_link(service_key, city):
+    """Return the internal target URL for a recommendable service, or None."""
+    if service_key == 'vacinas':
+        return url_for('servicos_vacinas', cidade=city) if city else url_for('servicos_vacinas')
+    if service_key == 'pmo':
+        return url_for('vacina_pmo_solicitar')
+    if service_key == 'consultas':
+        return url_for('veterinarios', cidade=city) if city else url_for('veterinarios')
+    if service_key == 'exames':
+        return url_for('servicos_ultrassom')
+    return None
+
+
+def _build_service_recommendation(tutor, animais, services, city, free_text):
+    """Build the WhatsApp recommendation message + wa.me URL for a tutor.
+
+    Each service link is wrapped in a personalized first-access URL so a
+    logged-out tutor sets a password once and is redirected (``next``) to the
+    service page. Must run server-side because the token is signed.
+    """
+    nome = (getattr(tutor, 'name', None) or 'tutor').split()[0]
+    nomes_animais = [a.name for a in (animais or []) if getattr(a, 'name', None)]
+    if not nomes_animais:
+        pets = 'seu pet'
+    elif len(nomes_animais) == 1:
+        pets = nomes_animais[0]
+    else:
+        pets = ', '.join(nomes_animais[:-1]) + f' e {nomes_animais[-1]}'
+
+    linhas = [
+        f'Oi, {nome}! Tudo bem? Aqui é o Lucas Marcelino, médico veterinário.',
+        f'Separei alguns serviços da PetOrlândia para {pets}:',
+        '',
+    ]
+    for key in services:
+        target = _service_recommendation_link(key, city)
+        if not target:
+            continue
+        link = _first_access_url_for_user(tutor, next_url=target, _external=True)
+        linhas.append(f'• {SERVICE_RECOMMENDATION_CATALOG[key]}: {link}')
+
+    if free_text and free_text.strip():
+        linhas.append('')
+        linhas.append(free_text.strip())
+
+    linhas.append('')
+    linhas.append('No primeiro acesso é só definir uma senha e você já cai direto na página. 🐾')
+    message = '\n'.join(linhas)
+    whatsapp_url = whatsapp_chat_url(getattr(tutor, 'phone', None), message)
+    return {
+        'message': message,
+        'whatsapp_url': whatsapp_url,
+        'phone_ok': bool(whatsapp_url),
+    }
+
+
+@app.route('/servicos/recomendar', methods=['POST'])
+@login_required
+def servicos_recomendar():
+    """Admin: gera mensagem de WhatsApp recomendando serviços a um tutor."""
+    from admin import _is_admin
+    if not _is_admin():
+        abort(403)
+
+    data = request.get_json(silent=True) or request.form
+    try:
+        tutor_id = int(data.get('tutor_id'))
+    except (TypeError, ValueError):
+        tutor_id = None
+    if not tutor_id:
+        return jsonify(success=False, message='Selecione um tutor.'), 400
+
+    tutor = get_user_or_404(tutor_id)
+
+    if hasattr(data, 'getlist'):
+        raw_services = data.getlist('services') or data.getlist('services[]')
+        raw_animal_ids = data.getlist('animal_ids') or data.getlist('animal_ids[]')
+    else:
+        raw_services = data.get('services') or []
+        raw_animal_ids = data.get('animal_ids') or []
+        if not isinstance(raw_services, (list, tuple)):
+            raw_services = [raw_services]
+        if not isinstance(raw_animal_ids, (list, tuple)):
+            raw_animal_ids = [raw_animal_ids]
+
+    services = [s for s in raw_services if s in SERVICE_RECOMMENDATION_CATALOG]
+    if not services:
+        return jsonify(success=False, message='Escolha ao menos um serviço.'), 400
+
+    animal_id_set = set()
+    for aid in raw_animal_ids:
+        try:
+            animal_id_set.add(int(aid))
+        except (TypeError, ValueError):
+            continue
+    animais = [
+        a for a in Animal.query.filter_by(user_id=tutor.id).all()
+        if a.id in animal_id_set
+    ]
+
+    city = (data.get('cidade') or '').strip() or None
+    free_text = data.get('texto_livre') or ''
+
+    result = _build_service_recommendation(tutor, animais, services, city, free_text)
+    return jsonify(success=True, **result)
 
 
 @app.route('/servicos/ultrassom')
