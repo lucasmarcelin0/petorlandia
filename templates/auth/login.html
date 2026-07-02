@@ -10,7 +10,7 @@
             Entre com sua conta de veterinário para conectar o PetOrlândia ao ChatGPT e autorizar cadastros direto no sistema.
         </div>
         {% endif %}
-        <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form">
+        <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form" data-no-whatsapp>
             {{ form.hidden_tag() }}
             <input type="hidden" name="next" value="{{ next_url }}">
             {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular') }}
