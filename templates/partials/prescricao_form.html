@@ -721,7 +721,7 @@
 
     fetch(`/medicamentos_favoritos/${med.id}`, {
       method: metodo,
-      headers: { 'X-CSRFToken': '{{ csrf_token() }}' },
+      headers: { 'X-CSRFToken': getCsrfTokenAtual() },
     })
       .then(r => r.json())
       .then(() => {
@@ -1031,6 +1031,79 @@
     document.getElementById('nova-medicacao-bula').value = '';
   }
 
+  function getCsrfTokenAtual() {
+    return document.querySelector('meta[name="csrf-token"]')?.content
+      || document.querySelector('input[name="csrf_token"]')?.value
+      || '';
+  }
+
+  function atualizarCsrfToken(token) {
+    if (!token) return;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) meta.content = token;
+    document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+      input.value = token;
+    });
+  }
+
+  async function renovarCsrfTokenPorPagina() {
+    const resp = await fetch(window.location.href, {
+      method: 'GET',
+      headers: { 'Accept': 'text/html' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    });
+    const html = await resp.text();
+    if (!resp.ok) throw new Error('Não foi possível renovar a validação de segurança.');
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const token = doc.querySelector('meta[name="csrf-token"]')?.content
+      || doc.querySelector('input[name="csrf_token"]')?.value
+      || '';
+    if (!token) throw new Error('Não foi possível renovar a validação de segurança.');
+
+    atualizarCsrfToken(token);
+    return token;
+  }
+
+  function respostaDeCsrfInvalido(resp, data) {
+    const textoErro = `${data?.error || ''} ${data?.message || ''}`.toLowerCase();
+    return resp.status === 400 && (
+      data?.errors?.csrf_token
+      || textoErro.includes('csrf')
+      || textoErro.includes('validação')
+      || textoErro.includes('validacao')
+    );
+  }
+
+  async function fetchMedicamentoComCsrf(url, options = {}, retry = true) {
+    const headers = {
+      ...(options.headers || {}),
+      'Accept': 'application/json',
+      'X-CSRFToken': getCsrfTokenAtual()
+    };
+
+    const resp = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'same-origin'
+    });
+    const data = await resp.json().catch(() => ({}));
+
+    if (retry && respostaDeCsrfInvalido(resp, data)) {
+      headers['X-CSRFToken'] = await renovarCsrfTokenPorPagina();
+      const retryResp = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'same-origin'
+      });
+      const retryData = await retryResp.json().catch(() => ({}));
+      return { resp: retryResp, data: retryData };
+    }
+
+    return { resp, data };
+  }
+
   async function salvarMedicamento() {
     const nome = document.getElementById('nova-medicacao-nome').value.trim();
     const principio = document.getElementById('nova-medicacao-principio').value.trim();
@@ -1064,12 +1137,11 @@
     const method = id ? 'PUT' : 'POST';
 
     try {
-      const resp = await fetch(url, {
+      const { resp, data } = await fetchMedicamentoComCsrf(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await resp.json();
       if (!resp.ok || data.success === false) throw new Error(data.message || 'Erro');
 
       mostrarFeedback(id ? 'Medicação atualizada!' : 'Medicação cadastrada com sucesso!');
@@ -1092,7 +1164,8 @@
       document.getElementById('frequencia').value = '';
       document.getElementById('duracao').value = '';
     } catch (e) {
-      mostrarFeedback('Erro ao salvar medicação.', 'danger');
+      console.error('Erro ao salvar medicação:', e);
+      mostrarFeedback(e.message || 'Erro ao salvar medicação.', 'danger');
     }
   }
 
@@ -1100,8 +1173,7 @@
     if (!medicamentoSelecionado?.id) return;
     if (!confirm('Deseja realmente excluir este medicamento?')) return;
     try {
-      const resp = await fetch(`/medicamento/${medicamentoSelecionado.id}`, { method: 'DELETE', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } });
-      const data = await resp.json().catch(() => ({}));
+      const { resp, data } = await fetchMedicamentoComCsrf(`/medicamento/${medicamentoSelecionado.id}`, { method: 'DELETE' });
       if (!resp.ok || data.success === false) throw new Error(data.message || 'Erro');
 
       mostrarFeedback('Medicação excluída.');
@@ -1111,7 +1183,8 @@
       limparFormularioMedicamento();
       document.getElementById('nova-medicacao-container').classList.add('d-none');
     } catch (e) {
-      mostrarFeedback('Erro ao excluir medicação.', 'danger');
+      console.error('Erro ao excluir medicação:', e);
+      mostrarFeedback(e.message || 'Erro ao excluir medicação.', 'danger');
     }
   }
 
