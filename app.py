@@ -36246,6 +36246,63 @@ def api_clinic_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
+def _parse_calendar_boundary(value):
+    if not value:
+        return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    try:
+        if "T" not in raw:
+            return datetime.combine(date.fromisoformat(raw), time.min, tzinfo=BR_TZ)
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=BR_TZ)
+        return parsed
+    except (TypeError, ValueError):
+        return None
+
+
+def _calendar_window_from_request():
+    start = _parse_calendar_boundary(request.args.get("start"))
+    end = _parse_calendar_boundary(request.args.get("end"))
+
+    if start and end and end <= start:
+        end = None
+
+    start_local = coerce_to_brazil_tz(start) if start else None
+    end_local = coerce_to_brazil_tz(end) if end else None
+
+    return {
+        "start_utc": normalize_to_utc(start) if start else None,
+        "end_utc": normalize_to_utc(end) if end else None,
+        "start_date": start_local.date() if start_local else None,
+        "end_date": end_local.date() if end_local else None,
+    }
+
+
+def _apply_calendar_datetime_window(query, column, window):
+    if not window:
+        return query
+    if window.get("start_utc") is not None:
+        query = query.filter(column >= window["start_utc"])
+    if window.get("end_utc") is not None:
+        query = query.filter(column < window["end_utc"])
+    return query
+
+
+def _apply_calendar_date_window(query, column, window):
+    if not window:
+        return query
+    if window.get("start_date") is not None:
+        query = query.filter(column >= window["start_date"])
+    if window.get("end_date") is not None:
+        query = query.filter(column < window["end_date"])
+    return query
+
+
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
@@ -36260,6 +36317,7 @@ def api_my_appointments():
     )
 
     query = Appointment.query
+    calendar_window = _calendar_window_from_request()
     is_vet = is_veterinarian(current_user)
     context = {
         'mode': None,
@@ -36444,6 +36502,7 @@ def api_my_appointments():
         context['mode'] = 'tutor'
         context['tutor_id'] = current_user.id
 
+    query = _apply_calendar_datetime_window(query, Appointment.scheduled_at, calendar_window)
     appts = query.order_by(Appointment.scheduled_at).all()
     events = appointments_to_events(appts)
 
@@ -36471,6 +36530,11 @@ def api_my_appointments():
         or_conditions = [cond for cond in (or_filters or []) if cond is not None]
         if or_conditions:
             query_obj = query_obj.filter(or_(*or_conditions))
+        query_obj = _apply_calendar_datetime_window(
+            query_obj,
+            ExamAppointment.scheduled_at,
+            calendar_window,
+        )
         exam_items = query_obj.order_by(ExamAppointment.scheduled_at).all()
         for exam in unique_items_by_id(exam_items):
             event = exam_to_event(exam)
@@ -36485,6 +36549,11 @@ def api_my_appointments():
         or_conditions = [cond for cond in (or_filters or []) if cond is not None]
         if or_conditions:
             query_obj = query_obj.filter(or_(*or_conditions))
+        query_obj = _apply_calendar_date_window(
+            query_obj,
+            Vacina.aplicada_em,
+            calendar_window,
+        )
         vaccine_items = query_obj.order_by(Vacina.aplicada_em).all()
         for vaccine in unique_items_by_id(vaccine_items):
             event = vaccine_to_event(vaccine)
@@ -36508,6 +36577,11 @@ def api_my_appointments():
         or_conditions = [cond for cond in (or_filters or []) if cond is not None]
         if or_conditions:
             query_obj = query_obj.filter(or_(*or_conditions))
+        query_obj = _apply_calendar_datetime_window(
+            query_obj,
+            func.coalesce(Consulta.finalizada_em, Consulta.created_at),
+            calendar_window,
+        )
         consulta_items = query_obj.order_by(Consulta.created_at).all()
         for consulta in unique_items_by_id(consulta_items):
             event = consulta_to_event(consulta)
@@ -36622,15 +36696,18 @@ def api_user_appointments(user_id):
 
     user = get_user_or_404(user_id)
     vet = getattr(user, 'veterinario', None)
+    calendar_window = _calendar_window_from_request()
 
     appointment_filters = [Appointment.tutor_id == user.id]
     if vet:
         appointment_filters.append(Appointment.veterinario_id == vet.id)
-    appointments = (
-        Appointment.query.filter(or_(*appointment_filters))
-        .order_by(Appointment.scheduled_at)
-        .all()
-    ) if appointment_filters else []
+    appointments_query = Appointment.query.filter(or_(*appointment_filters))
+    appointments_query = _apply_calendar_datetime_window(
+        appointments_query,
+        Appointment.scheduled_at,
+        calendar_window,
+    )
+    appointments = appointments_query.order_by(Appointment.scheduled_at).all()
 
     events = appointments_to_events(appointments)
 
@@ -36640,6 +36717,11 @@ def api_user_appointments(user_id):
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
     exam_filters.append(Animal.user_id == user.id)
     if exam_filters:
+        exam_query = _apply_calendar_datetime_window(
+            exam_query,
+            ExamAppointment.scheduled_at,
+            calendar_window,
+        )
         exam_appointments = (
             exam_query.filter(or_(*exam_filters))
             .order_by(ExamAppointment.scheduled_at)
@@ -36653,6 +36735,11 @@ def api_user_appointments(user_id):
     vaccine_filters = [Animal.user_id == user.id, Vacina.aplicada_por == user.id]
     vaccine_query = Vacina.query.outerjoin(Vacina.animal)
     if vaccine_filters:
+        vaccine_query = _apply_calendar_date_window(
+            vaccine_query,
+            Vacina.aplicada_em,
+            calendar_window,
+        )
         vaccine_appointments = (
             vaccine_query.filter(
                 or_(*vaccine_filters),
@@ -36744,6 +36831,7 @@ def api_clinic_appointments(clinica_id):
     """Return appointments for a clinic as calendar events."""
     ensure_clinic_access(clinica_id)
     from models import User, Clinica
+    calendar_window = _calendar_window_from_request()
 
     calendar_access_scope = get_calendar_access_scope(current_user)
     full_calendar_clinic_ids = calendar_access_scope.full_access_clinic_ids
@@ -36772,12 +36860,13 @@ def api_clinic_appointments(clinica_id):
     )
 
     appt_filters = [Appointment.clinica_id == clinica_id, creator_filter]
-    appts = (
-        Appointment.query
-        .filter(or_(*appt_filters))
-        .order_by(Appointment.scheduled_at)
-        .all()
+    appt_query = Appointment.query.filter(or_(*appt_filters))
+    appt_query = _apply_calendar_datetime_window(
+        appt_query,
+        Appointment.scheduled_at,
+        calendar_window,
     )
+    appts = appt_query.order_by(Appointment.scheduled_at).all()
 
     if allowed_veterinarian_ids is not None:
         appts = [
@@ -36789,6 +36878,11 @@ def api_clinic_appointments(clinica_id):
     events = appointments_to_events(appts)
 
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+    exam_query = _apply_calendar_datetime_window(
+        exam_query,
+        ExamAppointment.scheduled_at,
+        calendar_window,
+    )
     exam_appointments = (
         exam_query
         .filter(
@@ -36817,6 +36911,11 @@ def api_clinic_appointments(clinica_id):
     vaccine_events: list[dict] = []
     if has_full_clinic_access:
         vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+        vaccine_query = _apply_calendar_date_window(
+            vaccine_query,
+            Vacina.aplicada_em,
+            calendar_window,
+        )
         vaccine_appointments = (
             vaccine_query
             .filter(
@@ -36848,6 +36947,11 @@ def api_clinic_appointments(clinica_id):
         )
         .order_by(Consulta.finalizada_em, Consulta.created_at)
     )
+    consulta_query = _apply_calendar_datetime_window(
+        consulta_query,
+        func.coalesce(Consulta.finalizada_em, Consulta.created_at),
+        calendar_window,
+    )
     consultas = consulta_query.all()
     if allowed_veterinarian_ids is not None:
         allowed_user_ids = {
@@ -36876,6 +36980,7 @@ def api_clinic_appointments(clinica_id):
 def api_vet_appointments(veterinario_id):
     """Return appointments for a veterinarian as calendar events."""
     veterinario = Veterinario.query.get_or_404(veterinario_id)
+    calendar_window = _calendar_window_from_request()
 
     calendar_access_scope = get_calendar_access_scope(current_user)
     vet_clinic_ids = set()
@@ -36956,6 +37061,7 @@ def api_vet_appointments(veterinario_id):
     else:
         abort(403)
 
+    query = _apply_calendar_datetime_window(query, Appointment.scheduled_at, calendar_window)
     appointments = query.order_by(Appointment.scheduled_at).all()
     events = appointments_to_events(appointments)
 
@@ -36967,7 +37073,7 @@ def api_vet_appointments(veterinario_id):
         consulta_filters.append(Consulta.clinica_id.in_(target_clinic_ids))
     elif requested_clinic_ids:
         consulta_filters.append(false())
-    consultas = (
+    consulta_query = (
         Consulta.query
         .outerjoin(Consulta.animal)
         .options(
@@ -36977,8 +37083,13 @@ def api_vet_appointments(veterinario_id):
         )
         .filter(*consulta_filters)
         .order_by(Consulta.finalizada_em, Consulta.created_at)
-        .all()
     )
+    consulta_query = _apply_calendar_datetime_window(
+        consulta_query,
+        func.coalesce(Consulta.finalizada_em, Consulta.created_at),
+        calendar_window,
+    )
+    consultas = consulta_query.all()
     for consulta in unique_items_by_id(consultas):
         event = consulta_to_event(consulta)
         if event:
@@ -37002,6 +37113,11 @@ def api_vet_appointments(veterinario_id):
         )
 
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+    exam_query = _apply_calendar_datetime_window(
+        exam_query,
+        ExamAppointment.scheduled_at,
+        calendar_window,
+    )
     exam_appointments = (
         exam_query.filter(*exam_filters)
         .order_by(ExamAppointment.scheduled_at)
@@ -37026,6 +37142,11 @@ def api_vet_appointments(veterinario_id):
         vaccine_filters.append(Animal.clinica_id.in_(target_clinic_ids))
 
     vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+    vaccine_query = _apply_calendar_date_window(
+        vaccine_query,
+        Vacina.aplicada_em,
+        calendar_window,
+    )
     vaccine_appointments = (
         vaccine_query.filter(*vaccine_filters)
         .order_by(Vacina.aplicada_em)
