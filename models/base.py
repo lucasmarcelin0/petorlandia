@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
 import json
 from dateutil.relativedelta import relativedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 import unicodedata
 import enum
 import uuid
@@ -3244,6 +3244,25 @@ class Product(db.Model):
     )
 
     @property
+    def preco_publico(self):
+        """Preço único exibido ao tutor, com a taxa da plataforma embutida.
+
+        ``price`` é o valor que o lojista recebe. O preço público é
+        ``price`` + 10%, arredondado PARA CIMA ao próximo múltiplo de
+        R$ 5 — mesma regra de vacinas e serviços profissionais. A taxa
+        nunca aparece separada para o comprador.
+        """
+        if self.price is None:
+            return None
+        base = Decimal(str(self.price))
+        if base <= 0:
+            return base.quantize(Decimal("0.01"))
+        gross = base * Decimal("1.10")
+        step = Decimal("5")
+        steps = (gross / step).to_integral_value(rounding=ROUND_CEILING)
+        return (steps * step).quantize(Decimal("0.01"))
+
+    @property
     def category_label(self):
         """Rótulo de exibição da categoria (ex.: 'racao' -> 'Ração')."""
         if not self.category:
@@ -3298,11 +3317,13 @@ class Order(db.Model):
 
 
     def total_value(self):
-        """Calcula o valor total do pedido com base nos produtos e quantidades."""
+        """Valor total do pedido pelo preço público (o que o comprador paga)."""
         total = 0.0
         for item in self.items:
-            if item.product:
-                total += (item.product.price or 0) * item.quantity
+            if item.unit_price is not None:
+                total += float(item.unit_price) * item.quantity
+            elif item.product:
+                total += float(item.product.preco_publico or 0) * item.quantity
         return total
 
     def __str__(self):

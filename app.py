@@ -30825,24 +30825,6 @@ def _connected_mercadopago_account_for_order(order):
     return None
 
 
-def _mercadopago_marketplace_fee(total_amount):
-    """Taxa de serviço da plataforma sobre pedidos da loja.
-
-    Mesma regra dos serviços profissionais e vacinas: 10% sobre o total de
-    PRODUTOS (frete fora da base), arredondando PARA CIMA até o próximo
-    múltiplo de R$ 5. Ex.: produtos R$ 10 → taxa R$ 5 (paga R$ 15 + frete);
-    produtos R$ 1.010 → taxa R$ 105. O lojista recebe produtos + frete
-    integrais; a taxa é paga pelo comprador.
-    """
-    total = Decimal(str(total_amount))
-    if total <= 0:
-        return 0.0
-    public_total = public_price_from_professional_price(total)
-    if public_total is None:
-        return 0.0
-    return float(public_total - total)
-
-
 def _mp_auto_return_enabled(back_urls: dict) -> bool:
     """Return True when Mercado Pago auto_return can safely be enabled."""
     success_url = (back_urls or {}).get('success')
@@ -31387,17 +31369,24 @@ def _order_vendor_shipping(order):
         return {
             "stores": [],
             "products_total": Decimal("0.00"),
+            "seller_products_total": Decimal("0.00"),
             "shipping_total": Decimal("0.00"),
+            "platform_freight_total": Decimal("0.00"),
             "grand_total": Decimal("0.00"),
         }
 
     grouped = {}
     products_total = Decimal("0.00")
+    # Soma dos preços do lojista (repasse); a diferença para products_total
+    # (preço público, taxa embutida) é a margem da plataforma.
+    seller_products_total = Decimal("0.00")
     for item in order.items:
         product = item.product
-        unit_price = _money_decimal(item.unit_price if item.unit_price is not None else (product.price if product else 0))
+        unit_price = _money_decimal(item.unit_price if item.unit_price is not None else (product.preco_publico if product else 0))
         line_total = unit_price * int(item.quantity or 0)
         products_total += line_total
+        seller_unit = _money_decimal(product.price if product else 0)
+        seller_products_total += seller_unit * int(item.quantity or 0)
         casa_id = product.casa_de_racao_id if product and product.casa_de_racao_id else None
         clinica_id = product.clinica_id if product and product.clinica_id else None
         if not casa_id and not clinica_id:
@@ -31419,12 +31408,18 @@ def _order_vendor_shipping(order):
 
     stores = []
     shipping_total = Decimal("0.00")
+    # Frete de entregas feitas por parceiro PetOrlândia ('plataforma'):
+    # fica retido pela plataforma para repassar ao entregador, não ao lojista.
+    platform_freight_total = Decimal("0.00")
     for seller_key, entry in grouped.items():
         provider = entry["provider"]
         freight = _money_decimal(getattr(provider, "valor_frete", 0))
         minimum = _money_decimal(getattr(provider, "pedido_minimo_entrega", 0))
         meets_minimum = not minimum or entry["subtotal"] >= minimum
+        modo_entrega = getattr(provider, "modo_entrega", None) or "plataforma"
         shipping_total += freight
+        if modo_entrega != "propria":
+            platform_freight_total += freight
         stores.append({
             "seller_key": f"{entry['kind']}-{entry['seller_id']}",
             "seller_id": entry["seller_id"],
@@ -31432,6 +31427,7 @@ def _order_vendor_shipping(order):
             "name": provider.nome if provider else "Estabelecimento",
             "subtotal": entry["subtotal"],
             "freight": freight,
+            "modo_entrega": modo_entrega,
             "minimum": minimum,
             "meets_minimum": meets_minimum,
             "prazo_min": getattr(provider, "prazo_entrega_min", None),
@@ -31441,7 +31437,9 @@ def _order_vendor_shipping(order):
     return {
         "stores": stores,
         "products_total": products_total,
+        "seller_products_total": seller_products_total,
         "shipping_total": shipping_total,
+        "platform_freight_total": platform_freight_total,
         "grand_total": products_total + shipping_total,
     }
 
@@ -32755,7 +32753,8 @@ def adicionar_carrinho(product_id):
             order_id=order.id,
             product_id=product.id,
             item_name=product.name,
-            unit_price=Decimal(str(product.price or 0)),
+            # Preço público (taxa embutida) — é o que o comprador paga.
+            unit_price=product.preco_publico or Decimal("0"),
             quantity=qty,
         )
         db.session.add(item)
@@ -33105,7 +33104,11 @@ def checkout():
             "description": it.product.description or it.product.name,
             "category_id": it.product.mp_category_id or "others",
             "quantity":    int(it.quantity),
-            "unit_price":  float(it.product.price),
+            # Preço público congelado no carrinho (taxa embutida).
+            "unit_price":  float(
+                it.unit_price if it.unit_price is not None
+                else (it.product.preco_publico or 0)
+            ),
         }
         for it in order.items
     ]
@@ -33179,23 +33182,21 @@ def checkout():
                 seller_payment_account.casa_de_racao_id,
             )
             return respond_error("Pagamento da loja indisponivel no momento.")
-        # Taxa incide apenas sobre os produtos; o frete é repassado integral
-        # ao vendedor/entrega e não entra na base de cálculo.
-        marketplace_fee = _mercadopago_marketplace_fee(shipping["products_total"])
+        # Retenção da plataforma no split (invisível ao comprador, que vê
+        # um preço único com a taxa embutida):
+        #   1. margem dos produtos = preço público − preço do lojista;
+        #   2. frete de entregas por parceiro PetOrlândia (retido para
+        #      repasse ao entregador); frete de entrega própria ('propria')
+        #      fica com o lojista.
+        fee_produtos = max(
+            Decimal("0.00"),
+            shipping["products_total"] - shipping["seller_products_total"],
+        )
+        marketplace_fee = float(
+            (fee_produtos + shipping["platform_freight_total"]).quantize(Decimal("0.01"))
+        )
         if marketplace_fee > 0:
             preference_data["marketplace_fee"] = marketplace_fee
-            # Comprador paga a taxa por cima; lojista recebe o total integral.
-            items.append({
-                "id": "taxa-servico",
-                "title": "Taxa de serviço PetOrlândia",
-                "description": "Taxa de serviço da plataforma",
-                "category_id": "services",
-                "quantity": 1,
-                "unit_price": marketplace_fee,
-            })
-            payment.amount = float(
-                Decimal(str(payment.amount)) + Decimal(str(marketplace_fee))
-            )
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))
 

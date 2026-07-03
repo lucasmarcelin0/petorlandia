@@ -136,7 +136,8 @@ def test_checkout_uses_connected_store_token_and_marketplace_fee(app, client, mo
         order = Order(user_id=buyer.id)
         db.session.add(order)
         db.session.flush()
-        db.session.add(OrderItem(order_id=order.id, product_id=product.id, item_name=product.name, quantity=1, unit_price=100))
+        # unit_price = preço público (taxa embutida): 100 * 1.10 = 110 (múltiplo de 5)
+        db.session.add(OrderItem(order_id=order.id, product_id=product.id, item_name=product.name, quantity=1, unit_price=product.preco_publico))
         account = StorePaymentAccount(casa_de_racao_id=casa.id, provider="mercado_pago", status="connected")
         account.access_token = "seller-token"
         db.session.add(account)
@@ -158,6 +159,9 @@ def test_checkout_uses_connected_store_token_and_marketplace_fee(app, client, mo
 
         assert resp.status_code == 302, resp.get_data(as_text=True)
         assert captured["token"] == "seller-token"
+        # Comprador paga o preço público (110); lojista recebe 100; plataforma 10.
+        product_item = next(i for i in captured["payload"]["items"] if i["id"] == str(product.id))
+        assert product_item["unit_price"] == 110.0
         assert captured["payload"]["marketplace_fee"] == 10.0
 
 

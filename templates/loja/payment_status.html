@@ -57,7 +57,7 @@
       {% for item in order.items %}
       <li class="list-group-item d-flex justify-content-between align-items-center">
         <span>{{ item.item_name }} × {{ item.quantity }}</span>
-        <span>R$ {{ '%.2f'|format(item.product.price if item.product else 0) }}</span>
+        <span>R$ {{ '%.2f'|format(item.unit_price if item.unit_price is not none else (item.product.preco_publico if item.product else 0) or 0) }}</span>
       </li>
       {% endfor %}
     </ul>

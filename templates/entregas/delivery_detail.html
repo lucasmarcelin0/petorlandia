@@ -96,7 +96,7 @@
                   <h6 class="card-title mb-1">{{ item.product.name }}</h6>
                   <p class="card-text mb-0">
                     Quantidade: {{ item.quantity }}<br>
-                    Preço: R$ {{ '%.2f' | format(item.product.price) }}
+                    Preço: R$ {{ '%.2f' | format(item.unit_price if item.unit_price is not none else (item.product.preco_publico or 0)) }}
                   </p>
                 </div>
               </div>

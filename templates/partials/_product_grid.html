@@ -34,7 +34,7 @@
         {% endif %}
 
         <div class="mt-auto">
-          <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</span>
+          <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</span>
 
           {% if product.clinica %}
           <div class="product-seller-row mb-1">
