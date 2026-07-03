@@ -1,0 +1,203 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4" style="max-width: 1100px;">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 fw-bold mb-0"><i class="fa-solid fa-handshake me-2 text-primary"></i>Parcerias</h1>
+  </div>
+
+  {% if novo_convite_link %}
+  <div class="alert alert-success shadow-sm">
+    <h6 class="fw-bold mb-2"><i class="fa-solid fa-link me-2"></i>Convite gerado — {{ novo_convite.tipo_label }}{% if novo_convite.nome %} para {{ novo_convite.nome }}{% endif %}</h6>
+    <div class="input-group mb-2">
+      <input type="text" class="form-control" id="novo-convite-link" value="{{ novo_convite_link }}" readonly>
+      <button class="btn btn-outline-secondary" type="button"
+              onclick="navigator.clipboard.writeText(document.getElementById('novo-convite-link').value); this.innerText='Copiado!';">
+        Copiar
+      </button>
+    </div>
+    <a href="{{ novo_convite_whatsapp }}" target="_blank" rel="noopener" class="btn btn-success btn-sm">
+      <i class="fa-brands fa-whatsapp me-1"></i>Enviar pelo WhatsApp
+    </a>
+    <div class="form-text mt-1">Guarde este link: por segurança ele não é exibido novamente depois que você sair desta página.</div>
+  </div>
+  {% endif %}
+
+  <!-- ── Gerar convite ─────────────────────────────────────────────── -->
+  <div class="card rounded-4 shadow-sm mb-5">
+    <div class="card-body p-4">
+      <h5 class="fw-semibold mb-3"><i class="fa-solid fa-paper-plane me-2 text-primary"></i>Convidar novo parceiro ou usuário</h5>
+      <p class="text-muted small mb-3">
+        Gera um link único de cadastro pré-aprovado. A pessoa conclui tudo em uma página só
+        (conta + estabelecimento) e já entra ativa, sem passar pela fila de aprovação.
+      </p>
+      <form method="post" action="{{ url_for('admin_criar_convite') }}" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3">
+          <label class="form-label" for="convite-tipo">Tipo</label>
+          <select class="form-select" id="convite-tipo" name="tipo" required>
+            {% for valor, rotulo in tipos_convite.items() %}
+            <option value="{{ valor }}">{{ rotulo }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="convite-nome">Nome (pessoa ou estabelecimento)</label>
+          <input type="text" class="form-control" id="convite-nome" name="nome" placeholder="Opcional">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="convite-email">E-mail</label>
+          <input type="email" class="form-control" id="convite-email" name="email" placeholder="Envia o convite automaticamente">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="convite-telefone">Celular (WhatsApp)</label>
+          <input type="text" class="form-control" id="convite-telefone" name="telefone" placeholder="(DDD) 99999-9999">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label" for="convite-validade">Validade</label>
+          <select class="form-select" id="convite-validade" name="validade_dias">
+            <option value="7">7 d</option>
+            <option value="30" selected>30 d</option>
+            <option value="90">90 d</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-link me-1"></i>Gerar convite</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Clínicas aguardando aprovação ─────────────────────────────── -->
+  <h5 class="fw-semibold text-warning mb-3">
+    <i class="fa-solid fa-hospital me-2"></i>Clínicas aguardando aprovação ({{ clinicas_pendentes|length }})
+  </h5>
+  {% if clinicas_pendentes %}
+  <div class="row g-3 mb-5">
+    {% for clinica in clinicas_pendentes %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-warning border-2 rounded-4 h-100">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-1">{{ clinica.nome }}</h6>
+          {% if clinica.cnpj %}<div class="text-muted small">{{ clinica.cnpj }}</div>{% endif %}
+          {% if clinica.owner %}<div class="small mb-1"><i class="fa-solid fa-user me-1 text-muted"></i>{{ clinica.owner.name }} — {{ clinica.owner.email }}</div>{% endif %}
+          {% if clinica.telefone %}<div class="small mb-2"><i class="fa-solid fa-phone me-1 text-muted"></i>{{ clinica.telefone }}</div>{% endif %}
+          <div class="d-flex gap-2 mt-3">
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="btn btn-outline-secondary btn-sm">Ver</a>
+            <form method="post" action="{{ url_for('admin_aprovar_clinica', clinica_id=clinica.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-success btn-sm"><i class="fa-solid fa-check me-1"></i>Aprovar</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_rejeitar_clinica', clinica_id=clinica.id) }}"
+                  onsubmit="return confirm('Rejeitar a clínica {{ clinica.nome }}?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger btn-sm">Rejeitar</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-5">Nenhuma clínica pendente. 🎉</p>
+  {% endif %}
+
+  <!-- ── Lojas aguardando aprovação ────────────────────────────────── -->
+  <h5 class="fw-semibold text-warning mb-3">
+    <i class="fa-solid fa-store me-2"></i>Lojas aguardando aprovação ({{ casas_pendentes|length }})
+  </h5>
+  {% if casas_pendentes %}
+  <div class="row g-3 mb-2">
+    {% for casa in casas_pendentes %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card border-warning border-2 rounded-4 h-100">
+        <div class="card-body p-4">
+          <h6 class="fw-bold mb-1">{{ casa.nome }}</h6>
+          {% if casa.cnpj %}<div class="text-muted small">{{ casa.cnpj }}</div>{% endif %}
+          {% if casa.owner %}<div class="small mb-1"><i class="fa-solid fa-user me-1 text-muted"></i>{{ casa.owner.name }} — {{ casa.owner.email }}</div>{% endif %}
+          <div class="d-flex gap-2 mt-3">
+            <a href="{{ url_for('casa_de_racao_dashboard', casa_id=casa.id) }}" class="btn btn-outline-secondary btn-sm">Ver</a>
+            <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-success btn-sm"><i class="fa-solid fa-check me-1"></i>Aprovar</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if not casas_pendentes %}<p class="text-muted mb-5">Nenhuma loja pendente. 🎉</p>{% else %}<div class="mb-5"></div>{% endif %}
+
+  <!-- ── Candidaturas (Carreiras) ──────────────────────────────────── -->
+  <h5 class="fw-semibold text-warning mb-3">
+    <i class="fa-solid fa-clipboard-list me-2"></i>Candidaturas de Carreiras ({{ candidaturas|length }})
+  </h5>
+  {% if candidaturas %}
+  <div class="table-responsive mb-5">
+    <table class="table align-middle">
+      <thead><tr><th>Categoria</th><th>Nome</th><th>Contato</th><th>Cidade</th><th>Mensagem</th><th></th></tr></thead>
+      <tbody>
+        {% for c in candidaturas %}
+        <tr>
+          <td><span class="badge bg-info text-dark">{{ c.categoria }}</span></td>
+          <td>{{ c.nome }}</td>
+          <td class="small">{{ c.email }}{% if c.telefone %}<br>{{ c.telefone }}{% endif %}</td>
+          <td>{{ c.cidade or '—' }}</td>
+          <td class="small text-muted">{{ (c.mensagem or '')[:80] }}</td>
+          <td>
+            <div class="d-flex gap-2">
+              <form method="post" action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='aprovar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success btn-sm">Aprovar</button>
+              </form>
+              <form method="post" action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='rejeitar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Rejeitar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted mb-5">Nenhuma candidatura pendente. 🎉</p>
+  {% endif %}
+
+  <!-- ── Convites recentes ─────────────────────────────────────────── -->
+  <h5 class="fw-semibold mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-muted"></i>Convites recentes</h5>
+  {% if convites %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Tipo</th><th>Nome</th><th>Contato</th><th>Criado</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for inv in convites %}
+        <tr>
+          <td>{{ inv.tipo_label }}</td>
+          <td>{{ inv.nome or '—' }}</td>
+          <td class="small">{{ inv.email or inv.telefone or '—' }}</td>
+          <td class="small">{{ inv.created_at.strftime('%d/%m/%Y') if inv.created_at else '—' }}</td>
+          <td>
+            {% if inv.used_at %}
+            <span class="badge bg-success">Concluído</span>
+            {% elif inv.is_expired %}
+            <span class="badge bg-secondary">Expirado</span>
+            {% else %}
+            <span class="badge bg-warning text-dark">Aguardando</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">Nenhum convite gerado ainda.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

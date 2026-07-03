@@ -125,7 +125,7 @@ from models import (
     clinica_has_column,
     get_clinica_field,
 )
-from models import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite  # noqa: E402
+from models import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite  # noqa: E402
 from models import get_active_product_categories  # noqa: E402
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
@@ -4301,12 +4301,39 @@ def _registrar_ultimo_login(sender, user, **extra):
 login.login_view = "login_view"
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
+def _ensure_registration_flow_schema() -> None:
+    """Garante colunas/tabelas dos fluxos de cadastro de parceiros.
+
+    Precisa rodar no startup (e não por request) porque a coluna
+    ``clinica.status`` participa de todo SELECT do modelo Clinica.
+    """
+    from models import PartnerInvite
+
+    try:
+        columns = {column['name'] for column in inspect(db.engine).get_columns('clinica')}
+        if 'status' not in columns:
+            db.session.execute(text(
+                "ALTER TABLE clinica ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'ativa'"
+            ))
+        if 'created_at' not in columns:
+            db.session.execute(text('ALTER TABLE clinica ADD COLUMN created_at TIMESTAMP'))
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        app.logger.warning('Falha ao garantir colunas de status da clínica: %s', exc)
+    try:
+        PartnerInvite.__table__.create(db.engine, checkfirst=True)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning('Falha ao garantir tabela partner_invite: %s', exc)
+
+
 # ----------------------------------------------------------------
 # 8)  Admin & blueprints
 # ----------------------------------------------------------------
 with app.app_context():
     from admin import init_admin, _is_admin  # import interno evita loop
     init_admin(app)
+    _ensure_registration_flow_schema()
     # outras blueprints ->  from views import bp as views_bp ; app.register_blueprint(views_bp)
 
 # (rotas podem ser definidas em módulos separados e registrados via blueprint)
@@ -20334,6 +20361,7 @@ def minha_clinica():
                 prazo_entrega_min=form.prazo_entrega_min.data or None,
                 prazo_entrega_max=form.prazo_entrega_max.data or None,
                 owner_id=current_user.id,
+                status='pendente',
             )
             file = form.logotipo.data
             if file and getattr(file, "filename", ""):
@@ -20351,6 +20379,17 @@ def minha_clinica():
                 current_user.veterinario.clinica_id = clinica.id
             current_user.clinica_id = clinica.id
             db.session.commit()
+            from services.notifications import notify_admins
+            notify_admins(
+                f'Nova clínica aguardando aprovação: {clinica.nome} (responsável: {current_user.name}).',
+                kind='clinica_pendente',
+                url=url_for('admin_parcerias', _external=True),
+            )
+            flash(
+                'Cadastro enviado! Sua clínica está em análise — você será avisado assim que for aprovada. '
+                'Enquanto isso, já pode completar horários, equipe e demais informações.',
+                'success',
+            )
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
         return render_template('clinica/create_clinic.html', form=form)
 
@@ -20723,6 +20762,12 @@ def minha_casa_de_racao():
                 nova_casa.photo_offset_y = float(form.photo_offset_y.data)
         db.session.add(nova_casa)
         db.session.commit()
+        from services.notifications import notify_admins
+        notify_admins(
+            f'Nova loja aguardando aprovação: {nova_casa.nome} (responsável: {current_user.name}).',
+            kind='casa_pendente',
+            url=url_for('admin_parcerias', _external=True),
+        )
         flash(
             'Cadastro enviado! Aguarde a aprovação do administrador para começar a vender.',
             'success',
@@ -21416,8 +21461,20 @@ def admin_aprovar_casa_de_racao(casa_id):
     casa = CasaDeRacao.query.get_or_404(casa_id)
     casa.status = 'ativa'
     db.session.commit()
-    flash(f'Casa de ração "{casa.nome}" aprovada.', 'success')
-    return redirect(url_for('admin_casas_de_racao'))
+    from services.notifications import notify_user
+    notify_user(
+        casa.owner,
+        'Sua loja foi aprovada no PetOrlândia! 🎉',
+        (
+            f'Boa notícia: a loja "{casa.nome}" foi aprovada e já está ativa na plataforma.\n\n'
+            f'Acesse seu painel para publicar produtos e começar a vender:\n'
+            f'{url_for("casa_de_racao_dashboard", casa_id=casa.id, _external=True)}\n\n'
+            'Abraços,\nEquipe PetOrlândia'
+        ),
+        kind='casa_aprovada',
+    )
+    flash(f'Casa de ração "{casa.nome}" aprovada. O responsável foi avisado por e-mail.', 'success')
+    return redirect(request.referrer or url_for('admin_casas_de_racao'))
 
 
 @login_required
@@ -21427,8 +21484,350 @@ def admin_suspender_casa_de_racao(casa_id):
     casa = CasaDeRacao.query.get_or_404(casa_id)
     casa.status = 'suspensa'
     db.session.commit()
+    from services.notifications import notify_user
+    notify_user(
+        casa.owner,
+        'Sua loja foi suspensa no PetOrlândia',
+        (
+            f'A loja "{casa.nome}" foi suspensa e não está mais visível na plataforma.\n\n'
+            'Em caso de dúvidas, responda este e-mail ou fale com a administração.\n\n'
+            'Equipe PetOrlândia'
+        ),
+        kind='casa_suspensa',
+    )
     flash(f'Casa de ração "{casa.nome}" suspensa.', 'warning')
-    return redirect(url_for('admin_casas_de_racao'))
+    return redirect(request.referrer or url_for('admin_casas_de_racao'))
+
+
+# ── Parcerias: pendências de aprovação + convites unificados ────────────────
+
+_PARTNER_INVITE_ESTABLISHMENT_TIPOS = {'clinica', 'casa_de_racao', 'petshop', 'banho_tosa'}
+
+
+def _partner_invite_url(token):
+    return url_for('partner_invite_onboarding', token=token, _external=True)
+
+
+def _partner_invite_whatsapp_url(invite, link):
+    saudacao = f'Olá{", " + invite.nome.split()[0] if invite.nome else ""}!'
+    texto = (
+        f'{saudacao} Aqui é da PetOrlândia. '
+        f'Preparamos seu acesso de {invite.tipo_label.lower()} na plataforma. '
+        f'É só concluir o cadastro neste link: {link}'
+    )
+    numero = only_digits(invite.telefone or '')
+    base = f'https://wa.me/55{numero}' if len(numero) in (10, 11) else 'https://wa.me/'
+    return f'{base}?text={quote_plus(texto)}'
+
+
+@login_required
+def admin_parcerias():
+    if not _is_admin():
+        abort(403)
+    from models import CareerApplication
+
+    clinicas_pendentes = (
+        Clinica.query.filter_by(status='pendente').order_by(Clinica.id.desc()).all()
+    )
+    casas_pendentes = (
+        CasaDeRacao.query.filter_by(status='pendente').order_by(CasaDeRacao.created_at).all()
+    )
+    candidaturas = (
+        CareerApplication.query.filter_by(status='pendente')
+        .order_by(CareerApplication.created_at.asc())
+        .all()
+    )
+    convites = PartnerInvite.query.order_by(PartnerInvite.created_at.desc()).limit(20).all()
+
+    novo_convite_link = session.pop('partner_invite_link', None)
+    novo_convite_id = session.pop('partner_invite_id', None)
+    novo_convite = db.session.get(PartnerInvite, novo_convite_id) if novo_convite_id else None
+    novo_convite_whatsapp = (
+        _partner_invite_whatsapp_url(novo_convite, novo_convite_link)
+        if novo_convite and novo_convite_link
+        else None
+    )
+
+    return render_template(
+        'admin/parcerias.html',
+        clinicas_pendentes=clinicas_pendentes,
+        casas_pendentes=casas_pendentes,
+        candidaturas=candidaturas,
+        convites=convites,
+        tipos_convite=PartnerInvite.TIPOS,
+        novo_convite=novo_convite,
+        novo_convite_link=novo_convite_link,
+        novo_convite_whatsapp=novo_convite_whatsapp,
+    )
+
+
+@login_required
+def admin_aprovar_clinica(clinica_id):
+    if not _is_admin():
+        abort(403)
+    clinica = Clinica.query.get_or_404(clinica_id)
+    clinica.status = 'ativa'
+    db.session.commit()
+    from services.notifications import notify_user
+    notify_user(
+        clinica.owner,
+        'Sua clínica foi aprovada no PetOrlândia! 🎉',
+        (
+            f'Boa notícia: a clínica "{clinica.nome}" foi aprovada e já está ativa na plataforma.\n\n'
+            f'Acesse o painel da clínica para completar equipe, horários e serviços:\n'
+            f'{url_for("clinic_detail", clinica_id=clinica.id, _external=True)}\n\n'
+            'Abraços,\nEquipe PetOrlândia'
+        ),
+        kind='clinica_aprovada',
+    )
+    flash(f'Clínica "{clinica.nome}" aprovada. O responsável foi avisado por e-mail.', 'success')
+    return redirect(request.referrer or url_for('admin_parcerias'))
+
+
+@login_required
+def admin_rejeitar_clinica(clinica_id):
+    if not _is_admin():
+        abort(403)
+    clinica = Clinica.query.get_or_404(clinica_id)
+    clinica.status = 'rejeitada'
+    db.session.commit()
+    from services.notifications import notify_user
+    notify_user(
+        clinica.owner,
+        'Sobre o cadastro da sua clínica no PetOrlândia',
+        (
+            f'O cadastro da clínica "{clinica.nome}" não foi aprovado neste momento.\n\n'
+            'Se acredita que houve um engano ou quer entender os critérios, '
+            'responda este e-mail que a gente conversa.\n\n'
+            'Equipe PetOrlândia'
+        ),
+        kind='clinica_rejeitada',
+    )
+    flash(f'Clínica "{clinica.nome}" rejeitada.', 'warning')
+    return redirect(request.referrer or url_for('admin_parcerias'))
+
+
+@login_required
+def admin_criar_convite():
+    if not _is_admin():
+        abort(403)
+
+    tipo = (request.form.get('tipo') or '').strip()
+    if tipo not in PartnerInvite.TIPOS:
+        flash('Escolha um tipo de convite válido.', 'warning')
+        return redirect(url_for('admin_parcerias'))
+
+    nome = (request.form.get('nome') or '').strip() or None
+    email = normalize_email(request.form.get('email')) or None
+    telefone = (request.form.get('telefone') or '').strip() or None
+    cidade = (request.form.get('cidade') or '').strip() or None
+    try:
+        validade_dias = max(1, min(90, int(request.form.get('validade_dias') or 30)))
+    except ValueError:
+        validade_dias = 30
+
+    token = secrets.token_urlsafe(24)
+    invite = PartnerInvite(
+        tipo=tipo,
+        nome=nome,
+        email=email,
+        telefone=telefone,
+        cidade=cidade,
+        token_hash=hashlib.sha256(token.encode('utf-8')).hexdigest(),
+        created_by_id=current_user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=validade_dias),
+    )
+    db.session.add(invite)
+    db.session.commit()
+
+    link = _partner_invite_url(token)
+    session['partner_invite_link'] = link
+    session['partner_invite_id'] = invite.id
+
+    if email:
+        from services.notifications import notify_user
+        try:
+            mail.send(MailMessage(
+                subject='Seu convite para o PetOrlândia',
+                recipients=[email],
+                body=(
+                    f'Olá{", " + nome.split()[0] if nome else ""}!\n\n'
+                    f'Você foi convidado(a) a fazer parte do PetOrlândia como {invite.tipo_label.lower()}.\n'
+                    f'Conclua seu cadastro neste link (válido por {validade_dias} dias):\n{link}\n\n'
+                    'Abraços,\nEquipe PetOrlândia'
+                ),
+            ))
+            flash('Convite criado e enviado por e-mail.', 'success')
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning('Falha ao enviar convite por e-mail: %s', exc)
+            flash('Convite criado. Não foi possível enviar o e-mail — use o link ou o WhatsApp abaixo.', 'warning')
+    else:
+        flash('Convite criado. Envie o link pelo WhatsApp ou copie e compartilhe.', 'success')
+    return redirect(url_for('admin_parcerias'))
+
+
+def partner_invite_onboarding(token):
+    """Página pública de onboarding de um convite de parceria."""
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    invite = PartnerInvite.query.filter_by(token_hash=token_hash).first_or_404()
+
+    if invite.used_at:
+        flash('Este convite já foi utilizado. Entre com seu e-mail e senha.', 'info')
+        return redirect(url_for('login_view'))
+    if invite.is_expired:
+        return render_template('parceiro/convite_expirado.html', invite=invite), 410
+
+    precisa_estabelecimento = invite.tipo in _PARTNER_INVITE_ESTABLISHMENT_TIPOS
+    precisa_crmv = invite.tipo == 'veterinario'
+
+    errors = []
+    values = {
+        'nome': invite.nome or '',
+        'email': invite.email or '',
+        'telefone': invite.telefone or '',
+        'estabelecimento_nome': invite.nome or '',
+        'cnpj': '',
+        'endereco': '',
+        'crmv': '',
+    }
+
+    if request.method == 'POST':
+        values.update({
+            'nome': (request.form.get('nome') or '').strip(),
+            'email': normalize_email(request.form.get('email')) or '',
+            'telefone': (request.form.get('telefone') or '').strip(),
+            'estabelecimento_nome': (request.form.get('estabelecimento_nome') or '').strip(),
+            'cnpj': (request.form.get('cnpj') or '').strip(),
+            'endereco': (request.form.get('endereco') or '').strip(),
+            'crmv': (request.form.get('crmv') or '').strip(),
+        })
+        password = request.form.get('password') or ''
+        password_confirmation = request.form.get('password_confirmation') or ''
+
+        usuario = current_user if current_user.is_authenticated else None
+        normalized_phone = normalize_phone(values['telefone'])
+
+        if usuario is None:
+            if len(values['nome']) < 2:
+                errors.append('Informe seu nome completo.')
+            if not values['email'] or '@' not in values['email']:
+                errors.append('Informe um e-mail válido.')
+            elif User.query.filter(func.lower(User.email) == values['email']).first():
+                errors.append('Este e-mail já tem conta. Entre primeiro e abra o link do convite de novo.')
+            if not normalized_phone:
+                errors.append('Informe o celular com DDD.')
+            elif find_users_by_phone(normalized_phone):
+                errors.append('Este celular já pertence a outra conta.')
+            if len(password) < 8:
+                errors.append('Crie uma senha com pelo menos 8 caracteres.')
+            if password != password_confirmation:
+                errors.append('A confirmação da senha não confere.')
+
+        if precisa_estabelecimento and not values['estabelecimento_nome']:
+            errors.append('Informe o nome do estabelecimento.')
+        if values['cnpj']:
+            cnpj_digits = only_digits(values['cnpj'])
+            if len(cnpj_digits) != 14:
+                errors.append('O CNPJ deve ter 14 dígitos.')
+            else:
+                values['cnpj'] = format_cnpj_value(cnpj_digits)
+        if precisa_crmv:
+            if not values['crmv']:
+                errors.append('Informe o CRMV.')
+            else:
+                existing_crmv = Veterinario.query.filter(
+                    func.lower(Veterinario.crmv) == values['crmv'].lower()
+                )
+                if usuario is not None:
+                    existing_crmv = existing_crmv.filter(Veterinario.user_id != usuario.id)
+                if existing_crmv.first():
+                    errors.append('Este CRMV já está cadastrado.')
+
+        if not errors:
+            if usuario is None:
+                usuario = User(
+                    name=values['nome'],
+                    email=values['email'],
+                    phone=normalized_phone,
+                )
+                usuario.set_password(password)
+                db.session.add(usuario)
+                db.session.flush()
+
+            destino = url_for('index')
+            if invite.tipo == 'clinica':
+                clinica = Clinica(
+                    nome=values['estabelecimento_nome'],
+                    cnpj=values['cnpj'] or None,
+                    endereco=values['endereco'] or None,
+                    telefone=usuario.phone,
+                    email=usuario.email,
+                    owner_id=usuario.id,
+                    registered_by_id=invite.created_by_id,
+                    status='ativa',
+                )
+                db.session.add(clinica)
+                db.session.flush()
+                usuario.clinica_id = clinica.id
+                if getattr(usuario, 'veterinario', None):
+                    usuario.veterinario.clinica_id = clinica.id
+                destino = url_for('clinic_detail', clinica_id=clinica.id) + '#clinica'
+            elif invite.tipo in {'casa_de_racao', 'petshop', 'banho_tosa'}:
+                casa = CasaDeRacao(
+                    nome=values['estabelecimento_nome'],
+                    tipo=invite.tipo,
+                    cnpj=values['cnpj'] or None,
+                    telefone=usuario.phone,
+                    email=usuario.email,
+                    endereco=values['endereco'] or None,
+                    owner_id=usuario.id,
+                    registered_by_id=invite.created_by_id,
+                    status='ativa',
+                )
+                db.session.add(casa)
+                db.session.flush()
+                destino = url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos'
+            elif invite.tipo == 'veterinario':
+                usuario.worker = 'veterinario'
+                if not getattr(usuario, 'veterinario', None):
+                    db.session.add(Veterinario(user=usuario, crmv=values['crmv']))
+                destino = url_for('index')
+            elif invite.tipo == 'petsitter':
+                from models.petsitter import PetsitterProfile
+                if not PetsitterProfile.query.filter_by(user_id=usuario.id).first():
+                    db.session.add(PetsitterProfile(
+                        user_id=usuario.id,
+                        cidade=invite.cidade,
+                        status='aprovado',
+                        registered_by_id=invite.created_by_id,
+                    ))
+                destino = url_for('petsitter_routes.petsitter_home')
+
+            invite.used_at = datetime.now(timezone.utc)
+            invite.used_by_id = usuario.id
+            db.session.commit()
+
+            if not current_user.is_authenticated:
+                login_user(usuario)
+
+            from services.notifications import notify_admins
+            notify_admins(
+                f'Convite de {invite.tipo_label.lower()} concluído por {usuario.name}.',
+                kind='convite_concluido',
+                url=url_for('admin_parcerias', _external=True),
+            )
+            flash('Cadastro concluído! Seja bem-vindo(a) ao PetOrlândia. 🐾', 'success')
+            return redirect(destino)
+
+    return render_template(
+        'parceiro/convite_onboarding.html',
+        invite=invite,
+        values=values,
+        errors=errors,
+        precisa_estabelecimento=precisa_estabelecimento,
+        precisa_crmv=precisa_crmv,
+    )
+
 
 @login_required
 def casa_de_racao_vendas(casa_id):
@@ -22960,28 +23359,35 @@ def create_clinic_veterinario(clinica_id):
     name = request.form.get('name', '').strip()
     email = request.form.get('email', '').strip().lower()
     crmv = request.form.get('crmv', '').strip()
+    phone = normalize_phone(request.form.get('phone'))
 
-    if not name or not email or not crmv:
-        flash('Nome, e-mail e CRMV são obrigatórios.', 'danger')
+    if not name or not email or not crmv or not phone:
+        flash('Nome, e-mail, celular e CRMV são obrigatórios.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     if User.query.filter_by(email=email).first():
         flash('E-mail já cadastrado.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
+    if find_users_by_phone(phone):
+        flash('Celular já cadastrado em outra conta.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
     if Veterinario.query.filter_by(crmv=crmv).first():
         flash('CRMV já cadastrado.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
-    password = uuid.uuid4().hex[:8]
     user = User(
         name=name,
         email=email,
+        phone=phone,
         worker='veterinario',
         is_private=True,
         added_by=current_user,
     )
-    user.set_password(password)
+    # Senha provisória inacessível: o acesso real é criado pelo próprio vet
+    # através do link de primeiro acesso enviado abaixo.
+    user.set_password(uuid.uuid4().hex)
     user.clinica_id = clinica.id
     db.session.add(user)
 
@@ -22991,7 +23397,31 @@ def create_clinic_veterinario(clinica_id):
     db.session.add(ClinicStaff(clinic_id=clinica.id, user=user))
     db.session.commit()
 
-    flash('Veterinário cadastrado com sucesso.', 'success')
+    first_access_link = _first_access_url_for_user(user, _external=True)
+    email_enviado = False
+    try:
+        mail.send(MailMessage(
+            subject=f'Seu acesso à {clinica.nome} no PetOrlândia',
+            recipients=[email],
+            body=(
+                f'Olá, {name.split()[0]}!\n\n'
+                f'Você foi cadastrado(a) como veterinário(a) da clínica {clinica.nome} no PetOrlândia.\n'
+                f'Para criar sua senha e acessar a plataforma, use este link:\n{first_access_link}\n\n'
+                'Abraços,\nEquipe PetOrlândia'
+            ),
+        ))
+        email_enviado = True
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning('Falha ao enviar primeiro acesso do veterinário %s: %s', email, exc)
+
+    if email_enviado:
+        flash('Veterinário cadastrado. Enviamos por e-mail o link para ele criar a senha.', 'success')
+    else:
+        flash(
+            'Veterinário cadastrado, mas o e-mail não pôde ser enviado. '
+            f'Envie a ele este link de primeiro acesso: {first_access_link}',
+            'warning',
+        )
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 

@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container d-flex justify-content-center mt-5 mb-5">
+  <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 640px;">
+
+    <div class="text-center mb-4">
+      <span class="fs-1"><i class="fa-solid fa-handshake text-primary" aria-hidden="true"></i></span>
+      <h1 class="h3 fw-bold mt-2">Bem-vindo(a) ao PetOrlândia!</h1>
+      <p class="text-muted mb-0">
+        Você foi convidado(a) como <strong>{{ invite.tipo_label|lower }}</strong>.
+        Complete os dados abaixo e seu acesso já sai aprovado.
+      </p>
+    </div>
+
+    {% if errors %}
+    <div class="alert alert-danger">
+      <ul class="mb-0">
+        {% for erro in errors %}<li>{{ erro }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% if not current_user.is_authenticated %}
+      <h6 class="fw-semibold text-muted text-uppercase small mb-3">Seus dados</h6>
+      <div class="mb-3">
+        <label class="form-label" for="nome">Nome completo</label>
+        <input type="text" class="form-control rounded-pill" id="nome" name="nome" value="{{ values.nome }}" required>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-7 mb-3">
+          <label class="form-label" for="email">E-mail</label>
+          <input type="email" class="form-control rounded-pill" id="email" name="email" value="{{ values.email }}" required>
+        </div>
+        <div class="col-md-5 mb-3">
+          <label class="form-label" for="telefone">Celular (DDD)</label>
+          <input type="text" class="form-control rounded-pill" id="telefone" name="telefone" value="{{ values.telefone }}" required>
+        </div>
+      </div>
+      {% else %}
+      <div class="alert alert-info py-2">
+        Conectado como <strong>{{ current_user.name }}</strong> — o convite será vinculado a esta conta.
+      </div>
+      {% endif %}
+
+      {% if precisa_estabelecimento %}
+      <h6 class="fw-semibold text-muted text-uppercase small mb-3 mt-4">Dados do estabelecimento</h6>
+      <div class="mb-3">
+        <label class="form-label" for="estabelecimento_nome">Nome do estabelecimento</label>
+        <input type="text" class="form-control rounded-pill" id="estabelecimento_nome" name="estabelecimento_nome"
+               value="{{ values.estabelecimento_nome }}" required>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6 mb-3">
+          <label class="form-label" for="cnpj">CNPJ <span class="text-muted">(opcional)</span></label>
+          <input type="text" class="form-control rounded-pill" id="cnpj" name="cnpj" value="{{ values.cnpj }}">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label" for="endereco">Endereço</label>
+          <input type="text" class="form-control rounded-pill" id="endereco" name="endereco" value="{{ values.endereco }}">
+        </div>
+      </div>
+      {% endif %}
+
+      {% if precisa_crmv %}
+      <div class="mb-3 mt-2">
+        <label class="form-label" for="crmv">CRMV</label>
+        <input type="text" class="form-control rounded-pill" id="crmv" name="crmv" value="{{ values.crmv }}" required>
+      </div>
+      {% endif %}
+
+      {% if not current_user.is_authenticated %}
+      <h6 class="fw-semibold text-muted text-uppercase small mb-3 mt-4">Crie sua senha</h6>
+      <div class="row g-3">
+        <div class="col-md-6 mb-3">
+          <label class="form-label" for="password">Senha (mín. 8 caracteres)</label>
+          <input type="password" class="form-control rounded-pill" id="password" name="password" required minlength="8">
+        </div>
+        <div class="col-md-6 mb-4">
+          <label class="form-label" for="password_confirmation">Confirme a senha</label>
+          <input type="password" class="form-control rounded-pill" id="password_confirmation" name="password_confirmation" required>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="d-grid">
+        <button type="submit" class="btn btn-success rounded-pill py-2">
+          Concluir cadastro
+        </button>
+      </div>
+    </form>
+
+    {% if not current_user.is_authenticated %}
+    <p class="text-center text-muted small mt-3 mb-0">
+      Já tem conta? <a href="{{ url_for('login_view', next=request.path) }}">Entre primeiro</a> e abra o link do convite novamente.
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

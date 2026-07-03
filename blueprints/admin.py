@@ -40,4 +40,23 @@ def get_blueprint():
         view_func=lazy_view("admin_toggle_site_flag"),
         methods=["POST"],
     )
+    bp.add_url_rule(
+        "/admin/parcerias",
+        view_func=lazy_view("admin_parcerias"),
+    )
+    bp.add_url_rule(
+        "/admin/parcerias/convite",
+        view_func=lazy_view("admin_criar_convite"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/admin/clinica/<int:clinica_id>/aprovar",
+        view_func=lazy_view("admin_aprovar_clinica"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/admin/clinica/<int:clinica_id>/rejeitar",
+        view_func=lazy_view("admin_rejeitar_clinica"),
+        methods=["POST"],
+    )
     return bp

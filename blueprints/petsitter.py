@@ -344,6 +344,14 @@ def carreiras():
             )
             db.session.add(candidatura)
             db.session.commit()
+            from services.notifications import notify_admins
+
+            notify_admins(
+                f"Nova candidatura de {CATEGORIAS_CARREIRAS.get(categoria, categoria).lower()}: "
+                f"{nome} ({email}).",
+                kind="candidatura_carreiras",
+                url=url_for("admin_parcerias", _external=True),
+            )
             flash(
                 "Candidatura recebida! Vamos analisar e entrar em contato. Obrigado por querer fazer parte. 🐾",
                 "success",
@@ -434,17 +442,37 @@ def petsitter_admin_candidatura(candidatura_id: int, acao: str):
         flash("Esta candidatura já foi analisada.", "info")
         return redirect(url_for("petsitter_routes.petsitter_admin"))
 
+    import uuid as _uuid
+
+    from blueprints.utils import _load_app_module
+    from services.notifications import notify_user
+
     candidatura.status = "aprovada" if acao == "aprovar" else "rejeitada"
     candidatura.reviewed_at = utcnow()
     candidatura.reviewed_by_id = current_user.id
 
-    if acao == "aprovar" and candidatura.categoria == "petsitter":
+    if acao == "aprovar":
+        app_module = _load_app_module()
+
         usuario = candidatura.user
         if usuario is None:
             usuario = User.query.filter(
                 db.func.lower(User.email) == candidatura.email
             ).first()
-        if usuario is not None:
+        usuario_novo = usuario is None
+        if usuario_novo:
+            usuario = User(
+                name=candidatura.nome,
+                email=candidatura.email,
+                phone=candidatura.telefone or None,
+                added_by=current_user,
+            )
+            usuario.set_password(_uuid.uuid4().hex)
+            db.session.add(usuario)
+            db.session.flush()
+        candidatura.user_id = usuario.id
+
+        if candidatura.categoria == "petsitter":
             perfil = PetsitterProfile.query.filter_by(user_id=usuario.id).first()
             if perfil is None:
                 perfil = PetsitterProfile(
@@ -454,18 +482,74 @@ def petsitter_admin_candidatura(candidatura_id: int, acao: str):
                 )
                 db.session.add(perfil)
             perfil.status = "aprovado"
+            db.session.commit()
+            proximo_passo = (
+                app_module._first_access_url_for_user(usuario, _external=True)
+                if usuario_novo
+                else url_for("petsitter_routes.petsitter_home", _external=True)
+            )
+            corpo = (
+                f"Olá, {candidatura.nome.split()[0]}!\n\n"
+                "Sua candidatura como petsitter no PetOrlândia foi aprovada. 🎉\n"
+                + (
+                    f"Crie sua senha de acesso neste link:\n{proximo_passo}\n\n"
+                    if usuario_novo
+                    else f"Acesse a plataforma: {proximo_passo}\n\n"
+                )
+                + "Abraços,\nEquipe PetOrlândia"
+            )
         else:
-            flash(
-                "Candidatura aprovada, mas não há usuário com este e-mail. "
-                "Peça para a pessoa criar uma conta com o mesmo e-mail e aprove novamente.",
-                "warning",
+            # Demais categorias (clínica, petshop, laboratório, especialista):
+            # aprova gerando um convite de onboarding do tipo correspondente.
+            import hashlib
+            import secrets
+            from datetime import datetime, timedelta, timezone
+
+            from models import PartnerInvite
+
+            tipo_convite = {
+                "clinica": "clinica",
+                "petshop": "casa_de_racao",
+                "laboratorio": "clinica",
+                "especialista": "veterinario",
+            }.get(candidatura.categoria, "usuario")
+            token = secrets.token_urlsafe(24)
+            db.session.add(PartnerInvite(
+                tipo=tipo_convite,
+                nome=candidatura.nome,
+                email=candidatura.email,
+                telefone=candidatura.telefone,
+                cidade=candidatura.cidade,
+                token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                created_by_id=current_user.id,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            ))
+            db.session.commit()
+            link = url_for("partner_invite_onboarding", token=token, _external=True)
+            corpo = (
+                f"Olá, {candidatura.nome.split()[0]}!\n\n"
+                "Sua candidatura ao PetOrlândia foi aprovada. 🎉\n"
+                f"Conclua seu cadastro neste link (válido por 30 dias):\n{link}\n\n"
+                "Abraços,\nEquipe PetOrlândia"
             )
 
-    db.session.commit()
-    flash(
-        "Candidatura aprovada." if acao == "aprovar" else "Candidatura rejeitada.",
-        "success" if acao == "aprovar" else "info",
-    )
+        notify_user(usuario, "Candidatura aprovada no PetOrlândia 🎉", corpo, kind="candidatura_aprovada")
+        flash("Candidatura aprovada. O candidato foi avisado por e-mail com o próximo passo.", "success")
+    else:
+        db.session.commit()
+        if candidatura.user is not None:
+            notify_user(
+                candidatura.user,
+                "Sobre sua candidatura no PetOrlândia",
+                (
+                    f"Olá, {candidatura.nome.split()[0]}.\n\n"
+                    "Agradecemos seu interesse, mas sua candidatura não foi aprovada neste momento.\n"
+                    "Você pode se candidatar novamente no futuro.\n\n"
+                    "Equipe PetOrlândia"
+                ),
+                kind="candidatura_rejeitada",
+            )
+        flash("Candidatura rejeitada.", "info")
     return redirect(url_for("petsitter_routes.petsitter_admin"))
 
 
