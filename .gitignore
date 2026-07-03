@@ -55,6 +55,11 @@ Thumbs.db
 *.temp
 *.bak
 *.backup
+*.err
+tmp_*
+diagnostico_*
+vetsmart_dump_network.json
+vetsmart_produtos_cache.BEFORE_*.json
 
 # Development
 debug/
