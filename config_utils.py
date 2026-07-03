@@ -39,7 +39,10 @@ def normalize_database_uri(uri: str | bytes | None) -> str | None:
     if parsed.scheme == "sqlite":
         return uri
 
+    scheme = "postgresql" if parsed.scheme == "postgres" else parsed.scheme
+
     sanitized = parsed._replace(
+        scheme=scheme,
         netloc=_encode_netloc(parsed),
         path=_encode_path(parsed),
     )

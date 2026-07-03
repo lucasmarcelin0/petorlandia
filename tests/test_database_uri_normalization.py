@@ -21,3 +21,9 @@ def test_normalize_database_uri_accepts_bytes_input():
     uri = "postgresql://usuario:senha@localhost/db".encode("latin-1")
 
     assert normalize_database_uri(uri) == "postgresql://usuario:senha@localhost/db"
+
+
+def test_normalize_database_uri_updates_heroku_postgres_scheme():
+    uri = "postgres://usuario:senha@localhost/db"
+
+    assert normalize_database_uri(uri) == "postgresql://usuario:senha@localhost/db"
