@@ -30828,11 +30828,11 @@ def _connected_mercadopago_account_for_order(order):
 def _mercadopago_marketplace_fee(total_amount):
     """Taxa de serviço da plataforma sobre pedidos da loja.
 
-    Mesma regra dos serviços profissionais e vacinas: 10% sobre o total,
-    arredondando o preço final PARA CIMA até o próximo múltiplo de R$ 5.
-    Ex.: pedido de R$ 10 → comprador paga R$ 15 (taxa R$ 5);
-         pedido de R$ 1.010 → comprador paga R$ 1.115 (taxa R$ 105).
-    O lojista recebe o total integral; a taxa é paga pelo comprador.
+    Mesma regra dos serviços profissionais e vacinas: 10% sobre o total de
+    PRODUTOS (frete fora da base), arredondando PARA CIMA até o próximo
+    múltiplo de R$ 5. Ex.: produtos R$ 10 → taxa R$ 5 (paga R$ 15 + frete);
+    produtos R$ 1.010 → taxa R$ 105. O lojista recebe produtos + frete
+    integrais; a taxa é paga pelo comprador.
     """
     total = Decimal(str(total_amount))
     if total <= 0:
@@ -33179,7 +33179,9 @@ def checkout():
                 seller_payment_account.casa_de_racao_id,
             )
             return respond_error("Pagamento da loja indisponivel no momento.")
-        marketplace_fee = _mercadopago_marketplace_fee(payment.amount)
+        # Taxa incide apenas sobre os produtos; o frete é repassado integral
+        # ao vendedor/entrega e não entra na base de cálculo.
+        marketplace_fee = _mercadopago_marketplace_fee(shipping["products_total"])
         if marketplace_fee > 0:
             preference_data["marketplace_fee"] = marketplace_fee
             # Comprador paga a taxa por cima; lojista recebe o total integral.
