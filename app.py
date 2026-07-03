@@ -30826,10 +30826,21 @@ def _connected_mercadopago_account_for_order(order):
 
 
 def _mercadopago_marketplace_fee(total_amount):
-    fee_percent = float(current_app.config.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT") or 0)
-    if fee_percent <= 0:
+    """Taxa de serviço da plataforma sobre pedidos da loja.
+
+    Mesma regra dos serviços profissionais e vacinas: 10% sobre o total,
+    arredondando o preço final PARA CIMA até o próximo múltiplo de R$ 5.
+    Ex.: pedido de R$ 10 → comprador paga R$ 15 (taxa R$ 5);
+         pedido de R$ 1.010 → comprador paga R$ 1.115 (taxa R$ 105).
+    O lojista recebe o total integral; a taxa é paga pelo comprador.
+    """
+    total = Decimal(str(total_amount))
+    if total <= 0:
         return 0.0
-    return round(float(total_amount) * fee_percent / 100, 2)
+    public_total = public_price_from_professional_price(total)
+    if public_total is None:
+        return 0.0
+    return float(public_total - total)
 
 
 def _mp_auto_return_enabled(back_urls: dict) -> bool:
@@ -33171,6 +33182,18 @@ def checkout():
         marketplace_fee = _mercadopago_marketplace_fee(payment.amount)
         if marketplace_fee > 0:
             preference_data["marketplace_fee"] = marketplace_fee
+            # Comprador paga a taxa por cima; lojista recebe o total integral.
+            items.append({
+                "id": "taxa-servico",
+                "title": "Taxa de serviço PetOrlândia",
+                "description": "Taxa de serviço da plataforma",
+                "category_id": "services",
+                "quantity": 1,
+                "unit_price": marketplace_fee,
+            })
+            payment.amount = float(
+                Decimal(str(payment.amount)) + Decimal(str(marketplace_fee))
+            )
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))
 
