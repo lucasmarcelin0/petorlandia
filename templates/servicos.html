@@ -2,7 +2,7 @@
 {% block main %}
 
 {% if is_admin %}
-<section class="mb-4">
+<section class="mb-4" id="rec-servico-panel">
   <div class="card border-primary shadow-sm">
     <div class="card-header bg-primary text-white d-flex align-items-center gap-2">
       <i class="fa-solid fa-share-nodes"></i>
@@ -80,6 +80,32 @@
     </div>
   </div>
 </section>
+
+<script>
+  // Painel de recomendação (WhatsApp): começa recolhido, expande ao clicar no cabeçalho.
+  (function () {
+    var panel = document.getElementById('rec-servico-panel');
+    if (!panel) return;
+    var header = panel.querySelector('.card-header');
+    var body = panel.querySelector('.card-body');
+    if (!header || !body) return;
+
+    var chevron = document.createElement('i');
+    chevron.className = 'fa-solid fa-chevron-down ms-auto';
+    header.appendChild(chevron);
+    header.style.cursor = 'pointer';
+    header.setAttribute('role', 'button');
+
+    function setOpen(open) {
+      body.style.display = open ? '' : 'none';
+      chevron.className = 'fa-solid ms-auto ' + (open ? 'fa-chevron-up' : 'fa-chevron-down');
+    }
+    setOpen(false); // começa recolhido
+    header.addEventListener('click', function () {
+      setOpen(body.style.display === 'none');
+    });
+  })();
+</script>
 
 <script>
 (function () {
