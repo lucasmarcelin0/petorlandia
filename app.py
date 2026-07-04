@@ -29863,8 +29863,9 @@ def criar_tutor_ajax():
 @login_required
 def novo_animal():
     if not has_professional_access(current_user):
-        flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
-        return redirect(url_for('index'))
+        # Tutor comum caiu na rota profissional (link antigo ou compartilhado):
+        # leva direto para o cadastro de pet do tutor em vez de mostrar erro.
+        return redirect(url_for('add_animal'))
 
     clinic_id = current_user_clinic_id()
     accessible_clinic_ids = _viewer_accessible_clinic_ids(current_user)

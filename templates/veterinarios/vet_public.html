@@ -72,7 +72,7 @@
       {% if not animals %}
       <div class="alert alert-warning mb-0">
         Você ainda não tem um pet cadastrado.
-        <a href="{{ url_for('novo_animal') }}" class="alert-link">Cadastrar pet</a> para solicitar.
+        <a href="{{ url_for('add_animal') }}" class="alert-link">Cadastrar pet</a> para solicitar.
       </div>
       {% else %}
       <form method="post" action="{{ url_for('solicitar_agendamento', veterinario_id=veterinario.id) }}">
