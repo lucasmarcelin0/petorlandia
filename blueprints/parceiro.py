@@ -20,4 +20,9 @@ def get_blueprint():
         view_func=lazy_view("parceiro_novo_usuario"),
         methods=["GET", "POST"],
     )
+    bp.add_url_rule(
+        "/convite/<string:token>",
+        view_func=lazy_view("partner_invite_onboarding"),
+        methods=["GET", "POST"],
+    )
     return bp

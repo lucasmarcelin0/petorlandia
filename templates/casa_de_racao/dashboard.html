@@ -25,6 +25,16 @@
 {% block main %}
 <div class="clinic-page-shell" data-clinic-workspace>
 
+  {% if casa.status == 'pendente' %}
+  <div class="alert alert-warning d-flex align-items-start gap-3 shadow-sm">
+    <i class="fa-solid fa-hourglass-half fs-4 mt-1" aria-hidden="true"></i>
+    <div>
+      <strong>Sua loja está em análise.</strong> Nossa equipe já foi avisada e você receberá um e-mail assim que ela for aprovada (normalmente em até 1 dia útil).<br>
+      <span class="small">Enquanto isso, adiante o que puder: cadastre seus produtos com fotos e preços, defina os horários de funcionamento e conecte o Mercado Pago. Assim, quando a aprovação sair, sua loja já começa vendendo.</span>
+    </div>
+  </div>
+  {% endif %}
+
   {# ── Cabeçalho ── #}
   <section class="clinic-context-card" aria-labelledby="store-context-title">
     <div class="clinic-context-card__identity">

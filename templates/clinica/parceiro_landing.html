@@ -40,23 +40,19 @@
   </div>
 
   <!-- CTA -->
-  <div class="d-grid gap-2 mb-4">
-    <a href="#fluxo" class="btn btn-primary btn-lg">
-      Conhecer a solução
-    </a>
+  <div class="d-grid gap-2 mb-2">
     <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}"
-       class="btn btn-outline-primary btn-lg">
-      Solicitar acesso
-    </a>
-    <a href="{{ url_for('index') }}#recursos"
-       class="btn btn-outline-secondary">
-      Ver demonstração
+       class="btn btn-primary btn-lg">
+      <i class="fa-solid fa-hospital me-2"></i>Cadastrar minha clínica
     </a>
     <a href="{{ url_for('login_view') }}?next={{ url_for('minha_clinica') }}"
        class="btn btn-outline-secondary">
-      Já tenho acesso — entrar
+      Já tenho conta — entrar
     </a>
   </div>
+  <p class="text-center text-muted small mb-4">
+    O cadastro passa por uma aprovação rápida da nossa equipe — você é avisado por e-mail assim que a clínica estiver ativa.
+  </p>
 
   <p class="text-center text-muted small">
     <i class="fa-solid fa-lock me-1"></i>PetOrlândia atua como tecnologia habilitadora: a experiência continua pertencendo à clínica.

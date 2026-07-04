@@ -4,7 +4,7 @@
 <div class="container-fluid">
 
   <!-- ─── Pendências: o que precisa de ação agora ─────────────────── -->
-  {% set total_pendencias = pending_deliveries + pending_payments + pending_requests %}
+  {% set total_pendencias = pending_deliveries + pending_payments + pending_requests + (parcerias_pendentes or 0) %}
   <div class="alert {{ 'alert-warning' if total_pendencias else 'alert-success' }} d-flex flex-wrap align-items-center gap-3 shadow-sm">
     <strong class="me-2">
       <i class="bi bi-bell-fill me-1"></i>
@@ -15,6 +15,12 @@
     </a>
     <span class="badge {{ 'bg-warning text-dark' if pending_payments else 'bg-secondary' }}">Pagamentos pendentes: {{ pending_payments }}</span>
     <span class="badge {{ 'bg-info text-dark' if pending_requests else 'bg-secondary' }}">Agendamentos aguardando confirmação: {{ pending_requests }}</span>
+    <a href="{{ url_for('admin_parcerias') }}" class="text-decoration-none">
+      <span class="badge {{ 'bg-danger' if parcerias_pendentes else 'bg-secondary' }}">
+        Parcerias aguardando aprovação: {{ parcerias_pendentes or 0 }}
+        {%- if parcerias_pendentes %} ({{ clinicas_pendentes }} clínica(s), {{ casas_pendentes }} loja(s), {{ candidaturas_pendentes }} candidatura(s)){% endif %}
+      </span>
+    </a>
   </div>
 
   <!-- ─── Crescimento ─────────────────────────────────────────────── -->

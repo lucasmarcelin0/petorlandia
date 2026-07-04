@@ -813,6 +813,9 @@ class Prescricao(db.Model):
 class Clinica(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
+    # pendente = aguardando aprovação do admin; ativa = aprovada; rejeitada/suspensa
+    status = db.Column(db.String(20), nullable=False, default='ativa', server_default='ativa', index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=True)
     cnpj = db.Column(db.String(18))
     endereco = db.Column(db.String(200))
     telefone = db.Column(db.String(20))
@@ -1044,6 +1047,53 @@ class CasaDeRacaoOnboardingInvite(db.Model):
         'CasaDeRacao',
         backref=db.backref('onboarding_invites', cascade='all, delete-orphan'),
     )
+
+    @property
+    def is_expired(self):
+        expires_at = self.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return bool(expires_at and expires_at < datetime.now(timezone.utc))
+
+
+class PartnerInvite(db.Model):
+    """Convite enviado pelo admin para qualquer tipo de parceiro/usuário.
+
+    O link tokenizado leva a uma página única de onboarding que cria a conta
+    e o estabelecimento (quando aplicável) já aprovados.
+    """
+
+    __tablename__ = 'partner_invite'
+
+    TIPOS = {
+        'clinica': 'Clínica veterinária',
+        'casa_de_racao': 'Casa de ração',
+        'petshop': 'Petshop',
+        'banho_tosa': 'Banho e tosa',
+        'veterinario': 'Veterinário(a)',
+        'petsitter': 'Petsitter',
+        'usuario': 'Usuário / tutor',
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), nullable=False, index=True)
+    nome = db.Column(db.String(150), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    telefone = db.Column(db.String(20), nullable=True)
+    cidade = db.Column(db.String(120), nullable=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    used_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    used_by = db.relationship('User', foreign_keys=[used_by_id])
+
+    @property
+    def tipo_label(self):
+        return self.TIPOS.get(self.tipo, self.tipo)
 
     @property
     def is_expired(self):

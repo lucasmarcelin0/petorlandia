@@ -282,8 +282,31 @@ class AdminDashboard(BaseView):
         atividades.sort(key=lambda a: a['quando'], reverse=True)
         atividades = atividades[:15]
 
+        # ── Pendências de parcerias (cadastros aguardando aprovação) ─────
+        from models import CareerApplication
+
+        try:
+            clinicas_pendentes = Clinica.query.filter_by(status='pendente').count()
+        except Exception:
+            db.session.rollback()
+            clinicas_pendentes = 0
+        try:
+            casas_pendentes = CasaDeRacao.query.filter_by(status='pendente').count()
+        except Exception:
+            db.session.rollback()
+            casas_pendentes = 0
+        try:
+            candidaturas_pendentes = CareerApplication.query.filter_by(status='pendente').count()
+        except Exception:
+            db.session.rollback()
+            candidaturas_pendentes = 0
+
         return self.render(
             'admin/home_admin.html',
+            clinicas_pendentes=clinicas_pendentes,
+            casas_pendentes=casas_pendentes,
+            candidaturas_pendentes=candidaturas_pendentes,
+            parcerias_pendentes=clinicas_pendentes + casas_pendentes + candidaturas_pendentes,
             total_users=User.query.count(),
             total_animals=Animal.query.count(),
             total_consultas=Consulta.query.count(),

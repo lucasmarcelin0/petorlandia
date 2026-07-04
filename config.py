@@ -51,7 +51,10 @@ class Config:
     # Lido exclusivamente da variável de ambiente (setada no Heroku em produção).
     # Sem ela (dev/local/CI), cai para um SQLite local — nunca uma credencial de
     # produção embutida no código.
-    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or (
+    SQLALCHEMY_DATABASE_URI = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("SQLALCHEMY_DATABASE_URI")
+    ) or (
         f"sqlite:///{(PROJECT_ROOT / 'petorlandia_dev.db').as_posix()}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False

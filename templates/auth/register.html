@@ -4,9 +4,9 @@
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
     <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 700px;">
-        <h1 class="mb-1 text-center h3">Criar conta no PetOrlândia</h1>
-        <p class="text-center text-muted mb-4">É rápido e gratuito. Os campos marcados com
-            <span class="text-danger">*</span> são obrigatórios.</p>
+        <h1 class="mb-1 text-center h3">Criar sua conta no PetOrlândia</h1>
+        <p class="text-center text-muted mb-4">Leva menos de 2 minutos — e seu acesso sai na hora.
+            Os campos marcados com <span class="text-danger">*</span> são obrigatórios.</p>
         <form method="POST" action="{{ url_for('register') }}" enctype="multipart/form-data" class="js-auth-form"
             data-no-whatsapp data-loading-timeout="off" data-loading-text="Criando sua conta...">
             {{ form.hidden_tag() }}

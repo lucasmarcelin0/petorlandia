@@ -32,6 +32,19 @@
 {% set team_total = (staff_members|length) + (veterinarios|length) + (specialists|length) %}
 {% set budget_total = orcamentos_pagination.total if orcamentos_pagination else (orcamentos|length) %}
 <div class="clinic-page-shell" data-clinic-workspace>
+  {% if clinica.status == 'pendente' %}
+  <div class="alert alert-warning d-flex align-items-start gap-3 shadow-sm">
+    <i class="fa-solid fa-hourglass-half fs-4 mt-1" aria-hidden="true"></i>
+    <div>
+      <strong>Sua clínica está em análise.</strong> Nossa equipe já foi avisada e você receberá um e-mail assim que ela for aprovada (normalmente em até 1 dia útil).<br>
+      <span class="small">Enquanto isso, adiante o que puder: complete os dados da clínica, cadastre a equipe e configure os horários de atendimento.</span>
+    </div>
+  </div>
+  {% elif clinica.status == 'rejeitada' %}
+  <div class="alert alert-danger shadow-sm">
+    <strong>O cadastro desta clínica não foi aprovado.</strong> Em caso de dúvidas, fale com a administração do PetOrlândia.
+  </div>
+  {% endif %}
   <section class="clinic-context-card" aria-labelledby="clinic-context-title">
     <div class="clinic-context-card__identity">
       <div class="clinic-context-card__logo" aria-hidden="true">
