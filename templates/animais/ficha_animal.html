@@ -27,6 +27,11 @@
         ✏️ Editar ficha
       </a>
       {% endif %}
+      {% if animal.user_id == current_user.id %}
+      <a href="{{ url_for('editar_animal', animal_id=animal.id) }}" class="btn btn-outline-secondary">
+        ✏️ Editar dados
+      </a>
+      {% endif %}
       <a href="#" onclick="window.print()" class="btn btn-outline-secondary">🖨️ Imprimir</a>
     </div>
   </div>

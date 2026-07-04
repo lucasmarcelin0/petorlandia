@@ -1,0 +1,27 @@
+{# Central "Minhas atividades": cabeçalho com abas compartilhado pelas páginas
+   de acompanhamento do tutor (agendamentos, petsitter, assinaturas, compras).
+   Cada aba continua sendo uma página própria — este partial só as costura
+   numa central única aos olhos do usuário. #}
+{% set _atividades_tabs = [
+  ('minhas_solicitacoes', url_for('minhas_solicitacoes'), 'fa-calendar-check', 'Agendamentos'),
+  ('petsitter_minhas', url_for('petsitter_routes.petsitter_minhas'), 'fa-dog', 'Petsitter'),
+  ('grooming_minhas_assinaturas', url_for('grooming_minhas_assinaturas'), 'fa-scissors', 'Assinaturas'),
+  ('minhas_compras', url_for('minhas_compras'), 'fa-bag-shopping', 'Compras'),
+] %}
+<div class="mb-4">
+  <h1 class="h4 fw-bold mb-2">
+    <i class="fa-solid fa-clipboard-list me-2 text-primary"></i>Minhas atividades
+  </h1>
+  <p class="text-muted small mb-2">Tudo o que você pediu, num lugar só: agendamentos, petsitter, assinaturas e compras.</p>
+  <ul class="nav nav-pills flex-wrap gap-2">
+    {% for tab_endpoint, tab_href, tab_icon, tab_label in _atividades_tabs %}
+    {% set tab_active = request.endpoint and request.endpoint.endswith(tab_endpoint) %}
+    <li class="nav-item">
+      <a class="nav-link rounded-pill px-3 {{ 'active' if tab_active else 'bg-white border text-body' }}"
+         {% if tab_active %}aria-current="page"{% endif %} href="{{ tab_href }}">
+        <i class="fa-solid {{ tab_icon }} me-1"></i> {{ tab_label }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>

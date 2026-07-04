@@ -6,7 +6,9 @@
   'FAILED': 'Falhou'
 } %}
 <div class="container py-5">
-  <h2 class="mb-4">Minhas Compras</h2>
+  {% include 'partials/minhas_atividades_tabs.html' %}
+
+  <h2 class="h5 fw-bold mb-4"><i class="fa-solid fa-bag-shopping me-2 text-primary"></i>Minhas compras</h2>
   {% if orders %}
   <div class="table-responsive">
     <table class="table align-middle">

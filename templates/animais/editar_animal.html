@@ -2,7 +2,13 @@
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
-<h2>Editar Animal</h2>
+<div class="container my-4" style="max-width: 720px;">
+  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-outline-secondary btn-sm rounded-pill mb-3">
+    <i class="fa-solid fa-arrow-left me-1"></i> Voltar à ficha de {{ animal.name }}
+  </a>
+
+  <div class="card shadow-sm rounded-4 p-4">
+    <h1 class="h4 fw-bold mb-3">✏️ Editar dados de {{ animal.name }}</h1>
 
 <form method="POST" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
@@ -75,13 +81,21 @@
         {{ form.price(class="form-control") }}
     </div>
 
-    <button class="btn btn-primary mt-2">Salvar</button>
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary">Salvar alterações</button>
+        <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
 </form>
+
+<hr class="my-4">
 
 <form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST"
       onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
-    <button type="submit" class="btn btn-danger mt-3">🗑️ Deletar Animal</button>
+    <button type="submit" class="btn btn-outline-danger btn-sm">🗑️ Deletar animal</button>
 </form>
+
+  </div>
+</div>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

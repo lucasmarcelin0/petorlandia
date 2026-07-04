@@ -166,13 +166,13 @@
         </li>
         {% else %}
         <li class="nav-item">
-          <a class="nav-link nav-link--primary" href="{{ url_for('list_animals') }}">
+          <a class="nav-link nav-link--primary" href="{{ url_for('list_animals', scope='meus') }}">
             <i class="fas fa-dog me-1 text-primary"></i> Meus pets
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('minhas_solicitacoes') }}">
-            <i class="fas fa-list-check me-1 text-primary"></i> Minhas solicitações
+            <i class="fas fa-list-check me-1 text-primary"></i> Minhas atividades
           </a>
         </li>
         {% endif %}

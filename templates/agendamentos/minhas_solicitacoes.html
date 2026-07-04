@@ -6,8 +6,10 @@
 
 {% block main %}
 <div class="container my-4" style="max-width: 820px;">
+  {% include 'partials/minhas_atividades_tabs.html' %}
+
   <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h4 fw-bold mb-0"><i class="fa-solid fa-list-check me-2 text-primary"></i>Minhas solicitações</h1>
+    <h2 class="h5 fw-bold mb-0"><i class="fa-solid fa-calendar-check me-2 text-primary"></i>Agendamentos solicitados</h2>
     <a href="{{ url_for('veterinarios') }}" class="btn btn-outline-primary btn-sm">
       <i class="fa-solid fa-plus me-1"></i> Nova solicitação
     </a>

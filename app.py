@@ -16963,8 +16963,16 @@ def list_animals():
     # Base query: ignora animais removidos e sem responsável cadastrado
     query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
 
+    # Escopo "meus": só os pets do usuário logado (qualquer modo). É o destino
+    # do link "Meus pets" da navbar — a listagem geral continua servindo
+    # adoção/venda/perdidos para todo mundo.
+    scope = request.args.get('scope')
+    if scope == 'meus' and current_user.is_authenticated:
+        query = query.filter(Animal.user_id == current_user.id)
+        if modo and modo.lower() != 'todos':
+            query = query.filter_by(modo=modo)
     # Filtro por modo
-    if modo and modo.lower() != 'todos':
+    elif modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
     else:
         # Admins can see all animals without filtering
@@ -17055,7 +17063,8 @@ def list_animals():
         tutor_name=tutor_name_query,
         pmo_dates=pmo_dates,
         is_admin=_is_admin(),
-        show_all=show_all
+        show_all=show_all,
+        scope=scope,
     )
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -17170,7 +17179,7 @@ def editar_animal(animal_id):
 
         db.session.commit()
         flash(f'Os dados de {animal.name} foram atualizados!', 'success')
-        return redirect(url_for('profile'))
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
 
     return render_template('animais/editar_animal.html',
                            form=form,

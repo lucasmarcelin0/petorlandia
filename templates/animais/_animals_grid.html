@@ -160,7 +160,9 @@
                 <p><strong>Sexo:</strong> {{ animal.sex }}</p>
                 <p><strong>Modo:</strong> {{ animal.modo|capitalize }}</p>
                 {% if animal.modo == 'venda' %}
-                <p><strong>Preço:</strong> R$ {{ "%.2f"|format(animal.price) }}</p>
+                <p><strong>Preço:</strong>
+                  {% if animal.price is not none %}R$ {{ "%.2f"|format(animal.price) }}{% else %}A combinar{% endif %}
+                </p>
                 {% endif %}
                 <p><strong>Descrição:</strong><br>{{ animal.description }}</p>
 
