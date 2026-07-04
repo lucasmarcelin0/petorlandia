@@ -70,7 +70,7 @@
         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
         Buscando CEP...
       </div>
-      <div class="invalid-feedback">Por favor, informe um CEP válido com 8 dígitos.</div>
+      <div class="invalid-feedback" data-cep-feedback>Por favor, informe um CEP válido com 8 dígitos.</div>
       {% if addr_form %}
       {% for error in addr_form.cep.errors %}
       <div class="text-danger">{{ error }}</div>
@@ -491,6 +491,9 @@
           value = value.substring(0, 5) + '-' + value.substring(5, 8);
         }
         e.target.value = value;
+        e.target.classList.remove('is-invalid');
+        const feedback = document.querySelector('[data-cep-feedback]');
+        if (feedback) feedback.classList.remove('d-block');
       });
     }
 
@@ -510,11 +513,17 @@
 
     const cep = cepField.value.replace(/\D/g, '');
     const loading = addressCard.querySelector('#cep-loading');
+    const cepFeedback = addressCard.querySelector('[data-cep-feedback]');
 
     if (cep.length !== 8) {
-      alert("CEP inválido. Digite 8 números.");
+      cepField.classList.add('is-invalid');
+      if (cepFeedback) cepFeedback.classList.add('d-block');
+      cepField.focus();
       return;
     }
+
+    cepField.classList.remove('is-invalid');
+    if (cepFeedback) cepFeedback.classList.remove('d-block');
 
     if (loading) {
       loading.classList.remove("d-none");
@@ -588,7 +597,11 @@
       })
       .catch(error => {
         console.error("Erro ao buscar CEP:", error);
-        alert(error.message || 'Erro ao buscar CEP. Tente novamente.');
+        const statusEl = addressCard.querySelector('[data-geo-status]');
+        if (statusEl) {
+          statusEl.textContent = (error.message || 'CEP não encontrado.') + ' Você pode preencher o endereço manualmente.';
+          statusEl.classList.add('text-danger');
+        }
       })
       .finally(() => {
         if (loading) {
@@ -776,7 +789,6 @@
       .catch(error => {
         console.error('Erro ao calcular coordenadas pelo endereço', error);
         setStatus(error.message || 'Não foi possível calcular a localização pelo endereço.', true);
-        alert(error.message || 'Erro ao calcular a localização.');
       })
       .finally(restoreButton);
 
@@ -817,7 +829,6 @@
           .catch(error => {
             console.error('Erro ao obter endereço por geolocalização', error);
             setStatus(error.message || 'Não foi possível usar a localização.', true);
-            alert(error.message || 'Erro ao usar a localização.');
           })
           .finally(restoreButton);
       },
@@ -828,7 +839,6 @@
         }
         setStatus(message, true);
         fallbackGeocode();
-        alert(message);
       },
       {
         enableHighAccuracy: true,
@@ -885,7 +895,6 @@
       .catch(error => {
         console.error('Erro ao obter endereço pelas coordenadas do mapa', error);
         setStatus(error.message || 'Não foi possível atualizar o endereço com o ponto selecionado.', true);
-        alert(error.message || 'Erro ao buscar endereço pelo mapa.');
       })
       .finally(restoreButton);
   }

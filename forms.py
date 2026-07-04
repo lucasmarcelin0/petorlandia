@@ -103,21 +103,31 @@ class FirstAccessPasswordForm(FlaskForm):
 
 class RegistrationForm(FlaskForm):
     name = StringField(
-        'Nome',
-        validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
-        render_kw={"required": True, "aria-required": "true"},
+        'Nome completo',
+        validators=[
+            DataRequired(message="Informe seu nome"),
+            Length(min=2, max=120, message="O nome deve ter entre 2 e 120 caracteres"),
+        ],
+        render_kw={"required": True, "aria-required": "true", "autocomplete": "name"},
     )
     email = EmailField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True, "aria-required": "true"},
+        'E-mail',
+        validators=[
+            DataRequired(message="Informe seu e-mail"),
+            Email(message="Informe um e-mail válido (ex.: nome@exemplo.com)"),
+        ],
+        render_kw={"required": True, "aria-required": "true", "autocomplete": "email", "inputmode": "email"},
     )
-    phone = StringField('Telefone', validators=[Optional(), Length(min=8, max=20)])
+    phone = StringField(
+        'Celular (opcional)',
+        validators=[Optional(), Length(min=8, max=20, message="Informe um celular válido com DDD")],
+        render_kw={"autocomplete": "tel", "inputmode": "tel"},
+    )
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
-    
-    profile_photo = FileField('Foto de Perfil', validators=[
+
+    profile_photo = FileField('Foto de perfil (opcional)', validators=[
         Optional(),
-        FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Envie uma imagem nos formatos JPG, PNG ou GIF.')
     ])
     photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
     photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
@@ -126,19 +136,22 @@ class RegistrationForm(FlaskForm):
 
     password = PasswordField(
         'Senha',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True, "aria-required": "true"},
+        validators=[
+            DataRequired(message="Crie uma senha"),
+            Length(min=6, message="A senha deve ter pelo menos 6 caracteres"),
+        ],
+        render_kw={"required": True, "aria-required": "true", "autocomplete": "new-password", "minlength": "6"},
     )
     confirm_password = PasswordField(
         'Confirme a senha',
         validators=[
-            DataRequired(message="Confirmação de senha é obrigatória"),
-            EqualTo('password', message='As senhas devem coincidir')
+            DataRequired(message="Repita a senha para confirmar"),
+            EqualTo('password', message='As senhas digitadas não são iguais')
         ],
-        render_kw={"required": True, "aria-required": "true"},
+        render_kw={"required": True, "aria-required": "true", "autocomplete": "new-password", "minlength": "6"},
     )
 
-    submit = SubmitField('Solicitar acesso')
+    submit = SubmitField('Criar conta')
 
 
 
@@ -432,7 +445,7 @@ class AddToCartForm(FlaskForm):
 
 class CartAddressForm(FlaskForm):
     """Formulário simples para salvar endereços via carrinho."""
-    cep = StringField('CEP', validators=[DataRequired()])
+    cep = StringField('CEP (opcional)', validators=[Optional(), Length(max=9)])
     rua = StringField('Rua', validators=[DataRequired()])
     numero = StringField('Número', validators=[Optional()])
     complemento = StringField('Complemento', validators=[Optional()])

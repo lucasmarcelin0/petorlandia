@@ -4,25 +4,30 @@
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
     <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 700px;">
-        <h1 class="mb-4 text-center h3">Solicitar acesso ao PetOrlândia</h1>
-        <form method="POST" action="{{ url_for('register') }}" enctype="multipart/form-data" class="js-auth-form" data-no-whatsapp>
+        <h1 class="mb-1 text-center h3">Criar conta no PetOrlândia</h1>
+        <p class="text-center text-muted mb-4">É rápido e gratuito. Os campos marcados com
+            <span class="text-danger">*</span> são obrigatórios.</p>
+        <form method="POST" action="{{ url_for('register') }}" enctype="multipart/form-data" class="js-auth-form"
+            data-no-whatsapp data-loading-timeout="off" data-loading-text="Criando sua conta...">
             {{ form.hidden_tag() }}
 
             <!-- Nome -->
             <div class="mb-3">
-                {{ form.name.label(class="form-label") }}
+                <label for="name" class="form-label">Nome completo <span class="text-danger"
+                        aria-hidden="true">*</span></label>
                 {{ form.name(class="form-control rounded-pill w-100", placeholder="Seu nome completo") }}
                 {% for error in form.name.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
 
             <!-- Email -->
             <div class="mb-3">
-                {{ form.email.label(class="form-label") }}
+                <label for="email" class="form-label">E-mail <span class="text-danger"
+                        aria-hidden="true">*</span></label>
                 {{ form.email(class="form-control rounded-pill w-100", placeholder="email@exemplo.com") }}
                 {% for error in form.email.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
 
@@ -31,7 +36,7 @@
                 {{ form.phone.label(class="form-label") }}
                 {{ form.phone(class="form-control rounded-pill w-100", placeholder="(DDD) 99999-9999") }}
                 {% for error in form.phone.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
 
@@ -41,7 +46,7 @@
                 {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x,
                 form.photo_offset_y, '', 120, 'profile_photo', 'user') }}
                 {% for error in form.profile_photo.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
 
@@ -50,7 +55,8 @@
 
             <!-- Senha -->
             <div class="mb-3 mt-4">
-                {{ form.password.label(class="form-label") }}
+                <label for="password" class="form-label">Senha <span class="text-danger"
+                        aria-hidden="true">*</span></label>
                 <div class="input-group">
                     {{ form.password(class="form-control rounded-pill", id="password", placeholder="Crie uma senha") }}
                     <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password', this)"
@@ -58,17 +64,19 @@
                         <i class="fa fa-eye"></i>
                     </button>
                 </div>
+                <div class="form-text">Use pelo menos 6 caracteres.</div>
                 <div class="progress mt-2" style="height: 5px;">
                     <div id="password-strength" class="progress-bar" role="progressbar" style="width: 0;"></div>
                 </div>
                 {% for error in form.password.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
 
             <!-- Confirmar Senha -->
             <div class="mb-3">
-                {{ form.confirm_password.label(class="form-label") }}
+                <label for="confirm_password" class="form-label">Confirme a senha <span class="text-danger"
+                        aria-hidden="true">*</span></label>
                 <div class="input-group">
                     {{ form.confirm_password(class="form-control rounded-pill", id="confirm_password",
                     placeholder="Confirme a senha") }}
@@ -80,13 +88,21 @@
                     </button>
                 </div>
                 {% for error in form.confirm_password.errors %}
-                <div class="text-danger">{{ error }}</div>
+                <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
+
+            <!-- Mensagens de status ficam aqui, coladas no botão, para o usuário sempre ver -->
+            <div class="form-status-message alert d-none mb-3" role="alert" aria-live="assertive"></div>
 
             <!-- Botão -->
             <div class="d-grid">
                 {{ form.submit(class="btn btn-success rounded-pill py-2") }}
+            </div>
+
+            <div class="text-center mt-3">
+                <span class="text-muted">Já tem uma conta?</span>
+                <a href="{{ url_for('login_view') }}" class="text-decoration-none fw-semibold">Entrar</a>
             </div>
         </form>
     </div>
@@ -117,6 +133,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         const pwdInput = document.getElementById('password');
+        const confirmInput = document.getElementById('confirm_password');
         const bar = document.getElementById('password-strength');
         if (pwdInput && bar) {
             pwdInput.addEventListener('input', () => {
@@ -130,6 +147,20 @@
             });
         }
 
+        // Avisa na hora se as senhas não coincidem, sem esperar o envio
+        if (pwdInput && confirmInput) {
+            const checkMatch = () => {
+                if (confirmInput.value && confirmInput.value !== pwdInput.value) {
+                    confirmInput.setCustomValidity('As senhas digitadas não são iguais');
+                    confirmInput.classList.add('is-invalid');
+                } else {
+                    confirmInput.setCustomValidity('');
+                    confirmInput.classList.remove('is-invalid');
+                }
+            };
+            confirmInput.addEventListener('input', checkMatch);
+            pwdInput.addEventListener('input', checkMatch);
+        }
     });
 </script>
 

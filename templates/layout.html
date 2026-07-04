@@ -973,12 +973,22 @@
         };
 
         form.addEventListener('submit', async ev => {
+          // Outra validação (ex.: campos obrigatórios do endereço) já bloqueou o envio
+          if (ev.defaultPrevented) return;
           ev.preventDefault();
           const handle = async () => {
-            form.querySelectorAll('.text-danger').forEach(el => el.remove());
-            const globalError = ensureGlobalError();
-            globalError.textContent = '';
-            globalError.classList.add('d-none');
+            form.querySelectorAll('.js-field-error').forEach(el => el.remove());
+            form.querySelectorAll('[data-js-auth-invalid]').forEach(el => {
+              el.classList.remove('is-invalid');
+              el.removeAttribute('aria-invalid');
+              el.removeAttribute('data-js-auth-invalid');
+            });
+            const statusEl = form.querySelector('.form-status-message');
+            const globalError = statusEl ? null : ensureGlobalError();
+            if (globalError) {
+              globalError.textContent = '';
+              globalError.classList.add('d-none');
+            }
             try {
               // Requisições de autenticação usam fetch direto (não offline queue)
               // pois dependem de CSRF tokens que expiram
@@ -1010,32 +1020,52 @@
                 }
               }
 
-              console.log('Form error data:', errorData);
+              const globalMessages = [];
+              let firstInvalid = null;
 
               if (errorData && errorData.errors) {
-                const globalMessages = [];
                 for (const [field, messages] of Object.entries(errorData.errors)) {
                   const input = form.querySelector(`[name="${field}"]`);
-                  const text = Array.isArray(messages) ? messages.join(', ') : messages;
+                  const text = Array.isArray(messages) ? messages.join(' ') : messages;
                   const shouldRenderGlobal = !input || input.type === 'hidden' || ['csrf_token', 'form', 'endereco'].includes(field);
 
                   if (!shouldRenderGlobal) {
+                    input.classList.add('is-invalid');
+                    input.setAttribute('aria-invalid', 'true');
+                    input.setAttribute('data-js-auth-invalid', 'true');
                     const div = document.createElement('div');
-                    div.className = 'text-danger';
+                    div.className = 'invalid-feedback d-block js-field-error';
                     div.textContent = text;
-                    input.insertAdjacentElement('afterend', div);
+                    // Campos dentro de input-group (senha com botão de olho) recebem
+                    // a mensagem depois do grupo para não quebrar o layout
+                    const anchor = input.closest('.input-group') || input;
+                    anchor.insertAdjacentElement('afterend', div);
+                    if (!firstInvalid) firstInvalid = input;
                   } else if (text) {
                     globalMessages.push(text);
                   }
                 }
 
-                if (globalMessages.length) {
+                if (globalError && globalMessages.length) {
                   globalError.textContent = globalMessages.join(' ');
                   globalError.classList.remove('d-none');
                 }
               }
 
-              const message = (errorData && (errorData.message || errorData.error)) || 'Não foi possível concluir o acesso.';
+              const fallback = (errorData && (errorData.message || errorData.error)) || 'Não foi possível concluir. Confira os campos e tente novamente.';
+              const message = globalMessages.length ? globalMessages.join(' ') : fallback;
+
+              // Leva o usuário até o problema: primeiro campo inválido ou a mensagem geral
+              if (firstInvalid) {
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                try { firstInvalid.focus({ preventScroll: true }); } catch (focusError) { }
+              } else if (statusEl) {
+                const submitBtn = form.querySelector('button[type="submit"], [type="submit"]');
+                (submitBtn || statusEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } else if (globalError && !globalError.classList.contains('d-none')) {
+                globalError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+
               return { success: false, message, level: 'danger' };
             } catch (error) {
               console.error('Form submission error:', error);

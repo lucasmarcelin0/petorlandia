@@ -16,6 +16,7 @@
 {% endmacro %}
 
 {% macro render_submit(field, classes='btn btn-primary w-100') %}
+<div class="form-status-message alert d-none mb-3" role="alert" aria-live="assertive"></div>
 <div class="d-grid">
   {{ field(class=classes) }}
 </div>

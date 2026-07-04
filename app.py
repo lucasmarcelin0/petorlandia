@@ -10140,14 +10140,23 @@ def register():
             estado=request.form.get('estado')
         )
         if not _update_coordinates_from_request(endereco):
-            _geocode_endereco(endereco)
+            # Sem geocodificação síncrona aqui: as chamadas externas (Nominatim)
+            # podem levar dezenas de segundos e estourar o timeout do Heroku,
+            # derrubando o cadastro. As coordenadas ficam nulas e podem ser
+            # calculadas depois, quando forem necessárias.
+            endereco.latitude = None
+            endereco.longitude = None
 
-        # Upload da foto de perfil para o S3
+        # Upload da foto de perfil para o S3 — nunca pode impedir a criação da conta
         photo_url = None
-        if form.profile_photo.data:
-            file = form.profile_photo.data
-            filename = secure_filename(file.filename)
-            photo_url = upload_to_s3(file, filename, folder="users")
+        if form.profile_photo.data and getattr(form.profile_photo.data, 'filename', ''):
+            try:
+                file = form.profile_photo.data
+                filename = secure_filename(file.filename)
+                photo_url = upload_to_s3(file, filename, folder="users")
+            except Exception:
+                app.logger.exception('Falha ao enviar foto de perfil no cadastro; conta criada sem foto')
+                photo_url = None
 
 
         # Cria o usuário com a URL da imagem no S3
@@ -10204,12 +10213,15 @@ def register():
         return redirect(url_for('index'))
 
     if request.method == 'POST' and is_json_request:
-        errors = {}
-        if form.errors:
-            errors = {field: messages for field, messages in form.errors.items()}
-        if not errors:
-            errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
-        return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o registro.'}), 400
+        errors = dict(form.errors) if form.errors else {}
+        if 'csrf_token' in errors:
+            message = 'Sua sessão expirou. Recarregue a página e tente novamente.'
+        elif errors:
+            message = 'Confira os campos destacados e tente novamente.'
+        else:
+            errors = {'form': ['Não foi possível validar o formulário. Recarregue a página e tente novamente.']}
+            message = 'Não foi possível criar a conta. Recarregue a página e tente novamente.'
+        return jsonify({'success': False, 'errors': errors, 'message': message}), 400
 
     return render_template('auth/register.html', form=form, endereco=None)
 
