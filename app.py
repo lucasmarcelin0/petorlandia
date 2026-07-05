@@ -18310,6 +18310,143 @@ def verificar_datas_proximas() -> None:
         db.session.commit()
 
 
+def _notification_base_url() -> str:
+    """Base para links em e-mails enviados fora de request context (jobs)."""
+    return os.environ.get('FRONTEND_URL', 'https://www.petorlandia.com.br').rstrip('/')
+
+
+def _concluir_entrega_efeitos(delivery) -> None:
+    """Efeitos da conclusão de uma entrega: congela o frete a repassar e
+    pede ao tutor a confirmação de recebimento (libera repasses)."""
+    from services.notifications import notify_user
+    from services.repasses import congelar_frete
+
+    congelar_frete(delivery)
+    order = delivery.order
+    tutor = getattr(order, 'user', None)
+    if not tutor:
+        return
+    base_url = _notification_base_url()
+    notify_user(
+        tutor,
+        'Seu pedido chegou? Confirme o recebimento — PetOrlândia',
+        (
+            f'Olá {tutor.name}! A entrega do pedido #{order.id} foi concluída.\n\n'
+            'Se está tudo certo, confirme o recebimento em Minhas atividades → Compras:\n'
+            f'{base_url}/minhas_compras\n\n'
+            'A confirmação garante a segurança da sua compra e libera o repasse '
+            'aos parceiros da entrega.'
+        ),
+        kind='order_receipt',
+    )
+
+
+def enviar_lembretes_recebimento() -> None:
+    """Job diário: lembra tutores de confirmar pedidos pagos ainda não confirmados.
+
+    Regras anti-spam: espera 2 dias após o pagamento (tempo de chegar),
+    relembra no máximo a cada 3 dias e ignora pedidos com mais de 60 dias.
+    """
+    from services.notifications import notify_user
+
+    with app.app_context():
+        agora = now_in_brazil()
+        espera_entrega = agora - timedelta(days=2)
+        corte_antigo = agora - timedelta(days=60)
+        relembrar_apos = agora - timedelta(days=3)
+        pedidos = (
+            Order.query
+            .join(Payment, Payment.order_id == Order.id)
+            .filter(
+                Payment.status == PaymentStatus.COMPLETED,
+                Order.received_at.is_(None),
+                Payment.created_at <= espera_entrega,
+                Payment.created_at >= corte_antigo,
+                or_(
+                    Order.receipt_reminder_at.is_(None),
+                    Order.receipt_reminder_at <= relembrar_apos,
+                ),
+            )
+            .all()
+        )
+        base_url = _notification_base_url()
+        for pedido in pedidos:
+            tutor = pedido.user
+            if not tutor:
+                continue
+            notify_user(
+                tutor,
+                'Recebeu seu pedido? Confirme para nós — PetOrlândia',
+                (
+                    f'Olá {tutor.name}! Você já recebeu o pedido #{pedido.id}?\n\n'
+                    'Confirme o recebimento em Minhas atividades → Compras:\n'
+                    f'{base_url}/minhas_compras\n\n'
+                    'Se ainda não chegou ou houve algum problema, responda este '
+                    'e-mail para ajudarmos.'
+                ),
+                kind='order_receipt',
+            )
+            pedido.receipt_reminder_at = agora
+        db.session.commit()
+
+
+def enviar_lembretes_tratamento() -> None:
+    """Job diário: resumo das doses de hoje/atrasadas dos tratamentos ativos.
+
+    Um e-mail por acompanhamento ativo com pendências no dia — traz o tutor de
+    volta à página do tratamento para marcar as doses e enviar a foto diária.
+    """
+    from services.notifications import notify_user
+
+    with app.app_context():
+        agora = now_in_brazil()
+        hoje = agora.date()
+        base_url = _notification_base_url()
+        acompanhamentos = (
+            TratamentoAcompanhamento.query
+            .filter(TratamentoAcompanhamento.status == 'ativo')
+            .all()
+        )
+        for acompanhamento in acompanhamentos:
+            animal = acompanhamento.animal
+            tutor = animal.owner if animal else None
+            if not tutor:
+                continue
+            doses_hoje = 0
+            doses_atrasadas = 0
+            for item in acompanhamento.itens:
+                for registro in item.registros:
+                    if registro.status != 'pendente' or registro.prevista_para is None:
+                        continue
+                    prevista = coerce_to_brazil_tz(registro.prevista_para)
+                    if prevista.date() < hoje:
+                        doses_atrasadas += 1
+                    elif prevista.date() == hoje:
+                        doses_hoje += 1
+            if not doses_hoje and not doses_atrasadas:
+                continue
+            partes = []
+            if doses_hoje:
+                partes.append(f'{doses_hoje} dose(s) para dar hoje')
+            if doses_atrasadas:
+                partes.append(f'{doses_atrasadas} dose(s) atrasada(s)')
+            resumo = ' e '.join(partes)
+            notify_user(
+                tutor,
+                f'Tratamento de {animal.name}: {resumo} — PetOrlândia',
+                (
+                    f'Olá {tutor.name}! O tratamento de {animal.name} tem {resumo}.\n\n'
+                    'Marque as doses dadas e aproveite para enviar a foto de hoje '
+                    'da evolução:\n'
+                    f'{base_url}/tratamento/{acompanhamento.id}\n\n'
+                    'Registrar direitinho ajuda o veterinário a avaliar o '
+                    'tratamento e ajustar o que for preciso.'
+                ),
+                kind='treatment_reminder',
+            )
+        db.session.commit()
+
+
 def _run_financial_snapshot_job() -> None:
     """Daily hook executed by APScheduler to refresh monthly snapshots."""
 
@@ -18334,6 +18471,8 @@ def _run_mercadopago_oauth_renewal_job() -> None:
 if not app.config.get("TESTING"):
     scheduler = BackgroundScheduler(timezone=str(BR_TZ))
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
+    scheduler.add_job(enviar_lembretes_tratamento, 'cron', hour=9)
+    scheduler.add_job(enviar_lembretes_recebimento, 'cron', hour=10)
     scheduler.add_job(_run_financial_snapshot_job, 'cron', hour=2, minute=30)
     scheduler.add_job(_run_mercadopago_oauth_renewal_job, 'cron', hour=3, minute=15)
     scheduler.start()
@@ -22284,6 +22423,7 @@ def casa_entrega_atualizar_status(casa_id, dr_id):
     dr.status = novo_status
     if novo_status == 'concluida':
         dr.completed_at = now_in_brazil()
+        _concluir_entrega_efeitos(dr)
     elif novo_status == 'cancelada':
         dr.canceled_at = now_in_brazil()
         dr.canceled_by_id = current_user.id
@@ -29448,19 +29588,29 @@ def ativar_acompanhamento_tratamento(bloco_id):
 
     acompanhamento = bloco.acompanhamento
     if acompanhamento is None:
+        from services.notifications import notify_user
+
         acompanhamento = criar_acompanhamento(bloco, current_user, now_in_brazil())
-        animal = bloco.animal
-        if animal and animal.user_id:
-            db.session.add(Notification(
-                user_id=animal.user_id,
-                message=(
-                    f'O acompanhamento do tratamento de {animal.name} foi ativado. '
-                    'Marque as doses dadas e envie fotos da evolução.'
-                ),
-                channel='app',
-                kind='treatment',
-            ))
         db.session.commit()
+        animal = bloco.animal
+        tutor = animal.owner if animal else None
+        if tutor:
+            link_tutor = _first_access_url_for_user(
+                tutor,
+                next_url=url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id),
+                _external=True,
+            )
+            notify_user(
+                tutor,
+                f'Acompanhe o tratamento de {animal.name} — PetOrlândia',
+                (
+                    f'Olá {tutor.name}! O tratamento de {animal.name} agora tem uma '
+                    'página de acompanhamento: marque os medicamentos comprados, as '
+                    'doses dadas e envie fotos da evolução.\n\n'
+                    f'Acesse: {link_tutor}'
+                ),
+                kind='treatment',
+            )
         flash('Acompanhamento ativado! Compartilhe o link com o tutor pelo WhatsApp.', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
@@ -30840,6 +30990,7 @@ def complete_delivery(req_id):
             return _delivery_error_response('Você não pode concluir esta entrega.', 'danger', 403)
         req.status = 'concluida'
         req.completed_at = utcnow()
+        _concluir_entrega_efeitos(req)
         db.session.commit()
         flash('Entrega concluída.', 'success')
         if _wants_json_response():
@@ -31209,6 +31360,70 @@ def delivery_overview():
     )
 
 
+@app.route('/admin/repasses-frete')
+@login_required
+def admin_repasses_frete():
+    """Painel semanal de repasse de frete aos entregadores.
+
+    Frete só é liberado quando o tutor confirma o recebimento do pedido;
+    o pagamento é feito em lote (ciclo semanal), por entregador.
+    """
+    if not _is_admin():
+        abort(403)
+    from services.repasses import resumo_repasses
+
+    entregas = (
+        DeliveryRequest.query
+        .options(
+            joinedload(DeliveryRequest.order),
+            joinedload(DeliveryRequest.worker),
+            joinedload(DeliveryRequest.casa_de_racao),
+            joinedload(DeliveryRequest.clinica),
+        )
+        .filter(
+            DeliveryRequest.status == 'concluida',
+            DeliveryRequest.tipo_entrega != 'propria',
+        )
+        .order_by(DeliveryRequest.completed_at.desc())
+        .all()
+    )
+    return render_template('admin/repasses_frete.html', grupos=resumo_repasses(entregas))
+
+
+@app.route('/admin/repasses-frete/pagar/<int:worker_id>', methods=['POST'])
+@login_required
+def admin_pagar_repasses_frete(worker_id):
+    """Marca como pagos todos os fretes liberados (recebimento confirmado) do entregador."""
+    if not _is_admin():
+        abort(403)
+    from services.repasses import congelar_frete
+
+    entregas = (
+        DeliveryRequest.query
+        .join(Order, DeliveryRequest.order_id == Order.id)
+        .filter(
+            DeliveryRequest.worker_id == worker_id,
+            DeliveryRequest.status == 'concluida',
+            DeliveryRequest.tipo_entrega != 'propria',
+            DeliveryRequest.frete_pago_em.is_(None),
+            Order.received_at.isnot(None),
+        )
+        .all()
+    )
+    if not entregas:
+        flash('Nenhum frete liberado para este entregador.', 'info')
+        return redirect(url_for('admin_repasses_frete'))
+
+    agora = now_in_brazil()
+    for entrega in entregas:
+        congelar_frete(entrega)
+        entrega.frete_pago_em = agora
+        entrega.frete_pago_por_id = current_user.id
+    db.session.commit()
+    flash(f'{len(entregas)} frete(s) marcados como pagos.', 'success')
+    return redirect(url_for('admin_repasses_frete'))
+
+
 @login_required
 def admin_set_delivery_status(req_id, status):
     if not _is_admin():
@@ -31242,6 +31457,7 @@ def admin_set_delivery_status(req_id, status):
             req.accepted_at = now
         req.canceled_at = None
         req.canceled_by_id = None
+        _concluir_entrega_efeitos(req)
 
     elif status == 'cancelada':
         req.canceled_at = now

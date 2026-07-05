@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4" style="max-width: 900px;">
+  <h1 class="h4 fw-bold mb-1">🚚 Repasses de frete — entregadores</h1>
+  <p class="text-muted small mb-4">
+    Ciclo semanal: o frete de cada entrega fica <strong>retido</strong> até o tutor
+    confirmar o recebimento do pedido. Confirmou, o valor entra em
+    <strong>liberado</strong> e é pago em lote por entregador.
+  </p>
+
+  {% if not grupos %}
+    <div class="alert alert-light border">Nenhuma entrega de plataforma concluída ainda.</div>
+  {% endif %}
+
+  {% for g in grupos %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <strong>{{ g.worker.name if g.worker else 'Sem entregador atribuído' }}</strong>
+          {% if g.worker and g.worker.phone %}<small class="text-muted"> · {{ g.worker.phone }}</small>{% endif %}
+        </div>
+        {% if g.worker and g.liberadas %}
+          <form method="POST" action="{{ url_for('admin_pagar_repasses_frete', worker_id=g.worker.id) }}"
+                onsubmit="return confirm('Marcar R$ {{ '%.2f'|format(g.total_liberado) }} como pagos para {{ g.worker.name }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-success btn-sm">
+              💸 Pagar R$ {{ '%.2f'|format(g.total_liberado) }} ({{ g.liberadas|length }} entrega(s))
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        <div class="d-flex flex-wrap gap-3 px-3 py-2 small border-bottom bg-light">
+          <span class="text-success">Liberado: <strong>R$ {{ '%.2f'|format(g.total_liberado) }}</strong></span>
+          <span class="text-warning">Aguardando confirmação: <strong>R$ {{ '%.2f'|format(g.total_aguardando) }}</strong></span>
+          <span class="text-muted">Já pago: <strong>R$ {{ '%.2f'|format(g.total_pago) }}</strong></span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr class="small text-muted">
+                <th>Pedido</th><th>Loja</th><th>Concluída em</th><th>Frete</th><th>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in g.liberadas + g.aguardando + g.pagas %}
+                <tr>
+                  <td>#{{ d.order_id }}</td>
+                  <td class="small">{{ (d.casa_de_racao.nome if d.casa_de_racao else (d.clinica.nome if d.clinica else '—')) }}</td>
+                  <td class="small">{{ d.completed_at|format_datetime_brazil('%d/%m/%Y') if d.completed_at else '—' }}</td>
+                  <td>R$ {{ '%.2f'|format(d.frete_valor if d.frete_valor is not none else 0) }}</td>
+                  <td>
+                    {% if d.frete_pago_em %}
+                      <span class="badge bg-secondary">Pago em {{ d.frete_pago_em|format_datetime_brazil('%d/%m/%Y') }}</span>
+                    {% elif d.order and d.order.received_at %}
+                      <span class="badge bg-success">Liberado</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark" title="Tutor ainda não confirmou o recebimento">Aguardando confirmação</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

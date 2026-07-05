@@ -53,7 +53,7 @@
 
   <!-- ─── Métricas de negócio (tração) ────────────────────────────── -->
   <div class="row g-4 mb-2">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card shadow-sm border-0 border-start border-success border-3">
         <div class="card-body">
           <h6 class="text-muted mb-1"><i class="bi bi-person-badge me-2"></i>Veterinários pagantes</h6>
@@ -62,16 +62,26 @@
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 border-start border-success border-3">
+        <div class="card-body">
+          <h6 class="text-muted mb-1"><i class="bi bi-people-fill me-2"></i>Tutores ativos (30 dias)</h6>
+          <h2 class="fw-bold mb-0">{{ tutores_ativos_30d }}</h2>
+          <small class="text-muted">tutores que entraram no app</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
       <div class="card shadow-sm border-0 border-start border-success border-3">
         <div class="card-body">
           <h6 class="text-muted mb-1"><i class="bi bi-cart-check me-2"></i>GMV da loja (acumulado)</h6>
           <h2 class="fw-bold mb-0">R$ {{ '%.2f'|format(gmv_loja) }}</h2>
-          <small class="text-muted">pagamentos concluídos de pedidos</small>
+          <small class="text-muted">pagamentos concluídos ·
+            <a href="{{ url_for('admin_repasses_frete') }}">repasses de frete</a></small>
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card shadow-sm border-0 border-start border-success border-3">
         <div class="card-body">
           <h6 class="text-muted mb-1"><i class="bi bi-shield-plus me-2"></i>Pedidos de vacina (30 dias)</h6>

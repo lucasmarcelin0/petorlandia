@@ -321,6 +321,15 @@ class AdminDashboard(BaseView):
             .filter(VaccineServiceRequest.created_at >= d30)
             .count()
         )
+        # Tutores ativos = logaram nos últimos 30 dias e não são equipe
+        # (vet/entregador/colaborador etc.) nem admin.
+        tutores_ativos_30d = (
+            User.query
+            .filter(User.last_login.isnot(None), User.last_login >= d30)
+            .filter(db.or_(User.worker.is_(None), User.worker == ''))
+            .filter(db.func.lower(func.coalesce(User.role, '')) != 'admin')
+            .count()
+        )
 
         return self.render(
             'admin/home_admin.html',
@@ -331,6 +340,7 @@ class AdminDashboard(BaseView):
             vets_pagantes=vets_pagantes,
             gmv_loja=gmv_loja,
             pedidos_vacina_30d=pedidos_vacina_30d,
+            tutores_ativos_30d=tutores_ativos_30d,
             total_users=User.query.count(),
             total_animals=Animal.query.count(),
             total_consultas=Consulta.query.count(),

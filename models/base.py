@@ -3475,6 +3475,8 @@ class Order(db.Model):
     # Confirmação do tutor de que o pedido chegou — base para liberar
     # repasses (entregador/lojista) com segurança.
     received_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Último lembrete pedindo a confirmação de recebimento (evita spam diário).
+    receipt_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship(
         'User',
@@ -3571,6 +3573,17 @@ class DeliveryRequest(db.Model):
     casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
     # 'plataforma' = fila de entregadores, 'propria' = vendedor gerencia
     tipo_entrega = db.Column(db.String(20), default='plataforma', nullable=False)
+
+    # Repasse do frete ao entregador (entregas 'plataforma'): valor congelado
+    # na conclusão da entrega; liberado quando o tutor confirma o recebimento
+    # (order.received_at) e pago em lote semanal pelo admin.
+    frete_valor = db.Column(db.Numeric(10, 2), nullable=True)
+    frete_pago_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    frete_pago_por_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
 
     order = db.relationship('Order', backref='delivery_requests')
     requested_by = db.relationship(
