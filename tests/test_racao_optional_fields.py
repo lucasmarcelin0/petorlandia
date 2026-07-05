@@ -5,7 +5,7 @@ os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from app import app as flask_app, db
+from app import app as flask_app, db, list_rations
 from models import User, Animal, TipoRacao, VacinaModelo, Medicamento, Veterinario
 
 
@@ -31,6 +31,30 @@ def _activate_veterinarian(user, crmv):
     vet_profile = Veterinario(user=user, crmv=crmv)
     db.session.add(vet_profile)
     return vet_profile
+
+
+def test_list_rations_cache_survives_session_teardown(app):
+    with app.app_context():
+        db.create_all()
+        list_rations.cache_clear()
+
+        vet = User(name="Vet", email="vet-cache@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.flush()
+        tipo = TipoRacao(marca="Golden", linha="Senior", recomendacao=12.5, created_by=vet.id)
+        db.session.add(tipo)
+        db.session.commit()
+        tipo_id = tipo.id
+
+        cached = list_rations()
+        db.session.commit()
+        db.session.remove()
+
+        assert cached[0].id == tipo_id
+        assert cached[0].marca == "Golden"
+        assert cached[0].linha == "Senior"
+        assert cached[0].recomendacao == 12.5
 
 
 def test_salvar_racao_cria_tipo_com_usuario(app):

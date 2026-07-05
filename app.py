@@ -32228,7 +32228,16 @@ def _get_recent_tutores(
 
 @cache
 def list_rations():
-    return TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
+    """Return cached ration options without keeping ORM instances alive."""
+    return [
+        SimpleNamespace(
+            id=tipo.id,
+            marca=tipo.marca,
+            linha=tipo.linha,
+            recomendacao=tipo.recomendacao,
+        )
+        for tipo in TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
+    ]
 
 
 # ─────────────────────────────────────────────────────────
