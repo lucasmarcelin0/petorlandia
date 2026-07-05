@@ -48,7 +48,7 @@
               {% else %}
               <i class="fa-solid fa-clinic-medical product-seller-icon"></i>
               {% endif %}
-              <span class="product-seller-name">{{ product.clinica.nome }}</span>
+              <span class="product-seller-name" style="display:inline-block;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">{{ product.clinica.nome }}</span>
             </a>
           </div>
           {% elif product.casa_de_racao %}
@@ -63,7 +63,7 @@
               {% else %}
               <i class="fa-solid fa-seedling product-seller-icon"></i>
               {% endif %}
-              <span class="product-seller-name">{{ product.casa_de_racao.nome }}</span>
+              <span class="product-seller-name" style="display:inline-block;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">{{ product.casa_de_racao.nome }}</span>
             </a>
           </div>
           {% endif %}

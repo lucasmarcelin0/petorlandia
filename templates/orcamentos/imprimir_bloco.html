@@ -13,6 +13,14 @@
   <button onclick="window.print()">🖨️ Imprimir</button>
   <button onclick="abrirAssinatura()">🔏 Assinar</button>
   <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  {% if acompanhamento %}
+    <a href="{{ url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) }}">🩺 Acompanhamento</a>
+  {% elif pode_ativar_acompanhamento %}
+    <form method="POST" action="{{ url_for('ativar_acompanhamento_tratamento', bloco_id=bloco.id) }}" style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">▶️ Ativar acompanhamento</button>
+    </form>
+  {% endif %}
   <a href="{{ return_url or url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
 </div>
 
@@ -154,6 +162,7 @@
   const numeroWhatsApp = "{{ bloco.animal.owner.phone | digits_only if bloco.animal.owner and bloco.animal.owner.phone else '' }}";
   const firstAccessUrl = {{ first_access_url|tojson }};
   const prescriptionUrl = {{ prescription_public_url|tojson }};
+  const tratamentoUrl = {{ tratamento_first_access_url|tojson }};
   const btnWhats = document.getElementById('btn-whatsapp');
   if (!numeroWhatsApp && btnWhats) {
     btnWhats.style.display = 'none';
@@ -170,7 +179,10 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! Segue a receita veterinária de {{ bloco.animal.name }}.\n\nAcesse pelo primeiro acesso PetOrlandia, confirme seu celular e crie sua senha: ${firstAccessUrl}\n\nSe você já tem senha, use o mesmo link e toque em "Já tenho senha".\n\nLink da receita: ${prescriptionUrl}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const blocoAcompanhamento = tratamentoUrl
+      ? `\n\nAcompanhe o tratamento pelo link abaixo: marque os medicamentos comprados, as doses dadas e envie fotos da evolução.\nAcompanhamento: ${tratamentoUrl}`
+      : '';
+    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! Segue a receita veterinária de {{ bloco.animal.name }}.\n\nAcesse pelo primeiro acesso PetOrlandia, confirme seu celular e crie sua senha: ${firstAccessUrl}\n\nSe você já tem senha, use o mesmo link e toque em "Já tenho senha".\n\nLink da receita: ${prescriptionUrl}${blocoAcompanhamento}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

@@ -34,9 +34,25 @@
             </span>
           </td>
           <td>
-            <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes do pedido {{ o.id }}">
-              <i class="bi bi-search"></i> Detalhes
-            </a>
+            <div class="d-flex flex-wrap gap-1 justify-content-end">
+              <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes do pedido {{ o.id }}">
+                <i class="bi bi-search"></i> Detalhes
+              </a>
+              {% if status == 'COMPLETED' %}
+                {% if o.received_at %}
+                <span class="badge bg-success-subtle text-success border align-self-center" title="Recebimento confirmado">
+                  <i class="bi bi-check2-circle"></i> Recebido em {{ o.received_at|format_datetime_brazil('%d/%m/%Y') }}
+                </span>
+                {% else %}
+                <form method="post" action="{{ url_for('confirmar_recebimento_pedido', order_id=o.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-success" aria-label="Confirmar recebimento do pedido {{ o.id }}">
+                    <i class="bi bi-box-seam"></i> Recebi o pedido
+                  </button>
+                </form>
+                {% endif %}
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}

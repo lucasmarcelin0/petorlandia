@@ -76,7 +76,9 @@ def test_checkout_adds_one_shipping_item_per_feed_store(app, client, monkeypatch
 
         assert resp.status_code == 302
         payment = Payment.query.one()
-        assert float(payment.amount) == 220.0
+        # Itens reprecificados ao preço público (taxa embutida):
+        # 100→110 e 2x 50→55 (=110), + fretes 8 e 12 → total 240.
+        assert float(payment.amount) == 240.0
         titles = [item["title"] for item in captured["payload"]["items"]]
         assert "Frete - Racoes A" in titles
         assert "Frete - Racoes B" in titles

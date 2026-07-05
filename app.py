@@ -283,7 +283,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
 from werkzeug.exceptions import HTTPException, NotFound
-from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
+from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, now_in_brazil, utcnow
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -20520,19 +20520,28 @@ def _onboarding_seller_percent():
 
 
 def _onboarding_payout_from_final(price):
+    """Repasse estimado a partir de um preço de vitrine desejado (÷ 1,10).
+
+    O preço de vitrine real será ``_onboarding_final_from_payout`` do valor
+    retornado (pode arredondar para cima até o múltiplo de R$ 5).
+    """
     if price is None:
         return None
-    _, seller_percent = _onboarding_seller_percent()
-    return (Decimal(price) * seller_percent / Decimal('100')).quantize(Decimal('0.01'))
+    return (Decimal(price) / Decimal('1.10')).quantize(Decimal('0.01'))
 
 
 def _onboarding_final_from_payout(payout):
+    """Preço de vitrine: repasse + 10%, arredondado ao próximo múltiplo de R$5.
+
+    Mesma regra de ``Product.preco_publico`` — o lojista recebe o valor
+    integral que definiu; a taxa fica embutida no preço exibido.
+    """
     if payout is None:
         return None
-    _, seller_percent = _onboarding_seller_percent()
-    if seller_percent <= 0:
+    amount = Decimal(payout)
+    if amount <= 0:
         return None
-    return (Decimal(payout) * Decimal('100') / seller_percent).quantize(Decimal('0.01'))
+    return public_price_from_professional_price(amount)
 
 
 def _onboarding_prefill_email(user_email):
@@ -20548,15 +20557,16 @@ def _onboarding_product_form_state(produtos):
         is_configured = bool((product.price or 0) > 0 and (product.stock or 0) >= 0 and product.status == 'active')
         if is_configured:
             configured_count += 1
-        final_price = Decimal(str(product.price or 0)) if is_configured else None
-        payout = _onboarding_payout_from_final(final_price) if is_configured else None
+        # product.price = valor que o lojista recebe; vitrine = preço público.
+        payout = Decimal(str(product.price or 0)) if is_configured else None
+        final_price = _onboarding_final_from_payout(payout) if is_configured else None
         state.append({
             'product': product,
             'price_value': _onboarding_money_display(final_price),
             'payout_value': _onboarding_money_display(payout),
             'stock_value': '' if not is_configured else str(product.stock),
             'configured': is_configured,
-            'pricing_mode': 'final',
+            'pricing_mode': 'payout',
         })
     return state, configured_count, fee_percent, seller_percent
 
@@ -20649,9 +20659,9 @@ def casa_de_racao_onboarding(token):
             product = item['product']
             raw_price = request.form.get(f'price_{product.id}')
             raw_payout = request.form.get(f'payout_{product.id}')
-            pricing_mode = (request.form.get(f'pricing_mode_{product.id}') or 'final').strip()
+            pricing_mode = (request.form.get(f'pricing_mode_{product.id}') or 'payout').strip()
             if pricing_mode not in {'final', 'payout'}:
-                pricing_mode = 'final'
+                pricing_mode = 'payout'
             price = _onboarding_decimal(raw_price)
             payout = _onboarding_decimal(raw_payout)
             raw_stock = (request.form.get(f'stock_{product.id}') or '').strip()
@@ -20670,28 +20680,27 @@ def casa_de_racao_onboarding(token):
                 item['pricing_mode'] = pricing_mode
                 continue
 
-            final_price = price
+            # O que é salvo em product.price é sempre o REPASSE (valor que
+            # a loja recebe); a vitrine é derivada com a taxa embutida.
             if pricing_mode == 'payout':
-                final_price = _onboarding_final_from_payout(payout)
+                seller_price = payout
                 if payout is None or payout <= 0:
                     errors.append(f'Informe quanto deseja receber por {product.name}.')
             else:
                 if price is None or price <= 0:
-                    errors.append(f'Informe um preço final válido para {product.name}.')
+                    errors.append(f'Informe um preço de vitrine válido para {product.name}.')
+                seller_price = _onboarding_payout_from_final(price)
+            final_price = _onboarding_final_from_payout(seller_price)
             if stock < 0:
                 errors.append(f'Informe um estoque válido para {product.name}.')
-            if final_price is not None and final_price > 0 and stock >= 0:
+            if seller_price is not None and seller_price > 0 and stock >= 0:
                 configured_products += 1
-            if pricing_mode == 'payout' and payout is not None and payout > 0:
-                item['price_value'] = _onboarding_money_display(final_price)
-                item['payout_value'] = str(raw_payout or '').strip()
-            else:
-                item['price_value'] = str(raw_price or '').strip()
-                item['payout_value'] = _onboarding_money_display(_onboarding_payout_from_final(price)) if price is not None and price > 0 else str(raw_payout or '').strip()
+            item['price_value'] = _onboarding_money_display(final_price) if final_price else str(raw_price or '').strip()
+            item['payout_value'] = _onboarding_money_display(seller_price) if seller_price else str(raw_payout or '').strip()
             item['stock_value'] = raw_stock
-            item['configured'] = bool(final_price is not None and final_price > 0 and stock >= 0)
+            item['configured'] = bool(seller_price is not None and seller_price > 0 and stock >= 0)
             item['pricing_mode'] = pricing_mode
-            product_updates.append((product, final_price, stock, True))
+            product_updates.append((product, seller_price, stock, True))
 
         if configured_products == 0:
             errors.append('Preencha ao menos um produto com preço e estoque para concluir.')
@@ -29383,6 +29392,19 @@ def imprimir_bloco_prescricao(bloco_id):
             _external=True,
         )
 
+    acompanhamento = bloco.acompanhamento
+    pode_ativar_acompanhamento = acompanhamento is None and is_veterinarian(current_user)
+    tratamento_first_access_url = None
+    if acompanhamento:
+        tratamento_next_url = url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id)
+        tratamento_first_access_url = url_for('first_access', next=tratamento_next_url, _external=True)
+        if tutor:
+            tratamento_first_access_url = _first_access_url_for_user(
+                tutor,
+                next_url=tratamento_next_url,
+                _external=True,
+            )
+
     return render_template(
         'orcamentos/imprimir_bloco.html',
         bloco=bloco,
@@ -29396,8 +29418,239 @@ def imprimir_bloco_prescricao(bloco_id):
         printed_at=datetime.now(BR_TZ),
         first_access_url=first_access_url,
         prescription_public_url=prescription_public_url,
+        acompanhamento=acompanhamento,
+        pode_ativar_acompanhamento=pode_ativar_acompanhamento,
+        tratamento_first_access_url=tratamento_first_access_url,
         return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
+
+
+def _tratamento_acompanhamento_or_404(tratamento_id):
+    """Carrega o acompanhamento validando acesso: tutor dono ou equipe da clínica."""
+    acompanhamento = TratamentoAcompanhamento.query.get_or_404(tratamento_id)
+    if _current_user_owns_animal(acompanhamento.animal):
+        return acompanhamento, True
+    ensure_clinic_access(acompanhamento.bloco.clinica_id if acompanhamento.bloco else None)
+    return acompanhamento, False
+
+
+@app.route('/bloco_prescricao/<int:bloco_id>/acompanhamento', methods=['POST'])
+@login_required
+def ativar_acompanhamento_tratamento(bloco_id):
+    from services.tratamento import criar_acompanhamento
+
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    if not _current_user_owns_animal(bloco.animal):
+        ensure_clinic_access(bloco.clinica_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem ativar o acompanhamento.', 'danger')
+        return redirect(request.referrer or url_for('index'))
+
+    acompanhamento = bloco.acompanhamento
+    if acompanhamento is None:
+        acompanhamento = criar_acompanhamento(bloco, current_user, now_in_brazil())
+        animal = bloco.animal
+        if animal and animal.user_id:
+            db.session.add(Notification(
+                user_id=animal.user_id,
+                message=(
+                    f'O acompanhamento do tratamento de {animal.name} foi ativado. '
+                    'Marque as doses dadas e envie fotos da evolução.'
+                ),
+                channel='app',
+                kind='treatment',
+            ))
+        db.session.commit()
+        flash('Acompanhamento ativado! Compartilhe o link com o tutor pelo WhatsApp.', 'success')
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
+
+
+@app.route('/tratamento/<int:tratamento_id>')
+@login_required
+def acompanhamento_tratamento(tratamento_id):
+    from services.tratamento import resumo_progresso
+
+    acompanhamento, is_owner = _tratamento_acompanhamento_or_404(tratamento_id)
+    animal = acompanhamento.animal
+    bloco = acompanhamento.bloco
+    agora = now_in_brazil()
+    hoje = agora.date()
+
+    doses_hoje = []
+    doses_atrasadas = []
+    itens_view = []
+    for item in acompanhamento.itens:
+        previstas = 0
+        feitas = 0
+        proxima = None
+        ultima_aplicacao = None
+        for registro in item.registros:
+            if registro.prevista_para is not None:
+                previstas += 1
+            if registro.status == 'feita':
+                feitas += 1
+                realizada = coerce_to_brazil_tz(registro.realizada_em) if registro.realizada_em else None
+                if realizada and (ultima_aplicacao is None or realizada > ultima_aplicacao):
+                    ultima_aplicacao = realizada
+            elif registro.status == 'pendente' and registro.prevista_para is not None:
+                prevista = coerce_to_brazil_tz(registro.prevista_para)
+                if prevista.date() < hoje:
+                    doses_atrasadas.append({'item': item, 'registro': registro, 'prevista': prevista})
+                elif prevista.date() == hoje:
+                    doses_hoje.append({'item': item, 'registro': registro, 'prevista': prevista})
+                if proxima is None:
+                    proxima = prevista
+        itens_view.append({
+            'item': item,
+            'prescricao': item.prescricao,
+            'previstas': previstas,
+            'feitas': feitas,
+            'percentual': round(100 * feitas / previstas) if previstas else None,
+            'proxima': proxima,
+            'ultima_aplicacao': ultima_aplicacao,
+        })
+
+    doses_hoje.sort(key=lambda d: d['prevista'])
+    doses_atrasadas.sort(key=lambda d: d['prevista'])
+    fotos = sorted(
+        acompanhamento.fotos,
+        key=lambda f: f.enviada_em or acompanhamento.data_inicio or agora,
+        reverse=True,
+    )
+
+    tutor = animal.owner if animal else None
+    is_vet_viewer = is_veterinarian(current_user)
+    tutor_whatsapp_url = None
+    if is_vet_viewer and tutor:
+        tratamento_next_url = url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id)
+        link_tutor = _first_access_url_for_user(tutor, next_url=tratamento_next_url, _external=True)
+        mensagem = (
+            f'Olá {tutor.name}! Acompanhe o tratamento de {animal.name} pelo PetOrlandia: '
+            'marque as doses dadas e envie fotos da evolução.\n\n'
+            f'Acesse: {link_tutor}'
+        )
+        tutor_whatsapp_url = _web_whatsapp_url(tutor.phone, mensagem)
+
+    return render_template(
+        'tratamento/acompanhamento.html',
+        acompanhamento=acompanhamento,
+        animal=animal,
+        bloco=bloco,
+        itens=itens_view,
+        doses_hoje=doses_hoje,
+        doses_atrasadas=doses_atrasadas,
+        fotos=fotos,
+        progresso=resumo_progresso(acompanhamento),
+        is_owner=is_owner,
+        is_vet_viewer=is_vet_viewer,
+        tutor_whatsapp_url=tutor_whatsapp_url,
+        hoje=hoje,
+    )
+
+
+@app.route('/tratamento/item/<int:item_id>/comprado', methods=['POST'])
+@login_required
+def marcar_item_tratamento_comprado(item_id):
+    item = ItemTratamento.query.get_or_404(item_id)
+    acompanhamento, _ = _tratamento_acompanhamento_or_404(item.acompanhamento_id)
+    if item.comprado_em:
+        item.comprado_em = None
+        item.comprado_por_id = None
+    else:
+        item.comprado_em = now_in_brazil()
+        item.comprado_por_id = current_user.id
+    db.session.commit()
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#compras')
+
+
+@app.route('/tratamento/registro/<int:registro_id>/marcar', methods=['POST'])
+@login_required
+def marcar_administracao_tratamento(registro_id):
+    registro = AdministracaoRegistro.query.get_or_404(registro_id)
+    item = registro.item
+    acompanhamento, _ = _tratamento_acompanhamento_or_404(item.acompanhamento_id)
+
+    status = (request.form.get('status') or '').strip()
+    if status not in ('feita', 'pulada', 'pendente'):
+        abort(400)
+
+    registro.status = status
+    if status == 'feita':
+        registro.realizada_em = now_in_brazil()
+        registro.realizada_por_id = current_user.id
+    elif status == 'pulada':
+        registro.realizada_em = None
+        registro.realizada_por_id = current_user.id
+    else:
+        registro.realizada_em = None
+        registro.realizada_por_id = None
+
+    observacao = (request.form.get('observacao') or '').strip()
+    if observacao:
+        registro.observacao = observacao
+    db.session.commit()
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
+
+
+@app.route('/tratamento/item/<int:item_id>/registrar', methods=['POST'])
+@login_required
+def registrar_aplicacao_tratamento(item_id):
+    item = ItemTratamento.query.get_or_404(item_id)
+    acompanhamento, _ = _tratamento_acompanhamento_or_404(item.acompanhamento_id)
+    observacao = (request.form.get('observacao') or '').strip() or None
+    db.session.add(AdministracaoRegistro(
+        item_id=item.id,
+        status='feita',
+        realizada_em=now_in_brazil(),
+        realizada_por_id=current_user.id,
+        observacao=observacao,
+    ))
+    db.session.commit()
+    flash('Aplicação registrada!', 'success')
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
+
+
+@app.route('/tratamento/<int:tratamento_id>/foto', methods=['POST'])
+@login_required
+def enviar_foto_tratamento(tratamento_id):
+    acompanhamento, _ = _tratamento_acompanhamento_or_404(tratamento_id)
+    arquivo = request.files.get('foto')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione uma foto para enviar.', 'warning')
+        return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
+
+    carimbo = now_in_brazil().strftime('%Y%m%d%H%M%S')
+    filename = f'tratamento_{acompanhamento.id}_{carimbo}_{secure_filename(arquivo.filename)}'
+    url = upload_to_s3(arquivo, filename, folder='tratamentos')
+    if not url:
+        flash('Não foi possível enviar a foto. Tente novamente.', 'danger')
+        return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
+
+    db.session.add(FotoTratamento(
+        acompanhamento_id=acompanhamento.id,
+        url=url,
+        observacao=(request.form.get('observacao') or '').strip() or None,
+        enviada_por_id=current_user.id,
+    ))
+    db.session.commit()
+    flash('Foto enviada! Ela ajuda o veterinário a avaliar a evolução.', 'success')
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
+
+
+@app.route('/tratamento/<int:tratamento_id>/status', methods=['POST'])
+@login_required
+def alterar_status_tratamento(tratamento_id):
+    acompanhamento, _ = _tratamento_acompanhamento_or_404(tratamento_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem alterar o status do tratamento.', 'danger')
+        return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
+    novo_status = (request.form.get('status') or '').strip()
+    if novo_status not in ('ativo', 'concluido', 'interrompido'):
+        abort(400)
+    acompanhamento.status = novo_status
+    db.session.commit()
+    flash('Status do tratamento atualizado.', 'success')
+    return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
 
 @app.route('/animal/<int:animal_id>/bloco_exames', methods=['POST'])
@@ -31815,6 +32068,31 @@ def _money_decimal(value) -> Decimal:
         return Decimal("0.00")
 
 
+def _reprice_order_items(order):
+    """Sincroniza itens de carrinho aberto com o preço público atual.
+
+    Carrinhos criados antes de uma mudança de precificação (ex.: taxa
+    embutida) carregam ``unit_price`` antigo; aqui todo carrinho é
+    "reaberto" com o preço vigente antes de exibir ou cobrar.
+    """
+    if not order or not getattr(order, "items", None):
+        return False
+    changed = False
+    for item in order.items:
+        product = item.product
+        if not product:
+            continue
+        current = product.preco_publico
+        if current is None:
+            continue
+        if item.unit_price is None or _money_decimal(item.unit_price) != current:
+            item.unit_price = current
+            changed = True
+    if changed:
+        db.session.commit()
+    return changed
+
+
 def _order_vendor_shipping(order):
     """Return per-store shipping lines for a cart/order."""
     if not order or not getattr(order, 'items', None):
@@ -33322,8 +33600,10 @@ def ver_carrinho():
         if pagamento and pagamento.status == PaymentStatus.PENDING:
             pagamento_pendente = pagamento
 
-    # 3) Busca o pedido atual
+    # 3) Busca o pedido atual e garante preços vigentes (reprecifica
+    #    carrinhos abertos antes de mudanças de precificação)
     order = _get_current_order()
+    _reprice_order_items(order)
 
     # 4) Renderiza o carrinho passando o form
     return render_template(
@@ -33377,6 +33657,7 @@ def checkout_confirm():
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
+    _reprice_order_items(order)
 
     # Determine the address text based on the chosen option
     selected_address = None
@@ -33469,6 +33750,8 @@ def checkout():
     order = _get_current_order()
     if not order or not order.items:
         return respond_error("Seu carrinho está vazio.", "warning")
+    # Nunca cobrar preço defasado: reprecifica com o preço público vigente.
+    _reprice_order_items(order)
 
     address_text = None
     if form.address_id.data is not None and form.address_id.data >= 0:
@@ -34218,6 +34501,21 @@ def minhas_compras():
         PaymentStatus=PaymentStatus,
     )
 
+
+
+@login_required
+def confirmar_recebimento_pedido(order_id):
+    """Tutor confirma que o pedido chegou — base para liberar repasses."""
+    order = Order.query.get_or_404(order_id)
+    if order.user_id != current_user.id:
+        abort(403)
+    if order.received_at is None:
+        order.received_at = now_in_brazil()
+        db.session.commit()
+        flash('Recebimento confirmado. Obrigado!', 'success')
+    else:
+        flash('Este pedido já estava confirmado como recebido.', 'info')
+    return redirect(url_for('minhas_compras'))
 
 
 @login_required

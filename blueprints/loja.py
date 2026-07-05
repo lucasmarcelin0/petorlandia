@@ -17,6 +17,11 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/pedidos/<int:order_id>/confirmar-recebimento",
+        view_func=lazy_view("confirmar_recebimento_pedido"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/delivery_requests",
         view_func=lazy_view("list_delivery_requests"),
     )

@@ -165,6 +165,76 @@ def test_checkout_uses_connected_store_token_and_marketplace_fee(app, client, mo
         assert captured["payload"]["marketplace_fee"] == 10.0
 
 
+def test_checkout_reprices_stale_cart_items(app, client, monkeypatch):
+    """Carrinhos abertos antes de mudança de preço são reprecificados no checkout."""
+    monkeypatch.setenv("FISCAL_MASTER_KEY", "test-master-key")
+    clear_crypto_cache()
+    app.config.update(
+        MERCADOPAGO_ACCESS_TOKEN="platform-token",
+        WTF_CSRF_ENABLED=False,
+    )
+    captured = {}
+
+    class FakePreference:
+        def create(self, payload):
+            captured["payload"] = payload
+            return {"status": 201, "response": {"id": "pref-2", "init_point": "https://pay.test"}}
+
+    class FakeSdk:
+        def __init__(self, token):
+            captured["token"] = token
+
+        def preference(self):
+            return FakePreference()
+
+    with app.app_context():
+        addr = Endereco(cep="11111-000", rua="Rua Tutor", cidade="Cidade", estado="SP")
+        buyer = User(name="Comprador Antigo", email="antigo@example.com")
+        buyer.set_password("x")
+        buyer.endereco = addr
+        owner, casa = _create_owner_and_store()
+        product = Product(
+            name="Racao Estoque",
+            price=100,
+            stock=5,
+            casa_de_racao_id=casa.id,
+            status="active",
+        )
+        db.session.add_all([addr, buyer, product])
+        db.session.flush()
+        order = Order(user_id=buyer.id)
+        db.session.add(order)
+        db.session.flush()
+        # unit_price defasado (pré-taxa-embutida): deve virar 110 no checkout
+        stale_item = OrderItem(order_id=order.id, product_id=product.id, item_name=product.name, quantity=1, unit_price=100)
+        db.session.add(stale_item)
+        account = StorePaymentAccount(casa_de_racao_id=casa.id, provider="mercado_pago", status="connected")
+        account.access_token = "seller-token"
+        db.session.add(account)
+        db.session.commit()
+
+        _login(monkeypatch, buyer)
+        runtime_app = sys.modules["petorlandia_app"]
+        monkeypatch.setattr(runtime_app, "_get_current_order", lambda: order)
+        monkeypatch.setattr(runtime_app, "mp_sdk", lambda token=None: FakeSdk(token))
+        monkeypatch.setattr(runtime_app, "_mercadopago_notification_url", lambda: "https://example.test/notificacoes")
+
+        class TestCheckoutForm(runtime_app.CheckoutForm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.address_id.choices = [(0, "addr")]
+
+        monkeypatch.setattr(runtime_app, "CheckoutForm", TestCheckoutForm)
+
+        resp = client.post("/checkout", data={"address_id": 0}, headers={"Accept": "text/html"})
+
+        assert resp.status_code == 302, resp.get_data(as_text=True)
+        product_item = next(i for i in captured["payload"]["items"] if i["id"] == str(product.id))
+        assert product_item["unit_price"] == 110.0
+        assert captured["payload"]["marketplace_fee"] == 10.0
+        assert float(stale_item.unit_price) == 110.0
+
+
 def test_renew_due_store_accounts_refreshes_expiring_token(app, monkeypatch):
     monkeypatch.setenv("FISCAL_MASTER_KEY", "test-master-key")
     clear_crypto_cache()

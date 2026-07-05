@@ -301,12 +301,36 @@ class AdminDashboard(BaseView):
             db.session.rollback()
             candidaturas_pendentes = 0
 
+        # ── Métricas de negócio (tração para investidores) ───────────────
+        from models import VaccineServiceRequest
+
+        vets_pagantes = (
+            VeterinarianMembership.query
+            .filter(VeterinarianMembership.paid_until.isnot(None),
+                    VeterinarianMembership.paid_until >= agora)
+            .count()
+        )
+        gmv_loja = (
+            db.session.query(func.sum(Payment.amount))
+            .filter(Payment.status == PaymentStatus.COMPLETED,
+                    Payment.order_id.isnot(None))
+            .scalar() or 0
+        )
+        pedidos_vacina_30d = (
+            VaccineServiceRequest.query
+            .filter(VaccineServiceRequest.created_at >= d30)
+            .count()
+        )
+
         return self.render(
             'admin/home_admin.html',
             clinicas_pendentes=clinicas_pendentes,
             casas_pendentes=casas_pendentes,
             candidaturas_pendentes=candidaturas_pendentes,
             parcerias_pendentes=clinicas_pendentes + casas_pendentes + candidaturas_pendentes,
+            vets_pagantes=vets_pagantes,
+            gmv_loja=gmv_loja,
+            pedidos_vacina_30d=pedidos_vacina_30d,
             total_users=User.query.count(),
             total_animals=Animal.query.count(),
             total_consultas=Consulta.query.count(),

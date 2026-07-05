@@ -810,6 +810,122 @@ class Prescricao(db.Model):
         return f'<Prescrição {self.medicamento} (ID: {self.id})>'
 
 
+class TratamentoAcompanhamento(db.Model):
+    """Acompanhamento de um bloco de prescrição: compras, administrações e fotos."""
+    __tablename__ = 'tratamento_acompanhamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    bloco_id = db.Column(
+        db.Integer,
+        db.ForeignKey('bloco_prescricao.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True,
+    )
+    animal_id = db.Column(
+        db.Integer,
+        db.ForeignKey('animal.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    status = db.Column(db.String(20), nullable=False, default='ativo')  # ativo | concluido | interrompido
+    data_inicio = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    bloco = db.relationship(
+        'BlocoPrescricao',
+        backref=db.backref('acompanhamento', uselist=False, cascade='all, delete-orphan'),
+    )
+    animal = db.relationship('Animal', backref=db.backref('acompanhamentos_tratamento', lazy=True))
+    criado_por = db.relationship('User', foreign_keys=[criado_por_id])
+    itens = db.relationship(
+        'ItemTratamento',
+        backref='acompanhamento',
+        cascade='all, delete-orphan',
+        order_by='ItemTratamento.id',
+    )
+    fotos = db.relationship(
+        'FotoTratamento',
+        backref='acompanhamento',
+        cascade='all, delete-orphan',
+        order_by='FotoTratamento.enviada_em',
+    )
+
+
+class ItemTratamento(db.Model):
+    """Um medicamento/shampoo/pomada da receita dentro do acompanhamento.
+
+    modo 'agendado' = posologia interpretada, doses pré-geradas em AdministracaoRegistro.
+    modo 'livre' = sem cadência confiável; tutor registra cada aplicação manualmente.
+    """
+    __tablename__ = 'item_tratamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    acompanhamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('tratamento_acompanhamento.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    prescricao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('prescricao.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    modo = db.Column(db.String(10), nullable=False, default='livre')  # agendado | livre
+    intervalo_horas = db.Column(db.Integer)
+    duracao_dias = db.Column(db.Integer)
+    comprado_em = db.Column(db.DateTime(timezone=True))
+    comprado_por_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    prescricao = db.relationship('Prescricao')
+    comprado_por = db.relationship('User', foreign_keys=[comprado_por_id])
+    registros = db.relationship(
+        'AdministracaoRegistro',
+        backref='item',
+        cascade='all, delete-orphan',
+        order_by='AdministracaoRegistro.prevista_para',
+    )
+
+
+class AdministracaoRegistro(db.Model):
+    """Uma dose prevista (modo agendado) ou aplicação avulsa (modo livre)."""
+    __tablename__ = 'administracao_registro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('item_tratamento.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    prevista_para = db.Column(db.DateTime(timezone=True))  # null em aplicações avulsas
+    realizada_em = db.Column(db.DateTime(timezone=True))
+    realizada_por_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    status = db.Column(db.String(10), nullable=False, default='pendente')  # pendente | feita | pulada
+    observacao = db.Column(db.Text)
+
+    realizada_por = db.relationship('User', foreign_keys=[realizada_por_id])
+
+
+class FotoTratamento(db.Model):
+    """Foto de evolução enviada pelo tutor (ou equipe) durante o tratamento."""
+    __tablename__ = 'foto_tratamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    acompanhamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('tratamento_acompanhamento.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    url = db.Column(db.String(400), nullable=False)
+    observacao = db.Column(db.Text)
+    enviada_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
+    enviada_por_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    enviada_por = db.relationship('User', foreign_keys=[enviada_por_id])
+
+
 class Clinica(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
@@ -3356,6 +3472,9 @@ class Order(db.Model):
     )
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     shipping_address = db.Column(db.String(200))
+    # Confirmação do tutor de que o pedido chegou — base para liberar
+    # repasses (entregador/lojista) com segurança.
+    received_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship(
         'User',
@@ -3868,6 +3987,10 @@ def _format_age_label(number, unit):
     return f"{number} {suffix}"
 
 
+# Partículas de nomes pt-BR que permanecem minúsculas (exceto como 1ª palavra)
+_NAME_PARTICLES = {"da", "de", "do", "das", "dos", "e", "di", "du"}
+
+
 def _normalize_person_name(value):
     if value is None:
         return None
@@ -3876,19 +3999,23 @@ def _normalize_person_name(value):
     if not normalized:
         return normalized
 
-    lowered = normalized.lower()
-    result = []
-    capitalize_next = True
+    words = []
+    for index, word in enumerate(normalized.lower().split(" ")):
+        if index > 0 and word in _NAME_PARTICLES:
+            words.append(word)
+            continue
+        chars = []
+        capitalize_next = True
+        for char in word:
+            if capitalize_next and char.isalpha():
+                chars.append(char.upper())
+                capitalize_next = False
+            else:
+                chars.append(char)
+                capitalize_next = char in {"-", "'"}
+        words.append("".join(chars))
 
-    for char in lowered:
-        if capitalize_next and char.isalpha():
-            result.append(char.upper())
-            capitalize_next = False
-        else:
-            result.append(char)
-            capitalize_next = char in {" ", "-", "'"}
-
-    return "".join(result)
+    return " ".join(words)
 
 
 def _normalize_model_name(target):

@@ -29,8 +29,8 @@
             <div class="small mb-1"><strong>Loja:</strong> {{ casa.nome }}</div>
             <div class="small mb-1"><strong>Produtos no catalogo:</strong> {{ produtos|length }}</div>
             <div class="small mb-1"><strong>Ja configurados:</strong> {{ configured_count }}</div>
-            <div class="small mb-1"><strong>Repasse para a loja:</strong> {{ '%.0f'|format(seller_percent) }}%</div>
-            <div class="small text-muted">Taxa da plataforma: {{ '%.0f'|format(fee_percent) }}%. O link deixa de funcionar depois da conclusao.</div>
+            <div class="small mb-1"><strong>Voce recebe</strong> exatamente o valor que definir em cada produto.</div>
+            <div class="small text-muted">O preco exibido no app ja inclui a taxa da plataforma. O link deixa de funcionar depois da conclusao.</div>
           </div>
         </div>
       </div>
@@ -140,8 +140,6 @@
           <div class="col-md-6">
             <div class="border rounded-3 p-3 h-100 onboarding-product-card"
                  data-product-card
-                 data-fee-percent="{{ fee_percent }}"
-                 data-seller-percent="{{ seller_percent }}"
                  data-product-id="{{ product.id }}">
               <div class="d-flex gap-3 align-items-center mb-3">
                 {% if product.image_url %}
@@ -161,27 +159,27 @@
                 <div class="d-flex flex-column gap-2">
                   <label class="border rounded-3 px-3 py-2 bg-white">
                     <input class="form-check-input me-2 product-pricing-mode" type="radio"
-                           name="pricing_mode_{{ product.id }}" value="final"
-                           {% if item.pricing_mode != 'payout' %}checked{% endif %}>
-                    Informar o valor final exibido no app
+                           name="pricing_mode_{{ product.id }}" value="payout"
+                           {% if item.pricing_mode == 'payout' %}checked{% endif %}>
+                    Informar quanto quero receber (recomendado)
                   </label>
                   <label class="border rounded-3 px-3 py-2 bg-white">
                     <input class="form-check-input me-2 product-pricing-mode" type="radio"
-                           name="pricing_mode_{{ product.id }}" value="payout"
-                           {% if item.pricing_mode == 'payout' %}checked{% endif %}>
-                    Informar quanto quero receber ({{ '%.0f'|format(seller_percent) }}%)
+                           name="pricing_mode_{{ product.id }}" value="final"
+                           {% if item.pricing_mode != 'payout' %}checked{% endif %}>
+                    Informar o valor exibido no app
                   </label>
                 </div>
               </div>
               <div class="row g-2">
                 <div class="col-12">
                   <div class="small text-muted rounded-3 border bg-light px-3 py-2">
-                    A loja recebe <strong>{{ '%.0f'|format(seller_percent) }}%</strong> do valor exibido.
-                    A plataforma fica com <strong>{{ '%.0f'|format(fee_percent) }}%</strong>.
+                    Voce recebe <strong>o valor integral</strong> que definir.
+                    O preco no app ja inclui a taxa da plataforma (10%, arredondado ao multiplo de R$ 5).
                   </div>
                 </div>
                 <div class="col-sm-7">
-                  <label class="form-label small fw-semibold" for="price_{{ product.id }}">Valor que aparecera na plataforma</label>
+                  <label class="form-label small fw-semibold" for="price_{{ product.id }}">Preco exibido no app (com taxa)</label>
                   <div class="input-group">
                     <span class="input-group-text">R$</span>
                     <input class="form-control" inputmode="decimal"
@@ -253,9 +251,14 @@
       return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // Preco de vitrine = repasse + 10%, arredondado PARA CIMA ao proximo
+    // multiplo de R$ 5 (mesma regra do backend: Product.preco_publico).
+    function publicFromPayout(payout) {
+      if (payout === null || payout <= 0) return null;
+      return Math.ceil((payout * 1.10) / 5) * 5;
+    }
+
     document.querySelectorAll('[data-product-card]').forEach(function (card) {
-      const feePercent = Number(card.dataset.feePercent || '0');
-      const sellerPercent = Number(card.dataset.sellerPercent || '100');
       const priceInput = card.querySelector('[data-price-input]');
       const payoutInput = card.querySelector('[data-payout-input]');
       const summary = card.querySelector('[data-pricing-summary]');
@@ -263,27 +266,28 @@
 
       function currentMode() {
         const selected = Array.from(modeInputs).find(function (input) { return input.checked; });
-        return selected ? selected.value : 'final';
+        return selected ? selected.value : 'payout';
       }
 
       function syncFromPrice() {
         const price = parseMoney(priceInput.value);
-        if (price === null || sellerPercent <= 0) {
+        if (price === null || price <= 0) {
           payoutInput.value = '';
           return null;
         }
-        const payout = (price * sellerPercent) / 100;
+        const payout = price / 1.10;
         payoutInput.value = formatMoney(payout);
-        return { price: price, payout: payout };
+        // O preco real de vitrine pode arredondar para cima do valor digitado.
+        return { price: publicFromPayout(payout), payout: payout };
       }
 
       function syncFromPayout() {
         const payout = parseMoney(payoutInput.value);
-        if (payout === null || sellerPercent <= 0) {
+        const price = publicFromPayout(payout);
+        if (price === null) {
           priceInput.value = '';
           return null;
         }
-        const price = (payout * 100) / sellerPercent;
         priceInput.value = formatMoney(price);
         return { price: price, payout: payout };
       }
@@ -291,14 +295,13 @@
       function updateSummary(values) {
         if (!summary) return;
         if (!values || values.price === null || values.payout === null) {
-          summary.textContent = 'Preencha um dos valores para ver exatamente quanto aparece no app e quanto vai para a loja.';
+          summary.textContent = 'Preencha um dos valores para ver exatamente quanto aparece no app e quanto voce recebe.';
           return;
         }
         const platformValue = values.price - values.payout;
-        summary.textContent = 'Na plataforma: R$ ' + formatMoney(values.price) +
+        summary.textContent = 'No app: R$ ' + formatMoney(values.price) +
           ' | Voce recebe: R$ ' + formatMoney(values.payout) +
-          ' | Taxa da plataforma: R$ ' + formatMoney(platformValue) +
-          ' (' + formatMoney(feePercent).replace(',00', '') + '%)';
+          ' | Taxa da plataforma: R$ ' + formatMoney(platformValue);
       }
 
       function applyMode() {

@@ -17,7 +17,8 @@ def test_user_name_is_normalized_before_save(app):
         db.session.add(user)
         db.session.commit()
 
-        assert user.name == "Maria Da Silva"
+        # Partículas de nomes brasileiros ficam minúsculas
+        assert user.name == "Maria da Silva"
 
 
 def test_animal_name_is_normalized_before_save(app):
@@ -34,4 +35,4 @@ def test_animal_name_is_normalized_before_save(app):
         db.session.add(animal)
         db.session.commit()
 
-        assert animal.name == "Belinha Do Sol"
+        assert animal.name == "Belinha do Sol"

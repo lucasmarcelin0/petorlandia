@@ -64,9 +64,9 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
     html = response.get_data(as_text=True)
     assert "Vamos deixar sua loja pronta" in html
     assert "Voce nao precisa preencher tudo de uma vez" in html
-    assert "Valor que aparecera na plataforma" in html
+    assert "Preco exibido no app (com taxa)" in html
     assert "Valor que voce recebe" in html
-    assert "Repasse para a loja:</strong> 90%" in html
+    assert "Voce recebe</strong> exatamente o valor que definir" in html
 
     response = client.post(
         f"/ativar-loja/{token}",
@@ -107,7 +107,8 @@ def test_store_onboarding_completes_account_and_catalog(app, client):
         assert casa.modo_entrega == "propria"
         assert invite.used_at is not None
         assert by_name["Simparic"].status == "active"
-        assert by_name["Simparic"].price == 99.89
+        # payout digitado (89,90) e salvo direto: price = valor que a loja recebe
+        assert by_name["Simparic"].price == 89.90
         assert by_name["Simparic"].stock == 5
         assert by_name["Canex Original"].status == "inactive"
         assert by_name["Canex Original"].price == 0

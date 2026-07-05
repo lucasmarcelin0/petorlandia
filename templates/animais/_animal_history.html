@@ -15,9 +15,14 @@
                   <span class="text-dark">
                     {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
                   </span>
-                  {% if current_user.worker == 'veterinario' %}
-                    <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
-                  {% endif %}
+                  <span class="d-flex gap-1">
+                    {% if bloco.acompanhamento %}
+                      <a href="{{ url_for('acompanhamento_tratamento', tratamento_id=bloco.acompanhamento.id) }}" class="btn btn-sm btn-outline-success">🩺 Acompanhar</a>
+                    {% endif %}
+                    {% if current_user.worker == 'veterinario' %}
+                      <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+                    {% endif %}
+                  </span>
                 </div>
               </div>
             {% endfor %}

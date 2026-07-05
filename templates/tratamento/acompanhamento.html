@@ -1,0 +1,249 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-3" style="max-width: 720px;">
+
+  {# ---------- Cabeçalho ---------- #}
+  <div class="d-flex justify-content-between align-items-start mb-1">
+    <div>
+      <h4 class="mb-0">🩺 Tratamento de {{ animal.name }}</h4>
+      <small class="text-muted">
+        Receita #{{ bloco.id }}
+        {% if acompanhamento.data_inicio %} · iniciado em {{ acompanhamento.data_inicio|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
+      </small>
+    </div>
+    {% if acompanhamento.status == 'ativo' %}
+      <span class="badge bg-success">Ativo</span>
+    {% elif acompanhamento.status == 'concluido' %}
+      <span class="badge bg-secondary">Concluído</span>
+    {% else %}
+      <span class="badge bg-danger">Interrompido</span>
+    {% endif %}
+  </div>
+  <div class="mb-3">
+    <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="small">Ver receita completa</a>
+  </div>
+
+  {% if progresso.previstas %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Progresso do tratamento</span>
+          <span><strong>{{ progresso.feitas }}</strong>/{{ progresso.previstas }} doses</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+          <div class="progress-bar bg-success" role="progressbar" style="width: {{ progresso.percentual or 0 }}%;"></div>
+        </div>
+        {% if progresso.atrasadas %}
+          <small class="text-danger">{{ progresso.atrasadas }} dose(s) atrasada(s)</small>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# ---------- Doses atrasadas ---------- #}
+  {% if doses_atrasadas %}
+    <div class="card border-danger shadow-sm mb-3">
+      <div class="card-header bg-danger text-white py-2">⏰ Doses atrasadas</div>
+      <ul class="list-group list-group-flush">
+        {% for d in doses_atrasadas %}
+          <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <strong>{{ d.item.prescricao.medicamento }}</strong><br>
+              <small class="text-muted">prevista {{ d.prevista|format_datetime_brazil('%d/%m %H:%M') }}</small>
+            </div>
+            <div class="d-flex gap-1">
+              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="feita">
+                <button class="btn btn-success btn-sm">✔ Dei</button>
+              </form>
+              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="pulada">
+                <button class="btn btn-outline-secondary btn-sm">Pular</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {# ---------- Doses de hoje ---------- #}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2">📅 Hoje</div>
+    {% if doses_hoje %}
+      <ul class="list-group list-group-flush">
+        {% for d in doses_hoje %}
+          <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <strong>{{ d.item.prescricao.medicamento }}</strong><br>
+              <small class="text-muted">{{ d.prevista|format_datetime_brazil('%H:%M') }}{% if d.item.prescricao.dosagem %} · {{ d.item.prescricao.dosagem }}{% endif %}</small>
+            </div>
+            <div class="d-flex gap-1">
+              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="feita">
+                <button class="btn btn-success btn-sm">✔ Dei</button>
+              </form>
+              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="pulada">
+                <button class="btn btn-outline-secondary btn-sm">Pular</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="card-body py-3 text-muted">
+        Nenhuma dose agendada pendente para hoje 🎉
+      </div>
+    {% endif %}
+  </div>
+
+  {# ---------- Compras ---------- #}
+  <div class="card shadow-sm mb-3" id="compras">
+    <div class="card-header py-2">🛒 Já comprei</div>
+    <ul class="list-group list-group-flush">
+      {% for i in itens %}
+        <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+          <div>
+            {{ i.prescricao.medicamento }}
+            {% if i.item.comprado_em %}
+              <br><small class="text-success">Comprado em {{ i.item.comprado_em|format_datetime_brazil('%d/%m/%Y') }}</small>
+            {% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('marcar_item_tratamento_comprado', item_id=i.item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if i.item.comprado_em %}
+              <button class="btn btn-success btn-sm">✔ Comprado</button>
+            {% else %}
+              <button class="btn btn-outline-primary btn-sm">Marcar como comprado</button>
+            {% endif %}
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {# ---------- Itens do tratamento ---------- #}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2">💊 Medicações e cuidados</div>
+    <div class="card-body p-2">
+      {% for i in itens %}
+        <div class="border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-1">
+            <div>
+              <strong>{{ i.prescricao.medicamento }}</strong>
+              <div class="small text-muted">
+                {% if i.prescricao.dosagem %}{{ i.prescricao.dosagem }}{% endif %}
+                {% if i.prescricao.frequencia %} · {{ i.prescricao.frequencia }}{% endif %}
+                {% if i.prescricao.duracao %} · {{ i.prescricao.duracao }}{% endif %}
+                {% if i.prescricao.observacoes %} · {{ i.prescricao.observacoes }}{% endif %}
+              </div>
+            </div>
+            {% if i.item.modo == 'agendado' %}
+              <span class="badge bg-info text-dark">agenda automática</span>
+            {% else %}
+              <span class="badge bg-light text-dark border">registro livre</span>
+            {% endif %}
+          </div>
+
+          {% if i.item.modo == 'agendado' %}
+            {% if i.previstas %}
+              <div class="progress my-2" style="height: 8px;">
+                <div class="progress-bar bg-success" style="width: {{ i.percentual or 0 }}%;"></div>
+              </div>
+              <div class="small text-muted d-flex justify-content-between flex-wrap">
+                <span>{{ i.feitas }}/{{ i.previstas }} doses</span>
+                {% if i.proxima %}<span>próxima: {{ i.proxima|format_datetime_brazil('%d/%m %H:%M') }}</span>{% endif %}
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+              <small class="text-muted">
+                {% if i.ultima_aplicacao %}
+                  Última aplicação: {{ i.ultima_aplicacao|format_datetime_brazil('%d/%m %H:%M') }}
+                {% else %}
+                  Nenhuma aplicação registrada ainda.
+                {% endif %}
+              </small>
+              <form method="POST" action="{{ url_for('registrar_aplicacao_tratamento', item_id=i.item.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-primary btn-sm">✔ Apliquei agora</button>
+              </form>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if bloco.instrucoes_gerais %}
+        <div class="alert alert-light border small mb-0">
+          <strong>Orientações do veterinário:</strong> {{ bloco.instrucoes_gerais }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---------- Fotos ---------- #}
+  <div class="card shadow-sm mb-3" id="fotos">
+    <div class="card-header py-2">📷 Evolução em fotos</div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('enviar_foto_tratamento', tratamento_id=acompanhamento.id) }}" enctype="multipart/form-data" class="mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="input-group input-group-sm mb-2">
+          <input type="file" name="foto" accept="image/*" capture="environment" class="form-control" required>
+          <button class="btn btn-primary">Enviar</button>
+        </div>
+        <input type="text" name="observacao" class="form-control form-control-sm" placeholder="Observação (opcional)">
+        <small class="text-muted">Envie uma foto por dia da região tratada — isso ajuda o veterinário a avaliar a evolução.</small>
+      </form>
+      {% if fotos %}
+        <div class="row g-2">
+          {% for foto in fotos %}
+            <div class="col-6 col-md-4">
+              <a href="{{ foto.url }}" target="_blank" rel="noopener">
+                <img src="{{ foto.url }}" class="img-fluid rounded" alt="Foto do tratamento" loading="lazy">
+              </a>
+              <small class="text-muted d-block">
+                {{ foto.enviada_em|format_datetime_brazil('%d/%m %H:%M') if foto.enviada_em }}
+                {% if foto.observacao %} · {{ foto.observacao }}{% endif %}
+              </small>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted small mb-0">Nenhuma foto enviada ainda.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---------- Ações do veterinário ---------- #}
+  {% if is_vet_viewer %}
+    <div class="card shadow-sm mb-3 border-primary">
+      <div class="card-header py-2">👩‍⚕️ Área do veterinário</div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        {% if tutor_whatsapp_url %}
+          <a href="{{ tutor_whatsapp_url }}" target="_blank" rel="noopener" class="btn btn-success btn-sm">
+            📱 Enviar link ao tutor
+          </a>
+        {% endif %}
+        {% if acompanhamento.status == 'ativo' %}
+          <form method="POST" action="{{ url_for('alterar_status_tratamento', tratamento_id=acompanhamento.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="concluido">
+            <button class="btn btn-outline-secondary btn-sm">Concluir tratamento</button>
+          </form>
+        {% else %}
+          <form method="POST" action="{{ url_for('alterar_status_tratamento', tratamento_id=acompanhamento.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="ativo">
+            <button class="btn btn-outline-success btn-sm">Reativar tratamento</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
