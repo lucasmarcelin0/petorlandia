@@ -312,6 +312,24 @@ def test_imprimir_mostra_botao_e_link(app):
         resp = client.get(f'/bloco_prescricao/{bloco_id}/imprimir')
         html = resp.get_data(as_text=True)
         assert f'/tratamento/{tratamento_id}' in html
-        assert 'Acompanhamento' in html
+        assert 'Acompanhamento ativo' in html
+        assert 'Abrir acompanhamento' in html
+    with app.app_context():
+        db.drop_all()
+
+
+def test_consulta_historico_nao_expoe_acompanhamento(app):
+    bloco_id, animal_id = _setup_bloco(app)
+    client = app.test_client()
+
+    with client:
+        _login(client, 'vet@example.com', 'pw1')
+        resp = client.get(f'/consulta/{animal_id}')
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert f'/bloco_prescricao/{bloco_id}/imprimir' in html
+        assert f'/bloco_prescricao/{bloco_id}/acompanhamento' not in html
+        assert 'Ativar acompanhamento' not in html
+
     with app.app_context():
         db.drop_all()
