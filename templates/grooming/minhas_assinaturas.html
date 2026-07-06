@@ -3,6 +3,7 @@
 <div class="container mt-4">
   {% include 'partials/minhas_atividades_tabs.html' %}
 
+  <section id="minhas-atividades-content" data-activities-content tabindex="-1">
   <div class="d-flex align-items-center gap-3 mb-4">
     <h2 class="h5 fw-bold mb-0"><i class="fa-solid fa-scissors me-2 text-primary"></i>Assinaturas de Banho e Tosa</h2>
     <a href="{{ url_for('grooming_planos_publicos') }}" class="btn btn-outline-secondary btn-sm">
@@ -75,5 +76,6 @@
   </div>
   {% endif %}
 
+  </section>
 </div>
 {% endblock %}
