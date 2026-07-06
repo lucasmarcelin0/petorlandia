@@ -33,7 +33,7 @@ from models import (
     Clinica,
     Orcamento,
 )
-from flask import abort, url_for
+from flask import abort, render_template_string, url_for
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import quote, parse_qs, urlparse
@@ -748,6 +748,16 @@ def test_animals_page(monkeypatch, app):
 
     response = client.get('/animals')
     assert response.status_code == 200
+
+
+def test_imported_whatsapp_macro_can_access_url_helper(app):
+    with app.app_context():
+        rendered = render_template_string(
+            "{% from 'components/whatsapp.html' import phone_with_whatsapp %}"
+            "{{ phone_with_whatsapp('(31) 99999-0000') }}"
+        )
+
+    assert 'https://wa.me/5531999990000' in rendered
 
 
 def test_admin_toggle_all_animals(monkeypatch, app):

@@ -1660,6 +1660,11 @@ def whatsapp_chat_url(phone: str | None, message: str | None = None) -> str | No
     return url
 
 
+# Imported Jinja macros do not receive context-processor values by default.
+# Register the helper globally so the shared WhatsApp component is reliable.
+app.jinja_env.globals['whatsapp_chat_url'] = whatsapp_chat_url
+
+
 def normalize_email(value: str | None) -> str | None:
     """Normalize an email for case-insensitive lookups."""
     if value is None:
