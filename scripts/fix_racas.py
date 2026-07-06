@@ -172,6 +172,21 @@ SPELLING_FIXES = {
     "Sphynx":                     "Sphynx",
     "Abissínio":                  "Abissínio",
     "Abissinio":                  "Abissínio",
+    "Buldogue Francês":           "Bulldog Francês",
+    "Buldogue francês":           "Bulldog Francês",
+    "buldogue frances":           "Bulldog Francês",
+}
+
+
+# ---------------------------------------------------------------------------
+# Raças de cachorro cadastradas por engano sob a espécie "Outro" (catálogo
+# genérico). IDs levantados manualmente em produção em 2026-07-06 — não é
+# detecção automática porque nomes genéricos como "SRD" sob "Outro" são
+# ambíguos (podem ser de qualquer espécie) e não devem ser movidos às cegas.
+# ---------------------------------------------------------------------------
+OUTRO_DOG_BREED_IDS = {
+    122, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+    132, 133, 134, 135, 136, 137, 138, 139, 140, 141,
 }
 
 
@@ -212,6 +227,135 @@ def list_breeds(conn):
         "ORDER BY s.name, b.name"
     )).fetchall()
     return rows
+
+
+def reassign_outro_dog_breeds(conn, dry_run: bool):
+    """Move raças de cachorro cadastradas por engano sob a espécie 'Outro' de
+    volta para 'Cachorro', mesclando com a raça já existente quando o nome
+    (após correção de spelling) já tiver um equivalente lá."""
+    species_rows = conn.execute(text("SELECT id, name FROM species")).fetchall()
+    species_id_by_name = {r[1]: r[0] for r in species_rows}
+    cachorro_id = species_id_by_name.get("Cachorro")
+    if cachorro_id is None:
+        print("⚠️   Espécie 'Cachorro' não encontrada — pulando reclassificação.")
+        return
+
+    rows = list_breeds(conn)
+    breeds = {r[0]: {"name": r[1], "species": r[2], "count": r[3]} for r in rows}
+
+    cachorro_by_key = {
+        normalize_key(SPELLING_FIXES.get(info["name"], info["name"])): bid
+        for bid, info in breeds.items()
+        if info["species"] == "Cachorro"
+    }
+
+    moves = []    # (breed_id, name, effective_name) — vira o próprio breed, sem merge
+    merges = []   # (src_id, dst_id, src_name, dst_name, count)
+
+    for bid in sorted(OUTRO_DOG_BREED_IDS):
+        info = breeds.get(bid)
+        if info is None or info["species"] != "Outro":
+            continue
+        effective_name = SPELLING_FIXES.get(info["name"], info["name"])
+        key = normalize_key(effective_name)
+        dst_id = cachorro_by_key.get(key)
+        if dst_id is not None and dst_id != bid:
+            merges.append((bid, dst_id, info["name"], breeds[dst_id]["name"], info["count"]))
+        else:
+            moves.append((bid, info["name"], effective_name))
+
+    print("\n" + "=" * 65)
+    print(f"  Reclassificação Outro → Cachorro  {'[DRY RUN]' if dry_run else '[APLICANDO]'}")
+    print("=" * 65)
+
+    if moves:
+        print(f"\n📦  Raças movidas para Cachorro (sem equivalente existente, {len(moves)}):")
+        for bid, old, new in moves:
+            renamed = f" (renomeada para '{new}')" if new != old else ""
+            print(f"     #{bid:>4}  '{old}'{renamed}")
+    if merges:
+        print(f"\n🔀  Raças mescladas em Cachorro já existente ({len(merges)}):")
+        for src_id, dst_id, src_name, dst_name, cnt in merges:
+            print(f"     #{src_id:>4} '{src_name}'  →  #{dst_id} '{dst_name}'  ({cnt} animal(is) movido(s))")
+    if not moves and not merges:
+        print("\n✅  Nada a reclassificar.")
+
+    if dry_run or (not moves and not merges):
+        return
+
+    for bid, old, new in moves:
+        conn.execute(
+            text("UPDATE breed SET name = :name, species_id = :species_id WHERE id = :id"),
+            {"name": new, "species_id": cachorro_id, "id": bid},
+        )
+        conn.execute(
+            text("UPDATE animal SET species_id = :species_id WHERE breed_id = :breed_id"),
+            {"species_id": cachorro_id, "breed_id": bid},
+        )
+
+    for src_id, dst_id, _src_name, _dst_name, cnt in merges:
+        if cnt > 0:
+            conn.execute(
+                text("UPDATE animal SET breed_id = :dst, species_id = :species_id WHERE breed_id = :src"),
+                {"dst": dst_id, "species_id": cachorro_id, "src": src_id},
+            )
+        conn.execute(text("DELETE FROM breed WHERE id = :id"), {"id": src_id})
+
+
+def fix_srd_species_mismatch(conn, dry_run: bool):
+    """Corrige animais cujo breed_id aponta para 'SRD' de outra espécie
+    (ex.: cachorro apontando para o SRD cadastrado em Gato). Só mexe no caso
+    'SRD', que existe replicado em várias espécies e é o único nome
+    suficientemente genérico para ser um erro seguro de corrigir — nomes como
+    'Agapornis' ou 'Chinês' associados à espécie errada são prováveis dados de
+    teste/lixo e ficam de fora, para revisão manual."""
+    rows = conn.execute(text(
+        "SELECT a.id, a.name, a.species_id, b.id AS breed_id, b.name AS breed_name, b.species_id AS breed_species_id "
+        "FROM animal a JOIN breed b ON b.id = a.breed_id "
+        "WHERE a.species_id != b.species_id"
+    )).fetchall()
+
+    srd_breed_by_species = {}
+    for r in conn.execute(text("SELECT id, name, species_id FROM breed")).fetchall():
+        if normalize_key(SPELLING_FIXES.get(r[1], r[1])) == normalize_key("SRD (Sem Raça Definida)"):
+            srd_breed_by_species[r[2]] = r[0]
+
+    fixes = []
+    unresolved = []
+    for animal_id, animal_name, animal_species_id, breed_id, breed_name, breed_species_id in rows:
+        if normalize_key(SPELLING_FIXES.get(breed_name, breed_name)) != normalize_key("SRD (Sem Raça Definida)"):
+            unresolved.append((animal_id, animal_name, breed_name))
+            continue
+        dst_breed_id = srd_breed_by_species.get(animal_species_id)
+        if dst_breed_id is None or dst_breed_id == breed_id:
+            unresolved.append((animal_id, animal_name, breed_name))
+            continue
+        fixes.append((animal_id, animal_name, breed_id, dst_breed_id))
+
+    print("\n" + "=" * 65)
+    print(f"  Correção de SRD com espécie trocada  {'[DRY RUN]' if dry_run else '[APLICANDO]'}")
+    print("=" * 65)
+
+    if fixes:
+        print(f"\n🐾  Animais com breed_id de SRD redirecionado ({len(fixes)}):")
+        for animal_id, animal_name, old_breed_id, new_breed_id in fixes:
+            print(f"     animal #{animal_id} '{animal_name}': breed #{old_breed_id} → #{new_breed_id}")
+    else:
+        print("\n✅  Nenhum caso de SRD com espécie trocada.")
+
+    if unresolved:
+        print(f"\n⚠️   Casos que ficam para revisão manual (espécie/raça não batem e não é SRD, {len(unresolved)}):")
+        for animal_id, animal_name, breed_name in unresolved:
+            print(f"     animal #{animal_id} '{animal_name}' — raça '{breed_name}'")
+
+    if dry_run or not fixes:
+        return
+
+    for animal_id, _animal_name, _old_breed_id, new_breed_id in fixes:
+        conn.execute(
+            text("UPDATE animal SET breed_id = :breed_id WHERE id = :id"),
+            {"breed_id": new_breed_id, "id": animal_id},
+        )
 
 
 def apply_fixes(conn, dry_run: bool):
@@ -342,8 +486,12 @@ def main():
         if not dry_run:
             # Usar transação para poder fazer rollback se der erro
             with conn.begin():
+                reassign_outro_dog_breeds(conn, dry_run=False)
+                fix_srd_species_mismatch(conn, dry_run=False)
                 apply_fixes(conn, dry_run=False)
         else:
+            reassign_outro_dog_breeds(conn, dry_run=True)
+            fix_srd_species_mismatch(conn, dry_run=True)
             apply_fixes(conn, dry_run=True)
 
 
