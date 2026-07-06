@@ -20963,6 +20963,9 @@ def casa_de_racao_dashboard(casa_id):
 
     if request.method == 'POST':
         if request.form.get('_action') == 'add_product':
+            if casa.status == 'pendente' and not _is_admin():
+                flash('Sua loja ainda está aguardando aprovação. Produtos poderão ser publicados em breve.', 'warning')
+                return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
             from forms import CasaDeRacaoProductForm
             product_form = CasaDeRacaoProductForm()
             if product_form.validate_on_submit():
@@ -21089,6 +21092,7 @@ def casa_de_racao_dashboard(casa_id):
         entregas_pendentes=entregas_pendentes,
         store_initials=store_initials,
         pode_editar=True,
+        is_admin=_is_admin(),
     )
 
 

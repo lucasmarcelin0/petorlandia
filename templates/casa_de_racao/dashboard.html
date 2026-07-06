@@ -300,7 +300,7 @@
       {# Atalhos #}
       <div class="d-flex gap-2 flex-wrap">
         <a href="{{ url_for('casa_de_racao_produtos', casa_id=casa.id) }}"
-           class="btn btn-primary {% if casa.status == 'pendente' %}disabled{% endif %}">
+           class="btn btn-primary {% if casa.status == 'pendente' and not is_admin %}disabled{% endif %}">
           <i class="fa-solid fa-plus me-1"></i>Publicar produto
         </a>
         <a href="{{ url_for('casa_de_racao_vendas', casa_id=casa.id) }}"
@@ -397,7 +397,7 @@
           <div class="card shadow-sm border-0 rounded-3">
             <div class="card-body">
               <h5 class="fw-bold mb-3"><i class="fa-solid fa-plus-circle me-2 text-success"></i>Publicar novo produto</h5>
-              {% if casa.status == 'pendente' %}
+              {% if casa.status == 'pendente' and not is_admin %}
               <div class="alert alert-warning py-2 small">Sua loja está em análise. Produtos poderão ser publicados após aprovação.</div>
               {% else %}
               <form method="post" enctype="multipart/form-data" novalidate
