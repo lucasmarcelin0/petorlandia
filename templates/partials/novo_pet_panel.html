@@ -6,15 +6,6 @@
      data-panel-param="panel">
   <div class="record-switch mb-4" role="tablist" aria-label="Animais">
     <button type="button"
-            class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
-            role="tab"
-            aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
-            aria-controls="animais-panel-cadastro"
-            data-record-panel-button="create">
-      <i class="fa-solid fa-plus" aria-hidden="true"></i>
-      <span>Novo cadastro</span>
-    </button>
-    <button type="button"
             class="record-switch__button {% if active_panel == 'list' %}active{% endif %}"
             role="tab"
             aria-selected="{{ 'true' if active_panel == 'list' else 'false' }}"
@@ -23,23 +14,16 @@
       <i class="fa-solid fa-paw" aria-hidden="true"></i>
       <span>Animais cadastrados</span>
     </button>
+    <button type="button"
+            class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
+            role="tab"
+            aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
+            aria-controls="animais-panel-cadastro"
+            data-record-panel-button="create">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+      <span>Novo cadastro</span>
+    </button>
   </div>
-
-  <section id="animais-panel-cadastro"
-           class="record-panel-section"
-           role="tabpanel"
-           data-record-panel-section="create"
-           {% if active_panel != 'create' %}hidden{% endif %}>
-    <div class="card shadow-sm border-0 rounded-4 h-100">
-      <div class="card-body p-4">
-        <div class="mb-4">
-          <h3 class="fw-semibold mb-1">Cadastro de Animais</h3>
-          <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
-        </div>
-        {% include 'partials/animal_register_form.html' %}
-      </div>
-    </div>
-  </section>
 
   <section id="animais-panel-listagem"
            class="record-panel-section"
@@ -62,6 +46,22 @@
           {% include 'partials/animais_adicionados.html' %}
         {% endwith %}
       {% endif %}
+    </div>
+  </section>
+
+  <section id="animais-panel-cadastro"
+           class="record-panel-section"
+           role="tabpanel"
+           data-record-panel-section="create"
+           {% if active_panel != 'create' %}hidden{% endif %}>
+    <div class="card shadow-sm border-0 rounded-4 h-100">
+      <div class="card-body p-4">
+        <div class="mb-4">
+          <h3 class="fw-semibold mb-1">Cadastro de Animais</h3>
+          <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
+        </div>
+        {% include 'partials/animal_register_form.html' %}
+      </div>
     </div>
   </section>
 </div>

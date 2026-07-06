@@ -9,15 +9,6 @@
        data-panel-param="panel">
     <div class="record-switch mb-4" role="tablist" aria-label="Tutores">
       <button type="button"
-              class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
-              role="tab"
-              aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
-              aria-controls="tutores-panel-cadastro"
-              data-record-panel-button="create">
-        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
-        <span>Novo cadastro</span>
-      </button>
-      <button type="button"
               class="record-switch__button {% if active_panel == 'list' %}active{% endif %}"
               role="tab"
               aria-selected="{{ 'true' if active_panel == 'list' else 'false' }}"
@@ -26,19 +17,16 @@
         <i class="fa-solid fa-users" aria-hidden="true"></i>
         <span>Tutores cadastrados</span>
       </button>
+      <button type="button"
+              class="record-switch__button {% if active_panel == 'create' %}active{% endif %}"
+              role="tab"
+              aria-selected="{{ 'true' if active_panel == 'create' else 'false' }}"
+              aria-controls="tutores-panel-cadastro"
+              data-record-panel-button="create">
+        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+        <span>Novo cadastro</span>
+      </button>
     </div>
-
-    <section id="tutores-panel-cadastro"
-             class="record-panel-section"
-             role="tabpanel"
-             data-record-panel-section="create"
-             {% if active_panel != 'create' %}hidden{% endif %}>
-      <div class="card shadow-sm border-0 rounded-4">
-        <div class="card-body p-4">
-          {% include 'partials/tutor_management_panel.html' %}
-        </div>
-      </div>
-    </section>
 
     <section id="tutores-panel-listagem"
              class="record-panel-section"
@@ -58,6 +46,18 @@
             {% include 'partials/tutores_adicionados.html' %}
           {% endwith %}
         {% endif %}
+      </div>
+    </section>
+
+    <section id="tutores-panel-cadastro"
+             class="record-panel-section"
+             role="tabpanel"
+             data-record-panel-section="create"
+             {% if active_panel != 'create' %}hidden{% endif %}>
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-4">
+          {% include 'partials/tutor_management_panel.html' %}
+        </div>
       </div>
     </section>
   </div>
