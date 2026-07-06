@@ -3334,10 +3334,11 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
         viewer = current_user
 
     animal = Animal.query.get_or_404(animal_id)
+    admin_access = bool(viewer and getattr(viewer, 'role', None) == 'admin')
     owner_access = bool(viewer and animal.user_id == viewer.id)
     added_by_access = bool(viewer and animal.added_by_id and animal.added_by_id == viewer.id)
     shared_access = _resolve_shared_access_for_animal(animal, viewer=viewer, clinic_scope=clinic_scope)
-    if not shared_access and not owner_access and not added_by_access:
+    if not admin_access and not shared_access and not owner_access and not added_by_access:
         ensure_clinic_access(animal.clinica_id)
     elif shared_access:
         _log_data_share(
