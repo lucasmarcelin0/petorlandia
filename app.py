@@ -26355,7 +26355,7 @@ def tutores():
     active_record_panel = _resolve_record_panel(
         request.args,
         listing_params=('scope', 'tutor_search', 'tutor_sort', 'page'),
-        default='create',
+        default='list',
     )
     defer_tutor_listing = active_record_panel != 'list' and not wants_listing_payload
 
@@ -30506,7 +30506,7 @@ def novo_animal():
     active_record_panel = _resolve_record_panel(
         request.args,
         listing_params=('scope', 'animal_search', 'animal_sort', 'page'),
-        default='create',
+        default='list',
     )
     defer_animal_listing = active_record_panel != 'list' and not wants_listing_payload
 
