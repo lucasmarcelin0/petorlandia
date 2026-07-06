@@ -8,20 +8,26 @@
   ('grooming_minhas_assinaturas', url_for('grooming_minhas_assinaturas'), 'fa-scissors', 'Assinaturas'),
   ('minhas_compras', url_for('minhas_compras'), 'fa-bag-shopping', 'Compras'),
 ] %}
-<div class="mb-4">
+<div class="mb-4" data-activities-navigation>
   <h1 class="h4 fw-bold mb-2">
     <i class="fa-solid fa-clipboard-list me-2 text-primary"></i>Minhas atividades
   </h1>
   <p class="text-muted small mb-2">Tudo o que você pediu, num lugar só: agendamentos, petsitter, assinaturas e compras.</p>
-  <ul class="nav nav-pills flex-wrap gap-2">
+  <ul class="nav nav-pills flex-wrap gap-2" role="tablist" aria-label="Minhas atividades">
     {% for tab_endpoint, tab_href, tab_icon, tab_label in _atividades_tabs %}
     {% set tab_active = request.endpoint and request.endpoint.endswith(tab_endpoint) %}
     <li class="nav-item">
       <a class="nav-link rounded-pill px-3 {{ 'active' if tab_active else 'bg-white border text-body' }}"
+         data-activities-tab role="tab" aria-selected="{{ 'true' if tab_active else 'false' }}"
          {% if tab_active %}aria-current="page"{% endif %} href="{{ tab_href }}">
         <i class="fa-solid {{ tab_icon }} me-1"></i> {{ tab_label }}
       </a>
     </li>
     {% endfor %}
   </ul>
+  <div class="small text-primary mt-2 d-none" data-activities-status role="status" aria-live="polite">
+    <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+    Atualizando atividades...
+  </div>
 </div>
+<script src="{{ url_for('static', filename='js/minhas_atividades.js') }}" defer></script>

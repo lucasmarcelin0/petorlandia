@@ -8,6 +8,7 @@
 <div class="container py-5">
   {% include 'partials/minhas_atividades_tabs.html' %}
 
+  <section id="minhas-atividades-content" data-activities-content tabindex="-1">
   <h2 class="h5 fw-bold mb-4"><i class="fa-solid fa-bag-shopping me-2 text-primary"></i>Minhas compras</h2>
   {% if orders %}
   <div class="table-responsive">
@@ -89,5 +90,6 @@
     </ul>
   </nav>
   {% endif %}
+  </section>
 </div>
 {% endblock %}
