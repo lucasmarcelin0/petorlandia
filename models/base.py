@@ -789,6 +789,15 @@ class BlocoPrescricao(db.Model):
     saved_by = db.relationship('User', foreign_keys=[saved_by_id])
     clinica = db.relationship('Clinica', backref=db.backref('blocos_prescricao', cascade='all, delete-orphan'))
 
+    assinatura_arquivo_url = db.Column(db.String(500), nullable=True)
+    assinatura_enviada_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    assinatura_enviada_por_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    assinatura_enviada_por = db.relationship('User', foreign_keys=[assinatura_enviada_por_id])
+
+    @property
+    def assinatura_enviada(self):
+        return bool(self.assinatura_arquivo_url)
+
 class Prescricao(db.Model):
     __tablename__ = 'prescricao'
 

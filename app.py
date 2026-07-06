@@ -29534,6 +29534,7 @@ def imprimir_bloco_prescricao(bloco_id):
 
     acompanhamento = bloco.acompanhamento
     pode_ativar_acompanhamento = acompanhamento is None and is_veterinarian(current_user)
+    pode_enviar_assinatura = is_veterinarian(current_user)
     tratamento_first_access_url = None
     if acompanhamento:
         tratamento_next_url = url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id)
@@ -29560,9 +29561,40 @@ def imprimir_bloco_prescricao(bloco_id):
         prescription_public_url=prescription_public_url,
         acompanhamento=acompanhamento,
         pode_ativar_acompanhamento=pode_ativar_acompanhamento,
+        pode_enviar_assinatura=pode_enviar_assinatura,
         tratamento_first_access_url=tratamento_first_access_url,
         return_url=url_for('ficha_animal', animal_id=animal.id) if owner_access else url_for('consulta_direct', animal_id=animal.id),
     )
+
+
+@app.route('/bloco_prescricao/<int:bloco_id>/assinatura', methods=['POST'])
+@login_required
+def enviar_assinatura_bloco_prescricao(bloco_id):
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    if not _current_user_owns_animal(bloco.animal):
+        ensure_clinic_access(bloco.clinica_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem enviar a receita assinada.', 'danger')
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    arquivo = request.files.get('documento')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione o arquivo da receita assinada.', 'warning')
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    original_name = secure_filename(arquivo.filename) or 'receita_assinada.pdf'
+    stored_url = upload_to_s3(arquivo, f"{uuid.uuid4().hex}_{original_name}", folder='receitas_assinadas')
+    if not stored_url:
+        flash('Não foi possível enviar o arquivo. Tente novamente.', 'danger')
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    bloco.assinatura_arquivo_url = stored_url
+    bloco.assinatura_enviada_em = now_in_brazil()
+    bloco.assinatura_enviada_por_id = current_user.id
+    db.session.commit()
+
+    flash('Receita assinada enviada! Agora é só compartilhar pelo WhatsApp.', 'success')
+    return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
 
 
 def _tratamento_acompanhamento_or_404(tratamento_id):
