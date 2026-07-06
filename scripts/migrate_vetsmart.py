@@ -50,7 +50,7 @@ TUTOR_DEFAULT_PASSWORD = "VetSmart@2024"
 RAW_DIR = "scripts/vetsmart_raw"
 # ─────────────────────────────────────────────────────────────────────────────
 
-import os, sys, json, hashlib, logging, time, re
+import os, sys, json, hashlib, logging, time, re, unicodedata
 from datetime import datetime, date
 from pathlib import Path
 
@@ -797,15 +797,25 @@ def get_or_create_species(db, Species, name: str) -> int:
         log.info("  + Espécie criada: %s", name)
     return sp.id
 
+def _normalize_breed_key(name: str) -> str:
+    """Remove acentos, lowercase, colapsa espaços — evita duplicar raças por
+    causa de variação de maiúscula/acento (ex.: 'labrador' vs 'Labrador')."""
+    nfkd = unicodedata.normalize("NFKD", name)
+    ascii_str = nfkd.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", ascii_str).strip().lower()
+
+
 def get_or_create_breed(db, Breed, species_id: int, name: str) -> int | None:
     if not name:
         return None
-    br = Breed.query.filter_by(name=name, species_id=species_id).first()
-    if not br:
-        br = Breed(name=name, species_id=species_id)
-        db.session.add(br)
-        db.session.flush()
-        log.info("  + Raça criada: %s", name)
+    key = _normalize_breed_key(name)
+    for br in Breed.query.filter_by(species_id=species_id).all():
+        if _normalize_breed_key(br.name) == key:
+            return br.id
+    br = Breed(name=name, species_id=species_id)
+    db.session.add(br)
+    db.session.flush()
+    log.info("  + Raça criada: %s", name)
     return br.id
 
 def build_species_breed_maps(db, Species, Breed, raw_animals: list) -> tuple[dict, dict]:
