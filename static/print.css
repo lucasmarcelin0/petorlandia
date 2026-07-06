@@ -549,23 +549,20 @@ footer span + span::before {
   margin: 0;
 }
 
-.print-action--icon {
-  padding-left: 10px;
-  padding-right: 10px;
+.print-toolbar__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
-.print-toolbar__status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #047857;
+.print-action__check {
+  color: #6fe0a8;
   font-weight: 700;
-  font-size: 9pt;
-  white-space: nowrap;
 }
 
 .no-print button,
@@ -573,38 +570,29 @@ footer span + span::before {
   background-color: var(--primary-color);
   color: #fff;
   border: none;
-  min-height: 40px;
-  padding: 9px 14px;
+  height: 38px;
+  padding: 0 14px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 10.5pt;
-  font-weight: 700;
+  font-size: 10pt;
+  font-weight: 600;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(31, 58, 86, 0.15);
-}
-
-.no-print .print-action--success {
-  background-color: #047857;
+  box-shadow: none;
 }
 
 .no-print .print-action--ghost {
   background-color: #ffffff;
   color: var(--primary-color);
   border: 1px solid var(--border-color);
-  box-shadow: none;
 }
 
 .no-print button:hover,
 .no-print a:hover {
   background-color: #172b42;
-}
-
-.no-print .print-action--success:hover {
-  background-color: #065f46;
 }
 
 .no-print .print-action--ghost:hover {
