@@ -525,104 +525,23 @@ footer span + span::before {
 .no-print {
   max-width: 19cm;
   margin: 18px auto 0;
-  padding: 16px 18px;
+  padding: 10px 14px;
   text-align: left;
-  position: relative;
   background: #ffffff;
   border: 1px solid var(--soft-border-color);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
 }
 
+.print-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .print-toolbar__back {
-  display: inline-block;
-  margin-bottom: 10px;
-  color: var(--muted-text);
-  font-size: 9.5pt;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.print-toolbar__back:hover {
-  color: var(--primary-color);
-  text-decoration: underline;
-}
-
-.print-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.print-step {
-  flex: 1 1 210px;
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 10px;
-  border: 1px solid var(--soft-border-color);
-  border-radius: 10px;
-  background: #f9fbfd;
-}
-
-.print-step--active {
-  background: #eef6ff;
-  border-color: #bcd9f7;
-}
-
-.print-step--done {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-}
-
-.print-step__badge {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--secondary-color);
-  color: #fff;
-  font-weight: 700;
-  font-size: 11pt;
-}
-
-.print-step--done .print-step__badge {
-  background: #047857;
-}
-
-.print-step--active .print-step__badge {
-  background: var(--primary-color);
-}
-
-.print-step__body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.print-step__label {
-  font-weight: 700;
-  font-size: 9.5pt;
-  color: var(--body-text);
-}
-
-.print-step__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.print-step__hint {
-  font-size: 9pt;
-  color: var(--muted-text);
+  margin-left: auto;
 }
 
 .print-toolbar__form {
@@ -630,10 +549,15 @@ footer span + span::before {
   margin: 0;
 }
 
+.print-action--icon {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 .print-toolbar__status {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 40px;
   padding: 6px 10px;
   border-radius: 8px;
   background: #ecfdf5;
@@ -641,8 +565,7 @@ footer span + span::before {
   color: #047857;
   font-weight: 700;
   font-size: 9pt;
-  white-space: normal;
-  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .no-print button,
@@ -694,12 +617,8 @@ footer span + span::before {
     margin: 10px;
   }
 
-  .print-steps {
-    flex-direction: column;
-  }
-
-  .print-step {
-    flex: 1 1 auto;
+  .print-toolbar__row {
+    justify-content: stretch;
   }
 
   .no-print button,
@@ -709,9 +628,11 @@ footer span + span::before {
     justify-content: center;
   }
 
-  .print-toolbar__status {
+  .print-toolbar__back {
+    margin-left: 0;
     flex: 1 1 100%;
-    justify-content: center;
+    order: 99;
+    text-align: center;
   }
 
   .header--exam-portal {

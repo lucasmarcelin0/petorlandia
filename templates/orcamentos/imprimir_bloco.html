@@ -9,85 +9,51 @@
 <body>
 
 <div class="no-print print-toolbar" aria-label="Ações da receita">
-  <a class="print-toolbar__back" href="{{ return_url or url_for('consulta_direct', animal_id=animal.id) }}">&larr; Voltar</a>
+  <div class="print-toolbar__row">
+    <button type="button" class="print-action" onclick="window.print()">Imprimir</button>
+    <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar</button>
 
-  <ol class="print-steps">
-    <li class="print-step print-step--done">
-      <span class="print-step__badge">1</span>
-      <div class="print-step__body">
-        <span class="print-step__label">Imprimir e assinar</span>
-        <div class="print-step__actions">
-          <button type="button" class="print-action" onclick="window.print()">Imprimir receita</button>
-          <button type="button" class="print-action" onclick="abrirAssinatura()">Assinar (gov.br)</button>
-        </div>
-      </div>
-    </li>
+    {% if bloco.assinatura_enviada %}
+      <a class="print-action print-action--success"
+         href="{{ bloco.assinatura_arquivo_url }}"
+         target="_blank" rel="noopener"
+         title="Assinada{% if bloco.assinatura_enviada_por %} por {{ bloco.assinatura_enviada_por.name }}{% endif %}{% if bloco.assinatura_enviada_em %} em {{ bloco.assinatura_enviada_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% endif %}">
+        &check; Receita assinada
+      </a>
+      {% if pode_enviar_assinatura %}
+        <form action="{{ url_for('enviar_assinatura_bloco_prescricao', bloco_id=bloco.id) }}" method="post" enctype="multipart/form-data" class="print-toolbar__form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="file" id="receita-assinada-input" name="documento" accept=".pdf,.jpg,.jpeg,.png" class="d-none" onchange="this.form.submit()">
+          <button type="button" class="print-action print-action--ghost print-action--icon" title="Substituir arquivo" onclick="document.getElementById('receita-assinada-input').click()">&#8635;</button>
+        </form>
+      {% endif %}
+    {% elif pode_enviar_assinatura %}
+      <form action="{{ url_for('enviar_assinatura_bloco_prescricao', bloco_id=bloco.id) }}" method="post" enctype="multipart/form-data" class="print-toolbar__form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" id="receita-assinada-input" name="documento" accept=".pdf,.jpg,.jpeg,.png" class="d-none" onchange="this.form.submit()">
+        <button type="button" class="print-action print-action--success" onclick="document.getElementById('receita-assinada-input').click()">Enviar receita assinada</button>
+      </form>
+    {% endif %}
 
-    <li class="print-step {% if bloco.assinatura_enviada %}print-step--done{% elif pode_enviar_assinatura %}print-step--active{% endif %}">
-      <span class="print-step__badge">{% if bloco.assinatura_enviada %}&check;{% else %}2{% endif %}</span>
-      <div class="print-step__body">
-        <span class="print-step__label">Cadastrar receita assinada</span>
-        {% if bloco.assinatura_enviada %}
-          <div class="print-step__actions">
-            <span class="print-toolbar__status">Assinada e enviada{% if bloco.assinatura_enviada_por %} por {{ bloco.assinatura_enviada_por.name }}{% endif %}{% if bloco.assinatura_enviada_em %} em {{ bloco.assinatura_enviada_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% endif %}</span>
-            <a class="print-action print-action--ghost" href="{{ bloco.assinatura_arquivo_url }}" target="_blank" rel="noopener">Ver arquivo</a>
-            {% if pode_enviar_assinatura %}
-              <form action="{{ url_for('enviar_assinatura_bloco_prescricao', bloco_id=bloco.id) }}" method="post" enctype="multipart/form-data" class="print-toolbar__form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="file" id="receita-assinada-input" name="documento" accept=".pdf,.jpg,.jpeg,.png" class="d-none" onchange="this.form.submit()">
-                <button type="button" class="print-action print-action--ghost" onclick="document.getElementById('receita-assinada-input').click()">Substituir arquivo</button>
-              </form>
-            {% endif %}
-          </div>
-        {% elif pode_enviar_assinatura %}
-          <div class="print-step__actions">
-            <form action="{{ url_for('enviar_assinatura_bloco_prescricao', bloco_id=bloco.id) }}" method="post" enctype="multipart/form-data" class="print-toolbar__form">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="file" id="receita-assinada-input" name="documento" accept=".pdf,.jpg,.jpeg,.png" class="d-none" onchange="this.form.submit()">
-              <button type="button" class="print-action print-action--success" onclick="document.getElementById('receita-assinada-input').click()">Enviar receita assinada</button>
-            </form>
-          </div>
-        {% else %}
-          <span class="print-step__hint">Aguardando o veterinário enviar a receita assinada.</span>
-        {% endif %}
-      </div>
-    </li>
+    <button type="button" class="print-action print-action--primary" onclick="enviarWhatsApp()" id="btn-whatsapp">Enviar WhatsApp</button>
 
-    <li class="print-step {% if bloco.assinatura_enviada %}print-step--active{% endif %}">
-      <span class="print-step__badge">3</span>
-      <div class="print-step__body">
-        <span class="print-step__label">Compartilhar com o tutor</span>
-        <div class="print-step__actions">
-          <button type="button" class="print-action print-action--primary" onclick="enviarWhatsApp()" id="btn-whatsapp">Enviar WhatsApp</button>
-        </div>
-      </div>
-    </li>
+    {% if acompanhamento %}
+      <span class="print-toolbar__status">Acompanhamento ativo</span>
+      <a class="print-action print-action--success"
+         href="{{ url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) }}">
+        Abrir acompanhamento
+      </a>
+    {% elif pode_ativar_acompanhamento %}
+      <form method="POST"
+            action="{{ url_for('ativar_acompanhamento_tratamento', bloco_id=bloco.id) }}"
+            class="print-toolbar__form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="print-action print-action--ghost">Ativar acompanhamento</button>
+      </form>
+    {% endif %}
 
-    <li class="print-step {% if acompanhamento %}print-step--done{% endif %}">
-      <span class="print-step__badge">{% if acompanhamento %}&check;{% else %}4{% endif %}</span>
-      <div class="print-step__body">
-        <span class="print-step__label">Acompanhar o tratamento</span>
-        <div class="print-step__actions">
-          {% if acompanhamento %}
-            <span class="print-toolbar__status">Acompanhamento ativo</span>
-            <a class="print-action print-action--success"
-               href="{{ url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) }}">
-              Abrir acompanhamento
-            </a>
-          {% elif pode_ativar_acompanhamento %}
-            <form method="POST"
-                  action="{{ url_for('ativar_acompanhamento_tratamento', bloco_id=bloco.id) }}"
-                  class="print-toolbar__form">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="print-action print-action--success">Ativar acompanhamento</button>
-            </form>
-          {% else %}
-            <span class="print-step__hint">Ainda não ativado.</span>
-          {% endif %}
-        </div>
-      </div>
-    </li>
-  </ol>
+    <a class="print-action print-action--ghost print-toolbar__back" href="{{ return_url or url_for('consulta_direct', animal_id=animal.id) }}">Voltar</a>
+  </div>
 </div>
 
 {% from 'components/logo.html' import clinic_logo %}
