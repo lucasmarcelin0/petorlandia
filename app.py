@@ -26926,6 +26926,16 @@ def ficha_tutor(tutor_id):
             'name': breed.name
         })
 
+    # "SRD" é uma raça única no banco (não duplicada por espécie), mas deve
+    # ficar disponível na lista de qualquer espécie no formulário.
+    srd_entries = [b for b in breeds if (b.name or '').strip().upper() == 'SRD']
+    for srd in srd_entries:
+        for sp in species_list:
+            sp_id = str(sp['id'])
+            options = breed_map.setdefault(sp_id, [])
+            if not any(opt['id'] == srd.id for opt in options):
+                options.append({'id': srd.id, 'name': srd.name})
+
     return render_template(
         'animais/tutor_detail.html',
         tutor=tutor,
