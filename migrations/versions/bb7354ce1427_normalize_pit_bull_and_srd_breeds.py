@@ -44,10 +44,10 @@ def _ensure_breed(conn, species_id, name):
     if row:
         return row[0]
     result = conn.execute(
-        sa.text("INSERT INTO breed (name, species_id) VALUES (:name, :species_id)"),
+        sa.text("INSERT INTO breed (name, species_id) VALUES (:name, :species_id) RETURNING id"),
         {"name": name, "species_id": species_id},
     )
-    return result.lastrowid
+    return result.scalar()
 
 
 def _merge_breed_ids(conn, src_id, dst_id):
