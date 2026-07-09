@@ -50,7 +50,9 @@ from flask_wtf.csrf import CSRFError, generate_csrf
 from flask.cli import with_appcontext
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
-from twilio.rest import Client
+# Twilio não é usado hoje (WhatsApp é via links wa.me); import lazy dentro de
+# _send_share_sms/enviar_mensagem_whatsapp para não pagar o custo no boot.
+# from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 from authlib.jose import JsonWebKey, jwt
@@ -265,9 +267,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 # 3)  Extensões
 # ----------------------------------------------------------------
 
-@app.template_filter('date_now')
-def date_now(format_string='%Y-%m-%d'):
-    return datetime.now(BR_TZ).strftime(format_string)
 from extensions import (
     db,
     migrate,
@@ -1567,131 +1566,36 @@ def local_date_range_to_utc(start_dt, end_dt):
     return _convert(start_dt), _convert(end_dt)
 
 
-@app.template_filter("datetime_brazil")
-def datetime_brazil(value):
-    if isinstance(value, datetime):
-        value = coerce_to_brazil_tz(value)
-        return value.strftime("%d/%m/%Y %H:%M")
-    return value
+# Filters e helpers de formatação vivem em template_filters.py; os nomes são
+# reimportados aqui porque várias views deste módulo ainda os utilizam.
+from template_filters import (
+    register_template_filters,
+    date_now,
+    datetime_brazil,
+    format_datetime_brazil,
+    isoformat_with_tz,
+    format_timedelta,
+    digits_only,
+    whatsapp_chat_url,
+    normalize_email,
+    normalize_phone,
+    format_cnpj,
+    currency_br,
+    payment_status_label,
+    PAYER_TYPE_LABELS,
+    payer_type_label,
+    default_payer_type_for_consulta,
+    species_display,
+    animal_size_label,
+    animal_size_token,
+    _resolve_species_name,
+    _normalize_species_token,
+    _resolve_species_visual,
+    _resolve_size_data,
+    _SPECIES_VISUAL_TOKENS,
+)
 
-@app.template_filter("format_datetime_brazil")
-def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
-    if value is None:
-        return ""
-
-    if isinstance(value, datetime):
-        assume_utc_local = os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "0").lower() in {"1", "true", "yes"}
-
-        if value.tzinfo is None:
-            localized = coerce_to_brazil_tz(value)
-        elif assume_utc_local and value.tzinfo == timezone.utc:
-            # Some records may have been stored with UTC tzinfo even though the
-            # timestamp was captured in local time. Reattach the Brazil timezone
-            # without shifting the clock to avoid showing hours behind.
-            localized = value.replace(tzinfo=BR_TZ)
-        else:
-            localized = coerce_to_brazil_tz(value)
-        return localized.strftime(fmt)
-
-    if isinstance(value, date):
-        return value.strftime(fmt)
-
-    return value
-
-
-@app.template_filter("isoformat_with_tz")
-def isoformat_with_tz(value):
-    """Return an ISO-8601 string with explicit timezone information.
-
-    Datetimes are converted to UTC and rendered with a ``Z`` suffix. Naive
-    datetimes are assumed to be expressed in Brazil's timezone to avoid
-    unintended shifts when the client parses them.
-    """
-
-    if value is None:
-        return ""
-
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=BR_TZ)
-        value = value.astimezone(timezone.utc)
-        return value.isoformat().replace("+00:00", "Z")
-
-    if isinstance(value, date):
-        localized = datetime.combine(value, datetime.min.time(), tzinfo=BR_TZ)
-        return localized.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    return str(value)
-
-
-@app.template_filter("format_timedelta")
-def format_timedelta(value):
-    """Format a ``timedelta`` as ``'Xh Ym'``."""
-    total_seconds = int(value.total_seconds())
-    if total_seconds <= 0:
-        return "0h 0m"
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, _ = divmod(remainder, 60)
-    return f"{hours}h {minutes}m"
-
-@app.template_filter("digits_only")
-def digits_only(value):
-    """Return only the digits from a string."""
-    return "".join(filter(str.isdigit, value)) if value else ""
-
-
-def whatsapp_chat_url(phone: str | None, message: str | None = None) -> str | None:
-    """Build a public WhatsApp chat URL for Brazilian phone numbers."""
-    digits = digits_only(phone)
-    if not digits:
-        return None
-
-    if digits.startswith("00"):
-        digits = digits[2:]
-    if digits.startswith("0") and len(digits) in {11, 12}:
-        digits = digits[1:]
-    if not digits.startswith("55") and len(digits) in {10, 11}:
-        digits = f"55{digits}"
-    if len(digits) < 12:
-        return None
-
-    url = f"https://wa.me/{digits}"
-    if message:
-        url = f"{url}?text={quote_plus(str(message))}"
-    return url
-
-
-# Imported Jinja macros do not receive context-processor values by default.
-# Register the helper globally so the shared WhatsApp component is reliable.
-app.jinja_env.globals['whatsapp_chat_url'] = whatsapp_chat_url
-
-
-def normalize_email(value: str | None) -> str | None:
-    """Normalize an email for case-insensitive lookups."""
-    if value is None:
-        return None
-    normalized = value.strip().lower()
-    return normalized or None
-
-
-def normalize_phone(value: str | None) -> str | None:
-    """Normalize a phone number into a comparable storage format."""
-    digits = digits_only(value)
-    if not digits:
-        return None
-
-    if digits.startswith("55") and len(digits) >= 12:
-        digits = digits[2:]
-    elif digits.startswith("0") and len(digits) >= 11:
-        digits = digits[1:]
-
-    if len(digits) in {10, 11}:
-        return f"+55{digits}"
-
-    if str(value or "").strip().startswith("+"):
-        return f"+{digits}"
-    return f"+55{digits}"
-
+register_template_filters(app)
 
 def find_users_by_phone(phone: str | None, *, exclude_user_id: int | None = None) -> list[User]:
     """Return users whose stored phone matches the normalized phone value."""
@@ -1722,159 +1626,6 @@ def find_user_by_login_identifier(identifier: str | None) -> tuple[User | None, 
         return phone_matches[0], None
     return None, None
 
-
-@app.template_filter("format_cnpj")
-def format_cnpj(value):
-    """Return a formatted CNPJ (00.000.000/0000-00)."""
-    return format_cnpj_value(value)
-
-
-@app.template_filter("currency_br")
-def currency_br(value):
-    """Format numeric values using the Brazilian currency style."""
-    if value is None:
-        value = Decimal("0")
-    if not isinstance(value, Decimal):
-        try:
-            value = Decimal(str(value))
-        except (ArithmeticError, ValueError):
-            return str(value)
-    quantized = value.quantize(Decimal("0.01"))
-    formatted = f"{quantized:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {formatted}"
-
-
-@app.template_filter("payment_status_label")
-def payment_status_label(value):
-    """Translate payment status codes to Portuguese labels."""
-    mapping = {
-        "pending": "Pendente",
-        "success": "Aprovado",
-        "completed": "Aprovado",
-        "approved": "Aprovado",
-        "failure": "Falha no pagamento",
-        "failed": "Falha no pagamento",
-    }
-    return mapping.get(value.lower(), value) if value else ""
-
-
-PAYER_TYPE_LABELS = {
-    "plan": "Plano",
-    "particular": "Particular",
-}
-
-
-def payer_type_label(value):
-    return PAYER_TYPE_LABELS.get(value or "particular", "Particular")
-
-
-def default_payer_type_for_consulta(consulta):
-    return "plan" if getattr(consulta, "health_subscription_id", None) else "particular"
-
-
-@app.template_filter("payer_label")
-def payer_label_filter(value):
-    return payer_type_label(value)
-
-
-@app.template_filter('coverage_label')
-def coverage_label_filter(value):
-    return coverage_label(value)
-
-
-@app.template_filter('coverage_badge')
-def coverage_badge_filter(value):
-    return coverage_badge(value)
-
-
-def _resolve_species_name(species) -> str | None:
-    if not species:
-        return None
-    name = getattr(species, "name", None)
-    if isinstance(name, str) and name.strip():
-        return name
-    if isinstance(species, str):
-        return species
-    return str(species)
-
-
-@app.template_filter('species_display')
-def species_display(species) -> str:
-    """Return a readable label for a Species relationship or string."""
-    return _resolve_species_name(species) or "Espécie não informada"
-
-
-def _normalize_species_token(species: str | None) -> str | None:
-    name = _resolve_species_name(species)
-    if not name:
-        return None
-    normalized = unicodedata.normalize("NFKD", name)
-    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
-    cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", without_accents).strip("-")
-    token = cleaned.lower()
-    return token or None
-
-
-_SPECIES_VISUAL_TOKENS = {
-    "cao": "dog",
-    "cachorro": "dog",
-    "canino": "dog",
-    "gato": "cat",
-    "felino": "cat",
-    "gata": "cat",
-    "ave": "bird",
-    "passaro": "bird",
-    "canario": "bird",
-    "papagaio": "bird",
-    "coelho": "rabbit",
-    "lagarto": "reptile",
-    "jabuti": "reptile",
-    "tartaruga": "reptile",
-    "reptil": "reptile",
-    "hamster": "rodent",
-    "roedor": "rodent",
-}
-
-
-def _resolve_species_visual(species) -> str:
-    token = _normalize_species_token(species)
-    if not token:
-        return "default"
-    if token in _SPECIES_VISUAL_TOKENS:
-        return _SPECIES_VISUAL_TOKENS[token]
-    root = token.split("-")[0]
-    return _SPECIES_VISUAL_TOKENS.get(root, "default")
-
-
-@app.template_filter("species_visual_token")
-def species_visual_token_filter(species) -> str:
-    """Return a semantic token used to colorize and iconize species placeholders."""
-    return _resolve_species_visual(species)
-
-
-def _resolve_size_data(weight):
-    try:
-        value = float(weight)
-    except (TypeError, ValueError):
-        value = None
-
-    if value is None or value <= 0:
-        return "Porte indefinido", "unknown"
-    if value < 10:
-        return "Porte pequeno", "small"
-    if value < 25:
-        return "Porte médio", "medium"
-    return "Porte grande", "large"
-
-
-@app.template_filter('animal_size_label')
-def animal_size_label(weight) -> str:
-    return _resolve_size_data(weight)[0]
-
-
-@app.template_filter('animal_size_token')
-def animal_size_token(weight) -> str:
-    return _resolve_size_data(weight)[1]
 
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
@@ -3141,6 +2892,7 @@ def _send_share_sms(phone, body):
         return False
     number = formatar_telefone(phone)
     try:
+        from twilio.rest import Client
         client = Client(account_sid, auth_token)
         client.messages.create(body=body, from_=from_number, to=number)
         return True
@@ -18360,6 +18112,7 @@ def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
     if not all([account_sid, auth_token, from_number]):
         raise RuntimeError("Credenciais do Twilio não configuradas")
 
+    from twilio.rest import Client
     client = Client(account_sid, auth_token)
     client.messages.create(body=texto, from_=from_number, to=numero)
 
@@ -29013,34 +28766,6 @@ def deletar_prescricao(prescricao_id):
     db.session.commit()
     flash('Prescrição removida com sucesso!', 'info')
     return redirect(url_for('consulta_qr', animal_id=animal_id))
-
-
-@app.route('/importar_medicamentos')
-def importar_medicamentos():
-    import pandas as pd
-
-
-    try:
-        df = pd.read_csv("medicamentos_pet_orlandia.csv")
-
-        for _, row in df.iterrows():
-            medicamento = Medicamento(
-                classificacao=row["classificacao"],
-                nome=row["nome"],
-                principio_ativo=row["principio_ativo"],
-                via_administracao=row["via_administracao"],
-                dosagem_recomendada=row["dosagem_recomendada"],
-                duracao_tratamento=row["duracao_tratamento"],
-                observacoes=row["observacoes"],
-                bula=row["link_bula"]
-            )
-            db.session.add(medicamento)
-
-        db.session.commit()
-        return "✅ Medicamentos importados com sucesso!"
-
-    except Exception as e:
-        return f"❌ Erro: {e}"
 
 
 @app.route("/medicamento", methods=["POST"])

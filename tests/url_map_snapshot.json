@@ -1,0 +1,5942 @@
+[
+ {
+  "endpoint": "accept_delivery",
+  "rule": "/delivery_requests/<int:req_id>/accept",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "aceitar_interesse",
+  "rule": "/mensagem/<int:message_id>/aceitar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "acompanhamento_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "add_animal",
+  "rule": "/add-animal",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "adicionar_carrinho",
+  "rule": "/carrinho/adicionar/<int:product_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "adicionar_orcamento_item",
+  "rule": "/consulta/<int:consulta_id>/orcamento_item",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_aprovar_casa_de_racao",
+  "rule": "/admin/casa-de-racao/<int:casa_id>/aprovar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_aprovar_clinica",
+  "rule": "/admin/clinica/<int:clinica_id>/aprovar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_archive_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/archive",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_casas_de_racao",
+  "rule": "/admin/casas-de-racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_criar_convite",
+  "rule": "/admin/parcerias/convite",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_data_share_logs",
+  "rule": "/admin/data-share-logs",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_delete_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_delivery_detail",
+  "rule": "/admin/delivery/<int:req_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_geocode_addresses",
+  "rule": "/admin/api/geocode_addresses",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_geocode_status",
+  "rule": "/admin/api/geocode_addresses/status",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_notification_mark_read",
+  "rule": "/admin/notificacoes/<int:notification_id>/ler",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_notification_resolve",
+  "rule": "/admin/notificacoes/<int:notification_id>/resolver",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_notifications",
+  "rule": "/admin/notificacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_pagar_repasses_frete",
+  "rule": "/admin/repasses-frete/pagar/<int:worker_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_parcerias",
+  "rule": "/admin/parcerias",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_promote_delivery",
+  "rule": "/admin/users/<int:user_id>/promover_entregador",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_promote_parceiro",
+  "rule": "/admin/users/<int:user_id>/promover_parceiro",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_promote_veterinarian",
+  "rule": "/admin/users/<int:user_id>/promover_veterinario",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_rejeitar_clinica",
+  "rule": "/admin/clinica/<int:clinica_id>/rejeitar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_remove_delivery",
+  "rule": "/admin/users/<int:user_id>/remover_entregador",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_remove_parceiro",
+  "rule": "/admin/users/<int:user_id>/remover_parceiro",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_repasses_frete",
+  "rule": "/admin/repasses-frete",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_routes.admin_aprovar_clinica",
+  "rule": "/admin/clinica/<int:clinica_id>/aprovar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_criar_convite",
+  "rule": "/admin/parcerias/convite",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_notification_mark_read",
+  "rule": "/admin/notificacoes/<int:notification_id>/ler",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_notification_resolve",
+  "rule": "/admin/notificacoes/<int:notification_id>/resolver",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_notifications",
+  "rule": "/admin/notificacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_routes.admin_parcerias",
+  "rule": "/admin/parcerias",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_routes.admin_promote_delivery",
+  "rule": "/admin/users/<int:user_id>/promover_entregador",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_promote_parceiro",
+  "rule": "/admin/users/<int:user_id>/promover_parceiro",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_promote_veterinarian",
+  "rule": "/admin/users/<int:user_id>/promover_veterinario",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_rejeitar_clinica",
+  "rule": "/admin/clinica/<int:clinica_id>/rejeitar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_remove_delivery",
+  "rule": "/admin/users/<int:user_id>/remover_entregador",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_remove_parceiro",
+  "rule": "/admin/users/<int:user_id>/remover_parceiro",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.admin_toggle_site_flag",
+  "rule": "/admin/site-flags/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_routes.planos_dashboard",
+  "rule": "/admin/planos/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_set_delivery_status",
+  "rule": "/admin/delivery_requests/<int:req_id>/status/<status>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_suspender_casa_de_racao",
+  "rule": "/admin/casa-de-racao/<int:casa_id>/suspender",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_toggle_site_flag",
+  "rule": "/admin/site-flags/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "admin_tutor_map",
+  "rule": "/admin/mapa_tutores",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_tutor_markers_api",
+  "rule": "/admin/api/tutor_markers",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "admin_unarchive_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/unarchive",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "adotar_animal",
+  "rule": "/animal/<int:animal_id>/adotar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.animal_exam_appointments",
+  "rule": "/animal/<int:animal_id>/exam_appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.appointment_confirmation",
+  "rule": "/appointments/<int:appointment_id>/confirmation",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.appointment_emit_nfse",
+  "rule": "/appointments/<int:appointment_id>/nfse",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.appointments",
+  "rule": "/appointments",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.appointments_calendar",
+  "rule": "/appointments/calendar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.bulk_delete_vet_schedule",
+  "rule": "/appointments/<int:veterinario_id>/schedule/bulk_delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.delete_appointment",
+  "rule": "/appointments/<int:appointment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.delete_exam_appointment",
+  "rule": "/exam_appointment/<int:appointment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.delete_vet_schedule",
+  "rule": "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.edit_appointment",
+  "rule": "/appointments/<int:appointment_id>/edit",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.edit_vet_schedule_slot",
+  "rule": "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.edit_vet_specialties",
+  "rule": "/admin/veterinario/<int:veterinario_id>/especialidades",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.manage_appointments",
+  "rule": "/appointments/manage",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.pending_appointments",
+  "rule": "/appointments/pending",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.schedule_exam",
+  "rule": "/animal/<int:animal_id>/schedule_exam",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.update_appointment_status",
+  "rule": "/appointments/<int:appointment_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.update_exam_appointment",
+  "rule": "/exam_appointment/<int:appointment_id>/update",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.update_exam_appointment_requester",
+  "rule": "/exam_appointment/<int:appointment_id>/requester_update",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.update_exam_appointment_status",
+  "rule": "/exam_appointment/<int:appointment_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "agendamentos_routes.vet_detail",
+  "rule": "/veterinario/<int:veterinario_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.veterinarian_activity_report",
+  "rule": "/veterinario/<int:veterinario_id>/relatorio-atividades",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendamentos_routes.veterinarios",
+  "rule": "/veterinarios",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "agendar_retorno",
+  "rule": "/agendar_retorno/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "alterar_exame",
+  "rule": "/exame/<int:exame_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "alterar_exame_modelo",
+  "rule": "/exame_modelo/<int:exame_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "alterar_medicamento",
+  "rule": "/medicamento/<int:med_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "alterar_racao",
+  "rule": "/racao/<int:racao_id>",
+  "methods": "DELETE,GET,PUT"
+ },
+ {
+  "endpoint": "alterar_status_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "alterar_tipo_racao",
+  "rule": "/tipo_racao/<int:tipo_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "alterar_vacina",
+  "rule": "/vacina/<int:vacina_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "alterar_vacina_modelo",
+  "rule": "/vacina_modelo/<int:vacina_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "analise_respostas",
+  "rule": "/sfa/analise-respostas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "animal.action_view",
+  "rule": "/painel/animal/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "animal.ajax_lookup",
+  "rule": "/painel/animal/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "animal.ajax_update",
+  "rule": "/painel/animal/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "animal.create_view",
+  "rule": "/painel/animal/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "animal.delete_view",
+  "rule": "/painel/animal/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "animal.details_view",
+  "rule": "/painel/animal/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "animal.edit_view",
+  "rule": "/painel/animal/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "animal.export",
+  "rule": "/painel/animal/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "animal.index_view",
+  "rule": "/painel/animal/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "animal_exam_appointments",
+  "rule": "/animal/<int:animal_id>/exam_appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "apagar_teste_dados",
+  "rule": "/sfa/teste-dados/apagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_atualizar_peso_animal",
+  "rule": "/api/animal/<int:animal_id>/peso",
+  "methods": "PATCH"
+ },
+ {
+  "endpoint": "api_cep_lookup",
+  "rule": "/api/cep/<cep>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_clinic_appointments",
+  "rule": "/api/clinic_appointments/<int:clinica_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_clinic_pets",
+  "rule": "/api/clinic_pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_contabilidade_dashboard",
+  "rule": "/api/contabilidade/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_contabilidade_veterinarios",
+  "rule": "/api/contabilidade/veterinarios",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_conversa_admin_message",
+  "rule": "/api/conversa_admin/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_conversa_message",
+  "rule": "/api/conversa/<int:animal_id>/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_criar_sinistro",
+  "rule": "/api/seguradoras/sinistros",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_delivery_counts",
+  "rule": "/api/delivery_counts",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_forward_geocode",
+  "rule": "/api/geocode/address",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_geo_cidade",
+  "rule": "/api/geo/cidade",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_historico_uso",
+  "rule": "/api/seguradoras/planos/<int:plan_id>/historico",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_appointments",
+  "rule": "/api/integrations/appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_attach_exame_imagem_pdf",
+  "rule": "/api/integrations/image-exams/pdf",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_clinical_pendencies",
+  "rule": "/api/integrations/clinical-pendencies",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_clinical_summary",
+  "rule": "/api/integrations/clinical-summary/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_create_appointment",
+  "rule": "/api/integrations/appointments",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_create_exam_block",
+  "rule": "/api/integrations/exam-blocks",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_create_exame_imagem",
+  "rule": "/api/integrations/image-exams",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_create_or_update_consultation",
+  "rule": "/api/integrations/consultations",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_create_return_appointment",
+  "rule": "/api/integrations/returns",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_create_tutor_and_pets",
+  "rule": "/api/integrations/tutors-with-pets",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_find_or_create_requesting_clinic",
+  "rule": "/api/integrations/requesting-clinics",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_find_or_create_tutor_animal_for_exam",
+  "rule": "/api/integrations/exam-tutor-animal",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_generate_clinic_first_access_invite",
+  "rule": "/api/integrations/clinic-first-access-invites",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_generate_tutor_access_invite",
+  "rule": "/api/integrations/tutor-access-invites",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_get_clinical_document",
+  "rule": "/api/integrations/clinical-document",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_handoff",
+  "rule": "/api/integrations/handoff/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_interpret_intake",
+  "rule": "/api/integrations/intake/interpret",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_list_animal_medical_history",
+  "rule": "/api/integrations/medical-history",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_me",
+  "rule": "/api/integrations/me",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_openapi",
+  "rule": "/api/integrations/openapi.json",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_operational_assistant",
+  "rule": "/api/integrations/assistant",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_pets",
+  "rule": "/api/integrations/pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_release_exame_to_clinic",
+  "rule": "/api/integrations/image-exams/release-clinic",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_release_exame_to_tutor",
+  "rule": "/api/integrations/image-exams/release-tutor",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_integrations_today_agenda",
+  "rule": "/api/integrations/today-agenda",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_integrations_tutor_guidance",
+  "rule": "/api/integrations/tutor-guidance/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_message_threads",
+  "rule": "/api/messages/threads",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_minhas_compras",
+  "rule": "/api/minhas-compras",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_my_appointments",
+  "rule": "/api/my_appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_my_pets",
+  "rule": "/api/my_pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_payment_status",
+  "rule": "/api/payment_status/<int:payment_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_public_pricing",
+  "rule": "/api/public/pricing",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_reschedule_appointment",
+  "rule": "/api/appointments/<int:appointment_id>/reschedule",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_reverse_geocode",
+  "rule": "/api/geocode/reverse",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_cep_lookup",
+  "rule": "/api/cep/<cep>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_clinic_appointments",
+  "rule": "/api/clinic_appointments/<int:clinica_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_clinic_pets",
+  "rule": "/api/clinic_pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_conversa_admin_message",
+  "rule": "/api/conversa_admin",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_conversa_admin_message",
+  "rule": "/api/conversa_admin/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_conversa_message",
+  "rule": "/api/conversa/<int:animal_id>/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_criar_sinistro",
+  "rule": "/api/seguradoras/sinistros",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_delivery_counts",
+  "rule": "/api/delivery_counts",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_forward_geocode",
+  "rule": "/api/geocode/address",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_historico_uso",
+  "rule": "/api/seguradoras/planos/<int:plan_id>/historico",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_appointments",
+  "rule": "/api/integrations/appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_attach_exame_imagem_pdf",
+  "rule": "/api/integrations/image-exams/pdf",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_clinical_pendencies",
+  "rule": "/api/integrations/clinical-pendencies",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_clinical_summary",
+  "rule": "/api/integrations/clinical-summary/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_appointment",
+  "rule": "/api/integrations/appointments",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_exam_block",
+  "rule": "/api/integrations/exam-blocks",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_exame_imagem",
+  "rule": "/api/integrations/image-exams",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_or_update_consultation",
+  "rule": "/api/integrations/consultations",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_return_appointment",
+  "rule": "/api/integrations/returns",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_create_tutor_and_pets",
+  "rule": "/api/integrations/tutors-with-pets",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_find_or_create_requesting_clinic",
+  "rule": "/api/integrations/requesting-clinics",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_find_or_create_tutor_animal_for_exam",
+  "rule": "/api/integrations/exam-tutor-animal",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_generate_clinic_first_access_invite",
+  "rule": "/api/integrations/clinic-first-access-invites",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_generate_tutor_access_invite",
+  "rule": "/api/integrations/tutor-access-invites",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_get_clinical_document",
+  "rule": "/api/integrations/clinical-document",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_handoff",
+  "rule": "/api/integrations/handoff/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_interpret_intake",
+  "rule": "/api/integrations/intake/interpret",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_list_animal_medical_history",
+  "rule": "/api/integrations/medical-history",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_me",
+  "rule": "/api/integrations/me",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_openapi",
+  "rule": "/api/integrations/openapi.json",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_operational_assistant",
+  "rule": "/api/integrations/assistant",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_pets",
+  "rule": "/api/integrations/pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_release_exame_to_clinic",
+  "rule": "/api/integrations/image-exams/release-clinic",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_release_exame_to_tutor",
+  "rule": "/api/integrations/image-exams/release-tutor",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_today_agenda",
+  "rule": "/api/integrations/today-agenda",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_tutor_guidance",
+  "rule": "/api/integrations/tutor-guidance/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_message_threads",
+  "rule": "/api/messages/threads",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_minhas_compras",
+  "rule": "/api/minhas-compras",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_my_appointments",
+  "rule": "/api/my_appointments",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_my_pets",
+  "rule": "/api/my_pets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_payment_status",
+  "rule": "/api/payment_status/<int:payment_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_public_pricing",
+  "rule": "/api/public/pricing",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_reschedule_appointment",
+  "rule": "/api/appointments/<int:appointment_id>/reschedule",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_reverse_geocode",
+  "rule": "/api/geocode/reverse",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_specialist_available_times",
+  "rule": "/api/specialist/<int:veterinario_id>/available_times",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_specialist_weekly_schedule",
+  "rule": "/api/specialist/<int:veterinario_id>/weekly_schedule",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_specialists",
+  "rule": "/api/specialists",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_specialties",
+  "rule": "/api/specialties",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_status_autorizacao",
+  "rule": "/api/seguradoras/consultas/<int:consulta_id>/autorizacao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_status_sinistro",
+  "rule": "/api/seguradoras/sinistros/<int:claim_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_user_appointments",
+  "rule": "/api/user_appointments/<int:user_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.api_vet_appointments",
+  "rule": "/api/vet_appointments/<int:veterinario_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.approve_share_request",
+  "rule": "/api/shares/<int:request_id>/approve",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.confirm_share_request",
+  "rule": "/api/shares/confirm",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.deny_share_request",
+  "rule": "/api/shares/<int:request_id>/deny",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.share_request_detail",
+  "rule": "/api/share-requests/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_routes.shares_api",
+  "rule": "/api/shares",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "api_specialist_available_times",
+  "rule": "/api/specialist/<int:veterinario_id>/available_times",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_specialist_weekly_schedule",
+  "rule": "/api/specialist/<int:veterinario_id>/weekly_schedule",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_specialists",
+  "rule": "/api/specialists",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_specialties",
+  "rule": "/api/specialties",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_status_autorizacao",
+  "rule": "/api/seguradoras/consultas/<int:consulta_id>/autorizacao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_status_sinistro",
+  "rule": "/api/seguradoras/sinistros/<int:claim_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_tipos_racao",
+  "rule": "/api/tipos_racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_user_appointments",
+  "rule": "/api/user_appointments/<int:user_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "api_vet_appointments",
+  "rule": "/api/vet_appointments/<int:veterinario_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "aplicar_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/aplicar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "appointment_close",
+  "rule": "/appointments/<int:appointment_id>/close",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "appointment_confirmation",
+  "rule": "/appointments/<int:appointment_id>/confirmation",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "appointment_emit_nfse",
+  "rule": "/appointments/<int:appointment_id>/nfse",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "appointments",
+  "rule": "/appointments",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "appointments_calendar",
+  "rule": "/appointments/calendar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "approve_share_request",
+  "rule": "/api/shares/<int:request_id>/approve",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.action_view",
+  "rule": "/painel/apresentacaomedicamento/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.ajax_lookup",
+  "rule": "/painel/apresentacaomedicamento/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.ajax_update",
+  "rule": "/painel/apresentacaomedicamento/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.create_view",
+  "rule": "/painel/apresentacaomedicamento/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.delete_view",
+  "rule": "/painel/apresentacaomedicamento/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.details_view",
+  "rule": "/painel/apresentacaomedicamento/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.edit_view",
+  "rule": "/painel/apresentacaomedicamento/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.export",
+  "rule": "/painel/apresentacaomedicamento/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "apresentacaomedicamento.index_view",
+  "rule": "/painel/apresentacaomedicamento/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "arquivar_animal",
+  "rule": "/animal/<int:animal_id>/arquivar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "ativar_acompanhamento_tratamento",
+  "rule": "/bloco_prescricao/<int:bloco_id>/acompanhamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>",
+  "methods": "PUT"
+ },
+ {
+  "endpoint": "atualizar_realizacao_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/realizacao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "atualizar_status_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/status",
+  "methods": "PATCH"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.action_view",
+  "rule": "/painel/auditoriasugestaoclinica/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.ajax_lookup",
+  "rule": "/painel/auditoriasugestaoclinica/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.ajax_update",
+  "rule": "/painel/auditoriasugestaoclinica/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.create_view",
+  "rule": "/painel/auditoriasugestaoclinica/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.delete_view",
+  "rule": "/painel/auditoriasugestaoclinica/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.details_view",
+  "rule": "/painel/auditoriasugestaoclinica/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.edit_view",
+  "rule": "/painel/auditoriasugestaoclinica/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.export",
+  "rule": "/painel/auditoriasugestaoclinica/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "auditoriasugestaoclinica.index_view",
+  "rule": "/painel/auditoriasugestaoclinica/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "aumentar_item_carrinho",
+  "rule": "/carrinho/increase/<int:item_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "auth_routes.change_password",
+  "rule": "/change_password",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.delete_account",
+  "rule": "/delete_account",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "auth_routes.first_access",
+  "rule": "/primeiro-acesso",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.first_access_password",
+  "rule": "/primeiro-acesso/senha",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.login_view",
+  "rule": "/login",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.logout",
+  "rule": "/logout",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "auth_routes.profile",
+  "rule": "/profile",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.register",
+  "rule": "/register",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.reset_password",
+  "rule": "/reset_password/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "auth_routes.reset_password_request",
+  "rule": "/reset_password_request",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "breed.action_view",
+  "rule": "/painel/breed/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "breed.ajax_lookup",
+  "rule": "/painel/breed/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "breed.ajax_update",
+  "rule": "/painel/breed/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "breed.create_view",
+  "rule": "/painel/breed/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "breed.delete_view",
+  "rule": "/painel/breed/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "breed.details_view",
+  "rule": "/painel/breed/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "breed.edit_view",
+  "rule": "/painel/breed/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "breed.export",
+  "rule": "/painel/breed/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "breed.index_view",
+  "rule": "/painel/breed/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario",
+  "rule": "/bulario",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_buscar_api",
+  "rule": "/api/bulario/buscar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_curadoria",
+  "rule": "/bulario/curadoria",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_curadoria_sincronizar",
+  "rule": "/bulario/curadoria/sincronizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_curadoria_status",
+  "rule": "/bulario/curadoria/<int:review_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_detalhe",
+  "rule": "/bulario/<int:medicamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_editar",
+  "rule": "/bulario/<int:medicamento_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "bulario_excluir",
+  "rule": "/bulario/<int:medicamento_id>/excluir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_novo",
+  "rule": "/bulario/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario",
+  "rule": "/bulario",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_buscar_api",
+  "rule": "/api/bulario/buscar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_curadoria",
+  "rule": "/bulario/curadoria",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_curadoria_sincronizar",
+  "rule": "/bulario/curadoria/sincronizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_curadoria_status",
+  "rule": "/bulario/curadoria/<int:review_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_detalhe",
+  "rule": "/bulario/<int:medicamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_editar",
+  "rule": "/bulario/<int:medicamento_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_excluir",
+  "rule": "/bulario/<int:medicamento_id>/excluir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_novo",
+  "rule": "/bulario/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "bulario_routes.bulario_sugerir_dose_api",
+  "rule": "/api/bulario/sugerir-dose",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulario_sugerir_dose_api",
+  "rule": "/api/bulario/sugerir-dose",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "bulk_delete_vet_schedule",
+  "rule": "/appointments/<int:veterinario_id>/schedule/bulk_delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "buscar_animais",
+  "rule": "/buscar_animais",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_apresentacoes",
+  "rule": "/buscar_apresentacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_exames",
+  "rule": "/buscar_exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_medicamentos",
+  "rule": "/buscar_medicamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_racoes",
+  "rule": "/buscar_racoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_tutores",
+  "rule": "/buscar_tutores",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buscar_vacinas",
+  "rule": "/buscar_vacinas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "buyer_cancel_delivery",
+  "rule": "/delivery_requests/<int:req_id>/buyer_cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "calcular_plano_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/plano",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "cancel_clinic_invite",
+  "rule": "/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "cancel_delivery",
+  "rule": "/delivery_requests/<int:req_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "cancelar_solicitacao",
+  "rule": "/solicitacoes/<int:request_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "carreiras",
+  "rule": "/carreiras",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "carrinho_salvar_endereco",
+  "rule": "/carrinho/salvar_endereco",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_animais",
+  "rule": "/casa-de-racao/<int:casa_id>/animais",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_animal_racoes",
+  "rule": "/casa-de-racao/<int:casa_id>/animal/<int:animal_id>/racoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_dashboard",
+  "rule": "/casa-de-racao/<int:casa_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_entregas",
+  "rule": "/casa-de-racao/<int:casa_id>/entregas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_grooming_plano_toggle",
+  "rule": "/casa-de-racao/<int:casa_id>/planos/tosa/<int:plan_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_grooming_planos",
+  "rule": "/casa-de-racao/<int:casa_id>/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_horario_delete",
+  "rule": "/casa-de-racao/<int:casa_id>/horario/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_onboarding",
+  "rule": "/ativar-loja/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_produtos",
+  "rule": "/casa-de-racao/<int:casa_id>/produtos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.admin_aprovar_casa_de_racao",
+  "rule": "/admin/casa-de-racao/<int:casa_id>/aprovar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.admin_casas_de_racao",
+  "rule": "/admin/casas-de-racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.admin_suspender_casa_de_racao",
+  "rule": "/admin/casa-de-racao/<int:casa_id>/suspender",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_animais",
+  "rule": "/casa-de-racao/<int:casa_id>/animais",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_animal_racoes",
+  "rule": "/casa-de-racao/<int:casa_id>/animal/<int:animal_id>/racoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_dashboard",
+  "rule": "/casa-de-racao/<int:casa_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_entregas",
+  "rule": "/casa-de-racao/<int:casa_id>/entregas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_grooming_plano_toggle",
+  "rule": "/casa-de-racao/<int:casa_id>/planos/tosa/<int:plan_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_grooming_planos",
+  "rule": "/casa-de-racao/<int:casa_id>/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_horario_delete",
+  "rule": "/casa-de-racao/<int:casa_id>/horario/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_onboarding",
+  "rule": "/ativar-loja/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_produtos",
+  "rule": "/casa-de-racao/<int:casa_id>/produtos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_tutores",
+  "rule": "/casa-de-racao/<int:casa_id>/tutores",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_de_racao_vendas",
+  "rule": "/casa-de-racao/<int:casa_id>/vendas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_entrega_atualizar_status",
+  "rule": "/casa-de-racao/<int:casa_id>/entrega/<int:dr_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_produto_editar",
+  "rule": "/casa-de-racao/<int:casa_id>/produto/<int:product_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.casa_produto_toggle",
+  "rule": "/casa-de-racao/<int:casa_id>/produto/<int:product_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.mercadopago_direct_save",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/credenciais",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.mercadopago_oauth_callback",
+  "rule": "/casa-de-racao/mercado-pago/callback",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.mercadopago_oauth_disconnect",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/desconectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.mercadopago_oauth_start",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/conectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.minha_casa_de_racao",
+  "rule": "/minha-casa-de-racao",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.parceiro_loja_landing",
+  "rule": "/parceiros/loja",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_routes.parceiro_loja_produtos_landing",
+  "rule": "/parceiros/loja/produtos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_de_racao_tutores",
+  "rule": "/casa-de-racao/<int:casa_id>/tutores",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_de_racao_vendas",
+  "rule": "/casa-de-racao/<int:casa_id>/vendas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casa_entrega_atualizar_status",
+  "rule": "/casa-de-racao/<int:casa_id>/entrega/<int:dr_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casa_produto_editar",
+  "rule": "/casa-de-racao/<int:casa_id>/produto/<int:product_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casa_produto_toggle",
+  "rule": "/casa-de-racao/<int:casa_id>/produto/<int:product_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacao.action_view",
+  "rule": "/painel/casaderacao/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacao.ajax_lookup",
+  "rule": "/painel/casaderacao/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacao.ajax_update",
+  "rule": "/painel/casaderacao/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacao.create_view",
+  "rule": "/painel/casaderacao/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casaderacao.delete_view",
+  "rule": "/painel/casaderacao/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacao.details_view",
+  "rule": "/painel/casaderacao/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacao.edit_view",
+  "rule": "/painel/casaderacao/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casaderacao.export",
+  "rule": "/painel/casaderacao/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacao.index_view",
+  "rule": "/painel/casaderacao/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacaohorario.action_view",
+  "rule": "/painel/casaderacaohorario/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacaohorario.ajax_lookup",
+  "rule": "/painel/casaderacaohorario/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacaohorario.ajax_update",
+  "rule": "/painel/casaderacaohorario/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacaohorario.create_view",
+  "rule": "/painel/casaderacaohorario/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casaderacaohorario.delete_view",
+  "rule": "/painel/casaderacaohorario/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "casaderacaohorario.details_view",
+  "rule": "/painel/casaderacaohorario/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacaohorario.edit_view",
+  "rule": "/painel/casaderacaohorario/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "casaderacaohorario.export",
+  "rule": "/painel/casaderacaohorario/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "casaderacaohorario.index_view",
+  "rule": "/painel/casaderacaohorario/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "castracao_pmo_solicitar",
+  "rule": "/castracao-pmo/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "change_password",
+  "rule": "/change_password",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "chat_messages",
+  "rule": "/chat/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "chat_view",
+  "rule": "/chat/<int:animal_id>/view",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "chatgpt_onboarding",
+  "rule": "/chatgpt",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "checkout",
+  "rule": "/checkout",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "checkout_confirm",
+  "rule": "/checkout/confirm",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_dashboard",
+  "rule": "/clinica/<int:clinica_id>/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinic_detail",
+  "rule": "/clinica/<int:clinica_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_grooming_assinantes",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/assinantes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinic_grooming_plano_editar",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_grooming_plano_toggle",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_grooming_planos",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_invites",
+  "rule": "/convites/clinica",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_loja_produtos",
+  "rule": "/clinica/<int:clinica_id>/loja/produtos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_mercadopago_direct_save",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/credenciais",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_mercadopago_oauth_disconnect",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/desconectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_mercadopago_oauth_start",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/conectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_produto_editar",
+  "rule": "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_produto_toggle",
+  "rule": "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinic_staff",
+  "rule": "/clinica/<int:clinica_id>/funcionarios",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_staff_permissions",
+  "rule": "/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinic_stock",
+  "rule": "/clinica/<int:clinica_id>/estoque",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica.action_view",
+  "rule": "/painel/clinica/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica.ajax_lookup",
+  "rule": "/painel/clinica/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica.ajax_update",
+  "rule": "/painel/clinica/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica.create_view",
+  "rule": "/painel/clinica/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica.delete_view",
+  "rule": "/painel/clinica/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica.details_view",
+  "rule": "/painel/clinica/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica.edit_view",
+  "rule": "/painel/clinica/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica.export",
+  "rule": "/painel/clinica/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica.index_view",
+  "rule": "/painel/clinica/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.atualizar_status_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/status",
+  "methods": "PATCH"
+ },
+ {
+  "endpoint": "clinica_routes.cancel_clinic_invite",
+  "rule": "/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_dashboard",
+  "rule": "/clinica/<int:clinica_id>/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_detail",
+  "rule": "/clinica/<int:clinica_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_invites",
+  "rule": "/convites/clinica",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_loja_produtos",
+  "rule": "/clinica/<int:clinica_id>/loja/produtos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_mercadopago_direct_save",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/credenciais",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_mercadopago_oauth_disconnect",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/desconectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_mercadopago_oauth_start",
+  "rule": "/clinica/<int:clinica_id>/mercado-pago/conectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_produto_editar",
+  "rule": "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_produto_toggle",
+  "rule": "/clinica/<int:clinica_id>/loja/produto/<int:product_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_staff",
+  "rule": "/clinica/<int:clinica_id>/funcionarios",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_staff_permissions",
+  "rule": "/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinic_stock",
+  "rule": "/clinica/<int:clinica_id>/estoque",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.clinicas",
+  "rule": "/clinicas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.create_clinic_veterinario",
+  "rule": "/clinica/<int:clinica_id>/veterinario",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.dashboard_orcamentos",
+  "rule": "/dashboard/orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.delete_clinic_hour",
+  "rule": "/clinica/<int:clinica_id>/horario/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.delete_vet_schedule_clinic",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.editar_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.enviar_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/enviar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.external_clinic_first_access_invite",
+  "rule": "/primeiro-acesso-clinica/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.external_onboarding_invite",
+  "rule": "/acesso-laudo/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.minha_clinica",
+  "rule": "/minha-clinica",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.novo_orcamento",
+  "rule": "/clinica/<int:clinica_id>/novo_orcamento",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinica_routes.orcamentos",
+  "rule": "/clinica/<int:clinica_id>/orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.parceiro_clinica_landing",
+  "rule": "/parceiros/clinica",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinica_routes.publish_inventory_to_loja",
+  "rule": "/estoque/item/<int:item_id>/publicar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.remove_funcionario",
+  "rule": "/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.remove_specialist",
+  "rule": "/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.remove_veterinario",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.resend_clinic_invite",
+  "rule": "/clinica/<int:clinica_id>/convites/<int:invite_id>/resend",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.respond_clinic_invite",
+  "rule": "/convites/<int:invite_id>/<string:action>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.update_inventory_item",
+  "rule": "/estoque/item/<int:item_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinicas",
+  "rule": "/clinicas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinichours.action_view",
+  "rule": "/painel/clinichours/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinichours.ajax_lookup",
+  "rule": "/painel/clinichours/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinichours.ajax_update",
+  "rule": "/painel/clinichours/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinichours.create_view",
+  "rule": "/painel/clinichours/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinichours.delete_view",
+  "rule": "/painel/clinichours/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinichours.details_view",
+  "rule": "/painel/clinichours/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinichours.edit_view",
+  "rule": "/painel/clinichours/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinichours.export",
+  "rule": "/painel/clinichours/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinichours.index_view",
+  "rule": "/painel/clinichours/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinicstaff.action_view",
+  "rule": "/painel/clinicstaff/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinicstaff.ajax_lookup",
+  "rule": "/painel/clinicstaff/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinicstaff.ajax_update",
+  "rule": "/painel/clinicstaff/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinicstaff.create_view",
+  "rule": "/painel/clinicstaff/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinicstaff.delete_view",
+  "rule": "/painel/clinicstaff/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinicstaff.details_view",
+  "rule": "/painel/clinicstaff/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinicstaff.edit_view",
+  "rule": "/painel/clinicstaff/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "clinicstaff.export",
+  "rule": "/painel/clinicstaff/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "clinicstaff.index_view",
+  "rule": "/painel/clinicstaff/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "complete_delivery",
+  "rule": "/delivery_requests/<int:req_id>/complete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "confirm_share_request",
+  "rule": "/api/shares/confirm",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "confirmar_recebimento_pedido",
+  "rule": "/pedidos/<int:order_id>/confirmar-recebimento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta.action_view",
+  "rule": "/painel/consulta/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta.ajax_lookup",
+  "rule": "/painel/consulta/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta.ajax_update",
+  "rule": "/painel/consulta/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta.create_view",
+  "rule": "/painel/consulta/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "consulta.delete_view",
+  "rule": "/painel/consulta/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta.details_view",
+  "rule": "/painel/consulta/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta.edit_view",
+  "rule": "/painel/consulta/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "consulta.export",
+  "rule": "/painel/consulta/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta.index_view",
+  "rule": "/painel/consulta/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_direct",
+  "rule": "/consulta/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_qr",
+  "rule": "/consulta_qr",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_conciliacao_importar",
+  "rule": "/contabilidade/conciliacao/importar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_contas",
+  "rule": "/contabilidade/contas",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contabilidade_dre",
+  "rule": "/contabilidade/dre",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_exportar_xlsx",
+  "rule": "/contabilidade/exportar/xlsx",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_financeiro",
+  "rule": "/contabilidade/financeiro",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_fluxo_caixa",
+  "rule": "/contabilidade/fluxo-caixa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_home",
+  "rule": "/contabilidade",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse",
+  "rule": "/contabilidade/nfse",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse_cancelar",
+  "rule": "/contabilidade/nfse/<int:issue_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_configurar",
+  "rule": "/contabilidade/nfse/configurar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_consolidado",
+  "rule": "/contabilidade/nfse/consolidado",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse_contexto",
+  "rule": "/contabilidade/nfse/<int:issue_id>/contexto",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_download",
+  "rule": "/contabilidade/nfse/<int:issue_id>/download/<string:kind>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse_emitir",
+  "rule": "/contabilidade/nfse/emitir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_orcamento",
+  "rule": "/contabilidade/nfse/orcamento/<int:orcamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse_preview",
+  "rule": "/contabilidade/nfse/preview",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_nfse_processar_fila",
+  "rule": "/contabilidade/nfse/processar_fila",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_reprocessar",
+  "rule": "/contabilidade/nfse/<int:issue_id>/reprocessar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_nfse_substituir",
+  "rule": "/contabilidade/nfse/<int:issue_id>/substituir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_obrigacoes",
+  "rule": "/contabilidade/obrigacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_pagamentos",
+  "rule": "/contabilidade/pagamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "contabilidade_pagamentos_delete",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_pagamentos_editar",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contabilidade_pagamentos_marcar_pago",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/marcar_pago",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_pagamentos_novo",
+  "rule": "/contabilidade/pagamentos/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contabilidade_plantao_confirmar",
+  "rule": "/contabilidade/pagamentos/plantao/<int:escala_id>/confirmar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_plantao_gerar_pagamento",
+  "rule": "/contabilidade/pagamentos/plantao/<int:escala_id>/gerar_pagamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidade_plantonistas_editar",
+  "rule": "/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contabilidade_plantonistas_novo",
+  "rule": "/contabilidade/pagamentos/plantonistas/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contabilidade_plantonistas_quick_create",
+  "rule": "/contabilidade/pagamentos/plantonistas/quick-create",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "contabilidadeconfigview.index",
+  "rule": "/painel/contabilidadeconfigview/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "contratar_plano",
+  "rule": "/plano-saude/<int:animal_id>/contratar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "conversa",
+  "rule": "/conversa/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "conversa_admin",
+  "rule": "/conversa_admin/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "create_clinic_veterinario",
+  "rule": "/clinica/<int:clinica_id>/veterinario",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "create_order",
+  "rule": "/orders/new",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "criar_apresentacao_medicamento",
+  "rule": "/apresentacao_medicamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_exame_modelo",
+  "rule": "/exame_modelo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_medicamento",
+  "rule": "/medicamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_paciente_manual",
+  "rule": "/sfa/paciente/manual",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_prescricao",
+  "rule": "/consulta/<int:consulta_id>/prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_servico_clinica",
+  "rule": "/servico",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_tipo_racao",
+  "rule": "/tipo_racao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_tutor_ajax",
+  "rule": "/criar_tutor_ajax",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "criar_vacina_modelo",
+  "rule": "/vacina_modelo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "dashboard",
+  "rule": "/sfa/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "dashboard_orcamentos",
+  "rule": "/dashboard/orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deletar_animal",
+  "rule": "/animal/<int:animal_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_consulta",
+  "rule": "/consulta/<int:consulta_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_orcamento_item",
+  "rule": "/consulta/orcamento_item/<int:item_id>",
+  "methods": "DELETE"
+ },
+ {
+  "endpoint": "deletar_prescricao",
+  "rule": "/prescricao/<int:prescricao_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deletar_tutor",
+  "rule": "/deletar_tutor/<int:tutor_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_account",
+  "rule": "/delete_account",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_appointment",
+  "rule": "/appointments/<int:appointment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_clinic_hour",
+  "rule": "/clinica/<int:clinica_id>/horario/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_document",
+  "rule": "/animal/<int:animal_id>/documentos/<int:doc_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_exam_appointment",
+  "rule": "/exam_appointment/<int:appointment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_vet_schedule",
+  "rule": "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delete_vet_schedule_clinic",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "delivery_archive",
+  "rule": "/admin/delivery_archive",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "delivery_archive_user",
+  "rule": "/delivery_archive",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "delivery_detail",
+  "rule": "/delivery/<int:req_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "delivery_overview",
+  "rule": "/admin/delivery_overview",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deliveryrequest.action_view",
+  "rule": "/painel/deliveryrequest/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deliveryrequest.ajax_lookup",
+  "rule": "/painel/deliveryrequest/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deliveryrequest.ajax_update",
+  "rule": "/painel/deliveryrequest/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deliveryrequest.create_view",
+  "rule": "/painel/deliveryrequest/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "deliveryrequest.delete_view",
+  "rule": "/painel/deliveryrequest/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "deliveryrequest.details_view",
+  "rule": "/painel/deliveryrequest/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deliveryrequest.edit_view",
+  "rule": "/painel/deliveryrequest/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "deliveryrequest.export",
+  "rule": "/painel/deliveryrequest/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deliveryrequest.index_view",
+  "rule": "/painel/deliveryrequest/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "deny_share_request",
+  "rule": "/api/shares/<int:request_id>/deny",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "detalhe_medicamento_busca",
+  "rule": "/medicamento/<int:med_id>/detalhe",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "detalhes_racao",
+  "rule": "/relatorio/racoes/<int:tipo_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "diminuir_item_carrinho",
+  "rule": "/carrinho/decrease/<int:item_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "edit_appointment",
+  "rule": "/appointments/<int:appointment_id>/edit",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "edit_order_address",
+  "rule": "/order/<int:order_id>/edit_address",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "edit_vet_schedule_slot",
+  "rule": "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "edit_vet_specialties",
+  "rule": "/admin/veterinario/<int:veterinario_id>/especialidades",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "editar_animal",
+  "rule": "/animal/<int:animal_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "editar_animal",
+  "rule": "/editar_animal/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "editar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "editar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "editar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "editar_ficha_animal",
+  "rule": "/animal/<int:animal_id>/editar_ficha",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "editar_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "enviar_assinatura_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/assinatura",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "enviar_foto_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>/foto",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "enviar_mensagem",
+  "rule": "/mensagem/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "enviar_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/enviar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "examemodelo.action_view",
+  "rule": "/painel/examemodelo/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "examemodelo.ajax_lookup",
+  "rule": "/painel/examemodelo/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "examemodelo.ajax_update",
+  "rule": "/painel/examemodelo/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "examemodelo.create_view",
+  "rule": "/painel/examemodelo/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "examemodelo.delete_view",
+  "rule": "/painel/examemodelo/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "examemodelo.details_view",
+  "rule": "/painel/examemodelo/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "examemodelo.edit_view",
+  "rule": "/painel/examemodelo/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "examemodelo.export",
+  "rule": "/painel/examemodelo/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "examemodelo.index_view",
+  "rule": "/painel/examemodelo/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "exames_imagem_compartilhar",
+  "rule": "/exames-imagem/<int:exame_id>/compartilhar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "exames_imagem_painel",
+  "rule": "/exames-imagem",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "export_analitico_csv",
+  "rule": "/sfa/export/analitico.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "export_cadastro_csv",
+  "rule": "/sfa/export/cadastro.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "export_tcle_signatures_csv",
+  "rule": "/sfa/tcle/assinaturas.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "external_clinic_first_access_invite",
+  "rule": "/primeiro-acesso-clinica/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "external_onboarding_invite",
+  "rule": "/acesso-laudo/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "ficha_animal",
+  "rule": "/animal/<int:animal_id>/ficha",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "ficha_tutor",
+  "rule": "/ficha_tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "finalizar_consulta",
+  "rule": "/finalizar_consulta/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "finalizar_consulta_e_fechar",
+  "rule": "/finalizar_consulta/<int:consulta_id>/fechar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.api_contabilidade_dashboard",
+  "rule": "/api/contabilidade/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.api_contabilidade_veterinarios",
+  "rule": "/api/contabilidade/veterinarios",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_conciliacao_importar",
+  "rule": "/contabilidade/conciliacao/importar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_contas",
+  "rule": "/contabilidade/contas",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_dre",
+  "rule": "/contabilidade/dre",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_exportar_xlsx",
+  "rule": "/contabilidade/exportar/xlsx",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_financeiro",
+  "rule": "/contabilidade/financeiro",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_fluxo_caixa",
+  "rule": "/contabilidade/fluxo-caixa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_home",
+  "rule": "/contabilidade",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse",
+  "rule": "/contabilidade/nfse",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_cancelar",
+  "rule": "/contabilidade/nfse/<int:issue_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_configurar",
+  "rule": "/contabilidade/nfse/configurar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_consolidado",
+  "rule": "/contabilidade/nfse/consolidado",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_contexto",
+  "rule": "/contabilidade/nfse/<int:issue_id>/contexto",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_download",
+  "rule": "/contabilidade/nfse/<int:issue_id>/download/<string:kind>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_emitir",
+  "rule": "/contabilidade/nfse/emitir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_orcamento",
+  "rule": "/contabilidade/nfse/orcamento/<int:orcamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_preview",
+  "rule": "/contabilidade/nfse/preview",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_processar_fila",
+  "rule": "/contabilidade/nfse/processar_fila",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_reprocessar",
+  "rule": "/contabilidade/nfse/<int:issue_id>/reprocessar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_nfse_substituir",
+  "rule": "/contabilidade/nfse/<int:issue_id>/substituir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_obrigacoes",
+  "rule": "/contabilidade/obrigacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_pagamentos",
+  "rule": "/contabilidade/pagamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_pagamentos_delete",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_pagamentos_editar",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_pagamentos_marcar_pago",
+  "rule": "/contabilidade/pagamentos/<int:payment_id>/marcar_pago",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_pagamentos_novo",
+  "rule": "/contabilidade/pagamentos/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_plantao_confirmar",
+  "rule": "/contabilidade/pagamentos/plantao/<int:escala_id>/confirmar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_plantao_gerar_pagamento",
+  "rule": "/contabilidade/pagamentos/plantao/<int:escala_id>/gerar_pagamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_plantonistas_editar",
+  "rule": "/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_plantonistas_novo",
+  "rule": "/contabilidade/pagamentos/plantonistas/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "financeiro_routes.contabilidade_plantonistas_quick_create",
+  "rule": "/contabilidade/pagamentos/plantonistas/quick-create",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "first_access",
+  "rule": "/primeiro-acesso",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "first_access_password",
+  "rule": "/primeiro-acesso/senha",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_certificate_upload",
+  "rule": "/fiscal/certificate",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_document_cancel",
+  "rule": "/fiscal/documents/<int:document_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_document_detail",
+  "rule": "/fiscal/documents/<int:document_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_document_emit",
+  "rule": "/fiscal/documents/<int:document_id>/emit",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_document_status",
+  "rule": "/fiscal/documents/<int:document_id>/status",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_documents",
+  "rule": "/fiscal/documents",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_exports_xmls",
+  "rule": "/fiscal/exports/xmls",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_nfse_manual",
+  "rule": "/fiscal/nfse/manual",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_onboarding_start",
+  "rule": "/fiscal/onboarding",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_onboarding_step",
+  "rule": "/fiscal/onboarding/step/<int:step>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_certificate_upload",
+  "rule": "/fiscal/certificate",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_document_cancel",
+  "rule": "/fiscal/documents/<int:document_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_document_detail",
+  "rule": "/fiscal/documents/<int:document_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_document_emit",
+  "rule": "/fiscal/documents/<int:document_id>/emit",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_document_status",
+  "rule": "/fiscal/documents/<int:document_id>/status",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_documents",
+  "rule": "/fiscal/documents",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_exports_xmls",
+  "rule": "/fiscal/exports/xmls",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_nfse_manual",
+  "rule": "/fiscal/nfse/manual",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_onboarding_start",
+  "rule": "/fiscal/onboarding",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_onboarding_step",
+  "rule": "/fiscal/onboarding/step/<int:step>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_routes.fiscal_settings",
+  "rule": "/fiscal/settings",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "fiscal_settings",
+  "rule": "/fiscal/settings",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "formularios_print",
+  "rule": "/sfa/formularios/impressao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "generate_qr",
+  "rule": "/generate_qr/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "gerar_link_pagamento_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/pagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "gerar_termo",
+  "rule": "/termo/<int:animal_id>/<tipo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "gerar_teste_dados",
+  "rule": "/sfa/teste-dados/gerar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "grooming_assinar",
+  "rule": "/planos/tosa/<int:plan_id>/assinar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "grooming_cancelar",
+  "rule": "/planos/tosa/assinatura/<int:sub_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "grooming_minhas_assinaturas",
+  "rule": "/planos/tosa/minhas-assinaturas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "grooming_planos_publicos",
+  "rule": "/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "healthplan.action_view",
+  "rule": "/painel/healthplan/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthplan.ajax_lookup",
+  "rule": "/painel/healthplan/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthplan.ajax_update",
+  "rule": "/painel/healthplan/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthplan.create_view",
+  "rule": "/painel/healthplan/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "healthplan.delete_view",
+  "rule": "/painel/healthplan/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthplan.details_view",
+  "rule": "/painel/healthplan/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthplan.edit_view",
+  "rule": "/painel/healthplan/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "healthplan.export",
+  "rule": "/painel/healthplan/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthplan.index_view",
+  "rule": "/painel/healthplan/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthsubscription.action_view",
+  "rule": "/painel/healthsubscription/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthsubscription.ajax_lookup",
+  "rule": "/painel/healthsubscription/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthsubscription.ajax_update",
+  "rule": "/painel/healthsubscription/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthsubscription.create_view",
+  "rule": "/painel/healthsubscription/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "healthsubscription.delete_view",
+  "rule": "/painel/healthsubscription/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "healthsubscription.details_view",
+  "rule": "/painel/healthsubscription/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthsubscription.edit_view",
+  "rule": "/painel/healthsubscription/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "healthsubscription.export",
+  "rule": "/painel/healthsubscription/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "healthsubscription.index_view",
+  "rule": "/painel/healthsubscription/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "historico_animal",
+  "rule": "/historico_animal/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "historico_consultas_partial",
+  "rule": "/animal/<int:animal_id>/historico_consultas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "historico_exames_partial",
+  "rule": "/animal/<int:animal_id>/historico_exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "historico_orcamentos_partial",
+  "rule": "/consulta/<int:consulta_id>/historico_orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "historico_prescricoes_partial",
+  "rule": "/consulta/<int:consulta_id>/historico_prescricoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_bloco_exames",
+  "rule": "/imprimir_bloco_exames/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_bloco_orcamento",
+  "rule": "/imprimir_bloco_orcamento/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_consulta",
+  "rule": "/imprimir_consulta/<int:consulta_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_orcamento",
+  "rule": "/imprimir_orcamento/<int:consulta_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_orcamento_padrao",
+  "rule": "/orcamento/<int:orcamento_id>/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "imprimir_vacinas",
+  "rule": "/animal/<int:animal_id>/vacinas/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "index",
+  "rule": "/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "indicacao",
+  "rule": "/indicacao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "iniciar_retorno",
+  "rule": "/retorno/<int:appointment_id>/start",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "jwks",
+  "rule": "/.well-known/jwks.json",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "legacy_pagamento",
+  "rule": "/pagamento/<status>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "list_animals",
+  "rule": "/animals",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "list_delivery_requests",
+  "rule": "/delivery_requests",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "listar_medicamentos_favoritos",
+  "rule": "/medicamentos_favoritos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "login_view",
+  "rule": "/login",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "logout",
+  "rule": "/logout",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja",
+  "rule": "/loja",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_data",
+  "rule": "/loja/data",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.accept_delivery",
+  "rule": "/delivery_requests/<int:req_id>/accept",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.adicionar_carrinho",
+  "rule": "/carrinho/adicionar/<int:product_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.admin_archive_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/archive",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.admin_data_share_logs",
+  "rule": "/admin/data-share-logs",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.admin_delete_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.admin_delivery_detail",
+  "rule": "/admin/delivery/<int:req_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.admin_geocode_addresses",
+  "rule": "/admin/api/geocode_addresses",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.admin_geocode_status",
+  "rule": "/admin/api/geocode_addresses/status",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.admin_set_delivery_status",
+  "rule": "/admin/delivery_requests/<int:req_id>/status/<status>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.admin_tutor_map",
+  "rule": "/admin/mapa_tutores",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.admin_tutor_markers_api",
+  "rule": "/admin/api/tutor_markers",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.admin_unarchive_delivery",
+  "rule": "/admin/delivery_requests/<int:req_id>/unarchive",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.aumentar_item_carrinho",
+  "rule": "/carrinho/increase/<int:item_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.buyer_cancel_delivery",
+  "rule": "/delivery_requests/<int:req_id>/buyer_cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.cancel_delivery",
+  "rule": "/delivery_requests/<int:req_id>/cancel",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.carrinho_salvar_endereco",
+  "rule": "/carrinho/salvar_endereco",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.checkout",
+  "rule": "/checkout",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.checkout_confirm",
+  "rule": "/checkout/confirm",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.complete_delivery",
+  "rule": "/delivery_requests/<int:req_id>/complete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.confirmar_recebimento_pedido",
+  "rule": "/pedidos/<int:order_id>/confirmar-recebimento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.create_order",
+  "rule": "/orders/new",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.delivery_archive",
+  "rule": "/admin/delivery_archive",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.delivery_archive_user",
+  "rule": "/delivery_archive",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.delivery_detail",
+  "rule": "/delivery/<int:req_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.delivery_overview",
+  "rule": "/admin/delivery_overview",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.diminuir_item_carrinho",
+  "rule": "/carrinho/decrease/<int:item_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.edit_order_address",
+  "rule": "/order/<int:order_id>/edit_address",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.legacy_pagamento",
+  "rule": "/pagamento/<status>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.list_delivery_requests",
+  "rule": "/delivery_requests",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.loja",
+  "rule": "/loja",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.loja_data",
+  "rule": "/loja/data",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.minhas_compras",
+  "rule": "/minhas-compras",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.notificacoes_mercado_pago",
+  "rule": "/notificacoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.payment_status",
+  "rule": "/payment_status/<int:payment_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.pedido_detail",
+  "rule": "/pedido/<int:order_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.pesquisa_racoes_tutores",
+  "rule": "/relatorio/racoes/pesquisa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "loja_routes.produto_detail",
+  "rule": "/produto/<int:product_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.request_delivery",
+  "rule": "/orders/<int:order_id>/request_delivery",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.save_pesquisa_racoes_tutor_answers",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/answers",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.send_selected_pesquisa_racoes_tutores",
+  "rule": "/relatorio/racoes/pesquisa/send-selected",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.toggle_pesquisa_racoes_tutor",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.update_pesquisa_racoes_tutor_status",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/status/<status_key>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.ver_carrinho",
+  "rule": "/carrinho",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.warmup_pesquisa_racoes_whatsapp",
+  "rule": "/relatorio/racoes/pesquisa/warmup-whatsapp",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.worker_delivery_detail",
+  "rule": "/worker/delivery/<int:req_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "manage_appointments",
+  "rule": "/appointments/manage",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "marcar_administracao_tratamento",
+  "rule": "/tratamento/registro/<int:registro_id>/marcar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "marcar_como_falecido",
+  "rule": "/animal/<int:animal_id>/marcar_falecido",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "marcar_item_tratamento_comprado",
+  "rule": "/tratamento/item/<int:item_id>/comprado",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "marcar_whatsapp",
+  "rule": "/sfa/paciente/<id_estudo>/whatsapp",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mcp_protected_resource_metadata",
+  "rule": "/.well-known/oauth-protected-resource",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mcp_server",
+  "rule": "/mcp",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "medicamento.action_view",
+  "rule": "/painel/medicamento/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "medicamento.ajax_lookup",
+  "rule": "/painel/medicamento/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "medicamento.ajax_update",
+  "rule": "/painel/medicamento/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "medicamento.create_view",
+  "rule": "/painel/medicamento/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "medicamento.delete_view",
+  "rule": "/painel/medicamento/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "medicamento.details_view",
+  "rule": "/painel/medicamento/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "medicamento.edit_view",
+  "rule": "/painel/medicamento/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "medicamento.export",
+  "rule": "/painel/medicamento/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "medicamento.index_view",
+  "rule": "/painel/medicamento/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "medicamentos_frequentes",
+  "rule": "/medicamentos_frequentes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens",
+  "rule": "/mensagens",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens_admin",
+  "rule": "/mensagens_admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens_admin_marcar_lidas",
+  "rule": "/mensagens_admin/marcar_lidas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mensagens_routes.aceitar_interesse",
+  "rule": "/mensagem/<int:message_id>/aceitar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mensagens_routes.chat_messages",
+  "rule": "/chat/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mensagens_routes.chat_view",
+  "rule": "/chat/<int:animal_id>/view",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens_routes.conversa",
+  "rule": "/conversa/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mensagens_routes.conversa_admin",
+  "rule": "/conversa_admin",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mensagens_routes.conversa_admin",
+  "rule": "/conversa_admin/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mensagens_routes.enviar_mensagem",
+  "rule": "/mensagem/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mensagens_routes.mensagens",
+  "rule": "/mensagens",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens_routes.mensagens_admin",
+  "rule": "/mensagens_admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mensagens_routes.mensagens_admin_marcar_lidas",
+  "rule": "/mensagens_admin/marcar_lidas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mercadopago_direct_save",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/credenciais",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mercadopago_oauth_callback",
+  "rule": "/casa-de-racao/mercado-pago/callback",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mercadopago_oauth_disconnect",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/desconectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "mercadopago_oauth_start",
+  "rule": "/casa-de-racao/<int:casa_id>/mercado-pago/conectar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "message.action_view",
+  "rule": "/painel/message/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "message.ajax_lookup",
+  "rule": "/painel/message/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "message.ajax_update",
+  "rule": "/painel/message/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "message.create_view",
+  "rule": "/painel/message/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "message.delete_view",
+  "rule": "/painel/message/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "message.details_view",
+  "rule": "/painel/message/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "message.edit_view",
+  "rule": "/painel/message/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "message.export",
+  "rule": "/painel/message/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "message.index_view",
+  "rule": "/painel/message/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "meus_animais",
+  "rule": "/meus-animais",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "minha_casa_de_racao",
+  "rule": "/minha-casa-de-racao",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "minha_clinica",
+  "rule": "/minha-clinica",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "minhas_compras",
+  "rule": "/minhas-compras",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "minhas_solicitacoes",
+  "rule": "/minhas-solicitacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "notificacoes_mercado_pago",
+  "rule": "/notificacoes",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "novo_animal",
+  "rule": "/novo_animal",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "novo_atendimento",
+  "rule": "/novo_atendimento",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "novo_orcamento",
+  "rule": "/clinica/<int:clinica_id>/novo_orcamento",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "oauth_authorization_server_metadata",
+  "rule": "/.well-known/oauth-authorization-server",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_authorize",
+  "rule": "/oauth/authorize",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "oauth_dynamic_client_registration",
+  "rule": "/oauth/register",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_introspect",
+  "rule": "/oauth/introspect",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_revoke",
+  "rule": "/oauth/revoke",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_routes.jwks",
+  "rule": "/.well-known/jwks.json",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_routes.mcp_protected_resource_metadata",
+  "rule": "/.well-known/oauth-protected-resource",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_routes.mcp_server",
+  "rule": "/mcp",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_authorization_server_metadata",
+  "rule": "/.well-known/oauth-authorization-server",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_authorize",
+  "rule": "/oauth/authorize",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_dynamic_client_registration",
+  "rule": "/oauth/register",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_introspect",
+  "rule": "/oauth/introspect",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_revoke",
+  "rule": "/oauth/revoke",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_token",
+  "rule": "/oauth/token",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_routes.oauth_userinfo",
+  "rule": "/oauth/userinfo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_routes.openid_configuration",
+  "rule": "/.well-known/openid-configuration",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_token",
+  "rule": "/oauth/token",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "oauth_userinfo",
+  "rule": "/oauth/userinfo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "obter_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "obter_sugestoes_clinicas",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "obter_tutor",
+  "rule": "/tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "openai_apps_challenge",
+  "rule": "/.well-known/openai-apps-challenge",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "openid_configuration",
+  "rule": "/.well-known/openid-configuration",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "orcamentos",
+  "rule": "/clinica/<int:clinica_id>/orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "order.action_view",
+  "rule": "/painel/order/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "order.ajax_lookup",
+  "rule": "/painel/order/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "order.ajax_update",
+  "rule": "/painel/order/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "order.create_view",
+  "rule": "/painel/order/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "order.delete_view",
+  "rule": "/painel/order/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "order.details_view",
+  "rule": "/painel/order/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "order.edit_view",
+  "rule": "/painel/order/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "order.export",
+  "rule": "/painel/order/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "order.index_view",
+  "rule": "/painel/order/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "orderitem.action_view",
+  "rule": "/painel/orderitem/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "orderitem.ajax_lookup",
+  "rule": "/painel/orderitem/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "orderitem.ajax_update",
+  "rule": "/painel/orderitem/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "orderitem.create_view",
+  "rule": "/painel/orderitem/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "orderitem.delete_view",
+  "rule": "/painel/orderitem/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "orderitem.details_view",
+  "rule": "/painel/orderitem/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "orderitem.edit_view",
+  "rule": "/painel/orderitem/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "orderitem.export",
+  "rule": "/painel/orderitem/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "orderitem.index_view",
+  "rule": "/painel/orderitem/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "paciente_detail",
+  "rule": "/sfa/paciente/<id_estudo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes",
+  "rule": "/sfa/pacientes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_print_testes",
+  "rule": "/sfa/pacientes/impressao/testes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pagar_consulta_orcamento",
+  "rule": "/consulta/<int:consulta_id>/pagar_orcamento",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pagar_orcamento",
+  "rule": "/pagar_orcamento/<int:bloco_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "painel_admin.index",
+  "rule": "/painel/painel_admin/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "painel_dashboard",
+  "rule": "/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_clinica_landing",
+  "rule": "/parceiros/clinica",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_dashboard",
+  "rule": "/parceiro",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_loja_landing",
+  "rule": "/parceiros/loja",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_loja_produtos_landing",
+  "rule": "/parceiros/loja/produtos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_novo_estabelecimento",
+  "rule": "/parceiro/estabelecimentos/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "parceiro_novo_usuario",
+  "rule": "/parceiro/usuarios/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "parceiro_routes.parceiro_dashboard",
+  "rule": "/parceiro",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "parceiro_routes.parceiro_novo_estabelecimento",
+  "rule": "/parceiro/estabelecimentos/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "parceiro_routes.parceiro_novo_usuario",
+  "rule": "/parceiro/usuarios/novo",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "parceiro_routes.partner_invite_onboarding",
+  "rule": "/convite/<string:token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "parceiro_vacinas_precos",
+  "rule": "/parceiro/vacinas/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "partner_invite_onboarding",
+  "rule": "/convite/<string:token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "payment_status",
+  "rule": "/payment_status/<int:payment_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pedido_detail",
+  "rule": "/pedido/<int:order_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pending_appointments",
+  "rule": "/appointments/pending",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pesquisa_racoes_tutores",
+  "rule": "/relatorio/racoes/pesquisa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_admin",
+  "rule": "/petsitter/admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_admin_atribuir",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/atribuir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_admin_candidatura",
+  "rule": "/petsitter/admin/candidatura/<int:candidatura_id>/<acao>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_admin_concluir",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/concluir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_admin_estornar",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/estornar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_cancelar",
+  "rule": "/petsitter/solicitacao/<int:solicitacao_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_home",
+  "rule": "/petsitter",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_minhas",
+  "rule": "/petsitter/minhas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_pagar",
+  "rule": "/petsitter/solicitacao/<int:solicitacao_id>/pagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.carreiras",
+  "rule": "/carreiras",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "petsitter_routes.indicacao",
+  "rule": "/indicacao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_admin",
+  "rule": "/petsitter/admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_admin_atribuir",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/atribuir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_admin_candidatura",
+  "rule": "/petsitter/admin/candidatura/<int:candidatura_id>/<acao>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_admin_concluir",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/concluir",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_admin_estornar",
+  "rule": "/petsitter/admin/solicitacao/<int:solicitacao_id>/estornar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_cancelar",
+  "rule": "/petsitter/solicitacao/<int:solicitacao_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_home",
+  "rule": "/petsitter",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_minhas",
+  "rule": "/petsitter/minhas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_pagar",
+  "rule": "/petsitter/solicitacao/<int:solicitacao_id>/pagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "petsitter_routes.petsitter_solicitar",
+  "rule": "/petsitter/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "petsitter_solicitar",
+  "rule": "/petsitter/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pickuplocation.action_view",
+  "rule": "/painel/pickuplocation/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pickuplocation.ajax_lookup",
+  "rule": "/painel/pickuplocation/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pickuplocation.ajax_update",
+  "rule": "/painel/pickuplocation/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pickuplocation.create_view",
+  "rule": "/painel/pickuplocation/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pickuplocation.delete_view",
+  "rule": "/painel/pickuplocation/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pickuplocation.details_view",
+  "rule": "/painel/pickuplocation/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pickuplocation.edit_view",
+  "rule": "/painel/pickuplocation/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pickuplocation.export",
+  "rule": "/painel/pickuplocation/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pickuplocation.index_view",
+  "rule": "/painel/pickuplocation/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "plano_saude_overview",
+  "rule": "/plano-saude",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_dashboard",
+  "rule": "/admin/planos/dashboard",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "planos_routes.clinic_grooming_assinantes",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/assinantes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "planos_routes.clinic_grooming_plano_editar",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.clinic_grooming_plano_toggle",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa/<int:plan_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "planos_routes.clinic_grooming_planos",
+  "rule": "/clinica/<int:clinica_id>/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.contratar_plano",
+  "rule": "/plano-saude/<int:animal_id>/contratar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "planos_routes.grooming_assinar",
+  "rule": "/planos/tosa/<int:plan_id>/assinar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.grooming_cancelar",
+  "rule": "/planos/tosa/assinatura/<int:sub_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "planos_routes.grooming_minhas_assinaturas",
+  "rule": "/planos/tosa/minhas-assinaturas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "planos_routes.grooming_planos_publicos",
+  "rule": "/planos/tosa",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.plano_saude_overview",
+  "rule": "/plano-saude",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.planosaude_animal",
+  "rule": "/animal/<int:animal_id>/planosaude",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "planos_routes.validar_plano_consulta",
+  "rule": "/consulta/<int:consulta_id>/validar-plano",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "planosaude_animal",
+  "rule": "/animal/<int:animal_id>/planosaude",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "prescricao.action_view",
+  "rule": "/painel/prescricao/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "prescricao.ajax_lookup",
+  "rule": "/painel/prescricao/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "prescricao.ajax_update",
+  "rule": "/painel/prescricao/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "prescricao.create_view",
+  "rule": "/painel/prescricao/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "prescricao.delete_view",
+  "rule": "/painel/prescricao/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "prescricao.details_view",
+  "rule": "/painel/prescricao/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "prescricao.edit_view",
+  "rule": "/painel/prescricao/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "prescricao.export",
+  "rule": "/painel/prescricao/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "prescricao.index_view",
+  "rule": "/painel/prescricao/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "privacy",
+  "rule": "/privacy",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "product.action_view",
+  "rule": "/painel/product/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "product.ajax_lookup",
+  "rule": "/painel/product/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "product.ajax_update",
+  "rule": "/painel/product/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "product.create_view",
+  "rule": "/painel/product/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "product.delete_view",
+  "rule": "/painel/product/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "product.details_view",
+  "rule": "/painel/product/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "product.edit_view",
+  "rule": "/painel/product/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "product.export",
+  "rule": "/painel/product/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "product.index_view",
+  "rule": "/painel/product/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "productcategory.action_view",
+  "rule": "/painel/productcategory/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "productcategory.ajax_lookup",
+  "rule": "/painel/productcategory/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "productcategory.ajax_update",
+  "rule": "/painel/productcategory/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "productcategory.create_view",
+  "rule": "/painel/productcategory/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "productcategory.delete_view",
+  "rule": "/painel/productcategory/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "productcategory.details_view",
+  "rule": "/painel/productcategory/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "productcategory.edit_view",
+  "rule": "/painel/productcategory/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "productcategory.export",
+  "rule": "/painel/productcategory/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "productcategory.index_view",
+  "rule": "/painel/productcategory/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "produto_detail",
+  "rule": "/produto/<int:product_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "professional_services_manage",
+  "rule": "/veterinario/servicos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "profile",
+  "rule": "/profile",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinico.action_view",
+  "rule": "/painel/protocoloclinico/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinico.ajax_lookup",
+  "rule": "/painel/protocoloclinico/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinico.ajax_update",
+  "rule": "/painel/protocoloclinico/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinico.create_view",
+  "rule": "/painel/protocoloclinico/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinico.delete_view",
+  "rule": "/painel/protocoloclinico/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinico.details_view",
+  "rule": "/painel/protocoloclinico/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinico.edit_view",
+  "rule": "/painel/protocoloclinico/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinico.export",
+  "rule": "/painel/protocoloclinico/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinico.index_view",
+  "rule": "/painel/protocoloclinico/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.action_view",
+  "rule": "/painel/protocoloclinicoexame/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.ajax_lookup",
+  "rule": "/painel/protocoloclinicoexame/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.ajax_update",
+  "rule": "/painel/protocoloclinicoexame/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.create_view",
+  "rule": "/painel/protocoloclinicoexame/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.delete_view",
+  "rule": "/painel/protocoloclinicoexame/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.details_view",
+  "rule": "/painel/protocoloclinicoexame/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.edit_view",
+  "rule": "/painel/protocoloclinicoexame/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.export",
+  "rule": "/painel/protocoloclinicoexame/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoexame.index_view",
+  "rule": "/painel/protocoloclinicoexame/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.action_view",
+  "rule": "/painel/protocoloclinicomedicamento/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.ajax_lookup",
+  "rule": "/painel/protocoloclinicomedicamento/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.ajax_update",
+  "rule": "/painel/protocoloclinicomedicamento/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.create_view",
+  "rule": "/painel/protocoloclinicomedicamento/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.delete_view",
+  "rule": "/painel/protocoloclinicomedicamento/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.details_view",
+  "rule": "/painel/protocoloclinicomedicamento/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.edit_view",
+  "rule": "/painel/protocoloclinicomedicamento/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.export",
+  "rule": "/painel/protocoloclinicomedicamento/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicomedicamento.index_view",
+  "rule": "/painel/protocoloclinicomedicamento/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.action_view",
+  "rule": "/painel/protocoloclinicoretorno/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.ajax_lookup",
+  "rule": "/painel/protocoloclinicoretorno/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.ajax_update",
+  "rule": "/painel/protocoloclinicoretorno/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.create_view",
+  "rule": "/painel/protocoloclinicoretorno/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.delete_view",
+  "rule": "/painel/protocoloclinicoretorno/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.details_view",
+  "rule": "/painel/protocoloclinicoretorno/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.edit_view",
+  "rule": "/painel/protocoloclinicoretorno/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.export",
+  "rule": "/painel/protocoloclinicoretorno/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "protocoloclinicoretorno.index_view",
+  "rule": "/painel/protocoloclinicoretorno/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "publish_inventory_to_loja",
+  "rule": "/estoque/item/<int:item_id>/publicar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "recarregar_historico_prescricoes_ajax",
+  "rule": "/animal/<int:animal_id>/historico_prescricoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "redirect_t0",
+  "rule": "/sfa/p/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "redirect_t10",
+  "rule": "/sfa/p/<token>/t10",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "redirect_t30",
+  "rule": "/sfa/p/<token>/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "register",
+  "rule": "/register",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "registrar_aplicacao_tratamento",
+  "rule": "/tratamento/item/<int:item_id>/registrar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "registrar_feedback_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/feedback",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "relatorio_racoes",
+  "rule": "/relatorio/racoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "remove_funcionario",
+  "rule": "/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "remove_specialist",
+  "rule": "/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "remove_veterinario",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "request_delivery",
+  "rule": "/orders/<int:order_id>/request_delivery",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "resend_clinic_invite",
+  "rule": "/clinica/<int:clinica_id>/convites/<int:invite_id>/resend",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "reset_password",
+  "rule": "/reset_password/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "reset_password_request",
+  "rule": "/reset_password_request",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "respond_clinic_invite",
+  "rule": "/convites/<int:invite_id>/<string:action>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "responder_solicitacao",
+  "rule": "/solicitacoes/<int:request_id>/responder",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "reverter_falecimento",
+  "rule": "/animal/<int:animal_id>/reverter_falecimento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "revisao_formulario",
+  "rule": "/sfa/revisao/<kind>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "revisao_graficos",
+  "rule": "/sfa/revisao/graficos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "revisao_links",
+  "rule": "/sfa/revisao/links",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "revisao_qrcode",
+  "rule": "/sfa/revisao/qrcode/<kind>.png",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "revisao_resumo",
+  "rule": "/sfa/revisao/resumo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "rodar_rotina",
+  "rule": "/sfa/rotina",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_bloco_exames",
+  "rule": "/animal/<int:animal_id>/bloco_exames",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_bloco_orcamento",
+  "rule": "/consulta/<int:consulta_id>/bloco_orcamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_bloco_prescricao",
+  "rule": "/consulta/<int:consulta_id>/bloco_prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_prescricoes_lote",
+  "rule": "/consulta/<int:consulta_id>/prescricao/lote",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_racao",
+  "rule": "/animal/<int:animal_id>/racoes",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "salvar_vacinas",
+  "rule": "/animal/<int:animal_id>/vacinas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "save_pesquisa_racoes_tutor_answers",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/answers",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "schedule_exam",
+  "rule": "/animal/<int:animal_id>/schedule_exam",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "secret_game",
+  "rule": "/surpresa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "secret_game_partituras",
+  "rule": "/surpresa/partituras-list",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "secret_game_static",
+  "rule": "/surpresa/<path:filename>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "send_selected_pesquisa_racoes_tutores",
+  "rule": "/relatorio/racoes/pesquisa/send-selected",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "service_worker",
+  "rule": "/service-worker.js",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos",
+  "rule": "/servicos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_exames",
+  "rule": "/servicos/exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_recomendar",
+  "rule": "/servicos/recomendar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "servicos_ultrassom",
+  "rule": "/servicos/ultrassom",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_vacinas",
+  "rule": "/servicos/vacinas",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "servicos_vacinas_admin",
+  "rule": "/servicos/vacinas/admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_vacinas_admin_acao",
+  "rule": "/servicos/vacinas/admin/<int:req_id>/acao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "servicos_vacinas_admin_item",
+  "rule": "/servicos/vacinas/admin/item",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "servicos_vacinas_cancelar",
+  "rule": "/servicos/vacinas/pedido/<token>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "servicos_vacinas_cidade_por_local",
+  "rule": "/servicos/vacinas/cidade-por-local",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_vacinas_pedido",
+  "rule": "/servicos/vacinas/pedido/<token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "servicos_vacinas_reagendar",
+  "rule": "/servicos/vacinas/pedido/<token>/reagendar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.analise_respostas",
+  "rule": "/sfa/analise-respostas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.apagar_teste_dados",
+  "rule": "/sfa/teste-dados/apagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.criar_paciente_manual",
+  "rule": "/sfa/paciente/manual",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.dashboard",
+  "rule": "/sfa/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.export_analitico_csv",
+  "rule": "/sfa/export/analitico.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.export_cadastro_csv",
+  "rule": "/sfa/export/cadastro.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.export_tcle_signatures_csv",
+  "rule": "/sfa/tcle/assinaturas.csv",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.formularios_print",
+  "rule": "/sfa/formularios/impressao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.gerar_teste_dados",
+  "rule": "/sfa/teste-dados/gerar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.marcar_whatsapp",
+  "rule": "/sfa/paciente/<id_estudo>/whatsapp",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.paciente_detail",
+  "rule": "/sfa/paciente/<id_estudo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.pacientes",
+  "rule": "/sfa/pacientes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.pacientes_print_testes",
+  "rule": "/sfa/pacientes/impressao/testes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.redirect_t0",
+  "rule": "/sfa/p/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.redirect_t10",
+  "rule": "/sfa/p/<token>/t10",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.redirect_t30",
+  "rule": "/sfa/p/<token>/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.revisao_formulario",
+  "rule": "/sfa/revisao/<kind>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.revisao_graficos",
+  "rule": "/sfa/revisao/graficos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.revisao_links",
+  "rule": "/sfa/revisao/links",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.revisao_qrcode",
+  "rule": "/sfa/revisao/qrcode/<kind>.png",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.revisao_resumo",
+  "rule": "/sfa/revisao/resumo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.rodar_rotina",
+  "rule": "/sfa/rotina",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.sync_sinan",
+  "rule": "/sfa/sync",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.t0_form_config",
+  "rule": "/sfa/config/t0",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.t10_form_config",
+  "rule": "/sfa/config/t10",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.t30_form_config",
+  "rule": "/sfa/config/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "sfa_routes.tcle_signatures",
+  "rule": "/sfa/tcle/assinaturas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sfa_routes.webhook_t0",
+  "rule": "/sfa/webhook/t0",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.webhook_t10",
+  "rule": "/sfa/webhook/t10",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sfa_routes.webhook_t30",
+  "rule": "/sfa/webhook/t30",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "share_request_detail",
+  "rule": "/api/share-requests/<string:token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "shares_api",
+  "rule": "/api/shares",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "solicitacoes_recebidas",
+  "rule": "/solicitacoes-recebidas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "solicitar_agendamento",
+  "rule": "/veterinario/<int:veterinario_id>/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "specialty.action_view",
+  "rule": "/painel/specialty/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "specialty.ajax_lookup",
+  "rule": "/painel/specialty/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "specialty.ajax_update",
+  "rule": "/painel/specialty/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "specialty.create_view",
+  "rule": "/painel/specialty/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "specialty.delete_view",
+  "rule": "/painel/specialty/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "specialty.details_view",
+  "rule": "/painel/specialty/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "specialty.edit_view",
+  "rule": "/painel/specialty/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "specialty.export",
+  "rule": "/painel/specialty/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "specialty.index_view",
+  "rule": "/painel/specialty/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "species.action_view",
+  "rule": "/painel/species/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "species.ajax_lookup",
+  "rule": "/painel/species/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "species.ajax_update",
+  "rule": "/painel/species/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "species.create_view",
+  "rule": "/painel/species/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "species.delete_view",
+  "rule": "/painel/species/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "species.details_view",
+  "rule": "/painel/species/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "species.edit_view",
+  "rule": "/painel/species/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "species.export",
+  "rule": "/painel/species/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "species.index_view",
+  "rule": "/painel/species/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "static",
+  "rule": "/static/<path:filename>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "storepaymentaccount.action_view",
+  "rule": "/painel/storepaymentaccount/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "storepaymentaccount.ajax_lookup",
+  "rule": "/painel/storepaymentaccount/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "storepaymentaccount.ajax_update",
+  "rule": "/painel/storepaymentaccount/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "storepaymentaccount.create_view",
+  "rule": "/painel/storepaymentaccount/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "storepaymentaccount.delete_view",
+  "rule": "/painel/storepaymentaccount/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "storepaymentaccount.details_view",
+  "rule": "/painel/storepaymentaccount/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "storepaymentaccount.edit_view",
+  "rule": "/painel/storepaymentaccount/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "storepaymentaccount.export",
+  "rule": "/painel/storepaymentaccount/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "storepaymentaccount.index_view",
+  "rule": "/painel/storepaymentaccount/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "support",
+  "rule": "/support",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sync_sinan",
+  "rule": "/sfa/sync",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "t0_form_config",
+  "rule": "/sfa/config/t0",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "t10_form_config",
+  "rule": "/sfa/config/t10",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "t30_form_config",
+  "rule": "/sfa/config/t30",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "tcle_signatures",
+  "rule": "/sfa/tcle/assinaturas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "termo_animal",
+  "rule": "/animal/<int:animal_id>/termo/<string:tipo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "termo_interesse",
+  "rule": "/termo/interesse/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "termo_transferencia",
+  "rule": "/termo/transferencia/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "terms",
+  "rule": "/terms",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tiporacao.action_view",
+  "rule": "/painel/tiporacao/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "tiporacao.ajax_lookup",
+  "rule": "/painel/tiporacao/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tiporacao.ajax_update",
+  "rule": "/painel/tiporacao/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "tiporacao.create_view",
+  "rule": "/painel/tiporacao/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "tiporacao.delete_view",
+  "rule": "/painel/tiporacao/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "tiporacao.details_view",
+  "rule": "/painel/tiporacao/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tiporacao.edit_view",
+  "rule": "/painel/tiporacao/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "tiporacao.export",
+  "rule": "/painel/tiporacao/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tiporacao.index_view",
+  "rule": "/painel/tiporacao/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tipos_racao",
+  "rule": "/tipos_racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "toggle_medicamento_favorito",
+  "rule": "/medicamentos_favoritos/<int:med_id>",
+  "methods": "DELETE,POST"
+ },
+ {
+  "endpoint": "toggle_pesquisa_racoes_tutor",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/toggle",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "transaction.action_view",
+  "rule": "/painel/transaction/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "transaction.ajax_lookup",
+  "rule": "/painel/transaction/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "transaction.ajax_update",
+  "rule": "/painel/transaction/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "transaction.create_view",
+  "rule": "/painel/transaction/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "transaction.delete_view",
+  "rule": "/painel/transaction/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "transaction.details_view",
+  "rule": "/painel/transaction/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "transaction.edit_view",
+  "rule": "/painel/transaction/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "transaction.export",
+  "rule": "/painel/transaction/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "transaction.index_view",
+  "rule": "/painel/transaction/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tutor_detail",
+  "rule": "/tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tutor_sharing_dashboard",
+  "rule": "/tutor/compartilhamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "tutores",
+  "rule": "/tutores",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "update_animal",
+  "rule": "/update_animal/<int:animal_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_appointment_status",
+  "rule": "/appointments/<int:appointment_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_consulta",
+  "rule": "/update_consulta/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_exam_appointment",
+  "rule": "/exam_appointment/<int:appointment_id>/update",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_exam_appointment_requester",
+  "rule": "/exam_appointment/<int:appointment_id>/requester_update",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_exam_appointment_status",
+  "rule": "/exam_appointment/<int:appointment_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_inventory_item",
+  "rule": "/estoque/item/<int:item_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_pesquisa_racoes_tutor_status",
+  "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/status/<status_key>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_tutor",
+  "rule": "/update_tutor/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_vet_profile",
+  "rule": "/veterinario/<int:veterinario_id>/profile",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "upload_document",
+  "rule": "/animal/<int:animal_id>/documentos",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "user.action_view",
+  "rule": "/painel/user/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "user.ajax_lookup",
+  "rule": "/painel/user/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "user.ajax_update",
+  "rule": "/painel/user/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "user.create_view",
+  "rule": "/painel/user/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "user.delete_view",
+  "rule": "/painel/user/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "user.details_view",
+  "rule": "/painel/user/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "user.edit_view",
+  "rule": "/painel/user/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "user.export",
+  "rule": "/painel/user/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "user.index_view",
+  "rule": "/painel/user/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo",
+  "rule": "/vacina-pmo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_agenda",
+  "rule": "/vacina-pmo/agenda",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_animal_name",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/name",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_animal_photo",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/photo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_animal_photo_src",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/photo-src",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_animal_status",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_avaliacoes",
+  "rule": "/vacina-pmo/avaliacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_cobertura_ativa",
+  "rule": "/vacina-pmo/cobertura-ativa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_criar_dia",
+  "rule": "/vacina-pmo/criar-dia",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_doses_compilar",
+  "rule": "/vacina-pmo/doses/compilar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_doses_webhook",
+  "rule": "/vacina-pmo/webhook/compilar-doses",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_imprimir",
+  "rule": "/vacina-pmo/imprimir/<date_str>/<turno>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_painel",
+  "rule": "/vacina-pmo/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_public",
+  "rule": "/vacina-pmo/c/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_public_pet",
+  "rule": "/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_route_optimize",
+  "rule": "/vacina-pmo/route/optimize",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_route_preview",
+  "rule": "/vacina-pmo/route/preview",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_route_undo",
+  "rule": "/vacina-pmo/route/undo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_sheets",
+  "rule": "/vacina-pmo/sheets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_solicitar",
+  "rule": "/vacina-pmo/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_state",
+  "rule": "/vacina-pmo/state",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_status_webhook",
+  "rule": "/vacina-pmo/webhook/atualizar-status",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_sync",
+  "rule": "/vacina-pmo/sync",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_visit_attended_by",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/attended-by",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_visit_losses",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/losses",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_visit_note",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/note",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacinamodelo.action_view",
+  "rule": "/painel/vacinamodelo/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacinamodelo.ajax_lookup",
+  "rule": "/painel/vacinamodelo/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacinamodelo.ajax_update",
+  "rule": "/painel/vacinamodelo/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacinamodelo.create_view",
+  "rule": "/painel/vacinamodelo/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacinamodelo.delete_view",
+  "rule": "/painel/vacinamodelo/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacinamodelo.details_view",
+  "rule": "/painel/vacinamodelo/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacinamodelo.edit_view",
+  "rule": "/painel/vacinamodelo/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacinamodelo.export",
+  "rule": "/painel/vacinamodelo/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacinamodelo.index_view",
+  "rule": "/painel/vacinamodelo/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "validar_plano_consulta",
+  "rule": "/consulta/<int:consulta_id>/validar-plano",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "ver_carrinho",
+  "rule": "/carrinho",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vet_detail",
+  "rule": "/veterinario/<int:veterinario_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarian_activity_report",
+  "rule": "/veterinario/<int:veterinario_id>/relatorio-atividades",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarian_cancel_trial",
+  "rule": "/veterinario/assinatura/<int:membership_id>/cancelar_avaliacao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarian_membership",
+  "rule": "/veterinario/assinatura",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarian_membership_checkout",
+  "rule": "/veterinario/assinatura/checkout",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarian_request_new_trial",
+  "rule": "/veterinario/assinatura/<int:membership_id>/nova_avaliacao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.action_view",
+  "rule": "/painel/veterinarianmembership/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.ajax_lookup",
+  "rule": "/painel/veterinarianmembership/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarianmembership.ajax_update",
+  "rule": "/painel/veterinarianmembership/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.create_view",
+  "rule": "/painel/veterinarianmembership/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.delete_view",
+  "rule": "/painel/veterinarianmembership/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.details_view",
+  "rule": "/painel/veterinarianmembership/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarianmembership.edit_view",
+  "rule": "/painel/veterinarianmembership/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "veterinarianmembership.export",
+  "rule": "/painel/veterinarianmembership/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarianmembership.index_view",
+  "rule": "/painel/veterinarianmembership/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinariansettingsview.index",
+  "rule": "/painel/veterinariansettingsview/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "veterinario.action_view",
+  "rule": "/painel/veterinario/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinario.ajax_lookup",
+  "rule": "/painel/veterinario/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinario.ajax_update",
+  "rule": "/painel/veterinario/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinario.create_view",
+  "rule": "/painel/veterinario/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "veterinario.delete_view",
+  "rule": "/painel/veterinario/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "veterinario.details_view",
+  "rule": "/painel/veterinario/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinario.edit_view",
+  "rule": "/painel/veterinario/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "veterinario.export",
+  "rule": "/painel/veterinario/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinario.index_view",
+  "rule": "/painel/veterinario/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarios",
+  "rule": "/veterinarios",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vetschedule.action_view",
+  "rule": "/painel/vetschedule/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vetschedule.ajax_lookup",
+  "rule": "/painel/vetschedule/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vetschedule.ajax_update",
+  "rule": "/painel/vetschedule/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vetschedule.create_view",
+  "rule": "/painel/vetschedule/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vetschedule.delete_view",
+  "rule": "/painel/vetschedule/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vetschedule.details_view",
+  "rule": "/painel/vetschedule/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vetschedule.edit_view",
+  "rule": "/painel/vetschedule/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vetschedule.export",
+  "rule": "/painel/vetschedule/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vetschedule.index_view",
+  "rule": "/painel/vetschedule/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "warmup_pesquisa_racoes_whatsapp",
+  "rule": "/relatorio/racoes/pesquisa/warmup-whatsapp",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "webhook_t0",
+  "rule": "/sfa/webhook/t0",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "webhook_t10",
+  "rule": "/sfa/webhook/t10",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "webhook_t30",
+  "rule": "/sfa/webhook/t30",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "worker_delivery_detail",
+  "rule": "/worker/delivery/<int:req_id>",
+  "methods": "GET"
+ }
+]
