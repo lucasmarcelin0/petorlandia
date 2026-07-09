@@ -41,6 +41,7 @@ def register_domain_blueprints(app):
     from blueprints import (
         admin,
         consulta,
+        vacina_pmo,
         pacientes,
         agendamentos,
         api,
@@ -131,3 +132,7 @@ def register_domain_blueprints(app):
     consulta_bp = consulta.get_blueprint()
     if not _is_blueprint_registered(app, consulta_bp):
         _register_with_alias(app, consulta_bp)
+
+    vacina_pmo_bp = vacina_pmo.get_blueprint()
+    if not _is_blueprint_registered(app, vacina_pmo_bp):
+        _register_with_alias(app, vacina_pmo_bp)
