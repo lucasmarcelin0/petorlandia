@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "PetOrlandia",
     "subtitle": "Gestao veterinaria",
-    "description": "PetOrlandia ajuda veterinarios e equipes clinicas a consultar pets, agenda e pendencias, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT. Tambem permite consultar produtos reais da loja, montar pedido e abrir checkout no PetOrlandia.",
+    "description": "PetOrlandia ajuda tutores, veterinarios e equipes clinicas a consultar pets, agenda e pendencias, importar carteira de vacinacao por fotos com revisao obrigatoria, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT. Tambem permite consultar produtos reais da loja, montar pedido e abrir checkout no PetOrlandia.",
     "category": "PRODUCTIVITY",
     "icon_url": "https://petorlandia-fbabb575d64c.herokuapp.com/static/chatgpt_app_icon.png"
   },
@@ -19,6 +19,30 @@
         "read_only_justification": "Only retrieves pets accessible to the authenticated PetOrlandia user.",
         "open_world_justification": "Does not write to public internet state or third-party systems.",
         "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "revisar_carteirinha_fotografada": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only validates ChatGPT's transcription of a submitted vaccination card and does not save data.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "importar_carteirinha_fotografada": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Imports explicitly confirmed pet health history and stores the submitted card photos as private audit evidence.",
+        "open_world_justification": "Writes only inside the authenticated user's private PetOrlandia records and file storage.",
+        "destructive_justification": "Does not delete records; conflicting profile fields require a specific confirmation."
       }
     },
     "listar_agendamentos": {

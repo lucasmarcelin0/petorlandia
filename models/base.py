@@ -3028,6 +3028,44 @@ class AnimalDocumento(db.Model):
     veterinario = db.relationship('User')
 
 
+class AnimalHealthRecord(db.Model):
+    """Evento de saude historico que nao pertence ao calendario de vacinas."""
+    __tablename__ = 'animal_health_record'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    kind = db.Column(db.String(40), nullable=False, index=True)
+    title = db.Column(db.String(160), nullable=False)
+    occurred_on = db.Column(db.Date, nullable=True, index=True)
+    next_due_on = db.Column(db.Date, nullable=True, index=True)
+    weight_kg = db.Column(db.Float, nullable=True)
+    provider_name = db.Column(db.String(160), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    source = db.Column(db.String(80), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+
+    animal = db.relationship('Animal', backref=db.backref('health_records', cascade='all, delete-orphan'))
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+
+class CarteirinhaImportacao(db.Model):
+    """Auditoria da importacao de uma carteirinha enviada pelo tutor."""
+    __tablename__ = 'carteirinha_importacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='SET NULL'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    status = db.Column(db.String(30), nullable=False, default='importada')
+    dados_extraidos = db.Column(db.Text, nullable=False)
+    arquivos_origem = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    confirmed_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=True)
+
+    animal = db.relationship('Animal', backref=db.backref('importacoes_carteirinha', lazy=True))
+    user = db.relationship('User', foreign_keys=[user_id])
+
+
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

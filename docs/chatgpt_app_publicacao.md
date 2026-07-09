@@ -18,6 +18,8 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, central admin, widg
 ## Tools disponiveis
 
 - `listar_meus_pets`
+- `revisar_carteirinha_fotografada`
+- `importar_carteirinha_fotografada`
 - `listar_agendamentos`
 - `interpretar_mensagem_livre_atendimento`
 - `assistente_operacional_veterinario`
@@ -67,6 +69,7 @@ Todas as tools agora recebem hints explicitos (`readOnlyHint`, `destructiveHint`
 ## Arquivos no ChatGPT
 
 - Para anexos de PDF no ChatGPT atual, use `arquivo_pdf` ou `laudo_arquivo` como file reference com `download_url` e `file_id`.
+- Para fotos de carteirinha, o ChatGPT deve primeiro ler a imagem e chamar `revisar_carteirinha_fotografada`. A ferramenta aponta conflitos, campos ilegíveis e itens de baixa confiança. Somente após a confirmação do tutor deve chamar `importar_carteirinha_fotografada`, que preserva as fotos de origem, cria o histórico de vacinas e registra vermifugações como eventos de saúde.
 - `attachment_id` permanece apenas como compatibilidade legada e nao deve ser o `fileParam` principal.
 - Caminhos locais do sandbox, como `/mnt/data/...`, nao devem ser enviados ao PetOrlandia.
 

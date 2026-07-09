@@ -1,7 +1,7 @@
 """Views do domínio mcp (migrado do app.py)."""
 from flask import Blueprint
 import json
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import quote_plus
 from extensions import csrf, db
 from flask import jsonify, make_response, request, url_for
@@ -9,9 +9,11 @@ from helpers import has_veterinarian_profile
 from models import (
     AdminActionNotification,
     Animal,
+    AnimalHealthRecord,
     AnimalDocumento,
     Appointment,
     Clinica,
+    CarteirinhaImportacao,
     Consulta,
     ExameImagem,
     OAuthAccessToken,
@@ -39,6 +41,7 @@ from app import (  # noqa: E402
     _integration_create_exam_block,
     _integration_create_exame_imagem,
     _integration_create_or_reuse_tutor_and_pets,
+    _integration_download_and_store_carteirinha_file,
     _integration_ensure_clinic_admin_user,
     _integration_exame_imagem_document_payload,
     _integration_exame_imagem_pdf_summary,
@@ -60,6 +63,8 @@ from app import (  # noqa: E402
     _integration_parse_time_arg,
     _integration_reconcile_exam_documents,
     _integration_release_exame_imagem,
+    _integration_resolve_breed,
+    _integration_resolve_species,
     _integration_schedule_consulta,
     _integration_serialize_exame_imagem,
     _integration_store_exame_pdf,
@@ -169,6 +174,18 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'scopes': ['pets:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_object_output_schema('Link publico da carteirinha digital do pet.'),
+    },
+    'revisar_carteirinha_fotografada': {
+        'title': 'Revisar carteirinha fotografada',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Rascunho revisavel de identificacao, vacinas e vermifugacoes.'),
+    },
+    'importar_carteirinha_fotografada': {
+        'title': 'Importar carteirinha fotografada',
+        'scopes': ['pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Dados da carteirinha gravados com fotos de origem auditaveis.'),
     },
     'listar_agendamentos': {
         'title': 'Listar agendamentos',
@@ -1459,6 +1476,248 @@ def _mcp_order_payload(order: Order):
     }
 
 
+def _mcp_parse_carteirinha_date(value):
+    if isinstance(value, date):
+        return value
+    raw = str(value or '').strip()
+    if not raw:
+        return None
+    for pattern in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d.%m.%Y', '%d/%m/%y', '%d-%m-%y'):
+        try:
+            return datetime.strptime(raw, pattern).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _mcp_carteirinha_data(arguments: dict) -> dict:
+    data = arguments.get('dados_extraidos') or arguments.get('dados') or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _mcp_carteirinha_preview(user: User, arguments: dict) -> dict:
+    data = _mcp_carteirinha_data(arguments)
+    pet_data = data.get('pet') or {}
+    pet_name = (pet_data.get('nome') or pet_data.get('name') or '').strip()
+    animal = None
+    requested_id = arguments.get('animal_id')
+    if requested_id:
+        try:
+            animal = _integration_accessible_animals_query(user).filter(Animal.id == int(requested_id)).first()
+        except (TypeError, ValueError):
+            animal = None
+    if animal is None and pet_name:
+        animal = _integration_accessible_animals_query(user).filter(db.func.lower(Animal.name) == pet_name.lower()).first()
+
+    conflicts = []
+    birth_date = _mcp_parse_carteirinha_date(pet_data.get('data_nascimento') or pet_data.get('nascimento'))
+    source_fields = {
+        'nome': pet_name or None,
+        'sexo': (pet_data.get('sexo') or '').strip() or None,
+        'data_nascimento': birth_date.isoformat() if birth_date else None,
+        'especie': (pet_data.get('especie') or '').strip() or None,
+        'raca': (pet_data.get('raca') or '').strip() or None,
+        'pelagem': (pet_data.get('pelagem') or '').strip() or None,
+        'microchip': (pet_data.get('microchip') or '').strip() or None,
+    }
+    if animal:
+        current = _mcp_animal_payload(animal)
+        comparisons = {
+            'sexo': current.get('sexo'),
+            'data_nascimento': animal.date_of_birth.isoformat() if animal.date_of_birth else None,
+            'especie': current.get('especie'),
+            'raca': current.get('raca'),
+            'microchip': animal.microchip_number,
+        }
+        for field, existing in comparisons.items():
+            incoming = source_fields.get(field)
+            if incoming and existing and str(incoming).strip().lower() != str(existing).strip().lower():
+                conflicts.append({'campo': field, 'atual': existing, 'foto': incoming})
+
+    vaccines = [item for item in (data.get('vacinas') or []) if isinstance(item, dict)]
+    dewormings = [item for item in (data.get('vermifugacoes') or []) if isinstance(item, dict)]
+    low_confidence = []
+    for category, items in (('vacinas', vaccines), ('vermifugacoes', dewormings)):
+        for index, item in enumerate(items):
+            confidence = (item.get('confianca') or '').strip().lower()
+            if confidence in {'baixa', 'low'}:
+                low_confidence.append({'tipo': category, 'indice': index, 'motivo': 'leitura de baixa confianca'})
+    return {
+        'animal_encontrado': _mcp_animal_payload(animal) if animal else None,
+        'pet_extraido': source_fields,
+        'vacinas_para_revisao': vaccines,
+        'vermifugacoes_para_revisao': dewormings,
+        'campos_em_conflito': conflicts,
+        'itens_de_baixa_confianca': low_confidence,
+        'proxima_acao': (
+            'Confirme o animal e revise os itens antes de importar.' if animal
+            else 'Nenhum pet correspondente foi encontrado. Cadastre o pet primeiro e depois importe a carteirinha.'
+        ),
+        'regras_de_seguranca': [
+            'Nao importe textos ou datas ilegiveis.',
+            'Fotos originais sao preservadas como evidencia da importacao.',
+            'Campos que conflitam com o cadastro atual exigem confirmacao especifica.',
+        ],
+    }
+
+
+def _mcp_ensure_carteirinha_tables() -> bool:
+    try:
+        AnimalHealthRecord.__table__.create(db.engine, checkfirst=True)
+        CarteirinhaImportacao.__table__.create(db.engine, checkfirst=True)
+        return True
+    except Exception:
+        db.session.rollback()
+        return False
+
+
+def _mcp_should_import_item(item: dict) -> bool:
+    if item.get('selecionado') is False:
+        return False
+    return (item.get('confianca') or '').strip().lower() not in {'baixa', 'low'}
+
+
+def _mcp_import_carteirinha(user: User, animal: Animal, arguments: dict) -> dict:
+    if not _mcp_ensure_carteirinha_tables():
+        raise ValueError('Nao foi possivel preparar o armazenamento da importacao da carteirinha.')
+    data = _mcp_carteirinha_data(arguments)
+    pet_data = data.get('pet') or {}
+    preview = _mcp_carteirinha_preview(user, {**arguments, 'animal_id': animal.id})
+    conflict_fields = {item['campo'] for item in preview['campos_em_conflito']}
+    confirmed_fields = {str(value).strip() for value in (arguments.get('campos_confirmados') or [])}
+    updated_fields = []
+
+    birth_date = _mcp_parse_carteirinha_date(pet_data.get('data_nascimento') or pet_data.get('nascimento'))
+    updates = {
+        'sexo': (pet_data.get('sexo') or '').strip() or None,
+        'microchip': (pet_data.get('microchip') or '').strip() or None,
+    }
+    for field, value in updates.items():
+        attribute = {
+            'microchip': 'microchip_number',
+            'sexo': 'sex',
+        }.get(field, field)
+        if not value:
+            continue
+        current = getattr(animal, attribute)
+        if not current or field in confirmed_fields:
+            setattr(animal, attribute, value)
+            updated_fields.append(field)
+    if birth_date and (not animal.date_of_birth or 'data_nascimento' in confirmed_fields):
+        animal.date_of_birth = birth_date
+        updated_fields.append('data_nascimento')
+    if (pet_data.get('especie') or '').strip() and (not animal.species_id or 'especie' in confirmed_fields):
+        species = _integration_resolve_species(pet_data.get('especie'))
+        if species:
+            animal.species_id = species.id
+            updated_fields.append('especie')
+    if (pet_data.get('raca') or '').strip() and (animal.species_id and (not animal.breed_id or 'raca' in confirmed_fields)):
+        species = animal.species or _integration_resolve_species(pet_data.get('especie'))
+        breed = _integration_resolve_breed(species, pet_data.get('raca')) if species else None
+        if breed:
+            animal.breed_id = breed.id
+            updated_fields.append('raca')
+    coat = (pet_data.get('pelagem') or '').strip()
+    if coat and 'pelagem' not in conflict_fields:
+        note = f'Pelagem informada na carteirinha: {coat}.'
+        if note not in (animal.description or ''):
+            animal.description = '\n'.join(filter(None, [animal.description, note]))
+            updated_fields.append('pelagem')
+
+    imported_vaccines = 0
+    skipped_vaccines = 0
+    for item in data.get('vacinas') or []:
+        if not isinstance(item, dict) or not _mcp_should_import_item(item):
+            skipped_vaccines += 1
+            continue
+        name = (item.get('nome') or '').strip()
+        applied_on = _mcp_parse_carteirinha_date(item.get('aplicada_em') or item.get('data'))
+        if not name or not applied_on:
+            skipped_vaccines += 1
+            continue
+        lot = (item.get('lote') or '').strip() or None
+        duplicate = Vacina.query.filter_by(animal_id=animal.id, nome=name, aplicada_em=applied_on, lote=lot).first()
+        if duplicate:
+            skipped_vaccines += 1
+            continue
+        next_due = _mcp_parse_carteirinha_date(item.get('proxima_dose') or item.get('proxima_em'))
+        interval = (next_due - applied_on).days if next_due and next_due > applied_on else None
+        notes = ['Importado de carteirinha fotografada.']
+        if item.get('veterinario'):
+            notes.append(f"Veterinario informado: {item['veterinario']}.")
+        if item.get('crmv'):
+            notes.append(f"CRMV informado: {item['crmv']}.")
+        db.session.add(Vacina(
+            animal_id=animal.id,
+            nome=name,
+            tipo=(item.get('tipo') or 'Historico importado').strip(),
+            fabricante=(item.get('fabricante') or '').strip() or None,
+            lote=lot,
+            aplicada=True,
+            aplicada_em=applied_on,
+            intervalo_dias=interval,
+            frequencia='anual' if interval and 330 <= interval <= 400 else None,
+            observacoes=' '.join(notes),
+            created_by=user.id,
+        ))
+        imported_vaccines += 1
+
+    imported_dewormings = 0
+    for item in data.get('vermifugacoes') or []:
+        if not isinstance(item, dict) or not _mcp_should_import_item(item):
+            continue
+        title = (item.get('medicamento') or item.get('nome') or '').strip()
+        occurred_on = _mcp_parse_carteirinha_date(item.get('administrada_em') or item.get('data'))
+        if not title or not occurred_on:
+            continue
+        duplicate = AnimalHealthRecord.query.filter_by(animal_id=animal.id, kind='vermifugacao', title=title, occurred_on=occurred_on).first()
+        if duplicate:
+            continue
+        try:
+            weight = float(str(item.get('peso_kg') or item.get('peso') or '').replace(',', '.'))
+        except ValueError:
+            weight = None
+        db.session.add(AnimalHealthRecord(
+            animal_id=animal.id,
+            created_by_id=user.id,
+            kind='vermifugacao',
+            title=title,
+            occurred_on=occurred_on,
+            next_due_on=_mcp_parse_carteirinha_date(item.get('proxima_dose') or item.get('proxima_em')),
+            weight_kg=weight,
+            provider_name=(item.get('veterinario') or '').strip() or None,
+            notes='Importado de carteirinha fotografada.',
+            source='chatgpt_carteirinha',
+        ))
+        imported_dewormings += 1
+
+    source_files = []
+    for file_ref in arguments.get('fotos_carteirinha') or []:
+        if not isinstance(file_ref, dict):
+            continue
+        stored_url, filename = _integration_download_and_store_carteirinha_file(file_ref)
+        source_files.append({'filename': filename, 'url': stored_url})
+    audit = CarteirinhaImportacao(
+        animal_id=animal.id,
+        user_id=user.id,
+        status='importada',
+        dados_extraidos=json.dumps(data, ensure_ascii=False),
+        arquivos_origem=json.dumps(source_files, ensure_ascii=False),
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return {
+        'importacao_id': audit.id,
+        'animal': _mcp_animal_payload(animal),
+        'campos_atualizados': sorted(set(updated_fields)),
+        'campos_em_conflito_nao_alterados': sorted(conflict_fields.difference(confirmed_fields)),
+        'vacinas_importadas': imported_vaccines,
+        'vacinas_ignoradas': skipped_vaccines,
+        'vermifugacoes_importadas': imported_dewormings,
+        'arquivos_preservados': source_files,
+    }
+
+
 def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
     required_scope_set = {scope for scope in required_scopes if scope}
     missing_scopes = sorted(required_scope_set.difference(token_scope_set))
@@ -1580,6 +1839,8 @@ def mcp_server():
                 'Nunca invente categorias, produtos, marcas, preços, estoque ou formas de pagamento. '
                 'Para pagamento, crie ou atualize o pedido e entregue o link do carrinho/checkout do PetOrlandia; '
                 'não afirme que processou cartão dentro do ChatGPT. '
+                'Quando o tutor enviar fotos de carteirinha de vacinação, leia as imagens, chame revisar_carteirinha_fotografada '
+                'com uma transcrição estruturada e apresente a revisão; só chame importar_carteirinha_fotografada após confirmação explícita. '
                 'Para qualquer escrita, peça confirmação explícita antes de chamar tools que gravam dados.'
             ),
         })
@@ -1634,6 +1895,50 @@ def mcp_server():
                     },
                     'required': ['animal_id'],
                 },
+            },
+            {
+                'name': 'revisar_carteirinha_fotografada',
+                'description': (
+                    'Use quando o tutor enviar fotos de carteira/cartao de vacinacao no ChatGPT. '
+                    'O ChatGPT deve ler as imagens, transcrever apenas campos claros em dados_extraidos '
+                    '(identificacao, vacinas e vermifugacoes) e chamar esta tool antes de gravar. '
+                    'Retorna pet correspondente, conflitos e itens que exigem revisao; nao grava dados.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do pet ja escolhido, se houver.'},
+                        'dados_extraidos': {
+                            'type': 'object',
+                            'description': 'Transcricao estruturada feita a partir das fotos. Use pet, vacinas e vermifugacoes; omita trechos ilegiveis.',
+                        },
+                    },
+                    'required': ['dados_extraidos'],
+                },
+            },
+            {
+                'name': 'importar_carteirinha_fotografada',
+                'description': (
+                    'Importa para um pet confirmado os dados revisados de uma carteirinha fotografada. '
+                    'Preserva as fotos originais como evidencia, cria vacinas historicas e eventos de vermifugacao. '
+                    'Nunca chame sem confirmar a revisao com o tutor; itens de baixa confianca devem ficar fora da importacao.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do pet que recebera os dados.'},
+                        'dados_extraidos': {'type': 'object', 'description': 'Mesmo rascunho aprovado na revisao.'},
+                        'fotos_carteirinha': {'type': 'array', 'items': MCP_FILE_REFERENCE_SCHEMA, 'maxItems': 12},
+                        'campos_confirmados': {
+                            'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'Campos em conflito que o tutor confirmou substituir: sexo, data_nascimento, especie, raca ou microchip.',
+                        },
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['animal_id', 'dados_extraidos', 'confirmar_gravacao'],
+                },
+                '_meta': {'openai/fileParams': ['fotos_carteirinha']},
             },
             {
                 'name': 'listar_agendamentos',
@@ -2330,6 +2635,37 @@ def mcp_server():
                 'structuredContent': payload,
                 'content': [{'type': 'text', 'text': texto}],
             })
+
+        if tool_name == 'revisar_carteirinha_fotografada':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
+            if not _mcp_carteirinha_data(tool_args):
+                return _mcp_err(req_id, -32602, 'dados_extraidos e obrigatorio. Envie uma transcricao estruturada das fotos.')
+            payload = _mcp_carteirinha_preview(user, tool_args)
+            return _mcp_ok(req_id, _mcp_json_content(payload))
+
+        if tool_name == 'importar_carteirinha_fotografada':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            try:
+                animal_id = int(tool_args.get('animal_id') or 0)
+            except (TypeError, ValueError):
+                animal_id = 0
+            animal = _integration_accessible_animals_query(user).filter(Animal.id == animal_id).first()
+            if animal is None:
+                return _mcp_err(req_id, -32004, 'Pet nao encontrado ou sem acesso para importar a carteirinha.')
+            if not _mcp_carteirinha_data(tool_args):
+                return _mcp_err(req_id, -32602, 'dados_extraidos e obrigatorio.')
+            try:
+                payload = _mcp_import_carteirinha(user, animal, tool_args)
+            except ValueError as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            return _mcp_ok(req_id, _mcp_json_content(payload))
 
         if tool_name == 'listar_agendamentos':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')

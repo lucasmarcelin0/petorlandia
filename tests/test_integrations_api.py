@@ -7,11 +7,13 @@ from extensions import db
 from models import (
     AdminActionNotification,
     Animal,
+    AnimalHealthRecord,
     AnimalDocumento,
     Appointment,
     BlocoExames,
     BlocoPrescricao,
     Clinica,
+    CarteirinhaImportacao,
     Consulta,
     ExamAppointment,
     ExameImagem,
@@ -2438,6 +2440,111 @@ def test_mcp_admin_alert_tools_list_and_resolve(app, client):
         },
     )
     assert resolve_response.get_json()["result"]["structuredContent"]["alerta"]["status"] == "resolved"
+
+
+def test_mcp_carteirinha_photo_review_and_import(app, client):
+    with app.app_context():
+        tutor = User(name="Juliana", email="juliana-carteirinha@example.com", role="adotante")
+        tutor.set_password("secret123")
+        db.session.add(tutor)
+        db.session.flush()
+        pet = Animal(name="Durga", user_id=tutor.id, status="disponivel", modo="adotado")
+        db.session.add(pet)
+        db.session.commit()
+        pet_id = pet.id
+        token_value = _create_token(tutor.id, scope="profile pets:read pets:write")
+
+    extracted = {
+        "pet": {
+            "nome": "Durga",
+            "sexo": "F",
+            "data_nascimento": "2016-04-20",
+            "pelagem": "azul com branco",
+        },
+        "vacinas": [
+            {
+                "nome": "Nobivac DHPPi+L",
+                "aplicada_em": "2024-09-28",
+                "proxima_dose": "2025-09-28",
+                "fabricante": "MSD",
+                "lote": "033/23",
+                "confianca": "alta",
+            },
+            {
+                "nome": "Canigen R",
+                "aplicada_em": "2024-09-28",
+                "proxima_dose": "2025-09-28",
+                "confianca": "baixa",
+            },
+        ],
+        "vermifugacoes": [
+            {
+                "medicamento": "Canex",
+                "data": "2024-11-07",
+                "proxima_dose": "2024-11-22",
+                "peso_kg": "8,1",
+                "confianca": "alta",
+            },
+        ],
+    }
+    headers = _auth_header(token_value)
+    tools_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 89, "method": "tools/list", "params": {}},
+    )
+    tools_by_name = {tool["name"]: tool for tool in tools_response.get_json()["result"]["tools"]}
+    assert {"revisar_carteirinha_fotografada", "importar_carteirinha_fotografada"}.issubset(tools_by_name)
+    assert tools_by_name["importar_carteirinha_fotografada"]["_meta"]["openai/fileParams"] == ["fotos_carteirinha"]
+
+    review = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 90,
+            "method": "tools/call",
+            "params": {
+                "name": "revisar_carteirinha_fotografada",
+                "arguments": {"animal_id": pet_id, "dados_extraidos": extracted},
+            },
+        },
+    )
+    assert review.status_code == 200
+    review_payload = review.get_json()["result"]["structuredContent"]
+    assert review_payload["animal_encontrado"]["nome"] == "Durga"
+    assert len(review_payload["itens_de_baixa_confianca"]) == 1
+
+    imported = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 91,
+            "method": "tools/call",
+            "params": {
+                "name": "importar_carteirinha_fotografada",
+                "arguments": {
+                    "animal_id": pet_id,
+                    "dados_extraidos": extracted,
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+    assert imported.status_code == 200
+    imported_payload = imported.get_json()["result"]["structuredContent"]
+    assert imported_payload["vacinas_importadas"] == 1
+    assert imported_payload["vermifugacoes_importadas"] == 1
+
+    with app.app_context():
+        pet = db.session.get(Animal, pet_id)
+        assert pet.sex == "F"
+        assert pet.date_of_birth == date(2016, 4, 20)
+        assert "Pelagem informada" in pet.description
+        assert Vacina.query.filter_by(animal_id=pet_id).count() == 1
+        assert AnimalHealthRecord.query.filter_by(animal_id=pet_id, kind="vermifugacao").count() == 1
+        assert CarteirinhaImportacao.query.filter_by(animal_id=pet_id, user_id=pet.user_id).count() == 1
 
 
 def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):
