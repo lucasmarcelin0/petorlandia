@@ -555,7 +555,7 @@ def mercadopago_oauth_callback():
         if state else None
     )
     if not account:
-        flash('NÃ£o foi possÃ­vel validar a conexÃ£o com o Mercado Pago. Tente novamente.', 'danger')
+        flash('Não foi possível validar a conexão com o Mercado Pago. Tente novamente.', 'danger')
         return redirect(url_for('minha_casa_de_racao'))
 
     casa = account.casa_de_racao
@@ -575,11 +575,11 @@ def mercadopago_oauth_callback():
 
     if error or not code:
         account.status = 'error'
-        account.error_message = error or 'AutorizaÃ§Ã£o cancelada ou incompleta.'
+        account.error_message = error or 'Autorização cancelada ou incompleta.'
         account.oauth_state = None
         account.code_verifier = None
         db.session.commit()
-        flash('A conexÃ£o com o Mercado Pago foi cancelada ou nÃ£o foi concluÃ­da.', 'warning')
+        flash('A conexão com o Mercado Pago foi cancelada ou não foi concluída.', 'warning')
         return redirect(success_redirect)
 
     try:
@@ -604,10 +604,10 @@ def mercadopago_oauth_callback():
         account.code_verifier = None
         db.session.add(account)
         db.session.commit()
-        flash('NÃ£o foi possÃ­vel concluir a conexÃ£o com o Mercado Pago.', 'danger')
+        flash('Não foi possível concluir a conexão com o Mercado Pago.', 'danger')
         return redirect(success_redirect)
 
-    flash('Mercado Pago conectado com sucesso. Sua loja jÃ¡ pode receber pagamentos.', 'success')
+    flash('Mercado Pago conectado com sucesso. Sua loja já pode receber pagamentos.', 'success')
     return redirect(success_redirect)
 
 

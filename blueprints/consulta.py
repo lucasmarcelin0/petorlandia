@@ -241,7 +241,7 @@ def calcular_plano_sugestao_clinica(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     ensure_clinic_access(consulta.clinica_id)
     if not is_veterinarian(current_user):
-        return jsonify({'success': False, 'message': 'Apenas veterinÃ¡rios podem calcular planos clÃ­nicos.'}), 403
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem calcular planos clínicos.'}), 403
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -249,7 +249,7 @@ def calcular_plano_sugestao_clinica(consulta_id):
     except (TypeError, ValueError):
         protocol_id = None
     if not protocol_id:
-        return jsonify({'success': False, 'message': 'Informe o protocolo clÃ­nico para calcular o plano.'}), 400
+        return jsonify({'success': False, 'message': 'Informe o protocolo clínico para calcular o plano.'}), 400
 
     protocol = (
         ProtocoloClinico.query
@@ -261,14 +261,14 @@ def calcular_plano_sugestao_clinica(consulta_id):
         .get_or_404(protocol_id)
     )
     if protocol.clinica_id and protocol.clinica_id != consulta.clinica_id:
-        return jsonify({'success': False, 'message': 'Protocolo clÃ­nico indisponÃ­vel para esta clÃ­nica.'}), 403
+        return jsonify({'success': False, 'message': 'Protocolo clínico indisponível para esta clínica.'}), 403
 
     from services.clinical_plan import build_clinical_plan
     plan = build_clinical_plan(consulta, protocol, session=db.session)
     return jsonify({
         'success': True,
         'plan': plan,
-        'message': 'Plano clÃ­nico calculado com sucesso.',
+        'message': 'Plano clínico calculado com sucesso.',
     })
 
 
