@@ -39,16 +39,16 @@ def _is_admin():
     return app_module._is_admin()
 
 
-def is_veterinarian(user=None, **kwargs):
+def is_veterinarian(*args, **kwargs):
     import app as app_module
 
-    return app_module.is_veterinarian(user, **kwargs)
+    return app_module.is_veterinarian(*args, **kwargs)
 
 
-def mp_sdk(access_token=None):
+def mp_sdk(*args, **kwargs):
     import app as app_module
 
-    return app_module.mp_sdk(access_token)
+    return app_module.mp_sdk(*args, **kwargs)
 
 
 def _grooming_clinic_access(clinica_id):
