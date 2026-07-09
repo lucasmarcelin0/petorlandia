@@ -1121,17 +1121,8 @@ def _mcp_widget_response(req_id, uri: str):
                 **resource,
                 'text': html,
                 '_meta': {
-                    'ui': {
-                        'prefersBorder': prefers_border,
-                        'domain': _oauth_issuer(),
-                        'csp': {
-                            'connectDomains': [],
-                            'resourceDomains': [],
-                        },
-                    },
                     'openai/widgetDescription': description,
                     'openai/widgetPrefersBorder': prefers_border,
-                    'openai/widgetDomain': _oauth_issuer(),
                     'openai/widgetCSP': {
                         'connect_domains': [],
                         'resource_domains': [],
@@ -1840,7 +1831,8 @@ def mcp_server():
                 'Para pagamento, crie ou atualize o pedido e entregue o link do carrinho/checkout do PetOrlandia; '
                 'não afirme que processou cartão dentro do ChatGPT. '
                 'Quando o tutor enviar fotos de carteirinha de vacinação, leia as imagens, chame revisar_carteirinha_fotografada '
-                'com uma transcrição estruturada e apresente a revisão; só chame importar_carteirinha_fotografada após confirmação explícita. '
+                'com uma transcrição estruturada e apresente no próprio chat somente o retorno efetivo da tool; nunca alegue que abriu um painel. '
+                'Só chame importar_carteirinha_fotografada após confirmação explícita. '
                 'Para qualquer escrita, peça confirmação explícita antes de chamar tools que gravam dados.'
             ),
         })
@@ -2128,9 +2120,6 @@ def mcp_server():
                     'idempotentHint': True,
                 },
                 '_meta': {
-                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
-                    'openai/outputTemplate': LAUDO_VOLANTE_WIDGET_URI,
-                    'openai/widgetAccessible': True,
                     'openai/fileParams': ['laudo_arquivo'],
                     'openai/toolInvocation/invoking': 'Abrindo revisao do laudo...',
                     'openai/toolInvocation/invoked': 'Revisao do laudo pronta.',
@@ -2279,9 +2268,6 @@ def mcp_server():
                     'required': [],
                 },
                 '_meta': {
-                    'ui': {'resourceUri': AGENDA_COCKPIT_WIDGET_URI},
-                    'openai/outputTemplate': AGENDA_COCKPIT_WIDGET_URI,
-                    'openai/widgetAccessible': True,
                     'openai/toolInvocation/invoking': 'Carregando agenda do dia...',
                     'openai/toolInvocation/invoked': 'Agenda do dia pronta.',
                 },
@@ -2376,9 +2362,6 @@ def mcp_server():
                     'required': [],
                 },
                 '_meta': {
-                    'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI},
-                    'openai/outputTemplate': TIMELINE_CLINICA_WIDGET_URI,
-                    'openai/widgetAccessible': True,
                     'openai/toolInvocation/invoking': 'Montando timeline clinica...',
                     'openai/toolInvocation/invoked': 'Timeline clinica pronta.',
                 },
@@ -2399,9 +2382,6 @@ def mcp_server():
                     'required': [],
                 },
                 '_meta': {
-                    'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI},
-                    'openai/outputTemplate': TIMELINE_CLINICA_WIDGET_URI,
-                    'openai/widgetAccessible': True,
                     'openai/toolInvocation/invoking': 'Preparando consulta...',
                     'openai/toolInvocation/invoked': 'Briefing da consulta pronto.',
                 },
@@ -2491,9 +2471,6 @@ def mcp_server():
                     'required': [],
                 },
                 '_meta': {
-                    'ui': {'resourceUri': ADMIN_COMMAND_CENTER_WIDGET_URI},
-                    'openai/outputTemplate': ADMIN_COMMAND_CENTER_WIDGET_URI,
-                    'openai/widgetAccessible': True,
                     'openai/toolInvocation/invoking': 'Carregando central admin...',
                     'openai/toolInvocation/invoked': 'Central admin pronta.',
                 },
@@ -3028,12 +3005,9 @@ def mcp_server():
                 'content': [
                     {
                         'type': 'text',
-                        'text': 'Abrindo painel para revisar o laudo antes de gravar no PetOrlandia.',
+                        'text': 'Revisão do laudo pronta para confirmação no chat.',
                     }
                 ],
-                '_meta': {
-                    'ui': {'resourceUri': LAUDO_VOLANTE_WIDGET_URI},
-                },
             })
 
         if tool_name == 'importar_laudo_volante':
@@ -3159,9 +3133,7 @@ def mcp_server():
                     target_date = date.fromisoformat(raw_date)
                 except ValueError:
                     return _mcp_err(req_id, -32602, 'A data deve estar no formato YYYY-MM-DD.')
-            response = _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date))
-            response['_meta'] = {'ui': {'resourceUri': AGENDA_COCKPIT_WIDGET_URI}}
-            return _mcp_ok(req_id, response)
+            return _mcp_ok(req_id, _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date)))
 
         if tool_name == 'buscar_produtos_loja':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
@@ -3250,9 +3222,7 @@ def mcp_server():
             animal = _mcp_find_animal_for_tool(user, tool_args)
             if not animal:
                 return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
-            response = _mcp_json_content(_mcp_build_timeline(user, animal))
-            response['_meta'] = {'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI}}
-            return _mcp_ok(req_id, response)
+            return _mcp_ok(req_id, _mcp_json_content(_mcp_build_timeline(user, animal)))
 
         if tool_name == 'preparar_consulta':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read', 'clinical_summary:read', 'exams:read', 'vaccines:read')
@@ -3266,9 +3236,7 @@ def mcp_server():
                 parsed_appointment_id = int(appointment_id) if appointment_id is not None else None
             except (TypeError, ValueError):
                 return _mcp_err(req_id, -32602, 'appointment_id deve ser numérico quando informado.')
-            response = _mcp_json_content(_mcp_build_consult_prep(user, animal, appointment_id=parsed_appointment_id))
-            response['_meta'] = {'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI}}
-            return _mcp_ok(req_id, response)
+            return _mcp_ok(req_id, _mcp_json_content(_mcp_build_consult_prep(user, animal, appointment_id=parsed_appointment_id)))
 
         if tool_name == 'listar_pendencias_clinicas':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read', 'exams:read', 'vaccines:read')
@@ -3392,9 +3360,10 @@ def mcp_server():
                 return scope_error
             if not _mcp_user_is_admin(user):
                 return _mcp_err(req_id, -32003, 'Esta tool é restrita a administradores.')
-            response = _mcp_json_content(_mcp_admin_alerts(user, status=tool_args.get('status') or 'open', limit=tool_args.get('limite') or 30))
-            response['_meta'] = {'ui': {'resourceUri': ADMIN_COMMAND_CENTER_WIDGET_URI}}
-            return _mcp_ok(req_id, response)
+            return _mcp_ok(
+                req_id,
+                _mcp_json_content(_mcp_admin_alerts(user, status=tool_args.get('status') or 'open', limit=tool_args.get('limite') or 30)),
+            )
 
         if tool_name == 'resolver_alerta_admin':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')

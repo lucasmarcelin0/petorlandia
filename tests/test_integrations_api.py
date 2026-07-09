@@ -2266,9 +2266,8 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert "attachment_id" not in (pdf_tool["inputSchema"].get("required") or [])
     assert pdf_tool["inputSchema"]["properties"]["arquivo_pdf"]["required"] == ["download_url", "file_id"]
     render_tool = next(tool for tool in tools if tool["name"] == "abrir_importador_laudo_volante")
-    assert render_tool["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v2.html"
-    assert render_tool["_meta"]["openai/outputTemplate"] == "ui://petorlandia/laudo-volante-v2.html"
-    assert render_tool["_meta"]["openai/widgetAccessible"] is True
+    assert "ui" not in render_tool["_meta"]
+    assert "openai/outputTemplate" not in render_tool["_meta"]
     assert render_tool["_meta"]["openai/fileParams"] == ["laudo_arquivo"]
     assert render_tool["inputSchema"]["properties"]["laudo_arquivo"]["required"] == ["download_url", "file_id"]
     assert "mensagem_tutor" in render_tool["inputSchema"]["properties"]
@@ -2296,9 +2295,6 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert "Enviar WhatsApp" in resource["text"]
     assert "mensagem_tutor" in resource["text"]
     assert "window.openai?.openExternal" in resource["text"]
-    assert resource["_meta"]["ui"]["prefersBorder"] is True
-    assert resource["_meta"]["ui"]["domain"]
-    assert resource["_meta"]["openai/widgetDomain"] == resource["_meta"]["ui"]["domain"]
     assert "https://wa.me" in resource["_meta"]["openai/widgetCSP"]["redirect_domains"]
 
     render_response = client.post(
@@ -2324,7 +2320,7 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     render_payload = render_response.get_json()["result"]
     assert render_payload["structuredContent"]["rascunho"]["animal"]["nome"] == "Nina"
     assert render_payload["structuredContent"]["campos_a_confirmar"] == ["telefone do tutor"]
-    assert render_payload["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v2.html"
+    assert "_meta" not in render_payload
 
 
 def test_mcp_operational_widget_resources_are_available(app, client):
@@ -2363,7 +2359,7 @@ def test_mcp_operational_widget_resources_are_available(app, client):
         resource = resource_response.get_json()["result"]["contents"][0]
         assert resource["mimeType"] == "text/html;profile=mcp-app"
         assert "window.openai" in resource["text"]
-        assert resource["_meta"]["openai/widgetDomain"]
+        assert resource["_meta"]["openai/widgetDescription"]
 
 
 def test_mcp_admin_alert_tools_list_and_resolve(app, client):
@@ -2421,7 +2417,7 @@ def test_mcp_admin_alert_tools_list_and_resolve(app, client):
         },
     )
     result = list_response.get_json()["result"]
-    assert result["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/admin-command-center-v1.html"
+    assert "_meta" not in result
     payload = json.loads(result["content"][0]["text"])
     assert payload["total_abertos"] == 1
     assert payload["alertas"][0]["titulo"] == "Nova candidatura petsitter"
