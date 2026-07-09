@@ -58,6 +58,7 @@ def register_domain_blueprints(app):
         parceiro,
         petsitter,
         planos,
+        push,
         sfa,
     )
 
@@ -141,3 +142,7 @@ def register_domain_blueprints(app):
     site_bp = site.get_blueprint()
     if not _is_blueprint_registered(app, site_bp):
         _register_with_alias(app, site_bp)
+
+    push_bp = push.get_blueprint()
+    if not _is_blueprint_registered(app, push_bp):
+        _register_with_alias(app, push_bp)

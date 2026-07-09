@@ -491,6 +491,11 @@
  },
  {
   "endpoint": "api_conversa_admin_message",
+  "rule": "/api/conversa_admin",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_conversa_admin_message",
   "rule": "/api/conversa_admin/<int:user_id>",
   "methods": "POST"
  },
@@ -1465,6 +1470,26 @@
   "methods": "POST"
  },
  {
+  "endpoint": "carteirinha_ativar",
+  "rule": "/animal/<int:animal_id>/carteirinha/ativar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "carteirinha_desativar",
+  "rule": "/animal/<int:animal_id>/carteirinha/desativar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "carteirinha_publica",
+  "rule": "/carteirinha/<token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "carteirinha_qr",
+  "rule": "/carteirinha/<token>/qr.png",
+  "methods": "GET"
+ },
+ {
   "endpoint": "casa_de_racao_animais",
   "rule": "/casa-de-racao/<int:casa_id>/animais",
   "methods": "GET,POST"
@@ -2240,6 +2265,356 @@
   "methods": "GET"
  },
  {
+  "endpoint": "consulta_routes.acompanhamento_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.adicionar_orcamento_item",
+  "rule": "/consulta/<int:consulta_id>/orcamento_item",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.agendar_retorno",
+  "rule": "/agendar_retorno/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.alterar_exame",
+  "rule": "/exame/<int:exame_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "consulta_routes.alterar_exame_modelo",
+  "rule": "/exame_modelo/<int:exame_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "consulta_routes.alterar_medicamento",
+  "rule": "/medicamento/<int:med_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "consulta_routes.alterar_status_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.aplicar_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/aplicar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.appointment_close",
+  "rule": "/appointments/<int:appointment_id>/close",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "consulta_routes.ativar_acompanhamento_tratamento",
+  "rule": "/bloco_prescricao/<int:bloco_id>/acompanhamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>",
+  "methods": "PUT"
+ },
+ {
+  "endpoint": "consulta_routes.atualizar_realizacao_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/realizacao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.buscar_apresentacoes",
+  "rule": "/buscar_apresentacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.buscar_exames",
+  "rule": "/buscar_exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.buscar_medicamentos",
+  "rule": "/buscar_medicamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.calcular_plano_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/plano",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.consulta_direct",
+  "rule": "/consulta/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.criar_apresentacao_medicamento",
+  "rule": "/apresentacao_medicamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_exame_modelo",
+  "rule": "/exame_modelo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_medicamento",
+  "rule": "/medicamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_prescricao",
+  "rule": "/consulta/<int:consulta_id>/prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.criar_servico_clinica",
+  "rule": "/servico",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_consulta",
+  "rule": "/consulta/<int:consulta_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_orcamento_item",
+  "rule": "/consulta/orcamento_item/<int:item_id>",
+  "methods": "DELETE"
+ },
+ {
+  "endpoint": "consulta_routes.deletar_prescricao",
+  "rule": "/prescricao/<int:prescricao_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.detalhe_medicamento_busca",
+  "rule": "/medicamento/<int:med_id>/detalhe",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.editar_bloco_exames",
+  "rule": "/bloco_exames/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.editar_bloco_orcamento",
+  "rule": "/bloco_orcamento/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.editar_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/editar",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.enviar_assinatura_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/assinatura",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.enviar_foto_tratamento",
+  "rule": "/tratamento/<int:tratamento_id>/foto",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.finalizar_consulta",
+  "rule": "/finalizar_consulta/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.finalizar_consulta_e_fechar",
+  "rule": "/finalizar_consulta/<int:consulta_id>/fechar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.gerar_link_pagamento_orcamento",
+  "rule": "/orcamento/<int:orcamento_id>/pagar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.historico_consultas_partial",
+  "rule": "/animal/<int:animal_id>/historico_consultas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.historico_exames_partial",
+  "rule": "/animal/<int:animal_id>/historico_exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.historico_orcamentos_partial",
+  "rule": "/consulta/<int:consulta_id>/historico_orcamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.historico_prescricoes_partial",
+  "rule": "/consulta/<int:consulta_id>/historico_prescricoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_bloco_exames",
+  "rule": "/imprimir_bloco_exames/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_bloco_orcamento",
+  "rule": "/imprimir_bloco_orcamento/<int:bloco_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_bloco_prescricao",
+  "rule": "/bloco_prescricao/<int:bloco_id>/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_consulta",
+  "rule": "/imprimir_consulta/<int:consulta_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_orcamento",
+  "rule": "/imprimir_orcamento/<int:consulta_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.imprimir_orcamento_padrao",
+  "rule": "/orcamento/<int:orcamento_id>/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.iniciar_retorno",
+  "rule": "/retorno/<int:appointment_id>/start",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.listar_medicamentos_favoritos",
+  "rule": "/medicamentos_favoritos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.marcar_administracao_tratamento",
+  "rule": "/tratamento/registro/<int:registro_id>/marcar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.marcar_item_tratamento_comprado",
+  "rule": "/tratamento/item/<int:item_id>/comprado",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.medicamentos_frequentes",
+  "rule": "/medicamentos_frequentes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.novo_atendimento",
+  "rule": "/novo_atendimento",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.obter_protocolo_clinico_inline",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/protocolos/<int:protocol_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.obter_sugestoes_clinicas",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.pagar_consulta_orcamento",
+  "rule": "/consulta/<int:consulta_id>/pagar_orcamento",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.pagar_orcamento",
+  "rule": "/pagar_orcamento/<int:bloco_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "consulta_routes.recarregar_historico_prescricoes_ajax",
+  "rule": "/animal/<int:animal_id>/historico_prescricoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "consulta_routes.registrar_aplicacao_tratamento",
+  "rule": "/tratamento/item/<int:item_id>/registrar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.registrar_feedback_sugestao_clinica",
+  "rule": "/consulta/<int:consulta_id>/sugestoes_clinicas/feedback",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.salvar_bloco_exames",
+  "rule": "/animal/<int:animal_id>/bloco_exames",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.salvar_bloco_orcamento",
+  "rule": "/consulta/<int:consulta_id>/bloco_orcamento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.salvar_bloco_prescricao",
+  "rule": "/consulta/<int:consulta_id>/bloco_prescricao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.salvar_prescricoes_lote",
+  "rule": "/consulta/<int:consulta_id>/prescricao/lote",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "consulta_routes.toggle_medicamento_favorito",
+  "rule": "/medicamentos_favoritos/<int:med_id>",
+  "methods": "DELETE,POST"
+ },
+ {
+  "endpoint": "consulta_routes.update_consulta",
+  "rule": "/update_consulta/<int:consulta_id>",
+  "methods": "POST"
+ },
+ {
   "endpoint": "contabilidade_conciliacao_importar",
   "rule": "/contabilidade/conciliacao/importar",
   "methods": "POST"
@@ -2402,6 +2777,11 @@
  {
   "endpoint": "conversa",
   "rule": "/conversa/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "conversa_admin",
+  "rule": "/conversa_admin",
   "methods": "GET,POST"
  },
  {
@@ -3535,6 +3915,21 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "loja_routes.racao_assinar",
+  "rule": "/produto/<int:product_id>/assinar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "loja_routes.racao_assinatura_cancelar",
+  "rule": "/assinatura-racao/<int:sub_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "loja_routes.racao_minhas_assinaturas",
+  "rule": "/minhas-assinaturas-racao",
+  "methods": "GET"
+ },
+ {
   "endpoint": "loja_routes.request_delivery",
   "rule": "/orders/<int:order_id>/request_delivery",
   "methods": "POST"
@@ -4058,6 +4453,281 @@
   "endpoint": "pacientes_print_testes",
   "rule": "/sfa/pacientes/impressao/testes",
   "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.add_animal",
+  "rule": "/add-animal",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.adotar_animal",
+  "rule": "/animal/<int:animal_id>/adotar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.alterar_racao",
+  "rule": "/racao/<int:racao_id>",
+  "methods": "DELETE,GET,PUT"
+ },
+ {
+  "endpoint": "pacientes_routes.alterar_tipo_racao",
+  "rule": "/tipo_racao/<int:tipo_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "pacientes_routes.alterar_vacina",
+  "rule": "/vacina/<int:vacina_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "pacientes_routes.alterar_vacina_modelo",
+  "rule": "/vacina_modelo/<int:vacina_id>",
+  "methods": "DELETE,PUT"
+ },
+ {
+  "endpoint": "pacientes_routes.api_atualizar_peso_animal",
+  "rule": "/api/animal/<int:animal_id>/peso",
+  "methods": "PATCH"
+ },
+ {
+  "endpoint": "pacientes_routes.api_tipos_racao",
+  "rule": "/api/tipos_racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.arquivar_animal",
+  "rule": "/animal/<int:animal_id>/arquivar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.buscar_animais",
+  "rule": "/buscar_animais",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.buscar_racoes",
+  "rule": "/buscar_racoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.buscar_tutores",
+  "rule": "/buscar_tutores",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.buscar_vacinas",
+  "rule": "/buscar_vacinas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.carteirinha_ativar",
+  "rule": "/animal/<int:animal_id>/carteirinha/ativar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.carteirinha_desativar",
+  "rule": "/animal/<int:animal_id>/carteirinha/desativar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.carteirinha_publica",
+  "rule": "/carteirinha/<token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.carteirinha_qr",
+  "rule": "/carteirinha/<token>/qr.png",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.consulta_qr",
+  "rule": "/consulta_qr",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.criar_tipo_racao",
+  "rule": "/tipo_racao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.criar_tutor_ajax",
+  "rule": "/criar_tutor_ajax",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.criar_vacina_modelo",
+  "rule": "/vacina_modelo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.deletar_animal",
+  "rule": "/animal/<int:animal_id>/deletar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.deletar_tutor",
+  "rule": "/deletar_tutor/<int:tutor_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.delete_document",
+  "rule": "/animal/<int:animal_id>/documentos/<int:doc_id>/delete",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.detalhes_racao",
+  "rule": "/relatorio/racoes/<int:tipo_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.editar_animal",
+  "rule": "/animal/<int:animal_id>/editar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.editar_animal",
+  "rule": "/editar_animal/<int:animal_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.editar_ficha_animal",
+  "rule": "/animal/<int:animal_id>/editar_ficha",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.exames_imagem_compartilhar",
+  "rule": "/exames-imagem/<int:exame_id>/compartilhar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.exames_imagem_painel",
+  "rule": "/exames-imagem",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.ficha_animal",
+  "rule": "/animal/<int:animal_id>/ficha",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.ficha_tutor",
+  "rule": "/ficha_tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.generate_qr",
+  "rule": "/generate_qr/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.gerar_termo",
+  "rule": "/termo/<int:animal_id>/<tipo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.historico_animal",
+  "rule": "/historico_animal/<int:animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.imprimir_vacinas",
+  "rule": "/animal/<int:animal_id>/vacinas/imprimir",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.list_animals",
+  "rule": "/animals",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.marcar_como_falecido",
+  "rule": "/animal/<int:animal_id>/marcar_falecido",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.meus_animais",
+  "rule": "/meus-animais",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.novo_animal",
+  "rule": "/novo_animal",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.obter_tutor",
+  "rule": "/tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.relatorio_racoes",
+  "rule": "/relatorio/racoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.reverter_falecimento",
+  "rule": "/animal/<int:animal_id>/reverter_falecimento",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.salvar_racao",
+  "rule": "/animal/<int:animal_id>/racoes",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.salvar_vacinas",
+  "rule": "/animal/<int:animal_id>/vacinas",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.termo_animal",
+  "rule": "/animal/<int:animal_id>/termo/<string:tipo>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.termo_interesse",
+  "rule": "/termo/interesse/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.termo_transferencia",
+  "rule": "/termo/transferencia/<int:animal_id>/<int:user_id>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.tipos_racao",
+  "rule": "/tipos_racao",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.tutor_detail",
+  "rule": "/tutor/<int:tutor_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.tutor_sharing_dashboard",
+  "rule": "/tutor/compartilhamentos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "pacientes_routes.tutores",
+  "rule": "/tutores",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "pacientes_routes.update_animal",
+  "rule": "/update_animal/<int:animal_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.update_tutor",
+  "rule": "/update_tutor/<int:user_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "pacientes_routes.upload_document",
+  "rule": "/animal/<int:animal_id>/documentos",
+  "methods": "POST"
  },
  {
   "endpoint": "pagar_consulta_orcamento",
@@ -4730,6 +5400,61 @@
   "methods": "POST"
  },
  {
+  "endpoint": "push_routes.push_subscribe",
+  "rule": "/push/subscribe",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_routes.push_test",
+  "rule": "/push/test",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_routes.push_unsubscribe",
+  "rule": "/push/unsubscribe",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_routes.push_vapid_public_key",
+  "rule": "/push/vapid-public-key",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "push_subscribe",
+  "rule": "/push/subscribe",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_test",
+  "rule": "/push/test",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_unsubscribe",
+  "rule": "/push/unsubscribe",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "push_vapid_public_key",
+  "rule": "/push/vapid-public-key",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "racao_assinar",
+  "rule": "/produto/<int:product_id>/assinar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "racao_assinatura_cancelar",
+  "rule": "/assinatura-racao/<int:sub_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "racao_minhas_assinaturas",
+  "rule": "/minhas-assinaturas-racao",
+  "methods": "GET"
+ },
+ {
   "endpoint": "recarregar_historico_prescricoes_ajax",
   "rule": "/animal/<int:animal_id>/historico_prescricoes",
   "methods": "GET"
@@ -5133,6 +5858,196 @@
   "endpoint": "shares_api",
   "rule": "/api/shares",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.admin_pagar_repasses_frete",
+  "rule": "/admin/repasses-frete/pagar/<int:worker_id>",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.admin_repasses_frete",
+  "rule": "/admin/repasses-frete",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.api_geo_cidade",
+  "rule": "/api/geo/cidade",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.cancelar_solicitacao",
+  "rule": "/solicitacoes/<int:request_id>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.chatgpt_onboarding",
+  "rule": "/chatgpt",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.index",
+  "rule": "/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.minhas_solicitacoes",
+  "rule": "/minhas-solicitacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.openai_apps_challenge",
+  "rule": "/.well-known/openai-apps-challenge",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.painel_dashboard",
+  "rule": "/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.parceiro_vacinas_precos",
+  "rule": "/parceiro/vacinas/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.privacy",
+  "rule": "/privacy",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.professional_services_manage",
+  "rule": "/veterinario/servicos",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.responder_solicitacao",
+  "rule": "/solicitacoes/<int:request_id>/responder",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.secret_game",
+  "rule": "/surpresa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.secret_game_partituras",
+  "rule": "/surpresa/partituras-list",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.secret_game_static",
+  "rule": "/surpresa/<path:filename>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.service_worker",
+  "rule": "/service-worker.js",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos",
+  "rule": "/servicos",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_exames",
+  "rule": "/servicos/exames",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_recomendar",
+  "rule": "/servicos/recomendar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.servicos_ultrassom",
+  "rule": "/servicos/ultrassom",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas",
+  "rule": "/servicos/vacinas",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_admin",
+  "rule": "/servicos/vacinas/admin",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_admin_acao",
+  "rule": "/servicos/vacinas/admin/<int:req_id>/acao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_admin_item",
+  "rule": "/servicos/vacinas/admin/item",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_cancelar",
+  "rule": "/servicos/vacinas/pedido/<token>/cancelar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_cidade_por_local",
+  "rule": "/servicos/vacinas/cidade-por-local",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_pedido",
+  "rule": "/servicos/vacinas/pedido/<token>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.servicos_vacinas_reagendar",
+  "rule": "/servicos/vacinas/pedido/<token>/reagendar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.solicitacoes_recebidas",
+  "rule": "/solicitacoes-recebidas",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.solicitar_agendamento",
+  "rule": "/veterinario/<int:veterinario_id>/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.support",
+  "rule": "/support",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.terms",
+  "rule": "/terms",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.update_vet_profile",
+  "rule": "/veterinario/<int:veterinario_id>/profile",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.veterinarian_cancel_trial",
+  "rule": "/veterinario/assinatura/<int:membership_id>/cancelar_avaliacao",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.veterinarian_membership",
+  "rule": "/veterinario/assinatura",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.veterinarian_membership_checkout",
+  "rule": "/veterinario/assinatura/checkout",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.veterinarian_request_new_trial",
+  "rule": "/veterinario/assinatura/<int:membership_id>/nova_avaliacao",
+  "methods": "POST"
  },
  {
   "endpoint": "solicitacoes_recebidas",
@@ -5642,6 +6557,141 @@
  {
   "endpoint": "vacina_pmo_route_undo",
   "rule": "/vacina-pmo/route/undo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.castracao_pmo_solicitar",
+  "rule": "/castracao-pmo/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo",
+  "rule": "/vacina-pmo",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_agenda",
+  "rule": "/vacina-pmo/agenda",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_animal_name",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/name",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_animal_photo",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/photo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_animal_photo_src",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/photo-src",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_animal_status",
+  "rule": "/vacina-pmo/animal/<int:animal_id>/status",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_avaliacoes",
+  "rule": "/vacina-pmo/avaliacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_cobertura_ativa",
+  "rule": "/vacina-pmo/cobertura-ativa",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_criar_dia",
+  "rule": "/vacina-pmo/criar-dia",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_doses_compilar",
+  "rule": "/vacina-pmo/doses/compilar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_doses_webhook",
+  "rule": "/vacina-pmo/webhook/compilar-doses",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_imprimir",
+  "rule": "/vacina-pmo/imprimir/<date_str>/<turno>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_painel",
+  "rule": "/vacina-pmo/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_public",
+  "rule": "/vacina-pmo/c/<token>",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_public_pet",
+  "rule": "/vacina-pmo/c/<token>/pet/<int:pmo_animal_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_route_optimize",
+  "rule": "/vacina-pmo/route/optimize",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_route_preview",
+  "rule": "/vacina-pmo/route/preview",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_route_undo",
+  "rule": "/vacina-pmo/route/undo",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_sheets",
+  "rule": "/vacina-pmo/sheets",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_solicitar",
+  "rule": "/vacina-pmo/solicitar",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_state",
+  "rule": "/vacina-pmo/state",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_status_webhook",
+  "rule": "/vacina-pmo/webhook/atualizar-status",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_sync",
+  "rule": "/vacina-pmo/sync",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_visit_attended_by",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/attended-by",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_visit_losses",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/losses",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "vacina_pmo_routes.vacina_pmo_visit_note",
+  "rule": "/vacina-pmo/visit/<int:visit_id>/note",
   "methods": "POST"
  },
  {

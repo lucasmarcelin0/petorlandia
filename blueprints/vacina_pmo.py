@@ -46,7 +46,11 @@ def upload_to_s3(*args, **kwargs):
 def vacina_pmo():
     if current_user.role not in ('admin', 'vacinador'):
         abort(403)
-    today = datetime.now(BR_TZ).date().isoformat()
+    # datetime resolvido via módulo app em tempo de request: testes congelam a
+    # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
+    import app as app_module
+
+    today = app_module.datetime.now(BR_TZ).date().isoformat()
     return render_template('vacina_pmo/dashboard.html', today=today)
 
 

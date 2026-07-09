@@ -1,5 +1,5 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v6';
+const CACHE_NAME = 'petorlandia-cache-v7';
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
@@ -51,5 +51,41 @@ self.addEventListener('fetch', event => {
   // Assets estáticos — cache primeiro, rede como fallback.
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
+  );
+});
+
+
+// ── Web Push ────────────────────────────────────────────────────────────────
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'PetOrlândia', body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || 'PetOrlândia';
+  const options = {
+    body: data.body || '',
+    icon: '/static/pastorgato-192.png',
+    badge: '/static/pastorgato-96.png',
+    tag: data.tag || 'petorlandia',
+    data: { url: data.url || '/' },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
   );
 });

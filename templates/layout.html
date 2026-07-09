@@ -343,6 +343,9 @@
     }
   </script>
   <script src="{{ url_for('static', filename='offline.js') }}"></script>
+  {% if current_user.is_authenticated %}
+  <script src="{{ url_for('static', filename='push.js', v='20260709') }}" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/form_feedback.js') }}" defer></script>
   <script src="{{ url_for('static', filename='photo_cropper.js') }}"></script>
   <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>

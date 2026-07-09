@@ -56,6 +56,24 @@ def get_blueprint():
     return bp
 
 
+def _push_nova_mensagem(receiver_id, url='/mensagens'):
+    """Push best-effort quando chega mensagem nova (complementa o badge)."""
+    try:
+        from services.push import push_to_user
+
+        nome = getattr(current_user, 'name', None) or 'Alguém'
+        push_to_user(
+            receiver_id,
+            'Nova mensagem 💬',
+            f'{nome} te enviou uma mensagem no PetOrlândia.',
+            url=url,
+            tag='mensagem',
+        )
+    except Exception:  # noqa: BLE001 - push nunca bloqueia o fluxo
+        current_app.logger.debug('Falha silenciosa de push de mensagem', exc_info=True)
+
+
+
 @bp.route("/mensagem/<int:animal_id>", methods=["GET", "POST"])
 @login_required
 def enviar_mensagem(animal_id):
@@ -77,6 +95,7 @@ def enviar_mensagem(animal_id):
         )
         db.session.add(msg)
         db.session.commit()
+        _push_nova_mensagem(animal.user_id)
         flash('Mensagem enviada com sucesso!', 'success')
         return redirect(url_for('list_animals'))
 
@@ -239,6 +258,10 @@ def conversa(animal_id, user_id):
         )
         db.session.add(nova_msg)
         db.session.commit()
+        _push_nova_mensagem(
+            outro_usuario.id,
+            url=url_for('conversa', animal_id=animal.id, user_id=current_user.id),
+        )
         return redirect(url_for('conversa', animal_id=animal.id, user_id=outro_usuario.id))
 
     updated = False
@@ -286,6 +309,10 @@ def api_conversa_message(animal_id, user_id):
     )
     db.session.add(nova_msg)
     db.session.commit()
+    _push_nova_mensagem(
+        outro_usuario.id,
+        url=url_for('conversa', animal_id=animal_id, user_id=current_user.id),
+    )
     return render_template('components/message.html', msg=nova_msg)
 
 
@@ -372,6 +399,10 @@ def conversa_admin(user_id=None):
             message_content=form.content.data,
         )
         db.session.commit()
+        _push_nova_mensagem(
+            interlocutor.id,
+            url=(url_for('conversa_admin', user_id=current_user.id) if not is_admin else url_for('conversa_admin')),
+        )
         if is_admin:
             return redirect(url_for('conversa_admin', user_id=interlocutor.id))
         return redirect(url_for('conversa_admin'))
@@ -469,6 +500,10 @@ def api_conversa_admin_message(user_id=None):
         message_content=content,
     )
     db.session.commit()
+    _push_nova_mensagem(
+        interlocutor.id,
+        url=(url_for('conversa_admin', user_id=current_user.id) if not is_admin else url_for('conversa_admin')),
+    )
     return render_template('components/message.html', msg=nova_msg)
 
 

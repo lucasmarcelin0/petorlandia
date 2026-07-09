@@ -7064,6 +7064,7 @@ def integration_bearer_required(*required_scopes: str):
 
 
 LAUDO_VOLANTE_WIDGET_URI = 'ui://petorlandia/laudo-volante-v2.html'
+MAX_MCP_LAUDO_FILE_BYTES = 25 * 1024 * 1024
 
 
 
@@ -7078,6 +7079,14 @@ def _is_local_chatgpt_file_path(value: str) -> bool:
         or lowered.startswith('file:')
         or re.match(r'^[a-z]:\\', raw, flags=re.IGNORECASE) is not None
     )
+
+
+def _mcp_extract_file_reference(payload: dict, *field_names: str) -> dict | None:
+    for field_name in field_names:
+        value = payload.get(field_name)
+        if isinstance(value, dict) and value.get('download_url') and value.get('file_id'):
+            return value
+    return None
 
 
 
@@ -8373,6 +8382,8 @@ def verificar_datas_proximas() -> None:
                 f"Lembrete: consulta de {appt.animal.name} em "
                 f"{appt.scheduled_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
             )
+            from services.push import push_to_user
+            push_to_user(tutor.id, 'PetOrlândia 🐾', texto, url='/', tag='lembrete')
             if tutor.email:
                 msg = MailMessage(
                     subject="Lembrete de consulta - PetOrlândia",
@@ -8406,6 +8417,8 @@ def verificar_datas_proximas() -> None:
                 f"Lembrete: exame '{ex.nome}' de {ex.bloco.animal.name} em "
                 f"{ex.performed_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
             )
+            from services.push import push_to_user
+            push_to_user(tutor.id, 'PetOrlândia 🐾', texto, url='/', tag='lembrete')
             if tutor.email:
                 msg = MailMessage(
                     subject="Lembrete de exame - PetOrlândia",
@@ -8434,6 +8447,8 @@ def verificar_datas_proximas() -> None:
                 f"Lembrete: vacina '{vac.nome}' de {vac.animal.name} em "
                 f"{vac.aplicada_em.strftime('%d/%m/%Y')}"
             )
+            from services.push import push_to_user
+            push_to_user(tutor.id, 'PetOrlândia 🐾', texto, url='/', tag='lembrete')
             if tutor.email:
                 msg = MailMessage(
                     subject="Lembrete de vacina - PetOrlândia",

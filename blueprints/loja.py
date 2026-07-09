@@ -30,7 +30,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
-from extensions import csrf, db
+from extensions import csrf, db, mail
+from flask_mail import Message as MailMessage
 from forms import (
     AddToCartForm,
     CartAddressForm,
@@ -1928,12 +1929,20 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             pass
 
+    racao_sub = None
+    if extref and extref.startswith('racao-assinatura-'):
+        try:
+            from models import RacaoAssinatura
+            racao_sub = RacaoAssinatura.query.get(int(extref.rsplit('-', 1)[1]))
+        except (ValueError, TypeError):
+            pass
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
             orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
-            if not pay and not bloco and not orcamento and not onboarding and not grooming_sub:
+            if not pay and not bloco and not orcamento and not onboarding and not grooming_sub and not racao_sub:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
@@ -2137,6 +2146,9 @@ def notificacoes_mercado_pago():
                 grooming_sub.start_date = utcnow()
                 if mp_id and not grooming_sub.mp_preapproval_id:
                     grooming_sub.mp_preapproval_id = mp_id
+
+            if racao_sub and payment_status == PaymentStatus.COMPLETED:
+                _process_racao_assinatura_ciclo(racao_sub, mp_id)
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -2351,3 +2363,203 @@ def pedido_detail(order_id):
         cancel_url=cancel_url,
     )
 
+
+
+# ---------------------------------------------------------------------------
+# Assinatura de ração (recorrência via preapproval Mercado Pago)
+# ---------------------------------------------------------------------------
+
+# frequência em dias -> (frequency, frequency_type) do preapproval
+RACAO_ASSINATURA_FREQUENCIAS = {
+    15: (15, 'days'),
+    30: (1, 'months'),
+    60: (2, 'months'),
+    90: (3, 'months'),
+}
+
+
+def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
+    """Registra um ciclo pago da assinatura e notifica tutor e lojista."""
+    primeira_vez = racao_sub.status != 'active'
+    if primeira_vez:
+        racao_sub.status = 'active'
+        racao_sub.activated_at = utcnow()
+    if mp_id and not racao_sub.mp_preapproval_id:
+        racao_sub.mp_preapproval_id = str(mp_id)
+    racao_sub.ciclos_pagos = (racao_sub.ciclos_pagos or 0) + 1
+    racao_sub.ultimo_ciclo_em = utcnow()
+
+    produto = racao_sub.product
+    nome_produto = racao_sub.variant.name if racao_sub.variant else (produto.name if produto else 'Assinatura')
+
+    # Tutor: confirmação do ciclo
+    try:
+        from services.push import push_to_user
+        push_to_user(
+            racao_sub.user_id,
+            'Assinatura confirmada 🐾' if primeira_vez else 'Ração a caminho 🐾',
+            f'Pagamento confirmado: {nome_produto}. A entrega será preparada.',
+            url='/minhas-assinaturas-racao',
+            tag='racao-assinatura',
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.debug('push tutor assinatura falhou', exc_info=True)
+
+    # Lojista: preparar entrega
+    casa = produto.casa_de_racao if produto else None
+    if casa and casa.owner_id:
+        endereco = racao_sub.endereco_entrega or 'endereço cadastrado do cliente'
+        cliente = racao_sub.user.name if racao_sub.user else 'cliente'
+        texto = (
+            f'Assinatura #{racao_sub.id}: preparar entrega de {racao_sub.quantidade}x '
+            f'{nome_produto} para {cliente} ({endereco}).'
+        )
+        try:
+            from services.push import push_to_user
+            push_to_user(casa.owner_id, 'Nova entrega de assinatura 📦', texto,
+                         url=f'/casa-de-racao/{casa.id}/entregas', tag='racao-assinatura')
+        except Exception:  # noqa: BLE001
+            current_app.logger.debug('push lojista assinatura falhou', exc_info=True)
+        owner = getattr(casa, 'owner', None)
+        email = getattr(owner, 'email', None)
+        if email:
+            try:
+                mail.send(MailMessage(
+                    subject='PetOrlândia — nova entrega de assinatura',
+                    recipients=[email],
+                    body=texto,
+                ))
+            except Exception:  # noqa: BLE001
+                current_app.logger.warning('Falha ao avisar lojista por e-mail (assinatura %s)', racao_sub.id)
+
+
+@bp.route('/produto/<int:product_id>/assinar', methods=['GET', 'POST'])
+@login_required
+def racao_assinar(product_id):
+    """Cria uma assinatura recorrente do produto (ração e afins)."""
+    from models import Animal, ProductVariant, RacaoAssinatura
+
+    product = Product.query.get_or_404(product_id)
+    if product.status != 'active':
+        abort(404)
+
+    variantes = [v for v in (product.variants or []) if v.status == 'active']
+    animais = (
+        Animal.query
+        .filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .all()
+    )
+
+    if request.method == 'POST':
+        freq = request.form.get('frequencia_dias', type=int) or 30
+        if freq not in RACAO_ASSINATURA_FREQUENCIAS:
+            freq = 30
+        quantidade = max(1, min(request.form.get('quantidade', type=int) or 1, 10))
+        variant = None
+        variant_id = request.form.get('variant_id', type=int)
+        if variant_id:
+            variant = ProductVariant.query.filter_by(id=variant_id, product_id=product.id).first()
+        animal_id = request.form.get('animal_id', type=int) or None
+        if animal_id and not any(a.id == animal_id for a in animais):
+            animal_id = None
+        endereco = (request.form.get('endereco_entrega') or '').strip()[:255] or None
+
+        preco_unit = variant.preco_publico if variant else product.preco_publico
+        preco_ciclo = float(preco_unit or 0) * quantidade
+        if preco_ciclo <= 0:
+            flash('Produto sem preço válido para assinatura.', 'danger')
+            return redirect(url_for('produto_detail', product_id=product.id))
+
+        sub = RacaoAssinatura(
+            user_id=current_user.id,
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            animal_id=animal_id,
+            quantidade=quantidade,
+            frequencia_dias=freq,
+            preco_ciclo=preco_ciclo,
+            endereco_entrega=endereco,
+            status='pending',
+        )
+        db.session.add(sub)
+        db.session.commit()
+
+        frequency, frequency_type = RACAO_ASSINATURA_FREQUENCIAS[freq]
+        nome_item = variant.name if variant else product.name
+        preapproval_data = {
+            'reason': f'Assinatura {nome_item} — PetOrlândia',
+            'back_url': url_for('racao_minhas_assinaturas', _external=True),
+            'payer_email': current_user.email,
+            'auto_recurring': {
+                'frequency': frequency,
+                'frequency_type': frequency_type,
+                'transaction_amount': preco_ciclo,
+                'currency_id': 'BRL',
+            },
+            'external_reference': f'racao-assinatura-{sub.id}',
+        }
+        try:
+            resp = mp_sdk().preapproval().create(preapproval_data)
+        except Exception:
+            current_app.logger.exception('Erro ao criar preapproval de assinatura de ração')
+            flash('Falha ao conectar com o Mercado Pago. Tente novamente.', 'danger')
+            return redirect(url_for('produto_detail', product_id=product.id))
+
+        if resp.get('status') not in {200, 201}:
+            current_app.logger.warning('Preapproval de ração rejeitado: %s', resp)
+            flash('Erro ao iniciar a assinatura. Tente novamente.', 'danger')
+            return redirect(url_for('produto_detail', product_id=product.id))
+
+        body = resp.get('response', {}) or {}
+        mp_id = body.get('id')
+        init_point = body.get('init_point') or body.get('sandbox_init_point')
+        if mp_id:
+            sub.mp_preapproval_id = str(mp_id)
+            db.session.commit()
+        if not init_point:
+            flash('Erro ao iniciar a assinatura.', 'danger')
+            return redirect(url_for('produto_detail', product_id=product.id))
+        return redirect(init_point)
+
+    return render_template(
+        'loja/assinar_racao.html',
+        product=product,
+        variantes=variantes,
+        animais=animais,
+        frequencias=RACAO_ASSINATURA_FREQUENCIAS,
+    )
+
+
+@bp.route('/minhas-assinaturas-racao')
+@login_required
+def racao_minhas_assinaturas():
+    from models import RacaoAssinatura
+
+    assinaturas = (
+        RacaoAssinatura.query
+        .filter_by(user_id=current_user.id)
+        .order_by(RacaoAssinatura.created_at.desc())
+        .all()
+    )
+    return render_template('loja/minhas_assinaturas_racao.html', assinaturas=assinaturas)
+
+
+@bp.route('/assinatura-racao/<int:sub_id>/cancelar', methods=['POST'])
+@login_required
+def racao_assinatura_cancelar(sub_id):
+    from models import RacaoAssinatura
+
+    sub = RacaoAssinatura.query.get_or_404(sub_id)
+    if sub.user_id != current_user.id and not _is_admin():
+        abort(403)
+    if sub.mp_preapproval_id:
+        try:
+            mp_sdk().preapproval().update(sub.mp_preapproval_id, {'status': 'cancelled'})
+        except Exception:
+            current_app.logger.exception('Falha ao cancelar preapproval %s', sub.mp_preapproval_id)
+    sub.status = 'cancelled'
+    sub.cancelled_at = utcnow()
+    db.session.commit()
+    flash('Assinatura cancelada. Nenhuma nova cobrança será feita.', 'info')
+    return redirect(url_for('racao_minhas_assinaturas'))

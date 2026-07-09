@@ -3074,3 +3074,99 @@ def api_atualizar_peso_animal(animal_id):
     db.session.commit()
     return jsonify({"ok": True, "peso_kg": novo_peso})
 
+
+
+# ---------------------------------------------------------------------------
+# Carteirinha digital pública do pet
+# ---------------------------------------------------------------------------
+
+def _carteirinha_pode_gerenciar(animal):
+    return (
+        current_user.is_authenticated
+        and (
+            current_user.role == 'admin'
+            or animal.user_id == current_user.id
+        )
+    )
+
+
+@bp.route('/animal/<int:animal_id>/carteirinha/ativar', methods=['POST'])
+@login_required
+def carteirinha_ativar(animal_id):
+    animal = get_animal_or_404(animal_id)
+    if not _carteirinha_pode_gerenciar(animal):
+        abort(403)
+    if not animal.public_token:
+        animal.public_token = secrets.token_urlsafe(20)[:32]
+        db.session.commit()
+    flash('Carteirinha digital ativada! Compartilhe o link com quem cuida do seu pet.', 'success')
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
+@bp.route('/animal/<int:animal_id>/carteirinha/desativar', methods=['POST'])
+@login_required
+def carteirinha_desativar(animal_id):
+    animal = get_animal_or_404(animal_id)
+    if not _carteirinha_pode_gerenciar(animal):
+        abort(403)
+    if animal.public_token:
+        animal.public_token = None
+        db.session.commit()
+    flash('Carteirinha digital desativada. O link antigo deixou de funcionar.', 'info')
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
+@bp.route('/carteirinha/<token>')
+def carteirinha_publica(token):
+    """Página pública da carteirinha — não exige login.
+
+    Mostra apenas dados do pet (nunca contato completo do tutor). O token é
+    opaco e revogável pelo tutor a qualquer momento.
+    """
+    animal = (
+        Animal.query
+        .filter_by(public_token=token)
+        .filter(Animal.removido_em.is_(None))
+        .first_or_404()
+    )
+
+    vacinas_aplicadas = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=True)
+        .order_by(Vacina.aplicada_em.desc())
+        .all()
+    )
+    proximas_doses = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        .filter(Vacina.aplicada_em.isnot(None))
+        .order_by(Vacina.aplicada_em)
+        .all()
+    )
+
+    tutor_nome = None
+    if animal.owner and animal.owner.name:
+        tutor_nome = animal.owner.name.split()[0]
+
+    return render_template(
+        'animais/carteirinha_publica.html',
+        animal=animal,
+        vacinas_aplicadas=vacinas_aplicadas,
+        proximas_doses=proximas_doses,
+        tutor_nome=tutor_nome,
+        hoje=date.today(),
+    )
+
+
+@bp.route('/carteirinha/<token>/qr.png')
+def carteirinha_qr(token):
+    animal = (
+        Animal.query
+        .filter_by(public_token=token)
+        .filter(Animal.removido_em.is_(None))
+        .first_or_404()
+    )
+    url = url_for('carteirinha_publica', token=animal.public_token, _external=True)
+    img = qrcode.make(url)
+    buffer = BytesIO()
+    img.save(buffer)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='image/png')

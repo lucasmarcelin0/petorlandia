@@ -273,6 +273,8 @@
                 <i class="fas fa-user me-2 text-primary"></i> Meu perfil</a></li>
             <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}">
                 <i class="fas fa-box me-2 text-warning"></i> Minhas compras</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('racao_minhas_assinaturas') }}">
+                <i class="fas fa-rotate me-2 text-success"></i> Minhas assinaturas</a></li>
             {% if current_user.role == 'parceiro' %}
             <li><a class="dropdown-item" href="{{ url_for('parceiro_dashboard') }}">
                 <i class="fa-solid fa-handshake me-2 text-primary"></i> Área do parceiro</a></li>
@@ -289,6 +291,11 @@
             <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}">
                 <i class="fas fa-credit-card me-2 text-success"></i> Assinatura de veterinário</a></li>
             {% endif %}
+            <li id="push-toggle-item" class="d-none">
+              <a class="dropdown-item" href="#" data-push-state="off">
+                <i class="fas fa-bell me-2 text-warning"></i> <span data-push-label>Ativar notificações</span>
+              </a>
+            </li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('logout') }}">
                 <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>

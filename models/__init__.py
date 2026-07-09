@@ -145,4 +145,6 @@ __all__ = [
     "ReferralSignup",
     "SiteFlag",
     "AdminActionNotification",
+    "PushSubscription",
+    "RacaoAssinatura",
 ]

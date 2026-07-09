@@ -118,6 +118,11 @@ class Config:
     # agendamentos). Sem valor definido, nenhum aviso é enviado.
     ADMIN_NOTIFY_EMAIL = _env_optional("ADMIN_NOTIFY_EMAIL")
 
+    # Web Push (VAPID). Sem as chaves o push fica desativado silenciosamente.
+    VAPID_PUBLIC_KEY = _env_optional("VAPID_PUBLIC_KEY")
+    VAPID_PRIVATE_KEY = _env_optional("VAPID_PRIVATE_KEY")
+    VAPID_CLAIM_EMAIL = _env_optional("VAPID_CLAIM_EMAIL")
+
     # Token de acesso do Mercado Pago usado na integração de pagamentos
     MERCADOPAGO_ACCESS_TOKEN = _env_optional("MERCADOPAGO_ACCESS_TOKEN")
     MERCADOPAGO_PUBLIC_KEY = _env_optional("MERCADOPAGO_PUBLIC_KEY")

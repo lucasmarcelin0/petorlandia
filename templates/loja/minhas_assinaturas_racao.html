@@ -1,0 +1,49 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container my-4" style="max-width: 760px;">
+  <h2 class="mb-3"><i class="fa-solid fa-rotate me-2 text-success"></i>Minhas assinaturas</h2>
+
+  {% if not assinaturas %}
+  <div class="alert alert-light border">
+    Você ainda não tem assinaturas. Na <a href="{{ url_for('loja') }}">loja</a>, procure o botão
+    <span class="badge bg-success">Assinar</span> nos produtos para receber automaticamente.
+  </div>
+  {% endif %}
+
+  {% for sub in assinaturas %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <div class="fw-semibold">
+          {{ sub.quantidade }}x {{ sub.variant.name if sub.variant else sub.product.name }}
+          {% if sub.animal %}<span class="text-muted">· para {{ sub.animal.name }}</span>{% endif %}
+        </div>
+        <div class="small text-muted">
+          {{ sub.frequencia_label }} · {{ sub.preco_ciclo | currency_br }} por ciclo
+          {% if sub.ciclos_pagos %} · {{ sub.ciclos_pagos }} ciclo(s) pago(s){% endif %}
+        </div>
+        <div class="small mt-1">
+          {% if sub.status == 'active' %}
+            <span class="badge bg-success">Ativa</span>
+          {% elif sub.status == 'pending' %}
+            <span class="badge bg-warning text-dark">Aguardando 1º pagamento</span>
+          {% else %}
+            <span class="badge bg-secondary">Cancelada</span>
+          {% endif %}
+          {% if sub.ultimo_ciclo_em %}
+            <span class="text-muted">último ciclo: {{ sub.ultimo_ciclo_em | format_datetime_brazil('%d/%m/%Y') }}</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if sub.status != 'cancelled' %}
+      <form method="POST" action="{{ url_for('racao_assinatura_cancelar', sub_id=sub.id) }}"
+            onsubmit="return confirm('Cancelar esta assinatura? Nenhuma nova cobrança será feita.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

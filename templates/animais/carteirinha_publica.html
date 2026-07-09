@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carteirinha de {{ animal.name }} — PetOrlândia</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+  <style>
+    body { background: #f2f6fb; }
+    .card-pet { max-width: 480px; margin: 0 auto; border-radius: 18px; overflow: hidden; }
+    .pet-header { background: linear-gradient(135deg, #4e73df, #36b9cc); color: #fff; padding: 1.5rem; }
+    .pet-photo { width: 84px; height: 84px; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,.7); }
+    .pet-attr { font-size: .85rem; opacity: .9; }
+    .section-title { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: #6c757d; }
+    .vac-ok { color: #1cc88a; }
+    .vac-late { color: #e74a3b; }
+    .brand { font-size: .8rem; color: #6c757d; }
+  </style>
+</head>
+<body class="py-4 px-3">
+  <div class="card card-pet shadow-sm">
+    <div class="pet-header d-flex align-items-center gap-3">
+      {% if animal.image %}
+        <img src="{{ animal.image }}" alt="{{ animal.name }}" class="pet-photo">
+      {% else %}
+        <img src="{{ url_for('static', filename='default_animal.png') }}" alt="" class="pet-photo">
+      {% endif %}
+      <div>
+        <h1 class="h4 mb-1">{{ animal.name }}</h1>
+        <div class="pet-attr">
+          {{ animal.species|species_display }}{% if animal.breed %} · {{ animal.breed.name }}{% endif %}
+          {% if animal.sex %} · {{ animal.sex }}{% endif %}
+        </div>
+        <div class="pet-attr">
+          {% if animal.date_of_birth %}Nascimento: {{ animal.date_of_birth.strftime('%d/%m/%Y') }}{% elif animal.age %}Idade: {{ animal.age }}{% endif %}
+          {% if animal.peso %} · {{ '%.1f'|format(animal.peso) }} kg{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="row g-2 mb-3">
+        {% if animal.microchip_number %}
+        <div class="col-6">
+          <div class="section-title">Microchip</div>
+          <div class="small">{{ animal.microchip_number }}</div>
+        </div>
+        {% endif %}
+        {% if tutor_nome %}
+        <div class="col-6">
+          <div class="section-title">Tutor(a)</div>
+          <div class="small">{{ tutor_nome }}</div>
+        </div>
+        {% endif %}
+        <div class="col-6">
+          <div class="section-title">Castrado</div>
+          <div class="small">{{ 'Sim' if animal.neutered else 'Não' }}</div>
+        </div>
+      </div>
+
+      <div class="section-title mb-2">Vacinas aplicadas</div>
+      {% if vacinas_aplicadas %}
+      <ul class="list-group list-group-flush mb-3">
+        {% for vac in vacinas_aplicadas %}
+        <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold small">{{ vac.nome }}</div>
+            {% if vac.fabricante %}<div class="text-muted small">{{ vac.fabricante }}{% if vac.lote %} · lote {{ vac.lote }}{% endif %}</div>{% endif %}
+            {% if vac.veterinario %}<div class="text-muted small">{{ vac.veterinario }}</div>{% endif %}
+          </div>
+          <span class="small vac-ok text-nowrap">✓ {{ vac.aplicada_em.strftime('%d/%m/%Y') if vac.aplicada_em }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-muted small mb-3">Nenhuma vacina registrada ainda.</p>
+      {% endif %}
+
+      {% if proximas_doses %}
+      <div class="section-title mb-2">Próximas doses</div>
+      <ul class="list-group list-group-flush mb-3">
+        {% for vac in proximas_doses %}
+        <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+          <span class="small">{{ vac.nome }}</span>
+          <span class="small text-nowrap {{ 'vac-late' if vac.aplicada_em and vac.aplicada_em < hoje else 'text-muted' }}">
+            {{ vac.aplicada_em.strftime('%d/%m/%Y') if vac.aplicada_em }}
+            {% if vac.aplicada_em and vac.aplicada_em < hoje %}(atrasada){% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <div class="text-center mt-4">
+        <img src="{{ url_for('carteirinha_qr', token=animal.public_token) }}" alt="QR code da carteirinha" width="140" height="140" class="mb-2">
+        <div class="brand">Carteirinha digital · <a href="{{ url_for('index') }}" class="text-decoration-none">PetOrlândia</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center mt-3">
+    <button class="btn btn-sm btn-outline-primary" onclick="compartilhar()">Compartilhar carteirinha</button>
+  </div>
+
+  <script>
+    function compartilhar() {
+      const data = {
+        title: 'Carteirinha de {{ animal.name }} — PetOrlândia',
+        url: window.location.href,
+      };
+      if (navigator.share) {
+        navigator.share(data).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+          alert('Link copiado!');
+        });
+      }
+    }
+  </script>
+</body>
+</html>

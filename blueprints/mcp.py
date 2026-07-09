@@ -2,10 +2,11 @@
 from flask import Blueprint
 import json
 from datetime import date
+from urllib.parse import quote_plus
 from extensions import csrf, db
-from flask import jsonify, make_response, request
+from flask import jsonify, make_response, request, url_for
 from helpers import has_veterinarian_profile
-from models import Animal, AnimalDocumento, Appointment, Clinica, Consulta, ExameImagem, OAuthAccessToken, User
+from models import AdminActionNotification, Animal, AnimalDocumento, Appointment, Clinica, Consulta, ExameImagem, OAuthAccessToken, User, Vacina
 from services.appointments import ReturnAppointmentDTO, schedule_return_appointment
 from services.oauth_provider import _oauth_allowed_scopes, _oauth_extract_bearer_token, _oauth_issuer, _oauth_order_scopes
 
@@ -126,6 +127,18 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'scopes': ['pets:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_array_output_schema('pets', 'Pets acessiveis ao usuario autenticado.'),
+    },
+    'listar_vacinas_pet': {
+        'title': 'Listar vacinas do pet',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('vacinas', 'Vacinas aplicadas e proximas doses dos pets do usuario.'),
+    },
+    'obter_carteirinha_pet': {
+        'title': 'Obter carteirinha digital do pet',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Link publico da carteirinha digital do pet.'),
     },
     'listar_agendamentos': {
         'title': 'Listar agendamentos',
@@ -255,6 +268,24 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_object_output_schema('Agenda diaria com pendencias clinicas resumidas.'),
     },
+    'buscar_paciente': {
+        'title': 'Buscar paciente',
+        'scopes': ['pets:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('pacientes', 'Pacientes encontrados no escopo acessivel.'),
+    },
+    'obter_timeline_clinica': {
+        'title': 'Obter timeline clinica',
+        'scopes': ['clinical_summary:read', 'exams:read', 'vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Linha do tempo clinica consolidada do paciente.'),
+    },
+    'preparar_consulta': {
+        'title': 'Preparar consulta',
+        'scopes': ['appointments:read', 'clinical_summary:read', 'exams:read', 'vaccines:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Briefing de consulta com resumo, pendencias e perguntas sugeridas.'),
+    },
     'listar_pendencias_clinicas': {
         'title': 'Listar pendencias clinicas',
         'scopes': ['appointments:read', 'exams:read', 'vaccines:read'],
@@ -285,11 +316,29 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_object_output_schema('Rascunho deterministico de orientacao ao tutor.'),
     },
+    'gerar_mensagem_whatsapp_tutor': {
+        'title': 'Gerar mensagem WhatsApp ao tutor',
+        'scopes': ['tutor_guidance:generate'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Mensagem pronta para copiar ou abrir no WhatsApp.'),
+    },
     'gerar_handoff_clinico': {
         'title': 'Gerar handoff clinico',
         'scopes': ['handoff:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_object_output_schema('Handoff clinico resumido para outro profissional.'),
+    },
+    'listar_alertas_admin': {
+        'title': 'Listar alertas administrativos',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('alertas', 'Alertas administrativos acionaveis do usuario admin.'),
+    },
+    'resolver_alerta_admin': {
+        'title': 'Resolver alerta administrativo',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Alerta administrativo marcado como lido ou resolvido.'),
     },
 }
 MAX_MCP_LAUDO_FILE_BYTES = 25 * 1024 * 1024
@@ -319,6 +368,125 @@ MCP_FILE_REFERENCE_OR_STRING_SCHEMA = {
         },
     ]
 }
+
+AGENDA_COCKPIT_WIDGET_URI = 'ui://petorlandia/agenda-cockpit-v1.html'
+TIMELINE_CLINICA_WIDGET_URI = 'ui://petorlandia/timeline-clinica-v1.html'
+ADMIN_COMMAND_CENTER_WIDGET_URI = 'ui://petorlandia/admin-command-center-v1.html'
+
+
+def _mcp_widget_resource(uri: str, name: str, description: str):
+    return {
+        'uri': uri,
+        'name': name,
+        'description': description,
+        'mimeType': 'text/html;profile=mcp-app',
+    }
+
+
+def _mcp_dashboard_widget_html(title: str, subtitle: str, mode: str):
+    return f"""
+<main class="po-shell" data-mode="{mode}">
+  <header>
+    <div>
+      <p>PetOrlandia</p>
+      <h1>{title}</h1>
+      <span>{subtitle}</span>
+    </div>
+    <strong id="count">0</strong>
+  </header>
+  <section id="summary"></section>
+  <section id="items" class="items"></section>
+</main>
+<style>
+  :root {{ color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+  body {{ margin: 0; background: #f8fafc; color: #172033; }}
+  .po-shell {{ min-height: 100vh; padding: 18px; box-sizing: border-box; }}
+  header {{ display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; border-bottom: 1px solid #dbe3ee; padding-bottom: 14px; }}
+  p {{ margin: 0 0 4px; color: #607089; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }}
+  h1 {{ margin: 0; font-size: 24px; line-height: 1.15; }}
+  header span {{ display: block; margin-top: 6px; color: #607089; font-size: 14px; }}
+  header strong {{ min-width: 42px; min-height: 42px; border-radius: 8px; background: #162033; color: #fff; display: grid; place-items: center; font-size: 18px; }}
+  #summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 16px 0; }}
+  .metric, .card {{ background: #fff; border: 1px solid #dbe3ee; border-radius: 8px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
+  .metric {{ padding: 12px; }}
+  .metric b {{ display: block; font-size: 20px; margin-bottom: 2px; }}
+  .metric span {{ color: #607089; font-size: 12px; }}
+  .items {{ display: grid; gap: 10px; }}
+  .card {{ padding: 12px; }}
+  .card h2 {{ margin: 0 0 6px; font-size: 15px; line-height: 1.25; }}
+  .card p {{ margin: 4px 0; color: #334155; font-size: 13px; text-transform: none; letter-spacing: 0; }}
+  .tags {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }}
+  .tag {{ border-radius: 999px; background: #eef6f5; color: #0f766e; padding: 4px 8px; font-size: 12px; }}
+  a {{ color: #0f766e; text-decoration: none; font-weight: 650; }}
+</style>
+<script>
+  const mode = document.querySelector(".po-shell").dataset.mode;
+  const summary = document.getElementById("summary");
+  const items = document.getElementById("items");
+  const count = document.getElementById("count");
+  const text = (value) => value === null || value === undefined || value === "" ? "-" : String(value);
+  const arr = (value) => Array.isArray(value) ? value : [];
+  function metric(label, value) {{
+    const node = document.createElement("article");
+    node.className = "metric";
+    node.innerHTML = `<b>${{text(value)}}</b><span>${{label}}</span>`;
+    return node;
+  }}
+  function tags(values) {{
+    const clean = arr(values).filter(Boolean);
+    if (!clean.length) return "";
+    return `<div class="tags">${{clean.map((v) => `<span class="tag">${{text(v)}}</span>`).join("")}}</div>`;
+  }}
+  function renderAgenda(payload) {{
+    const ag = arr(payload.agendamentos);
+    count.textContent = payload.total_agendamentos ?? ag.length;
+    summary.append(metric("Data", payload.data || "hoje"), metric("Agendamentos", count.textContent));
+    ag.forEach((it) => {{
+      const pend = it.pendencias_resumo || {{}};
+      const card = document.createElement("article");
+      card.className = "card";
+      card.innerHTML = `<h2>${{text(it.animal_nome)}} · ${{text(it.horario || it.scheduled_at)}}</h2>
+        <p>${{text(it.tipo || it.kind)}} · ${{text(it.status)}}</p>
+        <p>${{text(it.observacoes || it.notes)}}</p>
+        ${{tags([`Vacinas: ${{pend.vacinas_atrasadas || 0}}`, `Exames: ${{pend.exames_pendentes || 0}}`, `Retornos: ${{pend.retornos_agendados || 0}}`])}}`;
+      items.append(card);
+    }});
+  }}
+  function renderTimeline(payload) {{
+    const timeline = arr(payload.timeline);
+    count.textContent = timeline.length;
+    const animal = payload.animal || {{}};
+    summary.append(metric("Paciente", animal.nome || animal.name), metric("Eventos", timeline.length), metric("Pendências", arr(payload.pendencias).length));
+    timeline.forEach((event) => {{
+      const card = document.createElement("article");
+      card.className = "card";
+      card.innerHTML = `<h2>${{text(event.titulo || event.tipo)}}</h2><p>${{text(event.data || event.quando)}}</p><p>${{text(event.descricao)}}</p>${{tags(event.tags)}}`;
+      items.append(card);
+    }});
+  }}
+  function renderAdmin(payload) {{
+    const alerts = arr(payload.alertas);
+    count.textContent = payload.total_abertos ?? alerts.length;
+    summary.append(metric("Abertos", payload.total_abertos ?? alerts.length), metric("Críticos", payload.total_criticos ?? 0), metric("Não lidos", payload.total_nao_lidos ?? 0));
+    alerts.forEach((alerta) => {{
+      const card = document.createElement("article");
+      card.className = "card";
+      const link = alerta.url ? `<p><a target="_blank" href="${{alerta.url}}">Abrir no PetOrlandia</a></p>` : "";
+      card.innerHTML = `<h2>${{text(alerta.titulo)}}</h2><p>${{text(alerta.corpo)}}</p><p>${{text(alerta.prioridade)}} · ${{text(alerta.status)}} · ${{text(alerta.criado_em)}}</p>${{link}}`;
+      items.append(card);
+    }});
+  }}
+  function render(payload) {{
+    summary.innerHTML = "";
+    items.innerHTML = "";
+    if (mode === "agenda") renderAgenda(payload || {{}});
+    if (mode === "timeline") renderTimeline(payload || {{}});
+    if (mode === "admin") renderAdmin(payload || {{}});
+  }}
+  render(window.openai?.toolOutput || {{}});
+  window.addEventListener("openai:set_globals", (event) => render(event.detail?.globals?.toolOutput || window.openai?.toolOutput || {{}}), {{ passive: true }});
+</script>
+""".strip()
 
 
 
@@ -820,6 +988,316 @@ def _mcp_laudo_volante_widget_resource():
     }
 
 
+def _mcp_widget_catalog():
+    return {
+        LAUDO_VOLANTE_WIDGET_URI: (
+            _mcp_laudo_volante_widget_resource(),
+            _mcp_laudo_volante_widget_html(),
+            'Painel para revisar clinica, tutor, animal e laudo antes de gravar o exame no PetOrlandia.',
+            True,
+            ['https://wa.me'],
+        ),
+        AGENDA_COCKPIT_WIDGET_URI: (
+            _mcp_widget_resource(
+                AGENDA_COCKPIT_WIDGET_URI,
+                'Agenda e pendencias do dia',
+                'Painel operacional para revisar agenda diaria e pendencias antes dos atendimentos.',
+            ),
+            _mcp_dashboard_widget_html(
+                'Agenda do dia',
+                'Pacientes, horarios e pendencias clinicas em uma unica visao.',
+                'agenda',
+            ),
+            'Painel de agenda diaria com pacientes, horarios e pendencias resumidas.',
+            True,
+            [],
+        ),
+        TIMELINE_CLINICA_WIDGET_URI: (
+            _mcp_widget_resource(
+                TIMELINE_CLINICA_WIDGET_URI,
+                'Timeline clinica do paciente',
+                'Linha do tempo de consultas, exames, vacinas, documentos e pendencias.',
+            ),
+            _mcp_dashboard_widget_html(
+                'Timeline clinica',
+                'Historico consolidado do paciente para orientar a proxima decisao.',
+                'timeline',
+            ),
+            'Painel de timeline clinica consolidada do paciente.',
+            True,
+            [],
+        ),
+        ADMIN_COMMAND_CENTER_WIDGET_URI: (
+            _mcp_widget_resource(
+                ADMIN_COMMAND_CENTER_WIDGET_URI,
+                'Central admin',
+                'Fila de alertas administrativos acionaveis do PetOrlandia.',
+            ),
+            _mcp_dashboard_widget_html(
+                'Central admin',
+                'Alertas de compras, servicos, carreiras, petsitter e operacao.',
+                'admin',
+            ),
+            'Painel administrativo com alertas abertos e links de acao.',
+            True,
+            [],
+        ),
+    }
+
+
+def _mcp_widget_response(req_id, uri: str):
+    catalog = _mcp_widget_catalog()
+    if uri not in catalog:
+        return _mcp_err(req_id, -32004, f'Resource not found: {uri}')
+    resource, html, description, prefers_border, redirect_domains = catalog[uri]
+    return _mcp_ok(req_id, {
+        'contents': [
+            {
+                **resource,
+                'text': html,
+                '_meta': {
+                    'ui': {
+                        'prefersBorder': prefers_border,
+                        'domain': _oauth_issuer(),
+                        'csp': {
+                            'connectDomains': [],
+                            'resourceDomains': [],
+                        },
+                    },
+                    'openai/widgetDescription': description,
+                    'openai/widgetPrefersBorder': prefers_border,
+                    'openai/widgetDomain': _oauth_issuer(),
+                    'openai/widgetCSP': {
+                        'connect_domains': [],
+                        'resource_domains': [],
+                        'redirect_domains': [_oauth_issuer(), *redirect_domains],
+                    },
+                },
+            }
+        ]
+    })
+
+
+def _mcp_user_is_admin(user: User) -> bool:
+    return (getattr(user, 'role', '') or '').strip().lower() == 'admin'
+
+
+def _mcp_local_date_text(value):
+    if not value:
+        return None
+    if hasattr(value, 'astimezone'):
+        return _integration_format_datetime(value)
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def _mcp_owner_payload(owner):
+    if not owner:
+        return {}
+    return {
+        'id': owner.id,
+        'nome': owner.name,
+        'email': owner.email,
+        'telefone': owner.phone,
+    }
+
+
+def _mcp_animal_payload(animal: Animal):
+    spec = getattr(animal, 'species', None)
+    breed = getattr(animal, 'breed', None)
+    return {
+        'id': animal.id,
+        'nome': animal.name,
+        'especie': spec.name if hasattr(spec, 'name') else (str(spec) if spec else None),
+        'raca': breed.name if hasattr(breed, 'name') else (str(breed) if breed else None),
+        'sexo': animal.sex,
+        'idade': animal.age,
+        'peso': animal.peso,
+        'status': animal.status,
+        'tutor': _mcp_owner_payload(getattr(animal, 'owner', None)),
+        'clinica_id': getattr(animal, 'clinica_id', None),
+    }
+
+
+def _mcp_search_animals(user: User, termo: str | None = None, limit: int = 10):
+    query = _integration_accessible_animals_query(user).order_by(Animal.name.asc())
+    termo = (termo or '').strip()
+    if termo:
+        token = f'%{termo.lower()}%'
+        query = query.join(User, Animal.user_id == User.id).filter(
+            db.or_(
+                db.func.lower(Animal.name).like(token),
+                db.func.lower(User.name).like(token),
+                db.func.lower(User.email).like(token),
+                db.func.lower(User.phone).like(token),
+            )
+        )
+    return query.limit(max(1, min(int(limit or 10), 25))).all()
+
+
+def _mcp_build_timeline(user: User, animal: Animal):
+    summary = _integration_build_clinical_summary(user, animal)
+    timeline = []
+    for consulta in (
+        _integration_accessible_consultas_query(user)
+        .filter(Consulta.animal_id == animal.id)
+        .order_by(Consulta.created_at.desc())
+        .limit(12)
+        .all()
+    ):
+        timeline.append({
+            'tipo': 'consulta',
+            'titulo': f'Consulta #{consulta.id}',
+            'data': _mcp_local_date_text(getattr(consulta, 'finalizada_em', None) or getattr(consulta, 'created_at', None)),
+            'descricao': getattr(consulta, 'queixa_principal', None) or getattr(consulta, 'conduta', None) or getattr(consulta, 'historico', None),
+            'tags': [getattr(consulta, 'status', None), 'consulta'],
+        })
+    for exame in (
+        ExameImagem.query.filter_by(animal_id=animal.id)
+        .order_by(ExameImagem.data_exame.desc().nullslast(), ExameImagem.created_at.desc())
+        .limit(12)
+        .all()
+    ):
+        if not _integration_user_can_access_exame_imagem(user, exame):
+            continue
+        timeline.append({
+            'tipo': 'exame_imagem',
+            'titulo': exame.titulo or exame.tipo_exame,
+            'data': _mcp_local_date_text(exame.data_exame or exame.created_at),
+            'descricao': exame.impressao_diagnostica or exame.descricao,
+            'tags': [exame.status, exame.tipo_exame],
+        })
+    for vacina in (
+        Vacina.query.filter_by(animal_id=animal.id)
+        .order_by(Vacina.aplicada_em.desc().nullslast(), Vacina.id.desc())
+        .limit(12)
+        .all()
+    ):
+        timeline.append({
+            'tipo': 'vacina',
+            'titulo': getattr(vacina, 'nome', None) or getattr(vacina, 'vacina', None) or 'Vacina',
+            'data': _mcp_local_date_text(getattr(vacina, 'aplicada_em', None)),
+            'descricao': getattr(vacina, 'observacoes', None) or getattr(vacina, 'fabricante', None),
+            'tags': ['aplicada' if getattr(vacina, 'aplicada', False) else 'pendente', 'vacina'],
+        })
+    for doc in (
+        AnimalDocumento.query.filter_by(animal_id=animal.id)
+        .order_by(AnimalDocumento.uploaded_at.desc())
+        .limit(10)
+        .all()
+    ):
+        timeline.append({
+            'tipo': 'documento',
+            'titulo': doc.filename,
+            'data': _mcp_local_date_text(doc.uploaded_at),
+            'descricao': doc.descricao,
+            'tags': ['documento'],
+            'url': doc.file_url,
+        })
+    timeline.sort(key=lambda item: item.get('data') or '', reverse=True)
+    pendencias = summary.get('pendencias') or {}
+    pendencias_lista = []
+    for key, value in pendencias.items():
+        if isinstance(value, list):
+            pendencias_lista.extend({'tipo': key, **item} if isinstance(item, dict) else {'tipo': key, 'descricao': item} for item in value)
+    return {
+        'animal': _mcp_animal_payload(animal),
+        'resumo': summary,
+        'pendencias': pendencias_lista[:20],
+        'timeline': timeline[:30],
+    }
+
+
+def _mcp_build_consult_prep(user: User, animal: Animal, appointment_id: int | None = None):
+    timeline = _mcp_build_timeline(user, animal)
+    appointment = None
+    if appointment_id:
+        appointment = (
+            _integration_accessible_appointments_query(user)
+            .filter(Appointment.id == appointment_id, Appointment.animal_id == animal.id)
+            .first()
+        )
+    pendencias = timeline.get('pendencias') or []
+    perguntas = [
+        'Houve mudanca de apetite, sede, urina ou fezes desde o ultimo contato?',
+        'O tutor administrou medicacoes, suplementos ou tratamentos em casa?',
+        'Existe algum exame, vacina ou retorno pendente que precisa ser resolvido hoje?',
+    ]
+    if any((item.get('tipo') or '').startswith('vacinas') for item in pendencias if isinstance(item, dict)):
+        perguntas.append('Confirmar historico vacinal recente e possiveis reacoes anteriores.')
+    if any((item.get('tipo') or '').startswith('exames') for item in pendencias if isinstance(item, dict)):
+        perguntas.append('Confirmar se os exames solicitados foram realizados e anexar resultados.')
+    return {
+        'animal': timeline['animal'],
+        'appointment': {
+            'id': appointment.id,
+            'horario': _integration_format_datetime(appointment.scheduled_at),
+            'status': appointment.status,
+            'tipo': appointment.kind,
+            'observacoes': appointment.notes,
+        } if appointment else None,
+        'resumo': timeline['resumo'],
+        'pendencias_prioritarias': pendencias[:10],
+        'perguntas_sugeridas': perguntas,
+        'proximas_acoes': [
+            'Revisar timeline antes de atender.',
+            'Atualizar conduta e exames solicitados ao final.',
+            'Gerar orientacao ao tutor depois da consulta, se houver plano definido.',
+        ],
+    }
+
+
+def _mcp_admin_alert_payload(note: AdminActionNotification):
+    return {
+        'id': note.id,
+        'titulo': note.title,
+        'corpo': note.body,
+        'tipo_evento': note.event_type,
+        'tipo_entidade': note.entity_type,
+        'entidade_id': note.entity_id,
+        'prioridade': note.priority,
+        'status': note.status,
+        'url': note.url,
+        'criado_em': _mcp_local_date_text(note.created_at),
+        'lido_em': _mcp_local_date_text(note.read_at),
+        'resolvido_em': _mcp_local_date_text(note.resolved_at),
+    }
+
+
+def _mcp_admin_alerts(user: User, status='open', limit=30):
+    query = AdminActionNotification.query.filter_by(recipient_user_id=user.id)
+    status = (status or 'open').strip().lower()
+    if status == 'open':
+        query = query.filter(AdminActionNotification.status.in_(['unread', 'read']))
+    elif status in {'unread', 'read', 'resolved', 'archived'}:
+        query = query.filter(AdminActionNotification.status == status)
+    elif status != 'all':
+        query = query.filter(AdminActionNotification.status.in_(['unread', 'read']))
+    notes = (
+        query.order_by(
+            db.case((AdminActionNotification.priority == 'critical', 0), (AdminActionNotification.priority == 'high', 1), else_=2),
+            AdminActionNotification.created_at.desc(),
+        )
+        .limit(max(1, min(int(limit or 30), 100)))
+        .all()
+    )
+    open_count = AdminActionNotification.query.filter(
+        AdminActionNotification.recipient_user_id == user.id,
+        AdminActionNotification.status.in_(['unread', 'read']),
+    ).count()
+    return {
+        'total_abertos': open_count,
+        'total_nao_lidos': AdminActionNotification.query.filter_by(recipient_user_id=user.id, status='unread').count(),
+        'total_criticos': AdminActionNotification.query.filter(
+            AdminActionNotification.recipient_user_id == user.id,
+            AdminActionNotification.status.in_(['unread', 'read']),
+            AdminActionNotification.priority.in_(['critical', 'high']),
+        ).count(),
+        'alertas': [_mcp_admin_alert_payload(note) for note in notes],
+    }
+
+
 def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
     required_scope_set = {scope for scope in required_scopes if scope}
     missing_scopes = sorted(required_scope_set.difference(token_scope_set))
@@ -940,41 +1418,11 @@ def mcp_server():
         return ('', 204)
 
     if method == 'resources/list':
-        return _mcp_ok(req_id, {'resources': [_mcp_laudo_volante_widget_resource()]})
+        return _mcp_ok(req_id, {'resources': [item[0] for item in _mcp_widget_catalog().values()]})
 
     if method == 'resources/read':
         uri = str(params.get('uri') or '').strip()
-        if uri != LAUDO_VOLANTE_WIDGET_URI:
-            return _mcp_err(req_id, -32004, f'Resource not found: {uri}')
-        return _mcp_ok(req_id, {
-            'contents': [
-                {
-                    **_mcp_laudo_volante_widget_resource(),
-                    'text': _mcp_laudo_volante_widget_html(),
-                    '_meta': {
-                        'ui': {
-                            'prefersBorder': True,
-                            'domain': _oauth_issuer(),
-                            'csp': {
-                                'connectDomains': [],
-                                'resourceDomains': [],
-                            },
-                        },
-                        'openai/widgetDescription': (
-                            'Painel para revisar clinica, tutor, animal e laudo antes de gravar '
-                            'o exame no PetOrlandia.'
-                        ),
-                        'openai/widgetPrefersBorder': True,
-                        'openai/widgetDomain': _oauth_issuer(),
-                        'openai/widgetCSP': {
-                            'connect_domains': [],
-                            'resource_domains': [],
-                            'redirect_domains': [_oauth_issuer(), 'https://wa.me'],
-                        },
-                    },
-                }
-            ]
-        })
+        return _mcp_widget_response(req_id, uri)
 
     # ── tools/list ───────────────────────────────────────────────────────────
     if method == 'tools/list':
@@ -986,6 +1434,35 @@ def mcp_server():
                     'Retorna nome, espécie, raça, sexo, idade e peso de cada animal.'
                 ),
                 'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'listar_vacinas_pet',
+                'description': (
+                    'Lista as vacinas dos pets do usuário autenticado: aplicadas (com data, '
+                    'fabricante e veterinário) e próximas doses previstas ou atrasadas. '
+                    'Aceita animal_id opcional para filtrar um pet específico.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do pet (opcional).'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'obter_carteirinha_pet',
+                'description': (
+                    'Retorna o link público da carteirinha digital de um pet (vacinas e dados '
+                    'básicos, compartilhável). Informa como ativá-la caso ainda não exista.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do pet.'},
+                    },
+                    'required': ['animal_id'],
+                },
             },
             {
                 'name': 'listar_agendamentos',
@@ -1325,6 +1802,73 @@ def mcp_server():
                     },
                     'required': [],
                 },
+                '_meta': {
+                    'ui': {'resourceUri': AGENDA_COCKPIT_WIDGET_URI},
+                    'openai/outputTemplate': AGENDA_COCKPIT_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/toolInvocation/invoking': 'Carregando agenda do dia...',
+                    'openai/toolInvocation/invoked': 'Agenda do dia pronta.',
+                },
+            },
+            {
+                'name': 'buscar_paciente',
+                'description': (
+                    'Busca pacientes por nome do animal, tutor, telefone ou email dentro do escopo acessivel. '
+                    'Use antes de preparar consulta, obter timeline ou gerar mensagens quando o ID do animal nao estiver claro.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'termo': {'type': 'string', 'description': 'Nome, tutor, telefone ou email a buscar.'},
+                        'limite': {'type': 'integer', 'description': 'Quantidade maxima de resultados, ate 25.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'obter_timeline_clinica',
+                'description': (
+                    'Mostra a linha do tempo consolidada de um paciente: consultas, exames de imagem, vacinas, '
+                    'documentos e pendencias principais.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID nao for informado.'},
+                    },
+                    'required': [],
+                },
+                '_meta': {
+                    'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI},
+                    'openai/outputTemplate': TIMELINE_CLINICA_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/toolInvocation/invoking': 'Montando timeline clinica...',
+                    'openai/toolInvocation/invoked': 'Timeline clinica pronta.',
+                },
+            },
+            {
+                'name': 'preparar_consulta',
+                'description': (
+                    'Prepara um briefing antes do atendimento com resumo clinico, pendencias, perguntas sugeridas '
+                    'e proximas acoes. Nao grava dados.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID nao for informado.'},
+                        'appointment_id': {'type': 'integer', 'description': 'Agendamento especifico quando houver.'},
+                    },
+                    'required': [],
+                },
+                '_meta': {
+                    'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI},
+                    'openai/outputTemplate': TIMELINE_CLINICA_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/toolInvocation/invoking': 'Preparando consulta...',
+                    'openai/toolInvocation/invoked': 'Briefing da consulta pronto.',
+                },
             },
             {
                 'name': 'listar_pendencias_clinicas',
@@ -1364,6 +1908,24 @@ def mcp_server():
                 },
             },
             {
+                'name': 'gerar_mensagem_whatsapp_tutor',
+                'description': (
+                    'Gera uma mensagem pronta para copiar ou abrir no WhatsApp do tutor, com base no prontuario. '
+                    'Nao envia a mensagem automaticamente.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer', 'description': 'ID do animal.'},
+                        'nome_animal': {'type': 'string', 'description': 'Nome exato do animal quando o ID nao for informado.'},
+                        'consulta_id': {'type': 'integer', 'description': 'Consulta opcional para guiar a mensagem.'},
+                        'tipo': {'type': 'string', 'description': 'orientacao, retorno, exame, vacina ou livre.'},
+                        'contexto': {'type': 'string', 'description': 'Texto adicional a incluir no rascunho.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
                 'name': 'gerar_handoff_clinico',
                 'description': (
                     'Gera um handoff clínico resumido para troca entre veterinários e plantonistas.'
@@ -1378,8 +1940,54 @@ def mcp_server():
                     'required': [],
                 },
             },
+            {
+                'name': 'listar_alertas_admin',
+                'description': (
+                    'Lista alertas administrativos acionaveis do PetOrlandia para admins: compras, servicos, '
+                    'carreiras/petsitter, pagamentos e pendencias operacionais.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'status': {'type': 'string', 'description': 'open, unread, read, resolved, archived ou all.'},
+                        'limite': {'type': 'integer', 'description': 'Quantidade maxima de alertas, ate 100.'},
+                    },
+                    'required': [],
+                },
+                '_meta': {
+                    'ui': {'resourceUri': ADMIN_COMMAND_CENTER_WIDGET_URI},
+                    'openai/outputTemplate': ADMIN_COMMAND_CENTER_WIDGET_URI,
+                    'openai/widgetAccessible': True,
+                    'openai/toolInvocation/invoking': 'Carregando central admin...',
+                    'openai/toolInvocation/invoked': 'Central admin pronta.',
+                },
+            },
+            {
+                'name': 'resolver_alerta_admin',
+                'description': (
+                    'Marca um alerta administrativo como lido ou resolvido. Exige confirmacao explicita.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'alerta_id': {'type': 'integer', 'description': 'ID do alerta administrativo.'},
+                        'acao': {'type': 'string', 'description': 'ler ou resolver.'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['alerta_id', 'acao', 'confirmar_gravacao'],
+                },
+            },
         ]
-        return _mcp_ok(req_id, {'tools': _mcp_finalize_tool_descriptors(tools)})
+        # Mostra apenas as tools cujos scopes foram todos concedidos ao token —
+        # uma conexao de tutor (somente leitura) nao ve as tools de escrita da clinica.
+        visible = []
+        for tool in tools:
+            if tool.get('name') in {'listar_alertas_admin', 'resolver_alerta_admin'} and not _mcp_user_is_admin(user):
+                continue
+            required = set(MCP_TOOL_DESCRIPTOR_DEFAULTS.get(tool.get('name'), {}).get('scopes') or [])
+            if required.issubset(token_scope_set):
+                visible.append(tool)
+        return _mcp_ok(req_id, {'tools': _mcp_finalize_tool_descriptors(visible)})
 
     # ── tools/call ───────────────────────────────────────────────────────────
     if method == 'tools/call':
@@ -1414,6 +2022,82 @@ def mcp_server():
             return _mcp_ok(req_id, {
                 'structuredContent': {'pets': pets},
                 'content': [{'type': 'text', 'text': json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'}],
+            })
+
+        if tool_name == 'listar_vacinas_pet':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
+            animals_q = _integration_accessible_animals_query(user)
+            animal_id = tool_args.get('animal_id')
+            if animal_id:
+                animals_q = animals_q.filter(Animal.id == int(animal_id))
+            animals = animals_q.order_by(Animal.name).limit(50).all()
+            from datetime import date as _date
+            hoje = _date.today()
+            data_out = []
+            for a in animals:
+                vacinas = (
+                    Vacina.query.filter_by(animal_id=a.id)
+                    .order_by(Vacina.aplicada_em.desc().nullslast())
+                    .all()
+                )
+                aplicadas = []
+                proximas = []
+                for v in vacinas:
+                    item = {
+                        'nome': v.nome,
+                        'data': v.aplicada_em.isoformat() if v.aplicada_em else None,
+                        'fabricante': v.fabricante,
+                        'veterinario': v.veterinario,
+                    }
+                    if v.aplicada:
+                        aplicadas.append(item)
+                    else:
+                        item['atrasada'] = bool(v.aplicada_em and v.aplicada_em < hoje)
+                        proximas.append(item)
+                data_out.append({
+                    'animal_id': a.id,
+                    'pet': a.name,
+                    'aplicadas': aplicadas,
+                    'proximas_doses': proximas,
+                })
+            return _mcp_ok(req_id, {
+                'structuredContent': {'vacinas': data_out},
+                'content': [{'type': 'text', 'text': json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'}],
+            })
+
+        if tool_name == 'obter_carteirinha_pet':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
+            animal_id = tool_args.get('animal_id')
+            if not animal_id:
+                return _mcp_err(req_id, -32602, 'animal_id é obrigatório.')
+            animal = (
+                _integration_accessible_animals_query(user)
+                .filter(Animal.id == int(animal_id))
+                .first()
+            )
+            if animal is None:
+                return _mcp_err(req_id, -32602, 'Pet não encontrado ou sem acesso.')
+            if animal.public_token:
+                link = url_for('carteirinha_publica', token=animal.public_token, _external=True)
+                payload = {'ativa': True, 'pet': animal.name, 'link': link}
+                texto = f'Carteirinha de {animal.name}: {link}'
+            else:
+                payload = {
+                    'ativa': False,
+                    'pet': animal.name,
+                    'como_ativar': (
+                        'A carteirinha ainda não foi ativada. O tutor pode ativá-la na '
+                        'ficha do pet em PetOrlândia (seção "Carteirinha digital").'
+                    ),
+                }
+                texto = payload['como_ativar']
+            return _mcp_ok(req_id, {
+                'structuredContent': payload,
+                'content': [{'type': 'text', 'text': texto}],
             })
 
         if tool_name == 'listar_agendamentos':
@@ -1908,7 +2592,49 @@ def mcp_server():
                     target_date = date.fromisoformat(raw_date)
                 except ValueError:
                     return _mcp_err(req_id, -32602, 'A data deve estar no formato YYYY-MM-DD.')
-            return _mcp_ok(req_id, _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date)))
+            response = _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date))
+            response['_meta'] = {'ui': {'resourceUri': AGENDA_COCKPIT_WIDGET_URI}}
+            return _mcp_ok(req_id, response)
+
+        if tool_name == 'buscar_paciente':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')
+            if scope_error:
+                return scope_error
+            pacientes = [
+                _mcp_animal_payload(animal)
+                for animal in _mcp_search_animals(user, tool_args.get('termo'), tool_args.get('limite') or 10)
+            ]
+            return _mcp_ok(req_id, _mcp_json_content({
+                'total': len(pacientes),
+                'pacientes': pacientes,
+            }))
+
+        if tool_name == 'obter_timeline_clinica':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'clinical_summary:read', 'exams:read', 'vaccines:read')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            response = _mcp_json_content(_mcp_build_timeline(user, animal))
+            response['_meta'] = {'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI}}
+            return _mcp_ok(req_id, response)
+
+        if tool_name == 'preparar_consulta':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read', 'clinical_summary:read', 'exams:read', 'vaccines:read')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            appointment_id = tool_args.get('appointment_id')
+            try:
+                parsed_appointment_id = int(appointment_id) if appointment_id is not None else None
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'appointment_id deve ser numérico quando informado.')
+            response = _mcp_json_content(_mcp_build_consult_prep(user, animal, appointment_id=parsed_appointment_id))
+            response['_meta'] = {'ui': {'resourceUri': TIMELINE_CLINICA_WIDGET_URI}}
+            return _mcp_ok(req_id, response)
 
         if tool_name == 'listar_pendencias_clinicas':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read', 'exams:read', 'vaccines:read')
@@ -1971,6 +2697,44 @@ def mcp_server():
                 _mcp_json_content(_integration_generate_tutor_guidance(user, animal, consulta_id=parsed_consulta_id)),
             )
 
+        if tool_name == 'gerar_mensagem_whatsapp_tutor':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutor_guidance:generate')
+            if scope_error:
+                return scope_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if not animal:
+                return _mcp_err(req_id, -32004, 'Animal não encontrado no escopo disponível para este usuário.')
+            consulta_id = tool_args.get('consulta_id')
+            try:
+                parsed_consulta_id = int(consulta_id) if consulta_id is not None else None
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'consulta_id deve ser numérico quando informado.')
+            guidance = _integration_generate_tutor_guidance(user, animal, consulta_id=parsed_consulta_id)
+            tutor = getattr(animal, 'owner', None)
+            contexto = (tool_args.get('contexto') or '').strip()
+            tipo = (tool_args.get('tipo') or 'orientacao').strip().lower()
+            linhas = [
+                f'Olá{", " + tutor.name.split()[0] if getattr(tutor, "name", None) else ""}.',
+                f'Segue orientação sobre {animal.name}:',
+                guidance.get('orientacao') or guidance.get('texto') or guidance.get('message') or '',
+            ]
+            if contexto:
+                linhas.extend(['', contexto])
+            linhas.append('')
+            linhas.append('PetOrlandia')
+            mensagem = '\n'.join([linha for linha in linhas if linha is not None]).strip()
+            phone_digits = ''.join(ch for ch in (getattr(tutor, 'phone', '') or '') if ch.isdigit())
+            whatsapp_url = None
+            if len(phone_digits) in (10, 11):
+                whatsapp_url = f'https://wa.me/55{phone_digits}?text={quote_plus(mensagem)}'
+            return _mcp_ok(req_id, _mcp_json_content({
+                'tipo': tipo,
+                'animal': _mcp_animal_payload(animal),
+                'mensagem': mensagem,
+                'whatsapp_url': whatsapp_url,
+                'envio_automatico': False,
+            }))
+
         if tool_name == 'gerar_handoff_clinico':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'handoff:read')
             if scope_error:
@@ -1987,6 +2751,52 @@ def mcp_server():
                 req_id,
                 _mcp_json_content(_integration_build_handoff(user, animal, consulta_id=parsed_consulta_id)),
             )
+
+        if tool_name == 'listar_alertas_admin':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            if not _mcp_user_is_admin(user):
+                return _mcp_err(req_id, -32003, 'Esta tool é restrita a administradores.')
+            response = _mcp_json_content(_mcp_admin_alerts(user, status=tool_args.get('status') or 'open', limit=tool_args.get('limite') or 30))
+            response['_meta'] = {'ui': {'resourceUri': ADMIN_COMMAND_CENTER_WIDGET_URI}}
+            return _mcp_ok(req_id, response)
+
+        if tool_name == 'resolver_alerta_admin':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            if not _mcp_user_is_admin(user):
+                return _mcp_err(req_id, -32003, 'Esta tool é restrita a administradores.')
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            try:
+                alerta_id = int(tool_args.get('alerta_id') or 0)
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'alerta_id deve ser numérico.')
+            note = AdminActionNotification.query.filter_by(id=alerta_id, recipient_user_id=user.id).first()
+            if not note:
+                return _mcp_err(req_id, -32004, 'Alerta administrativo não encontrado.')
+            action = (tool_args.get('acao') or 'resolver').strip().lower()
+            from time_utils import now_in_brazil
+            now = now_in_brazil()
+            if action in {'ler', 'read'}:
+                if note.status == 'unread':
+                    note.status = 'read'
+                    note.read_at = now
+            elif action in {'resolver', 'resolve', 'resolved'}:
+                note.status = 'resolved'
+                note.read_at = note.read_at or now
+                note.resolved_at = now
+                note.resolved_by_id = user.id
+            else:
+                return _mcp_err(req_id, -32602, 'acao deve ser ler ou resolver.')
+            db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({
+                'success': True,
+                'alerta': _mcp_admin_alert_payload(note),
+            }))
 
         return _mcp_err(req_id, -32601, f'Tool not found: {tool_name}')
 

@@ -418,6 +418,10 @@ class Animal(db.Model):
     neutered = db.Column(db.Boolean, default=False)
     health_plan = db.Column(db.String(100), nullable=True)
 
+    # Carteirinha digital pública: token opaco que habilita /carteirinha/<token>.
+    # NULL = carteirinha desativada.
+    public_token = db.Column(db.String(32), unique=True, nullable=True)
+
     removido_em = db.Column(db.DateTime(timezone=True), nullable=True)
 
     added_by_id = db.Column(
@@ -4139,6 +4143,94 @@ class GroomingSubscription(db.Model):
     plan = db.relationship('GroomingPlan', back_populates='subscriptions')
     animal = db.relationship('Animal', backref=db.backref('grooming_subscriptions', lazy='dynamic'))
     user = db.relationship('User', backref=db.backref('grooming_subscriptions', lazy='dynamic'))
+
+
+class PushSubscription(db.Model):
+    """Inscrição Web Push (VAPID) de um navegador/dispositivo do usuário."""
+
+    __tablename__ = 'push_subscription'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    # Endpoint é a identidade da inscrição (único por navegador/perfil).
+    endpoint = db.Column(db.Text, nullable=False)
+    endpoint_hash = db.Column(db.String(64), unique=True, nullable=False)
+    p256dh = db.Column(db.String(255), nullable=False)
+    auth = db.Column(db.String(255), nullable=False)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    last_success_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    fail_count = db.Column(db.Integer, nullable=False, default=0)
+
+    user = db.relationship(
+        'User',
+        backref=db.backref('push_subscriptions', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+
+
+class RacaoAssinatura(db.Model):
+    """Assinatura recorrente de produto da loja (ração etc.) via preapproval MP.
+
+    Segue o mesmo desenho da GroomingSubscription: o preapproval é criado na
+    conta da plataforma; o repasse ao lojista segue o fluxo manual existente.
+    A cada pagamento recorrente aprovado (webhook), um ciclo é registrado e a
+    casa de ração é notificada para preparar a entrega.
+    """
+
+    __tablename__ = 'racao_assinatura'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey('product.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    variant_id = db.Column(
+        db.Integer,
+        db.ForeignKey('product_variant.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    animal_id = db.Column(
+        db.Integer,
+        db.ForeignKey('animal.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    quantidade = db.Column(db.Integer, nullable=False, default=1)
+    # Frequência em dias (15, 30, 60...) — convertida para o preapproval do MP.
+    frequencia_dias = db.Column(db.Integer, nullable=False, default=30)
+    # Preço público do ciclo, congelado na adesão.
+    preco_ciclo = db.Column(db.Numeric(10, 2), nullable=False)
+    # pending (aguardando 1º pagamento) | active | cancelled
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+    mp_preapproval_id = db.Column(db.String(128), nullable=True)
+    ciclos_pagos = db.Column(db.Integer, nullable=False, default=0)
+    ultimo_ciclo_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    endereco_entrega = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    activated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    cancelled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    user = db.relationship('User', backref=db.backref('racao_assinaturas', lazy='dynamic'))
+    product = db.relationship('Product', backref=db.backref('assinaturas', lazy='dynamic'))
+    variant = db.relationship('ProductVariant')
+    animal = db.relationship('Animal')
+
+    @property
+    def frequencia_label(self):
+        mapping = {15: 'Quinzenal', 30: 'Mensal', 60: 'A cada 2 meses', 90: 'A cada 3 meses'}
+        return mapping.get(self.frequencia_dias, f'A cada {self.frequencia_dias} dias')
 
 
 
