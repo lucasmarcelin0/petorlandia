@@ -9,10 +9,12 @@ from datetime import date, datetime, timedelta, timezone, time
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
+from sqlalchemy.exc import NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import object_session
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from extensions import db
+from repositories import ClinicRepository
 from time_utils import BR_TZ, normalize_to_utc, utcnow
 
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
@@ -1251,3 +1253,57 @@ def group_vet_schedules_by_day(schedules):
         ]
         for dia, items in groupby(sorted_scheds, key=lambda s: s.dia_semana)
     }
+
+
+# --- Acesso à contabilidade (migrado de app.py na modularização) ---
+
+def _user_is_clinic_owner(user=None):
+    """Return ``True`` if ``user`` owns at least one clinic."""
+
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    owner_attr = getattr(user, "is_clinic_owner", None)
+    if callable(owner_attr):
+        try:
+            if owner_attr():
+                return True
+        except TypeError:
+            pass
+    elif owner_attr:
+        return True
+
+    owned_clinics = getattr(user, "clinicas", None)
+    if owned_clinics:
+        return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
+
+    clinic_repo = ClinicRepository()
+    try:
+        return clinic_repo.first_by_owner(user.id) is not None
+    except (OperationalError, ProgrammingError, NoSuchTableError):
+        # Em ambientes de teste ou bancos desatualizados a tabela pode não existir.
+        # Nesses casos consideramos que o usuário não possui clínica.
+        return False
+
+
+def _user_can_access_accounting(user=None):
+    """Return ``True`` when ``user`` has permission to access accounting tools."""
+
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    role = (getattr(user, "role", "") or "").lower()
+    if role in {"admin", "gestor", "master"}:
+        return True
+
+    if _user_is_clinic_owner(user) and is_veterinarian(user):
+        return True
+
+    return False
+

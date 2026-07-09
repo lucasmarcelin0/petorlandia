@@ -298,116 +298,11 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 configure_logging(app)
 
 
-@app.before_request
-def _attach_request_id():
-    g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+# Hooks de request e error handlers globais vivem em request_hooks.py.
+from request_hooks import register_request_hooks
 
+register_request_hooks(app)
 
-@app.after_request
-def _set_request_id_header(response):
-    response.headers["X-Request-ID"] = getattr(g, "request_id", "")
-    if request.endpoint == "static":
-        if request.args.get("v"):
-            max_age = int(current_app.config.get("SEND_FILE_VERSIONED_MAX_AGE", 31536000))
-            response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"
-        else:
-            max_age = int(current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 3600))
-            response.headers["Cache-Control"] = f"public, max-age={max_age}"
-    return response
-
-
-@app.errorhandler(HTTPException)
-def handle_http_exception(err):
-    current_app.logger.warning(
-        "http_exception",
-        extra={
-            "path": request.path,
-            "status_code": err.code,
-            "request_id": getattr(g, "request_id", None),
-        },
-    )
-    wants_json = (
-        request.accept_mimetypes["application/json"]
-        >= request.accept_mimetypes["text/html"]
-    )
-
-    is_route_miss_404 = isinstance(err, NotFound) and getattr(request, "routing_exception", None) is not None
-    if (
-        is_route_miss_404
-        and request.accept_mimetypes["text/html"] >= request.accept_mimetypes["application/json"]
-        and request.method == 'GET'
-        and not request.path.startswith('/static/')
-        and current_user.is_authenticated
-        and has_veterinarian_profile(current_user)
-    ):
-        membership = ensure_veterinarian_membership(getattr(current_user, 'veterinario', None))
-        if membership and not membership.is_active():
-            flash('Sua assinatura de veterinário expirou. Renove para continuar acessando as funcionalidades.', 'warning')
-            return redirect(url_for('veterinarian_membership'))
-
-    if wants_json:
-        # Defense in depth: avoid leaking cross-tenant resource existence in JSON APIs.
-        sanitized_message = err.description
-        sanitized_error = err.name
-        if err.code in (403, 404):
-            sanitized_error = "Not Found"
-            sanitized_message = "Resource not found."
-        payload = {
-            "error": sanitized_error,
-            "message": sanitized_message,
-            "request_id": getattr(g, "request_id", None),
-        }
-        status_code = 404 if err.code in (403, 404) else err.code
-        return jsonify(payload), status_code
-    db.session.rollback()
-    return render_template("errors/http.html", error=err), err.code
-
-
-@app.errorhandler(CSRFError)
-def handle_csrf_error(err):
-    current_app.logger.warning(
-        "csrf_error",
-        extra={
-            "path": request.path,
-            "status_code": 400,
-            "request_id": getattr(g, "request_id", None),
-        },
-    )
-    wants_json = (
-        request.accept_mimetypes["application/json"]
-        >= request.accept_mimetypes["text/html"]
-    )
-    if wants_json:
-        payload = {
-            "error": "CSRF token missing or invalid",
-            "message": "Falha de validação. Recarregue a página e tente novamente.",
-            "errors": {"csrf_token": ["Falha de validação. Recarregue a página e tente novamente."]},
-            "request_id": getattr(g, "request_id", None),
-        }
-        return jsonify(payload), 400
-    db.session.rollback()
-    return render_template("errors/http.html", error=err), 400
-
-
-@app.errorhandler(Exception)
-def handle_unhandled_exception(err):
-    current_app.logger.exception(
-        "unhandled_error",
-        extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
-    )
-    wants_json = (
-        request.accept_mimetypes["application/json"]
-        >= request.accept_mimetypes["text/html"]
-    )
-    if wants_json:
-        payload = {
-            "error": "Internal Server Error",
-            "message": "Unexpected error.",
-            "request_id": getattr(g, "request_id", None),
-        }
-        return jsonify(payload), 500
-    db.session.rollback()
-    return render_template("errors/500.html"), 500
 
 # ----------------------------------------------------------------
 # 3a)  Runtime safety checks for legacy databases
@@ -1691,6 +1586,8 @@ from forms import (
     VeterinarianPromotionForm,
 )
 from helpers import (
+    _user_can_access_accounting,
+    _user_is_clinic_owner,
     appointments_to_events,
     calcular_idade,
     clinicas_do_usuario,
@@ -4098,141 +3995,17 @@ with app.app_context():
 # (rotas podem ser definidas em módulos separados e registrados via blueprint)
 # ────────────────────────────── fim ─────────────────────────────
 
-# Performance: cache for context processor results (short TTL)
-import time as _time_module
-_context_cache = {}
-_CONTEXT_CACHE_TTL = 30  # seconds
+# Context processors e cache de badges vivem em context_processors.py.
+from context_processors import (
+    register_context_processors,
+    _get_cached_context,
+    _set_cached_context,
+    _invalidate_cached_context,
+    _invalidate_admin_unread_cache,
+    _invalidate_admin_action_cache,
+)
 
-
-def _get_cached_context(user_id: int, key: str):
-    """Get cached context value if not expired."""
-    cache_key = f"{user_id}:{key}"
-    entry = _context_cache.get(cache_key)
-    if entry is not None:
-        value, timestamp = entry
-        if _time_module.time() - timestamp < _CONTEXT_CACHE_TTL:
-            return value
-    return None
-
-
-def _invalidate_cached_context(user_id: int, key: str) -> None:
-    """Remove cached context value so the next request recomputes it.
-
-    Usado ao marcar mensagens como lidas (ou aceitar consultas) para o badge
-    da navbar atualizar imediatamente, sem esperar o TTL do cache.
-    """
-    _context_cache.pop(f"{user_id}:{key}", None)
-
-
-def _invalidate_admin_unread_cache() -> None:
-    """Invalida o contador de mensagens não lidas de todos os admins."""
-    try:
-        for admin in User.query.filter_by(role='admin').all():
-            _invalidate_cached_context(admin.id, 'unread_messages')
-    except Exception:
-        pass
-
-
-def _set_cached_context(user_id: int, key: str, value):
-    """Cache context value with timestamp."""
-    cache_key = f"{user_id}:{key}"
-    _context_cache[cache_key] = (value, _time_module.time())
-    # Cleanup old entries periodically (keep cache small)
-    if len(_context_cache) > 500:
-        now = _time_module.time()
-        expired = [k for k, (_, ts) in list(_context_cache.items())
-                   if now - ts > _CONTEXT_CACHE_TTL * 2]
-        for k in expired:
-            _context_cache.pop(k, None)
-    return value
-
-
-@app.context_processor
-def inject_unread_count():
-    try:
-        if current_user.is_authenticated:
-            user_id = current_user.id
-            cached = _get_cached_context(user_id, 'unread_messages')
-            if cached is not None:
-                return dict(unread_messages=cached)
-
-            if current_user.role == 'admin':
-                admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-                unread = (
-                    Message.query
-                    .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                    .count()
-                )
-            else:
-                unread = (
-                    Message.query
-                    .filter_by(receiver_id=current_user.id, lida=False)
-                    .count()
-                )
-            _set_cached_context(user_id, 'unread_messages', unread)
-        else:
-            unread = 0
-    except Exception:
-        db.session.rollback()
-        unread = 0
-    return dict(unread_messages=unread)
-
-
-@app.context_processor
-def inject_admin_action_notifications():
-    try:
-        if (
-            current_user.is_authenticated
-            and (getattr(current_user, 'role', '') or '').lower() == 'admin'
-        ):
-            cached = _get_cached_context(current_user.id, 'admin_action_notifications')
-            if cached is not None:
-                return cached
-
-            open_count = (
-                AdminActionNotification.query
-                .filter_by(recipient_user_id=current_user.id)
-                .filter(AdminActionNotification.status.in_(['unread', 'read']))
-                .count()
-            )
-            unread_count = (
-                AdminActionNotification.query
-                .filter_by(recipient_user_id=current_user.id, status='unread')
-                .count()
-            )
-            recent = (
-                AdminActionNotification.query
-                .filter_by(recipient_user_id=current_user.id)
-                .filter(AdminActionNotification.status.in_(['unread', 'read']))
-                .order_by(AdminActionNotification.created_at.desc())
-                .limit(5)
-                .all()
-            )
-            payload = dict(
-                admin_action_count=open_count,
-                admin_action_unread_count=unread_count,
-                admin_action_recent=recent,
-            )
-            _set_cached_context(current_user.id, 'admin_action_notifications', payload)
-            return payload
-    except Exception:
-        db.session.rollback()
-    return dict(
-        admin_action_count=0,
-        admin_action_unread_count=0,
-        admin_action_recent=[],
-    )
-
-
-def _invalidate_admin_action_cache(user_id: int | None = None) -> None:
-    try:
-        if user_id:
-            _invalidate_cached_context(user_id, 'admin_action_notifications')
-            return
-        for admin in User.query.filter_by(role='admin').all():
-            _invalidate_cached_context(admin.id, 'admin_action_notifications')
-    except Exception:
-        pass
+register_context_processors(app)
 
 
 @login_required
@@ -4322,228 +4095,6 @@ def admin_notification_resolve(notification_id):
         db.session.commit()
         _invalidate_admin_action_cache(current_user.id)
     return redirect(request.referrer or url_for('admin_notifications'))
-
-
-@app.context_processor
-def inject_pending_exam_count():
-    """Exames aguardando ação do veterinário (status 'pending').
-
-    O badge reflete itens acionáveis: ele zera quando o exame é confirmado,
-    não quando a página é visitada (sem aritmética de "visto", que gerava
-    notificações fantasma).
-    """
-    try:
-        if current_user.is_authenticated and is_veterinarian(current_user):
-            user_id = current_user.id
-            cached = _get_cached_context(user_id, 'pending_exam_count')
-            if cached is not None:
-                return dict(pending_exam_count=cached)
-
-            from models import ExamAppointment
-
-            pending = ExamAppointment.query.filter_by(
-                specialist_id=current_user.veterinario.id, status='pending'
-            ).count()
-            _set_cached_context(user_id, 'pending_exam_count', pending)
-        else:
-            pending = 0
-    except Exception:
-        db.session.rollback()
-        pending = 0
-    return dict(pending_exam_count=pending)
-
-
-@app.context_processor
-def inject_pending_appointment_count():
-    """Consultas futuras aguardando aceite do veterinário.
-
-    Usa o MESMO escopo da página da Agenda (consultas do veterinário ou
-    criadas por ele), para o badge bater exatamente com o que a página
-    mostra. O badge zera quando a consulta é aceita/atendida — sem
-    aritmética de "visto".
-    """
-
-    try:
-        if current_user.is_authenticated and is_veterinarian(current_user):
-            user_id = current_user.id
-            cached = _get_cached_context(user_id, 'pending_appointment_count')
-            if cached is not None:
-                return dict(pending_appointment_count=cached)
-
-            from models import Appointment
-
-            now = utcnow()
-            scope_conditions = [
-                Appointment.veterinario_id == current_user.veterinario.id,
-            ]
-            scope_conditions.append(Appointment.created_by == user_id)
-            pending = Appointment.query.filter(
-                Appointment.status == "scheduled",
-                Appointment.scheduled_at > now,
-                or_(*scope_conditions),
-            ).count()
-            _set_cached_context(user_id, 'pending_appointment_count', pending)
-        else:
-            pending = 0
-    except Exception:
-        db.session.rollback()
-        pending = 0
-    return dict(pending_appointment_count=pending)
-
-
-def _clinic_pending_appointments_query(veterinario):
-    """Return query for scheduled clinic appointments excluding the given vet."""
-    if not veterinario or not getattr(veterinario, "clinica_id", None):
-        return None
-
-    from models import Appointment
-
-    return Appointment.query.filter(
-        Appointment.clinica_id == veterinario.clinica_id,
-        Appointment.status == "scheduled",
-        Appointment.veterinario_id != veterinario.id,
-    )
-
-
-@app.context_processor
-def inject_clinic_pending_appointment_count():
-    """Expose count of scheduled appointments in the clinic excluding the current vet."""
-
-    if current_user.is_authenticated and is_veterinarian(current_user):
-        user_id = current_user.id
-        cached = _get_cached_context(user_id, 'clinic_pending_appointment_count')
-        if cached is not None:
-            seen = session.get("clinic_pending_seen_count", 0)
-            return dict(clinic_pending_appointment_count=max(cached - seen, 0))
-
-        pending_query = _clinic_pending_appointments_query(
-            getattr(current_user, "veterinario", None)
-        )
-        pending = pending_query.count() if pending_query is not None else 0
-        _set_cached_context(user_id, 'clinic_pending_appointment_count', pending)
-        seen = session.get("clinic_pending_seen_count", 0)
-        pending = max(pending - seen, 0)
-    else:
-        pending = 0
-    return dict(clinic_pending_appointment_count=pending)
-
-
-@app.context_processor
-def inject_veterinarian_membership_context():
-    if not current_user.is_authenticated:
-        return dict(
-            is_active_veterinarian=False,
-            has_veterinarian_profile_flag=False,
-            current_veterinarian_membership=None,
-        )
-
-    has_profile = has_veterinarian_profile(current_user)
-    membership = None
-    if has_profile:
-        membership = ensure_veterinarian_membership(getattr(current_user, 'veterinario', None))
-
-    return dict(
-        is_active_veterinarian=has_profile and is_veterinarian(current_user),
-        has_veterinarian_profile_flag=has_profile,
-        has_professional_access=has_professional_access(current_user),
-        current_veterinarian_membership=membership,
-    )
-
-
-@app.context_processor
-def inject_clinic_invite_count():
-    if current_user.is_authenticated and has_veterinarian_profile(current_user):
-        user_id = current_user.id
-        cached = _get_cached_context(user_id, 'pending_clinic_invites')
-        if cached is not None:
-            return dict(pending_clinic_invites=cached)
-
-        from models import VetClinicInvite
-
-        pending = VetClinicInvite.query.filter_by(
-            veterinario_id=current_user.veterinario.id, status='pending'
-        ).count()
-        _set_cached_context(user_id, 'pending_clinic_invites', pending)
-    else:
-        pending = 0
-    return dict(pending_clinic_invites=pending)
-
-
-@app.context_processor
-def inject_accounting_access_flag():
-    return dict(can_access_accounting=_user_can_access_accounting())
-
-
-@app.context_processor
-def inject_has_clinic_access():
-    """Expose whether the current user can access at least one clinic."""
-    if not current_user.is_authenticated:
-        return dict(has_clinic_access=False)
-
-    cached = _get_cached_context(current_user.id, 'has_clinic_access')
-    if cached is not None:
-        return dict(has_clinic_access=bool(cached))
-
-    from models import Clinica
-
-    has_clinic_access = (
-        clinicas_do_usuario()
-        .with_entities(Clinica.id)
-        .limit(1)
-        .first()
-        is not None
-    )
-    _set_cached_context(current_user.id, 'has_clinic_access', has_clinic_access)
-    return dict(has_clinic_access=has_clinic_access)
-
-
-@app.context_processor
-def inject_minha_casa_de_racao():
-    """Expõe a casa de ração do usuário logado para os templates."""
-    if not current_user.is_authenticated:
-        return dict(minha_casa_de_racao=None)
-    cached = _get_cached_context(current_user.id, 'minha_casa_de_racao')
-    if cached is not None:
-        return dict(
-            minha_casa_de_racao=(
-                SimpleNamespace(**cached)
-                if cached
-                else None
-            )
-        )
-    casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
-    if casa:
-        cached_casa = {'id': casa.id, 'nome': casa.nome}
-        _set_cached_context(current_user.id, 'minha_casa_de_racao', cached_casa)
-        return dict(minha_casa_de_racao=SimpleNamespace(**cached_casa))
-    _set_cached_context(current_user.id, 'minha_casa_de_racao', False)
-    return dict(minha_casa_de_racao=None)
-
-
-@app.context_processor
-def inject_current_app():
-    """Make current_app available in templates for view_functions checks."""
-    return dict(current_app=current_app)
-
-
-@app.context_processor
-def inject_whatsapp_helpers():
-    return dict(whatsapp_chat_url=whatsapp_chat_url)
-
-
-@app.context_processor
-def inject_site_flags():
-    """Injeta feature flags do banco no contexto de todos os templates."""
-    from models.base import SiteFlag
-    try:
-        flags = {
-            'loja_em_breve': SiteFlag.get('loja_em_breve', default=True),
-            'plano_saude_em_breve': SiteFlag.get('plano_saude_em_breve', default=True),
-        }
-    except Exception:
-        db.session.rollback()
-        flags = {'loja_em_breve': True, 'plano_saude_em_breve': True}
-    return dict(site_flags=flags)
 
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -6306,56 +5857,7 @@ def castracao_pmo_solicitar():
     )
 
 
-def _user_is_clinic_owner(user=None):
-    """Return ``True`` if ``user`` owns at least one clinic."""
-
-    if user is None:
-        user = current_user if current_user.is_authenticated else None
-
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-
-    owner_attr = getattr(user, "is_clinic_owner", None)
-    if callable(owner_attr):
-        try:
-            if owner_attr():
-                return True
-        except TypeError:
-            pass
-    elif owner_attr:
-        return True
-
-    owned_clinics = getattr(user, "clinicas", None)
-    if owned_clinics:
-        return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
-
-    clinic_repo = ClinicRepository()
-    try:
-        return clinic_repo.first_by_owner(user.id) is not None
-    except (OperationalError, ProgrammingError, NoSuchTableError):
-        # Em ambientes de teste ou bancos desatualizados a tabela pode não existir.
-        # Nesses casos consideramos que o usuário não possui clínica.
-        return False
-
-
-def _user_can_access_accounting(user=None):
-    """Return ``True`` when ``user`` has permission to access accounting tools."""
-
-    if user is None:
-        user = current_user if current_user.is_authenticated else None
-
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-
-    role = (getattr(user, "role", "") or "").lower()
-    if role in {"admin", "gestor", "master"}:
-        return True
-
-    if _user_is_clinic_owner(user) and is_veterinarian(user):
-        return True
-
-    return False
-
+# _user_is_clinic_owner / _user_can_access_accounting migraram para helpers.py
 
 def _ensure_accounting_access():
     """Abort with 403 when the current user lacks accounting permissions."""
@@ -6596,71 +6098,10 @@ def _delete_pj_payment_classification(payment_id):
     ClassifiedTransaction.query.filter_by(origin='pj_payment', raw_id=str(payment_id)).delete()
 
 
-@app.cli.command('classify-transactions-history')
-@click.option(
-    '--months',
-    type=click.IntRange(min=1),
-    default=6,
-    show_default=True,
-    help='Quantidade de meses a reprocessar a partir do mês de referência.',
-)
-@click.option(
-    '--clinic-id',
-    'clinic_ids',
-    type=int,
-    multiple=True,
-    help='Limite o processamento a clínicas específicas (pode ser informado múltiplas vezes).',
-)
-@click.option(
-    '--reference-month',
-    type=str,
-    default=None,
-    help='Mês base (YYYY-MM) para iniciar a varredura; padrão: mês atual.',
-)
-@click.option(
-    '--verbose/--quiet',
-    default=False,
-    help='Mostra logs detalhados para cada combinação clínica/mês.',
-)
-@with_appcontext
-def classify_transactions_history(months, clinic_ids, reference_month, verbose):
-    """Reprocessa classificações de receitas e despesas para meses anteriores."""
+# Comandos CLI vivem em cli.py.
+from cli import register_cli_commands
 
-    def _verbose_callback(clinic_id, month_start):
-        click.echo(
-            f"Classificando clínica {clinic_id} — mês {month_start:%Y-%m}",
-            err=False,
-        )
-
-    def _error_callback(clinic_id, month_start, exc):
-        click.echo(
-            f"Erro ao classificar a clínica {clinic_id} no mês {month_start:%Y-%m}: {exc}",
-            err=True,
-        )
-
-    try:
-        result = run_transactions_history_backfill(
-            months=months,
-            reference_month=reference_month,
-            clinic_ids=clinic_ids,
-            progress_callback=_verbose_callback if verbose else None,
-            error_callback=_error_callback,
-        )
-    except ValueError as exc:
-        raise click.BadParameter(str(exc)) from exc
-
-    if not result.clinics:
-        click.echo('Nenhuma clínica encontrada para processar.')
-        return
-
-    if result.failures:
-        click.echo(
-            f'{len(result.failures)} combinação(ões) falharam; verifique os logs acima.',
-            err=True,
-        )
-    click.echo(
-        f'Classificação executada para {result.processed} combinações de clínica/mês.'
-    )
+register_cli_commands(app)
 
 
 @login_required
@@ -17882,18 +17323,6 @@ def mensagens_admin_marcar_lidas():
     else:
         flash('Nenhuma mensagem pendente de leitura.', 'info')
     return redirect(url_for('mensagens_admin'))
-
-
-@app.context_processor
-def inject_mp_public_key():
-    """Disponibiliza a chave pública do Mercado Pago para os templates."""
-    return dict(MERCADOPAGO_PUBLIC_KEY=current_app.config.get("MERCADOPAGO_PUBLIC_KEY"))
-
-
-@app.context_processor
-def inject_default_pickup_address():
-    """Exposes DEFAULT_PICKUP_ADDRESS config to templates."""
-    return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
 
 
 @app.route('/animal/<int:animal_id>/deletar', methods=['POST'])
