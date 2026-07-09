@@ -2180,6 +2180,19 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert initialize.status_code == 200
     assert "resources" in initialize.get_json()["result"]["capabilities"]
 
+    current_protocol = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 511,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18"},
+        },
+    )
+    assert current_protocol.status_code == 200
+    assert current_protocol.get_json()["result"]["protocolVersion"] == "2025-06-18"
+
     tools_response = client.post(
         "/mcp",
         headers=headers,

@@ -190,6 +190,14 @@ def test_protected_resource_metadata_advertises_clinical_scopes(app):
         assert required in scopes
 
 
+def test_path_based_protected_resource_metadata_is_available_for_mcp(app):
+    client = app.test_client()
+    response = client.get('/.well-known/oauth-protected-resource/mcp')
+
+    assert response.status_code == 200
+    assert response.get_json()['resource'].endswith('/mcp')
+
+
 
 
 def test_dynamic_registration_supports_client_secret_basic(app):

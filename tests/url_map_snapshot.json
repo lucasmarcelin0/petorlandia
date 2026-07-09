@@ -3935,6 +3935,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "loja_routes.retomar_carrinho_chatgpt",
+  "rule": "/carrinho/retomar/<int:order_id>",
+  "methods": "GET"
+ },
+ {
   "endpoint": "loja_routes.save_pesquisa_racoes_tutor_answers",
   "rule": "/relatorio/racoes/pesquisa/<int:tutor_id>/answers",
   "methods": "POST"
@@ -3997,6 +4002,11 @@
  {
   "endpoint": "mcp_protected_resource_metadata",
   "rule": "/.well-known/oauth-protected-resource",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "mcp_protected_resource_metadata_for_mcp",
+  "rule": "/.well-known/oauth-protected-resource/mcp",
   "methods": "GET"
  },
  {
@@ -4262,6 +4272,11 @@
  {
   "endpoint": "oauth_routes.mcp_protected_resource_metadata",
   "rule": "/.well-known/oauth-protected-resource",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "oauth_routes.mcp_protected_resource_metadata_for_mcp",
+  "rule": "/.well-known/oauth-protected-resource/mcp",
   "methods": "GET"
  },
  {
@@ -5538,6 +5553,11 @@
   "endpoint": "responder_solicitacao",
   "rule": "/solicitacoes/<int:request_id>/responder",
   "methods": "POST"
+ },
+ {
+  "endpoint": "retomar_carrinho_chatgpt",
+  "rule": "/carrinho/retomar/<int:order_id>",
+  "methods": "GET"
  },
  {
   "endpoint": "reverter_falecimento",

@@ -77,6 +77,15 @@ bp.add_url_rule(
     methods=["GET"],
 )
 
+# RFC 9728 discovery for a resource below the origin preserves its path.
+# The root route remains as a compatibility alias for older MCP clients.
+bp.add_url_rule(
+    "/.well-known/oauth-protected-resource/mcp",
+    view_func=mcp_protected_resource_metadata,
+    methods=["GET"],
+    endpoint="mcp_protected_resource_metadata_for_mcp",
+)
+
 
 @bp.route("/oauth/authorize", methods=["GET", "POST"])
 def oauth_authorize():

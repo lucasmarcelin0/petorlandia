@@ -81,6 +81,21 @@ from app import (  # noqa: E402
 
 
 
+MCP_PROTOCOL_VERSIONS = (
+    '2025-06-18',
+    '2025-03-26',
+    '2024-11-05',
+)
+
+
+def _mcp_protocol_version(params: dict) -> str:
+    """Negocia uma versao MCP atual sem desconectar clientes legados."""
+    requested = str((params or {}).get('protocolVersion') or '').strip()
+    if requested in MCP_PROTOCOL_VERSIONS:
+        return requested
+    return MCP_PROTOCOL_VERSIONS[0]
+
+
 def _mcp_ok(req_id, result):
     return jsonify({'jsonrpc': '2.0', 'id': req_id, 'result': result})
 
@@ -1495,7 +1510,8 @@ def _mcp_unauthorized():
     """Return 401 with WWW-Authenticate so that OAuth clients know how to auth."""
     issuer = _oauth_issuer()
     resource_url = f'{issuer}/mcp'
-    metadata_url = f'{issuer}/.well-known/oauth-protected-resource'
+    # RFC 9728 preserves the resource path after the well-known segment.
+    metadata_url = f'{issuer}/.well-known/oauth-protected-resource/mcp'
     resp = make_response(
         jsonify({'jsonrpc': '2.0', 'id': None,
                  'error': {'code': -32001, 'message': 'Unauthorized: Bearer token required'}}),
@@ -1524,7 +1540,7 @@ def mcp_server():
         return jsonify({
             'server': 'PetOrlândia MCP',
             'version': '1.0.0',
-            'protocol': 'mcp/2024-11-05',
+            'protocol': f'mcp/{MCP_PROTOCOL_VERSIONS[0]}',
             'authorization_required': True,
             'authorization_server': issuer,
         })
@@ -1554,7 +1570,7 @@ def mcp_server():
     # ── initialize ────────────────────────────────────────────────────────────
     if method == 'initialize':
         return _mcp_ok(req_id, {
-            'protocolVersion': '2024-11-05',
+            'protocolVersion': _mcp_protocol_version(params),
             'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
             'capabilities': {'tools': {}, 'resources': {}},
             'instructions': (
