@@ -14,7 +14,19 @@ def _register_with_alias(app, blueprint):
             continue
         alias = rule.endpoint[len(prefix):]
         if alias in existing_endpoints:
-            continue
+            # Endpoints com várias rules (ex.: /editar_animal/<id> e
+            # /animal/<id>/editar) precisam do alias em TODAS as rules.
+            # Se o alias já aponta para a mesma view, registra a rule extra
+            # sob o mesmo endpoint; se for outra view, não sobrescreve.
+            if app.view_functions[alias] is not app.view_functions[rule.endpoint]:
+                continue
+            already = any(
+                r.rule == rule.rule
+                for r in app.url_map.iter_rules()
+                if r.endpoint == alias
+            )
+            if already:
+                continue
         app.add_url_rule(
             rule.rule,
             endpoint=alias,
@@ -28,6 +40,7 @@ def _register_with_alias(app, blueprint):
 def register_domain_blueprints(app):
     from blueprints import (
         admin,
+        pacientes,
         agendamentos,
         api,
         auth,
@@ -109,3 +122,7 @@ def register_domain_blueprints(app):
     parceiro_bp = parceiro.get_blueprint()
     if not _is_blueprint_registered(app, parceiro_bp):
         _register_with_alias(app, parceiro_bp)
+
+    pacientes_bp = pacientes.get_blueprint()
+    if not _is_blueprint_registered(app, pacientes_bp):
+        _register_with_alias(app, pacientes_bp)
