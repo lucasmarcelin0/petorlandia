@@ -11,3 +11,4 @@ coverage==7.9.2
 # Rodam apenas na máquina de desenvolvimento, nunca no Heroku.
 playwright==1.51.0
 selenium==4.43.0
+pyflakes==3.4.0
