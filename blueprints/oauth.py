@@ -1,8 +1,7 @@
 """OAuth 2.0 / OpenID Connect provider — views reais do domínio.
 
-Migrado do app.py monolítico. O endpoint /mcp permanece registrado via
-lazy_view até a migração do servidor MCP. A lógica do provider (scopes,
-PKCE, JWKS, tokens) vive em services/oauth_provider.py.
+Migrado do app.py monolítico. A lógica do provider (scopes, PKCE, JWKS,
+tokens) vive em services/oauth_provider.py; o servidor MCP em blueprints/mcp.py.
 """
 import secrets
 from datetime import timedelta
@@ -20,7 +19,6 @@ from flask import (
 )
 from flask_login import current_user
 
-from blueprints.utils import lazy_view
 from extensions import csrf, db
 from helpers import has_veterinarian_profile
 from models import (
@@ -68,12 +66,14 @@ def get_blueprint():
     return bp
 
 
-# MCP server endpoint — JSON-RPC 2.0 over HTTP (migra na fase do MCP)
-bp.add_url_rule("/mcp", view_func=lazy_view("mcp_server"), methods=["GET", "POST", "OPTIONS"])
+# MCP server endpoint — JSON-RPC 2.0 over HTTP (views em blueprints/mcp.py)
+from blueprints.mcp import mcp_protected_resource_metadata, mcp_server  # noqa: E402
+
+bp.add_url_rule("/mcp", view_func=mcp_server, methods=["GET", "POST", "OPTIONS"])
 # RFC 9396 Protected Resource Metadata — enables OAuth discovery for path-based URLs
 bp.add_url_rule(
     "/.well-known/oauth-protected-resource",
-    view_func=lazy_view("mcp_protected_resource_metadata"),
+    view_func=mcp_protected_resource_metadata,
     methods=["GET"],
 )
 

@@ -59,9 +59,13 @@ from services.appointments import ReturnAppointmentDTO, schedule_return_appointm
 from services.oauth_provider import _oauth_allowed_scopes, _oauth_issuer
 from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
 
-from app import (
+from blueprints.mcp import (  # noqa: E402
     MCP_FILE_REFERENCE_OR_STRING_SCHEMA,
     MCP_FILE_REFERENCE_SCHEMA,
+    _mcp_find_animal_for_tool,
+)
+
+from app import (
     _activate_share_request,
     _apply_calendar_date_window,
     _apply_calendar_datetime_window,
@@ -111,7 +115,6 @@ from app import (
     _integration_user_clinic_id,
     _invite_payload,
     _is_tutor_portal_user,
-    _mcp_find_animal_for_tool,
     _notify_clinic_share_decision,
     _notify_tutor_share_request,
     _public_pricing_config,
