@@ -19,11 +19,21 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy import Text, cast, or_
 
-from admin import _is_admin
 from extensions import db
 from time_utils import now_in_brazil
 
 bp = Blueprint("bulario_routes", __name__)
+
+
+def _is_admin():
+    """Resolve via módulo app em tempo de request.
+
+    Testes fazem monkeypatch de ``app._is_admin``; a indireção mantém esse
+    contrato (o lazy_view antigo também resolvia tarde).
+    """
+    import app as app_module
+
+    return app_module._is_admin()
 
 
 @bp.route("/bulario/curadoria", methods=["GET"])
