@@ -52,7 +52,8 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
 # Twilio não é usado hoje (WhatsApp é via links wa.me); import lazy dentro de
 # _send_share_sms/enviar_mensagem_whatsapp para não pagar o custo no boot.
-# from twilio.rest import Client
+# O placeholder mantém o atributo no módulo para monkeypatch de testes.
+Client = None  # resolvido em runtime: twilio.rest.Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 from authlib.jose import JsonWebKey, jwt
@@ -2261,8 +2262,10 @@ def _send_share_sms(phone, body):
         return False
     number = formatar_telefone(phone)
     try:
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
+        client_cls = Client
+        if client_cls is None:
+            from twilio.rest import Client as client_cls
+        client = client_cls(account_sid, auth_token)
         client.messages.create(body=body, from_=from_number, to=number)
         return True
     except Exception as exc:  # pragma: no cover - avoid test flakes
@@ -8345,8 +8348,10 @@ def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
     if not all([account_sid, auth_token, from_number]):
         raise RuntimeError("Credenciais do Twilio não configuradas")
 
-    from twilio.rest import Client
-    client = Client(account_sid, auth_token)
+    client_cls = Client
+    if client_cls is None:
+        from twilio.rest import Client as client_cls
+    client = client_cls(account_sid, auth_token)
     client.messages.create(body=texto, from_=from_number, to=numero)
 
 
