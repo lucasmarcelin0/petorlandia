@@ -40,6 +40,7 @@ def _register_with_alias(app, blueprint):
 def register_domain_blueprints(app):
     from blueprints import (
         admin,
+        consulta,
         pacientes,
         agendamentos,
         api,
@@ -126,3 +127,7 @@ def register_domain_blueprints(app):
     pacientes_bp = pacientes.get_blueprint()
     if not _is_blueprint_registered(app, pacientes_bp):
         _register_with_alias(app, pacientes_bp)
+
+    consulta_bp = consulta.get_blueprint()
+    if not _is_blueprint_registered(app, consulta_bp):
+        _register_with_alias(app, consulta_bp)
