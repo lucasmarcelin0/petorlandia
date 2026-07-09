@@ -6,7 +6,22 @@ from urllib.parse import quote_plus
 from extensions import csrf, db
 from flask import jsonify, make_response, request, url_for
 from helpers import has_veterinarian_profile
-from models import AdminActionNotification, Animal, AnimalDocumento, Appointment, Clinica, Consulta, ExameImagem, OAuthAccessToken, User, Vacina
+from models import (
+    AdminActionNotification,
+    Animal,
+    AnimalDocumento,
+    Appointment,
+    Clinica,
+    Consulta,
+    ExameImagem,
+    OAuthAccessToken,
+    Order,
+    OrderItem,
+    Product,
+    ProductVariant,
+    User,
+    Vacina,
+)
 from services.appointments import ReturnAppointmentDTO, schedule_return_appointment
 from services.oauth_provider import _oauth_allowed_scopes, _oauth_extract_bearer_token, _oauth_issuer, _oauth_order_scopes
 
@@ -267,6 +282,24 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'scopes': ['appointments:read'],
         'annotations': _mcp_annotations(True, idempotent=True),
         'outputSchema': _mcp_object_output_schema('Agenda diaria com pendencias clinicas resumidas.'),
+    },
+    'buscar_produtos_loja': {
+        'title': 'Buscar produtos da loja',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_array_output_schema('produtos', 'Produtos reais disponiveis na loja PetOrlandia.'),
+    },
+    'obter_produto_loja': {
+        'title': 'Obter produto da loja',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema('Detalhes reais de um produto da loja PetOrlandia.'),
+    },
+    'criar_pedido_loja': {
+        'title': 'Criar pedido da loja',
+        'scopes': ['profile'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Pedido real criado ou atualizado no carrinho do PetOrlandia.'),
     },
     'buscar_paciente': {
         'title': 'Buscar paciente',
@@ -1298,6 +1331,119 @@ def _mcp_admin_alerts(user: User, status='open', limit=30):
     }
 
 
+def _mcp_money(value):
+    if value is None:
+        return None
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None
+    return {
+        'valor': round(amount, 2),
+        'formatado': f'R$ {amount:.2f}'.replace('.', ','),
+    }
+
+
+def _mcp_product_variant_payload(variant: ProductVariant):
+    return {
+        'id': variant.id,
+        'nome': variant.display_name,
+        'sku': variant.sku,
+        'codigo_barras': variant.barcode,
+        'dosagem': variant.dosage,
+        'embalagem': variant.package_quantity,
+        'peso_volume': variant.weight_volume,
+        'estoque': variant.stock,
+        'preco_publico': _mcp_money(variant.preco_publico),
+        'imagem_url': variant.image_url,
+        'status': variant.status,
+    }
+
+
+def _mcp_product_payload(product: Product, *, include_variants=True):
+    variants = product.active_variants if include_variants else []
+    seller = None
+    if getattr(product, 'clinica', None):
+        seller = {'tipo': 'clinica', 'id': product.clinica.id, 'nome': product.clinica.nome}
+    elif getattr(product, 'casa_de_racao', None):
+        seller = {'tipo': 'casa_de_racao', 'id': product.casa_de_racao.id, 'nome': product.casa_de_racao.nome}
+    return {
+        'id': product.id,
+        'nome': product.name,
+        'descricao': product.description,
+        'categoria': product.category,
+        'categoria_label': product.category_label,
+        'estoque': product.stock,
+        'preco_publico': _mcp_money(product.public_price_min),
+        'preco_publico_max': _mcp_money(product.public_price_max),
+        'imagem_url': product.image_url,
+        'url': url_for('produto_detail', product_id=product.id, _external=True),
+        'vendedor': seller,
+        'variantes': [_mcp_product_variant_payload(variant) for variant in variants],
+    }
+
+
+def _mcp_store_products(search_term=None, category=None, limit=12):
+    query = (
+        Product.query
+        .filter(Product.status == 'active')
+        .order_by(Product.name.asc())
+    )
+    search_term = (search_term or '').strip()
+    if search_term:
+        for token in [part for part in search_term.split() if part.strip()]:
+            like = f'%{token}%'
+            query = query.filter(db.or_(Product.name.ilike(like), Product.description.ilike(like)))
+    if category:
+        query = query.filter(Product.category == category)
+    return query.limit(max(1, min(int(limit or 12), 30))).all()
+
+
+def _mcp_resolve_product_item(raw_item: dict):
+    product_id = raw_item.get('produto_id') or raw_item.get('product_id')
+    variant_id = raw_item.get('variante_id') or raw_item.get('variant_id')
+    quantity = max(1, int(raw_item.get('quantidade') or raw_item.get('quantity') or 1))
+    product = db.session.get(Product, int(product_id or 0)) if product_id else None
+    variant = None
+    if variant_id:
+        variant = db.session.get(ProductVariant, int(variant_id))
+        if variant and product and variant.product_id != product.id:
+            raise ValueError('A variante informada não pertence ao produto.')
+        if variant and not product:
+            product = variant.product
+    if not product or product.status != 'active':
+        raise ValueError('Produto não encontrado ou indisponível.')
+    if variant and variant.status != 'active':
+        raise ValueError('Variante indisponível.')
+    available_stock = variant.stock if variant else product.stock
+    if available_stock is not None and available_stock < quantity:
+        raise ValueError(f'Estoque insuficiente para {product.name}. Disponível: {available_stock}.')
+    return product, variant, quantity
+
+
+def _mcp_order_payload(order: Order):
+    items = []
+    for item in order.items:
+        items.append({
+            'id': item.id,
+            'produto_id': item.product_id,
+            'variante_id': item.variant_id,
+            'nome': item.item_name,
+            'quantidade': item.quantity,
+            'preco_unitario': _mcp_money(item.unit_price),
+            'subtotal': _mcp_money((item.unit_price or 0) * item.quantity),
+        })
+    total = sum(float(item.unit_price or 0) * item.quantity for item in order.items)
+    return {
+        'id': order.id,
+        'itens': items,
+        'total': _mcp_money(total),
+        'endereco_entrega': order.shipping_address,
+        'url_carrinho': url_for('retomar_carrinho_chatgpt', order_id=order.id, _external=True),
+        'url_pedido': url_for('pedido_detail', order_id=order.id, _external=True),
+    }
+
+
 def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
     required_scope_set = {scope for scope in required_scopes if scope}
     missing_scopes = sorted(required_scope_set.difference(token_scope_set))
@@ -1411,6 +1557,15 @@ def mcp_server():
             'protocolVersion': '2024-11-05',
             'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
             'capabilities': {'tools': {}, 'resources': {}},
+            'instructions': (
+                'PetOrlandia é um app real de gestão veterinária, loja e serviços. '
+                'Quando o usuário pedir produtos, compras, catálogo, preço, estoque, carrinho ou pagamento, '
+                'use as tools de loja para consultar produtos reais e criar pedidos reais. '
+                'Nunca invente categorias, produtos, marcas, preços, estoque ou formas de pagamento. '
+                'Para pagamento, crie ou atualize o pedido e entregue o link do carrinho/checkout do PetOrlandia; '
+                'não afirme que processou cartão dentro do ChatGPT. '
+                'Para qualquer escrita, peça confirmação explícita antes de chamar tools que gravam dados.'
+            ),
         })
 
     # ── notifications/initialized (client ack — no response body needed) ─────
@@ -1808,6 +1963,66 @@ def mcp_server():
                     'openai/widgetAccessible': True,
                     'openai/toolInvocation/invoking': 'Carregando agenda do dia...',
                     'openai/toolInvocation/invoked': 'Agenda do dia pronta.',
+                },
+            },
+            {
+                'name': 'buscar_produtos_loja',
+                'description': (
+                    'Use quando o usuário quiser comprar, ver catálogo, saber o que há à venda, consultar preço, '
+                    'estoque, ração, petiscos, medicamentos, acessórios ou produtos da loja PetOrlandia. '
+                    'Retorna apenas produtos reais cadastrados e ativos; não invente produtos ausentes.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'termo': {'type': 'string', 'description': 'Texto de busca, como ração, Premier, gato, cachorro ou 15 kg.'},
+                        'categoria': {'type': 'string', 'description': 'Categoria interna opcional, quando conhecida.'},
+                        'limite': {'type': 'integer', 'description': 'Máximo de produtos, até 30.'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'obter_produto_loja',
+                'description': (
+                    'Use quando o usuário escolher um produto específico e precisar de detalhes reais, variações, '
+                    'preço público, estoque e link do produto.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'produto_id': {'type': 'integer', 'description': 'ID do produto real retornado por buscar_produtos_loja.'},
+                    },
+                    'required': ['produto_id'],
+                },
+            },
+            {
+                'name': 'criar_pedido_loja',
+                'description': (
+                    'Use quando o usuário confirmar que quer comprar produtos reais já selecionados. '
+                    'Cria ou atualiza um pedido/carrinho no PetOrlandia e retorna link para revisar entrega e pagar. '
+                    'Não processa cartão dentro do ChatGPT e exige confirmar_gravacao.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'itens': {
+                            'type': 'array',
+                            'description': 'Itens confirmados pelo usuário.',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'produto_id': {'type': 'integer'},
+                                    'variante_id': {'type': 'integer'},
+                                    'quantidade': {'type': 'integer'},
+                                },
+                                'required': ['produto_id'],
+                            },
+                        },
+                        'endereco_entrega': {'type': 'string', 'description': 'Endereço de entrega, se informado.'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['itens', 'confirmar_gravacao'],
                 },
             },
             {
@@ -2595,6 +2810,73 @@ def mcp_server():
             response = _mcp_json_content(_integration_build_today_agenda(user, target_date=target_date))
             response['_meta'] = {'ui': {'resourceUri': AGENDA_COCKPIT_WIDGET_URI}}
             return _mcp_ok(req_id, response)
+
+        if tool_name == 'buscar_produtos_loja':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            products = _mcp_store_products(
+                search_term=tool_args.get('termo') or tool_args.get('q'),
+                category=tool_args.get('categoria'),
+                limit=tool_args.get('limite') or 12,
+            )
+            return _mcp_ok(req_id, _mcp_json_content({
+                'total': len(products),
+                'produtos': [_mcp_product_payload(product, include_variants=False) for product in products],
+                'observacao': 'Mostre somente estes produtos reais. Se não houver resultado, peça outro termo ou ofereça abrir a loja.',
+                'url_loja': url_for('loja', _external=True),
+            }))
+
+        if tool_name == 'obter_produto_loja':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            try:
+                product_id = int(tool_args.get('produto_id') or 0)
+            except (TypeError, ValueError):
+                return _mcp_err(req_id, -32602, 'produto_id deve ser numérico.')
+            product = db.session.get(Product, product_id)
+            if not product or product.status != 'active':
+                return _mcp_err(req_id, -32004, 'Produto não encontrado ou indisponível.')
+            return _mcp_ok(req_id, _mcp_json_content({'produto': _mcp_product_payload(product)}))
+
+        if tool_name == 'criar_pedido_loja':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            raw_items = tool_args.get('itens') or []
+            if not isinstance(raw_items, list) or not raw_items:
+                return _mcp_err(req_id, -32602, 'Informe ao menos um item confirmado para criar o pedido.')
+            try:
+                resolved_items = [_mcp_resolve_product_item(item) for item in raw_items if isinstance(item, dict)]
+            except (TypeError, ValueError) as exc:
+                return _mcp_err(req_id, -32602, str(exc))
+            if not resolved_items:
+                return _mcp_err(req_id, -32602, 'Nenhum item válido foi informado.')
+            order = Order(user_id=user.id, shipping_address=(tool_args.get('endereco_entrega') or '').strip() or None)
+            db.session.add(order)
+            db.session.flush()
+            for product, variant, quantity in resolved_items:
+                unit_price = variant.preco_publico if variant else product.preco_publico
+                item_name = variant.display_name if variant else product.name
+                db.session.add(OrderItem(
+                    order_id=order.id,
+                    product_id=product.id,
+                    variant_id=variant.id if variant else None,
+                    item_name=item_name,
+                    quantity=quantity,
+                    unit_price=unit_price or 0,
+                ))
+            db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({
+                'success': True,
+                'message': 'Pedido criado. O usuário deve abrir o link do carrinho para revisar entrega e pagar no PetOrlandia.',
+                'pedido': _mcp_order_payload(order),
+                'pagamento_no_chatgpt': False,
+            }))
 
         if tool_name == 'buscar_paciente':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:read')

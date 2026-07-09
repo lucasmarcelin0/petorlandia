@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "PetOrlandia",
     "subtitle": "Gestao veterinaria",
-    "description": "PetOrlandia ajuda veterinarios e equipes clinicas a consultar pets, agenda e pendencias, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT.",
+    "description": "PetOrlandia ajuda veterinarios e equipes clinicas a consultar pets, agenda e pendencias, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT. Tambem permite consultar produtos reais da loja, montar pedido e abrir checkout no PetOrlandia.",
     "category": "PRODUCTIVITY",
     "icon_url": "https://petorlandia-fbabb575d64c.herokuapp.com/static/chatgpt_app_icon.png"
   },
@@ -428,6 +428,42 @@
         "open_world_justification": "Only updates PetOrlandia internal state for the authenticated admin.",
         "destructive_justification": "Does not delete data; it marks an admin alert read or resolved after explicit confirmation."
       }
+    },
+    "buscar_produtos_loja": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only searches active products currently registered in the PetOrlandia store.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "obter_produto_loja": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves details for one active product currently registered in the PetOrlandia store.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "criar_pedido_loja": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or updates a PetOrlandia store order/cart only after explicit user confirmation.",
+        "open_world_justification": "Only writes PetOrlandia internal order/cart state for the authenticated user.",
+        "destructive_justification": "Does not delete data or process external payment; it creates an internal order after explicit confirmation."
+      }
     }
   },
   "test_cases": [
@@ -518,6 +554,24 @@
       "prompt": "Quais alertas administrativos abertos exigem minha atencao agora?",
       "expected_behavior": "Lists actionable admin alerts for an authenticated admin and opens the admin command center widget.",
       "tools_triggered": "listar_alertas_admin"
+    },
+    {
+      "name": "Buscar produtos reais da loja",
+      "prompt": "O que voces tem a venda? Estou procurando racao para cachorro grande.",
+      "expected_behavior": "Uses the store product search tool and only lists active real products returned by PetOrlandia, including prices and links when available.",
+      "tools_triggered": "buscar_produtos_loja"
+    },
+    {
+      "name": "Detalhar produto antes da compra",
+      "prompt": "Quero ver detalhes e apresentacoes desse produto antes de comprar.",
+      "expected_behavior": "Fetches product details, variants, public price and stock from PetOrlandia instead of inventing SKU data.",
+      "tools_triggered": "obter_produto_loja"
+    },
+    {
+      "name": "Criar pedido de loja confirmado",
+      "prompt": "Pode criar meu pedido com esse produto. Eu confirmo.",
+      "expected_behavior": "Creates a PetOrlandia order/cart only after explicit confirmation and returns a PetOrlandia cart/checkout link; it does not claim to process card payment inside ChatGPT.",
+      "tools_triggered": "criar_pedido_loja"
     }
   ],
   "negative_test_cases": [

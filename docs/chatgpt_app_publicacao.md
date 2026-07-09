@@ -30,6 +30,9 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, central admin, widg
 - `agendar_retorno`
 - `obter_resumo_clinico_animal`
 - `listar_agenda_do_dia`
+- `buscar_produtos_loja`
+- `obter_produto_loja`
+- `criar_pedido_loja`
 - `buscar_paciente`
 - `obter_timeline_clinica`
 - `preparar_consulta`
@@ -51,6 +54,15 @@ Todas as tools agora recebem hints explicitos (`readOnlyHint`, `destructiveHint`
 - Timeline clinica: `obter_timeline_clinica` e `preparar_consulta` abrem uma visao consolidada do paciente.
 - Central admin: `listar_alertas_admin` abre a fila de alertas administrativos acionaveis; `resolver_alerta_admin` exige `confirmar_gravacao`.
 - Mensagens ao tutor: `gerar_mensagem_whatsapp_tutor` gera texto e link WhatsApp, mas nao envia automaticamente.
+- Loja: `buscar_produtos_loja` e `obter_produto_loja` consultam somente produtos reais ativos; `criar_pedido_loja` cria um pedido/carrinho real e retorna link para revisar entrega e pagar no PetOrlandia.
+
+## Regras para compras no ChatGPT
+
+- Nunca inventar categorias, marcas, produtos, estoque ou precos.
+- Quando o usuario perguntar "o que voces tem a venda?", chamar `buscar_produtos_loja`.
+- Quando o usuario escolher um produto, chamar `obter_produto_loja` antes de confirmar compra.
+- Para finalizar, chamar `criar_pedido_loja` somente com `confirmar_gravacao` e devolver o link `url_carrinho`.
+- O pagamento por cartao/PIX acontece no checkout do PetOrlandia, nao dentro do ChatGPT.
 
 ## Arquivos no ChatGPT
 

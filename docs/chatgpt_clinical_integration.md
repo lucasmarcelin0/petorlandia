@@ -15,6 +15,8 @@ Permitir que veterinários usem o ChatGPT como interface operacional segura para
 - preparar consulta com briefing operacional;
 - visualizar timeline clínica consolidada;
 - gerar mensagem WhatsApp para o tutor sem envio automático;
+- consultar produtos reais da loja;
+- criar pedido/carrinho para checkout no PetOrlandia;
 - cadastrar tutor e pets;
 - registrar dados clínicos essenciais da consulta;
 - registrar blocos de exames;
@@ -69,6 +71,9 @@ Todos exigem `Authorization: Bearer <token>`.
 - `listar_agendamentos`
 - `interpretar_mensagem_livre_atendimento`
 - `assistente_operacional_veterinario`
+- `buscar_produtos_loja`
+- `obter_produto_loja`
+- `criar_pedido_loja`
 - `obter_resumo_clinico_animal`
 - `listar_agenda_do_dia`
 - `buscar_paciente`
@@ -110,6 +115,7 @@ Regras adicionais:
 - `registrar_bloco_exames`: cria um bloco estruturado de exames solicitados para o animal.
 - `agendar_consulta`: cria agendamento clínico vinculado ao animal e à clínica.
 - `agendar_retorno`: agenda retorno a partir de uma consulta já existente.
+- `criar_pedido_loja`: cria pedido/carrinho real para o usuário autenticado e retorna link de checkout.
 - `resolver_alerta_admin`: marca alerta administrativo como lido ou resolvido, restrito a admins.
 
 ## Widgets operacionais no ChatGPT
@@ -159,6 +165,9 @@ Exemplos de uso:
 
 - "Resuma o histórico clínico do Thor"
 - "Quais pacientes tenho hoje?"
+- "O que vocês têm à venda?"
+- "Quero comprar ração para cachorro grande"
+- "Crie meu pedido com esse produto"
 - "Procure o paciente Thor da tutora Lígia"
 - "Abra a timeline clínica do Bolt"
 - "Prepare a consulta da Luna das 14h"

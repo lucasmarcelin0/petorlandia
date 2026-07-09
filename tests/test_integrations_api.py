@@ -19,7 +19,10 @@ from models import (
     OAuthAccessToken,
     OAuthClient,
     OAuthRefreshToken,
+    Order,
     Prescricao,
+    Product,
+    ProductVariant,
     User,
     Vacina,
     Veterinario,
@@ -2052,6 +2055,100 @@ def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
     assert result["tipo_exame"] == "Ultrassonografia abdominal"
     assert "Bexiga espessada." in result["rascunho_base"]
     assert result["exemplos_encontrados"][0]["trecho_modelo"].startswith("Bexiga")
+
+
+def test_mcp_store_tools_search_products_and_create_order(app, client):
+    with app.app_context():
+        tutor = User(name="Cliente Loja", email="cliente-loja-mcp@example.com", role="adotante")
+        tutor.set_password("secret123")
+        product = Product(
+            name="Premier Formula Adulto Raças Grandes 15 kg",
+            description="Ração seca para cães adultos de raças grandes.",
+            price=180.00,
+            stock=8,
+            category="racao",
+            status="active",
+        )
+        db.session.add_all([tutor, product])
+        db.session.flush()
+        variant = ProductVariant(
+            product_id=product.id,
+            name="Saco 15 kg",
+            weight_volume="15 kg",
+            price=180.00,
+            stock=8,
+            status="active",
+        )
+        db.session.add(variant)
+        db.session.commit()
+        token_value = _create_token(tutor.id, scope="profile")
+        tutor_id = tutor.id
+        product_id = product.id
+        variant_id = variant.id
+
+    headers = {"Authorization": f"Bearer {token_value}"}
+    tools_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 70, "method": "tools/list", "params": {}},
+    )
+    tool_names = {tool["name"] for tool in tools_response.get_json()["result"]["tools"]}
+    assert {"buscar_produtos_loja", "obter_produto_loja", "criar_pedido_loja"}.issubset(tool_names)
+
+    search_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 71,
+            "method": "tools/call",
+            "params": {"name": "buscar_produtos_loja", "arguments": {"termo": "Premier 15 kg"}},
+        },
+    )
+    search_payload = json.loads(search_response.get_json()["result"]["content"][0]["text"])
+    assert search_payload["total"] == 1
+    assert search_payload["produtos"][0]["id"] == product_id
+    assert "Premier Formula" in search_payload["produtos"][0]["nome"]
+
+    detail_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 72,
+            "method": "tools/call",
+            "params": {"name": "obter_produto_loja", "arguments": {"produto_id": product_id}},
+        },
+    )
+    detail_payload = json.loads(detail_response.get_json()["result"]["content"][0]["text"])
+    assert detail_payload["produto"]["variantes"][0]["id"] == variant_id
+
+    order_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 73,
+            "method": "tools/call",
+            "params": {
+                "name": "criar_pedido_loja",
+                "arguments": {
+                    "itens": [{"produto_id": product_id, "variante_id": variant_id, "quantidade": 1}],
+                    "endereco_entrega": "Rua Teste, 123",
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+    order_payload = order_response.get_json()["result"]["structuredContent"]
+    assert order_payload["success"] is True
+    assert order_payload["pagamento_no_chatgpt"] is False
+    assert "/carrinho/retomar/" in order_payload["pedido"]["url_carrinho"]
+    with app.app_context():
+        order = db.session.get(Order, order_payload["pedido"]["id"])
+        assert order is not None
+        assert order.user_id == tutor_id
+        assert order.items[0].variant_id == variant_id
 
 
 def test_mcp_laudo_volante_widget_contract(app, client):

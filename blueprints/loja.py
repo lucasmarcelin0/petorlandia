@@ -1534,6 +1534,21 @@ def ver_carrinho():
     )
 
 
+@bp.route("/carrinho/retomar/<int:order_id>", methods=["GET"])
+@login_required
+def retomar_carrinho_chatgpt(order_id):
+    """Retoma um pedido criado pelo ChatGPT/MCP na sessão web do comprador."""
+    order = Order.query.get_or_404(order_id)
+    if order.user_id != current_user.id:
+        abort(403)
+    if order.payment and order.payment.status == PaymentStatus.COMPLETED:
+        flash("Este pedido já foi pago.", "info")
+        return redirect(url_for("pedido_detail", order_id=order.id))
+    session["current_order"] = order.id
+    flash("Pedido carregado no carrinho. Revise entrega e pagamento.", "success")
+    return redirect(url_for("ver_carrinho"))
+
+
 @bp.route("/carrinho/salvar_endereco", methods=["POST"])
 @login_required
 def carrinho_salvar_endereco():

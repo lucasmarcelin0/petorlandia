@@ -13458,6 +13458,7 @@ from blueprints.loja import (  # noqa: E402,F401
     pesquisa_racoes_tutores,
     produto_detail,
     request_delivery,
+    retomar_carrinho_chatgpt,
     save_pesquisa_racoes_tutor_answers,
     send_selected_pesquisa_racoes_tutores,
     toggle_pesquisa_racoes_tutor,
