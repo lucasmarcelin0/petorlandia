@@ -333,7 +333,47 @@
 </section>
 {% endif %}
 
-<div class="mb-3 {% if pmo_services %}mt-5 pt-4 border-top{% endif %}">
+{% if bh_services %}
+<section class="pmo-section mb-4">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="service-icon text-primary">
+      <i class="fa-solid fa-landmark"></i>
+    </div>
+    <div>
+      <h2 class="h4 fw-bold mb-0">Prefeitura de Belo Horizonte</h2>
+      <p class="text-muted small mb-0">Serviços públicos <strong>gratuitos</strong> oferecidos pela Prefeitura de Belo
+        Horizonte para os pets da cidade.</p>
+    </div>
+  </div>
+
+  <div class="row g-3 g-md-4">
+    {% for service in bh_services %}
+    <div class="col-12 col-sm-6">
+      <div class="card service-card pmo-card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="service-icon text-{{ service.color }} mb-3">
+            <i class="fa-solid {{ service.icon }}"></i>
+          </div>
+          <h3 class="h5 fw-bold mb-1">
+            {{ service.title }}
+            {% if service.badge %}
+            <span class="badge bg-success ms-1 align-middle">{{ service.badge }}</span>
+            {% endif %}
+          </h3>
+          <p class="text-muted small flex-grow-1 mb-3">{{ service.description }}</p>
+          <a href="{{ service.url }}" class="btn btn-{{ service.color }} w-100 service-cta"
+            {% if service.external %}target="_blank" rel="noopener"{% endif %}>
+            {{ service.cta }} <i class="fa-solid fa-arrow-right ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div class="mb-3 {% if pmo_services or bh_services %}mt-5 pt-4 border-top{% endif %}">
   <h2 class="h4 fw-bold mb-1">Serviços PetOrlândia em {{ selected_city }}</h2>
   <p class="text-muted small mb-0">Vacinas em domicílio, consultas e exames com profissionais parceiros. A
     disponibilidade é confirmada dentro de cada serviço.</p>

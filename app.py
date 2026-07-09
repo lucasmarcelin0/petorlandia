@@ -32712,6 +32712,29 @@ def servicos():
             'cta': 'Solicitar',
         })
 
+    is_bh = selected_city_key == _normalize_public_text('Belo Horizonte')
+    bh_services = []
+    if is_bh:
+        bh_services.append({
+            'icon': 'fa-hand-holding-medical',
+            'color': 'primary',
+            'title': 'Castração (BH)',
+            'description': 'Cadastro de interesse para castração gratuita de cães e gatos pela Prefeitura de Belo Horizonte.',
+            'badge': 'Gratuito',
+            'url': (
+                'https://acesso.pbh.gov.br/auth/realms/PBH/protocol/openid-connect/auth'
+                '?client_id=SIEAWEB2'
+                '&redirect_uri=https%3A%2F%2Fsieaweb2.pbh.gov.br%2FloginPrincipal'
+                '&state=5c1d70d0-0daf-4643-8513-4f016f1eb1de'
+                '&response_mode=fragment&response_type=code&scope=openid'
+                '&nonce=90ca4408-4d52-412a-8e3b-4ae9fc291aae'
+                '&code_challenge=OSofSXemOqrKAWyNRPCXiX1ou0USm8Zj5RSfFZYCXLg'
+                '&code_challenge_method=S256'
+            ),
+            'cta': 'Solicitar',
+            'external': True,
+        })
+
     localized_services = []
     localized_services.extend([
         {
@@ -32810,6 +32833,7 @@ def servicos():
         cities=cities,
         selected_city=selected_city,
         pmo_services=pmo_services,
+        bh_services=bh_services,
         localized_services=localized_services,
         other_services=other_services,
         is_admin=_is_admin(),

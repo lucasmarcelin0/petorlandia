@@ -67,6 +67,33 @@ def test_services_city_filter_routes_into_existing_flows(app, client):
     assert 'Vacina Antirrábica (PMO)' not in html
     assert 'Ultrassom' not in html
     assert 'Raio-X' not in html
+    assert 'Castração (BH)' in html
+    assert 'acesso.pbh.gov.br' in html
+    assert 'target="_blank"' in html
+
+
+def test_bh_castration_card_hidden_for_other_cities(app, client):
+    with app.app_context():
+        tutor = User(
+            name='Tutor Orlândia BH check',
+            email='tutor-orlandia-bh-check@example.com',
+            password_hash='x',
+        )
+        _create_public_vet(
+            'Veterinária Orlândia BH check',
+            'vet-orlandia-bh-check@example.com',
+            'Orlândia',
+        )
+        db.session.add(tutor)
+        db.session.commit()
+        tutor_id = tutor.id
+
+    _login(client, tutor_id)
+    response = client.get('/servicos', query_string={'cidade': 'Orlândia'})
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'Castração (BH)' not in html
 
 
 def test_orlandia_services_keep_pmo_and_paid_vaccine_flow(app, client):

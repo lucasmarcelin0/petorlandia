@@ -8,6 +8,12 @@
       "port": 5000
     },
     {
+      "name": "Flask dev server (flask run)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "flask", "run", "--port", "5001"],
+      "port": 5001
+    },
+    {
       "name": "Scheduler",
       "runtimeExecutable": "python",
       "runtimeArgs": ["scheduler.py"],
