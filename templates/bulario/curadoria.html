@@ -1,0 +1,179 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<div class="container py-4">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-2">
+          <li class="breadcrumb-item"><a href="{{ url_for('bulario') }}">Bulário</a></li>
+          <li class="breadcrumb-item active">Curadoria</li>
+        </ol>
+      </nav>
+      <h1 class="h3 mb-1">Curadoria dos medicamentos mais prescritos</h1>
+      <p class="text-muted mb-0">Ranking offline por uso real, sem alterar doses, apresentações ou medicamentos aprovados.</p>
+    </div>
+    <a href="{{ url_for('bulario') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+  </div>
+
+  <div class="alert alert-info d-flex gap-3 align-items-start">
+    <i class="fas fa-shield-halved mt-1"></i>
+    <div>
+      <strong>Modo seguro sem IA ativa.</strong>
+      Esta tela prioriza e diagnostica candidatos usando apenas banco local e histórico interno. Pesquisa web/IA entra depois como proposta auditável.
+    </div>
+  </div>
+
+  <section class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+      <div>
+        <h2 class="h5 mb-1">Prévia do ranking</h2>
+        <p class="text-muted mb-0">Medicamentos agrupados por nome prescrito normalizado, ordenados por volume e recência.</p>
+      </div>
+      <form method="post" action="{{ url_for('bulario_curadoria_sincronizar') }}" class="d-flex flex-wrap gap-2">
+        <input type="number" name="limite" class="form-control form-control-sm" style="width: 90px" min="1" max="200" value="{{ limite }}">
+        <button type="submit" name="dry_run" value="1" class="btn btn-outline-primary btn-sm">
+          <i class="fas fa-eye me-1"></i>Dry-run
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="fas fa-rotate me-1"></i>Sincronizar fila
+        </button>
+      </form>
+    </div>
+
+    <div class="table-responsive border rounded">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Nome prescrito</th>
+            <th>Bulário</th>
+            <th class="text-end">Uso</th>
+            <th>Alias</th>
+            <th>Problemas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in ranking_preview %}
+          <tr>
+            <td class="text-muted">{{ loop.index }}</td>
+            <td>
+              <strong>{{ item.nome_prescrito_principal }}</strong>
+              {% if item.variantes|length > 1 %}
+              <div class="small text-muted">{{ item.variantes|length }} variações no histórico</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.medicamento_id %}
+              <a href="{{ url_for('bulario_detalhe', medicamento_id=item.medicamento_id) }}">{{ item.medicamento_nome }}</a>
+              {% else %}
+              <span class="text-danger">precisa resolver</span>
+              {% endif %}
+            </td>
+            <td class="text-end fw-semibold">{{ item.total_prescricoes }}</td>
+            <td><span class="badge text-bg-secondary">{{ item.confianca_alias }}</span></td>
+            <td>
+              {% set problemas = item.diagnostico.get('problemas', []) %}
+              {% if problemas %}
+                {% for p in problemas[:3] %}
+                  <span class="badge text-bg-warning text-dark me-1">{{ p.codigo }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="badge text-bg-success">sem lacunas óbvias</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">Nenhuma prescrição encontrada para montar o ranking.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+      <div>
+        <h2 class="h5 mb-1">Fila de revisão</h2>
+        <p class="text-muted mb-0">Itens sincronizados para acompanhamento de curadoria.</p>
+      </div>
+      <div class="btn-group btn-group-sm">
+        <a class="btn btn-outline-secondary {% if not status %}active{% endif %}" href="{{ url_for('bulario_curadoria', limite=limite) }}">Todos</a>
+        {% for st in ['pendente', 'pesquisado', 'revisar', 'aprovado', 'rejeitado'] %}
+        <a class="btn btn-outline-secondary {% if status == st %}active{% endif %}" href="{{ url_for('bulario_curadoria', status=st, limite=limite) }}">{{ st }}</a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="row g-3">
+      {% for review in reviews %}
+      {% set diag = review.diagnostico or {} %}
+      {% set hist = review.resumo_historico or {} %}
+      {% set proposta = review.proposta or {} %}
+      <div class="col-12">
+        <article class="border rounded p-3 bg-white">
+          <div class="d-flex flex-wrap justify-content-between gap-3">
+            <div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h3 class="h6 mb-0">{{ review.prioridade }}. {{ review.nome_prescrito_principal }}</h3>
+                <span class="badge text-bg-secondary">{{ review.status }}</span>
+                <span class="badge text-bg-light border">{{ review.confianca_alias }}</span>
+              </div>
+              <div class="small text-muted">
+                {{ review.total_prescricoes }} prescrição(ões)
+                {% if review.medicamento %}
+                  · <a href="{{ url_for('bulario_detalhe', medicamento_id=review.medicamento.id) }}">{{ review.medicamento.nome }}</a>
+                {% else %}
+                  · sem medicamento canônico
+                {% endif %}
+              </div>
+            </div>
+            <form method="post" action="{{ url_for('bulario_curadoria_status', review_id=review.id) }}" class="d-flex gap-2">
+              <select name="status" class="form-select form-select-sm">
+                {% for st in ['pendente', 'pesquisado', 'revisar', 'aprovado', 'rejeitado'] %}
+                <option value="{{ st }}" {% if review.status == st %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-outline-primary btn-sm">Salvar</button>
+            </form>
+          </div>
+
+          <div class="row g-3 mt-2">
+            <div class="col-md-4">
+              <h4 class="small text-uppercase text-muted mb-2">Histórico</h4>
+              <div class="small">
+                <div>Incompletas: {{ hist.get('prescricoes_incompletas', 0) }} ({{ (hist.get('proporcao_campos_incompletos', 0) * 100)|round(1) }}%)</div>
+                <div>Texto livre: {{ hist.get('prescricoes_texto_livre', 0) }} ({{ (hist.get('proporcao_texto_livre', 0) * 100)|round(1) }}%)</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <h4 class="small text-uppercase text-muted mb-2">Lacunas</h4>
+              {% for p in diag.get('problemas', [])[:5] %}
+                <span class="badge text-bg-warning text-dark me-1 mb-1" title="{{ p.detalhe }}">{{ p.titulo }}</span>
+              {% else %}
+                <span class="badge text-bg-success">sem lacunas óbvias</span>
+              {% endfor %}
+            </div>
+            <div class="col-md-4">
+              <h4 class="small text-uppercase text-muted mb-2">Próxima ação</h4>
+              <div class="small">{{ proposta.get('resumo') or 'Aguardando análise.' }}</div>
+            </div>
+          </div>
+        </article>
+      </div>
+      {% else %}
+      <div class="col-12">
+        <div class="text-center text-muted border rounded py-4">
+          A fila ainda está vazia. Use “Sincronizar fila” para criar os primeiros itens.
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{% endblock %}

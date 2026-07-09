@@ -45,6 +45,20 @@ def get_blueprint():
         view_func=lazy_view("admin_parcerias"),
     )
     bp.add_url_rule(
+        "/admin/notificacoes",
+        view_func=lazy_view("admin_notifications"),
+    )
+    bp.add_url_rule(
+        "/admin/notificacoes/<int:notification_id>/ler",
+        view_func=lazy_view("admin_notification_mark_read"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/admin/notificacoes/<int:notification_id>/resolver",
+        view_func=lazy_view("admin_notification_resolve"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/admin/parcerias/convite",
         view_func=lazy_view("admin_criar_convite"),
         methods=["POST"],

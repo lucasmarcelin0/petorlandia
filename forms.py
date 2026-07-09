@@ -440,6 +440,7 @@ class PlantonistaEscalaForm(FlaskForm):
 
 class AddToCartForm(FlaskForm):
     quantity = IntegerField('Quantidade', default=1, validators=[DataRequired()])
+    variant_id = HiddenField(validators=[Optional()])
     submit = SubmitField('Adicionar ao Carrinho')
 
 
@@ -1081,8 +1082,13 @@ class CasaDeRacaoProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário para publicar um produto da casa de ração na loja."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
-    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
-    stock = IntegerField('Estoque', validators=[Optional(), NumberRange(min=0)], default=0)
+    price = DecimalField('Preço da primeira apresentação (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    stock = IntegerField('Estoque da primeira apresentação', validators=[Optional(), NumberRange(min=0)], default=0)
+    variant_name = StringField('Primeira apresentação', validators=[Optional(), Length(max=160)])
+    dosage = StringField('Dosagem (opcional)', validators=[Optional(), Length(max=80)])
+    package_quantity = StringField('Embalagem (opcional)', validators=[Optional(), Length(max=80)])
+    weight_volume = StringField('Peso/volume (opcional)', validators=[Optional(), Length(max=80)])
+    sku = StringField('SKU/código interno (opcional)', validators=[Optional(), Length(max=80)])
     image_upload = FileField(
         'Imagem',
         validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],
@@ -1096,8 +1102,8 @@ class CasaDeRacaoProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário de edição de produto da casa de ração."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
-    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
-    stock = IntegerField('Estoque', validators=[Optional(), NumberRange(min=0)])
+    price = DecimalField('Preço padrão/menor apresentação (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    stock = IntegerField('Estoque total/legado', validators=[Optional(), NumberRange(min=0)])
     image_upload = FileField(
         'Nova imagem',
         validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')],

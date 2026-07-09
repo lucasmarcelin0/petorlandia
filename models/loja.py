@@ -3,6 +3,7 @@
 from .base import (
     Transaction,
     Product,
+    ProductVariant,
     ProductPhoto,
     Order,
     OrderItem,
@@ -17,6 +18,7 @@ from .base import (
 __all__ = [
     "Transaction",
     "Product",
+    "ProductVariant",
     "ProductPhoto",
     "Order",
     "OrderItem",

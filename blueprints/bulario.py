@@ -22,6 +22,21 @@ def get_blueprint():
         methods=["GET"],
     )
     bp.add_url_rule(
+        "/bulario/curadoria",
+        view_func=lazy_view("bulario_curadoria"),
+        methods=["GET"],
+    )
+    bp.add_url_rule(
+        "/bulario/curadoria/sincronizar",
+        view_func=lazy_view("bulario_curadoria_sincronizar"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
+        "/bulario/curadoria/<int:review_id>/status",
+        view_func=lazy_view("bulario_curadoria_status"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/bulario/<int:medicamento_id>/editar",
         view_func=lazy_view("bulario_editar"),
         methods=["GET", "POST"],

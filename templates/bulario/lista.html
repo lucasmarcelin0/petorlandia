@@ -15,6 +15,9 @@
       <a href="{{ url_for('bulario_novo') }}" class="btn bulario-btn-novo mt-3">
         <i class="fas fa-plus me-2"></i>Novo medicamento
       </a>
+      <a href="{{ url_for('bulario_curadoria') }}" class="btn btn-outline-light mt-3 ms-2">
+        <i class="fas fa-clipboard-check me-2"></i>Curadoria
+      </a>
     </div>
 
     <form method="GET" action="{{ url_for('bulario') }}" id="bulario-form">

@@ -1,0 +1,131 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Notificacoes do admin</h1>
+      <p class="text-muted mb-0">Eventos operacionais que precisam de atencao ou acompanhamento.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('painel_admin.index') }}">
+      <i class="fas fa-arrow-left me-1"></i> Painel
+    </a>
+  </div>
+
+  <form class="row g-2 align-items-end mb-4" method="get">
+    <div class="col-md-3">
+      <label class="form-label" for="status">Status</label>
+      <select class="form-select" id="status" name="status">
+        <option value="open" {% if status == 'open' %}selected{% endif %}>Abertas</option>
+        <option value="unread" {% if status == 'unread' %}selected{% endif %}>Nao lidas</option>
+        <option value="read" {% if status == 'read' %}selected{% endif %}>Lidas</option>
+        <option value="resolved" {% if status == 'resolved' %}selected{% endif %}>Resolvidas</option>
+        <option value="all" {% if status == 'all' %}selected{% endif %}>Todas</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="priority">Prioridade</label>
+      <select class="form-select" id="priority" name="priority">
+        <option value="">Todas</option>
+        <option value="critical" {% if priority == 'critical' %}selected{% endif %}>Critica</option>
+        <option value="high" {% if priority == 'high' %}selected{% endif %}>Alta</option>
+        <option value="normal" {% if priority == 'normal' %}selected{% endif %}>Normal</option>
+        <option value="info" {% if priority == 'info' %}selected{% endif %}>Info</option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="event_type">Tipo</label>
+      <select class="form-select" id="event_type" name="event_type">
+        <option value="">Todos</option>
+        {% for option in event_types %}
+        <option value="{{ option }}" {% if event_type == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100" type="submit">
+        <i class="fas fa-filter me-1"></i> Filtrar
+      </button>
+    </div>
+  </form>
+
+  {% if notifications %}
+  <div class="list-group shadow-sm">
+    {% for note in notifications %}
+    {% set priority_class = {
+      'critical': 'danger',
+      'high': 'warning',
+      'normal': 'primary',
+      'info': 'secondary'
+    }.get(note.priority, 'primary') %}
+    <div class="list-group-item py-3 {% if note.status == 'unread' %}border-start border-4 border-{{ priority_class }}{% endif %}">
+      <div class="d-flex flex-wrap justify-content-between gap-3">
+        <div class="flex-grow-1">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h2 class="h6 mb-0">{{ note.title }}</h2>
+            <span class="badge text-bg-{{ priority_class }}">{{ note.priority }}</span>
+            <span class="badge text-bg-light border text-muted">{{ note.event_type }}</span>
+            {% if note.status == 'unread' %}
+            <span class="badge text-bg-danger">nova</span>
+            {% elif note.status == 'resolved' %}
+            <span class="badge text-bg-success">resolvida</span>
+            {% endif %}
+          </div>
+          {% if note.body %}
+          <p class="text-muted mb-2" style="white-space: pre-line;">{{ note.body }}</p>
+          {% endif %}
+          <small class="text-muted">
+            {{ note.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}
+            {% if note.entity_type and note.entity_id %} - {{ note.entity_type }} #{{ note.entity_id }}{% endif %}
+          </small>
+        </div>
+        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-start gap-2">
+          {% if note.url %}
+          <a class="btn btn-sm btn-primary" href="{{ note.url }}">
+            <i class="fas fa-arrow-up-right-from-square me-1"></i> Abrir
+          </a>
+          {% endif %}
+          {% if note.status == 'unread' %}
+          <form method="post" action="{{ url_for('admin_notification_mark_read', notification_id=note.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">
+              <i class="fas fa-check me-1"></i> Lida
+            </button>
+          </form>
+          {% endif %}
+          {% if note.status != 'resolved' %}
+          <form method="post" action="{{ url_for('admin_notification_resolve', notification_id=note.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-success" type="submit">
+              <i class="fas fa-check-double me-1"></i> Resolver
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <nav class="mt-4" aria-label="Paginacao de notificacoes">
+    <ul class="pagination">
+      {% for page_num in pagination.iter_pages() %}
+        {% if page_num %}
+        <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('admin_notifications', page=page_num, status=status, event_type=event_type, priority=priority) }}">{{ page_num }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="alert alert-success shadow-sm">
+    Nenhuma notificacao encontrada para os filtros atuais.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

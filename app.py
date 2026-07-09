@@ -119,6 +119,7 @@ from models import (
     OAuthConsent,
     OAuthJwkKey,
     OAuthRefreshToken,
+    ProductVariant,
     StorePaymentAccount,
     User,
     Veterinario,
@@ -4423,6 +4424,152 @@ def inject_unread_count():
         db.session.rollback()
         unread = 0
     return dict(unread_messages=unread)
+
+
+@app.context_processor
+def inject_admin_action_notifications():
+    try:
+        if (
+            current_user.is_authenticated
+            and (getattr(current_user, 'role', '') or '').lower() == 'admin'
+        ):
+            cached = _get_cached_context(current_user.id, 'admin_action_notifications')
+            if cached is not None:
+                return cached
+
+            open_count = (
+                AdminActionNotification.query
+                .filter_by(recipient_user_id=current_user.id)
+                .filter(AdminActionNotification.status.in_(['unread', 'read']))
+                .count()
+            )
+            unread_count = (
+                AdminActionNotification.query
+                .filter_by(recipient_user_id=current_user.id, status='unread')
+                .count()
+            )
+            recent = (
+                AdminActionNotification.query
+                .filter_by(recipient_user_id=current_user.id)
+                .filter(AdminActionNotification.status.in_(['unread', 'read']))
+                .order_by(AdminActionNotification.created_at.desc())
+                .limit(5)
+                .all()
+            )
+            payload = dict(
+                admin_action_count=open_count,
+                admin_action_unread_count=unread_count,
+                admin_action_recent=recent,
+            )
+            _set_cached_context(current_user.id, 'admin_action_notifications', payload)
+            return payload
+    except Exception:
+        db.session.rollback()
+    return dict(
+        admin_action_count=0,
+        admin_action_unread_count=0,
+        admin_action_recent=[],
+    )
+
+
+def _invalidate_admin_action_cache(user_id: int | None = None) -> None:
+    try:
+        if user_id:
+            _invalidate_cached_context(user_id, 'admin_action_notifications')
+            return
+        for admin in User.query.filter_by(role='admin').all():
+            _invalidate_cached_context(admin.id, 'admin_action_notifications')
+    except Exception:
+        pass
+
+
+@login_required
+def admin_notifications():
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+
+    status = (request.args.get('status') or 'open').strip().lower()
+    event_type = (request.args.get('event_type') or '').strip()
+    priority = (request.args.get('priority') or '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    query = AdminActionNotification.query.filter_by(recipient_user_id=current_user.id)
+    if status == 'open':
+        query = query.filter(AdminActionNotification.status.in_(['unread', 'read']))
+    elif status in {'unread', 'read', 'resolved', 'archived'}:
+        query = query.filter(AdminActionNotification.status == status)
+    elif status != 'all':
+        status = 'open'
+        query = query.filter(AdminActionNotification.status.in_(['unread', 'read']))
+    if event_type:
+        query = query.filter(AdminActionNotification.event_type == event_type)
+    if priority:
+        query = query.filter(AdminActionNotification.priority == priority)
+
+    pagination = (
+        query
+        .order_by(
+            case(
+                (AdminActionNotification.priority == 'critical', 0),
+                (AdminActionNotification.priority == 'high', 1),
+                (AdminActionNotification.priority == 'normal', 2),
+                else_=3,
+            ),
+            AdminActionNotification.created_at.desc(),
+        )
+        .paginate(page=page, per_page=25, error_out=False)
+    )
+    event_types = [
+        row[0]
+        for row in db.session.query(AdminActionNotification.event_type)
+        .filter_by(recipient_user_id=current_user.id)
+        .distinct()
+        .order_by(AdminActionNotification.event_type.asc())
+        .all()
+    ]
+    return render_template(
+        'admin/notifications.html',
+        notifications=pagination.items,
+        pagination=pagination,
+        status=status,
+        event_type=event_type,
+        priority=priority,
+        event_types=event_types,
+    )
+
+
+@login_required
+def admin_notification_mark_read(notification_id):
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+    note = AdminActionNotification.query.filter_by(
+        id=notification_id,
+        recipient_user_id=current_user.id,
+    ).first_or_404()
+    if note.status == 'unread':
+        note.status = 'read'
+        note.read_at = now_in_brazil()
+        db.session.commit()
+        _invalidate_admin_action_cache(current_user.id)
+    return redirect(request.referrer or url_for('admin_notifications'))
+
+
+@login_required
+def admin_notification_resolve(notification_id):
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+    note = AdminActionNotification.query.filter_by(
+        id=notification_id,
+        recipient_user_id=current_user.id,
+    ).first_or_404()
+    if note.status != 'resolved':
+        note.status = 'resolved'
+        note.read_at = note.read_at or now_in_brazil()
+        note.resolved_at = now_in_brazil()
+        note.resolved_by_id = current_user.id
+        db.session.commit()
+        _invalidate_admin_action_cache(current_user.id)
+    return redirect(request.referrer or url_for('admin_notifications'))
 
 
 @app.context_processor
@@ -20630,6 +20777,114 @@ def _casa_de_racao_product_onboarding_target(casa):
     return url_for('casa_de_racao_produtos', casa_id=casa.id)
 
 
+def _variant_name_from_parts(name=None, dosage=None, package_quantity=None, weight_volume=None):
+    explicit = (name or '').strip()
+    if explicit:
+        return explicit[:160]
+    parts = [p.strip() for p in (dosage or '', package_quantity or '', weight_volume or '') if p and p.strip()]
+    return ' · '.join(parts)[:160] if parts else 'Padrão'
+
+
+def _sync_product_legacy_price_stock(product):
+    """Mantém Product.price/stock compatível com código legado."""
+    active = [v for v in (product.variants or []) if v.status == 'active']
+    if not active:
+        return
+    primary = sorted(active, key=lambda v: (v.position or 0, v.id or 0))[0]
+    product.price = float(primary.price or 0)
+    product.stock = sum(int(v.stock or 0) for v in active)
+
+
+def _create_initial_variant(product, form):
+    variant = ProductVariant(
+        product=product,
+        name=_variant_name_from_parts(
+            form.variant_name.data,
+            form.dosage.data,
+            form.package_quantity.data,
+            form.weight_volume.data,
+        ),
+        dosage=(form.dosage.data or '').strip() or None,
+        package_quantity=(form.package_quantity.data or '').strip() or None,
+        weight_volume=(form.weight_volume.data or '').strip() or None,
+        sku=(form.sku.data or '').strip() or None,
+        price=float(form.price.data or 0),
+        stock=form.stock.data or 0,
+        status='active',
+        position=0,
+    )
+    db.session.add(variant)
+    return variant
+
+
+def _sync_variants_from_request(product):
+    """Sincroniza linhas dinâmicas de variação do formulário de edição."""
+    ids = request.form.getlist('variant_id[]')
+    names = request.form.getlist('variant_name[]')
+    dosages = request.form.getlist('variant_dosage[]')
+    packages = request.form.getlist('variant_package[]')
+    weights = request.form.getlist('variant_weight[]')
+    skus = request.form.getlist('variant_sku[]')
+    prices = request.form.getlist('variant_price[]')
+    stocks = request.form.getlist('variant_stock[]')
+    statuses = set(request.form.getlist('variant_active[]'))
+
+    existing = {str(v.id): v for v in product.variants}
+    seen_ids = set()
+
+    total = max(len(names), len(prices), len(stocks), len(ids))
+    for idx in range(total):
+        raw_price = (prices[idx] if idx < len(prices) else '').strip().replace(',', '.')
+        if not raw_price:
+            continue
+        try:
+            price = float(raw_price)
+        except ValueError:
+            continue
+        if price <= 0:
+            continue
+        raw_stock = (stocks[idx] if idx < len(stocks) else '').strip()
+        try:
+            stock = max(0, int(raw_stock or 0))
+        except ValueError:
+            stock = 0
+
+        variant_id = (ids[idx] if idx < len(ids) else '').strip()
+        variant = existing.get(variant_id)
+        if not variant:
+            variant = ProductVariant(product=product)
+            db.session.add(variant)
+        elif variant_id:
+            seen_ids.add(variant_id)
+
+        name = names[idx] if idx < len(names) else ''
+        dosage = dosages[idx] if idx < len(dosages) else ''
+        package_quantity = packages[idx] if idx < len(packages) else ''
+        weight_volume = weights[idx] if idx < len(weights) else ''
+        sku = skus[idx] if idx < len(skus) else ''
+
+        variant.name = _variant_name_from_parts(name, dosage, package_quantity, weight_volume)
+        variant.dosage = dosage.strip() or None
+        variant.package_quantity = package_quantity.strip() or None
+        variant.weight_volume = weight_volume.strip() or None
+        variant.sku = sku.strip() or None
+        variant.price = price
+        variant.stock = stock
+        variant.position = idx
+        variant.status = 'active' if str(idx) in statuses else 'inactive'
+
+    for variant_id, variant in existing.items():
+        if variant_id not in seen_ids and not any((ids[i] if i < len(ids) else '') == variant_id for i in range(total)):
+            variant.status = 'inactive'
+
+    if not any(v.status == 'active' for v in product.variants):
+        first = product.variants[0] if product.variants else None
+        if first:
+            first.status = 'active'
+
+    _sync_product_legacy_price_stock(product)
+
+
 def parceiro_loja_produtos_landing():
     if current_user.is_authenticated:
         casa = CasaDeRacao.query.filter_by(owner_id=current_user.id).first()
@@ -20985,6 +21240,7 @@ def casa_de_racao_dashboard(casa_id):
                     status='active',
                 )
                 db.session.add(product)
+                _create_initial_variant(product, product_form)
                 db.session.commit()
                 flash('Produto publicado com sucesso!', 'success')
                 return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#produtos')
@@ -21004,7 +21260,8 @@ def casa_de_racao_dashboard(casa_id):
             casa.pedido_minimo_entrega = store_form.pedido_minimo_entrega.data or None
             casa.prazo_entrega_min = store_form.prazo_entrega_min.data or None
             casa.prazo_entrega_max = store_form.prazo_entrega_max.data or None
-            file = store_form.logotipo.data
+            file = request.files.get(store_form.logotipo.name)
+            logo_marked_as_selected = request.form.get('store_logo_has_new_file') == '1'
             if file and getattr(file, 'filename', ''):
                 filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
                 image_url = upload_to_s3(file, filename, folder='casas_de_racao')
@@ -21014,6 +21271,12 @@ def casa_de_racao_dashboard(casa_id):
                     casa.photo_zoom = float(store_form.photo_zoom.data)
                     casa.photo_offset_x = float(store_form.photo_offset_x.data)
                     casa.photo_offset_y = float(store_form.photo_offset_y.data)
+                else:
+                    flash('Não foi possível salvar a nova imagem da loja. Tente novamente ou use outro arquivo.', 'danger')
+                    return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#loja')
+            elif logo_marked_as_selected:
+                flash('A nova imagem não chegou ao servidor. Escolha a imagem novamente antes de salvar.', 'warning')
+                return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#loja')
             db.session.commit()
             flash('Dados da loja atualizados.', 'success')
             return redirect(url_for('casa_de_racao_dashboard', casa_id=casa.id) + '#loja')
@@ -21571,6 +21834,7 @@ def casa_de_racao_produtos(casa_id):
             status='active',
         )
         db.session.add(product)
+        _create_initial_variant(product, form)
         db.session.commit()
         flash('Produto publicado na loja com sucesso!', 'success')
         return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
@@ -21592,6 +21856,7 @@ def casa_produto_editar(casa_id, product_id):
         product.stock = form.stock.data or 0
         product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        _sync_variants_from_request(product)
         if form.image_upload.data:
             file = form.image_upload.data
             url = upload_to_s3(file, secure_filename(file.filename), folder='products')
@@ -21608,8 +21873,9 @@ def casa_produto_editar(casa_id, product_id):
 def casa_produto_toggle(casa_id, product_id):
     casa = _casa_loja_access(casa_id)
     product = Product.query.filter_by(id=product_id, casa_de_racao_id=casa.id).first_or_404()
-    if product.status != 'active' and product.price <= 0:
-        flash('Defina um preço maior que zero antes de ativar o produto.', 'warning')
+    has_sellable_variant = any((v.status == 'active' and (v.price or 0) > 0) for v in product.variants)
+    if product.status != 'active' and not has_sellable_variant and product.price <= 0:
+        flash('Defina ao menos uma apresentação com preço maior que zero antes de ativar o produto.', 'warning')
         return redirect(url_for('casa_de_racao_produtos', casa_id=casa.id))
     product.status = 'inactive' if product.status == 'active' else 'active'
     db.session.commit()
@@ -25181,6 +25447,24 @@ def solicitar_agendamento(veterinario_id):
         kind='appointment_request',
     )
     db.session.commit()
+    from services.notifications import notify_admin_action
+
+    notify_admin_action(
+        title=f'Nova solicitacao de {req.kind_label.lower()}',
+        body=(
+            f'Tutor: {getattr(current_user, "name", "?")} ({getattr(current_user, "email", "?")})\n'
+            f'Pet: {animal.name}\n'
+            f'Profissional: {veterinario.user.name if veterinario.user else veterinario.id}\n'
+            f'Preferencia: {quando}\n'
+            + (f'Observacoes: {req.notes}\n' if req.notes else '')
+        ),
+        event_type='appointment_request.created',
+        entity_type='appointment_request',
+        entity_id=req.id,
+        priority='high',
+        url=url_for('solicitacoes_recebidas', _external=True),
+        idempotency_key=f'appointment-request:{req.id}',
+    )
     avisar_admin_nova_solicitacao(
         f'Nova solicitação de {req.kind_label.lower()}',
         (
@@ -31901,11 +32185,40 @@ def list_species():
 
 @cache
 def list_breeds():
-    """Return a lightweight list of breeds as dictionaries."""
-    return [
-        {"id": br.id, "name": br.name, "species_id": br.species_id}
-        for br in Breed.query.order_by(Breed.name).all()
-    ]
+    """Return a lightweight, display-deduplicated list of breeds.
+
+    O banco pode conter aliases importados (ex.: ``SRD``, ``Sem Raça
+    Definida``, ``SRD (Sem Raça Definida)``). Para o usuário, isso deve
+    aparecer uma vez só no dropdown.
+    """
+    import unicodedata
+
+    def _breed_display_key(name):
+        raw = (name or "").strip()
+        normalized = unicodedata.normalize("NFKD", raw)
+        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        token = " ".join(normalized.lower().replace("-", " ").split())
+        if token in {
+            "srd",
+            "sem raca definida",
+            "srd sem raca definida",
+            "vira lata",
+            "viralata",
+            "mestico",
+        }:
+            return "srd"
+        return token
+
+    rows = Breed.query.order_by(Breed.name, Breed.id).all()
+    seen = set()
+    result = []
+    for br in rows:
+        key = _breed_display_key(br.name)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({"id": br.id, "name": "SRD" if key == "srd" else br.name, "species_id": br.species_id})
+    return result
 
 
 def _normalize_clinic_ids(clinic_scope):
@@ -34448,6 +34761,7 @@ def notificacoes_mercado_pago():
                     and pay.external_reference.startswith('vacserv-')
                 ):
                     from models import VaccineServiceRequest
+                    from services.notifications import queue_admin_action_notification
                     from services.vaccine_service_paid import mark_request_paid
                     try:
                         vacserv_id = int(pay.external_reference.split('-', 1)[1])
@@ -34457,6 +34771,53 @@ def notificacoes_mercado_pago():
                         vacserv_req = VaccineServiceRequest.query.get(vacserv_id)
                         if vacserv_req:
                             mark_request_paid(vacserv_req)
+                            tutor = vacserv_req.user
+                            queue_admin_action_notification(
+                                title=f'Pedido de vacina pago #{vacserv_req.id}',
+                                body=(
+                                    f'Tutor: {tutor.name if tutor else "?"}\n'
+                                    f'Pet: {vacserv_req.animal.name if vacserv_req.animal else "?"}\n'
+                                    f'Vacina(s): {vacserv_req.item_nome}\n'
+                                    f'Valor: R$ {float(vacserv_req.valor or 0):.2f}'
+                                ),
+                                event_type='vaccine_service.paid',
+                                entity_type='vaccine_service_request',
+                                entity_id=vacserv_req.id,
+                                priority='high',
+                                url=url_for('servicos_vacinas_admin', _external=True),
+                                idempotency_key=f'vacserv-paid:{vacserv_req.id}',
+                            )
+
+                if (
+                    pay.status == PaymentStatus.COMPLETED
+                    and pay.external_reference
+                    and pay.external_reference.startswith('petsitter-')
+                ):
+                    from models import PetsitterRequest
+                    from services.notifications import queue_admin_action_notification
+                    try:
+                        petsitter_id = int(pay.external_reference.split('-', 1)[1])
+                    except (ValueError, TypeError):
+                        petsitter_id = None
+                    if petsitter_id:
+                        petsitter_req = PetsitterRequest.query.get(petsitter_id)
+                        if petsitter_req:
+                            tutor = petsitter_req.tutor
+                            queue_admin_action_notification(
+                                title=f'Pagamento de petsitter confirmado #{petsitter_req.id}',
+                                body=(
+                                    f'Tutor: {tutor.name if tutor else "?"}\n'
+                                    f'Periodo: {petsitter_req.data_inicio.strftime("%d/%m/%Y")} a '
+                                    f'{petsitter_req.data_fim.strftime("%d/%m/%Y")}\n'
+                                    f'Valor: R$ {float(petsitter_req.preco_total or 0):.2f}'
+                                ),
+                                event_type='petsitter_request.paid',
+                                entity_type='petsitter_request',
+                                entity_id=petsitter_req.id,
+                                priority='high',
+                                url=url_for('petsitter_routes.petsitter_admin', _external=True),
+                                idempotency_key=f'petsitter-paid:{petsitter_req.id}',
+                            )
 
                 if pay.status == PaymentStatus.COMPLETED and pay.order_id:
                     order = Order.query.get(pay.order_id)
@@ -34515,6 +34876,24 @@ def notificacoes_mercado_pago():
 
                     # Decrementa estoque das clínicas para produtos vinculados
                     if order:
+                        from services.notifications import queue_admin_action_notification
+
+                        comprador = order.user
+                        queue_admin_action_notification(
+                            title=f'Pedido pago #{order.id}',
+                            body=(
+                                f'Cliente: {comprador.name if comprador else "?"} '
+                                f'({comprador.email if comprador else "?"})\n'
+                                f'Valor: R$ {order.total_value():.2f}\n'
+                                f'Itens: ' + ', '.join(f'{i.item_name} x{i.quantity}' for i in order.items)
+                            ),
+                            event_type='order.paid',
+                            entity_type='order',
+                            entity_id=order.id,
+                            priority='high',
+                            url=url_for('delivery_overview', _external=True),
+                            idempotency_key=f'order-paid:{order.id}',
+                        )
                         for oi in order.items:
                             prod = oi.product
                             if prod and prod.clinic_inventory_item_id:
@@ -39883,6 +40262,85 @@ def atualizar_bloco_orcamento(bloco_id):
 # ---------------------------------------------------------------------------
 # Bulário de Medicamentos (somente admin)
 # ---------------------------------------------------------------------------
+
+@login_required
+def bulario_curadoria():
+    """Fila de curadoria offline dos medicamentos mais prescritos."""
+    if not _is_admin():
+        abort(403)
+
+    from services.medicamento_curadoria import gerar_ranking_curadoria, listar_reviews
+
+    status = request.args.get("status", "").strip() or None
+    limite = request.args.get("limite", 25, type=int) or 25
+    limite = max(1, min(limite, 200))
+    reviews = listar_reviews(db.session, status=status, limite=200)
+    ranking_preview = gerar_ranking_curadoria(db.session, limite=limite)
+
+    return render_template(
+        "bulario/curadoria.html",
+        reviews=reviews,
+        ranking_preview=ranking_preview,
+        status=status,
+        limite=limite,
+    )
+
+
+@login_required
+def bulario_curadoria_sincronizar():
+    """Gera/sincroniza a fila, sem alterar dados clínicos do bulário."""
+    if not _is_admin():
+        abort(403)
+
+    from services.medicamento_curadoria import sincronizar_fila_curadoria
+
+    limite = request.form.get("limite", 25, type=int) or 25
+    limite = max(1, min(limite, 200))
+    dry_run = request.form.get("dry_run") == "1"
+
+    try:
+        resultado = sincronizar_fila_curadoria(db.session, limite=limite, dry_run=dry_run)
+        if dry_run:
+            flash(
+                f"Dry-run concluído: {resultado['total_candidatos']} candidato(s) avaliados; nada foi gravado.",
+                "info",
+            )
+        else:
+            flash(
+                f"Fila sincronizada: {resultado['criados']} criado(s), {resultado['atualizados']} atualizado(s).",
+                "success",
+            )
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao sincronizar curadoria de medicamentos")
+        flash(f"Falha ao sincronizar curadoria: {exc}", "danger")
+
+    return redirect(url_for("bulario_curadoria", limite=limite))
+
+
+@login_required
+def bulario_curadoria_status(review_id):
+    """Atualiza apenas o status da revisão de curadoria."""
+    if not _is_admin():
+        abort(403)
+
+    from models.base import CuradoriaMedicamentoReview
+
+    review = CuradoriaMedicamentoReview.query.get_or_404(review_id)
+    novo_status = (request.form.get("status") or "").strip()
+    permitidos = {"pendente", "pesquisado", "revisar", "aprovado", "rejeitado"}
+    if novo_status not in permitidos:
+        flash("Status de curadoria inválido.", "warning")
+        return redirect(url_for("bulario_curadoria"))
+
+    review.status = novo_status
+    if novo_status == "aprovado":
+        review.aprovado_em = now_in_brazil()
+        review.aprovado_por_id = current_user.id
+    db.session.commit()
+    flash("Status da curadoria atualizado.", "success")
+    return redirect(url_for("bulario_curadoria"))
+
 
 @login_required
 def bulario():

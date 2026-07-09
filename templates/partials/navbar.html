@@ -89,6 +89,38 @@
                 <i class="fas fa-paw me-2 text-danger"></i> Serviços</a></li>
           </ul>
         </li>
+        <li class="nav-item dropdown position-relative">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-bell me-1 text-warning"></i> Alertas
+            {% if admin_action_count|default(0) > 0 %}
+            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
+              {{ admin_action_count }}
+            </span>
+            {% endif %}
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
+            <li><h6 class="dropdown-header">Acoes abertas</h6></li>
+            {% if admin_action_recent|default([]) %}
+              {% for note in admin_action_recent %}
+              <li>
+                <a class="dropdown-item py-2" href="{{ note.url or url_for('admin_notifications') }}">
+                  <div class="fw-semibold small">{{ note.title }}</div>
+                  <div class="text-muted small">{{ note.event_type }} - {{ note.created_at|format_datetime_brazil('%d/%m %H:%M') }}</div>
+                </a>
+              </li>
+              {% endfor %}
+              <li><hr class="dropdown-divider"></li>
+            {% else %}
+              <li><span class="dropdown-item-text text-muted small">Sem alertas abertos.</span></li>
+              <li><hr class="dropdown-divider"></li>
+            {% endif %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('admin_notifications') }}">
+                <i class="fas fa-list-check me-2 text-primary"></i> Ver painel de notificacoes
+              </a>
+            </li>
+          </ul>
+        </li>
         {% elif current_user.is_authenticated %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('index') }}">

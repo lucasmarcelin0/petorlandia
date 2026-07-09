@@ -162,6 +162,25 @@ def petsitter_solicitar():
             solicitacao.animais.extend(animais_escolhidos)
             db.session.add(solicitacao)
             db.session.commit()
+            from services.notifications import notify_admin_action
+
+            pets = ", ".join(a.name for a in animais_escolhidos)
+            notify_admin_action(
+                title=f"Nova solicitacao de petsitter: {current_user.name}",
+                body=(
+                    f"Tutor: {current_user.name} ({current_user.email or 'sem email'})\n"
+                    f"Pets: {pets}\n"
+                    f"Periodo: {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}\n"
+                    f"Local: {LOCAIS_ATENDIMENTO.get(local, local)}"
+                    + (f"\nObservacoes: {observacoes}" if observacoes else "")
+                ),
+                event_type="petsitter_request.created",
+                entity_type="petsitter_request",
+                entity_id=solicitacao.id,
+                priority="high",
+                url=url_for("petsitter_routes.petsitter_admin", _external=True),
+                idempotency_key=f"petsitter-request:{solicitacao.id}",
+            )
             flash(
                 "Solicitação enviada! Vamos encontrar um cuidador e te avisar.",
                 "success",
@@ -350,7 +369,12 @@ def carreiras():
                 f"Nova candidatura de {CATEGORIAS_CARREIRAS.get(categoria, categoria).lower()}: "
                 f"{nome} ({email}).",
                 kind="candidatura_carreiras",
-                url=url_for("admin_parcerias", _external=True),
+                url=url_for(
+                    "petsitter_routes.petsitter_admin"
+                    if categoria == "petsitter"
+                    else "admin_parcerias",
+                    _external=True,
+                ),
             )
             flash(
                 "Candidatura recebida! Vamos analisar e entrar em contato. Obrigado por querer fazer parte. 🐾",

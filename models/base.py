@@ -2618,6 +2618,51 @@ class PrescricaoAliasMedicamento(db.Model):
     criado_em = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
 
+class CuradoriaMedicamentoReview(db.Model):
+    """Fila de curadoria clínica gerada a partir do histórico de prescrições.
+
+    A revisão guarda propostas e diagnósticos, mas não altera o bulário até uma
+    etapa posterior de aprovação explícita.
+    """
+    __tablename__ = 'curadoria_medicamento_review'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome_normalizado = db.Column(db.String(180), nullable=False, unique=True, index=True)
+    nome_prescrito_principal = db.Column(db.Text, nullable=False)
+    medicamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('medicamento.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    medicamento = db.relationship('Medicamento', backref=db.backref('curadorias_review', lazy='dynamic'))
+
+    status = db.Column(db.String(20), nullable=False, default='pendente', index=True)
+    prioridade = db.Column(db.Integer, nullable=False, default=0, index=True)
+    total_prescricoes = db.Column(db.Integer, nullable=False, default=0)
+    ultima_prescricao_em = db.Column(db.DateTime(timezone=True))
+    confianca_alias = db.Column(db.String(20), nullable=False, default='sem_match')
+
+    resumo_historico = db.Column(db.JSON)
+    diagnostico = db.Column(db.JSON)
+    proposta = db.Column(db.JSON)
+    fontes = db.Column(db.JSON)
+
+    criado_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    atualizado_em = db.Column(
+        db.DateTime(timezone=True),
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+        nullable=False,
+    )
+    aprovado_em = db.Column(db.DateTime(timezone=True))
+    aprovado_por_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    aprovado_por = db.relationship('User', foreign_keys=[aprovado_por_id])
+
+    def __repr__(self):
+        return f'<CuradoriaMedicamentoReview {self.nome_prescrito_principal!r} status={self.status}>'
+
+
 class MedicamentoFavorito(db.Model):
     """Medicamentos marcados como favoritos por um veterinário."""
     __tablename__ = 'medicamento_favorito'
@@ -2988,6 +3033,49 @@ class Notification(db.Model):
     sent_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
+
+
+class AdminActionNotification(db.Model):
+    __tablename__ = 'admin_action_notification'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'recipient_user_id',
+            'idempotency_key',
+            name='uq_admin_action_notification_recipient_key',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    recipient_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    event_type = db.Column(db.String(80), nullable=False, index=True)
+    entity_type = db.Column(db.String(80), nullable=True, index=True)
+    entity_id = db.Column(db.Integer, nullable=True, index=True)
+    title = db.Column(db.String(180), nullable=False)
+    body = db.Column(db.Text, nullable=True)
+    url = db.Column(db.String(500), nullable=True)
+    priority = db.Column(db.String(20), nullable=False, default='normal', index=True)
+    status = db.Column(db.String(20), nullable=False, default='unread', index=True)
+    idempotency_key = db.Column(db.String(180), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    resolved_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+
+    recipient = db.relationship(
+        'User',
+        foreign_keys=[recipient_user_id],
+        backref=db.backref('admin_action_notifications', cascade='all, delete-orphan'),
+    )
+    resolved_by = db.relationship('User', foreign_keys=[resolved_by_id])
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in {'unread', 'read'}
 
 
 class PmoVaccinationVisit(db.Model):
@@ -3418,6 +3506,26 @@ class Product(db.Model):
         cascade="all, delete-orphan"
     )
 
+    variants = db.relationship(
+        "ProductVariant",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductVariant.position.asc(), ProductVariant.id.asc()",
+    )
+
+    @staticmethod
+    def public_price_from_base(value):
+        """Preço público a partir do preço recebido pelo lojista."""
+        if value is None:
+            return None
+        base = Decimal(str(value))
+        if base <= 0:
+            return base.quantize(Decimal("0.01"))
+        gross = base * Decimal("1.10")
+        step = Decimal("5")
+        steps = (gross / step).to_integral_value(rounding=ROUND_CEILING)
+        return (steps * step).quantize(Decimal("0.01"))
+
     @property
     def preco_publico(self):
         """Preço único exibido ao tutor, com a taxa da plataforma embutida.
@@ -3427,15 +3535,53 @@ class Product(db.Model):
         R$ 5 — mesma regra de vacinas e serviços profissionais. A taxa
         nunca aparece separada para o comprador.
         """
-        if self.price is None:
+        return self.public_price_from_base(self.price)
+
+    @property
+    def active_variants(self):
+        """Variações vendáveis do produto, com fallback para produto legado."""
+        return [
+            variant for variant in (self.variants or [])
+            if variant.status == "active"
+        ]
+
+    @property
+    def default_variant(self):
+        active = self.active_variants
+        if active:
+            return active[0]
+        return None
+
+    @property
+    def has_variants(self):
+        return bool(self.active_variants)
+
+    @property
+    def public_price_min(self):
+        prices = [
+            variant.preco_publico for variant in self.active_variants
+            if variant.preco_publico is not None
+        ]
+        if prices:
+            return min(prices)
+        return self.preco_publico
+
+    @property
+    def public_price_max(self):
+        prices = [
+            variant.preco_publico for variant in self.active_variants
+            if variant.preco_publico is not None
+        ]
+        if prices:
+            return max(prices)
+        return self.preco_publico
+
+    @property
+    def variant_count_label(self):
+        count = len(self.active_variants)
+        if count <= 1:
             return None
-        base = Decimal(str(self.price))
-        if base <= 0:
-            return base.quantize(Decimal("0.01"))
-        gross = base * Decimal("1.10")
-        step = Decimal("5")
-        steps = (gross / step).to_integral_value(rounding=ROUND_CEILING)
-        return (steps * step).quantize(Decimal("0.01"))
+        return f"{count} apresentações disponíveis"
 
     @property
     def category_label(self):
@@ -3456,6 +3602,53 @@ class Product(db.Model):
 
     def __str__(self):
         return self.__repr__()
+
+
+class ProductVariant(db.Model):
+    """Apresentação/SKU vendável de um produto.
+
+    Exemplos:
+    - Simparic 10 mg — caixa com 3 comprimidos
+    - Ração 15 kg
+    """
+    __tablename__ = "product_variant"
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey("product.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = db.Column(db.String(160), nullable=False)
+    dosage = db.Column(db.String(80), nullable=True)
+    package_quantity = db.Column(db.String(80), nullable=True)
+    weight_volume = db.Column(db.String(80), nullable=True)
+    sku = db.Column(db.String(80), nullable=True)
+    barcode = db.Column(db.String(80), nullable=True)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, default=0)
+    image_url = db.Column(db.String(200), nullable=True)
+    status = db.Column(db.String(20), default="active", nullable=False)
+    position = db.Column(db.Integer, default=0, nullable=False)
+
+    product = db.relationship("Product", back_populates="variants")
+    order_items = db.relationship("OrderItem", back_populates="variant")
+
+    @property
+    def preco_publico(self):
+        return Product.public_price_from_base(self.price)
+
+    @property
+    def display_name(self):
+        parts = [self.name]
+        extras = [value for value in (self.dosage, self.package_quantity, self.weight_volume) if value]
+        if extras and not any(extra.lower() in (self.name or "").lower() for extra in extras):
+            parts.append(" · ".join(extras))
+        return " — ".join(parts)
+
+    def __repr__(self):
+        return f"{self.product.name if self.product else 'Produto'} / {self.name} (R$ {self.price})"
 
 
 class ProductPhoto(db.Model):
@@ -3517,8 +3710,10 @@ class OrderItem(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     order_id    = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
     product_id  = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)
+    variant_id  = db.Column(db.Integer, db.ForeignKey("product_variant.id", ondelete="SET NULL"), nullable=True, index=True)
     # back_populates permite acesso recíproco a partir de Product.order_items
     product     = db.relationship("Product", back_populates="order_items")
+    variant     = db.relationship("ProductVariant", back_populates="order_items")
 
     item_name   = db.Column(db.String(100), nullable=False)
     quantity    = db.Column(db.Integer, nullable=False, default=1)

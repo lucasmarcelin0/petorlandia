@@ -12,6 +12,7 @@ from .loja import (
     PaymentStatus,
     PickupLocation,
     Product,
+    ProductVariant,
     ProductPhoto,
     SavedAddress,
     Transaction,
@@ -93,6 +94,7 @@ __all__ = [
     "PaymentStatus",
     "PickupLocation",
     "Product",
+    "ProductVariant",
     "ProductPhoto",
     "SavedAddress",
     "Transaction",
@@ -142,4 +144,5 @@ __all__ = [
     "ReferralCode",
     "ReferralSignup",
     "SiteFlag",
+    "AdminActionNotification",
 ]

@@ -6,6 +6,7 @@
   {% set placeholder_url = url_for('static', filename='default_user.png') %}
 {% endif %}
 <div class="photo-cropper-wrapper text-center d-flex flex-column align-items-center gap-2">
+  <input type="hidden" id="{{ id }}-has-new-file" name="{{ id }}_has_new_file" value="0">
   {% if image_url %}
   <div id="{{ id }}-preview" class="mb-2 d-flex justify-content-center w-100">
     <img src="{{ image_url }}" class="img-thumbnail shadow-sm" style="width: {{ size }}px; height: {{ size }}px; border-radius: 1rem; object-fit: cover;" alt="Imagem atual">
@@ -29,6 +30,7 @@
     <button type="button" class="btn btn-primary btn-sm mb-3" onclick="document.getElementById('{{ id }}').click()">
       <i class="fas fa-upload me-1"></i> Escolher imagem
     </button>
+    <p id="{{ id }}-selected-file" class="text-success small fw-semibold mb-1 d-none" aria-live="polite"></p>
     <p class="text-muted small mb-1 pc-hint-desktop">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
     <p class="text-muted small mb-1 pc-hint-touch">Arraste para reposicionar e use dois dedos (pinça) para ajustar o zoom.</p>
 
@@ -96,6 +98,7 @@
     const zoomIn = document.getElementById('{{ id }}-zoom-in');
     const zoomOut = document.getElementById('{{ id }}-zoom-out');
     const resetBtn = document.getElementById('{{ id }}-reset');
+    const selectedFileLabel = document.getElementById('{{ id }}-selected-file');
 
     let rotation = parseInt(rotField.value || 0, 10);
     let zoom = parseFloat(zoomField.value || 1);
@@ -114,10 +117,21 @@
           offsetX = 0;
           offsetY = 0;
           showControls();
+          showSelectedFile(file.name || 'imagem selecionada');
           update();
         }
       };
       reader.readAsDataURL(file);
+    }
+
+    function showSelectedFile(filename) {
+      const hasNewFileField = document.getElementById('{{ id }}-has-new-file');
+      if (hasNewFileField) {
+        hasNewFileField.value = '1';
+      }
+      if (!selectedFileLabel) return;
+      selectedFileLabel.textContent = `Nova imagem selecionada: ${filename}`;
+      selectedFileLabel.classList.remove('d-none');
     }
 
     function setFileInputFromPaste(file) {

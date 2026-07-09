@@ -28,10 +28,18 @@
   {% if casa.status == 'pendente' %}
   <div class="alert alert-warning d-flex align-items-start gap-3 shadow-sm">
     <i class="fa-solid fa-hourglass-half fs-4 mt-1" aria-hidden="true"></i>
-    <div>
+    <div class="flex-grow-1">
       <strong>Sua loja está em análise.</strong> Nossa equipe já foi avisada e você receberá um e-mail assim que ela for aprovada (normalmente em até 1 dia útil).<br>
       <span class="small">Enquanto isso, adiante o que puder: cadastre seus produtos com fotos e preços, defina os horários de funcionamento e conecte o Mercado Pago. Assim, quando a aprovação sair, sua loja já começa vendendo.</span>
     </div>
+    {% if is_admin %}
+    <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}" class="ms-auto">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success text-nowrap">
+        <i class="fa-solid fa-check me-1" aria-hidden="true"></i>Aprovar loja
+      </button>
+    </form>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -63,8 +71,16 @@
       </div>
     </div>
     <div class="clinic-context-card__actions">
+      {% if is_admin and casa.status == 'pendente' %}
+      <form method="post" action="{{ url_for('admin_aprovar_casa_de_racao', casa_id=casa.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">
+          <i class="fa-solid fa-check" aria-hidden="true"></i> Aprovar loja
+        </button>
+      </form>
+      {% endif %}
       <button type="button" class="btn btn-primary"
-              onclick="toggleStoreEdit(); document.getElementById('edit-store-info').scrollIntoView({behavior:'smooth'});">
+              onclick="openStoreEdit({focusLogo: true});">
         <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Editar dados
       </button>
     </div>
@@ -106,7 +122,7 @@
             </div>
             <div class="clinic-hero__actions d-flex flex-wrap gap-2">
               <button type="button" class="btn btn-light btn-lg d-inline-flex align-items-center gap-2"
-                      onclick="toggleStoreEdit(); document.getElementById('edit-store-info').scrollIntoView({behavior:'smooth'});">
+                      onclick="openStoreEdit({focusLogo: true});">
                 <i class="fa-solid fa-pen-to-square"></i> Editar dados
               </button>
               <a href="{{ url_for('loja') }}" class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2" target="_blank">
@@ -424,6 +440,17 @@
                   {{ product_form.stock(class="form-control", placeholder="0") }}
                 </div>
                 <div class="mb-3">
+                  {{ product_form.variant_name.label(class="form-label fw-semibold") }}
+                  {{ product_form.variant_name(class="form-control", placeholder="Ex: 10 mg · caixa com 3 comprimidos ou pacote 15 kg") }}
+                  <div class="form-text">Depois de publicar, você pode adicionar outras apresentações em “Editar”.</div>
+                </div>
+                <div class="row g-2 mb-3">
+                  <div class="col-md-6">{{ product_form.dosage.label(class="form-label small fw-semibold") }}{{ product_form.dosage(class="form-control", placeholder="Ex: 10 mg") }}</div>
+                  <div class="col-md-6">{{ product_form.package_quantity.label(class="form-label small fw-semibold") }}{{ product_form.package_quantity(class="form-control", placeholder="Ex: 3 comprimidos") }}</div>
+                  <div class="col-md-6">{{ product_form.weight_volume.label(class="form-label small fw-semibold") }}{{ product_form.weight_volume(class="form-control", placeholder="Ex: 15 kg") }}</div>
+                  <div class="col-md-6">{{ product_form.sku.label(class="form-label small fw-semibold") }}{{ product_form.sku(class="form-control", placeholder="Opcional") }}</div>
+                </div>
+                <div class="mb-3">
                   {{ product_form.category.label(class="form-label fw-semibold") }}
                   {{ product_form.category(class="form-select") }}
                   <div class="form-text">Define em qual filtro o produto aparece na loja.</div>
@@ -472,7 +499,14 @@
                       <span class="badge bg-secondary-subtle text-secondary">Inativo</span>
                     {% endif %}
                   </div>
-                  <p class="text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}</p>
+                  <p class="text-success fw-bold mb-1">
+                    {% if p.public_price_min != p.public_price_max %}
+                      R$ {{ '%.2f'|format(p.public_price_min or 0)|replace('.', ',') }} – {{ '%.2f'|format(p.public_price_max or 0)|replace('.', ',') }}
+                    {% else %}
+                      R$ {{ '%.2f'|format(p.public_price_min or 0)|replace('.', ',') }}
+                    {% endif %}
+                  </p>
+                  {% if p.variant_count_label %}<p class="small text-muted mb-1">{{ p.variant_count_label }}</p>{% endif %}
                   <p class="small text-muted mb-2"><i class="fa-solid fa-boxes-stacked me-1"></i>Estoque: {{ p.stock }}</p>
                   <div class="d-flex gap-2 mt-auto">
                     <a href="{{ url_for('casa_produto_editar', casa_id=casa.id, product_id=p.id) }}"
@@ -513,8 +547,40 @@
 </div>{# fim clinic-page-shell #}
 
 <script>
+function activateStoreTab(tabId) {
+  const tabButton = document.getElementById(`${tabId}-tab`);
+  if (!tabButton || typeof bootstrap === 'undefined' || !bootstrap.Tab) {
+    return false;
+  }
+  bootstrap.Tab.getOrCreateInstance(tabButton).show();
+  return true;
+}
+
+function openStoreEdit(options = {}) {
+  activateStoreTab('loja');
+
+  const el = document.getElementById('edit-store-info');
+  if (!el) return;
+
+  el.style.display = 'block';
+  window.setTimeout(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    if (options.focusLogo) {
+      const logoToggle = document.getElementById('store_logo-toggle');
+      const logoInput = document.getElementById('store_logo');
+      if (logoToggle) {
+        logoToggle.focus({ preventScroll: true });
+      } else if (logoInput) {
+        logoInput.focus({ preventScroll: true });
+      }
+    }
+  }, 150);
+}
+
 function toggleStoreEdit() {
   const el = document.getElementById('edit-store-info');
+  if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 </script>
