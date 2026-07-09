@@ -10,7 +10,11 @@ Permitir que veterinários usem o ChatGPT como interface operacional segura para
 - listar agenda do dia;
 - ver pendências clínicas;
 - gerar orientação ao tutor;
-- gerar handoff clínico.
+- gerar handoff clínico;
+- buscar paciente por nome, tutor, telefone ou email;
+- preparar consulta com briefing operacional;
+- visualizar timeline clínica consolidada;
+- gerar mensagem WhatsApp para o tutor sem envio automático;
 - cadastrar tutor e pets;
 - registrar dados clínicos essenciais da consulta;
 - registrar blocos de exames;
@@ -67,12 +71,18 @@ Todos exigem `Authorization: Bearer <token>`.
 - `assistente_operacional_veterinario`
 - `obter_resumo_clinico_animal`
 - `listar_agenda_do_dia`
+- `buscar_paciente`
+- `obter_timeline_clinica`
+- `preparar_consulta`
 - `listar_pendencias_clinicas`
 - `listar_vacinas_pendentes`
 - `listar_exames_pendentes`
 - `listar_retornos_pendentes`
 - `gerar_orientacao_tutor`
+- `gerar_mensagem_whatsapp_tutor`
 - `gerar_handoff_clinico`
+- `listar_alertas_admin`
+- `resolver_alerta_admin`
 - `cadastrar_tutor_e_pets`
 - `registrar_consulta_clinica`
 - `registrar_bloco_exames`
@@ -100,6 +110,16 @@ Regras adicionais:
 - `registrar_bloco_exames`: cria um bloco estruturado de exames solicitados para o animal.
 - `agendar_consulta`: cria agendamento clínico vinculado ao animal e à clínica.
 - `agendar_retorno`: agenda retorno a partir de uma consulta já existente.
+- `resolver_alerta_admin`: marca alerta administrativo como lido ou resolvido, restrito a admins.
+
+## Widgets operacionais no ChatGPT
+
+- `agenda-cockpit-v1`: cockpit da agenda diária com resumo de pendências por paciente.
+- `timeline-clinica-v1`: timeline consolidada para atendimento e preparação de consulta.
+- `admin-command-center-v1`: central de alertas administrativos acionáveis.
+- `laudo-volante-v2`: revisão e gravação assistida de laudos.
+
+As ferramentas de timeline, preparação e central admin retornam `structuredContent` e `_meta.ui` para abrir o widget apropriado no ChatGPT.
 
 ## Interpretação de mensagens livres
 
@@ -139,9 +159,14 @@ Exemplos de uso:
 
 - "Resuma o histórico clínico do Thor"
 - "Quais pacientes tenho hoje?"
+- "Procure o paciente Thor da tutora Lígia"
+- "Abra a timeline clínica do Bolt"
+- "Prepare a consulta da Luna das 14h"
 - "Quais retornos estão pendentes?"
 - "Mostre vacinas atrasadas da clínica"
 - "Gere uma orientação para o tutor da Luna"
+- "Gere uma mensagem de WhatsApp para o tutor da Luna"
+- "Quais alertas administrativos estão abertos?"
 - "Faça um handoff clínico do paciente Bolt"
 - "Cadastre o tutor João com a cadela Mel e deixe uma observação clínica inicial"
 - "Registre a consulta clínica do Thor com suspeita de dermatite"

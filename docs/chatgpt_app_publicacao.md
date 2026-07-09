@@ -1,13 +1,17 @@
 # PetOrlandia no ChatGPT
 
-Status desta versao: app MCP com OAuth/OIDC, tools clinicas, widget de revisao de laudo volante e pacote inicial de submissao publica.
+Status desta versao: app MCP com OAuth/OIDC, tools clinicas, central admin, widgets operacionais e pacote de submissao publica.
 
 ## Arquitetura escolhida
 
 - Arquitetura: `submission-ready` com MCP server existente em Flask.
 - Endpoint principal: `/mcp`.
 - Autenticacao: OAuth/OIDC do proprio PetOrlandia.
-- UI Apps SDK: widget HTML em `ui://petorlandia/laudo-volante-v2.html`.
+- UI Apps SDK:
+  - `ui://petorlandia/laudo-volante-v2.html`
+  - `ui://petorlandia/agenda-cockpit-v1.html`
+  - `ui://petorlandia/timeline-clinica-v1.html`
+  - `ui://petorlandia/admin-command-center-v1.html`
 - App icon sugerido: `static/chatgpt_app_icon.png`.
 - Arquivo de submissao: `chatgpt-app-submission.json`.
 
@@ -26,14 +30,27 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, widget de revisao d
 - `agendar_retorno`
 - `obter_resumo_clinico_animal`
 - `listar_agenda_do_dia`
+- `buscar_paciente`
+- `obter_timeline_clinica`
+- `preparar_consulta`
 - `listar_pendencias_clinicas`
 - `listar_vacinas_pendentes`
 - `listar_exames_pendentes`
 - `listar_retornos_pendentes`
 - `gerar_orientacao_tutor`
+- `gerar_mensagem_whatsapp_tutor`
 - `gerar_handoff_clinico`
+- `listar_alertas_admin`
+- `resolver_alerta_admin`
 
 Todas as tools agora recebem hints explicitos (`readOnlyHint`, `destructiveHint`, `openWorldHint`), `outputSchema` e security schemes OAuth quando aplicavel.
+
+## Experiencias operacionais
+
+- Agenda do dia: `listar_agenda_do_dia` abre o cockpit de agenda com pacientes, horarios e pendencias.
+- Timeline clinica: `obter_timeline_clinica` e `preparar_consulta` abrem uma visao consolidada do paciente.
+- Central admin: `listar_alertas_admin` abre a fila de alertas administrativos acionaveis; `resolver_alerta_admin` exige `confirmar_gravacao`.
+- Mensagens ao tutor: `gerar_mensagem_whatsapp_tutor` gera texto e link WhatsApp, mas nao envia automaticamente.
 
 ## Arquivos no ChatGPT
 

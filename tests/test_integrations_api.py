@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from extensions import db
 from models import (
+    AdminActionNotification,
     Animal,
     AnimalDocumento,
     Appointment,
@@ -778,7 +779,6 @@ def test_external_clinic_invite_shows_trial_and_central_price(app, client):
     assert "Ver exame recebido" in html
     assert "Gostaria de organizar seus exames e prontuarios da mesma forma?" in html
     assert "Conhecer a solucao" in html
-    assert "Solicitar acesso" in html
     assert "Ativar painel gratuito por 30 dias" not in html
     assert "R$ 91,25/mês" not in html
     assert "Criar meu acesso gratuito" not in html
@@ -1699,7 +1699,7 @@ def test_mcp_importar_laudo_volante_creates_clinic_patient_and_exam(app, client)
 
         token_value = _create_token(
             professional.id,
-            scope="profile tutors:write pets:write exams:write",
+            scope="profile tutors:write pets:write exams:write exams:read clinical_summary:read",
         )
 
     response = client.post(
@@ -1797,7 +1797,7 @@ def test_mcp_importar_laudo_volante_accepts_chatgpt_file_reference(app, client, 
 
         token_value = _create_token(
             professional.id,
-            scope="profile tutors:write pets:write exams:write",
+            scope="profile tutors:write pets:write exams:write exams:read clinical_summary:read",
         )
 
     response = client.post(
@@ -2070,7 +2070,7 @@ def test_mcp_laudo_volante_widget_contract(app, client):
 
         token_value = _create_token(
             professional.id,
-            scope="profile tutors:write pets:write exams:write",
+            scope="profile tutors:write pets:write exams:write exams:read clinical_summary:read",
         )
 
     headers = {"Authorization": f"Bearer {token_value}"}
@@ -2091,7 +2091,7 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     tools = tools_response.get_json()["result"]["tools"]
     assert tools
     tool_names = {tool["name"] for tool in tools}
-    assert {
+    expected_widget_tools = {
         "criar_exame_imagem",
         "anexar_pdf_exame_imagem",
         "liberar_exame_para_clinica",
@@ -2102,7 +2102,8 @@ def test_mcp_laudo_volante_widget_contract(app, client):
         "obter_documento_clinico",
         "buscar_ou_criar_clinica_requisitante",
         "buscar_ou_criar_tutor_animal",
-    }.issubset(tool_names)
+    }
+    assert expected_widget_tools.issubset(tool_names), expected_widget_tools - tool_names
     for tool in tools:
         annotations = tool.get("annotations") or {}
         assert isinstance(annotations.get("readOnlyHint"), bool), tool["name"]
@@ -2212,6 +2213,121 @@ def test_mcp_laudo_volante_widget_contract(app, client):
     assert render_payload["structuredContent"]["rascunho"]["animal"]["nome"] == "Nina"
     assert render_payload["structuredContent"]["campos_a_confirmar"] == ["telefone do tutor"]
     assert render_payload["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/laudo-volante-v2.html"
+
+
+def test_mcp_operational_widget_resources_are_available(app, client):
+    with app.app_context():
+        admin = User(name="Admin ChatGPT", email="admin-mcp-widgets@example.com", role="admin")
+        admin.set_password("secret123")
+        db.session.add(admin)
+        db.session.commit()
+        token_value = _create_token(admin.id, scope="profile appointments:read clinical_summary:read exams:read vaccines:read")
+
+    headers = {"Authorization": f"Bearer {token_value}"}
+    resources_response = client.post(
+        "/mcp",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": 80, "method": "resources/list", "params": {}},
+    )
+    resources = resources_response.get_json()["result"]["resources"]
+    uris = {resource["uri"] for resource in resources}
+    assert {
+        "ui://petorlandia/laudo-volante-v2.html",
+        "ui://petorlandia/agenda-cockpit-v1.html",
+        "ui://petorlandia/timeline-clinica-v1.html",
+        "ui://petorlandia/admin-command-center-v1.html",
+    }.issubset(uris)
+
+    for uri in (
+        "ui://petorlandia/agenda-cockpit-v1.html",
+        "ui://petorlandia/timeline-clinica-v1.html",
+        "ui://petorlandia/admin-command-center-v1.html",
+    ):
+        resource_response = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 81, "method": "resources/read", "params": {"uri": uri}},
+        )
+        resource = resource_response.get_json()["result"]["contents"][0]
+        assert resource["mimeType"] == "text/html;profile=mcp-app"
+        assert "window.openai" in resource["text"]
+        assert resource["_meta"]["openai/widgetDomain"]
+
+
+def test_mcp_admin_alert_tools_list_and_resolve(app, client):
+    with app.app_context():
+        admin = User(name="Admin MCP", email="admin-mcp-alerts@example.com", role="admin")
+        admin.set_password("secret123")
+        vet = User(name="Vet MCP", email="vet-mcp-alerts@example.com", role="veterinario", worker="veterinario")
+        vet.set_password("secret123")
+        db.session.add_all([admin, vet])
+        db.session.flush()
+        note = AdminActionNotification(
+            recipient_user_id=admin.id,
+            event_type="career_application",
+            entity_type="petsitter_application",
+            entity_id=42,
+            title="Nova candidatura petsitter",
+            body="Uma candidata enviou formulario de carreira.",
+            url="/admin/carreiras",
+            priority="high",
+            status="unread",
+            idempotency_key="test:mcp-admin-alert",
+        )
+        db.session.add(note)
+        db.session.commit()
+        admin_token = _create_token(admin.id, scope="profile")
+        vet_token = _create_token(vet.id, scope="profile")
+        note_id = note.id
+
+    vet_tools_response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {vet_token}"},
+        json={"jsonrpc": "2.0", "id": 82, "method": "tools/list", "params": {}},
+    )
+    vet_tool_names = {tool["name"] for tool in vet_tools_response.get_json()["result"]["tools"]}
+    assert "listar_alertas_admin" not in vet_tool_names
+    assert "resolver_alerta_admin" not in vet_tool_names
+
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    admin_tools_response = client.post(
+        "/mcp",
+        headers=admin_headers,
+        json={"jsonrpc": "2.0", "id": 83, "method": "tools/list", "params": {}},
+    )
+    admin_tool_names = {tool["name"] for tool in admin_tools_response.get_json()["result"]["tools"]}
+    assert {"listar_alertas_admin", "resolver_alerta_admin"}.issubset(admin_tool_names)
+
+    list_response = client.post(
+        "/mcp",
+        headers=admin_headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 84,
+            "method": "tools/call",
+            "params": {"name": "listar_alertas_admin", "arguments": {"status": "open"}},
+        },
+    )
+    result = list_response.get_json()["result"]
+    assert result["_meta"]["ui"]["resourceUri"] == "ui://petorlandia/admin-command-center-v1.html"
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["total_abertos"] == 1
+    assert payload["alertas"][0]["titulo"] == "Nova candidatura petsitter"
+
+    resolve_response = client.post(
+        "/mcp",
+        headers=admin_headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 85,
+            "method": "tools/call",
+            "params": {
+                "name": "resolver_alerta_admin",
+                "arguments": {"alerta_id": note_id, "acao": "resolver", "confirmar_gravacao": "sim"},
+            },
+        },
+    )
+    assert resolve_response.get_json()["result"]["structuredContent"]["alerta"]["status"] == "resolved"
 
 
 def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):

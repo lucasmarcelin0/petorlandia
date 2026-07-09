@@ -356,6 +356,78 @@
         "open_world_justification": "Does not write to public internet state or third-party systems.",
         "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
       }
+    },
+    "buscar_paciente": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only searches patients accessible to the authenticated PetOrlandia user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "obter_timeline_clinica": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves clinical timeline records accessible to the authenticated PetOrlandia user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "preparar_consulta": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only prepares a consultation briefing from existing records and does not write data.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "gerar_mensagem_whatsapp_tutor": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only drafts a WhatsApp message and link; it does not send messages automatically.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "listar_alertas_admin": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves actionable admin alerts for authenticated PetOrlandia admins.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "resolver_alerta_admin": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Marks an existing admin alert as read or resolved only after explicit confirmation.",
+        "open_world_justification": "Only updates PetOrlandia internal state for the authenticated admin.",
+        "destructive_justification": "Does not delete data; it marks an admin alert read or resolved after explicit confirmation."
+      }
     }
   },
   "test_cases": [
@@ -422,6 +494,30 @@
       "tools_triggered": "agendar_retorno",
       "expected_output": "Creates a return appointment if the consultation is accessible and the requested time is valid.",
       "expected_output_url": null
+    },
+    {
+      "name": "Buscar paciente antes de atendimento",
+      "prompt": "Procure a paciente Luna da tutora Marina e me mostre os possiveis cadastros.",
+      "expected_behavior": "Searches accessible patients and returns matching animals with tutor context, without writing data.",
+      "tools_triggered": "buscar_paciente"
+    },
+    {
+      "name": "Abrir timeline clinica do paciente",
+      "prompt": "Abra a timeline clinica do Thor antes da consulta.",
+      "expected_behavior": "Retrieves the patient timeline and opens the timeline widget with consultations, exams, vaccines, documents, and pendencies.",
+      "tools_triggered": "obter_timeline_clinica"
+    },
+    {
+      "name": "Preparar consulta do dia",
+      "prompt": "Prepare a consulta do Rex das 14h com resumo, pendencias e perguntas sugeridas.",
+      "expected_behavior": "Builds a consultation briefing from existing clinical records and does not write data.",
+      "tools_triggered": "preparar_consulta"
+    },
+    {
+      "name": "Central admin de alertas",
+      "prompt": "Quais alertas administrativos abertos exigem minha atencao agora?",
+      "expected_behavior": "Lists actionable admin alerts for an authenticated admin and opens the admin command center widget.",
+      "tools_triggered": "listar_alertas_admin"
     }
   ],
   "negative_test_cases": [
