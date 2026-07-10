@@ -14,6 +14,7 @@ from io import BytesIO
 from jinja2 import TemplateNotFound
 from models import (
     Animal,
+    AnimalHealthRecord,
     AnimalDocumento,
     Appointment,
     BlocoExames,
@@ -3141,6 +3142,13 @@ def carteirinha_publica(token):
         .order_by(Vacina.aplicada_em)
         .all()
     )
+    vermifugacoes = (
+        AnimalHealthRecord.query
+        .filter_by(animal_id=animal.id, kind='vermifugacao')
+        .order_by(AnimalHealthRecord.occurred_on.desc(), AnimalHealthRecord.id.desc())
+        .limit(12)
+        .all()
+    )
 
     tutor_nome = None
     if animal.owner and animal.owner.name:
@@ -3151,6 +3159,7 @@ def carteirinha_publica(token):
         animal=animal,
         vacinas_aplicadas=vacinas_aplicadas,
         proximas_doses=proximas_doses,
+        vermifugacoes=vermifugacoes,
         tutor_nome=tutor_nome,
         hoje=date.today(),
     )

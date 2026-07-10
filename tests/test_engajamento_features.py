@@ -2,7 +2,7 @@
 import flask_login.utils as login_utils
 
 from extensions import db
-from models import Animal, PushSubscription, RacaoAssinatura, User, Vacina
+from models import Animal, AnimalHealthRecord, PushSubscription, RacaoAssinatura, User, Vacina
 
 
 def _login(monkeypatch, user):
@@ -136,6 +136,33 @@ def test_carteirinha_mostra_vacinas(app, client, monkeypatch):
     monkeypatch.setattr(login_utils, "_get_user", lambda: AnonymousUserMixin())
     resp = client.get(f"/carteirinha/{animal.public_token}")
     assert "Antirrábica".encode() in resp.data
+
+
+def test_carteirinha_mostra_vermifugacoes(app, client, monkeypatch):
+    from datetime import date
+
+    user = _make_user()
+    animal = _make_animal(user)
+    db.session.add(AnimalHealthRecord(
+        animal_id=animal.id,
+        kind="vermifugacao",
+        title="Canex",
+        occurred_on=date(2026, 5, 1),
+        next_due_on=date(2026, 11, 1),
+        weight_kg=8.2,
+    ))
+    db.session.commit()
+    _login(monkeypatch, user)
+    client.post(f"/animal/{animal.id}/carteirinha/ativar")
+    db.session.refresh(animal)
+
+    from flask_login import AnonymousUserMixin
+    monkeypatch.setattr(login_utils, "_get_user", lambda: AnonymousUserMixin())
+    resp = client.get(f"/carteirinha/{animal.public_token}")
+
+    assert "Vermifugação".encode() in resp.data
+    assert b"Canex" in resp.data
+    assert b"01/11/2026" in resp.data
 
 
 # ── Assinatura de ração ─────────────────────────────────────────────────────
