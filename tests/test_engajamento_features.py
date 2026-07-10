@@ -160,7 +160,7 @@ def test_carteirinha_mostra_vermifugacoes(app, client, monkeypatch):
     monkeypatch.setattr(login_utils, "_get_user", lambda: AnonymousUserMixin())
     resp = client.get(f"/carteirinha/{animal.public_token}")
 
-    assert "Vermifugação".encode() in resp.data
+    assert b"Ultima" in resp.data or "Última".encode() in resp.data
     assert b"Canex" in resp.data
     assert b"01/11/2026" in resp.data
 

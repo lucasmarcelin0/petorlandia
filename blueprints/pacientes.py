@@ -3146,9 +3146,39 @@ def carteirinha_publica(token):
         AnimalHealthRecord.query
         .filter_by(animal_id=animal.id, kind='vermifugacao')
         .order_by(AnimalHealthRecord.occurred_on.desc(), AnimalHealthRecord.id.desc())
-        .limit(12)
         .all()
     )
+
+    # Public card: show only the current action for each treatment type. Older
+    # doses remain available as history and must not be presented as overdue.
+    acoes_atuais = []
+    vacinas_vistas = set()
+    for vacina in vacinas_aplicadas:
+        chave = (vacina.nome or '').strip().casefold()
+        if not chave or chave in vacinas_vistas:
+            continue
+        vacinas_vistas.add(chave)
+        proxima_dose = vacina.proxima_dose
+        if proxima_dose:
+            acoes_atuais.append({
+                'tipo': 'Vacina',
+                'titulo': vacina.nome,
+                'data': proxima_dose,
+            })
+    for vacina in proximas_doses:
+        acoes_atuais.append({
+            'tipo': 'Vacina',
+            'titulo': vacina.nome,
+            'data': vacina.aplicada_em,
+        })
+    ultima_vermifugacao = vermifugacoes[0] if vermifugacoes else None
+    if ultima_vermifugacao and ultima_vermifugacao.next_due_on:
+        acoes_atuais.append({
+            'tipo': 'Vermífugo',
+            'titulo': ultima_vermifugacao.title,
+            'data': ultima_vermifugacao.next_due_on,
+        })
+    acoes_atuais.sort(key=lambda item: item['data'])
 
     tutor_nome = None
     if animal.owner and animal.owner.name:
@@ -3157,9 +3187,10 @@ def carteirinha_publica(token):
     return render_template(
         'animais/carteirinha_publica.html',
         animal=animal,
-        vacinas_aplicadas=vacinas_aplicadas,
-        proximas_doses=proximas_doses,
-        vermifugacoes=vermifugacoes,
+        acoes_atuais=acoes_atuais,
+        vacinas_recentes=vacinas_aplicadas[:6],
+        vermifugacoes_recentes=vermifugacoes[:6],
+        ultima_vermifugacao=ultima_vermifugacao,
         tutor_nome=tutor_nome,
         hoje=date.today(),
     )
