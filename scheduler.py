@@ -8,7 +8,14 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from flask import current_app
 
-from app import app
+from app import (
+    app,
+    _run_financial_snapshot_job,
+    _run_mercadopago_oauth_renewal_job,
+    enviar_lembretes_recebimento,
+    enviar_lembretes_tratamento,
+    verificar_datas_proximas,
+)
 from scripts.sync_pmo_full_status import run_pmo_full_sync
 from services.finance import run_transactions_history_backfill
 
@@ -155,6 +162,27 @@ def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    # Jobs diários que antes rodavam no dyno web (BackgroundScheduler no
+    # app.py). Centralizados aqui: uma única execução, independente do nº de
+    # workers web. Cada job gerencia o próprio app_context.
+    br_tz = 'America/Sao_Paulo'
+    daily_jobs = [
+        ('lembretes-consultas-exames-vacinas', verificar_datas_proximas, 8, 0),
+        ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
+        ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
+        ('snapshot-financeiro', _run_financial_snapshot_job, 2, 30),
+        ('mercadopago-oauth-renewal', _run_mercadopago_oauth_renewal_job, 3, 15),
+    ]
+    for job_id, func, hour, minute in daily_jobs:
+        scheduler.add_job(
+            func,
+            CronTrigger(hour=hour, minute=minute, timezone=br_tz),
+            id=job_id,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     with app.app_context():
         current_app.logger.info(
             'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '

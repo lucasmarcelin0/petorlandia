@@ -8689,7 +8689,10 @@ def _run_mercadopago_oauth_renewal_job() -> None:
             )
 
 
-if not app.config.get("TESTING"):
+# Os jobs diários migraram para o dyno dedicado (scheduler.py): uma única
+# execução, independente do nº de workers web. ENABLE_WEB_SCHEDULER=1 religa
+# o modo antigo em ambientes sem o dyno scheduler (ex.: dev local).
+if not app.config.get("TESTING") and os.getenv("ENABLE_WEB_SCHEDULER") == "1":
     scheduler = BackgroundScheduler(timezone=str(BR_TZ))
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
     scheduler.add_job(enviar_lembretes_tratamento, 'cron', hour=9)
