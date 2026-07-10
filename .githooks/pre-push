@@ -1,0 +1,29 @@
+#!/bin/sh
+# Gate local anti-regressão: roda antes de qualquer `git push` (inclusive para
+# o Heroku, que é o caminho de deploy). Executa só os testes rápidos de
+# contrato; a suíte completa roda no GitHub Actions.
+#
+# Pular em emergência:  SKIP_TESTS=1 git push heroku main
+# Instalação (uma vez): git config core.hooksPath .githooks
+
+if [ "$SKIP_TESTS" = "1" ]; then
+  echo "[pre-push] SKIP_TESTS=1 — pulando testes."
+  exit 0
+fi
+
+echo "[pre-push] Rodando gate rápido (contrato de rotas + engajamento)..."
+PYTHONUTF8=1 python -m pytest \
+  tests/test_url_map_contract.py \
+  tests/test_engajamento_features.py \
+  -q -p no:cacheprovider
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "[pre-push] ❌ Testes falharam — push abortado."
+  echo "[pre-push] Corrija ou use SKIP_TESTS=1 para pular conscientemente."
+  exit 1
+fi
+
+echo "[pre-push] ✅ Gate verde."
+exit 0

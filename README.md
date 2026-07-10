@@ -36,8 +36,19 @@ A comprehensive Flask application for managing veterinary clinics, pets, appoint
 
 Execute tests with `pytest` (no external services required):
 ```bash
-pytest
+pytest tests/ -q
 ```
+
+Anti-regressão automatizado:
+- **GitHub Actions** (`.github/workflows/tests.yml`): roda a suíte completa em
+  cada push/PR.
+- **Gate local de push** (`.githooks/pre-push`): roda o contrato de rotas e os
+  testes de engajamento antes de qualquer `git push` (inclusive deploy ao
+  Heroku). Instale uma vez com `git config core.hooksPath .githooks`;
+  em emergência, pule com `SKIP_TESTS=1 git push ...`.
+- **Contrato de rotas** (`tests/test_url_map_contract.py`): nenhuma rota pode
+  sumir do `url_map`. Após mudança intencional de rotas, regenere o snapshot
+  com `python scripts/gen_url_map_snapshot.py`.
 
 ## 📖 Documentation
 

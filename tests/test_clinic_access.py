@@ -52,6 +52,9 @@ def test_user_sees_own_clinic(monkeypatch, app):
         user = User(name="User", email="user3@example.com", password_hash="x")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
         db.session.add_all([c1, user, vet])
+        db.session.flush()
+        # O painel /clinica/<id> é do dono (equipe usa /minha_clinica).
+        c1.owner_id = user.id
         db.session.commit()
         login(monkeypatch, user)
         resp = client.get(f"/clinica/{c1.id}")

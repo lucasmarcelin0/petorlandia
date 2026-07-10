@@ -36,6 +36,21 @@ def app():
     yield flask_app
 
 
+def _login_clinic_owner(monkeypatch, clinic):
+    """As views de orçamento exigem can_manage_budget: dono da clínica passa."""
+    import flask_login.utils as login_utils
+
+    owner = User(name="Dono", email=f"dono-{uuid4().hex[:8]}@test")
+    owner.set_password("x")
+    db.session.add(owner)
+    db.session.flush()
+    clinic.owner_id = owner.id
+    db.session.commit()
+    owner_id = owner.id
+    monkeypatch.setattr(login_utils, "_get_user", lambda: db.session.get(User, owner_id))
+    return owner
+
+
 def _create_clinic(name="Clínica Teste"):
     clinic = Clinica(nome=name)
     db.session.add(clinic)
@@ -201,6 +216,8 @@ def test_gerar_link_pagamento_orcamento_triggers_sync(app, monkeypatch):
     with app.app_context():
         clinic = _create_clinic()
         orcamento = _create_orcamento(clinic)
+        _login_clinic_owner(monkeypatch, clinic)
+        orcamento_id = orcamento.id
 
     calls = []
     monkeypatch.setattr(
@@ -215,15 +232,18 @@ def test_gerar_link_pagamento_orcamento_triggers_sync(app, monkeypatch):
     monkeypatch.setattr(app_module, "ensure_clinic_access", lambda *args, **kwargs: None)
 
     with app.test_client() as client:
-        response = client.post(f"/orcamento/{orcamento.id}/pagar")
+        response = client.post(f"/orcamento/{orcamento_id}/pagar")
 
     assert response.status_code == 200
-    assert calls == [orcamento.id]
+    assert calls == [orcamento_id]
 
 
 def test_atualizar_bloco_orcamento_triggers_sync(app, monkeypatch):
     with app.app_context():
         bloco = _create_bloco(payment_status="pending")
+        _login_clinic_owner(monkeypatch, bloco.clinica)
+        bloco_id = bloco.id
+        bloco_clinica_id = bloco.clinica_id
 
     calls = []
     monkeypatch.setattr(app_module, "ensure_clinic_access", lambda *args, **kwargs: None)
@@ -231,14 +251,17 @@ def test_atualizar_bloco_orcamento_triggers_sync(app, monkeypatch):
     monkeypatch.setattr(app_module, "_render_orcamento_history", lambda *args, **kwargs: "<html></html>")
     monkeypatch.setattr(app_module, "_sync_orcamento_payment_classification", lambda record: calls.append(record.id))
 
-    payload = {"itens": [{"descricao": "Novo", "valor": 120.0}]}
+    payload = {
+        "clinica_id": bloco_clinica_id,  # agora obrigatório no payload
+        "itens": [{"descricao": "Novo", "valor": 120.0}],
+    }
     with app.test_client() as client:
         response = client.post(
-            f"/bloco_orcamento/{bloco.id}/atualizar",
+            f"/bloco_orcamento/{bloco_id}/atualizar",
             json=payload,
             headers={"Accept": "application/json"},
         )
 
     assert response.status_code == 200
     assert response.get_json()["success"] is True
-    assert calls == [bloco.id]
+    assert calls == [bloco_id]

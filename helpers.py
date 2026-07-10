@@ -676,10 +676,10 @@ def clinicas_do_usuario():
     """Retorna query de ``Clinica`` filtrada pelo usuário atual."""
     from models import Clinica, ClinicStaff
 
-    if not current_user.is_authenticated:
+    if not getattr(current_user, "is_authenticated", False):
         return Clinica.query.filter(False)
 
-    if current_user.role == "admin":
+    if getattr(current_user, "role", None) == "admin":
         query = Clinica.query
         default_id = None
         if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
@@ -1217,7 +1217,10 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
         available = []
         booked = []
         for slot in working_slots:
-            current_utc = normalize_to_utc(slot)
+            # booked_datetimes contém datetimes UTC naive (_to_utc_naive);
+            # remove o tzinfo para a igualdade funcionar (aware != naive
+            # nunca casa e marcava horário ocupado como disponível).
+            current_utc = normalize_to_utc(slot).replace(tzinfo=None)
             time_str = slot.strftime('%H:%M')
             if current_utc in booked_datetimes:
                 booked.append(time_str)
@@ -1261,7 +1264,7 @@ def _user_is_clinic_owner(user=None):
     """Return ``True`` if ``user`` owns at least one clinic."""
 
     if user is None:
-        user = current_user if current_user.is_authenticated else None
+        user = current_user if getattr(current_user, "is_authenticated", False) else None
 
     if not user or not getattr(user, "is_authenticated", False):
         return False
@@ -1293,7 +1296,7 @@ def _user_can_access_accounting(user=None):
     """Return ``True`` when ``user`` has permission to access accounting tools."""
 
     if user is None:
-        user = current_user if current_user.is_authenticated else None
+        user = current_user if getattr(current_user, "is_authenticated", False) else None
 
     if not user or not getattr(user, "is_authenticated", False):
         return False

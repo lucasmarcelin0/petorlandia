@@ -52,9 +52,14 @@ from services import (
     build_usage_history,
     coverage_label,
     find_active_share,
-    get_calendar_access_scope,
     insurer_token_valid,
 )
+
+
+def get_calendar_access_scope(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.get_calendar_access_scope.
+    import app as app_module
+    return app_module.get_calendar_access_scope(*args, **kwargs)
 from services.appointments import ReturnAppointmentDTO, schedule_return_appointment
 from services.oauth_provider import _oauth_allowed_scopes, _oauth_issuer
 from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow

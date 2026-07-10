@@ -130,7 +130,10 @@ def test_imprimir_orcamento_displays_original_vet_when_different(app):
         html = resp.get_data(as_text=True)
         assert 'Impresso por:' in html
         assert 'Vet2' in html
-        assert 'CRMV SP-202' in html
+        # Documento fiscal/clínico: o CRMV ao lado de "Impresso por" só aparece
+        # quando o impressor é o profissional responsável; aqui Vet2 imprime o
+        # orçamento de Vet1, então mostra apenas o nome.
+        assert 'CRMV SP-202' not in html
         assert 'Profissional responsável registrado: Vet1' in html
 
     with app.app_context():

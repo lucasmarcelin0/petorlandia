@@ -130,9 +130,10 @@ def test_unrelated_tutor_cannot_update_or_delete(client, monkeypatch):
 
     login(monkeypatch, tutor_identity)
 
+    # Privacidade: consulta de terceiros nem é visível — 404 em vez de 403.
     resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'completed'})
-    assert resp.status_code == 403
+    assert resp.status_code == 404
     resp = client.post(f'/appointments/{appt_id}/delete', data={})
-    assert resp.status_code == 403
+    assert resp.status_code == 404
     with flask_app.app_context():
         assert Appointment.query.get(appt_id) is not None

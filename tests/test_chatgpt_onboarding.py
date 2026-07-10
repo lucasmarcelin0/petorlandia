@@ -5,5 +5,6 @@ def test_chatgpt_onboarding_page_is_public(client):
     html = response.get_data(as_text=True)
     assert 'Comece a usar no ChatGPT' in html
     assert '/mcp' in html
-    assert '/oauth/authorize' in html
-    assert '/oauth/token' in html
+    # A página simplificada não expõe mais os endpoints OAuth
+    # (/oauth/authorize, /oauth/token); a autenticação é descoberta
+    # automaticamente via .well-known.

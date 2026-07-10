@@ -79,5 +79,5 @@ def test_schedule_grouped_by_day(monkeypatch, app):
         resp = client.get(f'/clinica/{clinica.id}')
         assert resp.status_code == 200
         data = resp.data.decode()
-        assert data.count("<td>Segunda:") == 1
-        assert "Segunda: 09:00 - 10:00, 10:00 - 11:00" in data
+        # O resumo saiu da <table> e virou lista no card do veterinário.
+        assert data.count("Segunda: 09:00 - 10:00, 10:00 - 11:00") == 1

@@ -1428,7 +1428,7 @@ def _column_index(column: str) -> int:
     index = 0
     for char in column.upper():
         if not ("A" <= char <= "Z"):
-            raise ValueError(f"Coluna de planilha invÃ¡lida: {column}")
+            raise ValueError(f"Coluna de planilha inválida: {column}")
         index = index * 26 + (ord(char) - ord("A") + 1)
     return index
 
@@ -1448,7 +1448,7 @@ def _read_sheet_values_by_gid(
     start_column = _column_index(match.group(1)) - 1
     end_column = _column_index(match.group(2))
     if end_column <= start_column:
-        raise ValueError("Intervalo de colunas da planilha PMO invÃ¡lido.")
+        raise ValueError("Intervalo de colunas da planilha PMO inválido.")
 
     result = (
         service.spreadsheets()

@@ -79,14 +79,16 @@ def test_login_invalid_credentials(monkeypatch, app):
     class FakeQuery:
         def filter_by(self, **kw):
             return self
+        def filter(self, *args, **kw):
+            return self
         def first(self):
             return None
 
     with app.app_context():
         monkeypatch.setattr(User, 'query', FakeQuery())
 
-    response = client.post('/login', data={'email': 'foo@bar.com', 'password': 'x'}, follow_redirects=True)
-    assert b'Email ou senha inv\xc3\xa1lidos' in response.data
+    response = client.post('/login', data={'login': 'foo@bar.com', 'password': 'x'}, follow_redirects=True)
+    assert 'E-mail, celular ou senha inválidos.'.encode() in response.data
 
 def test_add_animal_requires_login(app):
     client = app.test_client()
@@ -315,14 +317,14 @@ def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app
         user = User(id=1, name='Vet', email='vet@test', worker='veterinario')
         user.set_password('test')
         vet_profile = Veterinario(id=1, user=user, crmv='CRMV123')
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime.utcnow() - timedelta(days=60),
-            trial_ends_at=datetime.utcnow() - timedelta(days=30),
-            paid_until=None,
-        )
-
-        db.session.add_all([user, vet_profile, membership])
+        db.session.add_all([user, vet_profile])
+        db.session.commit()
+        # O after_insert de Veterinario cria a membership automaticamente;
+        # ajustamos as datas do registro auto-criado.
+        membership = vet_profile.membership
+        membership.started_at = datetime.utcnow() - timedelta(days=60)
+        membership.trial_ends_at = datetime.utcnow() - timedelta(days=30)
+        membership.paid_until = None
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -353,14 +355,14 @@ def test_index_shows_professional_area_for_active_vet_without_worker_flag(monkey
         user = User(id=1, name='Vet', email='vet@test', worker=None)
         user.set_password('test')
         vet_profile = Veterinario(id=1, user=user, crmv='CRMV123')
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime.utcnow() - timedelta(days=5),
-            trial_ends_at=datetime.utcnow() + timedelta(days=25),
-            paid_until=None,
-        )
-
-        db.session.add_all([user, vet_profile, membership])
+        db.session.add_all([user, vet_profile])
+        db.session.commit()
+        # O after_insert de Veterinario cria a membership automaticamente;
+        # ajustamos as datas do registro auto-criado.
+        membership = vet_profile.membership
+        membership.started_at = datetime.utcnow() - timedelta(days=5)
+        membership.trial_ends_at = datetime.utcnow() + timedelta(days=25)
+        membership.paid_until = None
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -401,14 +403,14 @@ def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatc
         vet_profile = Veterinario(id=1, user=vet_user, crmv='CRMV123')
         expired_started_at = datetime(2024, 1, 1, 12, 0, 0)
         expired_trial_ends = datetime(2024, 1, 15, 12, 0, 0)
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=expired_started_at,
-            trial_ends_at=expired_trial_ends,
-            paid_until=None,
-        )
-
-        db.session.add_all([admin, vet_user, vet_profile, membership])
+        db.session.add_all([admin, vet_user, vet_profile])
+        db.session.commit()
+        # O after_insert de Veterinario cria a membership automaticamente;
+        # ajustamos as datas do registro auto-criado.
+        membership = vet_profile.membership
+        membership.started_at = expired_started_at
+        membership.trial_ends_at = expired_trial_ends
+        membership.paid_until = None
         db.session.commit()
         membership_id = membership.id
         admin_id = admin.id
@@ -429,8 +431,9 @@ def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatc
 
     with app.app_context():
         unchanged_membership = VeterinarianMembership.query.get(membership_id)
-        assert unchanged_membership.started_at == expired_started_at
-        assert unchanged_membership.trial_ends_at == expired_trial_ends
+        # Colunas timezone=True voltam tz-aware do banco; compara sem tz.
+        assert unchanged_membership.started_at.replace(tzinfo=None) == expired_started_at
+        assert unchanged_membership.trial_ends_at.replace(tzinfo=None) == expired_trial_ends
 
         admin = User.query.get(admin_id)
         messages = Message.query.filter_by(
@@ -455,8 +458,8 @@ def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatc
 
     with app.app_context():
         refreshed_membership = VeterinarianMembership.query.get(membership_id)
-        assert refreshed_membership.started_at > expired_started_at
-        assert refreshed_membership.trial_ends_at > expired_trial_ends
+        assert refreshed_membership.started_at.replace(tzinfo=None) > expired_started_at
+        assert refreshed_membership.trial_ends_at.replace(tzinfo=None) > expired_trial_ends
 
 
 def test_veterinarian_membership_route_allows_admin(monkeypatch, app):
@@ -499,13 +502,14 @@ def test_expired_veterinarian_membership_redirects_on_404(monkeypatch, app):
         )
         vet_user.set_password('test')
         vet_profile = Veterinario(user=vet_user, crmv='CRMV999')
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime(2024, 1, 1, 12, 0, 0),
-            trial_ends_at=datetime(2024, 1, 2, 12, 0, 0),
-            paid_until=None,
-        )
-        db.session.add_all([vet_user, vet_profile, membership])
+        db.session.add_all([vet_user, vet_profile])
+        db.session.commit()
+        # O after_insert de Veterinario cria a membership automaticamente;
+        # ajustamos as datas do registro auto-criado.
+        membership = vet_profile.membership
+        membership.started_at = datetime(2024, 1, 1, 12, 0, 0)
+        membership.trial_ends_at = datetime(2024, 1, 2, 12, 0, 0)
+        membership.paid_until = None
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -536,13 +540,14 @@ def test_expired_veterinarian_membership_keeps_inroute_404(monkeypatch, app):
         )
         vet_user.set_password('test')
         vet_profile = Veterinario(user=vet_user, crmv='CRMV998')
-        membership = VeterinarianMembership(
-            veterinario=vet_profile,
-            started_at=datetime(2024, 1, 1, 12, 0, 0),
-            trial_ends_at=datetime(2024, 1, 2, 12, 0, 0),
-            paid_until=None,
-        )
-        db.session.add_all([vet_user, vet_profile, membership])
+        db.session.add_all([vet_user, vet_profile])
+        db.session.commit()
+        # O after_insert de Veterinario cria a membership automaticamente;
+        # ajustamos as datas do registro auto-criado.
+        membership = vet_profile.membership
+        membership.started_at = datetime(2024, 1, 1, 12, 0, 0)
+        membership.trial_ends_at = datetime(2024, 1, 2, 12, 0, 0)
+        membership.paid_until = None
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -792,9 +797,11 @@ def test_admin_toggle_all_animals(monkeypatch, app):
             if fn.__name__ == 'inject_unread_count':
                 flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
 
+        # Admins veem todos os animais por padrão (sem filtro de modo).
         resp1 = client.get('/animals')
         assert resp1.status_code == 200
-        assert b'Adopted' not in resp1.data
+        assert b'Adopted' in resp1.data
+        assert b'Available' in resp1.data
 
         resp2 = client.get('/animals?show_all=1')
         assert resp2.status_code == 200
@@ -1081,10 +1088,15 @@ def test_pedido_detail_forbidden(monkeypatch, app):
             is_authenticated = True
             id = 1
             email = 'x'
+            role = 'user'
+            worker = None
+            name = 'Fake'
         monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
         monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
-        response = client.get('/pedido/2')
+        # Browsers mandam Accept: text/html e recebem 403; sem o header o
+        # error handler sanitiza para 404 JSON (nao vazar existencia).
+        response = client.get('/pedido/2', headers={'Accept': 'text/html'})
         assert response.status_code == 403
 
 
@@ -1093,12 +1105,14 @@ def test_pedido_detail_buttons_for_buyer(monkeypatch, app):
 
     class FakeProduct:
         price = 10.0
+        preco_publico = 10.0
         name = 'P'
         image_url = None
 
     class FakeItem:
         product = FakeProduct()
         quantity = 1
+        unit_price = None
 
     class FakeReq:
         id = 5
@@ -1863,6 +1877,7 @@ def test_salvar_endereco_invalid(monkeypatch, app):
             if fn.__name__ == 'inject_unread_count':
                 flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
 
+        # CEP é opcional no CartAddressForm: com rua/cidade/estado o endereço salva.
         resp = client.post('/carrinho/salvar_endereco', data={
             'cep': '',
             'rua': 'Rua Teste',
@@ -1870,7 +1885,17 @@ def test_salvar_endereco_invalid(monkeypatch, app):
             'estado': 'SP'
         })
         assert resp.status_code == 302
-        assert SavedAddress.query.count() == 0
+        assert SavedAddress.query.count() == 1
+
+        # Sem campo obrigatório (rua) o formulário é rejeitado.
+        resp = client.post('/carrinho/salvar_endereco', data={
+            'cep': '',
+            'rua': '',
+            'cidade': 'Cidade',
+            'estado': 'SP'
+        })
+        assert resp.status_code == 302
+        assert SavedAddress.query.count() == 1
 
 
 def test_cart_shows_saved_address_below_default(monkeypatch, app):
@@ -2473,11 +2498,12 @@ def test_update_tutor_duplicate_cpf(monkeypatch, app):
 
         vet = User(id=10, name='Vet', email='vet@test', worker='veterinario')
         vet.set_password('x')
-        tutor1 = User(id=1, name='Tutor1', email='t1@test', cpf='11111111111')
+        vet_profile = Veterinario(user=vet, crmv='CRMV-CPF')
+        tutor1 = User(id=1, name='Tutor1', email='t1@test', cpf='11111111111', added_by_id=10)
         tutor1.set_password('x')
-        tutor2 = User(id=2, name='Tutor2', email='t2@test', cpf='22222222222')
+        tutor2 = User(id=2, name='Tutor2', email='t2@test', cpf='22222222222', added_by_id=10)
         tutor2.set_password('x')
-        db.session.add_all([vet, tutor1, tutor2])
+        db.session.add_all([vet, vet_profile, tutor1, tutor2])
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -2502,9 +2528,10 @@ def test_update_tutor_profile_photo(monkeypatch, app):
 
         vet = User(id=10, name='Vet', email='vet@test', worker='veterinario')
         vet.set_password('x')
-        tutor = User(id=1, name='Tutor', email='t@test')
+        vet_profile = Veterinario(user=vet, crmv='CRMV-FOTO')
+        tutor = User(id=1, name='Tutor', email='t@test', added_by_id=10)
         tutor.set_password('x')
-        db.session.add_all([vet, tutor])
+        db.session.add_all([vet, vet_profile, tutor])
         db.session.commit()
 
         import flask_login.utils as login_utils
@@ -3170,8 +3197,11 @@ def test_consulta_page_shows_documentos_tab(app, monkeypatch):
         tutor.set_password('x')
         vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
         vet.set_password('x')
-        animal = Animal(id=1, name='Dog', user_id=tutor.id)
-        db.session.add_all([tutor, vet, animal])
+        clinica = Clinica(id=1, nome='Clinica Doc')
+        vet_profile = Veterinario(user=vet, crmv='CRMV-DOC', clinica_id=1)
+        # added_by vincula o animal ao vet para as regras de visibilidade.
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=2)
+        db.session.add_all([tutor, vet, clinica, vet_profile, animal])
         db.session.commit()
         animal_id = animal.id
         vet_id = vet.id
@@ -3192,9 +3222,10 @@ def test_delete_document_by_veterinarian(app, monkeypatch):
         tutor.set_password('x')
         vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
         vet.set_password('x')
-        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        vet_profile = Veterinario(user=vet, crmv='CRMV-DEL')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id, added_by_id=2)
         doc = AnimalDocumento(id=1, animal_id=animal.id, veterinario_id=vet.id, filename='res.pdf', file_url='http://doc')
-        db.session.add_all([tutor, vet, animal, doc])
+        db.session.add_all([tutor, vet, vet_profile, animal, doc])
         db.session.commit()
         animal_id = animal.id
         doc_id = doc.id
@@ -3342,4 +3373,6 @@ def test_atualizar_status_orcamento_sem_acesso_retorna_403(app):
         json={'status': 'approved'},
         headers={'Accept': 'application/json'},
     )
-    assert resp.status_code == 403
+    # Em respostas JSON o error handler sanitiza 403 -> 404 para não vazar a
+    # existência de recursos de outra clínica (defense in depth).
+    assert resp.status_code == 404

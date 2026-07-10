@@ -12,6 +12,48 @@ from app_factory import create_app
 from extensions import db
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _isolate_app_state():
+    """Isola o estado global do app singleton entre ARQUIVOS de teste.
+
+    create_app() devolve sempre a mesma instância; testes que mutam
+    diretamente app.config (ex.: LOGIN_DISABLED=True), substituem itens de
+    template_context_processors ou registram error handlers vazariam esse
+    estado para os arquivos seguintes quando a suíte roda num único processo.
+    Snapshot no início / restore no fim de cada módulo elimina a poluição
+    entre arquivos sem interferir em fixtures de escopo módulo dos próprios
+    arquivos.
+    """
+    application = create_app()
+    saved_config = dict(application.config)
+    saved_processors = {
+        key: list(value)
+        for key, value in application.template_context_processors.items()
+    }
+    # error_handler_spec fica de fora de propósito: a estrutura aninhada do
+    # Flask não sobrevive a snapshot/restore raso e handlers custom de teste
+    # são raros (usar monkeypatch nesses casos).
+    yield
+    application.config.clear()
+    application.config.update(saved_config)
+    application.template_context_processors.clear()
+    application.template_context_processors.update(saved_processors)
+
+
+@pytest.fixture(autouse=True)
+def _clear_context_cache():
+    """Zera o cache de badges (TTL 30s) entre testes.
+
+    O cache é keyed por user_id; testes recriam usuários com os mesmos ids e
+    herdariam contadores/flags do teste anterior (ex.: has_clinic_access).
+    """
+    from context_processors import _context_cache
+
+    _context_cache.clear()
+    yield
+    _context_cache.clear()
+
+
 @pytest.fixture()
 def app():
     app = create_app()

@@ -86,3 +86,6 @@ build/
 
 
 .claude/worktrees/
+
+# Uploads de usuários (laudos, fotos) — nunca versionar
+static/uploads/

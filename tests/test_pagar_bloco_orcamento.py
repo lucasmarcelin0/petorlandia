@@ -91,7 +91,10 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         assert resp.status_code == 200
         payload = resp.get_json()
         assert payload['success']
-        assert payload['redirect_url'] == 'http://mp'
+        # O contrato JSON mudou: o link vai por WhatsApp/mensagem e a UI
+        # atualiza via 'html'; nao ha mais redirect_url na resposta.
+        assert payload['payment_status'] == 'pending'
+        assert 'html' in payload
         assert captured['preference'].get('auto_return') == 'approved'
 
     _teardown_db(app)

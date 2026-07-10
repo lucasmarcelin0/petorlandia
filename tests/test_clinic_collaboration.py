@@ -39,7 +39,11 @@ def test_users_share_clinic_data(monkeypatch, app):
 
         # veterinarian adds tutor and animal
         login(monkeypatch, vet_user)
-        client.post('/tutores', data={'name': 'Tutor', 'email': 't@t.com'})
+        client.post('/tutores', data={
+            'name': 'Tutor', 'email': 't@t.com',
+            # Endereço passou a ser obrigatório no cadastro de tutores.
+            'rua': 'Rua A', 'cidade': 'Orlandia', 'estado': 'SP',
+        })
         tutor = User.query.filter_by(email='t@t.com').first()
         assert tutor.clinica_id == clinic.id
 

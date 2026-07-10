@@ -44,7 +44,8 @@ def test_non_worker_cannot_create_event(client, monkeypatch):
     fake_user = type('U', (), {'id':1, 'worker':None, 'role':'adotante', 'is_authenticated':True})()
     login(monkeypatch, fake_user)
     resp = client.post('/appointments', data={'appointment-submit': True})
-    assert resp.status_code == 403
+    # Não-profissional é redirecionado com aviso (sem criar nada).
+    assert resp.status_code == 302
 
 
 def test_collaborator_can_delete_appointment(client, monkeypatch):

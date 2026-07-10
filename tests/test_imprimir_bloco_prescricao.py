@@ -69,7 +69,12 @@ def test_imprimir_bloco_prescricao_displays_printing_user(app):
         html = resp.get_data(as_text=True)
         assert 'Impresso por:' in html
         assert 'Vet2' in html
-        assert 'CRMV SP-456' in html
+        # Receita controlada: o CRMV ao lado de "Impresso por" só aparece
+        # quando o impressor é o profissional responsável. Vet2 imprime a
+        # prescrição de Vet1, então mostra apenas o nome; o CRMV do
+        # responsável (Vet1) aparece na seção "Profissional Responsável".
+        assert 'CRMV SP-456' not in html
+        assert 'SP-123' in html
 
     with app.app_context():
         db.drop_all()

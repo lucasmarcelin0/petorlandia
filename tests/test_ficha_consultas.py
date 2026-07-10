@@ -42,5 +42,16 @@ def test_tutor_sees_consultas_from_all_clinics(monkeypatch, app):
         login(monkeypatch, tutor)
         resp = client.get(f"/animal/{animal.id}/ficha")
         assert resp.status_code == 200
-        assert b"VetOne" in resp.data
-        assert b"VetTwo" in resp.data
+
+        # O histórico é carregado por AJAX; a seção devolve o HTML renderizado.
+        resp = client.get(
+            f"/animal/{animal.id}/ficha?section=history",
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 200
+        payload = resp.get_json()
+        assert payload["success"] is True
+        # O template aplica |title ao nome (VetOne -> Vetone).
+        html_lower = payload["html"].lower()
+        assert "vetone" in html_lower
+        assert "vettwo" in html_lower

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from models import User, Animal
+from models import User, Animal, Veterinario
 
 
 @pytest.fixture
@@ -41,7 +41,8 @@ def test_user_cannot_delete_other_users_animal(monkeypatch, app):
         })()
         monkeypatch.setattr(login_utils, '_get_user', lambda: fake_user)
     resp = client.post('/animal/1/deletar', headers={'Accept': 'application/json'})
-    assert resp.status_code == 403
+    # Privacidade: quem não enxerga o animal recebe 404 (não vaza existência).
+    assert resp.status_code == 404
     with app.app_context():
         assert Animal.query.get(1).removido_em is None
 
@@ -103,20 +104,19 @@ def test_vet_cannot_delete_tutor_added_by_other_vet(monkeypatch, app):
         vet1.set_password('x')
         vet2 = User(id=2, name='Vet2', email='v2@test', worker='veterinario')
         vet2.set_password('x')
+        vet2_profile = Veterinario(user=vet2, crmv='V2')
         tutor = User(id=3, name='Tutor', email='t@test', added_by_id=vet1.id)
         tutor.set_password('x')
-        db.session.add_all([vet1, vet2, tutor])
+        db.session.add_all([vet1, vet2, vet2_profile, tutor])
         db.session.commit()
         tutor_id = tutor.id
-        fake_vet = type('U', (), {
-            'id': vet2.id,
-            'role': 'adotante',
-            'worker': 'veterinario',
-            'is_authenticated': True,
-        })()
-        monkeypatch.setattr(login_utils, '_get_user', lambda: fake_vet)
+        vet2_id = vet2.id
+        monkeypatch.setattr(
+            login_utils, '_get_user', lambda: db.session.get(User, vet2_id)
+        )
     resp = client.post(f'/deletar_tutor/{tutor_id}', headers={'Accept': 'application/json'})
-    assert resp.status_code == 403
+    # Privacidade: tutor de outro vet nem é visível — 404.
+    assert resp.status_code == 404
     with app.app_context():
         assert User.query.get(tutor_id) is not None
 
@@ -128,18 +128,16 @@ def test_vet_can_delete_tutor_he_added(monkeypatch, app):
         db.create_all()
         vet = User(id=1, name='Vet', email='v@test', worker='veterinario')
         vet.set_password('x')
+        vet_profile = Veterinario(user=vet, crmv='V1')
         tutor = User(id=2, name='Tutor', email='t@test', added_by_id=vet.id)
         tutor.set_password('x')
-        db.session.add_all([vet, tutor])
+        db.session.add_all([vet, vet_profile, tutor])
         db.session.commit()
         tutor_id = tutor.id
-        fake_vet = type('U', (), {
-            'id': vet.id,
-            'role': 'adotante',
-            'worker': 'veterinario',
-            'is_authenticated': True,
-        })()
-        monkeypatch.setattr(login_utils, '_get_user', lambda: fake_vet)
+        vet_id = vet.id
+        monkeypatch.setattr(
+            login_utils, '_get_user', lambda: db.session.get(User, vet_id)
+        )
     resp = client.post(f'/deletar_tutor/{tutor_id}')
     assert resp.status_code == 302
     with app.app_context():

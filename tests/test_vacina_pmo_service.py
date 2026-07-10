@@ -506,7 +506,8 @@ def test_pmo_animal_photo_upload_persists_image_url(app, client, monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["image_url"] == "https://bucket.example/animals/lua.jpg"
-    with app.app_context():
+    # imageProxyUrl só é montada dentro de request context (url_for relativo).
+    with app.test_request_context():
         state = get_saved_vacina_pmo_rows(sheet_gid="photo-test")
         assert state["rows"][0]["animals"][0]["imageUrl"] == "https://bucket.example/animals/lua.jpg"
         assert state["rows"][0]["animals"][0]["imageProxyUrl"].endswith(
@@ -844,7 +845,8 @@ def test_pmo_public_link_renders_and_records_evaluation(app, client, monkeypatch
     assert b"Carteirinha digital da vacina" in response.data
     assert b"Protocolo PMO-" in response.data
     assert b"(16) 99999-9999" in response.data
-    assert b"PMOA9999" in response.data
+    # A senha da planilha (PMOA...) não é mais exposta na página pública;
+    # o acesso do tutor passou a ser por telefone/primeiro acesso.
     assert b"Ver carteirinha" in response.data
     assert b"Comprovante simples para o tutor" in response.data
     assert b"Como usar esta carteirinha" in response.data

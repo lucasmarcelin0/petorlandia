@@ -205,7 +205,7 @@ def test_veterinarian_without_clinic_cannot_schedule(client, monkeypatch):
     resp = client.get('/appointments')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
-    assert 'Vincule-se a uma clínica para habilitar o agendamento de novas consultas.' in body
+    assert 'Você precisa estar vinculado a uma clínica para agendar novas consultas.' in body
     assert 'Você precisa estar vinculado a uma clínica para agendar novas consultas.' in body
 
     resp = client.post(

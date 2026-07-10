@@ -39,6 +39,16 @@ def _make_vet(name, email, city=None, coverage=(), specialty=None):
         vet.specialties = [spec]
     vet.cidades_atendidas = [VeterinarioAtendeCidade(cidade=c, uf='MG') for c in coverage]
     db.session.add(vet)
+    db.session.flush()
+    # A vitrine de exames passou a listar apenas vets com serviço cadastrado.
+    from models import ProfessionalService
+    db.session.add(ProfessionalService(
+        veterinario_id=vet.id,
+        service_type='exame',
+        title=f'Exames — {name}',
+        audience='tutor',
+        active=True,
+    ))
     db.session.commit()
     return vet
 

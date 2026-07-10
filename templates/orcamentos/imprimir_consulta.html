@@ -65,7 +65,7 @@
       <span class="print-attribution__label">Data/Hora:</span>
       <span class="print-attribution__value">{{ printed_at|format_datetime_brazil('%d/%m/%Y %H:%M') if printed_at else date_now('%d/%m/%Y %H:%M') }}</span>
     </div>
-    {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+    {% if veterinario and printing_user and veterinario.id != printing_user.id %}
       <div class="print-attribution__note">
         Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
       </div>
@@ -128,7 +128,7 @@
       <span>CRMV {{ signature_user.veterinario.crmv if signature_has_active_membership else '—' }}</span>
     </div>
   </div>
-  {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+  {% if veterinario and printing_user and veterinario.id != printing_user.id %}
     <div class="signature-disclaimer">
       Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
     </div>

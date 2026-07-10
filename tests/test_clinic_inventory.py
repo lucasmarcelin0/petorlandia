@@ -12,7 +12,11 @@ def app():
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
-    yield flask_app
+    with flask_app.app_context():
+        db.create_all()
+        yield flask_app
+        db.session.remove()
+        db.drop_all()
 
 
 def test_clinic_inventory_page(app, monkeypatch):

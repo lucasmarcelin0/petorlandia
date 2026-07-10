@@ -148,8 +148,12 @@ def _viewer_operational_clinic_ids(user: Any) -> set[int]:
     for clinic in getattr(user, "clinicas", []) or []:
         if getattr(clinic, "id", None):
             ids.add(clinic.id)
+    # user.clinica_id também marca clientes (tutores) da clínica; só conta
+    # como vínculo OPERACIONAL para a equipe. Sem esta condição, qualquer
+    # cliente passaria em can_view_clinic/can_manage_* da própria clínica.
     clinic_id = getattr(user, "clinica_id", None)
-    if clinic_id:
+    worker = (getattr(user, "worker", None) or "").lower()
+    if clinic_id and worker in {"colaborador", "staff", "assistente"}:
         ids.add(clinic_id)
     vet = getattr(user, "veterinario", None)
     if vet:

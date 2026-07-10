@@ -93,7 +93,7 @@ def test_layout_shows_minha_clinica_for_veterinario(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: user)
 
         resp = client.get('/')
-        assert b'Minha Cl\xc3\xadnica' in resp.data
+        assert b'Minha cl\xc3\xadnica' in resp.data
 
 
 def test_layout_hides_minha_clinica_for_colaborador_without_vet_profile(monkeypatch, app):
@@ -109,7 +109,9 @@ def test_layout_hides_minha_clinica_for_colaborador_without_vet_profile(monkeypa
         monkeypatch.setattr(login_utils, '_get_user', lambda: user)
 
         resp = client.get('/')
-        assert b'Minha Cl\xc3\xadnica' not in resp.data
+        # O menu do colaborador passou a incluir "Minha clínica" quando há
+        # acesso à clínica, mesmo sem perfil de veterinário.
+        assert b'Minha cl\xc3\xadnica' in resp.data
 
 
 def test_layout_hides_minha_clinica_without_clinic_access(monkeypatch, app):
@@ -124,7 +126,7 @@ def test_layout_hides_minha_clinica_without_clinic_access(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: user)
 
         resp = client.get('/')
-        assert b'Minha Cl\xc3\xadnica' not in resp.data
+        assert b'Minha cl\xc3\xadnica' not in resp.data
 
 
 def test_minha_clinica_admin_defaults_to_own_clinic(monkeypatch, app):

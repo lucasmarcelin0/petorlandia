@@ -96,7 +96,7 @@ def inject_unread_count():
     from models import Message, User
 
     try:
-        if current_user.is_authenticated:
+        if getattr(current_user, "is_authenticated", False):
             user_id = current_user.id
             cached = _get_cached_context(user_id, 'unread_messages')
             if cached is not None:
@@ -129,7 +129,7 @@ def inject_admin_action_notifications():
 
     try:
         if (
-            current_user.is_authenticated
+            getattr(current_user, "is_authenticated", False)
             and (getattr(current_user, 'role', '') or '').lower() == 'admin'
         ):
             cached = _get_cached_context(current_user.id, 'admin_action_notifications')
@@ -179,7 +179,7 @@ def inject_pending_exam_count():
     notificações fantasma).
     """
     try:
-        if current_user.is_authenticated and is_veterinarian(current_user):
+        if getattr(current_user, "is_authenticated", False) and is_veterinarian(current_user):
             user_id = current_user.id
             cached = _get_cached_context(user_id, 'pending_exam_count')
             if cached is not None:
@@ -211,7 +211,7 @@ def inject_pending_appointment_count():
     from sqlalchemy import or_
 
     try:
-        if current_user.is_authenticated and is_veterinarian(current_user):
+        if getattr(current_user, "is_authenticated", False) and is_veterinarian(current_user):
             user_id = current_user.id
             cached = _get_cached_context(user_id, 'pending_appointment_count')
             if cached is not None:
@@ -255,7 +255,9 @@ def _clinic_pending_appointments_query(veterinario):
 def inject_clinic_pending_appointment_count():
     """Expose count of scheduled appointments in the clinic excluding the current vet."""
 
-    if current_user.is_authenticated and is_veterinarian(current_user):
+    # getattr: em renders fora de request (ou testes com _get_user=None) o
+    # current_user pode não ser um objeto flask-login completo.
+    if getattr(current_user, "is_authenticated", False) and is_veterinarian(current_user):
         user_id = current_user.id
         cached = _get_cached_context(user_id, 'clinic_pending_appointment_count')
         if cached is not None:
@@ -275,7 +277,7 @@ def inject_clinic_pending_appointment_count():
 
 
 def inject_veterinarian_membership_context():
-    if not current_user.is_authenticated:
+    if not getattr(current_user, "is_authenticated", False):
         return dict(
             is_active_veterinarian=False,
             has_veterinarian_profile_flag=False,
@@ -296,7 +298,7 @@ def inject_veterinarian_membership_context():
 
 
 def inject_clinic_invite_count():
-    if current_user.is_authenticated and has_veterinarian_profile(current_user):
+    if getattr(current_user, "is_authenticated", False) and has_veterinarian_profile(current_user):
         user_id = current_user.id
         cached = _get_cached_context(user_id, 'pending_clinic_invites')
         if cached is not None:
@@ -319,7 +321,7 @@ def inject_accounting_access_flag():
 
 def inject_has_clinic_access():
     """Expose whether the current user can access at least one clinic."""
-    if not current_user.is_authenticated:
+    if not getattr(current_user, "is_authenticated", False):
         return dict(has_clinic_access=False)
 
     cached = _get_cached_context(current_user.id, 'has_clinic_access')
@@ -343,7 +345,7 @@ def inject_minha_casa_de_racao():
     """Expõe a casa de ração do usuário logado para os templates."""
     from models import CasaDeRacao
 
-    if not current_user.is_authenticated:
+    if not getattr(current_user, "is_authenticated", False):
         return dict(minha_casa_de_racao=None)
     cached = _get_cached_context(current_user.id, 'minha_casa_de_racao')
     if cached is not None:

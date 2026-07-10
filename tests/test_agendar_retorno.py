@@ -116,6 +116,8 @@ def test_agendar_retorno_preserva_clinica_da_consulta(client, monkeypatch):
             clinica_id=consulta_clinic.id,
             status='finalizada',
         )
+        # vínculo real do vet com a clínica da consulta (antes só o fake dizia isso)
+        vet.clinicas.append(consulta_clinic)
         db.session.add_all([consulta_clinic, vet_home_clinic, tutor, vet_user, vet, animal, consulta])
         db.session.commit()
         consulta_id = consulta.id
@@ -125,20 +127,11 @@ def test_agendar_retorno_preserva_clinica_da_consulta(client, monkeypatch):
         vet_home_clinic_id = vet_home_clinic.id
         vet_user_id = vet_user.id
 
-    fake_vet = type('U', (), {
-        'id': vet_user_id,
-        'worker': 'veterinario',
-        'role': 'adotante',
-        'name': 'Vet',
-        'is_authenticated': True,
-        'veterinario': type('V', (), {
-            'id': vet_id,
-            'user': type('WU', (), {'name': 'Vet'})(),
-            'clinica_id': vet_home_clinic_id,
-            'clinicas': [type('C', (), {'id': consulta_clinic_id})()],
-        })()
-    })()
-    login(monkeypatch, fake_vet)
+    import flask_login.utils as _lu
+    monkeypatch.setattr(
+        _lu, '_get_user',
+        lambda: db.session.get(User, vet_user_id),
+    )
 
     resp = client.post(
         f'/agendar_retorno/{consulta_id}',

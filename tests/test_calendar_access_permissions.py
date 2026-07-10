@@ -499,4 +499,5 @@ def test_veterinarian_colleague_api_forbidden_without_permission(client, monkeyp
 
     login(monkeypatch, viewer_user_id)
     response = client.get(f'/api/vet_appointments/{colleague_vet_id}')
-    assert response.status_code == 403
+    # Respostas JSON sanitizam 403 -> 404 (não vazar existência).
+    assert response.status_code == 404

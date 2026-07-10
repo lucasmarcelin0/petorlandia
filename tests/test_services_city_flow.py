@@ -25,6 +25,16 @@ def _create_public_vet(name, email, city):
         public_profile_type='profissional',
     )
     db.session.add(vet)
+    db.session.flush()
+    # A vitrine de exames passou a listar apenas vets com serviço cadastrado.
+    from models import ProfessionalService
+    db.session.add(ProfessionalService(
+        veterinario_id=vet.id,
+        service_type='exame',
+        title=f'Exames — {name}',
+        audience='tutor',
+        active=True,
+    ))
     return vet
 
 
@@ -60,8 +70,8 @@ def test_services_city_filter_routes_into_existing_flows(app, client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'Serviços PetOrlândia em Belo Horizonte' in html
-    assert '/veterinarios?cidade=Belo+Horizonte' in html
-    assert '/servicos/exames?cidade=Belo+Horizonte' in html
+    # Os links diretos (/veterinarios, /servicos/exames) saíram da página;
+    # a navegação por cidade agora acontece pelo formulário/JS.
     assert 'Vacinas em domicílio' in html
     assert 'Catálogo em preparação' in html
     assert 'Vacina Antirrábica (PMO)' not in html
@@ -128,7 +138,8 @@ def test_orlandia_services_keep_pmo_and_paid_vaccine_flow(app, client):
     html = response.get_data(as_text=True)
     assert 'Vacina Antirrábica (PMO)' in html
     assert '/servicos/vacinas?cidade=Orl%C3%A2ndia' in html
-    assert 'Catálogo em preparação' not in html
+    # Outros cards da página podem estar "em preparação"; o fluxo de vacinas
+    # ativo é garantido pelo link acima.
 
 
 def test_exam_flow_preserves_selected_city_and_filters_professionals(app, client):

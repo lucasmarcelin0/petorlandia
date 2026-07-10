@@ -86,10 +86,8 @@ from app import (
     _delivery_sections_payload,
     _export_data_share_logs_csv,
     _export_data_share_logs_pdf,
-    _get_current_order,
     _get_or_create_delivery_research_contact,
     _get_vendedores_ativos,
-    _mercadopago_notification_url,
     _mp_auto_return_enabled,
     _normalize_external_payment_status,
     _order_checkout_total,
@@ -140,6 +138,18 @@ def verify_mp_signature(*args, **kwargs):
     import app as app_module
 
     return app_module.verify_mp_signature(*args, **kwargs)
+
+
+def _get_current_order(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app._get_current_order.
+    import app as app_module
+    return app_module._get_current_order(*args, **kwargs)
+
+
+def _mercadopago_notification_url(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app._mercadopago_notification_url.
+    import app as app_module
+    return app_module._mercadopago_notification_url(*args, **kwargs)
 
 
 def CheckoutForm(*args, **kwargs):

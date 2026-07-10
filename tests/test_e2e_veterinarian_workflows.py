@@ -774,6 +774,9 @@ class TestPerformanceVeterinarian:
         
         # Create many consultations
         with app.app_context():
+            # Vincula o paciente à clínica do vet (regra de visibilidade).
+            animal = db.session.get(Animal, tutor_with_animal['animal_id'])
+            animal.clinica_id = veterinarian_setup['clinic_id']
             for i in range(50):
                 consulta = Consulta(
                     animal_id=tutor_with_animal['animal_id'],

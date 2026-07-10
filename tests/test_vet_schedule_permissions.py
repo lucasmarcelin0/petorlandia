@@ -117,6 +117,8 @@ def test_veterinarian_cannot_create_schedule_for_other(client, monkeypatch):
             'schedule-intervalo_fim': '',
             'schedule-submit': 'Salvar',
         },
+        # Browsers recebem 403; sem Accept o handler JSON sanitiza p/ 404.
+        headers={'Accept': 'text/html'},
     )
     assert resp.status_code == 403
     with flask_app.app_context():
@@ -150,6 +152,8 @@ def test_veterinarian_cannot_reassign_existing_schedule(client, monkeypatch):
             'schedule-intervalo_fim': '',
             'schedule-submit': 'Salvar',
         },
+        # Browsers recebem 403; sem Accept o handler JSON sanitiza p/ 404.
+        headers={'Accept': 'text/html'},
     )
     assert resp.status_code == 403
     with flask_app.app_context():
@@ -172,7 +176,7 @@ def test_veterinarian_cannot_delete_other_vet_schedule(client, monkeypatch):
         db.session.commit()
         other_schedule_id = other_schedule.id
     login(monkeypatch, fake_user)
-    resp = client.post(f'/appointments/{main_vet_id}/schedule/{other_schedule_id}/delete')
+    resp = client.post(f'/appointments/{main_vet_id}/schedule/{other_schedule_id}/delete', headers={'Accept': 'text/html'})
     assert resp.status_code == 403
     with flask_app.app_context():
         assert VetSchedule.query.get(other_schedule_id) is not None

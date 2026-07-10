@@ -136,7 +136,8 @@ def test_dashboard_orcamentos_restrito_a_clinica_do_usuario(app):
         assert "Clínica A" in html
 
         resp_forbidden = client.get("/dashboard/orcamentos?scope=all")
-        assert resp_forbidden.status_code == 403
+        # Sem Accept de browser o 403 é sanitizado para 404 (não vazar recurso).
+        assert resp_forbidden.status_code == 404
 
     with app.app_context():
         db.drop_all()

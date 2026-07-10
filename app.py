@@ -2214,8 +2214,14 @@ def _serialize_share_request(req):
     clinic_name = getattr(req.clinic, 'nome', None)
     requester_name = getattr(req.requester, 'name', None)
     status = req.status
-    if status == 'pending' and req.expires_at and req.expires_at <= utcnow():
-        status = 'expired'
+    if status == 'pending' and req.expires_at:
+        # expires_at pode voltar naive do banco (SQLite); normaliza antes de
+        # comparar com utcnow() (aware) para não estourar TypeError.
+        expires_at = req.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= utcnow():
+            status = 'expired'
     return {
         'id': req.id,
         'token': req.token,
@@ -2464,7 +2470,12 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
     added_by_access = bool(viewer and animal.added_by_id and animal.added_by_id == viewer.id)
     shared_access = _resolve_shared_access_for_animal(animal, viewer=viewer, clinic_scope=clinic_scope)
     if not admin_access and not shared_access and not owner_access and not added_by_access:
-        ensure_clinic_access(animal.clinica_id)
+        clinic_id = animal.clinica_id
+        if not clinic_id:
+            # Animal sem clínica herda o vínculo do tutor-cliente — mesma
+            # regra de visibilidade aplicada ao próprio tutor.
+            clinic_id = getattr(animal.owner, 'clinica_id', None)
+        ensure_clinic_access(clinic_id)
     elif shared_access:
         _log_data_share(
             shared_access,
@@ -2497,7 +2508,19 @@ def get_consulta_or_404(consulta_id, *, viewer=None, clinic_scope=None):
     consulta = Consulta.query.get_or_404(consulta_id)
     shared_access = _resolve_shared_access_for_consulta(consulta, viewer=viewer, clinic_scope=clinic_scope)
     if not shared_access:
-        ensure_clinic_access(consulta.clinica_id)
+        clinic_id = consulta.clinica_id
+        if not clinic_id:
+            # Consultas legadas sem clínica: escopa pela clínica do animal
+            # (mesmo fallback usado pelas views ao gravar blocos).
+            clinic_id = getattr(consulta.animal, 'clinica_id', None)
+        if clinic_id:
+            ensure_clinic_access(clinic_id)
+        else:
+            # Sem nenhuma clínica resolvível, apenas o criador ou admin acessa.
+            viewer_id = getattr(viewer, 'id', None)
+            is_admin_viewer = (getattr(viewer, 'role', '') or '').lower() == 'admin'
+            if not is_admin_viewer and (viewer_id is None or consulta.created_by != viewer_id):
+                abort(404)
     else:
         _log_data_share(
             shared_access,

@@ -4010,8 +4010,18 @@
   "methods": "GET"
  },
  {
+  "endpoint": "mcp_protected_resource_metadata_for_mcp_v2",
+  "rule": "/.well-known/oauth-protected-resource/mcp/v2",
+  "methods": "GET"
+ },
+ {
   "endpoint": "mcp_server",
   "rule": "/mcp",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "mcp_server_v2",
+  "rule": "/mcp/v2",
   "methods": "GET,POST"
  },
  {
@@ -4280,8 +4290,18 @@
   "methods": "GET"
  },
  {
+  "endpoint": "oauth_routes.mcp_protected_resource_metadata_for_mcp_v2",
+  "rule": "/.well-known/oauth-protected-resource/mcp/v2",
+  "methods": "GET"
+ },
+ {
   "endpoint": "oauth_routes.mcp_server",
   "rule": "/mcp",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "oauth_routes.mcp_server_v2",
+  "rule": "/mcp/v2",
   "methods": "GET,POST"
  },
  {
@@ -4312,7 +4332,7 @@
  {
   "endpoint": "oauth_routes.oauth_token",
   "rule": "/oauth/token",
-  "methods": "POST"
+  "methods": "GET,POST"
  },
  {
   "endpoint": "oauth_routes.oauth_userinfo",
@@ -4327,7 +4347,7 @@
  {
   "endpoint": "oauth_token",
   "rule": "/oauth/token",
-  "methods": "POST"
+  "methods": "GET,POST"
  },
  {
   "endpoint": "oauth_userinfo",

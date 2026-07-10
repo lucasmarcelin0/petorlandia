@@ -237,8 +237,10 @@ def test_buscar_tutores_hides_private_profiles_for_guests(app):
 
     client = app.test_client()
     response = client.get('/buscar_tutores?q=Tutor')
-    assert response.status_code == 200
-    assert response.get_json() == []
+    # Endurecimento: a busca de tutores agora exige login; visitantes são
+    # redirecionados (nenhum dado é exposto, o que preserva a garantia).
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
 
 
 def test_buscar_tutores_shows_private_profiles_to_own_clinic(app, monkeypatch):

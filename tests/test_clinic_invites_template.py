@@ -15,6 +15,9 @@ def app():
     flask_app.config.update(
         TESTING=True,
         WTF_CSRF_ENABLED=True,
+        # Cookie de sessão precisa trafegar no HTTP do test client, senão o
+        # token CSRF não encontra a sessão e o POST recebe 400.
+        SESSION_COOKIE_SECURE=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
         SQLALCHEMY_ENGINE_OPTIONS={
             "poolclass": StaticPool,
@@ -185,6 +188,8 @@ def test_clinic_invites_allows_vet_profile_creation(monkeypatch, app):
                 'csrf_token': csrf_token,
             },
             follow_redirects=False,
+            # Browsers reais sempre enviam Referer; o modo estrito do CSRF exige.
+            headers={'Referer': 'https://localhost/mensagens'},
         )
 
         assert post_response.status_code == 302

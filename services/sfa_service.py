@@ -3337,7 +3337,7 @@ def stats_painel(mes_inicio_sintomas: str = "") -> dict:
             }
         except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
             db.session.rollback()
-            log.warning("SFA: tabela 'sfa_sinan_log' nÃ£o encontrada em stats_painel", exc_info=False)
+            log.warning("SFA: tabela 'sfa_sinan_log' não encontrada em stats_painel", exc_info=False)
             sinan_ids_no_mes = set()
     todos = [p for p in todos if _paciente_no_mes_inicio_sintomas(p, mes_inicio_sintomas, sinan_ids_no_mes)]
     total = len(todos)

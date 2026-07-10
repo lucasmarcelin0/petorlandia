@@ -11,6 +11,7 @@ from models import (
     OrcamentoItem,
     User,
     Veterinario,
+    Veterinario,
 )
 
 
@@ -37,9 +38,12 @@ def _bootstrap_clinics(app):
         db.create_all()
         clinic_a = Clinica(nome='Clinic A')
         clinic_b = Clinica(nome='Clinic B')
-        user = User(name='Owner', email='owner@test', worker='veterinario', clinica=clinic_a)
+        user = User(name='Owner', email='owner@test', worker='veterinario')
         user.set_password('secret')
-        db.session.add_all([clinic_a, clinic_b, user])
+        # Vínculo operacional real: perfil de veterinário na clínica A
+        # (user.clinica_id sozinho é vínculo de cliente e não dá acesso).
+        vet_profile = Veterinario(user=user, crmv='ISO-1', clinica=clinic_a)
+        db.session.add_all([clinic_a, clinic_b, user, vet_profile])
         db.session.commit()
         return SimpleNamespace(
             user_id=user.id,

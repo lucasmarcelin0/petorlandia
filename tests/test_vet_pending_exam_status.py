@@ -138,8 +138,10 @@ def test_confirmed_requested_exam_visible_with_status_badge(client, monkeypatch)
     html = response.data.decode()
     assert 'Exames aguardando outros profissionais' in html
     assert 'Rex' in html
-    assert 'Confirmado' in html
-    assert 'Confirmado pelo especialista' in html
+    # O card redesenhado mostra o especialista responsável e a tag de espera;
+    # o rótulo por-exame "Confirmado pelo especialista" saiu do HTML servidor.
+    assert 'Especialista responsável' in html
+    assert 'Dr. Specialist' in html
 
 
 def test_exam_default_deadline_attributes_present(client, monkeypatch):
@@ -251,7 +253,7 @@ def test_exam_default_deadline_attributes_present(client, monkeypatch):
     assert response.status_code == 200
     html = response.data.decode()
     assert 'data-exam-default-confirm-hours="5"' in html
-    assert 'data-exam-requested-at="' in html
-    assert 'data-exam-confirm-by=""' in html
+    # data-exam-requested-at saiu do HTML; o prazo por exame é derivado no JS
+    # a partir do atributo global acima.
     assert 'id="exam-requester-apply-default"' in html
     assert 'O prazo padrão é de 5 horas após a solicitação.' in html

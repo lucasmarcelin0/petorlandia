@@ -46,7 +46,6 @@ from security.crypto import MissingMasterKeyError
 from services.mercadopago_oauth import (
     MercadoPagoOAuthError,
     build_authorization_start,
-    exchange_code_for_credentials,
 )
 from template_filters import normalize_email, normalize_phone
 from time_utils import now_in_brazil, utcnow
@@ -77,6 +76,12 @@ bp = Blueprint("casa_de_racao_routes", __name__)
 
 def get_blueprint():
     return bp
+
+
+def exchange_code_for_credentials(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.exchange_code_for_credentials.
+    import app as app_module
+    return app_module.exchange_code_for_credentials(*args, **kwargs)
 
 
 def _is_admin():

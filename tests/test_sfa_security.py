@@ -100,7 +100,8 @@ def test_sfa_webhook_requires_secret_outside_testing(app, client, monkeypatch):
 
     response = client.post("/sfa/webhook/t0", json={})
 
-    assert response.status_code == 403
+    # Requisições JSON recebem o 403 sanitizado para 404 (não vazar existência).
+    assert response.status_code == 404
 
 
 def test_sfa_webhook_accepts_configured_secret(app, client, monkeypatch):
