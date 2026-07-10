@@ -1756,12 +1756,18 @@ def _mcp_find_animal_for_tool(user, tool_args):
     )
 
 
+def _mcp_resource_path() -> str:
+    """Return the MCP resource path for the current legacy or versioned route."""
+    return '/mcp/v2' if request.path.endswith('/mcp/v2') else '/mcp'
+
+
 def _mcp_unauthorized():
     """Return 401 with WWW-Authenticate so that OAuth clients know how to auth."""
     issuer = _oauth_issuer()
-    resource_url = f'{issuer}/mcp'
+    resource_path = _mcp_resource_path()
+    resource_url = f'{issuer}{resource_path}'
     # RFC 9728 preserves the resource path after the well-known segment.
-    metadata_url = f'{issuer}/.well-known/oauth-protected-resource/mcp'
+    metadata_url = f'{issuer}/.well-known/oauth-protected-resource{resource_path}'
     resp = make_response(
         jsonify({'jsonrpc': '2.0', 'id': None,
                  'error': {'code': -32001, 'message': 'Unauthorized: Bearer token required'}}),
@@ -1789,7 +1795,8 @@ def mcp_server():
         issuer = _oauth_issuer()
         return jsonify({
             'server': 'PetOrlândia MCP',
-            'version': '1.0.0',
+            'version': '2.0.0',
+            'resource': f'{issuer}{_mcp_resource_path()}',
             'protocol': f'mcp/{MCP_PROTOCOL_VERSIONS[0]}',
             'authorization_required': True,
             'authorization_server': issuer,
@@ -3416,14 +3423,15 @@ def mcp_protected_resource_metadata():
     connector URL uses a path (e.g. https://www.petorlandia.com.br/mcp).
     """
     issuer = _oauth_issuer()
+    resource_path = _mcp_resource_path()
     return jsonify({
-        'resource': f'{issuer}/mcp',
+        'resource': f'{issuer}{resource_path}',
         'authorization_servers': [issuer],
         'bearer_methods_supported': ['header'],
         # RFC 9728 §2: the scopes a client must request to access this resource.
         # Without this, MCP clients (ChatGPT/Claude) only request the default
         # OIDC scopes and never obtain pets:read / exams:write / etc.
         'scopes_supported': _oauth_order_scopes(_oauth_allowed_scopes()).split(),
-        'resource_documentation': f'{issuer}/mcp',
+        'resource_documentation': f'{issuer}{resource_path}',
     })
 

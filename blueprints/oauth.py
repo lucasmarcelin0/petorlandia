@@ -70,6 +70,8 @@ def get_blueprint():
 from blueprints.mcp import mcp_protected_resource_metadata, mcp_server  # noqa: E402
 
 bp.add_url_rule("/mcp", view_func=mcp_server, methods=["GET", "POST", "OPTIONS"])
+# Versioned endpoint for clients that need a clean capability discovery cycle.
+bp.add_url_rule("/mcp/v2", view_func=mcp_server, methods=["GET", "POST", "OPTIONS"], endpoint="mcp_server_v2")
 # RFC 9396 Protected Resource Metadata — enables OAuth discovery for path-based URLs
 bp.add_url_rule(
     "/.well-known/oauth-protected-resource",
@@ -84,6 +86,12 @@ bp.add_url_rule(
     view_func=mcp_protected_resource_metadata,
     methods=["GET"],
     endpoint="mcp_protected_resource_metadata_for_mcp",
+)
+bp.add_url_rule(
+    "/.well-known/oauth-protected-resource/mcp/v2",
+    view_func=mcp_protected_resource_metadata,
+    methods=["GET"],
+    endpoint="mcp_protected_resource_metadata_for_mcp_v2",
 )
 
 

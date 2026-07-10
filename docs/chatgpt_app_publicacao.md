@@ -5,13 +5,10 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, central admin, widg
 ## Arquitetura escolhida
 
 - Arquitetura: `submission-ready` com MCP server existente em Flask.
-- Endpoint principal: `/mcp`.
+- Endpoint recomendado para uma nova conexao: `/mcp/v2`.
+- Endpoint legado: `/mcp`.
 - Autenticacao: OAuth/OIDC do proprio PetOrlandia.
-- UI Apps SDK:
-  - `ui://petorlandia/laudo-volante-v2.html`
-  - `ui://petorlandia/agenda-cockpit-v1.html`
-  - `ui://petorlandia/timeline-clinica-v1.html`
-  - `ui://petorlandia/admin-command-center-v1.html`
+- As tools retornam revisoes e acoes diretamente no chat; nao dependem de widgets experimentais.
 - App icon sugerido: `static/chatgpt_app_icon.png`.
 - Arquivo de submissao: `chatgpt-app-submission.json`.
 
@@ -96,7 +93,7 @@ Settings -> Apps & Connectors -> Advanced settings -> Developer Mode
 4. Crie o app apontando para o tunnel local ou para o dominio de producao:
 
 ```text
-https://www.petorlandia.com.br/mcp
+https://petorlandia-fbabb575d64c.herokuapp.com/mcp/v2
 ```
 
 5. Configure OAuth:

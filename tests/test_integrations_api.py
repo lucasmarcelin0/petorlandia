@@ -1177,6 +1177,26 @@ def test_integrations_rest_write_routes_create_records(app, client):
         assert Appointment.query.filter_by(animal_id=animal_id).count() >= 2
 
 
+def test_mcp_v2_endpoint_forces_fresh_capability_discovery(app, client):
+    probe = client.get("/mcp/v2")
+
+    assert probe.status_code == 200
+    assert probe.get_json()["version"] == "2.0.0"
+    assert probe.get_json()["resource"].endswith("/mcp/v2")
+
+    metadata = client.get("/.well-known/oauth-protected-resource/mcp/v2")
+
+    assert metadata.status_code == 200
+    payload = metadata.get_json()
+    assert payload["resource"].endswith("/mcp/v2")
+    assert "pets:write" in payload["scopes_supported"]
+
+    unauthorized = client.post("/mcp/v2", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+
+    assert unauthorized.status_code == 401
+    assert "oauth-protected-resource/mcp/v2" in unauthorized.headers["WWW-Authenticate"]
+
+
 def test_mcp_clinical_tools_return_structured_payload(app, client):
     with app.app_context():
         clinic = Clinica(nome="Clinica MCP Operacional")
