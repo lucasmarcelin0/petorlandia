@@ -1846,7 +1846,7 @@ def mcp_server():
     if method == 'initialize':
         return _mcp_ok(req_id, {
             'protocolVersion': _mcp_protocol_version(params),
-            'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
+            'serverInfo': {'name': 'PetOrlandia MCP v2', 'version': '3.0.0'},
             'capabilities': {'tools': {}, 'resources': {}},
             'instructions': (
                 'PetOrlandia é um app real de gestão veterinária, loja e serviços. '
@@ -1858,6 +1858,8 @@ def mcp_server():
                 'Quando o tutor enviar fotos de carteirinha de vacinação, leia as imagens, chame revisar_carteirinha_fotografada '
                 'com uma transcrição estruturada e apresente no próprio chat somente o retorno efetivo da tool; nunca alegue que abriu um painel. '
                 'Só chame importar_carteirinha_fotografada após confirmação explícita. '
+                'Também existem atualizar_perfil_pet, registrar_vacina_pet e registrar_vermifugacao_pet. '
+                'Nunca afirme que uma ação não existe sem antes usar o catálogo de tools desta conexão. '
                 'Para qualquer escrita, peça confirmação explícita antes de chamar tools que gravam dados.'
             ),
         })

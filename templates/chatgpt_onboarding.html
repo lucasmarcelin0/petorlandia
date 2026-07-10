@@ -82,7 +82,7 @@
   <header class="mb-4">
     <div class="kicker">PetOrlandia no ChatGPT</div>
     <h1 class="h3 fw-bold mb-2">Comece a usar no ChatGPT</h1>
-    <p class="text-muted mb-0">Use esta pagina para conectar o PetOrlandia como app/connector de teste no ChatGPT.</p>
+    <p class="text-muted mb-0">Conecte a versao atual do PetOrlandia e confirme a compatibilidade antes de usar dados reais.</p>
   </header>
 
   <div class="row g-4 align-items-start">
@@ -91,12 +91,16 @@
         <h2 class="h5 fw-bold mb-3">Dados para conectar</h2>
 
         <label class="form-label fw-semibold" for="mcp-url">MCP URL</label>
-        <div class="copy-box mb-3">
-          <div class="copy-value" id="mcp-url">{{ mcp_url }}</div>
+          <div class="copy-box mb-3">
+            <div class="copy-value" id="mcp-url">{{ mcp_url }}</div>
           <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ mcp_url }}">
             <i class="fa-regular fa-copy" aria-hidden="true"></i>
             Copiar
           </button>
+          </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <button class="btn btn-outline-primary btn-sm" type="button" id="test-mcp">Testar conexao</button>
+          <span class="small text-muted" id="mcp-status" role="status">Ainda nao testado.</span>
         </div>
 
         <div class="row g-3">
@@ -135,13 +139,14 @@
             <div class="text-muted small">Settings -> Apps & Connectors -> Advanced settings.</div>
           </div>
           <div class="step">
-            <div class="fw-semibold">3. Crie um connector</div>
-            <div class="text-muted small">Use o nome PetOrlandia e cole a MCP URL acima.</div>
+            <div class="fw-semibold">3. Crie uma conexao nova</div>
+            <div class="text-muted small">Remova Petorlandia MCP antigo. Crie PetOrlandia MCP v2 e cole exatamente a MCP URL acima.</div>
           </div>
           <div class="step">
             <div class="fw-semibold">4. Conecte sua conta</div>
-            <div class="text-muted small">Faca login com uma conta veterinaria do PetOrlandia.</div>
+            <div class="text-muted small">Faca login, autorize as acoes de escrita e inicie uma conversa nova.</div>
           </div>
+          <a class="btn btn-primary" href="https://chatgpt.com/" target="_blank" rel="noopener">Abrir ChatGPT</a>
         </div>
       </section>
     </div>
@@ -152,7 +157,7 @@
     <div class="copy-box">
       <textarea id="client-message" readonly>Oi! Para testar o PetOrlandia no ChatGPT, abra este link: {{ request.url }}.
 
-Na pagina, copie a MCP URL e crie um connector no ChatGPT em Settings -> Apps & Connectors. Depois conecte com sua conta veterinaria do PetOrlandia.</textarea>
+Na pagina, teste a MCP URL. No ChatGPT, remova a conexao Petorlandia MCP antiga e crie PetOrlandia MCP v2 em Settings -> Apps. Depois conecte com sua conta PetOrlandia e inicie uma conversa nova.</textarea>
       <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="client-message">
         <i class="fa-regular fa-copy" aria-hidden="true"></i>
         Copiar texto
@@ -166,6 +171,24 @@ Na pagina, copie a MCP URL e crie um connector no ChatGPT em Settings -> Apps & 
 {{ super() }}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    const testButton = document.getElementById('test-mcp');
+    const status = document.getElementById('mcp-status');
+    async function testMcp() {
+      status.textContent = 'Testando conexao...';
+      status.className = 'small text-muted';
+      try {
+        const response = await fetch({{ mcp_url|tojson }}, { headers: { Accept: 'application/json' } });
+        const payload = await response.json();
+        if (!response.ok || payload.version !== '2.0.0') throw new Error('Resposta inesperada');
+        status.textContent = 'Conexao v2 online. Agora crie a conexao nova no ChatGPT.';
+        status.className = 'small text-success';
+      } catch (error) {
+        status.textContent = 'Nao foi possivel testar agora. Verifique sua rede e tente novamente.';
+        status.className = 'small text-danger';
+      }
+    }
+    testButton.addEventListener('click', testMcp);
+    testMcp();
     document.querySelectorAll('.js-copy').forEach(function (button) {
       button.addEventListener('click', async function () {
         const targetId = button.dataset.copyTarget;
