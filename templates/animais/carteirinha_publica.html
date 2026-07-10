@@ -64,23 +64,23 @@
       </div>
 
       <section class="health-section">
-        <h2 class="section-title mb-2">Atenção agora</h2>
-        {% if acoes_atuais %}
+        <h2 class="section-title mb-2">Próximas doses</h2>
+        {% if proximas_acoes %}
         <ul class="list-group list-group-flush action-list mb-3">
-          {% for acao in acoes_atuais %}
+          {% for acao in proximas_acoes %}
           <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
             <div>
               <div class="fw-semibold small">{{ acao.titulo }}</div>
               <div class="text-muted small">{{ acao.tipo }}</div>
             </div>
-            <span class="small text-nowrap {{ 'vac-late' if acao.data < hoje else 'text-muted' }}">
-              {{ acao.data.strftime('%d/%m/%Y') }}{% if acao.data < hoje %} · pendente{% else %} · próxima dose{% endif %}
+            <span class="small text-nowrap text-muted">
+              {{ acao.data.strftime('%d/%m/%Y') }}
             </span>
           </li>
           {% endfor %}
         </ul>
         {% else %}
-        <p class="text-muted small mb-3">Não há próxima dose com data informada.</p>
+        <p class="text-muted small mb-3">Nenhuma próxima dose com data informada.</p>
         {% endif %}
       </section>
 
@@ -125,6 +125,22 @@
           <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
             <span class="small">{{ registro.title }}</span>
             <span class="small vac-ok text-nowrap">✓ {{ registro.occurred_on.strftime('%d/%m/%Y') if registro.occurred_on }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if doses_a_revisar %}
+        <div class="section-title mt-3 mb-2">Doses a revisar</div>
+        <p class="text-muted small mb-2">Datas antigas que merecem confirmação com o veterinário.</p>
+        <ul class="list-group list-group-flush">
+          {% for acao in doses_a_revisar %}
+          <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="small fw-semibold">{{ acao.titulo }}</div>
+              <div class="text-muted small">{{ acao.tipo }}</div>
+            </div>
+            <span class="small vac-late text-nowrap">{{ acao.data.strftime('%d/%m/%Y') }}</span>
           </li>
           {% endfor %}
         </ul>

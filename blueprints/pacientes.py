@@ -3149,36 +3149,60 @@ def carteirinha_publica(token):
         .all()
     )
 
-    # Public card: show only the current action for each treatment type. Older
-    # doses remain available as history and must not be presented as overdue.
-    acoes_atuais = []
-    vacinas_vistas = set()
+    # Public card: group commercial brands by clinical protection. A later
+    # Rabisin/Raiva PM dose, for example, supersedes an older Canigen R dose.
+    def grupo_clinico(vacina):
+        raw = f'{vacina.nome or ""} {vacina.tipo or ""}'.casefold()
+        normalized = ''.join(
+            char for char in unicodedata.normalize('NFD', raw)
+            if unicodedata.category(char) != 'Mn'
+        )
+        if any(token in normalized for token in ('antirrab', 'raiva', 'rabisin', 'defensor', 'hertaliq', 'canigen r')):
+            return 'antirrabica'
+        if 'leish' in normalized:
+            return 'leishmaniose'
+        if 'giardia' in normalized:
+            return 'giardiase'
+        if any(token in normalized for token in ('dhppi', 'vanguard', 'nobivac canine', 'polivalente', 'multipla')):
+            return 'multipla'
+        return normalized or str(vacina.id)
+
+    proximas_acoes = []
+    doses_a_revisar = []
+    vacinas_atuais = {}
     for vacina in vacinas_aplicadas:
-        chave = (vacina.nome or '').strip().casefold()
-        if not chave or chave in vacinas_vistas:
+        vacinas_atuais.setdefault(grupo_clinico(vacina), vacina)
+    for vacina in vacinas_atuais.values():
+        if not vacina.proxima_dose:
             continue
-        vacinas_vistas.add(chave)
-        proxima_dose = vacina.proxima_dose
-        if proxima_dose:
-            acoes_atuais.append({
-                'tipo': 'Vacina',
-                'titulo': vacina.nome,
-                'data': proxima_dose,
-            })
+        action = {'tipo': 'Vacina', 'titulo': vacina.nome, 'data': vacina.proxima_dose}
+        if vacina.proxima_dose >= date.today():
+            proximas_acoes.append(action)
+        else:
+            doses_a_revisar.append(action)
     for vacina in proximas_doses:
-        acoes_atuais.append({
+        action = {
             'tipo': 'Vacina',
             'titulo': vacina.nome,
             'data': vacina.aplicada_em,
-        })
+        }
+        if vacina.aplicada_em >= date.today():
+            proximas_acoes.append(action)
+        else:
+            doses_a_revisar.append(action)
     ultima_vermifugacao = vermifugacoes[0] if vermifugacoes else None
     if ultima_vermifugacao and ultima_vermifugacao.next_due_on:
-        acoes_atuais.append({
+        action = {
             'tipo': 'Vermífugo',
             'titulo': ultima_vermifugacao.title,
             'data': ultima_vermifugacao.next_due_on,
-        })
-    acoes_atuais.sort(key=lambda item: item['data'])
+        }
+        if ultima_vermifugacao.next_due_on >= date.today():
+            proximas_acoes.append(action)
+        else:
+            doses_a_revisar.append(action)
+    proximas_acoes.sort(key=lambda item: item['data'])
+    doses_a_revisar.sort(key=lambda item: item['data'])
 
     tutor_nome = None
     if animal.owner and animal.owner.name:
@@ -3187,7 +3211,8 @@ def carteirinha_publica(token):
     return render_template(
         'animais/carteirinha_publica.html',
         animal=animal,
-        acoes_atuais=acoes_atuais,
+        proximas_acoes=proximas_acoes,
+        doses_a_revisar=doses_a_revisar,
         vacinas_recentes=vacinas_aplicadas[:6],
         vermifugacoes_recentes=vermifugacoes[:6],
         ultima_vermifugacao=ultima_vermifugacao,
