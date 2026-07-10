@@ -187,6 +187,24 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'annotations': _mcp_annotations(False, idempotent=False),
         'outputSchema': _mcp_object_output_schema('Dados da carteirinha gravados com fotos de origem auditaveis.'),
     },
+    'atualizar_perfil_pet': {
+        'title': 'Atualizar perfil do pet',
+        'scopes': ['pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Cadastro do pet atualizado.'),
+    },
+    'registrar_vacina_pet': {
+        'title': 'Registrar vacina do pet',
+        'scopes': ['pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Vacina registrada sem duplicidade.'),
+    },
+    'registrar_vermifugacao_pet': {
+        'title': 'Registrar vermifugacao do pet',
+        'scopes': ['pets:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Vermifugacao registrada sem duplicidade.'),
+    },
     'listar_agendamentos': {
         'title': 'Listar agendamentos',
         'scopes': ['appointments:read'],
@@ -1940,6 +1958,61 @@ def mcp_server():
                 '_meta': {'openai/fileParams': ['fotos_carteirinha']},
             },
             {
+                'name': 'atualizar_perfil_pet',
+                'description': 'Atualiza os dados confirmados de identificacao do pet, como nome, sexo, nascimento, especie, raca, pelagem e microchip.',
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome': {'type': 'string'},
+                        'sexo': {'type': 'string'},
+                        'data_nascimento': {'type': 'string', 'description': 'DD/MM/AAAA ou YYYY-MM-DD.'},
+                        'especie': {'type': 'string'},
+                        'raca': {'type': 'string'},
+                        'pelagem': {'type': 'string'},
+                        'microchip': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['animal_id', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'registrar_vacina_pet',
+                'description': 'Registra uma vacina historica ou aplicada para um pet. Evita duplicidade por pet, nome, data e lote.',
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'nome': {'type': 'string'},
+                        'aplicada_em': {'type': 'string', 'description': 'DD/MM/AAAA ou YYYY-MM-DD.'},
+                        'proxima_dose': {'type': 'string'},
+                        'tipo': {'type': 'string'},
+                        'fabricante': {'type': 'string'},
+                        'lote': {'type': 'string'},
+                        'observacoes': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['animal_id', 'nome', 'aplicada_em', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'registrar_vermifugacao_pet',
+                'description': 'Registra uma vermifugacao historica para um pet. Evita duplicidade por pet, medicamento e data.',
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'medicamento': {'type': 'string'},
+                        'administrada_em': {'type': 'string', 'description': 'DD/MM/AAAA ou YYYY-MM-DD.'},
+                        'proxima_dose': {'type': 'string'},
+                        'peso_kg': {'type': 'number'},
+                        'observacoes': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['animal_id', 'medicamento', 'administrada_em', 'confirmar_gravacao'],
+                },
+            },
+            {
                 'name': 'listar_agendamentos',
                 'description': (
                     'Lista os agendamentos veterinários do usuário autenticado. '
@@ -2504,9 +2577,7 @@ def mcp_server():
         for tool in tools:
             if tool.get('name') in {'listar_alertas_admin', 'resolver_alerta_admin'} and not _mcp_user_is_admin(user):
                 continue
-            required = set(MCP_TOOL_DESCRIPTOR_DEFAULTS.get(tool.get('name'), {}).get('scopes') or [])
-            if required.issubset(token_scope_set):
-                visible.append(tool)
+            visible.append(tool)
         return _mcp_ok(req_id, {'tools': _mcp_finalize_tool_descriptors(visible)})
 
     # ── tools/call ───────────────────────────────────────────────────────────
@@ -2650,6 +2721,107 @@ def mcp_server():
             except ValueError as exc:
                 return _mcp_err(req_id, -32602, str(exc))
             return _mcp_ok(req_id, _mcp_json_content(payload))
+
+        if tool_name == 'atualizar_perfil_pet':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            if animal is None:
+                return _mcp_err(req_id, -32004, 'Pet nao encontrado ou sem acesso para atualizacao.')
+            changed = []
+            for key, attribute in (('nome', 'name'), ('sexo', 'sex'), ('microchip', 'microchip_number')):
+                value = str(tool_args.get(key) or '').strip()
+                if value and value != getattr(animal, attribute):
+                    setattr(animal, attribute, value)
+                    changed.append(key)
+            birth_date = _mcp_parse_carteirinha_date(tool_args.get('data_nascimento'))
+            if birth_date and birth_date != animal.date_of_birth:
+                animal.date_of_birth = birth_date
+                changed.append('data_nascimento')
+            species_value = str(tool_args.get('especie') or '').strip()
+            if species_value:
+                species = _integration_resolve_species(species_value)
+                if species and species.id != animal.species_id:
+                    animal.species_id = species.id
+                    changed.append('especie')
+            breed_value = str(tool_args.get('raca') or '').strip()
+            if breed_value:
+                species = animal.species or _integration_resolve_species(species_value)
+                breed = _integration_resolve_breed(species, breed_value) if species else None
+                if breed and breed.id != animal.breed_id:
+                    animal.breed_id = breed.id
+                    changed.append('raca')
+            coat = str(tool_args.get('pelagem') or '').strip()
+            if coat:
+                coat_note = f'Pelagem informada: {coat}.'
+                if coat_note not in (animal.description or ''):
+                    animal.description = '\n'.join(filter(None, [animal.description, coat_note]))
+                    changed.append('pelagem')
+            db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({'animal': _mcp_animal_payload(animal), 'campos_atualizados': changed}))
+
+        if tool_name == 'registrar_vacina_pet':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            applied_on = _mcp_parse_carteirinha_date(tool_args.get('aplicada_em'))
+            name = str(tool_args.get('nome') or '').strip()
+            if animal is None or not name or not applied_on:
+                return _mcp_err(req_id, -32602, 'Informe um pet acessivel, nome da vacina e data de aplicacao validos.')
+            lot = str(tool_args.get('lote') or '').strip() or None
+            vaccine = Vacina.query.filter_by(animal_id=animal.id, nome=name, aplicada_em=applied_on, lote=lot).first()
+            created = vaccine is None
+            if created:
+                next_due = _mcp_parse_carteirinha_date(tool_args.get('proxima_dose'))
+                interval = (next_due - applied_on).days if next_due and next_due > applied_on else None
+                vaccine = Vacina(
+                    animal_id=animal.id, nome=name, tipo=str(tool_args.get('tipo') or 'Historico informado').strip(),
+                    fabricante=str(tool_args.get('fabricante') or '').strip() or None, lote=lot, aplicada=True,
+                    aplicada_em=applied_on, intervalo_dias=interval,
+                    frequencia='anual' if interval and 330 <= interval <= 400 else None,
+                    observacoes=str(tool_args.get('observacoes') or 'Registrado pelo ChatGPT.').strip(), created_by=user.id,
+                )
+                db.session.add(vaccine)
+                db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({'vacina': {'id': vaccine.id, 'nome': vaccine.nome, 'aplicada_em': vaccine.aplicada_em.isoformat()}, 'criada_agora': created}))
+
+        if tool_name == 'registrar_vermifugacao_pet':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            if not _mcp_ensure_carteirinha_tables():
+                return _mcp_err(req_id, -32603, 'Nao foi possivel preparar o historico de saude do pet.')
+            animal = _mcp_find_animal_for_tool(user, tool_args)
+            occurred_on = _mcp_parse_carteirinha_date(tool_args.get('administrada_em'))
+            title = str(tool_args.get('medicamento') or '').strip()
+            if animal is None or not title or not occurred_on:
+                return _mcp_err(req_id, -32602, 'Informe um pet acessivel, medicamento e data de administracao validos.')
+            record = AnimalHealthRecord.query.filter_by(animal_id=animal.id, kind='vermifugacao', title=title, occurred_on=occurred_on).first()
+            created = record is None
+            if created:
+                try:
+                    weight = float(tool_args.get('peso_kg')) if tool_args.get('peso_kg') is not None else None
+                except (TypeError, ValueError):
+                    return _mcp_err(req_id, -32602, 'peso_kg deve ser numerico quando informado.')
+                record = AnimalHealthRecord(
+                    animal_id=animal.id, created_by_id=user.id, kind='vermifugacao', title=title, occurred_on=occurred_on,
+                    next_due_on=_mcp_parse_carteirinha_date(tool_args.get('proxima_dose')), weight_kg=weight,
+                    notes=str(tool_args.get('observacoes') or 'Registrado pelo ChatGPT.').strip(), source='chatgpt_manual',
+                )
+                db.session.add(record)
+                db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({'vermifugacao': {'id': record.id, 'medicamento': record.title, 'administrada_em': record.occurred_on.isoformat()}, 'criada_agora': created}))
 
         if tool_name == 'listar_agendamentos':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'appointments:read')

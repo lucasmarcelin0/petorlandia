@@ -17,6 +17,9 @@ Status desta versao: app MCP com OAuth/OIDC, tools clinicas, central admin, widg
 - `listar_meus_pets`
 - `revisar_carteirinha_fotografada`
 - `importar_carteirinha_fotografada`
+- `atualizar_perfil_pet`
+- `registrar_vacina_pet`
+- `registrar_vermifugacao_pet`
 - `listar_agendamentos`
 - `interpretar_mensagem_livre_atendimento`
 - `assistente_operacional_veterinario`

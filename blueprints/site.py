@@ -420,7 +420,7 @@ def chatgpt_onboarding():
     issuer = _oauth_issuer()
     return render_template(
         'chatgpt_onboarding.html',
-        mcp_url=f'{issuer}/mcp',
+        mcp_url=f'{issuer}/mcp/v2',
         auth_url=f'{issuer}/oauth/authorize',
         token_url=f'{issuer}/oauth/token',
     )

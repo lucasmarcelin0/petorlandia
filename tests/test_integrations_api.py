@@ -1637,6 +1637,19 @@ def test_mcp_registration_tool_requires_write_scopes(app, client):
 
         token_value = _create_token(professional.id, scope="profile pets:read")
 
+    discovery = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={"jsonrpc": "2.0", "id": 0, "method": "tools/list", "params": {}},
+    )
+    discovered_tools = {tool["name"] for tool in discovery.get_json()["result"]["tools"]}
+    assert {
+        "importar_carteirinha_fotografada",
+        "atualizar_perfil_pet",
+        "registrar_vacina_pet",
+        "registrar_vermifugacao_pet",
+    }.issubset(discovered_tools)
+
     response = client.post(
         "/mcp",
         headers={"Authorization": f"Bearer {token_value}"},
@@ -2553,13 +2566,69 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
     assert imported_payload["vacinas_importadas"] == 1
     assert imported_payload["vermifugacoes_importadas"] == 1
 
+    profile_update = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 92,
+            "method": "tools/call",
+            "params": {
+                "name": "atualizar_perfil_pet",
+                "arguments": {"animal_id": pet_id, "microchip": "DURGA-001", "confirmar_gravacao": "sim"},
+            },
+        },
+    )
+    assert profile_update.get_json()["result"]["structuredContent"]["campos_atualizados"] == ["microchip"]
+
+    vaccine = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 93,
+            "method": "tools/call",
+            "params": {
+                "name": "registrar_vacina_pet",
+                "arguments": {
+                    "animal_id": pet_id,
+                    "nome": "Antirrabica",
+                    "aplicada_em": "2025-09-25",
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+    assert vaccine.get_json()["result"]["structuredContent"]["criada_agora"] is True
+
+    deworming = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 94,
+            "method": "tools/call",
+            "params": {
+                "name": "registrar_vermifugacao_pet",
+                "arguments": {
+                    "animal_id": pet_id,
+                    "medicamento": "Helfine",
+                    "administrada_em": "2025-11-07",
+                    "confirmar_gravacao": "sim",
+                },
+            },
+        },
+    )
+    assert deworming.get_json()["result"]["structuredContent"]["criada_agora"] is True
+
     with app.app_context():
         pet = db.session.get(Animal, pet_id)
         assert pet.sex == "F"
         assert pet.date_of_birth == date(2016, 4, 20)
         assert "Pelagem informada" in pet.description
-        assert Vacina.query.filter_by(animal_id=pet_id).count() == 1
-        assert AnimalHealthRecord.query.filter_by(animal_id=pet_id, kind="vermifugacao").count() == 1
+        assert pet.microchip_number == "DURGA-001"
+        assert Vacina.query.filter_by(animal_id=pet_id).count() == 2
+        assert AnimalHealthRecord.query.filter_by(animal_id=pet_id, kind="vermifugacao").count() == 2
         assert CarteirinhaImportacao.query.filter_by(animal_id=pet_id, user_id=pet.user_id).count() == 1
 
 

@@ -45,6 +45,42 @@
         "destructive_justification": "Does not delete records; conflicting profile fields require a specific confirmation."
       }
     },
+    "atualizar_perfil_pet": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Updates only fields explicitly confirmed by the authenticated user.",
+        "open_world_justification": "Writes only inside the authenticated user's private PetOrlandia records.",
+        "destructive_justification": "Does not delete the pet or its medical history."
+      }
+    },
+    "registrar_vacina_pet": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates an explicitly confirmed vaccine record after checking for duplicates.",
+        "open_world_justification": "Writes only inside the authenticated user's private PetOrlandia records.",
+        "destructive_justification": "Does not delete or overwrite existing vaccine records."
+      }
+    },
+    "registrar_vermifugacao_pet": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates an explicitly confirmed deworming record after checking for duplicates.",
+        "open_world_justification": "Writes only inside the authenticated user's private PetOrlandia records.",
+        "destructive_justification": "Does not delete or overwrite existing health records."
+      }
+    },
     "listar_agendamentos": {
       "annotations": {
         "readOnlyHint": true,
