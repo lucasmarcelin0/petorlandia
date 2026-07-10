@@ -103,26 +103,7 @@
           <span class="small text-muted" id="mcp-status" role="status">Ainda nao testado.</span>
         </div>
 
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label fw-semibold" for="auth-url">Authorization URL</label>
-            <div class="copy-box">
-              <div class="copy-value" id="auth-url">{{ auth_url }}</div>
-              <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ auth_url }}">
-                <i class="fa-regular fa-copy" aria-hidden="true"></i>
-              </button>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-semibold" for="token-url">Token URL</label>
-            <div class="copy-box">
-              <div class="copy-value" id="token-url">{{ token_url }}</div>
-              <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy="{{ token_url }}">
-                <i class="fa-regular fa-copy" aria-hidden="true"></i>
-              </button>
-            </div>
-          </div>
-        </div>
+        <p class="small text-muted mb-0">Use somente a MCP URL. Nao abra URLs de autorizacao ou token manualmente: o ChatGPT descobre e executa essa etapa automaticamente.</p>
       </section>
     </div>
 
@@ -140,11 +121,11 @@
           </div>
           <div class="step">
             <div class="fw-semibold">3. Crie uma conexao nova</div>
-            <div class="text-muted small">Remova Petorlandia MCP antigo. Crie PetOrlandia MCP v2 e cole exatamente a MCP URL acima.</div>
+            <div class="text-muted small">Em Apps, escolha criar app personalizado, nomeie como PetOrlandia MCP v2 e cole exatamente a MCP URL acima.</div>
           </div>
           <div class="step">
             <div class="fw-semibold">4. Conecte sua conta</div>
-            <div class="text-muted small">Faca login, autorize as acoes de escrita e inicie uma conversa nova.</div>
+            <div class="text-muted small">O ChatGPT abrira o login Petorlandia sozinho. Autorize e inicie uma conversa nova.</div>
           </div>
           <a class="btn btn-primary" href="https://chatgpt.com/" target="_blank" rel="noopener">Abrir ChatGPT</a>
         </div>

@@ -1197,6 +1197,16 @@ def test_mcp_v2_endpoint_forces_fresh_capability_discovery(app, client):
     assert "oauth-protected-resource/mcp/v2" in unauthorized.headers["WWW-Authenticate"]
 
 
+def test_chatgpt_onboarding_keeps_oauth_endpoints_out_of_manual_setup(app, client):
+    onboarding = client.get("/chatgpt")
+
+    assert onboarding.status_code == 200
+    assert b"/mcp/v2" in onboarding.data
+    assert b"Authorization URL" not in onboarding.data
+    assert client.get("/oauth/authorize").headers["Location"].endswith("/chatgpt")
+    assert client.get("/oauth/token").headers["Location"].endswith("/chatgpt")
+
+
 def test_mcp_clinical_tools_return_structured_payload(app, client):
     with app.app_context():
         clinic = Clinica(nome="Clinica MCP Operacional")

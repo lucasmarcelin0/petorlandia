@@ -107,6 +107,8 @@ def oauth_authorize():
     code_challenge_method = request.values.get('code_challenge_method', '').strip()
     resource = request.values.get('resource', '').strip()
 
+    if request.method == 'GET' and not response_type and not client_id:
+        return redirect(url_for('site_routes.chatgpt_onboarding'))
     if response_type != 'code':
         return _oauth_error_response('unsupported_response_type', 'Only authorization code flow is supported.')
     if not client_id:
@@ -204,9 +206,11 @@ def oauth_authorize():
     )
 
 
-@bp.route("/oauth/token", methods=["POST"])
+@bp.route("/oauth/token", methods=["GET", "POST"])
 @csrf.exempt
 def oauth_token():
+    if request.method == 'GET':
+        return redirect(url_for('site_routes.chatgpt_onboarding'))
     grant_type = request.form.get('grant_type', '').strip()
     if grant_type == 'authorization_code':
         code = request.form.get('code', '').strip()
