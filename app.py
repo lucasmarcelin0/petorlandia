@@ -228,26 +228,27 @@ elif _resolved_uri and _resolved_uri.startswith("sqlite"):
         engine_opts.pop("connect_args", None)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
-app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
+app.config.setdefault("SESSION_PERMANENT", True)
+app.config.setdefault("SESSION_TYPE", "filesystem")
 CORS(app, resources={
-    r"/surpresa*": {"origins": "*"},
-    r"/socket.io/*": {"origins": "*"},
+    r"/surpresa*": {"origins": app.config.get("CORS_ALLOWED_ORIGINS", ())},
+    r"/socket.io/*": {"origins": app.config.get("CORS_ALLOWED_ORIGINS", ())},
     # OAuth 2.0 / OpenID Connect endpoints must be accessible from any origin
     # so that external clients (Claude, ChatGPT, etc.) can perform dynamic
     # client registration (RFC 7591) and token exchange (RFC 6749).
     r"/.well-known/*": {
-        "origins": "*",
+        "origins": app.config.get("CORS_ALLOWED_ORIGINS", ()),
         "methods": ["GET", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
     },
     r"/oauth/*": {
-        "origins": "*",
+        "origins": app.config.get("CORS_ALLOWED_ORIGINS", ()),
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
     },
     # MCP server endpoint — Claude and ChatGPT connect here after OAuth
     r"/mcp(?:/v2)?": {
-        "origins": "*",
+        "origins": app.config.get("CORS_ALLOWED_ORIGINS", ()),
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "Mcp-Session-Id", "MCP-Protocol-Version"],
         "expose_headers": ["WWW-Authenticate", "Mcp-Session-Id"],
@@ -263,7 +264,11 @@ if async_mode == "eventlet":
         except Exception:  # pragma: no cover - fallback when eventlet is unavailable/incompatible
             async_mode = "threading"
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=app.config.get("CORS_ALLOWED_ORIGINS", ()),
+    async_mode=async_mode,
+)
 
 # ----------------------------------------------------------------
 # 3)  Extensões
@@ -277,6 +282,7 @@ from extensions import (
     session as session_ext,
     babel,
     csrf,
+    limiter,
     configure_logging,
 )
 from flask_login import login_user, logout_user, current_user, login_required
@@ -296,6 +302,7 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 csrf.init_app(app)
+limiter.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 configure_logging(app)
 
@@ -645,6 +652,13 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
     """
     try:
         fileobj = file
+        max_bytes = int(current_app.config.get("MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
+        original_position = file.stream.tell()
+        file.stream.seek(0, os.SEEK_END)
+        if file.stream.tell() > max_bytes:
+            current_app.logger.warning("Upload rejected: file exceeds configured limit")
+            return None
+        file.stream.seek(original_position)
         content_type = file.content_type
         filename = secure_filename(filename)
         bucket = _runtime_module_attr("BUCKET", BUCKET)
@@ -704,7 +718,13 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
                 app.logger.exception("S3 upload failed: %s", exc)
                 buffer.seek(0)
 
-        # Local fallback when S3 is not configured or fails
+        # Never make clinical/user documents public by default. Local fallback
+        # remains available only for tests or an explicit development opt-in.
+        if not current_app.config.get("ALLOW_LOCAL_UPLOAD_FALLBACK", False) and not current_app.config.get("TESTING"):
+            current_app.logger.error("Upload storage unavailable; local public fallback disabled")
+            return None
+
+        # Local fallback when S3 is not configured or fails (development/tests)
         local_path = project_root / "static" / "uploads" / key
         local_path.parent.mkdir(parents=True, exist_ok=True)
         with open(local_path, "wb") as fp:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional
+import secrets
 
 from flask import current_app
 from sqlalchemy import func
@@ -267,6 +268,4 @@ def build_usage_history(plan_id: Optional[int] = None, subscription_id: Optional
 
 def insurer_token_valid(token: Optional[str]) -> bool:
     expected = current_app.config.get('INSURER_PORTAL_TOKEN')
-    if not expected:
-        return True
-    return token == expected
+    return bool(expected and token and secrets.compare_digest(token, expected))

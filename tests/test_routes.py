@@ -96,11 +96,18 @@ def test_add_animal_requires_login(app):
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
 
-def test_loja_requires_login(app):
+def test_loja_catalog_is_public(app):
     client = app.test_client()
     response = client.get('/loja')
-    assert response.status_code == 302
-    assert '/login' in response.headers['Location']
+    assert response.status_code == 200
+    assert b'PetOrl' in response.data
+
+
+def test_services_catalog_is_public(app):
+    client = app.test_client()
+    response = client.get('/servicos')
+    assert response.status_code == 200
+    assert b'serv' in response.data.lower()
 
 
 def test_mp_token_in_config(app):

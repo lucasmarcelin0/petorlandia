@@ -8,6 +8,7 @@ Extraído de app.py durante a modularização. Registrar com:
 from __future__ import annotations
 
 import uuid
+from urllib.parse import urlsplit, urlunsplit
 
 from flask import (
     current_app,
@@ -25,6 +26,7 @@ from werkzeug.exceptions import HTTPException, NotFound
 
 from extensions import db
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
+from sqlalchemy import text
 
 
 def _attach_request_id():
@@ -33,6 +35,22 @@ def _attach_request_id():
 
 def _set_request_id_header(response):
     response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+    if current_app.config.get("SECURITY_HEADERS_ENABLED", True):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
+            "img-src 'self' data: https:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
+            "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com; "
+            "form-action 'self' https://chatgpt.com https://chat.openai.com",
+        )
+        if request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     if request.endpoint == "static":
         if request.args.get("v"):
             max_age = int(current_app.config.get("SEND_FILE_VERSIONED_MAX_AGE", 31536000))
@@ -41,6 +59,29 @@ def _set_request_id_header(response):
             max_age = int(current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 3600))
             response.headers["Cache-Control"] = f"public, max-age={max_age}"
     return response
+
+
+def _redirect_insecure_request():
+    if current_app.config.get("TESTING") or not current_app.config.get("FORCE_HTTPS", True):
+        return None
+    forwarded = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    host = request.host.split(":", 1)[0].lower()
+    if host in {"localhost", "127.0.0.1", "::1"} or request.is_secure or forwarded == "https":
+        return None
+    parts = urlsplit(request.url)
+    secure_url = urlunsplit(("https", parts.netloc, parts.path, parts.query, parts.fragment))
+    return redirect(secure_url, code=308)
+
+
+def _health_response(ready: bool):
+    if not ready:
+        return jsonify(status="ok"), 200
+    try:
+        db.session.execute(text("SELECT 1"))
+        return jsonify(status="ready"), 200
+    except Exception:  # noqa: BLE001 - no internal details in readiness output
+        current_app.logger.exception("readiness_check_failed")
+        return jsonify(status="not_ready"), 503
 
 
 def handle_http_exception(err):
@@ -135,8 +176,11 @@ def handle_unhandled_exception(err):
 
 
 def register_request_hooks(app):
+    app.before_request(_redirect_insecure_request)
     app.before_request(_attach_request_id)
     app.after_request(_set_request_id_header)
+    app.add_url_rule("/live", endpoint="health_live", view_func=lambda: _health_response(False), methods=["GET"])
+    app.add_url_rule("/ready", endpoint="health_ready", view_func=lambda: _health_response(True), methods=["GET"])
     app.register_error_handler(HTTPException, handle_http_exception)
     app.register_error_handler(CSRFError, handle_csrf_error)
     app.register_error_handler(Exception, handle_unhandled_exception)

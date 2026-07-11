@@ -25,6 +25,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-flask
 
+      - name: Sensitive artifact guard
+        run: python scripts/check_sensitive_artifacts.py
+
       - name: Run full test suite
         env:
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'

@@ -24,6 +24,7 @@ from models import (
     Veterinario,
 )
 from services.oauth_provider import _oauth_issuer
+from services.product_analytics import track_event
 from sqlalchemy.orm import joinedload, selectinload
 from time_utils import normalize_to_utc, now_in_brazil, utcnow
 
@@ -438,6 +439,37 @@ def openai_apps_challenge():
         abort(404)
     response = make_response(token)
     response.mimetype = 'text/plain'
+    return response
+
+
+@bp.route('/robots.txt')
+def robots_txt():
+    """Expose crawler guidance for the public marketing and catalog pages."""
+    sitemap_url = url_for('site_routes.sitemap_xml', _external=True)
+    response = make_response(
+        "User-agent: *\n"
+        "Disallow: /login\n"
+        "Disallow: /register\n"
+        "Disallow: /painel\n"
+        "Disallow: /admin\n"
+        f"Sitemap: {sitemap_url}\n"
+    )
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+
+@bp.route('/sitemap.xml')
+def sitemap_xml():
+    """Small explicit sitemap for stable, public acquisition pages."""
+    base = _oauth_issuer()
+    paths = ('/', '/loja', '/servicos', '/privacy', '/terms', '/support', '/chatgpt')
+    body = ''.join(f'<url><loc>{base}{path}</loc></url>' for path in paths)
+    response = make_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f'{body}</urlset>'
+    )
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
     return response
 
 
@@ -863,7 +895,6 @@ def admin_pagar_repasses_frete(worker_id):
 
 
 @bp.route('/servicos')
-@login_required
 def servicos():
     """Central de Serviços: agendamentos e solicitações em um só lugar.
 
@@ -871,6 +902,7 @@ def servicos():
     compra). Reúne o que antes ficava solto na home — vacina PMO e banho &
     tosa — junto de consultas, exames e pet sitter.
     """
+    track_event('services_viewed', city=request.args.get('cidade'))
     from services.vaccine_service_paid import list_cidades as list_vaccine_service_cities
     from admin import _is_admin
 

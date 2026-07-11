@@ -64,13 +64,31 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
-    SESSION_TYPE = "filesystem"
+    SESSION_TYPE = os.environ.get("SESSION_TYPE", "filesystem")
     SESSION_PERMANENT = True
-    PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    # Long-lived sessions increase the blast radius of a stolen cookie.
+    PERMANENT_SESSION_LIFETIME = timedelta(
+        days=int(os.environ.get("PERMANENT_SESSION_LIFETIME_DAYS", "30"))
+    )
     SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
-    WTF_CSRF_TIME_LIMIT = None  # CSRF token valid for entire session lifetime
+    WTF_CSRF_TIME_LIMIT = int(os.environ.get("WTF_CSRF_TIME_LIMIT", "3600"))
+    FORCE_HTTPS = _env_bool("FORCE_HTTPS", True)
+    SECURITY_HEADERS_ENABLED = _env_bool("SECURITY_HEADERS_ENABLED", True)
+    ALLOW_LOCAL_UPLOAD_FALLBACK = _env_bool("ALLOW_LOCAL_UPLOAD_FALLBACK", False)
+    MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
+    CORS_ALLOWED_ORIGINS = tuple(
+        origin.strip()
+        for origin in os.environ.get(
+            "CORS_ALLOWED_ORIGINS",
+            "https://chatgpt.com,https://chat.openai.com,https://www.petorlandia.com.br,https://petorlandia.com.br",
+        ).split(",")
+        if origin.strip()
+    )
+    RATELIMIT_ENABLED = _env_bool("RATELIMIT_ENABLED", True)
+    RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_HEADERS_ENABLED = True
 
     OAUTH_AUTHORIZATION_CODE_EXPIRES_IN = int(os.environ.get("OAUTH_AUTHORIZATION_CODE_EXPIRES_IN", "300"))
     OAUTH_ACCESS_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_ACCESS_TOKEN_EXPIRES_IN", "900"))
@@ -174,7 +192,9 @@ class Config:
         os.environ.get("VETERINARIAN_MEMBERSHIP_BILLING_DAYS", "30")
     )
 
-    INSURER_PORTAL_TOKEN = os.environ.get("INSURER_PORTAL_TOKEN", "petorlandia-insurer")
+    # Missing integration credentials disable the endpoint instead of
+    # authorizing every caller.
+    INSURER_PORTAL_TOKEN = _env_optional("INSURER_PORTAL_TOKEN")
 
     NFSE_ASYNC_MUNICIPIOS = [
         item.strip()

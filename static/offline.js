@@ -1,6 +1,18 @@
 (function(){
   const KEY = 'offline-queue';
   const DEFAULT_FETCH_TIMEOUT = 10000;
+  const SENSITIVE_FIELD_RE = /(^|[_-])(csrf|password|token|prescricao|consulta|exame|diagnost|conduta|historico|prontuario|laudo|medic|health)([_-]|$)/i;
+
+  function containsSensitiveData(bodyData){
+    if(!bodyData) return false;
+    if(bodyData.form){
+      return bodyData.form.some(([key]) => SENSITIVE_FIELD_RE.test(String(key || '')));
+    }
+    if(bodyData.json){
+      return Object.keys(bodyData.json).some(key => SENSITIVE_FIELD_RE.test(String(key || '')));
+    }
+    return false;
+  }
 
   function getSubmitButton(form){
     if (window.FormFeedback && typeof window.FormFeedback.getButton === 'function') {
@@ -114,6 +126,19 @@
     // Intentionally silent: avoid showing popups/toasts when a request is queued offline.
   }
 
+  function notifyOfflineBlocked(){
+    const message = 'Esta ação contém dados sensíveis e não será armazenada offline. Conecte-se à internet e tente novamente.';
+    const toastEl = document.getElementById('actionToast');
+    if(!toastEl) return;
+    const body = toastEl.querySelector('.toast-body');
+    if(body) body.textContent = message;
+    toastEl.classList.remove('bg-success','bg-info','bg-warning','bg-primary');
+    toastEl.classList.add('bg-danger');
+    if(window.bootstrap && bootstrap.Toast){
+      bootstrap.Toast.getOrCreateInstance(toastEl).show();
+    }
+  }
+
   async function sendQueued(){
     if(!navigator.onLine) return;
     const q = loadQueue();
@@ -159,6 +184,7 @@
     }
     const effectiveTimeout = Number.isFinite(timeout) ? timeout : DEFAULT_FETCH_TIMEOUT;
     const online = navigator.onLine !== false;
+    const sensitive = containsSensitiveData(bodyData);
 
     if(online){
       try {
@@ -173,6 +199,10 @@
         }
 
         // Se a conexão caiu entre o clique e o envio, trate como offline
+        if(sensitive){
+          notifyOfflineBlocked();
+          return { response: null, queued: false, offlineBlocked: true };
+        }
         const q = loadQueue();
         q.push({url, method, headers, body:bodyData});
         saveQueue(q);
@@ -181,6 +211,10 @@
       }
     }
 
+    if(sensitive){
+      notifyOfflineBlocked();
+      return { response: null, queued: false, offlineBlocked: true };
+    }
     const q = loadQueue();
     q.push({url, method, headers, body:bodyData});
     saveQueue(q);

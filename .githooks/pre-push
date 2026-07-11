@@ -12,6 +12,7 @@ if [ "$SKIP_TESTS" = "1" ]; then
 fi
 
 echo "[pre-push] Rodando gate rápido (contrato de rotas + engajamento)..."
+python scripts/check_sensitive_artifacts.py || exit 1
 PYTHONUTF8=1 python -m pytest \
   tests/test_url_map_contract.py \
   tests/test_engajamento_features.py \

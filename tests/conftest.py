@@ -63,6 +63,7 @@ def app():
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={},
         WTF_CSRF_ENABLED=False,
+        RATELIMIT_ENABLED=False,
     )
     with app.app_context():
         db.create_all()

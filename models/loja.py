@@ -515,6 +515,9 @@ class DeliveryRequest(db.Model):
         nullable=True,
     )
     archived = db.Column(db.Boolean, default=False, nullable=False)
+    # Deterministic idempotency key for one seller leg of one order. This
+    # prevents duplicate delivery requests when payment webhooks race/retry.
+    dedupe_key = db.Column(db.String(160), unique=True, nullable=True, index=True)
     # Vendedor responsável por esta entrega (apenas um dos dois estará preenchido)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id', ondelete='SET NULL'), nullable=True, index=True)
     casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
@@ -631,4 +634,3 @@ class PendingWebhook(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mp_id = db.Column(db.BigInteger, unique=True)
     attempts = db.Column(db.Integer, default=0)
-

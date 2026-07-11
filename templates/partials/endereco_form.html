@@ -5,7 +5,7 @@
         <i class="bi bi-geo-alt-fill"></i>
         Endereço
       </h5>
-      <p class="address-card__subtitle">Use o mapa ou preencha manualmente. Exemplo: "Av. Paulista, 1000".</p>
+      <p class="address-card__subtitle">Opcional no cadastro; necessário para entrega, atendimento domiciliar e serviços por cidade.</p>
     </div>
     <div class="address-card__actions">
       <button type="button" class="btn btn-sm btn-primary" onclick="preencherComLocalizacao(this)"
@@ -80,14 +80,14 @@
 
     <!-- Rua -->
     <div class="col-md-8 col-xl-6">
-      <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
+      <label for="rua" class="form-label fw-semibold">Logradouro</label>
       {% if addr_form %}
-      {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.", required=True) }}
+      {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.") }}
       {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
       <input type="text" class="form-control" name="rua" id="rua"
         value="{{ endereco.rua|default('', true) if endereco else '' }}" placeholder="Nome da rua, avenida, etc."
-        required>
+        >
       {% endif %}
       <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
@@ -130,25 +130,25 @@
 
     <!-- Cidade -->
     <div class="col-md-8 col-xl-3">
-      <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
+      <label for="cidade" class="form-label fw-semibold">Cidade</label>
       {% if addr_form %}
-      {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade", required=True) }}
+      {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade") }}
       {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
       <input type="text" class="form-control" name="cidade" id="cidade"
-        value="{{ endereco.cidade|default('', true) if endereco else '' }}" placeholder="Nome da cidade" required>
+        value="{{ endereco.cidade|default('', true) if endereco else '' }}" placeholder="Nome da cidade">
       {% endif %}
       <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
 
     <!-- Estado com select -->
     <div class="col-md-4 col-xl-2">
-      <label for="estado" class="form-label fw-semibold">UF <span class="text-danger">*</span></label>
+      <label for="estado" class="form-label fw-semibold">UF</label>
       {% if addr_form %}
       {{ addr_form.estado(class="form-select", id="estado") }}
       {% for error in addr_form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-      <select class="form-select" name="estado" id="estado" required>
+      <select class="form-select" name="estado" id="estado">
         <option value="">Selecione</option>
         <option value="AC" {{ 'selected' if endereco and endereco.estado=='AC' }}>AC - Acre</option>
         <option value="AL" {{ 'selected' if endereco and endereco.estado=='AL' }}>AL - Alagoas</option>
@@ -917,6 +917,10 @@
         // usando endereço salvo - não valida campos vazios
         return;
       }
+
+      const addressStarted = ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']
+        .some(id => (form.querySelector(`#${id}`)?.value || '').trim());
+      if (!addressStarted) return;
 
       let isValid = true;
 

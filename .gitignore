@@ -89,3 +89,9 @@ build/
 
 # Uploads de usuários (laudos, fotos) — nunca versionar
 static/uploads/
+
+# Exports brutos de pesquisa/base com PII; somente agregados anonimizados podem
+# ser versionados em outputs/presentation_handoff_2026/.
+outputs/presentation_handoff_2026/db_presentation_data_*.json
+outputs/presentation_handoff_2026/dados_unificados_*.csv
+outputs/presentation_handoff_2026/old_survey_*.json

@@ -67,6 +67,8 @@ from models import (
     get_active_product_categories,
 )
 from security.crypto import MissingMasterKeyError
+from services.payment_state import advance_payment_status
+from services.product_analytics import track_event
 from template_filters import digits_only, format_datetime_brazil
 from time_utils import now_in_brazil, utcnow
 
@@ -1220,8 +1222,8 @@ def delivery_archive_user():
 
 
 @bp.route("/loja", methods=["GET"])
-@login_required
 def loja():
+    track_event('catalog_viewed', category=request.args.get('category'))
     pagamento_pendente = None
     payment_id = session.get("last_pending_payment")
     if payment_id:
@@ -1241,8 +1243,15 @@ def loja():
     produtos = pagination.items
     form = AddToCartForm()
 
-    has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
-    minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+    has_orders = (
+        current_user.is_authenticated
+        and Order.query.filter_by(user_id=current_user.id).first() is not None
+    )
+    minha_clinica = (
+        Clinica.query.filter_by(owner_id=current_user.id).first()
+        if current_user.is_authenticated
+        else None
+    )
     vendedores = _get_vendedores_ativos()
 
     return render_template(
@@ -1972,6 +1981,11 @@ def notificacoes_mercado_pago():
                 return jsonify(error="payment not found"), 404
 
             if pay:
+                payment_status = advance_payment_status(
+                    pay.status,
+                    payment_status,
+                    provider_status=status,
+                )
                 pay.status = payment_status
                 pay.mercado_pago_id = mp_id
 
@@ -2055,6 +2069,18 @@ def notificacoes_mercado_pago():
                             seller_items.setdefault(key, []).append(oi)
 
                         for (clinica_id, casa_id), _ in seller_items.items():
+                            dedupe_key = f"order:{pay.order_id}:clinic:{clinica_id or 0}:store:{casa_id or 0}"
+                            existing_delivery = DeliveryRequest.query.filter_by(dedupe_key=dedupe_key).first()
+                            if existing_delivery is None:
+                                existing_delivery = DeliveryRequest.query.filter_by(
+                                    order_id=pay.order_id,
+                                    clinica_id=clinica_id,
+                                    casa_de_racao_id=casa_id,
+                                ).first()
+                                if existing_delivery is not None and not existing_delivery.dedupe_key:
+                                    existing_delivery.dedupe_key = dedupe_key
+                            if existing_delivery is not None:
+                                continue
                             tipo = 'plataforma'
                             if casa_id:
                                 casa = CasaDeRacao.query.get(casa_id)
@@ -2067,6 +2093,7 @@ def notificacoes_mercado_pago():
                             db.session.add(DeliveryRequest(
                                 order_id=pay.order_id,
                                 requested_by_id=pay.user_id,
+                                dedupe_key=dedupe_key,
                                 status="pendente",
                                 clinica_id=clinica_id,
                                 casa_de_racao_id=casa_id,

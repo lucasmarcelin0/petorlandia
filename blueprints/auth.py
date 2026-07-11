@@ -2,7 +2,8 @@
 from flask import Blueprint
 import os, uuid
 from datetime import datetime
-from extensions import csrf, db, mail
+from extensions import csrf, db, limiter, mail
+from services.product_analytics import track_event
 from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message as MailMessage
@@ -44,6 +45,7 @@ def upload_to_s3(*args, **kwargs):
 
 
 @bp.route("/reset_password_request", methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=["POST"])
 def reset_password_request():
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
@@ -126,6 +128,7 @@ def reset_password(token):
 
 @bp.route("/primeiro-acesso", methods=['GET', 'POST'])
 @csrf.exempt
+@limiter.limit("10 per minute", methods=["POST"])
 def first_access():
     if current_user.is_authenticated:
         return redirect(_sanitize_login_next_url(request.args.get('next')))
@@ -217,6 +220,7 @@ def first_access_password():
 
 
 @bp.route("/register", methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=["POST"])
 def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -244,11 +248,17 @@ def register():
             flash('Celular já está em uso.', 'danger')
             return render_template('auth/register.html', form=form, endereco=None)
 
+        # Address is progressive: only validate it when the user starts filling
+        # the section. A tutor can create an account before choosing delivery.
+        address_started = any(
+            (request.form.get(key) or '').strip()
+            for key in ('cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado')
+        )
         required_address_labels = {
             'rua': 'Rua',
             'cidade': 'Cidade',
             'estado': 'Estado',
-        }
+        } if address_started else {}
 
         required_missing = [
             label for key, label in required_address_labels.items()
@@ -272,7 +282,9 @@ def register():
             cidade=request.form.get('cidade'),
             estado=request.form.get('estado')
         )
-        if not _update_coordinates_from_request(endereco):
+        if not address_started:
+            endereco = None
+        if endereco is not None and not _update_coordinates_from_request(endereco):
             # Sem geocodificação síncrona aqui: as chamadas externas (Nominatim)
             # podem levar dezenas de segundos e estourar o timeout do Heroku,
             # derrubando o cadastro. As coordenadas ficam nulas e podem ser
@@ -304,7 +316,8 @@ def register():
 
         # Salva no banco com tratamento de erros
         try:
-            db.session.add(endereco)
+            if endereco is not None:
+                db.session.add(endereco)
             db.session.add(user)
             db.session.commit()
         except Exception as e:
@@ -339,6 +352,7 @@ def register():
 
         # Faz login automático do usuário recém-criado
         login_user(user)
+        track_event('signup_completed', role=getattr(user, 'role', None))
 
         if is_json_request:
             return jsonify({'success': True, 'redirect': url_for('index')})
@@ -360,6 +374,7 @@ def register():
 
 
 @bp.route("/login", methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def login_view():
     form = LoginForm()
     next_url = request.values.get('next') or url_for('index')
@@ -384,6 +399,7 @@ def login_view():
 
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
+            track_event('login_succeeded', role=getattr(user, 'role', None))
             if form.remember.data:
                 session.permanent = True
             if is_json_request:

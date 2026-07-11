@@ -9,6 +9,7 @@ const urlsToCache = [
   ,'/static/offline.js'
   ,'/static/bootstrap.min.css'
   ,'/static/bootstrap.bundle.min.js'
+  ,'/static/offline.html'
 ];
 
 // Install the service worker and take control immediately
@@ -43,7 +44,7 @@ self.addEventListener('fetch', event => {
   // cachear a resposta (páginas são dinâmicas e dependem de autenticação).
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request).catch(() => caches.match(event.request).then(cached => cached || caches.match('/static/offline.html')))
     );
     return;
   }

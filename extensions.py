@@ -11,6 +11,8 @@ from flask_login import LoginManager
 from flask_session import Session
 from flask_babel import Babel
 from flask_wtf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import event, inspect
 
 # Cache for datetime column names per model class (performance optimization)
@@ -46,12 +48,23 @@ login = LoginManager()
 session = Session()
 babel = Babel()
 csrf = CSRFProtect()
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
 
 class RequestContextFilter(logging.Filter):
     """Attach request context metadata to log records."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        record.event_name = getattr(record, "event_name", "-")
+        record.event_source = getattr(record, "event_source", "-")
+        record.event_user_id = getattr(record, "event_user_id", "-")
+        record.event_role = getattr(record, "event_role", "-")
+        record.event_path = getattr(record, "event_path", "-")
+        record.event_properties = getattr(record, "event_properties", {})
         if has_request_context():
             record.request_id = getattr(g, "request_id", None)
             record.path = request.path
@@ -68,7 +81,9 @@ def configure_logging(app) -> None:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
         "ts=%(asctime)s level=%(levelname)s logger=%(name)s "
-        "msg=%(message)s request_id=%(request_id)s method=%(method)s path=%(path)s"
+        "msg=%(message)s request_id=%(request_id)s method=%(method)s path=%(path)s "
+        "event_name=%(event_name)s event_source=%(event_source)s event_user_id=%(event_user_id)s "
+        "event_role=%(event_role)s event_properties=%(event_properties)s"
     )
     handler.setFormatter(formatter)
     handler.addFilter(RequestContextFilter())
