@@ -1181,7 +1181,7 @@ def test_mcp_v2_endpoint_forces_fresh_capability_discovery(app, client):
     probe = client.get("/mcp/v2")
 
     assert probe.status_code == 200
-    assert probe.get_json()["version"] == "2.0.0"
+    assert probe.get_json()["version"] == "2.1.0"
     assert probe.get_json()["resource"].endswith("/mcp/v2")
 
     metadata = client.get("/.well-known/oauth-protected-resource/mcp/v2")
@@ -2491,7 +2491,7 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
         db.session.add(pet)
         db.session.commit()
         pet_id = pet.id
-        token_value = _create_token(tutor.id, scope="profile pets:read pets:write")
+        token_value = _create_token(tutor.id, scope="profile pets:read pets:write tutors:write")
 
     extracted = {
         "pet": {
@@ -2500,6 +2500,7 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
             "data_nascimento": "2016-04-20",
             "pelagem": "azul com branco",
         },
+        "tutor": {"nome": "Juliana", "telefone": "31998160025"},
         "vacinas": [
             {
                 "nome": "Nobivac DHPPi+L",
@@ -2533,7 +2534,7 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
         json={"jsonrpc": "2.0", "id": 89, "method": "tools/list", "params": {}},
     )
     tools_by_name = {tool["name"]: tool for tool in tools_response.get_json()["result"]["tools"]}
-    assert {"revisar_carteirinha_fotografada", "importar_carteirinha_fotografada"}.issubset(tools_by_name)
+    assert {"revisar_carteirinha_fotografada", "importar_carteirinha_fotografada", "atualizar_perfil_tutor"}.issubset(tools_by_name)
     assert tools_by_name["importar_carteirinha_fotografada"]["_meta"]["openai/fileParams"] == ["fotos_carteirinha"]
 
     review = client.post(
@@ -2575,6 +2576,7 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
     imported_payload = imported.get_json()["result"]["structuredContent"]
     assert imported_payload["vacinas_importadas"] == 1
     assert imported_payload["vermifugacoes_importadas"] == 1
+    assert imported_payload["campos_tutor_atualizados"] == ["telefone"]
 
     profile_update = client.post(
         "/mcp",
@@ -2590,6 +2592,21 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
         },
     )
     assert profile_update.get_json()["result"]["structuredContent"]["campos_atualizados"] == ["microchip"]
+
+    tutor_update = client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 921,
+            "method": "tools/call",
+            "params": {
+                "name": "atualizar_perfil_tutor",
+                "arguments": {"animal_id": pet_id, "endereco": "Rua das Flores, 10", "confirmar_gravacao": "sim"},
+            },
+        },
+    )
+    assert tutor_update.get_json()["result"]["structuredContent"]["campos_atualizados"] == ["endereco"]
 
     vaccine = client.post(
         "/mcp",
@@ -2637,6 +2654,8 @@ def test_mcp_carteirinha_photo_review_and_import(app, client):
         assert pet.date_of_birth == date(2016, 4, 20)
         assert "Pelagem informada" in pet.description
         assert pet.microchip_number == "DURGA-001"
+        assert pet.owner.phone == "31998160025"
+        assert pet.owner.address == "Rua das Flores, 10"
         assert Vacina.query.filter_by(animal_id=pet_id).count() == 2
         assert AnimalHealthRecord.query.filter_by(animal_id=pet_id, kind="vermifugacao").count() == 2
         assert CarteirinhaImportacao.query.filter_by(animal_id=pet_id, user_id=pet.user_id).count() == 1

@@ -193,6 +193,12 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
         'annotations': _mcp_annotations(False, idempotent=False),
         'outputSchema': _mcp_object_output_schema('Cadastro do pet atualizado.'),
     },
+    'atualizar_perfil_tutor': {
+        'title': 'Atualizar perfil do tutor',
+        'scopes': ['tutors:write'],
+        'annotations': _mcp_annotations(False, idempotent=False),
+        'outputSchema': _mcp_object_output_schema('Cadastro do tutor atualizado.'),
+    },
     'registrar_vacina_pet': {
         'title': 'Registrar vacina do pet',
         'scopes': ['pets:write'],
@@ -1507,6 +1513,7 @@ def _mcp_carteirinha_data(arguments: dict) -> dict:
 def _mcp_carteirinha_preview(user: User, arguments: dict) -> dict:
     data = _mcp_carteirinha_data(arguments)
     pet_data = data.get('pet') or {}
+    tutor_data = data.get('tutor') or {}
     pet_name = (pet_data.get('nome') or pet_data.get('name') or '').strip()
     animal = None
     requested_id = arguments.get('animal_id')
@@ -1528,6 +1535,12 @@ def _mcp_carteirinha_preview(user: User, arguments: dict) -> dict:
         'raca': (pet_data.get('raca') or '').strip() or None,
         'pelagem': (pet_data.get('pelagem') or '').strip() or None,
         'microchip': (pet_data.get('microchip') or '').strip() or None,
+    }
+    source_tutor = {
+        'nome': (tutor_data.get('nome') or tutor_data.get('name') or '').strip() or None,
+        'telefone': (tutor_data.get('telefone') or tutor_data.get('phone') or '').strip() or None,
+        'endereco': (tutor_data.get('endereco') or tutor_data.get('address') or '').strip() or None,
+        'email': (tutor_data.get('email') or '').strip() or None,
     }
     if animal:
         current = _mcp_animal_payload(animal)
@@ -1554,12 +1567,13 @@ def _mcp_carteirinha_preview(user: User, arguments: dict) -> dict:
     return {
         'animal_encontrado': _mcp_animal_payload(animal) if animal else None,
         'pet_extraido': source_fields,
+        'tutor_extraido': source_tutor,
         'vacinas_para_revisao': vaccines,
         'vermifugacoes_para_revisao': dewormings,
         'campos_em_conflito': conflicts,
         'itens_de_baixa_confianca': low_confidence,
         'proxima_acao': (
-            'Confirme o animal e revise os itens antes de importar.' if animal
+            'O pet foi localizado. Dados claros podem ser importados agora; campos ausentes nao bloqueiam a importacao.' if animal
             else 'Nenhum pet correspondente foi encontrado. Cadastre o pet primeiro e depois importe a carteirinha.'
         ),
         'regras_de_seguranca': [
@@ -1632,6 +1646,25 @@ def _mcp_import_carteirinha(user: User, animal: Animal, arguments: dict) -> dict
         if note not in (animal.description or ''):
             animal.description = '\n'.join(filter(None, [animal.description, note]))
             updated_fields.append('pelagem')
+
+    # Tutor data is supplemental: a clear missing value can be completed, but a
+    # pre-existing different value is never silently replaced by a photo import.
+    tutor_data = data.get('tutor') or {}
+    tutor = animal.owner
+    updated_tutor_fields = []
+    tutor_confirmed_fields = {value.removeprefix('tutor.') for value in confirmed_fields}
+    if tutor and isinstance(tutor_data, dict):
+        tutor_updates = {
+            'telefone': ('phone', tutor_data.get('telefone') or tutor_data.get('phone')),
+            'endereco': ('address', tutor_data.get('endereco') or tutor_data.get('address')),
+        }
+        for field, (attribute, raw_value) in tutor_updates.items():
+            value = str(raw_value or '').strip()
+            current = str(getattr(tutor, attribute) or '').strip()
+            if value and (not current or current == value or field in tutor_confirmed_fields):
+                if current != value:
+                    setattr(tutor, attribute, value)
+                    updated_tutor_fields.append(field)
 
     imported_vaccines = 0
     skipped_vaccines = 0
@@ -1719,6 +1752,7 @@ def _mcp_import_carteirinha(user: User, animal: Animal, arguments: dict) -> dict
         'importacao_id': audit.id,
         'animal': _mcp_animal_payload(animal),
         'campos_atualizados': sorted(set(updated_fields)),
+        'campos_tutor_atualizados': sorted(set(updated_tutor_fields)),
         'campos_em_conflito_nao_alterados': sorted(conflict_fields.difference(confirmed_fields)),
         'vacinas_importadas': imported_vaccines,
         'vacinas_ignoradas': skipped_vaccines,
@@ -1813,7 +1847,7 @@ def mcp_server():
         issuer = _oauth_issuer()
         return jsonify({
             'server': 'PetOrlândia MCP',
-            'version': '2.0.0',
+            'version': '2.1.0',
             'resource': f'{issuer}{_mcp_resource_path()}',
             'protocol': f'mcp/{MCP_PROTOCOL_VERSIONS[0]}',
             'authorization_required': True,
@@ -1846,9 +1880,12 @@ def mcp_server():
     if method == 'initialize':
         return _mcp_ok(req_id, {
             'protocolVersion': _mcp_protocol_version(params),
-            'serverInfo': {'name': 'PetOrlandia MCP v2', 'version': '3.0.0'},
+            'serverInfo': {'name': 'PetOrlandia MCP v2', 'version': '3.1.0'},
             'capabilities': {'tools': {}, 'resources': {}},
             'instructions': (
+                'PHOTO IMPORT RULES: Never invent data or merge records from different pets. Missing phone, address, or incomplete history never blocks importing clear data. '
+                'A direct user instruction to register, include, save, or import is explicit confirmation: review and import in the same conversation with confirmar_gravacao="sim" when no material conflict exists. '
+                'Skip only illegible or low-confidence items and report them after the successful import. '
                 'PetOrlandia é um app real de gestão veterinária, loja e serviços. '
                 'Quando o usuário pedir produtos, compras, catálogo, preço, estoque, carrinho ou pagamento, '
                 'use as tools de loja para consultar produtos reais e criar pedidos reais. '
@@ -1940,7 +1977,8 @@ def mcp_server():
                 'description': (
                     'Importa para um pet confirmado os dados revisados de uma carteirinha fotografada. '
                     'Preserva as fotos originais como evidencia, cria vacinas historicas e eventos de vermifugacao. '
-                    'Nunca chame sem confirmar a revisao com o tutor; itens de baixa confianca devem ficar fora da importacao.'
+                    'Uma ordem direta para registrar ou importar e confirmacao suficiente. Importe itens claros mesmo com dados complementares ausentes; '
+                    'itens de baixa confianca devem ficar fora da importacao.'
                 ),
                 'inputSchema': {
                     'type': 'object',
@@ -1976,6 +2014,27 @@ def mcp_server():
                         'confirmar_gravacao': {'type': 'string'},
                     },
                     'required': ['animal_id', 'confirmar_gravacao'],
+                },
+            },
+            {
+                'name': 'atualizar_perfil_tutor',
+                'description': (
+                    'Atualiza o tutor vinculado a um pet acessivel: nome, telefone, telefone alternativo, endereco e e-mail. '
+                    'Use somente dados claros; nao invente nem substitua dado conflitante sem ordem expressa do usuario.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'animal_id': {'type': 'integer'},
+                        'tutor_id': {'type': 'integer'},
+                        'nome': {'type': 'string'},
+                        'telefone': {'type': 'string'},
+                        'telefone_alternativo': {'type': 'string'},
+                        'endereco': {'type': 'string'},
+                        'email': {'type': 'string'},
+                        'confirmar_gravacao': {'type': 'string'},
+                    },
+                    'required': ['confirmar_gravacao'],
                 },
             },
             {
@@ -2765,6 +2824,43 @@ def mcp_server():
                     changed.append('pelagem')
             db.session.commit()
             return _mcp_ok(req_id, _mcp_json_content({'animal': _mcp_animal_payload(animal), 'campos_atualizados': changed}))
+
+        if tool_name == 'atualizar_perfil_tutor':
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write')
+            if scope_error:
+                return scope_error
+            confirmation_error = _mcp_require_confirmation(req_id, tool_args)
+            if confirmation_error:
+                return confirmation_error
+            tutor = None
+            tutor_id = tool_args.get('tutor_id')
+            if tutor_id:
+                try:
+                    tutor = db.session.get(User, int(tutor_id))
+                except (TypeError, ValueError):
+                    tutor = None
+            if tutor is None:
+                animal = _mcp_find_animal_for_tool(user, tool_args)
+                tutor = animal.owner if animal else None
+            if tutor is None:
+                return _mcp_err(req_id, -32004, 'Tutor nao encontrado ou sem acesso pelo pet informado.')
+            allowed_animal = _integration_accessible_animals_query(user).filter(Animal.user_id == tutor.id).first()
+            if allowed_animal is None and not _mcp_user_is_admin(user):
+                return _mcp_err(req_id, -32004, 'Tutor nao encontrado ou sem acesso.')
+            changed = []
+            for key, attribute in (
+                ('nome', 'name'), ('telefone', 'phone'), ('telefone_alternativo', 'phone2'),
+                ('endereco', 'address'), ('email', 'email'),
+            ):
+                value = str(tool_args.get(key) or '').strip()
+                if not value or value == getattr(tutor, attribute):
+                    continue
+                if attribute == 'email' and User.query.filter(User.email == value, User.id != tutor.id).first():
+                    return _mcp_err(req_id, -32602, 'O e-mail informado ja pertence a outro cadastro.')
+                setattr(tutor, attribute, value)
+                changed.append(key)
+            db.session.commit()
+            return _mcp_ok(req_id, _mcp_json_content({'tutor': _mcp_owner_payload(tutor), 'campos_atualizados': changed}))
 
         if tool_name == 'registrar_vacina_pet':
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'pets:write')
