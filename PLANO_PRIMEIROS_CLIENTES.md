@@ -72,7 +72,7 @@ Se alguém do Grupo A ou das visitas topar uma conversa, este é o roteiro da de
 
 1. **Agenda + lembretes automáticos** (2 min)
    - "Hoje você liga ou manda mensagem para lembrar consulta?"
-   - Mostra como o sistema dispara automático pelo WhatsApp
+   - Mostra lembretes por e-mail/push e o link de WhatsApp para contato consentido
 
 2. **Prontuário digital** (3 min)
    - "O histórico do animal fica onde hoje — papel, caderno, Word?"
@@ -95,7 +95,7 @@ Se a resposta for sim: "O sistema custa R$60/mês. Você quer começar com 30 di
 
 Para as clínicas de São Joaquim da Barra, Guará, Bebedouro que você mapeou no Dia 1, mande mensagem pelo WhatsApp do estabelecimento:
 
-> "Oi! Vi a clínica de vocês no Google e queria apresentar um sistema de gestão veterinária que desenvolvemos aqui em Orlândia. Tem controle de agenda, prontuário, financeiro e WhatsApp automático. Posso mostrar em 15 minutos por vídeo chamada? Pode ser essa semana ou semana que vem."
+> "Oi! Vi a clínica de vocês no Google e queria apresentar um sistema de gestão veterinária que desenvolvemos aqui em Orlândia. Tem controle de agenda, prontuário, financeiro e lembretes por e-mail/push, com WhatsApp opcional via link. Posso mostrar em 15 minutos por vídeo chamada?"
 
 Meta: mandar para 10 estabelecimentos da região.
 
@@ -121,7 +121,7 @@ Poste **3 vídeos curtos** (pode ser pelo celular, sem edição):
 > Mostre você abrindo uma agenda de papel ou planilha desorganizada e diga: "É assim que a maioria das clínicas veterinárias controla os agendamentos. Existe jeito melhor."
 
 **Vídeo 2 — "A solução"**
-> Grave a tela do sistema por 60 segundos mostrando a agenda, o prontuário e o lembrete automático de WhatsApp. Sem falar muito, só mostre.
+> Grave a tela do sistema por 60 segundos mostrando a agenda, o prontuário e os lembretes de cuidado. Sem falar muito, só mostre.
 
 **Vídeo 3 — "Para quem é"**
 > "Se você tem uma clínica veterinária em Orlândia ou na região e ainda controla tudo no papel ou no WhatsApp, isso é para você. 30 dias grátis, sem cartão."
@@ -163,7 +163,7 @@ A maioria das vendas acontece no follow-up, não na primeira mensagem.
 > "Oi [nome]! Tô desenvolvendo um sistema para clínicas veterinárias aqui de Orlândia e queria muito a sua opinião. É rápido, 15 minutinhos. Você tem um tempinho essa semana?"
 
 ### Abordagem fria (WhatsApp — desconhecidos)
-> "Oi! Vi a [nome da clínica] no Google aqui em [cidade]. Desenvolvemos um sistema de gestão veterinária em Orlândia com agenda, prontuário, financeiro e WhatsApp automático. Posso mostrar em 15 min por vídeo chamada?"
+> "Oi! Vi a [nome da clínica] no Google aqui em [cidade]. Desenvolvemos um sistema de gestão veterinária em Orlândia com agenda, prontuário, financeiro e lembretes de cuidado. Posso mostrar em 15 min por vídeo chamada?"
 
 ### Abordagem para pet shops (loja)
 > "Oi! Tô montando uma loja online de produtos pet em Orlândia e região. Vocês teriam interesse em vender os produtos de vocês pela plataforma? Sem custo fixo, só comissão sobre vendas."
