@@ -42,10 +42,9 @@ google-auth==2.40.1
 google-auth-httplib2==0.2.0
 mercadopago==2.3.0
 requests==2.32.3
-# Twilio não é usado hoje (WhatsApp via links wa.me). Mantido apenas porque
-# _send_share_sms/enviar_mensagem_whatsapp fazem import lazy se as env vars
-# TWILIO_* forem configuradas. Candidato a remoção definitiva.
-twilio==9.5.1
+# Twilio foi removido (2026-07-10): WhatsApp é via links wa.me e SMS nunca foi
+# usado. Os caminhos de código degradam com log claro se as env vars TWILIO_*
+# forem configuradas sem o pacote instalado.
 
 # --- Fiscal (NF-e/NFS-e) ---
 lxml==6.0.2
