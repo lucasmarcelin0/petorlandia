@@ -597,6 +597,31 @@
         </div>
     </section>
 
+    <section class="landing-section" aria-labelledby="landing-start-title">
+        <div class="landing-section-heading">
+            <span class="landing-section-kicker">Comece pelo seu objetivo</span>
+            <h2 id="landing-start-title">Uma entrada clara para cada parte da rede pet.</h2>
+            <p>Escolha uma jornada e veja apenas o que é relevante para você.</p>
+        </div>
+        <div class="landing-audience-grid">
+            <article class="landing-audience-card">
+                <h3>Sou tutor</h3>
+                <p>Cadastre seu pet, acompanhe cuidados e encontre serviços.</p>
+                <a class="landing-btn landing-btn--secondary" href="{{ url_for('register') }}">Criar conta</a>
+            </article>
+            <article class="landing-audience-card">
+                <h3>Tenho uma clínica</h3>
+                <p>Conheça agenda, prontuário, financeiro e relacionamento.</p>
+                <a class="landing-btn landing-btn--secondary" href="{{ url_for('parceiro_clinica_landing') }}">Conhecer solução</a>
+            </article>
+            <article class="landing-audience-card">
+                <h3>Vendo produtos</h3>
+                <p>Entre no marketplace local sem mensalidade inicial.</p>
+                <a class="landing-btn landing-btn--secondary" href="{{ url_for('parceiro_loja_landing') }}">Ser parceiro</a>
+            </article>
+        </div>
+    </section>
+
     <section class="landing-cta-banner" aria-labelledby="landing-cta-title">
         <div>
             <span class="landing-section-kicker">Conhecer a solução</span>
