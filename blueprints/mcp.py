@@ -23,6 +23,7 @@ from models import (
     ProductVariant,
     User,
     Vacina,
+    Veterinario,
 )
 from services.appointments import ReturnAppointmentDTO, schedule_return_appointment
 from services.oauth_provider import _oauth_allowed_scopes, _oauth_extract_bearer_token, _oauth_issuer, _oauth_order_scopes
@@ -314,6 +315,14 @@ MCP_TOOL_DESCRIPTOR_DEFAULTS = {
     'importar_laudo_volante': {
         'scopes': ['tutors:write', 'pets:write', 'exams:write'],
         'annotations': _mcp_annotations(False, idempotent=False),
+    },
+    'sugerir_modelo_laudo': {
+        'title': 'Sugerir modelo de laudo',
+        'scopes': ['exams:read'],
+        'annotations': _mcp_annotations(True, idempotent=True),
+        'outputSchema': _mcp_object_output_schema(
+            'Modelo de laudo baseado apenas em exames acessiveis ao veterinario.'
+        ),
     },
     'agendar_consulta': {
         'title': 'Agendar consulta',
@@ -1152,6 +1161,13 @@ def _mcp_widget_response(req_id, uri: str):
                         'resource_domains': [],
                         'redirect_domains': [_oauth_issuer(), *redirect_domains],
                     },
+                    'ui': {
+                        'domain': _oauth_issuer(),
+                        'csp': {
+                            'connectDomains': [_oauth_issuer()],
+                            'resourceDomains': [_oauth_issuer()],
+                        },
+                    },
                 },
             }
         ]
@@ -1766,14 +1782,30 @@ def _mcp_require_scopes(req_id, token_scope_set, *required_scopes):
     missing_scopes = sorted(required_scope_set.difference(token_scope_set))
     if not missing_scopes:
         return None
-    return _mcp_err_with_data(
+    issuer = _oauth_issuer()
+    resource_path = _mcp_resource_path()
+    metadata_url = f'{issuer}/.well-known/oauth-protected-resource{resource_path}'
+    scope_text = ' '.join(missing_scopes)
+    challenge = (
+        f'Bearer resource_metadata="{metadata_url}",'
+        f' error="insufficient_scope",'
+        f' error_description="Additional PetOrlandia permissions are required",'
+        f' scope="{scope_text}"'
+    )
+    return _mcp_ok(
         req_id,
-        -32003,
-        'This MCP tool requires additional OAuth scopes.',
         {
+            'content': [{
+                'type': 'text',
+                'text': 'Authentication required: authorize the additional PetOrlandia permissions and try again.',
+            }],
+            'isError': True,
+            '_meta': {'mcp/www_authenticate': [challenge]},
+            'structuredContent': {
             'required_scopes': sorted(required_scope_set),
             'granted_scopes': sorted(token_scope_set),
             'missing_scopes': missing_scopes,
+            },
         },
     )
 
@@ -1863,6 +1895,10 @@ def mcp_server():
 
     token_obj = OAuthAccessToken.query.filter_by(access_token=bearer).first()
     if not token_obj or not token_obj.is_active:
+        return _mcp_unauthorized()
+
+    expected_resource = f'{_oauth_issuer().rstrip("/")}{_mcp_resource_path()}'
+    if not token_obj.resource or token_obj.resource.rstrip('/') != expected_resource:
         return _mcp_unauthorized()
 
     user = db.session.get(User, token_obj.user_id)
@@ -3090,6 +3126,8 @@ def mcp_server():
                 return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
             try:
                 result = _integration_create_exame_imagem(user, tool_args)
+            except PermissionError as exc:
+                return _mcp_err(req_id, -32003, str(exc))
             except ValueError as exc:
                 return _mcp_err(req_id, -32602, str(exc))
             return _mcp_ok(req_id, _mcp_json_content(result))
@@ -3180,6 +3218,8 @@ def mcp_server():
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
             if scope_error:
                 return scope_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
             confirmation_error = _mcp_require_confirmation(req_id, tool_args)
             if confirmation_error:
                 return confirmation_error
@@ -3194,12 +3234,17 @@ def mcp_server():
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'tutors:write', 'pets:write')
             if scope_error:
                 return scope_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
             confirmation_error = _mcp_require_confirmation(req_id, tool_args)
             if confirmation_error:
                 return confirmation_error
             clinic = db.session.get(Clinica, int(tool_args.get('clinica_id') or _integration_user_clinic_id(user) or 0))
             if not clinic:
                 return _mcp_err(req_id, -32602, 'Informe clinica_id ou conecte um usuario com clinica vinculada.')
+            user_clinic_id = _integration_user_clinic_id(user)
+            if getattr(user, 'role', '') != 'admin' and user_clinic_id != clinic.id:
+                return _mcp_err(req_id, -32003, 'A clinica informada nao pertence ao escopo profissional desta conta.')
             try:
                 tutor, tutor_created, provisional = _integration_find_or_create_tutor_for_clinic(user, clinic, {'nome': tool_args.get('nome_tutor'), 'telefone': tool_args.get('telefone'), 'email': tool_args.get('email')})
                 animal, animal_created = _integration_find_or_create_pet_for_tutor(user, clinic, tutor, {'nome': tool_args.get('nome_animal'), 'especie': tool_args.get('especie'), 'idade': tool_args.get('idade'), 'raca': tool_args.get('raca'), 'sexo': tool_args.get('sexo')})
@@ -3212,6 +3257,8 @@ def mcp_server():
             scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:write')
             if scope_error:
                 return scope_error
+            if not has_veterinarian_profile(user):
+                return _mcp_err(req_id, -32003, 'This MCP tool is restricted to veterinarian accounts.')
             confirmation_error = _mcp_require_confirmation(req_id, tool_args)
             if confirmation_error:
                 return confirmation_error
@@ -3223,15 +3270,12 @@ def mcp_server():
                     return _mcp_err(req_id, -32602, 'Informe clinica_id ou nome_clinica.')
                 if not (tool_args.get('email') or tool_args.get('telefone') or clinic.email or clinic.telefone):
                     return _mcp_err(req_id, -32602, 'Informe email ou telefone para enviar o primeiro acesso da clinica.')
-                _integration_ensure_clinic_admin_user(
-                    clinic,
-                    email=tool_args.get('email'),
-                    phone=tool_args.get('telefone'),
-                    name=tool_args.get('nome_responsavel') or tool_args.get('responsavel_nome'),
-                )
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
-                if exame:
-                    _integration_reconcile_exam_documents(exame.animal, [exame])
+                if not exame or not _integration_user_can_access_exame_imagem(user, exame):
+                    return _mcp_err(req_id, -32003, 'Informe um exame de imagem criado ou acessivel por esta conta.')
+                if exame.clinica_requisitante_id and exame.clinica_requisitante_id != clinic.id:
+                    return _mcp_err(req_id, -32003, 'A clinica nao corresponde ao exame informado.')
+                _integration_reconcile_exam_documents(exame.animal, [exame])
                 invite = _create_external_onboarding_invite('clinic', user, clinic=clinic, tutor=getattr(exame, 'tutor', None), animal=getattr(exame, 'animal', None), exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Primeiro acesso gratuito da clinica requisitante.')
             else:
                 tutor = db.session.get(User, int(tool_args.get('tutor_id'))) if tool_args.get('tutor_id') else None
@@ -3240,8 +3284,13 @@ def mcp_server():
                     tutor = animal.owner
                 if not tutor or not animal or animal.user_id != tutor.id:
                     return _mcp_err(req_id, -32602, 'Informe tutor e animal vinculados.')
+                allowed_animal = _integration_accessible_animals_query(user).filter(Animal.id == animal.id).first()
+                if not allowed_animal:
+                    return _mcp_err(req_id, -32003, 'O animal informado nao pertence ao escopo desta conta.')
                 exame = db.session.get(ExameImagem, int(tool_args.get('exame_id'))) if tool_args.get('exame_id') else None
                 if exame:
+                    if exame.animal_id != animal.id or not _integration_user_can_access_exame_imagem(user, exame):
+                        return _mcp_err(req_id, -32003, 'O exame informado nao pertence ao animal acessivel.')
                     _integration_reconcile_exam_documents(exame.animal, [exame])
                 invite = _create_external_onboarding_invite('tutor', user, clinic=animal.clinica, tutor=tutor, animal=animal, exam=getattr(exame, 'exame_solicitado', None), exam_image=exame, message='Acesso restrito a ficha do proprio animal.')
             db.session.commit()
@@ -3306,7 +3355,7 @@ def mcp_server():
             return _mcp_ok(req_id, response)
 
         if tool_name == 'sugerir_modelo_laudo':
-            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'profile')
+            scope_error = _mcp_require_scopes(req_id, token_scope_set, 'exams:read')
             if scope_error:
                 return scope_error
             if not has_veterinarian_profile(user):
@@ -3362,10 +3411,15 @@ def mcp_server():
             if not consulta:
                 return _mcp_err(req_id, -32004, 'Consulta não encontrada no escopo disponível para este usuário.')
             try:
+                selected_vet_id = int(tool_args.get('veterinario_id') or user.veterinario.id)
+                selected_vet = db.session.get(Veterinario, selected_vet_id)
+                own_vet = getattr(user, 'veterinario', None)
+                if not selected_vet or (selected_vet.id != getattr(own_vet, 'id', None) and selected_vet.clinica_id != _integration_user_clinic_id(user)):
+                    return _mcp_err(req_id, -32003, 'O veterinario selecionado nao pertence ao escopo desta clinica.')
                 payload = ReturnAppointmentDTO(
                     date=_integration_parse_date_arg(tool_args.get('data')),
                     time=_integration_parse_time_arg(tool_args.get('hora')),
-                    veterinarian_id=int(tool_args.get('veterinario_id') or user.veterinario.id),
+                    veterinarian_id=selected_vet_id,
                     reason=(tool_args.get('motivo') or '').strip() or None,
                 )
                 result = schedule_return_appointment(

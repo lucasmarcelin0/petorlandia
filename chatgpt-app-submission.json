@@ -6,7 +6,7 @@
     "subtitle": "Gestao veterinaria",
     "description": "PetOrlandia ajuda tutores, veterinarios e equipes clinicas a consultar pets, agenda e pendencias, importar carteira de vacinacao por fotos com revisao obrigatoria, gerar resumos clinicos e registrar atendimentos, exames, laudos e retornos com confirmacao explicita dentro do ChatGPT. Tambem permite consultar produtos reais da loja, montar pedido e abrir checkout no PetOrlandia.",
     "category": "PRODUCTIVITY",
-    "icon_url": "https://petorlandia-fbabb575d64c.herokuapp.com/static/chatgpt_app_icon.png"
+    "icon_url": "https://www.petorlandia.com.br/static/chatgpt_app_icon.png"
   },
   "tools": {
     "listar_meus_pets": {
@@ -524,6 +524,38 @@
         "open_world_justification": "Only writes PetOrlandia internal order/cart state for the authenticated user.",
         "destructive_justification": "Does not delete data or process external payment; it creates an internal order after explicit confirmation."
       }
+    },
+    "listar_vacinas_pet": {
+      "annotations": {"readOnlyHint": true, "openWorldHint": false, "destructiveHint": false},
+      "justifications": {
+        "read_only_justification": "Only retrieves vaccine history for pets accessible to the authenticated user.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete or overwrite health records."
+      }
+    },
+    "obter_carteirinha_pet": {
+      "annotations": {"readOnlyHint": true, "openWorldHint": false, "destructiveHint": false},
+      "justifications": {
+        "read_only_justification": "Only retrieves the authenticated user's digital pet card.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not delete, overwrite, or revoke records."
+      }
+    },
+    "atualizar_perfil_tutor": {
+      "annotations": {"readOnlyHint": false, "openWorldHint": false, "destructiveHint": false},
+      "justifications": {
+        "read_only_justification": "Updates only explicitly confirmed fields of the authenticated tutor profile.",
+        "open_world_justification": "Writes only inside the authenticated user's private PetOrlandia profile.",
+        "destructive_justification": "Does not delete the profile or medical history."
+      }
+    },
+    "sugerir_modelo_laudo": {
+      "annotations": {"readOnlyHint": true, "openWorldHint": false, "destructiveHint": false},
+      "justifications": {
+        "read_only_justification": "Generates a draft from examination examples accessible to the authenticated veterinarian.",
+        "open_world_justification": "Does not write to public internet state or third-party systems.",
+        "destructive_justification": "Does not create, delete, or alter clinical records."
+      }
     }
   },
   "test_cases": [
@@ -566,72 +598,6 @@
       "tools_triggered": "importar_laudo_volante",
       "expected_output": "Creates or reuses the clinic, tutor, animal, and completed exam record, then returns the recommended next action and message for the clinic.",
       "expected_output_url": null
-    },
-    {
-      "description": "Open the visual review panel before importing a report.",
-      "user_prompt": "Abra o painel para eu revisar o laudo volante da Nina antes de gravar.",
-      "file_attachment_urls": null,
-      "tools_triggered": "abrir_importador_laudo_volante",
-      "expected_output": "Renders the review widget with clinic, tutor, animal, exam, report text, and missing fields to confirm.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Run the ultrasound image exam flow with PDF and releases.",
-      "user_prompt": "Conduza o fluxo do ultrassonografista para Ultrassonografia Abdominal do SID, tutor Rosa, clinica requisitante Angrisano, data 16/02/2026, profissional Robson Oliveira CRMV-MG 26136, com PDF anexado, e confirme cada gravacao quando eu autorizar.",
-      "file_attachment_urls": null,
-      "tools_triggered": "criar_exame_imagem, anexar_pdf_exame_imagem, liberar_exame_para_clinica, gerar_convite_primeiro_acesso_clinica, liberar_exame_para_tutor, gerar_convite_acesso_tutor, listar_historico_medico_animal, obter_documento_clinico",
-      "expected_output": "Creates or reuses clinic, tutor, and animal records, creates the image exam, attaches the PDF, releases it according to permissions, returns invite links, and lists the exam in the animal medical history with a human-facing shareable_url or portal URL. Protected API URLs must not be presented as the exam link.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Schedule a return from an existing consultation.",
-      "user_prompt": "Agende retorno da consulta 123 para 2026-06-15 as 14:00 e confirme a gravacao.",
-      "file_attachment_urls": null,
-      "tools_triggered": "agendar_retorno",
-      "expected_output": "Creates a return appointment if the consultation is accessible and the requested time is valid.",
-      "expected_output_url": null
-    },
-    {
-      "name": "Buscar paciente antes de atendimento",
-      "prompt": "Procure a paciente Luna da tutora Marina e me mostre os possiveis cadastros.",
-      "expected_behavior": "Searches accessible patients and returns matching animals with tutor context, without writing data.",
-      "tools_triggered": "buscar_paciente"
-    },
-    {
-      "name": "Abrir timeline clinica do paciente",
-      "prompt": "Abra a timeline clinica do Thor antes da consulta.",
-      "expected_behavior": "Retrieves the patient timeline and opens the timeline widget with consultations, exams, vaccines, documents, and pendencies.",
-      "tools_triggered": "obter_timeline_clinica"
-    },
-    {
-      "name": "Preparar consulta do dia",
-      "prompt": "Prepare a consulta do Rex das 14h com resumo, pendencias e perguntas sugeridas.",
-      "expected_behavior": "Builds a consultation briefing from existing clinical records and does not write data.",
-      "tools_triggered": "preparar_consulta"
-    },
-    {
-      "name": "Central admin de alertas",
-      "prompt": "Quais alertas administrativos abertos exigem minha atencao agora?",
-      "expected_behavior": "Lists actionable admin alerts for an authenticated admin and opens the admin command center widget.",
-      "tools_triggered": "listar_alertas_admin"
-    },
-    {
-      "name": "Buscar produtos reais da loja",
-      "prompt": "O que voces tem a venda? Estou procurando racao para cachorro grande.",
-      "expected_behavior": "Uses the store product search tool and only lists active real products returned by PetOrlandia, including prices and links when available.",
-      "tools_triggered": "buscar_produtos_loja"
-    },
-    {
-      "name": "Detalhar produto antes da compra",
-      "prompt": "Quero ver detalhes e apresentacoes desse produto antes de comprar.",
-      "expected_behavior": "Fetches product details, variants, public price and stock from PetOrlandia instead of inventing SKU data.",
-      "tools_triggered": "obter_produto_loja"
-    },
-    {
-      "name": "Criar pedido de loja confirmado",
-      "prompt": "Pode criar meu pedido com esse produto. Eu confirmo.",
-      "expected_behavior": "Creates a PetOrlandia order/cart only after explicit confirmation and returns a PetOrlandia cart/checkout link; it does not claim to process card payment inside ChatGPT.",
-      "tools_triggered": "criar_pedido_loja"
     }
   ],
   "negative_test_cases": [
@@ -649,14 +615,6 @@
       "file_attachment_urls": null,
       "tools_triggered": null,
       "expected_output": "The assistant should ask for confirmation or missing details before using any write tool.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Do not trigger for unrelated personal calendar requests.",
-      "user_prompt": "Marque uma reuniao com meu contador amanha as 9h.",
-      "file_attachment_urls": null,
-      "tools_triggered": null,
-      "expected_output": "The app should not be invoked because the request is outside PetOrlandia clinical workflows.",
       "expected_output_url": null
     },
     {

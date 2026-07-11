@@ -246,7 +246,7 @@ CORS(app, resources={
         "allow_headers": ["Content-Type", "Authorization"],
     },
     # MCP server endpoint — Claude and ChatGPT connect here after OAuth
-    r"/mcp": {
+    r"/mcp(?:/v2)?": {
         "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "Mcp-Session-Id", "MCP-Protocol-Version"],
@@ -5897,16 +5897,22 @@ def _integration_find_existing_tutor(clinic_id: int | None, tutor_data: dict):
     name = (tutor_data.get('nome') or tutor_data.get('name') or '').strip()
 
     if email:
-        found = User.query.filter(func.lower(User.email) == email).first()
+        found = User.query.filter(
+            func.lower(User.email) == email,
+            or_(User.clinica_id == clinic_id, User.clinica_id.is_(None)),
+        ).first()
         if found:
             return found
     if cpf:
-        found = User.query.filter_by(cpf=cpf).first()
+        found = User.query.filter(
+            User.cpf == cpf,
+            or_(User.clinica_id == clinic_id, User.clinica_id.is_(None)),
+        ).first()
         if found:
             return found
     if clinic_id and name:
         query = User.query.filter(
-            User.clinica_id == clinic_id,
+            or_(User.clinica_id == clinic_id, User.clinica_id.is_(None)),
             func.lower(User.name) == name.lower(),
             User.role == 'adotante',
         )
@@ -5979,7 +5985,9 @@ def _integration_create_or_reuse_tutor_and_pets(user: User, tutor_data: dict, pe
         date_of_birth = tutor_data.get('date_of_birth')
         if date_of_birth:
             tutor.date_of_birth = _integration_parse_date_arg(date_of_birth)
-        tutor.set_password('123456789')
+        # The account is claimed through the first-access/reset flow. Never
+        # create tutor accounts with a shared or guessable bootstrap password.
+        tutor.set_password(secrets.token_urlsafe(32))
         db.session.add(tutor)
         db.session.flush()
 
@@ -6591,9 +6599,7 @@ def _integration_suggest_report_template(user: User, payload: dict):
     species_filter = _integration_normalize_match_text(payload.get('especie') or '')
 
     query = (
-        ExameSolicitado.query
-        .join(BlocoExames, ExameSolicitado.bloco_id == BlocoExames.id)
-        .join(Animal, BlocoExames.animal_id == Animal.id)
+        _integration_accessible_exam_requests_query(user)
         .filter(ExameSolicitado.resultado.isnot(None))
         .order_by(ExameSolicitado.performed_at.desc().nullslast(), ExameSolicitado.id.desc())
         .limit(50)
@@ -6662,6 +6668,15 @@ def _integration_schedule_consulta(user: User, animal: Animal, payload: dict):
     except (TypeError, ValueError):
         raise ValueError('veterinario_id inválido.')
 
+    selected_vet = db.session.get(Veterinario, vet_id)
+    own_clinic_id = _integration_user_clinic_id(user)
+    if not selected_vet:
+        raise ValueError('Veterinario nao encontrado.')
+    if selected_vet.id != getattr(veterinario, 'id', None) and selected_vet.clinica_id != own_clinic_id:
+        raise PermissionError('O veterinario selecionado nao pertence ao escopo desta clinica.')
+    if animal.clinica_id and selected_vet.clinica_id and animal.clinica_id != selected_vet.clinica_id:
+        raise PermissionError('O veterinario e o animal pertencem a clinicas diferentes.')
+
     scheduled_at_local = _integration_parse_datetime_arg(payload.get('data'), payload.get('hora'))
     appointment_kind = (payload.get('tipo') or 'consulta').strip() or 'consulta'
     if not is_slot_available(vet_id, scheduled_at_local, kind=appointment_kind):
@@ -6713,23 +6728,6 @@ def integration_bearer_required(*required_scopes: str):
             token_scope_set = {item.strip() for item in (token.scope or '').split() if item.strip()}
             missing_scopes = sorted(required_scope_set.difference(token_scope_set))
             if missing_scopes:
-                if _oauth_access_token_can_self_heal_mcp_scope(token):
-                    healed_scope = _oauth_default_mcp_scope()
-                    token.scope = healed_scope
-                    refresh = (
-                        db.session.get(OAuthRefreshToken, token.refresh_token_id)
-                        if token.refresh_token_id
-                        else None
-                    )
-                    if refresh is not None and _oauth_scope_needs_mcp_recovery(refresh.scope):
-                        refresh.scope = healed_scope
-                        db.session.add(refresh)
-                    db.session.add(token)
-                    db.session.commit()
-                    _oauth_log_event('oauth_mcp_legacy_access_scope_upgraded', client_id=token.client_id, user_id=token.user_id)
-                    token_scope_set = _oauth_scope_tokens(healed_scope)
-                    missing_scopes = sorted(required_scope_set.difference(token_scope_set))
-
                 if missing_scopes and _oauth_access_token_requires_mcp_reauthorization(token):
                     refresh = (
                         db.session.get(OAuthRefreshToken, token.refresh_token_id)
@@ -6983,6 +6981,9 @@ def _integration_find_or_create_exame_image_entities(user: User, payload: dict):
         clinic_created = False
         if not clinic:
             raise ValueError('Clinica requisitante nao encontrada.')
+        user_clinic_id = _integration_user_clinic_id(user)
+        if getattr(user, 'role', '') != 'admin' and user_clinic_id != clinic.id:
+            raise PermissionError('A clinica informada nao pertence ao escopo profissional desta conta.')
     elif payload.get('nome_clinica'):
         clinic, clinic_created = _integration_find_or_create_external_clinic(user, {
             'nome': payload.get('nome_clinica'),
@@ -7002,8 +7003,11 @@ def _integration_find_or_create_exame_image_entities(user: User, payload: dict):
         tutor = db.session.get(User, int(raw_tutor_id))
         tutor_created = False
         tutor_provisional_email = False
-        if not tutor:
+        if not tutor or tutor.clinica_id not in {None, clinic.id}:
             raise ValueError('Tutor nao encontrado.')
+        if tutor.clinica_id is None:
+            tutor.clinica_id = clinic.id
+            db.session.add(tutor)
     elif payload.get('nome_tutor'):
         tutor, tutor_created, tutor_provisional_email = _integration_find_or_create_tutor_for_clinic(
             user,
@@ -7023,7 +7027,7 @@ def _integration_find_or_create_exame_image_entities(user: User, payload: dict):
         animal = db.session.get(Animal, int(raw_animal_id))
         if not animal:
             raise ValueError('Animal nao encontrado.')
-        if animal.user_id != tutor.id:
+        if animal.user_id != tutor.id or (animal.clinica_id and animal.clinica_id != clinic.id):
             raise ValueError('Animal informado nao pertence ao tutor indicado.')
         if not animal.clinica_id:
             animal.clinica_id = clinic.id
@@ -7465,7 +7469,7 @@ def _integration_find_existing_exam_for_laudo(payload: dict, animal: Animal | No
             exam = db.session.get(ExameSolicitado, int(raw_exam_id))
         except (TypeError, ValueError):
             exam = None
-        if exam:
+        if exam and (animal is None or (exam.bloco and exam.bloco.animal_id == animal.id)):
             return exam
 
     raw_bloco_id = payload.get('bloco_id') or exam_data.get('bloco_id')

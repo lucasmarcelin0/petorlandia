@@ -163,10 +163,13 @@ def _oauth_order_scopes(scopes: Iterable[str]) -> str:
 
 
 def _oauth_veterinarian_write_scopes() -> set[str]:
+    """Scopes whose actions are exclusively available to veterinarian accounts.
+
+    Tutor and pet profile updates plus appointment requests also use write
+    scopes, so those scopes must remain grantable to ordinary tutor accounts.
+    Authorization handlers still enforce record ownership and role checks.
+    """
     return {
-        'tutors:write',
-        'pets:write',
-        'appointments:write',
         'consultations:write',
         'exams:write',
     }
@@ -180,8 +183,13 @@ def _oauth_scope_tokens(scope_value: str | None) -> set[str]:
     return {item.strip() for item in (scope_value or '').split() if item.strip()}
 
 
-def _oauth_default_mcp_scope() -> str:
-    return _oauth_order_scopes(_oauth_allowed_scopes())
+def _oauth_default_mcp_scope(user_id: int | None = None) -> str:
+    scopes = _oauth_allowed_scopes()
+    if user_id is not None:
+        user = db.session.get(User, user_id)
+        if not user or not has_veterinarian_profile(user):
+            scopes = scopes.difference(_oauth_veterinarian_write_scopes())
+    return _oauth_order_scopes(scopes)
 
 
 def _oauth_scope_needs_mcp_recovery(scope_value: str | None) -> bool:
@@ -273,25 +281,24 @@ def _oauth_datetime_is_future(value) -> bool:
     return value > utcnow()
 
 
-def _oauth_mcp_user_can_receive_clinical_scopes(user_id: int | None) -> bool:
+def _oauth_mcp_user_can_receive_scopes(user_id: int | None) -> bool:
     user = db.session.get(User, user_id) if user_id else None
-    return bool(user and has_veterinarian_profile(user))
+    return bool(user)
 
 
 def _oauth_access_token_can_self_heal_mcp_scope(token: OAuthAccessToken) -> bool:
     return (
         _oauth_access_token_requires_mcp_reauthorization(token)
-        and _oauth_mcp_user_can_receive_clinical_scopes(token.user_id)
+        and _oauth_mcp_user_can_receive_scopes(token.user_id)
     )
 
 
 def _oauth_refresh_token_can_self_heal_mcp_scope(refresh: OAuthRefreshToken, client: OAuthClient) -> bool:
-    if refresh.replaced_by_jti:
+    if refresh.replaced_by_jti or not refresh.is_active:
         return False
     return (
         _oauth_refresh_token_requires_mcp_reauthorization(refresh, client)
-        and _oauth_datetime_is_future(refresh.expires_at)
-        and _oauth_mcp_user_can_receive_clinical_scopes(refresh.user_id)
+        and _oauth_mcp_user_can_receive_scopes(refresh.user_id)
     )
 
 
@@ -369,7 +376,7 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
 
 def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool:
     parsed = urlparse(redirect_uri)
-    if parsed.scheme not in ('https', 'http') or not parsed.netloc or parsed.fragment:
+    if parsed.scheme != 'https' or not parsed.netloc or parsed.fragment:
         return False
 
     for allowed_uri in client.redirect_uri_list():
@@ -407,7 +414,10 @@ def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool
 
 
 def _oauth_requires_pkce(client: OAuthClient) -> bool:
-    return not bool(client.is_confidential)
+    # OAuth 2.1 requires authorization-code clients to use PKCE. Confidential
+    # clients still authenticate at the token endpoint; the client secret does
+    # not replace protection against intercepted authorization codes.
+    return True
 
 
 def _oauth_validate_client_secret(client: OAuthClient, provided_secret: str) -> bool:
@@ -440,7 +450,9 @@ def _oauth_extract_bearer_token() -> str | None:
     auth_header = request.headers.get('Authorization', '')
     if auth_header.lower().startswith('bearer '):
         return auth_header[7:].strip()
-    return request.values.get('access_token')
+    # Bearer tokens in query strings leak through browser history, proxy logs
+    # and referrers. OAuth 2.1/MCP clients must use the Authorization header.
+    return None
 
 
 
@@ -492,6 +504,7 @@ def _oauth_issue_refresh_grant_response(
         client_id=refresh.client_id,
         user_id=refresh.user_id,
         refresh_token=secrets.token_urlsafe(48),
+        resource=refresh.resource,
         scope=granted_scope,
         family_id=refresh.family_id,
         expires_at=now + timedelta(seconds=refresh_expires_in),
@@ -508,6 +521,7 @@ def _oauth_issue_refresh_grant_response(
         user_id=refresh.user_id,
         access_token=secrets.token_urlsafe(48),
         token_type='Bearer',
+        resource=refresh.resource,
         scope=granted_scope,
         refresh_token_id=new_refresh.id,
         expires_at=now + timedelta(seconds=access_expires_in),

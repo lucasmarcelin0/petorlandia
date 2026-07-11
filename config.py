@@ -75,6 +75,12 @@ class Config:
     OAUTH_AUTHORIZATION_CODE_EXPIRES_IN = int(os.environ.get("OAUTH_AUTHORIZATION_CODE_EXPIRES_IN", "300"))
     OAUTH_ACCESS_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_ACCESS_TOKEN_EXPIRES_IN", "900"))
     OAUTH_REFRESH_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_REFRESH_TOKEN_EXPIRES_IN", "2592000"))
+    # Keep OAuth issuer/resource identifiers independent from the request Host
+    # header. Production uses the verified public origin; tunnels and local
+    # environments can opt in to their own origin with OAUTH_ISSUER.
+    OAUTH_ISSUER = (
+        os.environ.get("OAUTH_ISSUER") or "https://www.petorlandia.com.br"
+    ).rstrip("/")
     OAUTH_ALLOWED_SCOPES = os.environ.get(
         "OAUTH_ALLOWED_SCOPES",
         (

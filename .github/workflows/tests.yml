@@ -27,12 +27,12 @@ jobs:
 
       - name: Run full test suite
         env:
-          SQLALCHEMY_DATABASE_URI: sqlite:///:memory:
+          SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
           python -m pytest tests/ -q -p no:cacheprovider
 
       - name: Route contract (url_map snapshot)
         env:
-          SQLALCHEMY_DATABASE_URI: sqlite:///:memory:
+          SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
           python -m pytest tests/test_url_map_contract.py -q -p no:cacheprovider

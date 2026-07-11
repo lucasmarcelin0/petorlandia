@@ -2444,7 +2444,22 @@ def alterar_vacina_modelo(vacina_id):
     return jsonify({'success': True})
 
 
+def _current_user_can_manage_vaccine_history(animal: Animal) -> bool:
+    if not current_user.is_authenticated:
+        return False
+    if getattr(current_user, 'role', '') == 'admin':
+        return True
+    if animal.user_id == current_user.id or animal.added_by_id == current_user.id:
+        return True
+    if getattr(current_user, 'worker', '') == 'veterinario' and not animal.clinica_id:
+        return True
+    if has_professional_access(current_user):
+        return bool(animal.clinica_id and animal.clinica_id in set(_viewer_accessible_clinic_ids(current_user) or ()))
+    return False
+
+
 @bp.route("/animal/<int:animal_id>/vacinas", methods=["POST"])
+@login_required
 def salvar_vacinas(animal_id):
     data = request.get_json(silent=True) or {}
 
@@ -2453,6 +2468,8 @@ def salvar_vacinas(animal_id):
 
     try:
         animal = Animal.query.get_or_404(animal_id)
+        if not _current_user_can_manage_vaccine_history(animal):
+            return jsonify({"success": False, "error": "Permissao negada"}), 403
         for v in data["vacinas"]:
             aplicada_em_str = v.get("aplicada_em")
             if aplicada_em_str:
@@ -2491,8 +2508,11 @@ def salvar_vacinas(animal_id):
 
 
 @bp.route("/animal/<int:animal_id>/vacinas/imprimir")
+@login_required
 def imprimir_vacinas(animal_id):
     animal = Animal.query.get_or_404(animal_id)
+    if not _current_user_can_manage_vaccine_history(animal):
+        abort(403)
     consulta = animal.consultas[-1] if animal.consultas else None
     veterinario = consulta.veterinario if consulta else None
     if not veterinario and current_user.is_authenticated and getattr(current_user, "worker", None) == "veterinario":

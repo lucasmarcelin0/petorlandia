@@ -62,6 +62,18 @@ from time_utils import utcnow
 bp = Blueprint("oauth_routes", __name__)
 
 
+def _oauth_normalize_mcp_resource(resource: str) -> str:
+    """Validate and canonicalize the RFC 8707 resource for this MCP server."""
+    value = (resource or '').strip().rstrip('/')
+    if not value:
+        return ''
+    issuer = _oauth_issuer().rstrip('/')
+    allowed_resources = {f'{issuer}/mcp', f'{issuer}/mcp/v2'}
+    if value not in allowed_resources:
+        raise ValueError('The requested resource is not a PetOrlandia MCP endpoint.')
+    return value
+
+
 def get_blueprint():
     return bp
 
@@ -106,6 +118,7 @@ def oauth_authorize():
     code_challenge = request.values.get('code_challenge', '').strip()
     code_challenge_method = request.values.get('code_challenge_method', '').strip()
     resource = request.values.get('resource', '').strip()
+    recovered_default_mcp_scope = False
 
     if request.method == 'GET' and not response_type and not client_id:
         return redirect(url_for('site_routes.chatgpt_onboarding'))
@@ -134,6 +147,12 @@ def oauth_authorize():
             _oauth_log_event('oauth_mcp_client_scopes_upgraded', client_id=client_id)
         if _oauth_scope_needs_mcp_recovery(scope_raw):
             scope_raw = _oauth_default_mcp_scope()
+            recovered_default_mcp_scope = True
+
+    try:
+        resource = _oauth_normalize_mcp_resource(resource)
+    except ValueError as exc:
+        return _oauth_error_response('invalid_target', str(exc))
 
     try:
         scope = _oauth_normalize_scope(scope_raw, client)
@@ -145,6 +164,10 @@ def oauth_authorize():
     if not current_user.is_authenticated:
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
+
+    if recovered_default_mcp_scope and not has_veterinarian_profile(current_user):
+        scope = _oauth_normalize_scope(_oauth_default_mcp_scope(current_user.id), client)
+        requested_scopes = scope.split()
 
     requested_scope_set = set(requested_scopes)
     if requested_scope_set.intersection(_oauth_veterinarian_write_scopes()) and not has_veterinarian_profile(current_user):
@@ -175,6 +198,7 @@ def oauth_authorize():
             client_id=client_id,
             user_id=current_user.id,
             redirect_uri=redirect_uri,
+            resource=resource or None,
             scope=scope,
             nonce=nonce,
             state=state,
@@ -203,6 +227,7 @@ def oauth_authorize():
         nonce=nonce,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
+        resource=resource,
     )
 
 
@@ -217,6 +242,7 @@ def oauth_token():
         client_id, client_secret = _oauth_extract_client_credentials()
         redirect_uri = request.form.get('redirect_uri', '').strip()
         code_verifier = request.form.get('code_verifier', '').strip()
+        resource_raw = request.form.get('resource', '').strip()
 
         if not all([code, client_id, redirect_uri]):
             return _oauth_error_response('invalid_request', 'code, client_id and redirect_uri are required.')
@@ -234,6 +260,16 @@ def oauth_token():
             return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
         if auth_code.redirect_uri != redirect_uri:
             return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
+        try:
+            token_resource = _oauth_normalize_mcp_resource(resource_raw)
+        except ValueError as exc:
+            return _oauth_error_response('invalid_target', str(exc))
+        if auth_code.resource and token_resource != auth_code.resource:
+            return _oauth_error_response(
+                'invalid_target',
+                'resource does not match the authorization request.',
+            )
+        resource = auth_code.resource or token_resource or None
         if auth_code.code_challenge_method == 'S256':
             if not code_verifier:
                 return _oauth_error_response('invalid_request', 'code_verifier is required for PKCE-enabled authorization codes.')
@@ -265,6 +301,7 @@ def oauth_token():
             client_id=client_id,
             user_id=auth_code.user_id,
             refresh_token=secrets.token_urlsafe(48),
+            resource=resource,
             scope=auth_code.scope,
             expires_at=utcnow() + timedelta(seconds=refresh_expires_in),
         )
@@ -273,6 +310,7 @@ def oauth_token():
             user_id=auth_code.user_id,
             access_token=access_token,
             token_type='Bearer',
+            resource=resource,
             scope=auth_code.scope,
             id_token=id_token,
             refresh_token_id=refresh_token.id,
@@ -306,6 +344,7 @@ def oauth_token():
     if grant_type == 'refresh_token':
         client_id, client_secret = _oauth_extract_client_credentials()
         refresh_token_value = request.form.get('refresh_token', '').strip()
+        resource_raw = request.form.get('resource', '').strip()
         if not client_id or not refresh_token_value:
             return _oauth_error_response('invalid_request', 'client_id and refresh_token are required.')
 
@@ -318,26 +357,37 @@ def oauth_token():
         refresh = OAuthRefreshToken.query.filter_by(refresh_token=refresh_token_value, client_id=client_id).first()
         if not refresh:
             return _oauth_error_response('invalid_grant', 'Refresh token is invalid.')
-
-        if not refresh.is_active:
-            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
-                return _oauth_issue_refresh_grant_response(
-                    refresh,
-                    scope=_oauth_default_mcp_scope(),
-                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
-                )
+        try:
+            requested_resource = _oauth_normalize_mcp_resource(resource_raw)
+        except ValueError as exc:
+            return _oauth_error_response('invalid_target', str(exc))
+        mcp_client = _oauth_client_looks_like_openai_mcp(
+            client,
+            resource=resource_raw,
+        )
+        if mcp_client and not refresh.resource:
             _oauth_revoke_refresh_family(refresh)
             db.session.commit()
-            _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
-            return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
-
+            _oauth_log_event('oauth_mcp_reauthorization_required', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response(
+                'invalid_grant',
+                'Refresh token is not bound to the PetOrlandia MCP resource. Reconnect PetOrlandia in ChatGPT.',
+            )
+        if refresh.resource and requested_resource and requested_resource != refresh.resource:
+            return _oauth_error_response(
+                'invalid_target',
+                'resource does not match the refresh token.',
+            )
+        if not refresh.is_active:
+            was_reused_or_revoked = bool(refresh.replaced_by_jti or refresh.revoked_at)
+            _oauth_revoke_refresh_family(refresh)
+            db.session.commit()
+            if was_reused_or_revoked:
+                _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+                return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
+            _oauth_log_event('oauth_refresh_token_expired', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response('invalid_grant', 'Refresh token is expired.')
         if _oauth_refresh_token_requires_mcp_reauthorization(refresh, client):
-            if _oauth_refresh_token_can_self_heal_mcp_scope(refresh, client):
-                return _oauth_issue_refresh_grant_response(
-                    refresh,
-                    scope=_oauth_default_mcp_scope(),
-                    log_event='oauth_mcp_legacy_refresh_scope_upgraded',
-                )
             _oauth_revoke_refresh_family(refresh)
             db.session.commit()
             _oauth_log_event('oauth_mcp_reauthorization_required', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')

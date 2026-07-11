@@ -96,7 +96,7 @@ Settings -> Apps & Connectors -> Advanced settings -> Developer Mode
 4. Crie o app apontando para o tunnel local ou para o dominio de producao:
 
 ```text
-https://petorlandia-fbabb575d64c.herokuapp.com/mcp/v2
+https://www.petorlandia.com.br/mcp/v2
 ```
 
 5. Configure OAuth:

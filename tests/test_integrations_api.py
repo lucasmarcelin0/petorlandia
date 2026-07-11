@@ -33,13 +33,18 @@ from models import (
 from time_utils import utcnow
 
 
-def _create_token(user_id: int, scope: str = "") -> str:
+def _create_token(
+    user_id: int,
+    scope: str = "",
+    resource: str = "https://www.petorlandia.com.br/mcp",
+) -> str:
     token_value = f"token-{user_id}-{scope.replace(':', '-') or 'none'}"
     token = OAuthAccessToken(
         client_id="integration-client",
         user_id=user_id,
         access_token=token_value,
         token_type="Bearer",
+        resource=resource,
         scope=scope,
         expires_at=utcnow() + timedelta(minutes=30),
     )
@@ -79,7 +84,7 @@ def test_integrations_endpoint_requires_scope(app, client):
     assert "pets:read" in payload["error"]["details"]["missing_scopes"]
 
 
-def test_chatgpt_oidc_only_access_token_self_heals_for_veterinarian(app, client):
+def test_chatgpt_oidc_only_access_token_requires_reauthorization_for_veterinarian(app, client):
     with app.app_context():
         user = User(name="ChatGPT Vet", email="chatgpt-token@example.com", role="veterinario", worker="veterinario")
         user.set_password("secret123")
@@ -120,12 +125,56 @@ def test_chatgpt_oidc_only_access_token_self_heals_for_veterinarian(app, client)
         headers={"Authorization": "Bearer old-chatgpt-access-token"},
     )
 
-    assert response.status_code == 200
-    assert response.get_json()["data"] == []
+    assert response.status_code == 401
+    assert response.get_json()["error"]["code"] == "reauthorization_required"
     with app.app_context():
-        assert db.session.get(OAuthAccessToken, access_id).revoked_at is None
-        assert "pets:read" in db.session.get(OAuthAccessToken, access_id).scope
-        assert "exams:write" in db.session.get(OAuthRefreshToken, refresh_id).scope
+        assert db.session.get(OAuthAccessToken, access_id).revoked_at is not None
+        assert db.session.get(OAuthRefreshToken, refresh_id).revoked_at is not None
+
+
+def test_chatgpt_oidc_only_access_token_requires_reauthorization_for_tutor(app, client):
+    with app.app_context():
+        user = User(name="ChatGPT Tutor", email="chatgpt-tutor-token@example.com", role="adotante")
+        user.set_password("secret123")
+        oauth_client = OAuthClient(
+            client_id="chatgpt-tutor-token-client",
+            name="ChatGPT PetOrlandia MCP",
+            redirect_uris="https://chatgpt.com/connector/oauth/petorlandia-tutor-token",
+            scopes="openid profile email",
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.flush()
+        refresh = OAuthRefreshToken(
+            client_id=oauth_client.client_id,
+            user_id=user.id,
+            refresh_token="old-chatgpt-tutor-refresh-token",
+            scope="openid profile email",
+            expires_at=utcnow() + timedelta(hours=1),
+        )
+        db.session.add(refresh)
+        db.session.flush()
+        access = OAuthAccessToken(
+            client_id=oauth_client.client_id,
+            user_id=user.id,
+            access_token="old-chatgpt-tutor-access-token",
+            token_type="Bearer",
+            scope="openid profile email",
+            refresh_token_id=refresh.id,
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(access)
+        db.session.commit()
+        access_id = access.id
+
+    response = client.get(
+        "/api/integrations/pets",
+        headers={"Authorization": "Bearer old-chatgpt-tutor-access-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json()["error"]["code"] == "reauthorization_required"
+    with app.app_context():
+        assert db.session.get(OAuthAccessToken, access_id).revoked_at is not None
 
 
 def test_integrations_me_and_resource_endpoints(app, client):
@@ -1680,9 +1729,130 @@ def test_mcp_registration_tool_requires_write_scopes(app, client):
 
     assert response.status_code == 200
     payload = response.get_json()
+    result = payload["result"]
+    assert result["isError"] is True
+    assert "tutors:write" in result["structuredContent"]["missing_scopes"]
+    assert "pets:write" in result["structuredContent"]["missing_scopes"]
+    challenge = result["_meta"]["mcp/www_authenticate"][0]
+    assert 'error="insufficient_scope"' in challenge
+    assert 'resource_metadata="https://www.petorlandia.com.br/.well-known/oauth-protected-resource/mcp"' in challenge
+
+
+def test_mcp_tutor_cannot_create_records_in_a_clinic(app, client):
+    with app.app_context():
+        clinic = Clinica(nome="Clinica Protegida")
+        tutor = User(name="Tutor Sem Clinica", email="tutor-sem-clinica@example.com", role="adotante")
+        tutor.set_password("secret123")
+        db.session.add_all([clinic, tutor])
+        db.session.commit()
+        clinic_id = clinic.id
+        token_value = _create_token(tutor.id, scope="profile tutors:write pets:write")
+        tutor_count = User.query.count()
+        animal_count = Animal.query.count()
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "buscar_ou_criar_tutor_animal",
+                "arguments": {
+                    "confirmar_gravacao": "sim",
+                    "clinica_id": clinic_id,
+                    "nome_tutor": "Vitima",
+                    "nome_animal": "Pet Vitima",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
     assert payload["error"]["code"] == -32003
-    assert "tutors:write" in payload["error"]["data"]["missing_scopes"]
-    assert "pets:write" in payload["error"]["data"]["missing_scopes"]
+    assert "veterin" in payload["error"]["message"].lower()
+    with app.app_context():
+        assert User.query.count() == tutor_count
+        assert Animal.query.count() == animal_count
+
+
+def test_mcp_rejects_token_bound_to_a_different_resource(app, client):
+    with app.app_context():
+        user = User(name="Resource Tutor", email="resource-tutor@example.com", role="adotante")
+        user.set_password("secret123")
+        db.session.add(user)
+        db.session.flush()
+        token = OAuthAccessToken(
+            client_id="integration-client",
+            user_id=user.id,
+            access_token="resource-bound-token",
+            token_type="Bearer",
+            resource="https://www.petorlandia.com.br/mcp/v2",
+            scope="profile pets:read",
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(token)
+        db.session.commit()
+
+    wrong_endpoint = client.post(
+        "/mcp",
+        headers={"Authorization": "Bearer resource-bound-token"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+    )
+    assert wrong_endpoint.status_code == 401
+
+    correct_endpoint = client.post(
+        "/mcp/v2",
+        headers={"Authorization": "Bearer resource-bound-token"},
+        json={"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {}},
+    )
+    assert correct_endpoint.status_code == 200
+
+
+def test_mcp_rejects_legacy_token_without_resource_binding(app, client):
+    with app.app_context():
+        user = User(name="Tutor Sem Recurso", email="sem-recurso@example.com", role="adotante")
+        user.set_password("secret123")
+        db.session.add(user)
+        db.session.flush()
+        token = OAuthAccessToken(
+            client_id="integration-client",
+            user_id=user.id,
+            access_token="unbound-mcp-token",
+            token_type="Bearer",
+            resource=None,
+            scope="profile pets:read",
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+        db.session.add(token)
+        db.session.commit()
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": "Bearer unbound-mcp-token"},
+        json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {}},
+    )
+
+    assert response.status_code == 401
+    assert "oauth-protected-resource/mcp" in response.headers["WWW-Authenticate"]
+
+
+def test_mcp_rejects_bearer_token_in_query_string(app, client):
+    with app.app_context():
+        user = User(name="Tutor Query Token", email="query-token@example.com", role="adotante")
+        user.set_password("secret123")
+        db.session.add(user)
+        db.session.commit()
+        token_value = _create_token(user.id, scope="profile pets:read")
+
+    response = client.post(
+        f"/mcp?access_token={token_value}",
+        json={"jsonrpc": "2.0", "id": 4, "method": "initialize", "params": {}},
+    )
+
+    assert response.status_code == 401
 
 
 def test_mcp_registration_tool_requires_veterinarian_profile(app, client):
@@ -2062,14 +2232,23 @@ def test_mcp_open_laudo_widget_strips_unreachable_chatgpt_local_path(app, client
 
 def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
     with app.app_context():
-        professional = User(name="Dra. Modelo", email="modelo-laudo@example.com", role="veterinario", worker="veterinario")
+        clinic = Clinica(nome="Clinica Modelo")
+        db.session.add(clinic)
+        db.session.flush()
+        professional = User(
+            name="Dra. Modelo",
+            email="modelo-laudo@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=clinic.id,
+        )
         professional.set_password("secret123")
         tutor = User(name="Tutor Modelo", email="tutor-modelo@example.com")
         tutor.set_password("secret123")
-        animal = Animal(name="Paciente Modelo", owner=tutor)
+        animal = Animal(name="Paciente Modelo", owner=tutor, clinica_id=clinic.id)
         db.session.add_all([professional, tutor, animal])
         db.session.flush()
-        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-MODELO"))
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-MODELO", clinica_id=clinic.id))
         bloco = BlocoExames(animal=animal)
         db.session.add(ExameSolicitado(
             bloco=bloco,
@@ -2079,7 +2258,7 @@ def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
             performed_at=datetime(2026, 2, 16),
         ))
         db.session.commit()
-        token_value = _create_token(professional.id, scope="profile")
+        token_value = _create_token(professional.id, scope="exams:read")
 
     response = client.post(
         "/mcp",
@@ -2100,6 +2279,77 @@ def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
     assert result["tipo_exame"] == "Ultrassonografia abdominal"
     assert "Bexiga espessada." in result["rascunho_base"]
     assert result["exemplos_encontrados"][0]["trecho_modelo"].startswith("Bexiga")
+
+
+def test_mcp_sugerir_modelo_laudo_does_not_leak_reports_between_clinics(app, client):
+    with app.app_context():
+        own_clinic = Clinica(nome="Clinica Autorizada")
+        other_clinic = Clinica(nome="Clinica Externa")
+        db.session.add_all([own_clinic, other_clinic])
+        db.session.flush()
+
+        professional = User(
+            name="Dra. Isolamento",
+            email="isolamento-laudo@example.com",
+            role="veterinario",
+            worker="veterinario",
+            clinica_id=own_clinic.id,
+        )
+        professional.set_password("secret123")
+        own_tutor = User(name="Tutor Autorizado", email="tutor-autorizado@example.com")
+        own_tutor.set_password("secret123")
+        other_tutor = User(name="Tutor Externo", email="tutor-externo@example.com")
+        other_tutor.set_password("secret123")
+        own_animal = Animal(name="Paciente Autorizado", owner=own_tutor, clinica_id=own_clinic.id)
+        other_animal = Animal(name="Paciente Sigiloso", owner=other_tutor, clinica_id=other_clinic.id)
+        db.session.add_all([professional, own_tutor, other_tutor, own_animal, other_animal])
+        db.session.flush()
+        db.session.add(Veterinario(
+            user_id=professional.id,
+            crmv="CRMV-ISOLAMENTO",
+            clinica_id=own_clinic.id,
+        ))
+        own_block = BlocoExames(animal=own_animal)
+        other_block = BlocoExames(animal=other_animal)
+        db.session.add_all([
+            ExameSolicitado(
+                bloco=own_block,
+                nome="Ultrassonografia abdominal",
+                status="concluido",
+                resultado="Conteudo autorizado da clinica atual.",
+                performed_at=datetime(2026, 2, 16),
+            ),
+            ExameSolicitado(
+                bloco=other_block,
+                nome="Ultrassonografia abdominal",
+                status="concluido",
+                resultado="CONTEUDO SIGILOSO DE OUTRA CLINICA.",
+                performed_at=datetime(2026, 2, 17),
+            ),
+        ])
+        db.session.commit()
+        token_value = _create_token(professional.id, scope="exams:read")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 441,
+            "method": "tools/call",
+            "params": {
+                "name": "sugerir_modelo_laudo",
+                "arguments": {"tipo_exame": "Ultrassonografia abdominal", "limite_exemplos": 5},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()["result"]["structuredContent"]
+    serialized = json.dumps(result, ensure_ascii=False)
+    assert "Conteudo autorizado da clinica atual." in serialized
+    assert "CONTEUDO SIGILOSO DE OUTRA CLINICA." not in serialized
+    assert "Paciente Sigiloso" not in serialized
 
 
 def test_mcp_store_tools_search_products_and_create_order(app, client):
@@ -2727,6 +2977,10 @@ def test_mcp_registration_tool_creates_and_reuses_tutor_and_pets(app, client):
     assert first_result["tutor"]["ja_existia"] is False
     assert first_result["tutor"]["email_provisorio"] is True
     assert first_result["resumo"]["pets_criados"] == 2
+    with app.app_context():
+        created_tutor = db.session.get(User, first_result["tutor"]["id"])
+        assert created_tutor is not None
+        assert created_tutor.check_password("123456789") is False
     assert first_result["resumo"]["consultas_iniciais_criadas"] == 2
 
     with app.app_context():
