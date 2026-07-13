@@ -2279,6 +2279,53 @@ def test_mcp_sugerir_modelo_laudo_uses_previous_reports(app, client):
     assert result["tipo_exame"] == "Ultrassonografia abdominal"
     assert "Bexiga espessada." in result["rascunho_base"]
     assert result["exemplos_encontrados"][0]["trecho_modelo"].startswith("Bexiga")
+    assert result["perfil_de_estilo"]["modalidade"] == "ultrassonografia"
+    assert "Rins e ureteres" in result["rascunho_base"]
+
+
+def test_mcp_sugerir_modelo_laudo_uses_radiography_editable_structure(app, client):
+    with app.app_context():
+        professional = User(
+            name="Dr. Radiologia",
+            email="radiografia-laudo@example.com",
+            role="veterinario",
+            worker="veterinario",
+        )
+        professional.set_password("secret123")
+        db.session.add(professional)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=professional.id, crmv="CRMV-RADIO"))
+        db.session.commit()
+        token_value = _create_token(professional.id, scope="exams:read")
+
+    response = client.post(
+        "/mcp",
+        headers={"Authorization": f"Bearer {token_value}"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 45,
+            "method": "tools/call",
+            "params": {
+                "name": "sugerir_modelo_laudo",
+                "arguments": {
+                    "tipo_exame": "Radiografia de membro pélvico",
+                    "achados": "Pequeno fragmento ósseo junto à tuberosidade tibial.",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()["result"]["structuredContent"]
+    assert result["perfil_de_estilo"]["modalidade"] == "radiografia"
+    assert result["estrutura_sugerida"] == [
+        "Identificação do paciente e do exame",
+        "Região de estudo",
+        "Projeções",
+        "Relatório radiográfico",
+        "Impressão diagnóstica",
+    ]
+    assert "Pequeno fragmento ósseo" in result["rascunho_base"]
 
 
 def test_mcp_sugerir_modelo_laudo_does_not_leak_reports_between_clinics(app, client):
