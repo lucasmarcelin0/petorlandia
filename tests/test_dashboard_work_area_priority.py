@@ -20,7 +20,7 @@ def _login(client, user_id):
         ({'name': 'Entregador', 'email': 'delivery-dashboard@example.test', 'worker': 'delivery'}, False, 'delivery'),
     ],
 )
-def test_work_area_precedes_personal_pets_area(client, app, user_kwargs, create_vet, work_area):
+def test_work_area_precedes_all_personal_dashboard_areas(client, app, user_kwargs, create_vet, work_area):
     with app.app_context():
         user = User(password_hash='x', **user_kwargs)
         db.session.add(user)
@@ -32,6 +32,7 @@ def test_work_area_precedes_personal_pets_area(client, app, user_kwargs, create_
     _login(client, user_id)
     page = client.get('/').get_data(as_text=True)
 
-    assert page.index(f'data-dashboard-area="{work_area}"') < page.index(
-        'data-dashboard-area="personal-pets"'
-    )
+    work_area_position = page.index(f'data-dashboard-area="{work_area}"')
+
+    assert work_area_position < page.index('data-dashboard-area="personal-shortcuts"')
+    assert work_area_position < page.index('data-dashboard-area="personal-pets"')

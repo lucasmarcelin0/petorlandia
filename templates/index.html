@@ -12,7 +12,13 @@
     {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
     {% set owns_clinic = (current_user.clinicas or [])|length > 0 %}
     {% set dashboard_work_first = is_active_veterinarian or current_user.worker in ['colaborador', 'delivery'] or current_user.role in ['admin', 'master', 'parceiro', 'vacinador'] or (owns_clinic and can_access_accounting) %}
-    <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted text-center">
+    {% if dashboard_work_first %}
+    <section class="mt-5" aria-label="Áreas de trabalho">
+        {% include 'components/dashboard_work_areas.html' %}
+    </section>
+    {% endif %}
+
+    <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center dashboard-personal-area" data-dashboard-area="personal-shortcuts">
         <h1 class="h3 mb-1">Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
         <h2 class="h6 text-muted mb-2">O que você deseja fazer hoje?</h2>
         <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
@@ -37,10 +43,6 @@
             </a>
         </div>
     </div>
-
-    {% if dashboard_work_first %}
-    {% include 'components/dashboard_work_areas.html' %}
-    {% endif %}
 
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted dashboard-personal-area" data-dashboard-area="personal-pets">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
