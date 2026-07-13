@@ -598,6 +598,15 @@
   <!-- Custom JS -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Flask-Admin gera atributos do Bootstrap 4 (data-toggle); o Bootstrap 5
+      // só reconhece data-bs-*. Converte para os dropdowns/modais funcionarem.
+      document.querySelectorAll('[data-toggle]').forEach(el => {
+        el.setAttribute('data-bs-toggle', el.getAttribute('data-toggle'));
+      });
+      document.querySelectorAll('[data-target]').forEach(el => {
+        el.setAttribute('data-bs-target', el.getAttribute('data-target'));
+      });
+
       // Toggle sidebar collapse
       const toggleSidebar = document.querySelector('.toggle-sidebar');
       const sidebar = document.querySelector('.sidebar');
