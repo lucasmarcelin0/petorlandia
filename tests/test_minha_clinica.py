@@ -56,6 +56,34 @@ def test_vet_without_clinic_can_create(monkeypatch, app):
         db.drop_all()
 
 
+def test_layout_shows_minha_clinica_for_vet_without_clinic(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Vet sem clinica", email="vet-no-menu@example.com", password_hash="x")
+        vet = Veterinario(user=user, crmv="456")
+        db.session.add_all([user, vet])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        resp = client.get('/')
+        assert b'Minha cl\xc3\xadnica' in resp.data
+
+        db.session.remove()
+        db.drop_all()
+
+
+def test_minha_clinica_requires_login(app):
+    client = app.test_client()
+    response = client.get('/minha-clinica')
+
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
+
+
 def test_minha_clinica_shows_dashboard_for_multiple_clinics(monkeypatch, app):
     client = app.test_client()
     with app.app_context():

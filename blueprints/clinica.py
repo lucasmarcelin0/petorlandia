@@ -191,6 +191,7 @@ def external_clinic_first_access_invite(token):
 
 
 @bp.route("/minha-clinica", methods=["GET", "POST"])
+@login_required
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
