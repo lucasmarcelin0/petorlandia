@@ -612,6 +612,13 @@ class VeterinarianSettings(db.Model):
 def _create_veterinarian_membership(mapper, connection, target):
     """Ensure every veterinarian profile starts with a membership record."""
 
+    # ``ensure_veterinarian_membership`` may already have associated a pending
+    # ORM membership with this profile. During this ``after_insert`` hook that
+    # pending row has not been written yet, so a database-only lookup cannot
+    # see it and would create a duplicate row for the same veterinarian.
+    if target.__dict__.get('membership') is not None:
+        return
+
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     now = utcnow()
     membership_row = connection.execute(
@@ -677,4 +684,3 @@ def _normalize_user_name_before_insert(mapper, connection, target):
 @event.listens_for(User, "before_update")
 def _normalize_user_name_before_update(mapper, connection, target):
     _normalize_model_name(target)
-
