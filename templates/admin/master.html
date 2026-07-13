@@ -647,6 +647,33 @@
     .content .select2-container {
       min-width: 220px;
       max-width: 100%;
+      width: 100% !important;
+    }
+
+    /* Select2 3.x com cara de form-control do Bootstrap 5 */
+    .content .select2-container .select2-choice,
+    .content .select2-container-multi .select2-choices {
+      height: auto;
+      min-height: 42px;
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      background: white none;
+      box-shadow: none;
+      line-height: 1.5;
+      color: #333;
+    }
+
+    .content .select2-container .select2-choice .select2-arrow {
+      background: transparent none;
+      border-left: none;
+      top: 8px;
+    }
+
+    .content .select2-container-active .select2-choice,
+    .content .select2-dropdown-open .select2-choice {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
     }
 
     /* Breadcrumb */
