@@ -169,7 +169,7 @@
                 <i class="fas fa-briefcase-medical me-2 text-success"></i> Meus serviços</a></li>
             <li><a class="dropdown-item" href="{{ url_for('exames_imagem_painel') }}">
                 <i class="fas fa-file-medical me-2 text-info"></i> Laudos</a></li>
-            {% if has_clinic_access and has_veterinarian_profile_flag %}
+            {% if has_veterinarian_profile_flag %}
             <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}">
                 <i class="fas fa-clinic-medical me-2 text-info"></i> Minha clínica</a></li>
             {% endif %}
@@ -279,7 +279,7 @@
             <li><a class="dropdown-item" href="{{ url_for('parceiro_dashboard') }}">
                 <i class="fa-solid fa-handshake me-2 text-primary"></i> Área do parceiro</a></li>
             {% endif %}
-            {% if has_clinic_access and has_veterinarian_profile_flag %}
+            {% if has_veterinarian_profile_flag %}
             <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}">
                 <i class="fas fa-clinic-medical me-2 text-info"></i> Minha clínica</a></li>
             {% endif %}
