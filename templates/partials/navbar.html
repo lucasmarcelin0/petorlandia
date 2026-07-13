@@ -122,25 +122,7 @@
           </ul>
         </li>
         {% elif current_user.is_authenticated %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('index') }}">
-            <i class="fas fa-home me-1 text-primary"></i> Início
-          </a>
-        </li>
-
-        {% if current_user.worker != 'delivery' %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('servicos') }}">
-            <i class="fas fa-paw me-1 text-danger"></i> Serviços
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('loja') }}">
-            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
-          </a>
-        </li>
-        {% endif %}
-
+        {# Ações de trabalho vêm primeiro para perfis que usam a plataforma profissionalmente. #}
         {% if current_user.worker == 'delivery' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('list_delivery_requests') }}">
@@ -221,6 +203,26 @@
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('minha_casa_de_racao') }}">
             <i class="fa-solid fa-store me-1 text-success"></i> Casa de ração
+          </a>
+        </li>
+        {% endif %}
+
+        {# Navegação pessoal e pública permanece disponível depois das áreas de trabalho. #}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('index') }}">
+            <i class="fas fa-home me-1 text-primary"></i> Início
+          </a>
+        </li>
+
+        {% if current_user.worker != 'delivery' %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('servicos') }}">
+            <i class="fas fa-paw me-1 text-danger"></i> Serviços
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('loja') }}">
+            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
           </a>
         </li>
         {% endif %}
