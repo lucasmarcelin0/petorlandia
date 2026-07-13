@@ -1,5 +1,5 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v7';
+const CACHE_NAME = 'petorlandia-cache-v8';
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
@@ -31,6 +31,14 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Requisições cross-origin (CDNs, S3, Google Fonts) — não interceptar.
+  // O fetch() dentro do service worker é limitado pelo CSP do próprio worker
+  // (connect-src 'self'), o que bloquearia esses recursos; deixamos o
+  // navegador tratá-las diretamente, sob o CSP da página.
+  if (new URL(event.request.url).origin !== self.location.origin) {
+    return;
+  }
+
   // AJAX requests (listing panels, autocomplete, etc.) — vai direto à rede,
   // sem tocar no cache. Evita retornar HTML cacheado no lugar de JSON.
   const isAjax = event.request.headers.get('X-Requested-With') === 'XMLHttpRequest'
