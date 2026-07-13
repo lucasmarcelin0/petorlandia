@@ -336,15 +336,8 @@ def veterinarian_request_new_trial(membership_id):
 def painel_dashboard():
     if not _is_admin():
         abort(403)
-    cards = [
-        {"icon": "👤", "title": "Usuários", "description": f"Total: {User.query.count()}"},
-        {"icon": "🐶", "title": "Animais", "description": f"Total: {Animal.query.count()}"},
-        {"icon": "🏥", "title": "Clínicas", "description": f"Total: {Clinica.query.count()}"},
-        {"icon": "💉", "title": "Vacinas", "description": f"Hoje: {VacinaModelo.query.count()}"},
-        {"icon": "📋", "title": "Consultas", "description": f"Pendentes: {Consulta.query.filter_by(status='pendente').count()}"},
-        {"icon": "💊", "title": "Prescrições", "description": f"Semana: {Prescricao.query.count()}"},
-    ]
-    return render_template('admin/admin_dashboard.html', cards=cards)
+    # O dashboard canônico do admin é o index do Flask-Admin.
+    return redirect(url_for('painel_admin.index'))
 
 
 @bp.route('/')

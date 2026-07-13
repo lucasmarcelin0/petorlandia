@@ -602,7 +602,12 @@ class PickupLocationView(ModelView):
 
 class UserAdminView(MyModelView):
     form_extra_fields = {
-        'profile_photo_upload': FileField('Foto de perfil')
+        'profile_photo_upload': FileField('Foto de perfil'),
+        'new_password': PasswordField(
+            'Nova senha',
+            description='Preencha apenas para redefinir a senha do usuário '
+                        '(mínimo 6 caracteres). Deixe em branco para manter a atual.',
+        ),
     }
 
     column_list = (
@@ -638,13 +643,23 @@ class UserAdminView(MyModelView):
         'worker': {'choices': USER_WORKER_CHOICES},
     }
     form_columns = (
-        'name', 'email', 'password_hash', 'role', 'worker',
+        'name', 'email', 'new_password', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica', 'profile_photo_upload'
     )
     column_details_list = column_list
 
     def on_model_change(self, form, model, is_created):
         model.worker = (model.worker or '').strip() or None
+        password_field = getattr(form, 'new_password', None)
+        new_password = ((password_field.data if password_field else '') or '').strip()
+        if new_password:
+            if len(new_password) < 6:
+                from wtforms.validators import ValidationError
+                raise ValidationError('A nova senha deve ter pelo menos 6 caracteres.')
+            model.set_password(new_password)
+        elif is_created and password_field is not None:
+            from wtforms.validators import ValidationError
+            raise ValidationError('Defina uma senha para o novo usuário.')
         if form.profile_photo_upload.data:
             file = form.profile_photo_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"

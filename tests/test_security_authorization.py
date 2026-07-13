@@ -225,7 +225,8 @@ class TestAuthorization:
         """Admin users should access admin panel."""
         login(client, multi_user_setup['admin_id'])
         
-        response = client.get('/painel')
+        # /painel redireciona para o dashboard do Flask-Admin
+        response = client.get('/painel', follow_redirects=True)
         assert response.status_code == 200
     
     def test_veterinarian_cannot_access_other_clinic_data(self, client, multi_user_setup, app):

@@ -732,7 +732,8 @@ def test_painel_allows_admin(monkeypatch, app):
 
         monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
 
-        response = client.get('/painel')
+        # /painel redireciona para o dashboard do Flask-Admin
+        response = client.get('/painel', follow_redirects=True)
         assert response.status_code == 200
 
 
