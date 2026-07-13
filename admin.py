@@ -1384,11 +1384,9 @@ def init_admin(app):
         index_view=dashboard_view,     # dashboard é a home
     )
 
-    # Flask-Admin 1.x aceita template_mode; versões mais antigas não.
-    try:
-        admin = Admin(app, template_mode=None, **admin_kwargs)
-    except TypeError:
-        admin = Admin(app, **admin_kwargs)
+    # bootstrap4 gera markup moderno (nav-link, dropdown-item, ícones FA),
+    # que renderiza corretamente sob o Bootstrap 5 do master.html.
+    admin = Admin(app, template_mode='bootstrap4', **admin_kwargs)
 
     # Registro das demais views
     admin.add_view(AnimalAdminView(
