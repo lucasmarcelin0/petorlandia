@@ -6610,6 +6610,79 @@ def _integration_import_mobile_exam_report(user: User, payload: dict):
     }
 
 
+def _integration_report_style_template(exam_type: str, findings: str):
+    """Build an editable imaging-report outline without making clinical claims."""
+    normalized_type = _integration_normalize_match_text(exam_type)
+    known_findings = findings or '[Descrever somente os achados confirmados pelo veterinário.]'
+    disclaimer = (
+        'A impressão diagnóstica deve ser confrontada com dados clínicos e laboratoriais, '
+        'bem como com exames de imagem prévios e/ou subsequentes. Há limitações inerentes '
+        'ao método e a avaliação pode não ser conclusiva.'
+    )
+
+    if 'radiograf' in normalized_type:
+        sections = [
+            'Identificação do paciente e do exame',
+            'Região de estudo',
+            'Projeções',
+            'Relatório radiográfico',
+            'Impressão diagnóstica',
+        ]
+        draft = (
+            f'{exam_type}\n\n'
+            'Paciente: [nome]    Espécie: [espécie]    Idade: [idade]\n'
+            'Raça: [raça]    Sexo: [sexo]\n'
+            'Tutor: [nome]    Data: [data]\n'
+            'Clínica/Médico(a) veterinário(a) requisitante: [nome]\n\n'
+            'Região de estudo:\n[região e objetivo do exame]\n\n'
+            'Projeções:\n[projeções efetivamente avaliadas]\n\n'
+            'Relatório radiográfico:\n'
+            f'{known_findings}\n\n'
+            'Impressão diagnóstica:\n'
+            '- [conclusões sustentadas pelos achados acima]\n\n'
+            f'Ressalva:\n{disclaimer}'
+        )
+        modality = 'radiografia'
+    else:
+        sections = [
+            'Identificação do paciente e do exame',
+            'Técnica e limitações',
+            'Descrição por órgãos e sistemas avaliados',
+            'Impressão diagnóstica',
+            'Comentários e recomendações',
+        ]
+        draft = (
+            f'{exam_type}\n\n'
+            'Paciente: [nome]    Espécie: [espécie]    Idade: [idade]\n'
+            'Raça: [raça]    Sexo: [sexo]\n'
+            'Tutor: [nome]    Data: [data]\n'
+            'Clínica veterinária requisitante: [nome]\n\n'
+            'Técnica e limitações:\n[descrever somente as limitações observadas]\n\n'
+            'Bexiga:\n[descrever se avaliada]\n\n'
+            'Rins e ureteres:\n[descrever se avaliados]\n\n'
+            'Adrenais:\n[descrever se avaliadas ou não visibilizadas]\n\n'
+            'Trato gastrintestinal:\n[descrever segmentos efetivamente avaliados]\n\n'
+            'Fígado, vesícula biliar, baço e pâncreas:\n[descrever órgãos efetivamente avaliados]\n\n'
+            'Demais estruturas e cavidade abdominal:\n[descrever somente o que foi avaliado]\n\n'
+            'Achados confirmados pelo veterinário:\n'
+            f'{known_findings}\n\n'
+            'Impressão diagnóstica:\n'
+            '- [conclusões sustentadas pelos achados acima]\n\n'
+            'Comentários e recomendações:\n'
+            '- [correlação clínica ou investigação complementar, quando indicada]\n\n'
+            f'Ressalva:\n{disclaimer}'
+        )
+        modality = 'ultrassonografia'
+
+    return {
+        'nome': 'Imagem veterinária - relato técnico estruturado',
+        'modalidade': modality,
+        'secoes': sections,
+        'ressalva': disclaimer,
+        'rascunho': draft,
+    }
+
+
 def _integration_suggest_report_template(user: User, payload: dict):
     exam_type = (payload.get('tipo_exame') or payload.get('exame') or '').strip()
     if not exam_type:
@@ -6646,28 +6719,19 @@ def _integration_suggest_report_template(user: User, payload: dict):
             break
 
     achados = (payload.get('achados') or '').strip()
-    sections = [
-        'Identificacao do paciente e dados do exame',
-        'Tecnica e limitacoes do metodo',
-        'Descricao por sistemas/orgaos avaliados',
-        'Impressao diagnostica',
-        'Recomendacoes e correlacao clinica',
-    ]
-    draft = (
-        f'{exam_type}\n\n'
-        'Paciente: [nome]\nTutor: [nome]\nData: [data]\n\n'
-        'Achados:\n'
-        f'{achados or "[descrever achados atuais por orgao/sistema]"}\n\n'
-        'Impressao diagnostica:\n'
-        '[resumir os achados principais sem extrapolar alem do exame]\n\n'
-        'Recomendacoes:\n'
-        '[sugerir correlacao clinica, exames complementares ou acompanhamento quando aplicavel]'
-    )
+    style_profile = _integration_report_style_template(exam_type, achados)
     return {
         'tipo_exame': exam_type,
-        'estrutura_sugerida': sections,
-        'rascunho_base': draft,
+        'perfil_de_estilo': style_profile,
+        'estrutura_sugerida': style_profile['secoes'],
+        'rascunho_base': style_profile['rascunho'],
+        'achados_informados': achados or None,
         'exemplos_encontrados': examples,
+        'orientacao_de_seguranca': (
+            'Use imagens e anotações somente como apoio. Não invente medidas, achados normais, '
+            'órgãos avaliados, diagnóstico ou recomendação; marque dados ausentes para confirmação '
+            'e apresente o rascunho editável ao veterinário antes de gravar ou compartilhar.'
+        ),
         'orientacao': (
             'Use os exemplos apenas como padrao de estrutura e linguagem. '
             'Adapte todos os achados ao paciente atual e mantenha a impressao diagnostica compatível com o exame.'

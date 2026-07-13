@@ -2259,10 +2259,13 @@ def mcp_server():
                 'name': 'abrir_importador_laudo_volante',
                 'title': 'Abrir importador de laudo volante',
                 'description': (
-                    'Use this immediately when o ultrassonografista enviar um link, PDF, arquivo ou texto de laudo '
-                    'volante no ChatGPT. Abra este aplicativo na mesma resposta para revisar clinica, tutor, animal, '
-                    'laudo e mensagens antes de gravar; o profissional nao deve precisar pedir o app em outra mensagem. '
-                    'Esta tool renderiza o painel; o botao do painel chama importar_laudo_volante apos confirmacao.'
+                    'Use imediatamente quando o veterinário enviar fotos, capturas de tela, PDF, texto ou observações '
+                    'de exame de imagem no ChatGPT. Para um novo rascunho, chame primeiro sugerir_modelo_laudo, '
+                    'redija laudo_texto somente com achados confirmados e então abra este painel na mesma resposta. '
+                    'O painel mostra clínica, tutor, animal, laudo e mensagens para edição antes de gravar. Nunca '
+                    'invente medidas, achados, órgãos avaliados, diagnóstico ou recomendação; liste dados ausentes '
+                    'em campos_a_confirmar. Esta tool não grava nada; o botão chama importar_laudo_volante somente '
+                    'após confirmação explícita.'
                 ),
                 'inputSchema': {
                     'type': 'object',
@@ -2359,8 +2362,11 @@ def mcp_server():
             {
                 'name': 'sugerir_modelo_laudo',
                 'description': (
-                    'Ajuda o veterinario a escrever novo relatorio/laudo usando laudos antigos como modelo. '
-                    'Nao grava dados; retorna estrutura, frases-base e exemplos recentes semelhantes.'
+                    'Use primeiro quando o veterinário enviar imagens ou observações de ultrassom/radiografia e '
+                    'pedir um rascunho. Retorna estrutura editável baseada em laudos de imagem, frases-base e '
+                    'exemplos acessíveis. Não grava nada nem interpreta o exame de forma autônoma: use apenas '
+                    'achados confirmados para redigir laudo_texto e então chame abrir_importador_laudo_volante '
+                    'para revisão humana.'
                 ),
                 'inputSchema': {
                     'type': 'object',
