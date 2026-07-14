@@ -1,0 +1,306 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<style>
+  .pacs-page {
+    color: #172033;
+  }
+
+  .pacs-page .kicker {
+    color: #047857;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .pacs-page .setup-panel,
+  .pacs-page .info-panel {
+    background: #fff;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+  }
+
+  .pacs-page .copy-box {
+    align-items: stretch;
+    background: #f8fafc;
+    border: 1px solid #dde6ee;
+    border-radius: 8px;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: .6rem;
+  }
+
+  .pacs-page .copy-value,
+  .pacs-page .copy-box textarea {
+    background: transparent;
+    border: 0;
+    color: #0f172a;
+    font-family: var(--bs-font-monospace, monospace);
+    font-size: .82rem;
+    min-width: 0;
+    outline: 0;
+  }
+
+  .pacs-page .copy-value {
+    align-items: center;
+    display: flex;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    padding: .35rem .1rem;
+    word-break: break-word;
+  }
+
+  .pacs-page .copy-box textarea {
+    min-height: 200px;
+    resize: vertical;
+    white-space: pre;
+  }
+
+  .pacs-page .step {
+    border-left: 3px solid #14b8a6;
+    padding-left: .9rem;
+  }
+
+  .pacs-page .flow-box {
+    background: #f0fdfa;
+    border: 1px dashed #14b8a6;
+    border-radius: 8px;
+    font-family: var(--bs-font-monospace, monospace);
+    font-size: .85rem;
+    padding: .8rem 1rem;
+  }
+
+  .pacs-page .btn-icon {
+    align-items: center;
+    display: inline-flex;
+    gap: .4rem;
+    justify-content: center;
+    min-height: 38px;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 575.98px) {
+    .pacs-page .copy-box {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="pacs-page py-4">
+  <header class="mb-4">
+    <div class="kicker">Integração de imagens (PACS DICOM)</div>
+    <h1 class="h3 fw-bold mb-2">Conecte seu ultrassom ao PetOrlândia</h1>
+    <p class="text-muted mb-0">Passo a passo para receber os exames do aparelho (ex.: VINNO D2) automaticamente no prontuário, usando o servidor gratuito Orthanc.</p>
+  </header>
+
+  <section class="info-panel p-3 p-md-4 mb-4">
+    <h2 class="h5 fw-bold mb-2">Como funciona</h2>
+    <div class="flow-box mb-2">Ultrassom (DICOM) &rarr; Orthanc no PC da clínica &rarr; webhook &rarr; PetOrlândia</div>
+    <p class="small text-muted mb-0">O aparelho envia as imagens pelo protocolo DICOM para um computador da clínica rodando o Orthanc. Ao final de cada exame, o Orthanc avisa o PetOrlândia, que cria automaticamente um rascunho de laudo já vinculado ao animal — basta digitar no aparelho o nome do pet igual ao cadastro. As imagens ficam guardadas no computador da clínica.</p>
+  </section>
+
+  <div class="row g-4 align-items-start">
+    <div class="col-lg-5">
+      <section class="info-panel p-3 p-md-4">
+        <h2 class="h5 fw-bold mb-3">Passo a passo</h2>
+        <div class="d-grid gap-3">
+          <div class="step">
+            <div class="fw-semibold">1. Baixe o Orthanc</div>
+            <div class="text-muted small">No PC da clínica que fica ligado durante os exames, baixe o Orthanc para Windows em <a href="https://orthanc.uclouvain.be/downloads/windows-64/orthanc/index.html" target="_blank" rel="noopener">orthanc.uclouvain.be</a> e salve em <code>C:\Orthanc</code>.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">2. Crie os dois arquivos ao lado</div>
+            <div class="text-muted small">Salve <code>orthanc.json</code> e <code>petorlandia-webhook.lua</code> na mesma pasta. No script Lua, troque <code>SEU_TOKEN_AQUI</code> pelo token da sua clínica (fale com o suporte PetOrlândia).</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">3. Inicie o Orthanc</div>
+            <div class="text-muted small">Execute <code>Orthanc.exe orthanc.json</code>. Abra <a href="http://localhost:8042" target="_blank" rel="noopener">http://localhost:8042</a> para conferir (usuário e senha do orthanc.json). Para iniciar junto com o Windows, crie um atalho na pasta Inicializar (Win+R &rarr; <code>shell:startup</code>).</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">4. Descubra o IP do computador</div>
+            <div class="text-muted small">Abra o Prompt de Comando e digite <code>ipconfig</code>. Anote o "Endereço IPv4" (ex.: 192.168.1.50). Se o teste do aparelho falhar depois, libere a porta TCP 4242 no Firewall do Windows.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">5. Configure o aparelho</div>
+            <div class="text-muted small">Na tela de DICOM Storage do ultrassom: <strong>SCP AET</strong> <code>PETORLANDIA</code>, <strong>SCP Address</strong> o IP anotado, <strong>SCP Port</strong> <code>4242</code>. Clique em <strong>Test</strong> — deve passar.</div>
+          </div>
+          <div class="step">
+            <div class="fw-semibold">6. Faça um exame de teste</div>
+            <div class="text-muted small">Digite o nome do paciente igual ao cadastro do pet no PetOrlândia (ex.: <code>THOR</code>). Cerca de 30&nbsp;segundos após a última imagem, o rascunho do laudo aparece no histórico do animal.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="setup-panel p-3 p-md-4 mt-4">
+        <h2 class="h5 fw-bold mb-3">Status do servidor</h2>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <button class="btn btn-outline-primary btn-sm" type="button" id="test-webhook">Testar webhook</button>
+          <span class="small text-muted" id="webhook-status" role="status">Ainda não testado.</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="col-lg-7">
+      <section class="setup-panel p-3 p-md-4 mb-4">
+        <h2 class="h5 fw-bold mb-2">Arquivo 1 — <code>orthanc.json</code></h2>
+        <p class="small text-muted">Configuração do servidor: recebe DICOM na porta 4242 e mostra os exames em http://localhost:8042. Troque a senha de acesso.</p>
+        <div class="copy-box">
+          <textarea id="orthanc-config" readonly>{
+  "Name": "PetOrlandia PACS",
+  "StorageDirectory": "C:/Orthanc/db",
+  "IndexDirectory": "C:/Orthanc/db",
+
+  "HttpServerEnabled": true,
+  "HttpPort": 8042,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": { "petorlandia": "TROQUE_ESTA_SENHA" },
+
+  "DicomServerEnabled": true,
+  "DicomAet": "PETORLANDIA",
+  "DicomPort": 4242,
+  "DicomCheckCalledAet": false,
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowStore": true,
+
+  "StableAge": 30,
+  "LuaScripts": [ "C:/Orthanc/petorlandia-webhook.lua" ]
+}</textarea>
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="orthanc-config">
+            <i class="fa-regular fa-copy" aria-hidden="true"></i>
+            Copiar
+          </button>
+        </div>
+      </section>
+
+      <section class="setup-panel p-3 p-md-4">
+        <h2 class="h5 fw-bold mb-2">Arquivo 2 — <code>petorlandia-webhook.lua</code></h2>
+        <p class="small text-muted">Avisa o PetOrlândia a cada exame concluído. Troque <code>SEU_TOKEN_AQUI</code> pelo token da sua clínica.</p>
+        <div class="copy-box">
+          <textarea id="webhook-script" readonly>local WEBHOOK_URL = "{{ webhook_url }}"
+local WEBHOOK_TOKEN = "SEU_TOKEN_AQUI"
+
+function OnStableStudy(studyId, tags, metadata)
+  local study = ParseJson(RestApiGet('/studies/' .. studyId))
+  local payload = {
+    token = WEBHOOK_TOKEN,
+    event = 'stable_study',
+    orthanc_study_id = studyId,
+    study = {
+      StudyInstanceUID = tags['StudyInstanceUID'],
+      StudyDate = tags['StudyDate'],
+      StudyTime = tags['StudyTime'],
+      StudyDescription = tags['StudyDescription'],
+      AccessionNumber = tags['AccessionNumber'],
+    },
+    patient = {
+      PatientName = study['PatientMainDicomTags']['PatientName'],
+      PatientID = study['PatientMainDicomTags']['PatientID'],
+      PatientSex = study['PatientMainDicomTags']['PatientSex'],
+    },
+    series_count = #study['Series'],
+  }
+  local headers = {
+    ['Content-Type'] = 'application/json',
+    ['X-Orthanc-Token'] = WEBHOOK_TOKEN,
+  }
+  local ok, err = pcall(function()
+    HttpPost(WEBHOOK_URL, DumpJson(payload, true), headers)
+  end)
+  if ok then
+    print('PetOrlandia webhook enviado para estudo ' .. studyId)
+  else
+    print('PetOrlandia webhook FALHOU: ' .. tostring(err))
+  end
+end</textarea>
+          <button class="btn btn-outline-secondary btn-icon js-copy" type="button" data-copy-target="webhook-script">
+            <i class="fa-regular fa-copy" aria-hidden="true"></i>
+            Copiar
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="info-panel p-3 p-md-4 mt-4">
+    <h2 class="h5 fw-bold mb-3">Perguntas frequentes</h2>
+    <div class="d-grid gap-3">
+      <div>
+        <div class="fw-semibold">O exame chegou no Orthanc mas não apareceu no PetOrlândia?</div>
+        <div class="text-muted small">Confira se o nome do paciente digitado no aparelho é igual ao nome do pet no cadastro. Se houver dois pets com o mesmo nome, o exame fica aguardando vínculo manual — nunca cai no animal errado.</div>
+      </div>
+      <div>
+        <div class="fw-semibold">O botão Test do aparelho falha?</div>
+        <div class="text-muted small">Verifique se o PC está ligado, na mesma rede do aparelho, com o Orthanc aberto, e libere a porta TCP 4242 no Firewall do Windows (Regra de Entrada &rarr; TCP 4242 &rarr; Permitir).</div>
+      </div>
+      <div>
+        <div class="fw-semibold">Onde ficam as imagens?</div>
+        <div class="text-muted small">Na pasta <code>db</code> ao lado do Orthanc, no computador da clínica. Inclua essa pasta no seu backup. O PetOrlândia recebe os dados do exame e cria o rascunho do laudo.</div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const testButton = document.getElementById('test-webhook');
+    const status = document.getElementById('webhook-status');
+    async function testWebhook() {
+      status.textContent = 'Testando...';
+      status.className = 'small text-muted';
+      try {
+        const response = await fetch({{ webhook_url|tojson }}, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const payload = await response.json();
+        const code = payload && payload.error && payload.error.code;
+        if (code === 'invalid_orthanc_token') {
+          status.textContent = 'Webhook ativo e aguardando exames.';
+          status.className = 'small text-success';
+        } else if (code === 'orthanc_webhook_disabled') {
+          status.textContent = 'Webhook ainda não habilitado no servidor. Fale com o suporte.';
+          status.className = 'small text-warning';
+        } else {
+          throw new Error('Resposta inesperada');
+        }
+      } catch (error) {
+        status.textContent = 'Não foi possível testar agora. Verifique sua rede e tente novamente.';
+        status.className = 'small text-danger';
+      }
+    }
+    testButton.addEventListener('click', testWebhook);
+    testWebhook();
+    document.querySelectorAll('.js-copy').forEach(function (button) {
+      button.addEventListener('click', async function () {
+        const targetId = button.dataset.copyTarget;
+        const target = targetId ? document.getElementById(targetId) : null;
+        const value = target ? target.value : (button.dataset.copy || '');
+        try {
+          await navigator.clipboard.writeText(value);
+          button.classList.remove('btn-outline-secondary');
+          button.classList.add('btn-success');
+          const original = button.innerHTML;
+          button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copiado';
+          window.setTimeout(function () {
+            button.classList.add('btn-outline-secondary');
+            button.classList.remove('btn-success');
+            button.innerHTML = original;
+          }, 1600);
+        } catch (error) {
+          if (target) {
+            target.focus();
+          }
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

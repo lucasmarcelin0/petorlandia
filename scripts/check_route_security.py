@@ -8,6 +8,8 @@ CENTRAL_AUTH_PATTERNS = ("ensure_", "authorize_", "require_", "check_")
 EXCEPTION_PATTERNS = (
     re.compile(r"^/healthz?$"), re.compile(r"^/health/check$"), re.compile(r"^/login/?$"),
     re.compile(r"^/oauth/token$"), re.compile(r"^/webhook/"),
+    # Webhook do PACS Orthanc: público por design, validado por token compartilhado (ORTHANC_WEBHOOK_TOKEN)
+    re.compile(r"^/api/integrations/orthanc/webhook$"),
 )
 SENSITIVE_HINTS = ("<int:", "/api/", "/animal/", "/consulta/", "/tutor/", "/clinica", "/fiscal", "/orcamento", "/prescricao", "/exame")
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

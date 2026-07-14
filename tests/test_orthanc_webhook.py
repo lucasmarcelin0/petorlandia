@@ -159,6 +159,18 @@ def test_orthanc_webhook_does_not_match_ambiguous_patient_name(app, client):
     assert response.get_json()["data"]["orthanc_study"]["match_status"] == "unmatched"
 
 
+def test_pacs_onboarding_page_renders_setup_guide(app, client):
+    response = client.get("/integracoes/pacs")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Conecte seu ultrassom ao PetOrlândia" in html
+    assert "PETORLANDIA" in html
+    assert "4242" in html
+    assert "/api/integrations/orthanc/webhook" in html
+    assert "SEU_TOKEN_AQUI" in html
+
+
 def test_orthanc_webhook_matches_dicom_caret_separated_name(app, client):
     app.config["ORTHANC_WEBHOOK_TOKEN"] = TOKEN
     with app.app_context():

@@ -409,6 +409,16 @@ def support():
     )
 
 
+@bp.route('/integracoes/pacs')
+def pacs_onboarding():
+    """Passo a passo público de integração do ultrassom (Orthanc/DICOM)."""
+    issuer = _oauth_issuer()
+    return render_template(
+        'pacs_onboarding.html',
+        webhook_url=f'{issuer}/api/integrations/orthanc/webhook',
+    )
+
+
 @bp.route('/chatgpt')
 def chatgpt_onboarding():
     issuer = _oauth_issuer()
