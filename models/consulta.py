@@ -470,6 +470,35 @@ class ExameImagemPdfAccessLog(db.Model):
     user = db.relationship('User')
 
 
+class OrthancStudy(db.Model):
+    """Estudo DICOM recebido do PACS Orthanc via webhook (ex.: ultrassom VINNO D2).
+
+    Registro idempotente por StudyInstanceUID; quando o PatientName casa com um
+    único Animal, um rascunho de ExameImagem é criado automaticamente.
+    """
+    __tablename__ = 'orthanc_study'
+
+    id = db.Column(db.Integer, primary_key=True)
+    study_instance_uid = db.Column(db.String(128), nullable=False, unique=True, index=True)
+    orthanc_study_id = db.Column(db.String(64), nullable=True)
+    accession_number = db.Column(db.String(64), nullable=True)
+    study_description = db.Column(db.String(255), nullable=True)
+    study_date = db.Column(db.Date, nullable=True)
+    patient_name = db.Column(db.String(160), nullable=True)
+    patient_dicom_id = db.Column(db.String(64), nullable=True)
+    patient_sex = db.Column(db.String(16), nullable=True)
+    series_count = db.Column(db.Integer, nullable=True)
+    raw_payload = db.Column(db.Text, nullable=True)
+    match_status = db.Column(db.String(20), nullable=False, default='unmatched', index=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='SET NULL'), nullable=True, index=True)
+    exame_imagem_id = db.Column(db.Integer, db.ForeignKey('exame_imagem.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, onupdate=now_in_brazil, nullable=False)
+
+    animal = db.relationship('Animal')
+    exame_imagem = db.relationship('ExameImagem')
+
+
 class ProtocoloClinico(db.Model):
     __tablename__ = 'protocolo_clinico'
 

@@ -3,13 +3,15 @@
 ``is_veterinarian`` e ``ensure_clinic_access`` são late-bound via módulo app
 (testes fazem monkeypatch desses nomes — contrato do antigo lazy_view).
 """
+import hmac
+import json
 import re
 from datetime import date, datetime, timedelta
 from typing import Optional, Set
 from urllib.parse import parse_qs, urlparse
 
 import requests
-from flask import Blueprint, abort, g, jsonify, request
+from flask import Blueprint, abort, current_app, g, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy import and_, false, func, or_
 from sqlalchemy.orm import joinedload
@@ -42,6 +44,7 @@ from models import (
     ExamAppointment,
     ExameImagem,
     ExameImagemPdfAccessLog,
+    OrthancStudy,
     Order,
     Payment,
     User,
@@ -1100,6 +1103,125 @@ def api_integrations_release_exame_to_tutor():
     except ValueError as exc:
         return _integration_error('invalid_exame_imagem_release', str(exc), 400)
     return _integration_ok({'exame': result})
+
+
+def _orthanc_parse_dicom_date(value):
+    try:
+        return datetime.strptime((value or '').strip()[:8], '%Y%m%d').date()
+    except ValueError:
+        return None
+
+
+def _orthanc_match_animal(patient_name: str):
+    """Casa o PatientName DICOM com um Animal; retorna o animal apenas se o
+    casamento for inequívoco (um único animal com o nome informado)."""
+    from app import _integration_normalize_match_text
+
+    normalized = _integration_normalize_match_text((patient_name or '').replace('^', ' '))
+    if not normalized:
+        return None
+    first_token = normalized.split(' ')[0]
+    candidates = (
+        Animal.query
+        .filter(Animal.name.ilike(f"%{first_token}%"))
+        .filter(Animal.removido_em.is_(None))
+        .limit(50)
+        .all()
+    )
+    matches = {
+        animal.id: animal
+        for animal in candidates
+        if _integration_normalize_match_text(animal.name) in (normalized, first_token)
+    }
+    if len(matches) == 1:
+        return next(iter(matches.values()))
+    return None
+
+
+@bp.route("/api/integrations/orthanc/webhook", methods=["POST"])
+@csrf.exempt
+def api_integrations_orthanc_webhook():
+    """Recebe a notificação de estudo estável do Orthanc (script Lua do PACS).
+
+    Autenticado por token compartilhado (ORTHANC_WEBHOOK_TOKEN), não por OAuth:
+    quem chama é o servidor Orthanc da clínica, não um usuário.
+    """
+    expected = (current_app.config.get('ORTHANC_WEBHOOK_TOKEN') or '').strip()
+    if not expected:
+        return _integration_error(
+            'orthanc_webhook_disabled',
+            'Defina ORTHANC_WEBHOOK_TOKEN para habilitar o webhook do Orthanc.',
+            503,
+        )
+    payload = request.get_json(silent=True) or {}
+    provided = (request.headers.get('X-Orthanc-Token') or payload.get('token') or '').strip()
+    if not hmac.compare_digest(provided, expected):
+        return _integration_error('invalid_orthanc_token', 'Token do webhook invalido.', 401)
+
+    study = payload.get('study') or {}
+    patient = payload.get('patient') or {}
+    uid = (study.get('StudyInstanceUID') or '').strip()
+    if not uid:
+        return _integration_error('missing_study_uid', 'Payload sem study.StudyInstanceUID.', 400)
+
+    record = OrthancStudy.query.filter_by(study_instance_uid=uid).first()
+    created = record is None
+    if created:
+        record = OrthancStudy(study_instance_uid=uid)
+        db.session.add(record)
+
+    record.orthanc_study_id = (payload.get('orthanc_study_id') or '').strip() or record.orthanc_study_id
+    record.accession_number = (study.get('AccessionNumber') or '').strip() or record.accession_number
+    record.study_description = (study.get('StudyDescription') or '').strip() or record.study_description
+    record.study_date = _orthanc_parse_dicom_date(study.get('StudyDate')) or record.study_date
+    record.patient_name = (patient.get('PatientName') or '').strip() or record.patient_name
+    record.patient_dicom_id = (patient.get('PatientID') or '').strip() or record.patient_dicom_id
+    record.patient_sex = (patient.get('PatientSex') or '').strip() or record.patient_sex
+    if payload.get('series_count') is not None:
+        try:
+            record.series_count = int(payload['series_count'])
+        except (TypeError, ValueError):
+            pass
+    sanitized = {k: v for k, v in payload.items() if k != 'token'}
+    record.raw_payload = json.dumps(sanitized, ensure_ascii=False)
+
+    if record.animal_id is None:
+        animal = _orthanc_match_animal(record.patient_name)
+        if animal:
+            record.animal_id = animal.id
+            record.match_status = 'matched'
+            if record.exame_imagem_id is None:
+                tipo = record.study_description or 'Exame de imagem (DICOM)'
+                exame = ExameImagem(
+                    animal_id=animal.id,
+                    tutor_id=animal.user_id,
+                    clinica_requisitante_id=animal.clinica_id,
+                    tipo_exame=tipo[:160],
+                    titulo=tipo[:200],
+                    data_exame=record.study_date,
+                    descricao=(
+                        'Recebido automaticamente do PACS Orthanc '
+                        f'(StudyInstanceUID {uid}).'
+                    ),
+                    status='rascunho',
+                )
+                db.session.add(exame)
+                db.session.flush()
+                record.exame_imagem_id = exame.id
+        else:
+            record.match_status = 'unmatched'
+
+    db.session.commit()
+    return _integration_ok({
+        'orthanc_study': {
+            'id': record.id,
+            'study_instance_uid': record.study_instance_uid,
+            'criado_agora': created,
+            'match_status': record.match_status,
+            'animal_id': record.animal_id,
+            'exame_imagem_id': record.exame_imagem_id,
+        },
+    }, 201 if created else 200)
 
 
 @bp.route("/api/integrations/clinic-first-access-invites", methods=["POST"])

@@ -124,6 +124,7 @@ __all__ = [
     "ExternalOnboardingInvite",
     "ExameImagem",
     "ExameImagemPdfAccessLog",
+    "OrthancStudy",
     "ClinicInventory",
     "ClinicInventoryMovement",
     "ProtocoloClinico",

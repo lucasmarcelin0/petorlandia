@@ -159,6 +159,9 @@ class Config:
         os.environ.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT", "0")
     )
 
+    # Integração DICOM (Orthanc → PetOrlândia). Sem o token o webhook fica desativado.
+    ORTHANC_WEBHOOK_TOKEN = _env_optional("ORTHANC_WEBHOOK_TOKEN")
+
     # Opções adicionais de integração com o Mercado Pago
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
