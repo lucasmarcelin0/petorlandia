@@ -1445,15 +1445,23 @@ function renderFiscalActs() {
 }
 
 function renderPrint() {
-  const tabs = [
+  const establishmentTabs = [
     ["anexoI", "Anexo I"],
     ["mtse", "MTSE"],
     ["construction", "Construcao/reforma"],
     ["produto", "Produto/rotulo"],
+  ];
+  const fiscalTabs = [
     ["infracao", "Auto de infracao"],
     ["advertencia", "Advertencia"],
     ["apreensao", "Apreensao"],
   ];
+  // Atos fiscais (infracao/advertencia/apreensao) sao ferramenta exclusiva do
+  // fiscal: o estabelecimento nao lavra nem imprime esses modelos por conta propria.
+  const tabs = state.role === "sim" ? [...establishmentTabs, ...fiscalTabs] : establishmentTabs;
+  if (state.role !== "sim" && fiscalTabs.some(([id]) => id === state.printForm)) {
+    state.printForm = "anexoI";
+  }
   return `
     <div class="tabs no-print">${tabs.map(([id, label]) => `<button class="${state.printForm === id ? "active" : ""}" data-print-form="${id}">${label}</button>`).join("")}</div>
     <div class="actions no-print" style="margin-bottom:14px">
