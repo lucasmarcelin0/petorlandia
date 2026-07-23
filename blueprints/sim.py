@@ -583,15 +583,22 @@ def get_blueprint():
         ensure_ready()
 
     # ---- front estatico -------------------------------------------------
+    # no-cache (revalidacao por ETag a cada visita): o portal e atualizado com
+    # frequencia e o max-age padrao de 7 dias do app fazia navegadores exibirem
+    # versoes antigas por ate uma semana apos cada deploy.
     @bp.route("/")
     def sim_index():
         if not PORTAL_STATIC_DIR.exists():
             abort(404)
-        return send_from_directory(str(PORTAL_STATIC_DIR), "index.html")
+        response = send_from_directory(str(PORTAL_STATIC_DIR), "index.html")
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
     @bp.route("/<path:filename>")
     def sim_static(filename: str):
-        return send_from_directory(str(PORTAL_STATIC_DIR), filename)
+        response = send_from_directory(str(PORTAL_STATIC_DIR), filename)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
     # ---- autenticacao ---------------------------------------------------
     @bp.route("/api/login", methods=["POST"])

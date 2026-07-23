@@ -100,7 +100,11 @@ def reverse_geocode_city(*args, **kwargs):
 def secret_game():
     if not EASTER_EGG_STATIC_DIR.exists():
         abort(404)
-    return send_from_directory(str(EASTER_EGG_STATIC_DIR), "index.html")
+    # no-cache: a pagina muda com frequencia (card do SIM etc.) e o max-age
+    # padrao de 7 dias deixava visitantes presos em versoes antigas.
+    response = send_from_directory(str(EASTER_EGG_STATIC_DIR), "index.html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @bp.route("/surpresa/partituras-list")
