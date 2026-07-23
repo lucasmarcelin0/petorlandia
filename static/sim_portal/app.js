@@ -545,19 +545,15 @@ function renderLogin() {
         <form class="login-form" data-login-form>
           <div class="field">
             <label>E-mail</label>
-            <input name="email" type="email" autocomplete="username" value="lucas.sim@orlandia.sp.gov.br">
+            <input name="email" type="email" autocomplete="username" placeholder="seu-email@exemplo.com.br" required>
           </div>
           <div class="field">
             <label>Senha</label>
-            <input name="password" type="password" autocomplete="current-password" value="sim2026">
+            <input name="password" type="password" autocomplete="current-password" required>
           </div>
           <button class="btn primary" type="submit">Entrar</button>
         </form>
-        <div class="login-help">
-          <button class="btn" data-demo-login="sim">Acesso SIM</button>
-          <button class="btn" data-demo-login="establishment">Acesso Guerra Milk</button>
-        </div>
-        <p class="small muted">Contas locais para homologacao: SIM usa senha sim2026; estabelecimento usa senha guerra2026.</p>
+        <p class="small muted">Acesso fornecido pelo Servico de Inspecao Municipal de Orlandia. Para obter sua conta de estabelecimento, procure o SIM na Divisao de Agronegocios ou envie e-mail para o servico.</p>
       </section>
     </div>
   `;
@@ -787,14 +783,6 @@ function renderDashboard() {
           ${(notifications.length ? notifications : [{ title: "Sem notificacoes novas", message: "Eventos do processo apareceriam aqui para ciencia e acompanhamento.", created_at: state.protocol.updatedAt }]).slice(0, 5).map(notificationItem).join("")}
         </div>
       </div>
-      ${state.role === "sim" ? `
-      <div class="span-12 panel">
-        <div class="panel-header"><h2>Proximos passos para sistema oficial</h2><span class="status review">Implantacao</span></div>
-        <div class="roadmap">
-          ${officialSteps().map((step, index) => `<div><strong>${index + 1}. ${step.title}</strong><span>${step.text}</span></div>`).join("")}
-        </div>
-      </div>
-      ` : ""}
     </div>
   `;
 }
@@ -813,16 +801,6 @@ function notificationItem(item) {
       </div>
     </div>
   `;
-}
-
-function officialSteps() {
-  return [
-    { title: "Validar juridicamente os formularios", text: "Confirmar publicacao dos Decretos 5.368/2024, 5.373/2024 e 5.374/2024, versao oficial e competencia do SIM." },
-    { title: "Definir autenticacao institucional", text: "Usar login por conta institucional para servidores e cadastro controlado para responsaveis legais/tecnicos." },
-    { title: "Criar banco e armazenamento de anexos", text: "Guardar processos, versoes, arquivos, hash, usuario, horario, pareceres e decisoes." },
-    { title: "Formalizar protocolo e notificacoes", text: "Gerar numero de processo, recibo de envio, ciencia de exigencias e historico auditavel." },
-    { title: "Homologar com um processo piloto", text: "Usar GUERRA MILK como piloto assistido antes de abrir para outros estabelecimentos." },
-  ];
 }
 
 function nextActions() {
@@ -1758,15 +1736,6 @@ function bindLoginEvents() {
     event.preventDefault();
     const formData = new FormData(form);
     await login(formData.get("email"), formData.get("password"));
-  });
-  document.querySelectorAll("[data-demo-login]").forEach((el) => {
-    el.addEventListener("click", async () => {
-      if (el.dataset.demoLogin === "sim") {
-        await login("lucas.sim@orlandia.sp.gov.br", "sim2026");
-      } else {
-        await login("guerra.milk@empresa.local", "guerra2026");
-      }
-    });
   });
 }
 
