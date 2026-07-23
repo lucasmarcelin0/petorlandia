@@ -256,17 +256,23 @@ SEED_STATE = {
     },
     "legalResponsible": {"name": "Jose Francisco Guerra"},
     "documents": [
-        {"id": "requerimento-assinado", "name": "Requerimento assinado pelo responsavel legal (art. 11, I, LC 84/2024)", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "contrato-social-cnpj", "name": "Contrato social / CNPJ (art. 11, LC 84/2024)", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "doc-responsavel-legal", "name": "Documento do responsavel legal", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "art-responsavel-tecnico", "name": "ART / comprovacao do RT", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "plantas-baixas", "name": "Plantas baixas: situacao 1:500, fluxograma 1:100, cortes/fachadas 1:100, instalacoes 1:100", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "memorial-economico-sanitario", "name": "Memorial economico-sanitario", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "comprovante-taxa", "name": "Comprovante de recolhimento da Taxa de Inspecao Sanitaria (LC 104/2026; sem cobranca em 2026)", "required": False, "status": "Pendente", "file": "", "internal": False},
-        {"id": "mtse", "name": "Memorial Tecnico-Sanitario (Anexo II, Dec. 5.374/2024)", "required": True, "status": "Em correcao", "file": "MTSE_rascunho.pdf", "internal": False},
-        {"id": "rotulos-produtos", "name": "Rotulos e memoriais dos produtos (Anexo IV)", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "certidoes-ambientais", "name": "Certidoes de regularidade ambiental", "required": False, "status": "Pendente", "file": "", "internal": False},
-        {"id": "planta-fluxo", "name": "Croqui de fluxo (apoio)", "required": False, "status": "Pendente", "file": "", "internal": False},
+        {"id": "requerimento-assinado", "item": "01", "group": "art11", "name": "Requerimento ao SIM solicitando o registro", "hint": "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "contrato-social-cnpj", "item": "03", "group": "art11", "name": "Contrato ou estatuto social registrado, quando houver firma constituida", "hint": "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "cpf-cnpj", "item": "04", "group": "art11", "name": "CPF ou CNPJ, conforme o caso", "hint": "Cartao CNPJ: emissao gratuita no site da Receita Federal.", "link": "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "inscricao-estadual", "item": "05", "group": "art11", "name": "Inscricao estadual/ICMS ou inscricao de Produtor Rural", "hint": "Cadesp/Sefaz-SP; produtor rural usa a inscricao de produtor.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "alvara-prefeitura", "item": "06", "group": "art11", "name": "Alvara de construcao e/ou localizacao e funcionamento", "hint": "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "certidoes-ambientais", "item": "07", "group": "art11", "name": "Licenca ambiental ou dispensa emitida pelo orgao ambiental", "hint": "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "exames-agua", "item": "08", "group": "art11", "name": "Exames fisico-quimico e microbiologico da agua de abastecimento", "hint": "Laboratorio credenciado; colete conforme orientacao do laboratorio.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "memorial-economico-sanitario", "item": "09", "group": "art11", "name": "Memorial descritivo economico e sanitario do estabelecimento", "hint": "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "manual-bpf", "item": "10", "group": "art11", "name": "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", "hint": "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "registro-crmv", "item": "11", "group": "art11", "name": "Registro do estabelecimento no CRMV-SP, se aplicavel", "hint": "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", "required": False, "status": "Pendente", "file": "", "internal": False},
+        {"id": "comprovante-taxa", "item": "12", "group": "art11", "name": "Comprovante da Taxa de Inspecao Sanitaria", "hint": "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", "required": False, "status": "Dispensado em 2026", "file": "", "internal": False},
+        {"id": "mtse", "group": "anexos", "name": "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", "hint": "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", "required": False, "status": "Em correcao", "file": "MTSE_rascunho.pdf", "internal": False},
+        {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Um Anexo IV por produto; cadastre os produtos no portal e imprima.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "doc-responsavel-legal", "group": "anexos", "name": "Documento do responsavel legal (RG/CPF ou CNH)", "hint": "Copia simples e legivel.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "art-responsavel-tecnico", "group": "anexos", "name": "ART ou contrato do responsavel tecnico", "hint": "Anotacao de responsabilidade tecnica emitida no conselho do RT.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "planta-fluxo", "group": "anexos", "name": "Croqui de fluxo (apoio)", "hint": "Opcional; ajuda a analise do fluxo de producao.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "parecer-tecnico-sim", "name": "Parecer tecnico do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "checklist-inspecao-sim", "name": "Checklist de inspecao do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "despachos-internos-sim", "name": "Despachos internos / instrucoes", "required": False, "status": "Interno", "file": "", "internal": True},
@@ -432,6 +438,21 @@ def get_state() -> dict:
     for doc in SEED_STATE["documents"]:
         if doc["id"] not in existing:
             state.setdefault("documents", []).append(dict(doc))
+        else:
+            for item in state["documents"]:
+                if item.get("id") == doc["id"]:
+                    # Metadados legais vem sempre da semente (checklist do art. 11
+                    # da LC 84/2024); status/arquivo/versoes ficam como estao.
+                    for key in ("name", "hint", "item", "group", "link", "internal", "required"):
+                        if key in doc:
+                            item[key] = doc[key]
+                    # Dispensa legal de 2026 (LC 104/2026) vale mesmo para
+                    # processos criados antes da atualizacao do checklist.
+                    if doc["id"] == "comprovante-taxa" and item.get("status") == "Pendente":
+                        item["status"] = "Dispensado em 2026"
+                    break
+    order = {doc["id"]: index for index, doc in enumerate(SEED_STATE["documents"])}
+    state["documents"].sort(key=lambda doc: order.get(doc.get("id"), 99))
     return state
 
 

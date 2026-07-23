@@ -118,17 +118,27 @@ const initialState = {
     notification: "",
     witnesses: "",
   },
+  journey: {
+    signedAck: false,
+  },
   documents: [
-    { id: crypto.randomUUID(), name: "Requerimento assinado pelo responsavel legal (art. 21, I, LC 84/2024)", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Contrato social / CNPJ (art. 21, II e III)", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Documento do responsavel legal", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "ART / comprovacao do RT", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Plantas baixas nas escalas do art. 21, IV", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Memorial economico-sanitario (art. 21, V)", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Comprovante de recolhimento da taxa municipal (art. 21, VI)", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Memorial Tecnico-Sanitario (Anexo II)", required: true, status: "Em correcao", file: "MTSE_rascunho.pdf" },
-    { id: crypto.randomUUID(), name: "Rotulos e memoriais dos produtos (Anexo IV)", required: true, status: "Pendente", file: "" },
-    { id: crypto.randomUUID(), name: "Croqui de fluxo (apoio)", required: false, status: "Pendente", file: "" },
+    { id: "requerimento-assinado", item: "01", group: "art11", name: "Requerimento ao SIM solicitando o registro", hint: "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", required: true, status: "Pendente", file: "" },
+    { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", required: true, status: "Pendente", file: "" },
+    { id: "contrato-social-cnpj", item: "03", group: "art11", name: "Contrato ou estatuto social registrado, quando houver firma constituida", hint: "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", required: true, status: "Pendente", file: "" },
+    { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
+    { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Cadesp/Sefaz-SP; produtor rural usa a inscricao de produtor.", required: true, status: "Pendente", file: "" },
+    { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
+    { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
+    { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
+    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Memorial descritivo economico e sanitario do estabelecimento", hint: "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", required: true, status: "Pendente", file: "" },
+    { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
+    { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
+    { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
+    { id: "mtse", group: "anexos", name: "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", hint: "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", required: false, status: "Em correcao", file: "MTSE_rascunho.pdf" },
+    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Um Anexo IV por produto; cadastre os produtos no portal e imprima.", required: true, status: "Pendente", file: "" },
+    { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel.", required: true, status: "Pendente", file: "" },
+    { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Anotacao de responsabilidade tecnica emitida no conselho do RT.", required: true, status: "Pendente", file: "" },
+    { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional; ajuda a analise do fluxo de producao.", required: false, status: "Pendente", file: "" },
   ],
   review: {
     decision: "Correcoes solicitadas",
@@ -620,6 +630,86 @@ function topActions() {
   `;
 }
 
+const GOVBR_SIGNER_URL = "https://assinador.iti.br";
+
+function docReceived(doc) {
+  return (doc.versions || []).length > 0 || doc.status === "Recebido";
+}
+
+function art11Docs() {
+  return state.documents.filter((doc) => doc.group === "art11");
+}
+
+function art11Progress() {
+  const required = art11Docs().filter((doc) => doc.required);
+  const sent = required.filter(docReceived).length;
+  return { sent, total: required.length };
+}
+
+function journeySteps() {
+  const est = state.establishment;
+  const fichaDone = Boolean(est.email && est.phone && state.legalResponsible.cpf && state.technicalResponsible.name);
+  const mtseDone = Boolean(state.production.activities && state.production.monthlyCapacity && state.production.waterSupply);
+  const productsDone = state.products.some((product) => (product.name || "").trim());
+  const docs = art11Progress();
+  const docsDone = docs.total > 0 && docs.sent === docs.total;
+  const signDone = Boolean(state.journey?.signedAck);
+  const submitted = ["review", "approved"].includes(state.protocol.status);
+  const approved = state.protocol.status === "approved";
+  return [
+    { id: "ficha", title: "Preencher a ficha do estabelecimento", desc: "Dados da empresa, responsavel legal e responsavel tecnico. Preencha uma vez; o portal reaproveita em todos os formularios.", done: fichaDone, view: "establishment", cta: "Abrir ficha" },
+    { id: "mtse", title: "Descrever a producao (Memorial/MTSE)", desc: "Atividades, capacidade, agua, higiene e fluxo. Atende o item 09 do checklist.", done: mtseDone, view: "establishment", cta: "Preencher memorial" },
+    { id: "produtos", title: "Cadastrar os produtos", desc: "Um Anexo IV por produto: nome, composicao, rotulo e conservacao.", done: productsDone, view: "products", cta: "Cadastrar produtos" },
+    { id: "assinar", title: "Imprimir e assinar no gov.br", desc: "Imprima os formularios em PDF e assine de graca com sua conta gov.br, sem cartorio.", done: signDone, view: "print", cta: "Ver formularios" },
+    { id: "documentos", title: `Enviar os documentos (${docs.sent} de ${docs.total})`, desc: "Checklist oficial do art. 11 da LC 84/2024. Cada item diz onde conseguir o documento.", done: docsDone, view: "documents", cta: "Enviar documentos" },
+    { id: "protocolar", title: "Enviar tudo ao SIM", desc: "Protocola o pedido; o SIM analisa e responde por aqui, com notificacao.", done: submitted, view: "dashboard", cta: "Enviar ao SIM", action: "submit" },
+    { id: "analise", title: "Acompanhar a analise", desc: "O SIM confere, agenda a vistoria e emite o registro. Voce acompanha tudo nesta tela.", done: approved, view: "dashboard", cta: "Ver andamento" },
+  ];
+}
+
+function renderJourney() {
+  const steps = journeySteps();
+  const doneCount = steps.filter((step) => step.done).length;
+  const percent = Math.round((doneCount / steps.length) * 100);
+  const current = steps.find((step) => !step.done);
+  return `
+    <div class="span-12 panel journey">
+      <div class="panel-header">
+        <div>
+          <h2>Seu registro no SIM, passo a passo</h2>
+          <p class="muted">Complete os passos no seu ritmo. Nada se perde: tudo fica salvo automaticamente.</p>
+        </div>
+        <span class="journey-score">${percent}%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>
+      ${current ? `
+        <div class="next-action">
+          <div>
+            <strong>Proximo passo: ${current.title}</strong>
+            <span>${current.desc}</span>
+          </div>
+          ${current.action === "submit"
+            ? `<button class="btn primary" data-action="submit">${icon("send")}${current.cta}</button>`
+            : `<button class="btn primary" data-view="${current.view}">${current.cta}</button>`}
+        </div>
+      ` : `
+        <div class="next-action done">
+          <div><strong>Tudo certo por aqui!</strong><span>Seu processo foi aprovado pelo SIM.</span></div>
+        </div>
+      `}
+      <div class="journey-steps">
+        ${steps.map((step, index) => `
+          <button class="journey-step ${step.done ? "done" : ""} ${current && step.id === current.id ? "current" : ""}" data-view="${step.view}">
+            <span class="step-badge">${step.done ? "&#10003;" : index + 1}</span>
+            <span class="step-text"><strong>${step.title}</strong><span>${step.desc}</span></span>
+          </button>
+        `).join("")}
+      </div>
+      <p class="small muted" style="margin-top:12px">Sem taxa em 2026: a Taxa de Inspecao Sanitaria esta dispensada neste ano (LC 104/2026). Registrar agora e gratuito.</p>
+    </div>
+  `;
+}
+
 function simServicePanel() {
   if (state.role !== "sim") return "";
   const latest = latestInspectionByEstablishment();
@@ -648,6 +738,7 @@ function renderDashboard() {
   return `
     <div class="grid">
       ${simServicePanel()}
+      ${state.role === "establishment" ? renderJourney() : ""}
       <div class="span-12 metrics">
         <div class="metric"><strong>${statusLabel()}</strong><span>Status atual</span></div>
         <div class="metric"><strong>${state.protocol.version}</strong><span>Versao protocolada</span></div>
@@ -696,12 +787,14 @@ function renderDashboard() {
           ${(notifications.length ? notifications : [{ title: "Sem notificacoes novas", message: "Eventos do processo apareceriam aqui para ciencia e acompanhamento.", created_at: state.protocol.updatedAt }]).slice(0, 5).map(notificationItem).join("")}
         </div>
       </div>
+      ${state.role === "sim" ? `
       <div class="span-12 panel">
         <div class="panel-header"><h2>Proximos passos para sistema oficial</h2><span class="status review">Implantacao</span></div>
         <div class="roadmap">
           ${officialSteps().map((step, index) => `<div><strong>${index + 1}. ${step.title}</strong><span>${step.text}</span></div>`).join("")}
         </div>
       </div>
+      ` : ""}
     </div>
   `;
 }
@@ -847,18 +940,30 @@ function renderEstablishment() {
 }
 
 function renderDocuments() {
-  const publicDocs = state.documents.filter((doc) => !doc.internal);
+  const art11 = state.documents.filter((doc) => doc.group === "art11");
+  const anexos = state.documents.filter((doc) => !doc.internal && doc.group !== "art11");
   const internalDocs = state.documents.filter((doc) => doc.internal);
+  const progress = art11Progress();
+  const percent = progress.total ? Math.round((progress.sent / progress.total) * 100) : 0;
   return `
     <div class="grid">
+      <div class="span-12 banner-warn">
+        <strong>Taxa do SIM em 2026: nao e preciso pagar nada.</strong>
+        A Taxa de Inspecao Sanitaria esta dispensada neste ano (LC 104/2026, art. 3, par. unico). O item 12 do checklist fica sem exigencia em 2026.
+      </div>
       <div class="span-8 panel">
         <div class="panel-header">
-          <div><h2>Checklist documental</h2><p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : "O estabelecimento envia ou substitui anexos; o status e definido pelo SIM."}</p></div>
-          ${state.role === "establishment" && !backendAvailable ? `<button class="btn" data-action="mock-upload">${icon("clip")}Simular upload</button>` : ""}
+          <div><h2>Checklist do registro - art. 11 da LC 84/2024</h2>
+          <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : "Envie cada documento em PDF. Cada item explica o que e e onde conseguir."}</p></div>
+          <span class="journey-score">${progress.sent}/${progress.total}</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>
+        <div class="document-group">
+          ${art11.map(documentCard).join("")}
         </div>
         <div class="document-group">
-          <h3>Documentos enviados pelo estabelecimento</h3>
-          ${publicDocs.map(documentCard).join("")}
+          <h3>Anexos complementares</h3>
+          ${anexos.map(documentCard).join("")}
         </div>
         ${state.role === "sim" ? `
           <div class="document-group">
@@ -869,13 +974,22 @@ function renderDocuments() {
         ` : ""}
       </div>
       <div class="span-4 panel">
-        <div class="panel-header"><h2>Rastreabilidade</h2></div>
-        <table class="table">
-          <tr><th>Conta</th><td>Usuario autenticado</td></tr>
-          <tr><th>Horario</th><td>Registro automatico</td></tr>
-          <tr><th>Arquivo</th><td>Nome, tamanho e hash</td></tr>
-          <tr><th>Versao</th><td>Cada novo envio gera nova versao; nada e apagado.</td></tr>
-        </table>
+        <div class="panel-header"><h2>Assine de graca no gov.br</h2></div>
+        <ol class="signer-steps">
+          <li>Imprima os formularios do portal em PDF (botao Imprimir - salvar como PDF).</li>
+          <li>Acesse o assinador oficial e entre com sua conta gov.br (nivel prata ou ouro).</li>
+          <li>Envie o PDF, posicione a assinatura e baixe o arquivo assinado.</li>
+          <li>Volte aqui e envie o PDF assinado no item correspondente.</li>
+        </ol>
+        <a class="btn primary" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">Abrir assinador gov.br</a>
+        ${state.role === "establishment" ? `
+          <label class="check-item" style="margin-top:12px">
+            <input type="checkbox" data-journey-signed ${state.journey?.signedAck ? "checked" : ""}>
+            <span>Ja assinei meus documentos no gov.br</span>
+          </label>
+        ` : ""}
+        <div class="panel-header" style="margin-top:18px"><h2>Rastreabilidade</h2></div>
+        <p class="muted small">Cada envio registra conta, horario, tamanho e hash SHA-256. Reenviar cria nova versao; nada e apagado.</p>
         <div class="panel-header" style="margin-top:18px"><h2>Historico de modificacoes</h2></div>
         <div class="timeline compact">
           ${(state.stateHistory || []).slice(0, 8).map((item) => `
@@ -890,20 +1004,24 @@ function renderDocuments() {
 function documentCard(doc) {
   const versions = doc.versions || [];
   const canUpload = backendAvailable && (state.role === "sim" || !doc.internal);
+  const isTaxWaived = doc.id === "comprovante-taxa";
+  const received = docReceived(doc);
   return `
-    <section class="document-card ${doc.internal ? "internal" : ""}">
+    <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
       <div class="document-main">
         <div>
-          <strong>${doc.name}${doc.required ? " *" : ""}</strong>
-          <span>${doc.internal ? "Interno SIM" : "Estabelecimento"} - ${documentSummary(doc)}</span>
+          <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
+          ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
+          ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
+          <span>${documentSummary(doc)}</span>
         </div>
         <div class="upload-controls">
-          ${canUpload ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
+          ${canUpload && !isTaxWaived ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
           ${doc.uploadId ? `<button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>` : ""}
           ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" target="_blank" rel="noreferrer">Baixar</a>` : ""}
-          <select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
-            ${["Pendente", "Em correcao", "Recebido", "Interno"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
-          </select>
+          ${isTaxWaived && state.role !== "sim" ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
+            ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
+          </select>`}
         </div>
       </div>
       <div class="version-list">
@@ -1250,7 +1368,7 @@ function renderLegislation() {
       <div class="span-7 panel">
         <div class="panel-header"><h2>Base legal municipal</h2><span class="status review">Publicacoes oficiais</span></div>
         <table class="table">
-          <tr><th>LC 84/2024</th><td>Institui a obrigatoriedade de previa inspecao e fiscalizacao de POA e reestrutura o SIM. Art. 11: documentos do registro; art. 18: multas de 20 a 1.000 UFESP; art. 21: arrecadacao vinculada ao SIM.<br>${lawLink("https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1844-de-19-de-junho-de-2024-Extraordinaria.pdf", "Publicacao oficial - ed. 1844, 19/06/2024 (PDF)")} - ${lawLink("https://leismunicipais.com.br/a/sp/o/orlandia/lei-complementar/2024/9/84/lei-complementar-n-84-2024-dispoe-sobre-a-obrigatoriedade-de-previa-inspecao-e-fiscalizacao-dos-produtos-de-origem-animal-no-ambito-do-municipio-de-orlandia-reestrutura-o-servico-de-inspecao-municipal-sim-e-da-outras-providencias", "texto consolidado")}</td></tr>
+          <tr><th>LC 84/2024</th><td>Institui a obrigatoriedade de previa inspecao e fiscalizacao de POA e reestrutura o SIM. Art. 11: documentos do registro; art. 18: multas de 20 a 1.000 UFESP; art. 21: arrecadacao vinculada ao SIM.<br>${lawLink("https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1844-de-19-de-junho-de-2024-Extraordinaria.pdf", "Publicacao oficial - ed. 1844, 19/06/2024 (PDF)")} - ${lawLink("https://leis.org/municipais/sp/orlandia/lei/lei-complementar/2024/84/lei-complementar-n-84-2024-dispoe-sobre-a-obrigatoriedade-de-previa-inspecao-e-fiscalizacao-dos-produtos-de-origem-animal-no-ambito-do-municipio-de-orlandia-reestrutura-o-servico-de-inspecao-municipal-sim-e-da-outras", "texto consolidado")}</td></tr>
           <tr><th>LC 104/2026</th><td>Institui a Taxa de Inspecao Sanitaria do SIM no Codigo Tributario (arts. 175-A a 175-D da LC 3.333/2003) e altera a LC 84/2024 (divida ativa das multas).<br>${lawLink("https://dosp.com.br/exibe_do.php?i=ODM4OTQ0", "Publicacao oficial - ed. 2338, 25/06/2026")}</td></tr>
           <tr><th>Decreto 5.368/2024</th><td>Regulamento operacional do SIM. Registro (arts. 21-25), medidas cautelares (art. 115), infracoes (art. 117), sancoes (art. 129), processo administrativo (arts. 141-154).<br>${lawLink("https://www.dosp.com.br/exibe_do.php?i=NTE2NTQx", "Publicacao oficial - ed. 1854, 03/07/2024")}</td></tr>
           <tr><th>Decretos 5.373 e 5.374/2024</th><td>Carimbos/identidade visual do SIM e formularios oficiais (Anexos I a VII; atos fiscais em 4 vias).<br>${lawLink("https://www.dosp.com.br/exibe_do.php?i=NTI5MjMy", "Publicacao oficial - ed. 1871, 30/07/2024")}</td></tr>
@@ -1516,6 +1634,10 @@ function render() {
     samples: renderSamples,
     legislation: renderLegislation,
   };
+  const establishmentViews = ["dashboard", "establishment", "documents", "products", "print"];
+  if (state.role === "establishment" && !establishmentViews.includes(state.view)) {
+    state.view = "dashboard";
+  }
   document.querySelector("#app").innerHTML = renderShell((views[state.view] || renderDashboard)());
   bindEvents();
 }
@@ -1557,6 +1679,15 @@ function bindEvents() {
     reviewNote.addEventListener("input", () => {
       state.review.note = reviewNote.value;
       saveState();
+    });
+  }
+  const journeySigned = document.querySelector("[data-journey-signed]");
+  if (journeySigned) {
+    journeySigned.addEventListener("change", () => {
+      state.journey = state.journey || {};
+      state.journey.signedAck = journeySigned.checked;
+      saveState();
+      toast(journeySigned.checked ? "Passo de assinatura concluido." : "Passo de assinatura reaberto.");
     });
   }
   document.querySelectorAll("[data-edit-establishment]").forEach((el) => el.addEventListener("click", () => {
