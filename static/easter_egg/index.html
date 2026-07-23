@@ -123,6 +123,10 @@
       background: var(--card-glow, transparent);
       opacity: 0; transition: opacity .3s;
       border-radius: inherit;
+      /* Puramente decorativo: sem isso, cliques em links aninhados (ex.: os
+         botoes do card do SIM) sao capturados por este overlay em vez do
+         elemento real, porque opacity cria um stacking context proprio. */
+      pointer-events: none;
     }
     .card:hover::before { opacity: 1; }
 
