@@ -759,6 +759,38 @@ table select:disabled {
   vertical-align: middle;
 }
 
+.label-upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: #fbfcfa;
+}
+
+.label-upload strong,
+.label-upload span {
+  display: block;
+}
+
+.label-upload span {
+  font-size: .82rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.label-upload.missing {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.label-upload.missing strong { color: #92400e; }
+
+.label-upload.has-file { border-left: 3px solid var(--green); }
+
 .product-actions {
   display: flex;
   gap: 10px;

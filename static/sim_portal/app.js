@@ -3,6 +3,9 @@ const TOKEN_KEY = "portal-sim-orlandia-token";
 // Quando servido como blueprint do PetOrlandia em /sim, a API fica em /sim/api.
 const BASE_PATH = location.pathname.replace(/\/(index\.html)?$/, "");
 const API_ROOT = `${BASE_PATH}/api`;
+// Prefixo de docId usado para anexar o rotulo direto na tela de cada produto
+// (precisa bater com PRODUCT_LABEL_PREFIX no backend).
+const PRODUCT_LABEL_PREFIX = "rotulo-produto-";
 
 const initialState = {
   role: "establishment",
@@ -134,7 +137,7 @@ const initialState = {
     { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", required: true, status: "Pendente", file: "" },
     { id: "contrato-social-cnpj", item: "03", group: "art11", name: "Contrato ou estatuto social registrado, quando houver firma constituida", hint: "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", required: true, status: "Pendente", file: "" },
     { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
-    { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Cadesp/Sefaz-SP; produtor rural usa a inscricao de produtor.", required: true, status: "Pendente", file: "" },
+    { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", link: "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", required: true, status: "Pendente", file: "" },
     { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
     { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
     { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
@@ -143,7 +146,7 @@ const initialState = {
     { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
     { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
     { id: "mtse", group: "anexos", name: "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", hint: "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", required: false, status: "Em correcao", file: "MTSE_rascunho.pdf" },
-    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Um Anexo IV por produto; cadastre os produtos no portal e imprima.", required: true, status: "Pendente", file: "" },
+    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", required: false, status: "Pendente", file: "" },
     { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel.", required: true, status: "Pendente", file: "" },
     { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Anotacao de responsabilidade tecnica emitida no conselho do RT.", required: true, status: "Pendente", file: "" },
     { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional; ajuda a analise do fluxo de producao.", required: false, status: "Pendente", file: "" },
@@ -654,7 +657,12 @@ function journeySteps() {
   const est = state.establishment;
   const fichaDone = Boolean(est.email && est.phone && state.legalResponsible.cpf && state.technicalResponsible.name);
   const mtseDone = Boolean(state.production.activities && state.production.monthlyCapacity && state.production.waterSupply);
-  const productsDone = state.products.some((product) => (product.name || "").trim());
+  // So conta como feito com nome real (nao o placeholder da semente) e rotulo anexado;
+  // um nome preenchido sozinho nao significa que o produto esteja pronto.
+  const productsDone = visibleProducts().some((product) => {
+    const hasRealName = (product.name || "").trim() && product.name !== "Queijo / derivado lacteo a confirmar";
+    return hasRealName && Boolean(product.labelUploadId);
+  });
   const docs = art11Progress();
   const docsDone = docs.total > 0 && docs.sent === docs.total;
   const signDone = Boolean(state.journey?.signedAck);
@@ -1004,7 +1012,7 @@ function documentCard(doc) {
         <div class="upload-controls">
           ${canUpload && !isTaxWaived ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
           ${doc.uploadId ? `<button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>` : ""}
-          ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" target="_blank" rel="noreferrer">Baixar</a>` : ""}
+          ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>` : ""}
           ${isTaxWaived && state.role !== "sim" ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
             ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
           </select>`}
@@ -1019,7 +1027,7 @@ function documentCard(doc) {
             </div>
             <div class="upload-controls">
               <button class="btn" data-open-upload="${version.id}">Abrir</button>
-              <a class="btn" href="${downloadUrl(version.id)}" target="_blank" rel="noreferrer">Baixar</a>
+              <a class="btn" href="${downloadUrl(version.id)}" download="${escapeHtml(version.file || "")}">Baixar</a>
             </div>
           </div>
         `).join("") : `<div class="empty small">Nenhuma versao enviada.</div>`}
@@ -1050,6 +1058,11 @@ function findUpload(uploadId) {
       if (version.id === uploadId) return { ...version, documentName: doc.name, internal: doc.internal };
     }
   }
+  for (const product of state.products || []) {
+    for (const version of product.labelVersions || []) {
+      if (version.id === uploadId) return { ...version, documentName: `Rotulo - ${product.name || "produto"}`, internal: false };
+    }
+  }
   return null;
 }
 
@@ -1077,9 +1090,11 @@ function renderUploadModal(upload) {
           <div class="full"><strong>SHA-256</strong><span>${upload.sha256}</span></div>
         </div>
         <div class="modal-actions">
-          <a class="btn primary" href="${downloadUrl(upload.id)}" target="_blank" rel="noreferrer">Baixar arquivo original</a>
+          <a class="btn" href="${downloadUrl(upload.id)}" target="_blank" rel="noreferrer">Abrir em nova aba</a>
+          <a class="btn primary" href="${downloadUrl(upload.id)}" download="${escapeHtml(upload.file || "")}">Baixar arquivo original</a>
         </div>
         <iframe class="upload-preview" src="${downloadUrl(upload.id)}" title="Previa do anexo ${upload.file}"></iframe>
+        <p class="small muted">Se a previa nao aparecer (ex.: .doc/.docx), use "Abrir em nova aba" ou baixe o arquivo.</p>
       </section>
     </div>
   `;
@@ -1132,6 +1147,26 @@ function productField(product, field, label, opts = {}) {
   return `<div class="${opts.full ? "field full" : "field"}"><label>${label}<span>Estabelecimento</span></label>${control}</div>`;
 }
 
+function productLabelCard(product, locked) {
+  const canUpload = backendAvailable && state.role === "establishment" && !locked;
+  const hasLabel = Boolean(product.labelUploadId);
+  return `
+    <div class="label-upload ${hasLabel ? "has-file" : "missing"}">
+      <div>
+        <strong>Rotulo do produto${hasLabel ? "" : " - pendente"}</strong>
+        ${hasLabel
+          ? `<span>v${product.labelVersionNo} - ${product.labelFile} - ${product.labelUploadedBy} - ${formatDate(product.labelUploadedAt)} - SHA-256 ${product.labelSha256.slice(0, 16)}...</span>`
+          : `<span>Envie a foto ou o PDF do rotulo/embalagem deste produto (obrigatorio para enviar ao SIM).</span>`}
+      </div>
+      <div class="upload-controls">
+        ${canUpload ? `<input type="file" accept="image/*,.pdf" data-upload-doc="${PRODUCT_LABEL_PREFIX}${product.id}" aria-label="Enviar rotulo de ${product.name || "produto"}">` : ""}
+        ${hasLabel ? `<button class="btn" data-open-upload="${product.labelUploadId}">Abrir</button>` : ""}
+        ${hasLabel ? `<a class="btn" href="${downloadUrl(product.labelUploadId)}" download="${escapeHtml(product.labelFile || "")}">Baixar</a>` : ""}
+      </div>
+    </div>
+  `;
+}
+
 function productEditor(product, opts = {}) {
   const versionTag = product.version > 1 ? `v${product.version}` : null;
   const locked = isProductLocked(product) || opts.readOnlyHistory;
@@ -1149,6 +1184,7 @@ function productEditor(product, opts = {}) {
       ${product.status === "Aprovado" ? `<p class="small muted">Aprovado em ${formatDate(product.approvedAt)} por ${product.approvedBy || "SIM"}. Este produto esta travado para edicao.</p>` : ""}
       ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
       ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
+      ${productLabelCard(product, locked)}
       <div class="form-grid">
         ${productField(product, "requestNature", "Natureza da solicitacao", { readOnlyHistory: locked })}
         ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
@@ -1885,6 +1921,10 @@ function handleProductAction(action, productId) {
   const who = state.role === "sim" ? "Lucas Marcelino Campos Ferreira" : state.establishment.tradeName;
   if (action === "submit") {
     if (isProductLocked(product)) return;
+    if (!product.labelUploadId) {
+      toast("Anexe o rotulo do produto antes de enviar para analise.");
+      return;
+    }
     product.status = "Em analise";
     product.submittedAt = new Date().toISOString();
     record(`Produto enviado para analise: ${product.name || "sem nome"}.`, who);

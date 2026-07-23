@@ -42,6 +42,10 @@ ACT_PREFIXES = {
     "Termo de coleta de amostras": "TC",
 }
 
+# Prefixo de docId usado para anexar o rotulo direto na tela de cada produto,
+# em vez do documento generico "rotulos-produtos" do checklist.
+PRODUCT_LABEL_PREFIX = "rotulo-produto-"
+
 
 # ---------------------------------------------------------------------------
 # Modelos (todas as tabelas prefixadas com sim_)
@@ -260,7 +264,7 @@ SEED_STATE = {
         {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "contrato-social-cnpj", "item": "03", "group": "art11", "name": "Contrato ou estatuto social registrado, quando houver firma constituida", "hint": "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "cpf-cnpj", "item": "04", "group": "art11", "name": "CPF ou CNPJ, conforme o caso", "hint": "Cartao CNPJ: emissao gratuita no site da Receita Federal.", "link": "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "inscricao-estadual", "item": "05", "group": "art11", "name": "Inscricao estadual/ICMS ou inscricao de Produtor Rural", "hint": "Cadesp/Sefaz-SP; produtor rural usa a inscricao de produtor.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "inscricao-estadual", "item": "05", "group": "art11", "name": "Inscricao estadual/ICMS ou inscricao de Produtor Rural", "hint": "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", "link": "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "alvara-prefeitura", "item": "06", "group": "art11", "name": "Alvara de construcao e/ou localizacao e funcionamento", "hint": "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "certidoes-ambientais", "item": "07", "group": "art11", "name": "Licenca ambiental ou dispensa emitida pelo orgao ambiental", "hint": "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "exames-agua", "item": "08", "group": "art11", "name": "Exames fisico-quimico e microbiologico da agua de abastecimento", "hint": "Laboratorio credenciado; colete conforme orientacao do laboratorio.", "required": True, "status": "Pendente", "file": "", "internal": False},
@@ -269,7 +273,7 @@ SEED_STATE = {
         {"id": "registro-crmv", "item": "11", "group": "art11", "name": "Registro do estabelecimento no CRMV-SP, se aplicavel", "hint": "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "comprovante-taxa", "item": "12", "group": "art11", "name": "Comprovante da Taxa de Inspecao Sanitaria", "hint": "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", "required": False, "status": "Dispensado em 2026", "file": "", "internal": False},
         {"id": "mtse", "group": "anexos", "name": "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", "hint": "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", "required": False, "status": "Em correcao", "file": "MTSE_rascunho.pdf", "internal": False},
-        {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Um Anexo IV por produto; cadastre os produtos no portal e imprima.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "doc-responsavel-legal", "group": "anexos", "name": "Documento do responsavel legal (RG/CPF ou CNH)", "hint": "Copia simples e legivel.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "art-responsavel-tecnico", "group": "anexos", "name": "ART ou contrato do responsavel tecnico", "hint": "Anotacao de responsabilidade tecnica emitida no conselho do RT.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "planta-fluxo", "group": "anexos", "name": "Croqui de fluxo (apoio)", "hint": "Opcional; ajuda a analise do fluxo de producao.", "required": False, "status": "Pendente", "file": "", "internal": False},
@@ -544,6 +548,20 @@ def hydrate_state(role: str) -> dict:
             })
         visible_docs.append(enriched)
     state["documents"] = visible_docs
+    for product in state.get("products", []):
+        label_versions = uploads_by_doc.get(f"{PRODUCT_LABEL_PREFIX}{product.get('id')}", [])
+        product["labelVersions"] = label_versions
+        if label_versions:
+            latest = label_versions[0]
+            product.update({
+                "labelFile": latest["file"],
+                "labelUploadId": latest["id"],
+                "labelSha256": latest["sha256"],
+                "labelSizeBytes": latest["sizeBytes"],
+                "labelUploadedAt": latest["uploadedAt"],
+                "labelUploadedBy": latest["uploadedBy"],
+                "labelVersionNo": latest["versionNo"],
+            })
     return state
 
 
@@ -729,17 +747,31 @@ def get_blueprint():
         if not doc_id or file is None or not file.filename:
             return jsonify({"error": "Documento ou arquivo ausente."}), 400
         state = get_state()
-        doc = next((d for d in state.get("documents", []) if d.get("id") == doc_id), None)
-        if not doc:
-            return jsonify({"error": "Documento nao encontrado."}), 404
-        if doc.get("internal") and user.role != "sim":
-            return jsonify({"error": "Documento interno do SIM."}), 403
+        is_label = doc_id.startswith(PRODUCT_LABEL_PREFIX)
+        product = None
+        doc = None
+        if is_label:
+            product_id = doc_id[len(PRODUCT_LABEL_PREFIX):]
+            product = next((p for p in state.get("products", []) if p.get("id") == product_id), None)
+            if not product:
+                return jsonify({"error": "Produto nao encontrado."}), 404
+            if product.get("status") == "Aprovado" or product.get("supersededBy"):
+                return jsonify({"error": "Produto aprovado; abra uma nova versao para trocar o rotulo."}), 403
+            if user.role != "establishment":
+                return jsonify({"error": "Apenas o estabelecimento envia o rotulo do produto."}), 403
+            visibility = "all"
+        else:
+            doc = next((d for d in state.get("documents", []) if d.get("id") == doc_id), None)
+            if not doc:
+                return jsonify({"error": "Documento nao encontrado."}), 404
+            if doc.get("internal") and user.role != "sim":
+                return jsonify({"error": "Documento interno do SIM."}), 403
+            visibility = "sim" if doc.get("internal") else "all"
         payload = file.read()
         original = Path(file.filename).name
         digest = hashlib.sha256(payload).hexdigest()
         upload_id = secrets.token_hex(12)
         uploaded_at = now_iso()
-        visibility = "sim" if doc.get("internal") else "all"
         last = (
             SimUpload.query.filter_by(process_id=PROCESS_ID, document_id=doc_id)
             .order_by(SimUpload.version_no.desc()).first()
@@ -760,30 +792,40 @@ def get_blueprint():
             visibility=visibility,
             uploaded_at=uploaded_at,
         ))
-        for item in state.get("documents", []):
-            if item.get("id") == doc_id:
-                item.update({
-                    "status": "Recebido",
-                    "file": original,
-                    "uploadId": upload_id,
-                    "sha256": digest,
-                    "sizeBytes": len(payload),
-                    "uploadedAt": uploaded_at,
-                    "uploadedBy": user.name,
-                    "versionNo": version_no,
-                })
+        if not is_label:
+            for item in state.get("documents", []):
+                if item.get("id") == doc_id:
+                    item.update({
+                        "status": "Recebido",
+                        "file": original,
+                        "uploadId": upload_id,
+                        "sha256": digest,
+                        "sizeBytes": len(payload),
+                        "uploadedAt": uploaded_at,
+                        "uploadedBy": user.name,
+                        "versionNo": version_no,
+                    })
         version = int(state.get("protocol", {}).get("version", 1))
         state.setdefault("protocol", {})["updatedAt"] = uploaded_at
         save_state(state, user.id)
-        audit(user, f"Upload recebido: {doc.get('name', doc_id)} v{version_no} - {original} (SHA-256 {digest[:12]}...).", version)
-        notify(
-            "sim" if user.role == "establishment" else "all",
-            f"Novo anexo: {doc.get('name', doc_id)} v{version_no}",
-            f"{user.name} enviou {original} com SHA-256 {digest[:16]}...",
-            user.id,
-            upload_id,
-            doc_id,
-        )
+        if is_label:
+            audit(user, f"Rotulo enviado: {product.get('name') or 'produto sem nome'} v{version_no} - {original} (SHA-256 {digest[:12]}...).", version)
+            notify(
+                "sim",
+                f"Novo rotulo: {product.get('name') or 'produto'}",
+                f"{user.name} enviou o rotulo {original} com SHA-256 {digest[:16]}...",
+                user.id, upload_id, doc_id,
+            )
+        else:
+            audit(user, f"Upload recebido: {doc.get('name', doc_id)} v{version_no} - {original} (SHA-256 {digest[:12]}...).", version)
+            notify(
+                "sim" if user.role == "establishment" else "all",
+                f"Novo anexo: {doc.get('name', doc_id)} v{version_no}",
+                f"{user.name} enviou {original} com SHA-256 {digest[:16]}...",
+                user.id,
+                upload_id,
+                doc_id,
+            )
         db.session.commit()
         return jsonify({
             "ok": True,
@@ -801,10 +843,13 @@ def get_blueprint():
             abort(404)
         if user.role != "sim" and row.visibility == "sim":
             return jsonify({"error": "Anexo interno do SIM."}), 403
+        # "inline" (padrao) permite pre-visualizar PDF/imagem no iframe do modal
+        # sem forcar download; o botao de baixar usa o atributo HTML "download"
+        # para salvar o arquivo mesmo com essa disposicao.
         return send_file(
             BytesIO(row.content),
             mimetype=row.mime_type or "application/octet-stream",
-            as_attachment=True,
+            as_attachment=bool(request.args.get("download")),
             download_name=row.original_name,
         )
 
