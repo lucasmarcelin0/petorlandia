@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Marca provisoria do Portal SIM Orlandia</title>
+  <desc id="desc">Selo circular com linhas de formulario, escudo e gota de leite.</desc>
+  <rect width="320" height="320" rx="52" fill="#f5f7f2"/>
+  <circle cx="160" cy="160" r="112" fill="#ffffff" stroke="#1d5f53" stroke-width="10"/>
+  <path d="M160 66l66 27v49c0 53-27 88-66 111-39-23-66-58-66-111V93l66-27z" fill="#dbe9e5" stroke="#1d5f53" stroke-width="8"/>
+  <path d="M160 118c18 25 32 45 32 67 0 19-14 34-32 34s-32-15-32-34c0-22 14-42 32-67z" fill="#ffffff" stroke="#1d5f53" stroke-width="8"/>
+  <path d="M89 244h142" stroke="#b53d2f" stroke-width="8" stroke-linecap="round"/>
+  <path d="M107 264h106" stroke="#d7a63f" stroke-width="8" stroke-linecap="round"/>
+  <path d="M113 102h32M113 122h28M207 102h-32M207 122h-28" stroke="#1d5f53" stroke-width="8" stroke-linecap="round"/>
+</svg>

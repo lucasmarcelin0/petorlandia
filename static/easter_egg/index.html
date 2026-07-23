@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PetOrlândia · Arcade Secreto 🎮</title>
+  <title>PetOrlândia · SIM Informatizado & Arcade 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -195,6 +195,34 @@
     .card-btn:hover { transform: translateY(-2px); filter: brightness(1.07); }
     .card-btn:active { transform: scale(.97); }
 
+    /* Card destaque – SIM Informatizado */
+    .sim-feature {
+      width: 100%;
+      max-width: 800px;
+    }
+    .card--sim {
+      --card-glow: radial-gradient(ellipse at 20% 0%, rgba(56,189,248,.14) 0%, transparent 65%);
+      --tag-bg: rgba(56,189,248,.15);
+      --tag-color: #38bdf8;
+      --btn-bg: linear-gradient(135deg,#0ea5e9,#2563eb);
+      --btn-shadow: rgba(14,165,233,.35);
+      width: 100%;
+    }
+    .card--sim:hover { border-color: rgba(56,189,248,.4); }
+    .sim-actions {
+      display: flex; gap: 12px; flex-wrap: wrap; width: 100%; margin-top: 6px;
+    }
+    .sim-actions .card-btn { width: auto; flex: 1 1 220px; }
+    .sim-actions .card-btn.secondary {
+      background: rgba(148,163,184,.12);
+      border: 1px solid rgba(148,163,184,.3);
+      box-shadow: none;
+      color: var(--text);
+    }
+    .sim-note {
+      font-size: .72rem; color: rgba(148,163,184,.7); line-height: 1.5;
+    }
+
     /* Ribbon "NOVO" */
     .ribbon {
       position: absolute; top: 16px; right: -1px;
@@ -230,10 +258,39 @@
 
     <!-- Header -->
     <header class="hero">
-      <div class="badge">🐾 Easter Egg · PetOrlândia</div>
-      <h1 class="hero-title">Cantinho dos Jogos</h1>
-      <p class="hero-sub">Você encontrou o arcade secreto!<br>Escolha um jogo e divirta-se 🎉</p>
+      <div class="badge">🐾 Cantinho secreto · PetOrlândia</div>
+      <h1 class="hero-title">SIM Informatizado</h1>
+      <p class="hero-sub">Portal do Serviço de Inspeção Municipal de Orlândia — em fase piloto.<br>E, do lado, o arcade secreto de sempre 🎉</p>
     </header>
+
+    <!-- Destaque: SIM Informatizado -->
+    <div class="sim-feature">
+      <div class="card card--sim">
+        <span class="ribbon">Piloto</span>
+        <span class="card-icon">🛡️</span>
+        <span class="card-tag">Serviço público</span>
+        <div class="card-title">Portal SIM · Serviço de Inspeção Municipal</div>
+        <p class="card-desc">
+          Registro de estabelecimentos de produtos de origem animal, envio de documentos com
+          protocolo e hash, formulários oficiais do Decreto 5.374/2024, inspeções, atos fiscais
+          e base legal — tudo em um só lugar. Empresários acessam com a conta do estabelecimento;
+          o SIM acompanha e decide pela conta institucional.
+        </p>
+        <div class="card-meta">
+          <span class="card-chip">📄 Documentos com protocolo</span>
+          <span class="card-chip">🖨️ Formulários oficiais</span>
+          <span class="card-chip">⚖️ LC 84/2024 · LC 104/2026</span>
+        </div>
+        <div class="sim-actions">
+          <a class="card-btn" href="/sim/">Acessar o Portal SIM →</a>
+          <a class="card-btn secondary" href="/sim/" title="Mesma tela de entrada; use a conta institucional do SIM">Sou do SIM (acesso interno)</a>
+        </div>
+        <p class="sim-note">
+          Projeto experimental do Serviço de Inspeção Municipal de Orlândia para avaliar a utilidade
+          de um portal digital. Dúvidas e sugestões são bem-vindas.
+        </p>
+      </div>
+    </div>
 
     <!-- Cards -->
     <div class="games-grid">

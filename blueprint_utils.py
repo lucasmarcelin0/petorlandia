@@ -60,6 +60,7 @@ def register_domain_blueprints(app):
         planos,
         push,
         sfa,
+        sim,
     )
 
     bulario_bp = bulario.get_blueprint()
@@ -146,3 +147,9 @@ def register_domain_blueprints(app):
     push_bp = push.get_blueprint()
     if not _is_blueprint_registered(app, push_bp):
         _register_with_alias(app, push_bp)
+
+    # Portal SIM: blueprint autocontido em /sim; registro simples, sem alias,
+    # para nao expor os endpoints fora do prefixo.
+    sim_bp = sim.get_blueprint()
+    if not _is_blueprint_registered(app, sim_bp):
+        app.register_blueprint(sim_bp)
