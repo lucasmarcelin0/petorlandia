@@ -277,6 +277,33 @@ SEED_STATE = {
         {"id": "checklist-inspecao-sim", "name": "Checklist de inspecao do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "despachos-internos-sim", "name": "Despachos internos / instrucoes", "required": False, "status": "Interno", "file": "", "internal": True},
     ],
+    "products": [
+        {
+            "id": "guerra-milk-produto-1",
+            "name": "Queijo / derivado lacteo a confirmar",
+            "brand": "Guerra Milk",
+            "status": "Rascunho",
+            "version": 1,
+            "previousVersionId": None,
+            "supersededBy": None,
+            "supersededAt": None,
+            "approvedAt": None,
+            "approvedBy": None,
+            "simNote": "",
+            "submittedAt": None,
+            "conservation": "Refrigerado",
+            "notes": "Denominacao e RTIQ precisam ser confirmados.",
+            "requestNature": "Registro de produto e rotulo",
+            "packageType": "",
+            "labelFeatures": "",
+            "composition": "",
+            "nutrition": "",
+            "manufacturingProcess": "",
+            "packagingProcess": "",
+            "storageConditions": "",
+            "marketTransport": "",
+        },
+    ],
     "audit": [
         {"at": "2026-07-23T08:58:00-03:00", "who": "SIM Orlandia", "action": "Processo criado a partir do historico SIVISA.", "version": 1},
         {"at": "2026-07-23T09:32:00-03:00", "who": "Lucas Marcelino Campos Ferreira", "action": "Correcoes solicitadas pelo SIM.", "version": 2},
@@ -453,6 +480,11 @@ def get_state() -> dict:
                     break
     order = {doc["id"]: index for index, doc in enumerate(SEED_STATE["documents"])}
     state["documents"].sort(key=lambda doc: order.get(doc.get("id"), 99))
+    # Processos criados antes da adicao de "products" ao seed server-side
+    # (o campo so existia no estado inicial do navegador) ficam sem produto
+    # nenhum ate o estabelecimento salvar algo; evita GET /state com lista vazia.
+    if not state.get("products"):
+        state["products"] = [dict(product) for product in SEED_STATE["products"]]
     return state
 
 

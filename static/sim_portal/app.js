@@ -92,6 +92,14 @@ const initialState = {
       name: "Queijo / derivado lacteo a confirmar",
       brand: "Guerra Milk",
       status: "Rascunho",
+      version: 1,
+      previousVersionId: null,
+      supersededBy: null,
+      supersededAt: null,
+      approvedAt: null,
+      approvedBy: null,
+      simNote: "",
+      submittedAt: null,
       conservation: "Refrigerado",
       notes: "Denominacao e RTIQ precisam ser confirmados.",
       requestNature: "Registro de produto e rotulo",
@@ -1077,53 +1085,92 @@ function renderUploadModal(upload) {
   `;
 }
 
+// Uma vez aprovado, o produto fica travado para edicao: qualquer alteracao
+// precisa abrir uma nova versao (novo processo de analise), preservando a
+// versao aprovada intacta e auditavel no historico.
+function isProductLocked(product) {
+  return product.status === "Aprovado" || Boolean(product.supersededBy);
+}
+
+function visibleProducts() {
+  // Historico de versoes superadas fica disponivel, mas fora da lista principal.
+  return state.products.filter((product) => !product.supersededBy);
+}
+
 function renderProducts() {
+  const current = visibleProducts();
+  const history = state.products.filter((product) => product.supersededBy);
   return `
     <div class="grid">
       <div class="span-12 panel">
         <div class="panel-header">
-          <div><h2>Produtos e rotulos</h2><p class="muted">Cada produto puxa automaticamente os dados da ficha mestre para o Anexo IV.</p></div>
-          <button class="btn primary" data-action="add-product">Adicionar produto</button>
+          <div><h2>Produtos e rotulos</h2><p class="muted">Cada produto puxa automaticamente os dados da ficha mestre para o Anexo IV. Produtos aprovados ficam travados; alteracoes abrem uma nova versao.</p></div>
+          ${state.role === "establishment" ? `<button class="btn primary" data-action="add-product">Adicionar produto</button>` : ""}
         </div>
         <div class="product-list">
-          ${state.products.map((product, index) => productEditor(product, index)).join("")}
+          ${current.length ? current.map((product) => productEditor(product)).join("") : `<p class="muted small">Nenhum produto cadastrado ainda.</p>`}
         </div>
       </div>
+      ${history.length ? `
+        <div class="span-12 panel">
+          <div class="panel-header"><h2>Historico de versoes anteriores</h2><p class="muted">Somente leitura - preservado para auditoria.</p></div>
+          <div class="product-list">
+            ${history.map((product) => productEditor(product, { readOnlyHistory: true })).join("")}
+          </div>
+        </div>
+      ` : ""}
     </div>
   `;
 }
 
 function productField(product, field, label, opts = {}) {
   const value = product[field] ?? "";
-  const locked = state.role !== "establishment";
+  const locked = state.role !== "establishment" || isProductLocked(product) || opts.readOnlyHistory;
   const control = opts.textarea
     ? `<textarea data-product="${product.id}" data-field="${field}" ${locked ? "disabled" : ""}>${value}</textarea>`
     : `<input data-product="${product.id}" data-field="${field}" value="${escapeHtml(value)}" ${locked ? "disabled" : ""}>`;
   return `<div class="${opts.full ? "field full" : "field"}"><label>${label}<span>Estabelecimento</span></label>${control}</div>`;
 }
 
-function productEditor(product, index) {
+function productEditor(product, opts = {}) {
+  const versionTag = product.version > 1 ? `v${product.version}` : null;
+  const locked = isProductLocked(product) || opts.readOnlyHistory;
+  const canSubmit = state.role === "establishment" && !opts.readOnlyHistory
+    && ["Rascunho", "Correcoes solicitadas"].includes(product.status)
+    && (product.name || "").trim();
+  const canReview = state.role === "sim" && !opts.readOnlyHistory && product.status === "Em analise";
+  const canRevise = state.role === "establishment" && !opts.readOnlyHistory && product.status === "Aprovado";
   return `
-    <section class="subform">
+    <section class="subform ${locked ? "locked" : ""}">
       <div class="subform-title">
-        <h3>Produto ${index + 1} - Anexo IV</h3>
+        <h3>${escapeHtml(product.name || "Produto sem nome")} - Anexo IV ${versionTag ? `<span class="version-tag">${versionTag}</span>` : ""}</h3>
         <span class="status ${statusClass(product.status)}">${product.status}</span>
       </div>
+      ${product.status === "Aprovado" ? `<p class="small muted">Aprovado em ${formatDate(product.approvedAt)} por ${product.approvedBy || "SIM"}. Este produto esta travado para edicao.</p>` : ""}
+      ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
+      ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
       <div class="form-grid">
-        ${productField(product, "requestNature", "Natureza da solicitacao")}
-        ${productField(product, "status", "Status do produto")}
-        ${productField(product, "name", "Nome do produto")}
-        ${productField(product, "brand", "Marca")}
-        ${productField(product, "conservation", "Condicoes de conservacao")}
-        ${productField(product, "packageType", "Tipo de embalagem")}
-        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true })}
-        ${productField(product, "composition", "Composicao do produto", { textarea: true })}
-        ${productField(product, "nutrition", "Informacao nutricional", { textarea: true })}
-        ${productField(product, "manufacturingProcess", "Processo de fabricacao", { textarea: true })}
-        ${productField(product, "packagingProcess", "Processo de embalagem", { textarea: true })}
-        ${productField(product, "storageConditions", "Condicoes de armazenamento", { textarea: true })}
-        ${productField(product, "notes", "Medidas de controle de qualidade", { textarea: true })}
-        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true })}
+        ${productField(product, "requestNature", "Natureza da solicitacao", { readOnlyHistory: locked })}
+        ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
+        ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
+        ${productField(product, "conservation", "Condicoes de conservacao", { readOnlyHistory: locked })}
+        ${productField(product, "packageType", "Tipo de embalagem", { readOnlyHistory: locked })}
+        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "composition", "Composicao do produto", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "nutrition", "Informacao nutricional", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "manufacturingProcess", "Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "packagingProcess", "Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "storageConditions", "Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "notes", "Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true, readOnlyHistory: locked })}
+      </div>
+      <div class="product-actions">
+        ${canSubmit ? `<button class="btn primary" data-product-action="submit" data-product-id="${product.id}">Enviar produto para analise</button>` : ""}
+        ${canReview ? `
+          <button class="btn warn" data-product-action="request-changes" data-product-id="${product.id}">Solicitar correcoes</button>
+          <button class="btn primary" data-product-action="approve" data-product-id="${product.id}">${icon("check")}Aprovar produto</button>
+        ` : ""}
+        ${canRevise ? `<button class="btn" data-product-action="revise" data-product-id="${product.id}">Solicitar alteracao (nova versao)</button>` : ""}
       </div>
     </section>
   `;
@@ -1562,8 +1609,14 @@ function printConstruction() {
 }
 
 function printProduct() {
-  const product = state.products[0] || { name: "", brand: "", conservation: "", notes: "" };
-  return `${printHeader("ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL")}
+  const options = visibleProducts();
+  const product = options.find((item) => item.id === state.printProductId) || options[0] || { name: "", brand: "", conservation: "", notes: "" };
+  const picker = options.length > 1 ? `
+    <div class="tabs no-print" style="margin-bottom:12px">
+      ${options.map((item) => `<button class="${item.id === product.id ? "active" : ""}" data-print-product="${item.id}">${escapeHtml(item.name || "Sem nome")}</button>`).join("")}
+    </div>
+  ` : "";
+  return `${picker}${printHeader("ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL")}
     <table class="print-table">${masterRows()}
       <tr><th>SIM do estabelecimento</th><td>${state.establishment.simNumber}</td><th>Responsavel legal</th><td>${state.legalResponsible.name}</td></tr>
       <tr><th>Natureza da solicitacao</th><td colspan="3">${product.requestNature || "&nbsp;"}</td></tr>
@@ -1646,6 +1699,16 @@ function bindEvents() {
   document.querySelectorAll("[data-product]").forEach((el) => {
     el.addEventListener("input", updateProduct);
     el.addEventListener("change", updateProduct);
+  });
+  document.querySelectorAll("[data-product-action]").forEach((el) => {
+    el.addEventListener("click", () => handleProductAction(el.dataset.productAction, el.dataset.productId));
+  });
+  document.querySelectorAll("[data-print-product]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.printProductId = el.dataset.printProduct;
+      saveState();
+      render();
+    });
   });
   document.querySelectorAll("[data-upload-doc]").forEach((el) => {
     el.addEventListener("change", () => uploadDocument(el.dataset.uploadDoc, el.files[0]));
@@ -1811,8 +1874,78 @@ function openUpload(uploadId) {
 
 function updateProduct(event) {
   const product = state.products.find((item) => item.id === event.target.dataset.product);
+  if (!product || isProductLocked(product) || state.role !== "establishment") return;
   product[event.target.dataset.field] = event.target.value;
   saveState();
+}
+
+function handleProductAction(action, productId) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) return;
+  const who = state.role === "sim" ? "Lucas Marcelino Campos Ferreira" : state.establishment.tradeName;
+  if (action === "submit") {
+    if (isProductLocked(product)) return;
+    product.status = "Em analise";
+    product.submittedAt = new Date().toISOString();
+    record(`Produto enviado para analise: ${product.name || "sem nome"}.`, who);
+    notifications.unshift({
+      title: "Produto enviado para analise",
+      message: `${state.establishment.tradeName} enviou "${product.name || "produto sem nome"}" para analise do SIM.`,
+      created_at: new Date().toISOString(),
+    });
+    toast("Produto enviado para analise do SIM.");
+  }
+  if (action === "approve") {
+    if (state.role !== "sim") return;
+    product.status = "Aprovado";
+    product.approvedAt = new Date().toISOString();
+    product.approvedBy = who;
+    product.simNote = "";
+    record(`Produto aprovado: ${product.name || "sem nome"}.`, who);
+    notifications.unshift({
+      title: "Produto aprovado",
+      message: `"${product.name || "Produto"}" foi aprovado pelo SIM. O cadastro fica travado; qualquer alteracao exige nova versao.`,
+      created_at: new Date().toISOString(),
+    });
+    toast("Produto aprovado.");
+  }
+  if (action === "request-changes") {
+    if (state.role !== "sim") return;
+    const note = window.prompt("Descreva o que precisa ser corrigido neste produto:", product.simNote || "");
+    if (note === null) return;
+    product.status = "Correcoes solicitadas";
+    product.simNote = note;
+    record(`Correcoes solicitadas no produto: ${product.name || "sem nome"}.`, who);
+    notifications.unshift({
+      title: "Correcoes solicitadas em produto",
+      message: `O SIM pediu ajustes em "${product.name || "produto"}": ${note}`,
+      created_at: new Date().toISOString(),
+    });
+    toast("Correcoes solicitadas.");
+  }
+  if (action === "revise") {
+    if (state.role !== "establishment" || product.status !== "Aprovado") return;
+    const revision = {
+      ...structuredClone(product),
+      id: crypto.randomUUID(),
+      version: (product.version || 1) + 1,
+      previousVersionId: product.id,
+      supersededBy: null,
+      supersededAt: null,
+      status: "Rascunho",
+      approvedAt: null,
+      approvedBy: null,
+      simNote: "",
+      submittedAt: null,
+    };
+    product.supersededBy = revision.id;
+    product.supersededAt = new Date().toISOString();
+    state.products.push(revision);
+    record(`Nova versao aberta a partir do produto aprovado: ${product.name || "sem nome"} (v${revision.version}).`, who);
+    toast("Nova versao criada. A versao aprovada anterior ficou preservada no historico.");
+  }
+  saveState();
+  render();
 }
 
 function handleAction(action) {
@@ -1922,6 +2055,14 @@ function handleAction(action) {
       name: "",
       brand: state.establishment.tradeName,
       status: "Rascunho",
+      version: 1,
+      previousVersionId: null,
+      supersededBy: null,
+      supersededAt: null,
+      approvedAt: null,
+      approvedBy: null,
+      simNote: "",
+      submittedAt: null,
       conservation: "",
       notes: "",
       requestNature: "Registro de produto e rotulo",
