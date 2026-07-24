@@ -7,6 +7,30 @@ const API_ROOT = `${BASE_PATH}/api`;
 // (precisa bater com PRODUCT_LABEL_PREFIX no backend).
 const PRODUCT_LABEL_PREFIX = "rotulo-produto-";
 
+// Opcoes/estruturas do Anexo IV. Declaradas antes de initialState porque a
+// semente do produto ja usa defaultNutritionRows() no carregamento do modulo.
+const PRODUCT_NATURE_OPTIONS = [
+  "Registro de produto",
+  "Registro de rotulo",
+  "Alteracao de rotulo",
+  "Alteracao de memorial descritivo",
+  "Cancelamento de produto",
+  "Cancelamento de rotulo",
+];
+const NUTRITION_LABELS = [
+  "Valor energetico (kcal)",
+  "Carboidratos (g)",
+  "Proteinas (g)",
+  "Gorduras totais (g)",
+  "Gorduras saturadas (g)",
+  "Gorduras trans (g)",
+  "Fibra alimentar (g)",
+  "Sodio (mg)",
+];
+function defaultNutritionRows() {
+  return NUTRITION_LABELS.map((label) => ({ label, qty: "", pct: "" }));
+}
+
 const initialState = {
   role: "establishment",
   view: "dashboard",
@@ -117,10 +141,15 @@ const initialState = {
       conservation: "Refrigerado",
       notes: "Denominacao e RTIQ precisam ser confirmados.",
       requestNature: "Registro de produto e rotulo",
+      natureOptions: [],
       packageType: "",
+      labelRegistration: "",
       labelFeatures: "",
       composition: "",
+      compositionRows: [],
       nutrition: "",
+      nutritionPortion: "",
+      nutritionRows: defaultNutritionRows(),
       manufacturingProcess: "",
       packagingProcess: "",
       storageConditions: "",
@@ -1197,6 +1226,82 @@ function productLabelCard(product, locked) {
   `;
 }
 
+// Natureza da solicitacao do Anexo IV: checkboxes (multi) em vez de texto livre.
+// Compatibilidade: se natureOptions ainda nao existe mas ha texto legado em
+// requestNature, ele aparece como observacao para nao perder o dado.
+function productNatureBlock(product, locked) {
+  const selected = product.natureOptions || [];
+  const legacy = !selected.length && product.requestNature ? product.requestNature : "";
+  return `
+    <div class="struct-block">
+      <label class="struct-label">Natureza da solicitacao</label>
+      <div class="check-grid">
+        ${PRODUCT_NATURE_OPTIONS.map((opt) => `
+          <label class="check-item">
+            <input type="checkbox" data-pnature="${product.id}" value="${escapeHtml(opt)}" ${selected.includes(opt) ? "checked" : ""} ${locked ? "disabled" : ""}>
+            <span>${opt}</span>
+          </label>
+        `).join("")}
+      </div>
+      ${legacy ? `<p class="small muted">Registro anterior: ${escapeHtml(legacy)}</p>` : ""}
+    </div>
+  `;
+}
+
+// Composicao do produto: tabela dinamica (materia-prima, kg/L, %).
+function productCompositionBlock(product, locked) {
+  const rows = product.compositionRows || [];
+  const legacy = !rows.length && product.composition ? product.composition : "";
+  return `
+    <div class="struct-block">
+      <label class="struct-label">Composicao do produto</label>
+      <table class="struct-table">
+        <thead><tr><th>Materia-prima / ingrediente</th><th class="num">kg ou L</th><th class="num">%</th><th></th></tr></thead>
+        <tbody>
+          ${rows.length ? rows.map((row) => `
+            <tr>
+              <td><input data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="ingredient" value="${escapeHtml(row.ingredient || "")}" ${locked ? "disabled" : ""}></td>
+              <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="amount" value="${escapeHtml(row.amount || "")}" ${locked ? "disabled" : ""}></td>
+              <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="pct" value="${escapeHtml(row.pct || "")}" ${locked ? "disabled" : ""}></td>
+              <td>${locked ? "" : `<button class="btn danger btn-mini" data-product-action="del-comp-row" data-product-id="${product.id}" data-row-id="${row.id}">Remover</button>`}</td>
+            </tr>
+          `).join("") : `<tr><td colspan="4" class="empty small">Nenhum ingrediente informado.</td></tr>`}
+        </tbody>
+      </table>
+      ${locked ? "" : `<button class="btn btn-mini" data-product-action="add-comp-row" data-product-id="${product.id}">Adicionar ingrediente</button>`}
+      ${legacy ? `<p class="small muted">Registro anterior: ${escapeHtml(legacy)}</p>` : ""}
+    </div>
+  `;
+}
+
+// Informacao nutricional: tabela fixa (porcao + 8 nutrientes padrao).
+function productNutritionBlock(product, locked) {
+  const rows = product.nutritionRows || defaultNutritionRows();
+  const legacy = product.nutrition ? product.nutrition : "";
+  return `
+    <div class="struct-block">
+      <label class="struct-label">Informacao nutricional</label>
+      <div class="field" style="max-width:280px">
+        <label>Quantidade por porcao de<span>Estabelecimento</span></label>
+        <input data-pnutport="${product.id}" value="${escapeHtml(product.nutritionPortion || "")}" placeholder="ex.: 100 g" ${locked ? "disabled" : ""}>
+      </div>
+      <table class="struct-table">
+        <thead><tr><th>Nutriente</th><th class="num">Quantidade</th><th class="num">% VD</th></tr></thead>
+        <tbody>
+          ${rows.map((row, index) => `
+            <tr>
+              <td>${row.label}</td>
+              <td><input class="num" data-pnut="${product.id}" data-nidx="${index}" data-nfield="qty" value="${escapeHtml(row.qty || "")}" ${locked ? "disabled" : ""}></td>
+              <td><input class="num" data-pnut="${product.id}" data-nidx="${index}" data-nfield="pct" value="${escapeHtml(row.pct || "")}" ${locked ? "disabled" : ""}></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      ${legacy ? `<p class="small muted">Registro anterior: ${escapeHtml(legacy)}</p>` : ""}
+    </div>
+  `;
+}
+
 function productEditor(product, opts = {}) {
   const versionTag = product.version > 1 ? `v${product.version}` : null;
   const locked = isProductLocked(product) || opts.readOnlyHistory;
@@ -1224,20 +1329,23 @@ function productEditor(product, opts = {}) {
       ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
       ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
       ${productLabelCard(product, locked)}
+      ${productNatureBlock(product, locked)}
       <div class="form-grid">
-        ${productField(product, "requestNature", "Natureza da solicitacao", { readOnlyHistory: locked })}
         ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
         ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
+        ${productField(product, "labelRegistration", "N. registro de rotulo", { readOnlyHistory: locked })}
         ${productField(product, "conservation", "Condicoes de conservacao", { readOnlyHistory: locked })}
         ${productField(product, "packageType", "Tipo de embalagem", { readOnlyHistory: locked })}
-        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "composition", "Composicao do produto", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "nutrition", "Informacao nutricional", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true, full: true, readOnlyHistory: locked })}
+      </div>
+      ${productCompositionBlock(product, locked)}
+      ${productNutritionBlock(product, locked)}
+      <div class="form-grid">
         ${productField(product, "manufacturingProcess", "Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
         ${productField(product, "packagingProcess", "Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
         ${productField(product, "storageConditions", "Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
         ${productField(product, "notes", "Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true, readOnlyHistory: locked })}
+        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true, full: true, readOnlyHistory: locked })}
       </div>
       <div class="product-actions">
         ${canSubmit ? `<button class="btn primary" data-product-action="submit" data-product-id="${product.id}">Enviar produto para analise</button>` : ""}
@@ -1705,22 +1813,48 @@ function printProduct() {
       ${options.map((item) => `<button class="${item.id === product.id ? "active" : ""}" data-print-product="${item.id}">${escapeHtml(item.name || "Sem nome")}</button>`).join("")}
     </div>
   ` : "";
+  const natureText = (product.natureOptions && product.natureOptions.length)
+    ? product.natureOptions.join(", ")
+    : (product.requestNature || "&nbsp;");
+  const compRows = product.compositionRows || [];
+  const nutRows = product.nutritionRows || [];
+  const hasNut = Boolean(product.nutritionPortion) || nutRows.some((row) => row.qty || row.pct);
+  const compBlock = compRows.length
+    ? `<table class="print-table">
+        <tr><th colspan="3">Composicao do produto</th></tr>
+        <tr><th>Materia-prima / ingrediente</th><th>kg ou L</th><th>%</th></tr>
+        ${compRows.map((row) => `<tr><td>${escapeHtml(row.ingredient || "") || "&nbsp;"}</td><td>${escapeHtml(row.amount || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
+      </table>`
+    : `<table class="print-table"><tr><th>Composicao do produto</th><td colspan="2">${product.composition || "&nbsp;"}</td></tr></table>`;
+  const nutBlock = hasNut
+    ? `<table class="print-table">
+        <tr><th colspan="3">Informacao nutricional - porcao de ${escapeHtml(product.nutritionPortion || "") || "&nbsp;"}</th></tr>
+        <tr><th>Nutriente</th><th>Quantidade</th><th>% VD</th></tr>
+        ${nutRows.map((row) => `<tr><td>${row.label}</td><td>${escapeHtml(row.qty || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
+      </table>`
+    : (product.nutrition ? `<table class="print-table"><tr><th>Informacao nutricional</th><td>${product.nutrition}</td></tr></table>` : "");
   return `${picker}${printHeader("ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL")}
+    <p class="petition">Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo qualificado, atraves do seu representante legal e do seu responsavel tecnico, requer o atendimento da solicitacao especificada neste documento.</p>
     <table class="print-table">${masterRows()}
+      <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
       <tr><th>SIM do estabelecimento</th><td>${state.establishment.simNumber}</td><th>Responsavel legal</th><td>${state.legalResponsible.name}</td></tr>
-      <tr><th>Natureza da solicitacao</th><td colspan="3">${product.requestNature || "&nbsp;"}</td></tr>
+      <tr><th>Natureza da solicitacao</th><td colspan="3">${natureText}</td></tr>
       <tr><th>Nome do produto</th><td>${product.name}</td><th>Marca</th><td>${product.brand}</td></tr>
-      <tr><th>Conservacao</th><td>${product.conservation}</td><th>Embalagem</th><td>${product.packageType || "&nbsp;"}</td></tr>
+      <tr><th>N. registro de rotulo</th><td>${product.labelRegistration || "&nbsp;"}</td><th>Conservacao</th><td>${product.conservation || "&nbsp;"}</td></tr>
+      <tr><th>Embalagem</th><td colspan="3">${product.packageType || "&nbsp;"}</td></tr>
       <tr><th>Caracteristicas do rotulo/embalagem</th><td colspan="3">${product.labelFeatures || "&nbsp;"}</td></tr>
-      <tr><th>Composicao</th><td colspan="3">${product.composition || "&nbsp;"}</td></tr>
-      <tr><th>Informacao nutricional</th><td colspan="3">${product.nutrition || "&nbsp;"}</td></tr>
-      <tr><th>Processo de fabricacao</th><td colspan="3">${product.manufacturingProcess || product.notes || "&nbsp;"}</td></tr>
+    </table>
+    ${compBlock}
+    ${nutBlock}
+    <table class="print-table">
+      <tr><th>Processo de fabricacao</th><td colspan="3">${product.manufacturingProcess || "&nbsp;"}</td></tr>
       <tr><th>Processo de embalagem</th><td colspan="3">${product.packagingProcess || "&nbsp;"}</td></tr>
       <tr><th>Condicoes de armazenamento</th><td colspan="3">${product.storageConditions || "&nbsp;"}</td></tr>
-      <tr><th>Medidas de controle</th><td colspan="3">${product.notes || state.production.qualityControls || "&nbsp;"}</td></tr>
-      <tr><th>Transporte e expedicao</th><td colspan="3">${product.marketTransport || state.production.transport || "&nbsp;"}</td></tr>
+      <tr><th>Medidas de controle de qualidade</th><td colspan="3">${product.notes || state.production.qualityControls || "&nbsp;"}</td></tr>
+      <tr><th>Transporte e expedicao ao mercado consumidor</th><td colspan="3">${product.marketTransport || state.production.transport || "&nbsp;"}</td></tr>
     </table>
-    <div class="signature"><div>Responsavel legal</div><div>Responsavel tecnico</div></div>
+    <table class="print-table sign-meta"><tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr></table>
+    <div class="signature"><div>Carimbo e assinatura do responsavel legal da firma</div><div>Carimbo e assinatura do responsavel pelo projeto</div></div>
   </div>`;
 }
 
@@ -1789,8 +1923,12 @@ function bindEvents() {
     el.addEventListener("input", updateProduct);
     el.addEventListener("change", updateProduct);
   });
+  document.querySelectorAll("[data-pnature]").forEach((el) => el.addEventListener("change", toggleNature));
+  document.querySelectorAll("[data-pcomp]").forEach((el) => el.addEventListener("input", updateCompRow));
+  document.querySelectorAll("[data-pnut]").forEach((el) => el.addEventListener("input", updateNutRow));
+  document.querySelectorAll("[data-pnutport]").forEach((el) => el.addEventListener("input", updateNutPortion));
   document.querySelectorAll("[data-product-action]").forEach((el) => {
-    el.addEventListener("click", () => handleProductAction(el.dataset.productAction, el.dataset.productId));
+    el.addEventListener("click", () => handleProductAction(el.dataset.productAction, el.dataset.productId, el.dataset.rowId));
   });
   document.querySelectorAll("[data-print-product]").forEach((el) => {
     el.addEventListener("click", () => {
@@ -1968,7 +2106,52 @@ function updateProduct(event) {
   saveState();
 }
 
-function handleProductAction(action, productId) {
+function editableProduct(id) {
+  const product = state.products.find((item) => item.id === id);
+  if (!product || isProductLocked(product) || state.role !== "establishment") return null;
+  return product;
+}
+
+function toggleNature(event) {
+  const product = editableProduct(event.target.dataset.pnature);
+  if (!product) return;
+  if (!Array.isArray(product.natureOptions)) product.natureOptions = [];
+  const value = event.target.value;
+  if (event.target.checked) {
+    if (!product.natureOptions.includes(value)) product.natureOptions.push(value);
+  } else {
+    product.natureOptions = product.natureOptions.filter((item) => item !== value);
+  }
+  saveState();
+}
+
+function updateCompRow(event) {
+  const product = editableProduct(event.target.dataset.pcomp);
+  if (!product) return;
+  const row = (product.compositionRows || []).find((item) => item.id === event.target.dataset.cid);
+  if (!row) return;
+  row[event.target.dataset.cfield] = event.target.value;
+  saveState();
+}
+
+function updateNutRow(event) {
+  const product = editableProduct(event.target.dataset.pnut);
+  if (!product) return;
+  if (!Array.isArray(product.nutritionRows)) product.nutritionRows = defaultNutritionRows();
+  const index = Number(event.target.dataset.nidx);
+  if (!product.nutritionRows[index]) return;
+  product.nutritionRows[index][event.target.dataset.nfield] = event.target.value;
+  saveState();
+}
+
+function updateNutPortion(event) {
+  const product = editableProduct(event.target.dataset.pnutport);
+  if (!product) return;
+  product.nutritionPortion = event.target.value;
+  saveState();
+}
+
+function handleProductAction(action, productId, rowId) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return;
   const who = state.role === "sim" ? "Lucas Marcelino Campos Ferreira" : state.establishment.tradeName;
@@ -2036,6 +2219,15 @@ function handleProductAction(action, productId) {
     state.products.push(revision);
     record(`Nova versao aberta a partir do produto aprovado: ${product.name || "sem nome"} (v${revision.version}).`, who);
     toast("Nova versao criada. A versao aprovada anterior ficou preservada no historico.");
+  }
+  if (action === "add-comp-row") {
+    if (isProductLocked(product) || state.role !== "establishment") return;
+    if (!Array.isArray(product.compositionRows)) product.compositionRows = [];
+    product.compositionRows.push({ id: crypto.randomUUID(), ingredient: "", amount: "", pct: "" });
+  }
+  if (action === "del-comp-row") {
+    if (isProductLocked(product) || state.role !== "establishment") return;
+    product.compositionRows = (product.compositionRows || []).filter((item) => item.id !== rowId);
   }
   if (action === "cancel-submit") {
     if (state.role !== "establishment" || product.status !== "Em analise") return;
@@ -2173,10 +2365,15 @@ function handleAction(action) {
       conservation: "",
       notes: "",
       requestNature: "Registro de produto e rotulo",
+      natureOptions: [],
       packageType: "",
+      labelRegistration: "",
       labelFeatures: "",
       composition: "",
+      compositionRows: [],
       nutrition: "",
+      nutritionPortion: "",
+      nutritionRows: defaultNutritionRows(),
       manufacturingProcess: "",
       packagingProcess: "",
       storageConditions: "",

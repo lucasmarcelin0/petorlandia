@@ -761,6 +761,76 @@ table select:disabled {
   color: var(--muted);
 }
 
+.struct-block {
+  margin: 4px 0 14px;
+}
+
+.struct-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #344440;
+  margin-bottom: 8px;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.struct-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.struct-table th,
+.struct-table td {
+  border: 1px solid var(--line);
+  padding: 5px 6px;
+  text-align: left;
+}
+
+.struct-table th {
+  background: #f1f4f2;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.struct-table th.num,
+.struct-table td.num {
+  width: 120px;
+}
+
+.struct-table input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  min-height: 32px;
+  padding: 4px 7px;
+  background: white;
+  color: var(--ink);
+}
+
+.struct-table input.num {
+  text-align: right;
+}
+
+.btn-mini {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: .78rem;
+}
+
+.petition {
+  font-size: .82rem;
+  color: #475569;
+  margin: 4px 0 0;
+}
+
 .version-tag {
   display: inline-block;
   font-size: .72rem;
