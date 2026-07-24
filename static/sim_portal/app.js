@@ -1205,12 +1205,21 @@ function productEditor(product, opts = {}) {
     && (product.name || "").trim();
   const canReview = state.role === "sim" && !opts.readOnlyHistory && product.status === "Em analise";
   const canRevise = state.role === "establishment" && !opts.readOnlyHistory && product.status === "Aprovado";
+  const canCancel = state.role === "establishment" && !opts.readOnlyHistory && product.status === "Em analise";
+  const canDelete = state.role === "establishment" && !opts.readOnlyHistory && product.status !== "Aprovado";
+  const metaSummary = [
+    product.brand && `Marca: ${escapeHtml(product.brand)}`,
+    product.conservation && `Conservacao: ${escapeHtml(product.conservation)}`,
+    product.labelUploadId ? "Rotulo enviado" : "Rotulo pendente",
+    product.submittedAt ? `Enviado em ${formatDate(product.submittedAt)}` : null,
+  ].filter(Boolean).join(" &middot; ");
   return `
-    <section class="subform ${locked ? "locked" : ""}">
+    <section class="subform product-card ${locked ? "locked" : ""}">
       <div class="subform-title">
         <h3>${escapeHtml(product.name || "Produto sem nome")} - Anexo IV ${versionTag ? `<span class="version-tag">${versionTag}</span>` : ""}</h3>
         <span class="status ${statusClass(product.status)}">${product.status}</span>
       </div>
+      ${metaSummary ? `<p class="product-meta">${metaSummary}</p>` : ""}
       ${product.status === "Aprovado" ? `<p class="small muted">Aprovado em ${formatDate(product.approvedAt)} por ${product.approvedBy || "SIM"}. Este produto esta travado para edicao.</p>` : ""}
       ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
       ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
@@ -1232,11 +1241,13 @@ function productEditor(product, opts = {}) {
       </div>
       <div class="product-actions">
         ${canSubmit ? `<button class="btn primary" data-product-action="submit" data-product-id="${product.id}">Enviar produto para analise</button>` : ""}
+        ${canCancel ? `<button class="btn" data-product-action="cancel-submit" data-product-id="${product.id}">Cancelar envio e editar</button>` : ""}
         ${canReview ? `
           <button class="btn warn" data-product-action="request-changes" data-product-id="${product.id}">Solicitar correcoes</button>
           <button class="btn primary" data-product-action="approve" data-product-id="${product.id}">${icon("check")}Aprovar produto</button>
         ` : ""}
         ${canRevise ? `<button class="btn" data-product-action="revise" data-product-id="${product.id}">Solicitar alteracao (nova versao)</button>` : ""}
+        ${canDelete ? `<button class="btn danger" data-product-action="delete" data-product-id="${product.id}">Excluir pedido</button>` : ""}
       </div>
     </section>
   `;
@@ -2025,6 +2036,20 @@ function handleProductAction(action, productId) {
     state.products.push(revision);
     record(`Nova versao aberta a partir do produto aprovado: ${product.name || "sem nome"} (v${revision.version}).`, who);
     toast("Nova versao criada. A versao aprovada anterior ficou preservada no historico.");
+  }
+  if (action === "cancel-submit") {
+    if (state.role !== "establishment" || product.status !== "Em analise") return;
+    product.status = "Rascunho";
+    product.submittedAt = null;
+    record(`Envio cancelado para edicao: ${product.name || "sem nome"}.`, who);
+    toast("Envio cancelado. Produto voltou para rascunho e pode ser editado.");
+  }
+  if (action === "delete") {
+    if (state.role !== "establishment" || product.status === "Aprovado" || product.supersededBy) return;
+    if (!window.confirm(`Excluir o produto "${product.name || "sem nome"}"? O pedido sera removido da sua lista.`)) return;
+    state.products = state.products.filter((item) => item.id !== product.id);
+    record(`Produto excluido do protocolo: ${product.name || "sem nome"}.`, who);
+    toast("Produto excluido.");
   }
   saveState();
   render();
