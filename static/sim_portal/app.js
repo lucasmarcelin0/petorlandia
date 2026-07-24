@@ -43,12 +43,18 @@ const initialState = {
     municipalRegistration: "",
     area: "",
     legalNature: "Empresa privada",
+    smallBusiness: "Nao",
   },
   legalResponsible: {
     name: "Jose Francisco Guerra",
     cpf: "",
     email: "",
     phone: "",
+    address: "",
+    district: "",
+    city: "Orlandia",
+    state: "SP",
+    zip: "",
   },
   technicalResponsible: {
     name: "",
@@ -56,6 +62,11 @@ const initialState = {
     council: "",
     email: "",
     phone: "",
+    address: "",
+    district: "",
+    city: "Orlandia",
+    state: "SP",
+    zip: "",
   },
   production: {
     monthlyCapacity: "",
@@ -846,6 +857,8 @@ function renderEstablishment() {
           ${input("establishment.phone", "Telefone", { owner: "establishment" })}
           ${input("establishment.area", "Area do estabelecimento", { owner: "establishment" })}
           ${input("establishment.legalNature", "Natureza juridica", { owner: "establishment" })}
+          ${selectInput("establishment.propertyLink", "Tipo de vinculo com o imovel", ["Proprietario", "Locatario", "Outro"], { owner: "establishment" })}
+          ${selectInput("establishment.smallBusiness", "Estabelecimento Agroindustrial de Pequeno Porte?", ["Nao", "Sim"], { owner: "establishment" })}
           ${input("establishment.classification", "Classificacao do estabelecimento", { full: true, owner: "establishment" })}
         </div>
       </div>
@@ -861,6 +874,11 @@ function renderEstablishment() {
           ${input("legalResponsible.cpf", "CPF", { owner: "establishment" })}
           ${input("legalResponsible.email", "E-mail", { owner: "establishment" })}
           ${input("legalResponsible.phone", "Telefone", { owner: "establishment" })}
+          ${input("legalResponsible.address", "Endereco residencial", { full: true, owner: "establishment" })}
+          ${input("legalResponsible.district", "Bairro", { owner: "establishment" })}
+          ${input("legalResponsible.city", "Cidade", { owner: "establishment" })}
+          ${input("legalResponsible.state", "UF", { owner: "establishment" })}
+          ${input("legalResponsible.zip", "CEP", { owner: "establishment" })}
         </div>
       </div>
       <div class="span-6 panel">
@@ -871,6 +889,11 @@ function renderEstablishment() {
           ${input("technicalResponsible.council", "Conselho / UF", { owner: "establishment" })}
           ${input("technicalResponsible.email", "E-mail", { owner: "establishment" })}
           ${input("technicalResponsible.phone", "Telefone", { owner: "establishment" })}
+          ${input("technicalResponsible.address", "Endereco residencial", { full: true, owner: "establishment" })}
+          ${input("technicalResponsible.district", "Bairro", { owner: "establishment" })}
+          ${input("technicalResponsible.city", "Cidade", { owner: "establishment" })}
+          ${input("technicalResponsible.state", "UF", { owner: "establishment" })}
+          ${input("technicalResponsible.zip", "CEP", { owner: "establishment" })}
         </div>
       </div>
       <div class="span-12 panel">
@@ -878,13 +901,13 @@ function renderEstablishment() {
         <div class="form-grid">
           ${selectInput("application.actType", "Tipo de solicitacao", [
             "Registro de estabelecimento",
-            "Aprovacao de reforma ou ampliacao",
+            "Renovacao do titulo de registro",
+            "Reforma ou ampliacao",
             "Transferencia cadastral",
             "Solicitacao de vistoria in loco",
             "Paralisacao das atividades",
             "Reinicio das atividades",
-            "Cancelamento de registro de estabelecimento",
-            "Cancelamento de registro de produto",
+            "Cancelamento do registro",
             "Alteracao cadastral",
             "Outro ato"
           ], { owner: "establishment" })}
@@ -1596,20 +1619,31 @@ function masterRows() {
 function printAnexoI() {
   return `${printHeader("ANEXO I - SOLICITACAO DE ATOS DO S.I.M.")}
     <table class="print-table">${masterRows()}
+      <tr><th>Natureza juridica / porte</th><td>${state.establishment.legalNature || "&nbsp;"}</td><th>Agroindustria de pequeno porte?</th><td>${state.establishment.smallBusiness || "Nao"}</td></tr>
       <tr><th>Responsavel legal</th><td>${state.legalResponsible.name}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel tecnico</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>Conselho/UF</th><td>${state.technicalResponsible.council || "&nbsp;"}</td></tr>
-      <tr><th>Classificacao</th><td colspan="3">${state.establishment.classification}</td></tr>
+      <tr><th>Responsavel tecnico - RT</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.technicalResponsible.cpf || "&nbsp;"}</td></tr>
+      <tr><th>N. de inscricao do RT no conselho de classe/UF</th><td colspan="3">${state.technicalResponsible.council || "&nbsp;"}</td></tr>
+      <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
       <tr><th>Tipo de solicitacao</th><td colspan="3">${state.application.actType}${state.application.otherAct ? ` - ${state.application.otherAct}` : ""}</td></tr>
       <tr><th>Termo de compromisso</th><td colspan="3">${state.application.commitment}</td></tr>
     </table>
-    <p>Declaramos cumprir a legislacao vigente e assumimos responsabilidade pela veracidade das informacoes.</p>
-    <div class="signature"><div>Responsavel legal</div><div>Responsavel tecnico</div></div>
+    <table class="print-table sign-meta">
+      <tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr>
+      <tr><th>Nome do autuante</th><td>&nbsp;</td><th>Matricula</th><td>&nbsp;</td></tr>
+    </table>
+    <div class="signature"><div>Assinatura do proprietario ou responsavel legal</div><div>Assinatura do responsavel tecnico</div></div>
   </div>`;
 }
 
 function printMtse() {
   return `${printHeader("ANEXO II - MEMORIAL TECNICO-SANITARIO DO ESTABELECIMENTO")}
     <table class="print-table">${masterRows()}
+      <tr><th>N. do registro no S.I.M.</th><td>${state.establishment.simNumber || "&nbsp;"}</td><th>Tipo de vinculo com o imovel</th><td>${state.establishment.propertyLink || "&nbsp;"}</td></tr>
+      <tr><th>Responsavel legal</th><td>${state.legalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
+      <tr><th>Endereco residencial do responsavel legal</th><td colspan="3">${[state.legalResponsible.address, state.legalResponsible.district, state.legalResponsible.city, state.legalResponsible.state, state.legalResponsible.zip].filter(Boolean).join(", ") || "&nbsp;"}</td></tr>
+      <tr><th>Responsavel tecnico</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.technicalResponsible.cpf || "&nbsp;"}</td></tr>
+      <tr><th>Endereco residencial do responsavel tecnico</th><td colspan="3">${[state.technicalResponsible.address, state.technicalResponsible.district, state.technicalResponsible.city, state.technicalResponsible.state, state.technicalResponsible.zip].filter(Boolean).join(", ") || "&nbsp;"}</td></tr>
+      <tr><th>N. de inscricao do RT no conselho de classe/UF</th><td colspan="3">${state.technicalResponsible.council || "&nbsp;"}</td></tr>
       <tr><th>Classificacao</th><td colspan="3">${state.establishment.classification}</td></tr>
       <tr><th>Atividades gerais</th><td colspan="3">${state.production.activities || "&nbsp;"}</td></tr>
       <tr><th>Produtos e capacidade mensal</th><td colspan="3">${state.production.monthlyCapacity || "&nbsp;"}</td></tr>
@@ -1631,7 +1665,8 @@ function printMtse() {
       <tr><th>Dias e horarios de producao</th><td colspan="3">${state.production.productionSchedule || "&nbsp;"}</td></tr>
       <tr><th>Controles de qualidade</th><td colspan="3">${state.production.qualityControls || "&nbsp;"}</td></tr>
     </table>
-    <div class="signature"><div>Responsavel legal</div><div>Responsavel tecnico</div></div>
+    <table class="print-table sign-meta"><tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr></table>
+    <div class="signature"><div>Assinatura do proprietario ou responsavel legal</div><div>Assinatura do responsavel tecnico</div></div>
   </div>`;
 }
 
