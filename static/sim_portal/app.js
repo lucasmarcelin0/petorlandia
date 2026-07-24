@@ -1130,6 +1130,13 @@ function downloadUrl(uploadId) {
   return token ? `${API_ROOT}/uploads/${uploadId}?token=${encodeURIComponent(token)}` : `${API_ROOT}/uploads/${uploadId}`;
 }
 
+// URL do formulario em Word (rascunho editavel), gerado a partir do estado
+// ja persistido no servidor. A via oficial continua sendo o PDF assinado.
+function docxUrl(form) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? `${API_ROOT}/forms/${form}.docx?token=${encodeURIComponent(token)}` : `${API_ROOT}/forms/${form}.docx`;
+}
+
 function renderUploadModal(upload) {
   return `
     <div class="modal-backdrop" role="dialog" aria-modal="true">
@@ -1698,7 +1705,9 @@ function renderPrint() {
     <div class="tabs no-print">${tabs.map(([id, label]) => `<button class="${state.printForm === id ? "active" : ""}" data-print-form="${id}">${label}</button>`).join("")}</div>
     <div class="actions no-print" style="margin-bottom:14px">
       <button class="btn primary" data-action="print">${icon("print")}Imprimir</button>
+      ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<a class="btn" href="${docxUrl(state.printForm)}" title="Baixa uma versao Word editavel deste formulario">${icon("file")}Baixar Word (rascunho editavel)</a>` : ""}
     </div>
+    ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<p class="small muted no-print" style="margin:-6px 0 14px">O Word e um rascunho para editar com liberdade. A via oficial continua sendo o PDF assinado no gov.br.</p>` : ""}
     ${printSheet()}
   `;
 }

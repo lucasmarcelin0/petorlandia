@@ -621,6 +621,211 @@ def next_act_number(act_type: str, act_date: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Exportacao Word (.docx) dos formularios preenchidos
+# ---------------------------------------------------------------------------
+
+FORM_TITLES = {
+    "anexoI": "ANEXO I - SOLICITACAO DE ATOS DO S.I.M.",
+    "mtse": "ANEXO II - MEMORIAL TECNICO-SANITARIO DO ESTABELECIMENTO",
+    "construction": "ANEXO III - MEMORIAL DESCRITIVO DE CONSTRUCAO/REFORMA",
+    "produto": "ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL",
+}
+
+
+def _s(value) -> str:
+    return "" if value is None else str(value)
+
+
+def _master_pairs(state: dict) -> list:
+    e = state.get("establishment", {})
+    return [
+        ("Razao social / nome", e.get("legalName")),
+        ("CNPJ / CPF", e.get("cnpj")),
+        ("Nome fantasia", e.get("tradeName")),
+        ("CNAE", e.get("cnae")),
+        ("Inscricao estadual", e.get("stateRegistration")),
+        ("Inscricao municipal", e.get("municipalRegistration")),
+        ("Endereco", e.get("address")),
+        ("Bairro", e.get("district")),
+        ("Municipio/UF", f"{_s(e.get('city'))}/{_s(e.get('state'))}"),
+        ("CEP", e.get("zip")),
+        ("E-mail", e.get("email")),
+        ("Telefone", e.get("phone")),
+    ]
+
+
+def _residential(person: dict) -> str:
+    parts = [person.get("address"), person.get("district"), person.get("city"), person.get("state"), person.get("zip")]
+    return ", ".join(p for p in parts if p)
+
+
+def _kv_table(doc, pairs) -> None:
+    table = doc.add_table(rows=0, cols=2)
+    table.style = "Table Grid"
+    for key, value in pairs:
+        cells = table.add_row().cells
+        cells[0].text = _s(key)
+        cells[1].text = _s(value)
+
+
+def _visible_products(state: dict) -> list:
+    return [p for p in state.get("products", []) if not p.get("supersededBy")]
+
+
+def _selected_product(state: dict):
+    products = _visible_products(state)
+    pid = state.get("printProductId")
+    for product in products:
+        if product.get("id") == pid:
+            return product
+    return products[0] if products else {}
+
+
+def build_form_docx(form: str, state: dict):
+    """Monta um Document (python-docx) do formulario pedido a partir do state."""
+    from docx import Document
+
+    doc = Document()
+    doc.add_paragraph("PREFEITURA MUNICIPAL DE ORLANDIA-SP")
+    doc.add_paragraph("SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECONOMICO E TURISMO")
+    doc.add_paragraph("SERVICO DE INSPECAO MUNICIPAL")
+    doc.add_heading(FORM_TITLES.get(form, "FORMULARIO S.I.M."), level=1)
+
+    e = state.get("establishment", {})
+    lr = state.get("legalResponsible", {})
+    rt = state.get("technicalResponsible", {})
+
+    if form == "anexoI":
+        app = state.get("application", {})
+        pairs = _master_pairs(state) + [
+            ("Natureza juridica / porte", e.get("legalNature")),
+            ("Agroindustria de pequeno porte?", e.get("smallBusiness")),
+            ("Responsavel legal", lr.get("name")),
+            ("CPF do responsavel legal", lr.get("cpf")),
+            ("Responsavel tecnico - RT", rt.get("name")),
+            ("CPF do RT", rt.get("cpf")),
+            ("N. de inscricao do RT no conselho/UF", rt.get("council")),
+            ("Classificacao do estabelecimento", e.get("classification")),
+            ("Tipo de solicitacao", (state.get("application", {}).get("actType", "") + (f" - {app.get('otherAct')}" if app.get("otherAct") else ""))),
+            ("Termo de compromisso", app.get("commitment")),
+        ]
+        _kv_table(doc, pairs)
+    elif form == "mtse":
+        prod = state.get("production", {})
+        pairs = _master_pairs(state) + [
+            ("N. do registro no S.I.M.", e.get("simNumber")),
+            ("Tipo de vinculo com o imovel", e.get("propertyLink")),
+            ("Responsavel legal", lr.get("name")),
+            ("CPF do responsavel legal", lr.get("cpf")),
+            ("Endereco residencial do responsavel legal", _residential(lr)),
+            ("Responsavel tecnico", rt.get("name")),
+            ("CPF do RT", rt.get("cpf")),
+            ("Endereco residencial do RT", _residential(rt)),
+            ("N. de inscricao do RT no conselho/UF", rt.get("council")),
+            ("Classificacao", e.get("classification")),
+            ("Atividades gerais", prod.get("activities")),
+            ("Produtos e capacidade mensal", prod.get("monthlyCapacity")),
+            ("Origem da materia-prima / rastreamento", prod.get("rawMaterialOrigin")),
+            ("Funcionarios", prod.get("employees")),
+            ("Lavanderia", prod.get("laundry")),
+            ("Terreno e area de localizacao", " / ".join(p for p in [prod.get("landDetails"), prod.get("locationArea")] if p)),
+            ("Fluxo e disposicao das instalacoes", prod.get("flow")),
+            ("Equipamentos", prod.get("equipment")),
+            ("Piso, paredes e impermeabilizacao", prod.get("floorWalls")),
+            ("Janelas, portas, teto e bloqueio sanitario", prod.get("doorsWindowsCeiling")),
+            ("Banheiros, vestiarios e funcionarios", prod.get("bathrooms")),
+            ("Iluminacao e ventilacao", prod.get("lightingVentilation")),
+            ("Depositos", prod.get("storage")),
+            ("Abastecimento de agua", prod.get("waterSupply")),
+            ("Aguas servidas", prod.get("effluents")),
+            ("Transporte", prod.get("transport")),
+            ("Analises laboratoriais", prod.get("labAnalysis")),
+            ("Dias e horarios de producao", prod.get("productionSchedule")),
+            ("Controles de qualidade", prod.get("qualityControls")),
+        ]
+        _kv_table(doc, pairs)
+    elif form == "construction":
+        c = state.get("construction", {})
+        pairs = _master_pairs(state) + [
+            ("Caracterizacao do estabelecimento", e.get("classification")),
+            ("Motivo", c.get("requestReason") or state.get("application", {}).get("actType")),
+            ("Ambientes e dependencias", c.get("rooms")),
+            ("Descricao da construcao", c.get("buildingDescription")),
+            ("Materiais e acabamentos", c.get("materials")),
+            ("Camara fria / temperatura", c.get("coldRooms")),
+            ("Agua, esgoto e drenagem", c.get("waterAndSewage")),
+            ("Observacao", c.get("observations")),
+        ]
+        _kv_table(doc, pairs)
+    elif form == "produto":
+        product = _selected_product(state)
+        nature = ", ".join(product.get("natureOptions") or []) or product.get("requestNature")
+        doc.add_paragraph(
+            "Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo "
+            "qualificado, atraves do seu representante legal e do seu responsavel "
+            "tecnico, requer o atendimento da solicitacao especificada neste documento."
+        )
+        pairs = _master_pairs(state) + [
+            ("Classificacao do estabelecimento", e.get("classification")),
+            ("SIM do estabelecimento", e.get("simNumber")),
+            ("Responsavel legal", lr.get("name")),
+            ("Natureza da solicitacao", nature),
+            ("Nome do produto", product.get("name")),
+            ("Marca", product.get("brand")),
+            ("N. registro de rotulo", product.get("labelRegistration")),
+            ("Conservacao", product.get("conservation")),
+            ("Embalagem", product.get("packageType")),
+            ("Caracteristicas do rotulo/embalagem", product.get("labelFeatures")),
+        ]
+        _kv_table(doc, pairs)
+
+        comp_rows = product.get("compositionRows") or []
+        doc.add_heading("Composicao do produto", level=2)
+        if comp_rows:
+            table = doc.add_table(rows=1, cols=3)
+            table.style = "Table Grid"
+            hdr = table.rows[0].cells
+            hdr[0].text, hdr[1].text, hdr[2].text = "Materia-prima / ingrediente", "kg ou L", "%"
+            for row in comp_rows:
+                cells = table.add_row().cells
+                cells[0].text = _s(row.get("ingredient"))
+                cells[1].text = _s(row.get("amount"))
+                cells[2].text = _s(row.get("pct"))
+        else:
+            doc.add_paragraph(_s(product.get("composition")))
+
+        nut_rows = product.get("nutritionRows") or []
+        doc.add_heading(f"Informacao nutricional - porcao de {_s(product.get('nutritionPortion'))}", level=2)
+        if nut_rows:
+            table = doc.add_table(rows=1, cols=3)
+            table.style = "Table Grid"
+            hdr = table.rows[0].cells
+            hdr[0].text, hdr[1].text, hdr[2].text = "Nutriente", "Quantidade", "% VD"
+            for row in nut_rows:
+                cells = table.add_row().cells
+                cells[0].text = _s(row.get("label"))
+                cells[1].text = _s(row.get("qty"))
+                cells[2].text = _s(row.get("pct"))
+        elif product.get("nutrition"):
+            doc.add_paragraph(_s(product.get("nutrition")))
+
+        _kv_table(doc, [
+            ("Processo de fabricacao", product.get("manufacturingProcess")),
+            ("Processo de embalagem", product.get("packagingProcess")),
+            ("Condicoes de armazenamento", product.get("storageConditions")),
+            ("Medidas de controle de qualidade", product.get("notes")),
+            ("Transporte e expedicao", product.get("marketTransport")),
+        ])
+
+    doc.add_paragraph("")
+    doc.add_paragraph("Local e data: __________________________________________")
+    doc.add_paragraph("")
+    doc.add_paragraph("Assinatura do proprietario ou responsavel legal: ____________________")
+    doc.add_paragraph("Assinatura do responsavel tecnico: __________________________________")
+    return doc
+
+
+# ---------------------------------------------------------------------------
 # Blueprint
 # ---------------------------------------------------------------------------
 
@@ -851,6 +1056,30 @@ def get_blueprint():
             mimetype=row.mime_type or "application/octet-stream",
             as_attachment=bool(request.args.get("download")),
             download_name=row.original_name,
+        )
+
+    @bp.route("/api/forms/<form>.docx")
+    def sim_form_docx(form: str):
+        # Gera uma versao .docx editavel do formulario preenchido, para quem
+        # quiser ajustar com liberdade antes de imprimir/assinar. A via oficial
+        # continua sendo o PDF assinado no gov.br.
+        user = current_user()
+        if not user:
+            return jsonify({"error": "Sessao expirada ou inexistente."}), 401
+        if form not in FORM_TITLES:
+            abort(404)
+        try:
+            doc = build_form_docx(form, get_state())
+        except ImportError:
+            return jsonify({"error": "Exportacao Word indisponivel no servidor (python-docx ausente)."}), 501
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            as_attachment=True,
+            download_name=f"{form}.docx",
         )
 
     # ---- modulos do servico (exclusivos do SIM) -------------------------
