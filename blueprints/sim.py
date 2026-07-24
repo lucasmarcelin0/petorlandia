@@ -260,7 +260,7 @@ SEED_STATE = {
     },
     "legalResponsible": {"name": "Jose Francisco Guerra"},
     "documents": [
-        {"id": "requerimento-assinado", "item": "01", "group": "art11", "name": "Requerimento ao SIM solicitando o registro", "hint": "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "requerimento-assinado", "item": "01", "group": "art11", "name": "Requerimento ao SIM solicitando o registro", "hint": "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "anexoI"},
         {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "contrato-social-cnpj", "item": "03", "group": "art11", "name": "Contrato ou estatuto social registrado, quando houver firma constituida", "hint": "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "cpf-cnpj", "item": "04", "group": "art11", "name": "CPF ou CNPJ, conforme o caso", "hint": "Cartao CNPJ: emissao gratuita no site da Receita Federal.", "link": "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", "required": True, "status": "Pendente", "file": "", "internal": False},
@@ -268,7 +268,7 @@ SEED_STATE = {
         {"id": "alvara-prefeitura", "item": "06", "group": "art11", "name": "Alvara de construcao e/ou localizacao e funcionamento", "hint": "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "certidoes-ambientais", "item": "07", "group": "art11", "name": "Licenca ambiental ou dispensa emitida pelo orgao ambiental", "hint": "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "exames-agua", "item": "08", "group": "art11", "name": "Exames fisico-quimico e microbiologico da agua de abastecimento", "hint": "Laboratorio credenciado; colete conforme orientacao do laboratorio.", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "memorial-economico-sanitario", "item": "09", "group": "art11", "name": "Memorial descritivo economico e sanitario do estabelecimento", "hint": "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "memorial-economico-sanitario", "item": "09", "group": "art11", "name": "Memorial descritivo economico e sanitario do estabelecimento", "hint": "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "mtse"},
         {"id": "manual-bpf", "item": "10", "group": "art11", "name": "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", "hint": "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "registro-crmv", "item": "11", "group": "art11", "name": "Registro do estabelecimento no CRMV-SP, se aplicavel", "hint": "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "comprovante-taxa", "item": "12", "group": "art11", "name": "Comprovante da Taxa de Inspecao Sanitaria", "hint": "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", "required": False, "status": "Dispensado em 2026", "file": "", "internal": False},
@@ -474,7 +474,7 @@ def get_state() -> dict:
                 if item.get("id") == doc["id"]:
                     # Metadados legais vem sempre da semente (checklist do art. 11
                     # da LC 84/2024); status/arquivo/versoes ficam como estao.
-                    for key in ("name", "hint", "item", "group", "link", "internal", "required"):
+                    for key in ("name", "hint", "item", "group", "link", "internal", "required", "formView", "printForm"):
                         if key in doc:
                             item[key] = doc[key]
                     # Dispensa legal de 2026 (LC 104/2026) vale mesmo para

@@ -133,7 +133,7 @@ const initialState = {
     signedAck: false,
   },
   documents: [
-    { id: "requerimento-assinado", item: "01", group: "art11", name: "Requerimento ao SIM solicitando o registro", hint: "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", required: true, status: "Pendente", file: "" },
+    { id: "requerimento-assinado", item: "01", group: "art11", name: "Requerimento ao SIM solicitando o registro", hint: "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "anexoI" },
     { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", required: true, status: "Pendente", file: "" },
     { id: "contrato-social-cnpj", item: "03", group: "art11", name: "Contrato ou estatuto social registrado, quando houver firma constituida", hint: "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", required: true, status: "Pendente", file: "" },
     { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
@@ -141,7 +141,7 @@ const initialState = {
     { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
     { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
     { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
-    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Memorial descritivo economico e sanitario do estabelecimento", hint: "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", required: true, status: "Pendente", file: "" },
+    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Memorial descritivo economico e sanitario do estabelecimento", hint: "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
     { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
     { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
     { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
@@ -1008,6 +1008,13 @@ function documentCard(doc) {
           ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
           <span>${documentSummary(doc)}</span>
+          ${doc.formView && state.role === "establishment" ? `
+            <div class="doc-quick-actions">
+              <button class="btn" data-view="${doc.formView}">${icon("file")}Preencher ficha</button>
+              <button class="btn" data-view="print" data-print-form="${doc.printForm}">${icon("print")}Imprimir formulario</button>
+              <a class="btn" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">${icon("shield")}Assinar no gov.br</a>
+            </div>
+          ` : ""}
         </div>
         <div class="upload-controls">
           ${canUpload && !isTaxWaived ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}

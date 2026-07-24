@@ -1200,6 +1200,19 @@ table select:disabled {
 
 .doc-hint a { color: var(--green); font-weight: 600; }
 
+.doc-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.doc-quick-actions .btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: .8rem;
+}
+
 .signer-steps {
   margin: 0 0 12px 18px;
   padding: 0;
