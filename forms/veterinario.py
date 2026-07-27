@@ -5,6 +5,11 @@ Extraído de forms.py na modularização (2026-07-10).
 from flask_wtf import FlaskForm
 from sqlalchemy import or_, false
 from datetime import date
+from models.usuarios import (
+    HABILITACAO_CHOICES,
+    HABILITACAO_CRMV,
+    HABILITACAO_ESTAGIARIO,
+)
 from wtforms import (
     StringField,
     TextAreaField,
@@ -181,14 +186,47 @@ class VetProfileForm(FlaskForm):
     name = StringField('Nome completo', validators=[DataRequired(), Length(max=120)])
     phone = StringField('Telefone / WhatsApp', validators=[Optional(), Length(max=20)])
     email = EmailField('E-mail', validators=[Optional(), Email(), Length(max=120)])
-    crmv = StringField('Número do CRMV', validators=[DataRequired(), Length(max=20)])
+    habilitacao = SelectField(
+        'Habilitação',
+        choices=HABILITACAO_CHOICES,
+        default=HABILITACAO_CRMV,
+        validators=[DataRequired()],
+    )
+    # Optional no campo: a obrigatoriedade depende da habilitação (validate()).
+    crmv = StringField('Número do CRMV', validators=[Optional(), Length(max=20)])
     crmv_estado = SelectField('UF do CRMV', choices=_UF_CHOICES, default='')
+    supervisor_id = SelectField(
+        'Supervisor(a) responsável',
+        coerce=int,
+        validators=[Optional()],
+    )
     specialties = SelectMultipleField('Especialidades', coerce=int, validators=[Optional()])
     cidades_atendidas = TextAreaField(
         'Cidades atendidas',
         validators=[Optional(), Length(max=2000)],
     )
     submit = SubmitField('Salvar perfil')
+
+    def validate(self, extra_validators=None):
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if self.habilitacao.data == HABILITACAO_ESTAGIARIO:
+            # Estagiário nunca guarda CRMV, nem por engano de digitação.
+            self.crmv.data = ''
+            self.crmv_estado.data = ''
+            if not self.supervisor_id.data:
+                self.supervisor_id.errors.append(
+                    'Selecione o veterinário responsável pela supervisão.'
+                )
+                return False
+        else:
+            self.supervisor_id.data = None
+            if not (self.crmv.data or '').strip():
+                self.crmv.errors.append(
+                    'Informe o CRMV ou marque a pessoa como estagiária.'
+                )
+                return False
+        return True
 
 
 class ProfessionalServiceForm(FlaskForm):

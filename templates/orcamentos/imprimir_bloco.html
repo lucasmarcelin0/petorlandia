@@ -1,3 +1,4 @@
+{% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -103,7 +104,7 @@
       <span class="print-attribution__label">Impresso por:</span>
       <span class="print-attribution__value">{{ printing_user.name if printing_user else '—' }}</span>
       {% if signature_has_active_membership and printing_user and signature_user and printing_user.id == signature_user.id %}
-        <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
+        <span class="print-attribution__value">{{ valor_crmv(signature_user, vazio='sem CRMV') }}</span>
       {% endif %}
     </div>
     <div class="print-attribution__line">
@@ -117,7 +118,7 @@
       <h3>Profissional Responsável</h3>
       <ul class="info-list">
         <li><span>Nome</span><span>{{ veterinario.name if veterinario else '—' }}</span></li>
-        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ valor_crmv(veterinario) }}</span></li>
       </ul>
     </section>
     <section class="info-card">
@@ -175,7 +176,7 @@
     <div class="signature">
       <div class="signature-line"></div>
       <span>{{ signature_user.name if signature_user else '—' }}</span>
-      <span>CRMV {{ signature_user.veterinario.crmv if signature_has_active_membership else '—' }}</span>
+      {{ bloco_assinatura(signature_user) if signature_has_active_membership else '<span>—</span>'|safe }}
     </div>
   </div>
 

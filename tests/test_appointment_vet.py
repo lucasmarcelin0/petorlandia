@@ -121,14 +121,17 @@ def test_tutor_sees_only_their_animals_in_form(client):
         assert animal2.id not in animal_choices
         assert form.tutor_id.choices == [(tutor1.id, tutor1.name)]
         assert form.tutor_id.data == tutor1.id
-        assert form.animal_data == [
-            {
-                'id': animal1.id,
-                'name': animal1.name,
-                'tutor_id': tutor1.id,
-                'tutor_name': tutor1.name,
-            }
-        ]
+        assert len(form.animal_data) == 1
+        registro = form.animal_data[0]
+        assert registro['id'] == animal1.id
+        assert registro['name'] == animal1.name
+        assert registro['tutor_id'] == tutor1.id
+        assert registro['tutor_name'] == tutor1.name
+        # Campos que alimentam a busca e as miniaturas do seletor.
+        assert {
+            'photo', 'tutor_photo', 'species', 'breed',
+            'microchip', 'tutor_phone', 'tutor_email',
+        } <= set(registro)
 
 
 def test_veterinarian_without_clinic_has_no_animals_in_form(client):

@@ -1,3 +1,4 @@
+{% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -41,11 +42,15 @@
       </div>
       <div class="header-info header-info--clinic-first">
         <div class="clinica-nome">{{ clinica.nome }}</div>
-        {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
+        {% set assinatura_exame = assinatura_de(veterinario) %}
+        {% if veterinario and (veterinario.name or assinatura_exame) %}
           <div class="header-responsible">
-            <span>Veterinário responsável: {{ veterinario.name or 'Não informado' }}</span>
-            {% if veterinario.veterinario and veterinario.veterinario.crmv %}
-              <span>CRMV {{ veterinario.veterinario.crmv }}</span>
+            <span>Profissional: {{ veterinario.name or 'Não informado' }}</span>
+            {% if assinatura_exame and assinatura_exame.crmv_formatado %}
+              <span>{{ assinatura_exame.crmv_formatado }}</span>
+              {% if not assinatura_exame.pode_assinar %}
+                <span>Responsável técnico: {{ assinatura_exame.responsavel_tecnico }}</span>
+              {% endif %}
             {% endif %}
           </div>
         {% endif %}
@@ -75,12 +80,12 @@
   </div>
 
   <div class="info-grid">
-    {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
+    {% if veterinario and (veterinario.name or assinatura_de(veterinario)) %}
       <section class="info-card">
-        <h3>Médico Veterinário</h3>
+        <h3>Profissional Responsável</h3>
         <ul class="info-list">
           <li><span>Nome</span><span>{{ veterinario.name or '—' }}</span></li>
-          <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario.veterinario and veterinario.veterinario.crmv else '—' }}</span></li>
+          <li><span>CRMV</span><span>{{ valor_crmv(veterinario) }}</span></li>
         </ul>
       </section>
     {% endif %}
@@ -151,7 +156,7 @@
     <div class="signature">
       <div class="signature-line"></div>
       <span>{{ veterinario.name if veterinario else '' }}</span>
-      <span>CRMV {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
+      {{ bloco_assinatura(veterinario) }}
     </div>
   </div>
 

@@ -171,6 +171,9 @@
                   </option>
                 {% endfor %}
               </select>
+              {# Alimenta o seletor com busca por animal/tutor e miniaturas.
+                 O <select> acima continua sendo o campo enviado no POST. #}
+              <script type="application/json" data-appointment-animal-data>{{ animal_options|tojson }}</script>
               {% for error in form.animal_id.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
               {% endfor %}
@@ -672,6 +675,7 @@
 </script>
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='appointments_new_consulta.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/animal_picker.js') }}"></script>
 <script src="{{ url_for('static', filename='appointments_nfse.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {

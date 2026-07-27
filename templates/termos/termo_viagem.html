@@ -1,3 +1,4 @@
+{% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -551,7 +552,7 @@
           {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
           {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
           {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj | format_cnpj }}</span>{% endif %}
-          {% if veterinario and veterinario.crmv %}<span>CRMV {{ veterinario.crmv }}</span>{% endif %}
+          {% set a_termo = assinatura_de(veterinario) %}{% if a_termo and a_termo.crmv_formatado %}<span>{{ a_termo.crmv_formatado }}</span>{% endif %}
         </div>
       </div>
       <div class="header-logo header-logo--right">{{ clinic_logo(clinica) }}</div>
@@ -598,7 +599,7 @@
     </div>
     <div class="travel-summary__item">
       <span class="travel-summary__label">CRMV</span>
-      <span class="travel-summary__value">{{ veterinario.crmv if veterinario else '' }}</span>
+      <span class="travel-summary__value">{{ valor_crmv(veterinario, vazio='') }}</span>
     </div>
   </section>
 
@@ -808,8 +809,8 @@
       <div class="signature">
         <div class="signature-line"></div>
         <span contenteditable="true">{{ printing_user.name if printing_user else '' }}</span>
-        <span class="signature-meta" contenteditable="true">CRMV {{ veterinario.crmv if veterinario else '' }}</span>
-        <span class="muted">Medico(a) Veterinario(a)</span>
+        <span class="signature-meta" contenteditable="true">{{ bloco_assinatura(veterinario, vazio='') }}</span>
+        <span class="muted">{{ (assinatura_de(veterinario).papel or 'Medico(a) Veterinario(a)') if assinatura_de(veterinario) else 'Medico(a) Veterinario(a)' }}</span>
       </div>
     </div>
   </section>

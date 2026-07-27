@@ -355,6 +355,75 @@ class Specialty(db.Model):
         return self.nome
 
 
+HABILITACAO_CRMV = 'crmv'
+HABILITACAO_ESTAGIARIO = 'estagiario'
+
+HABILITACAO_CHOICES = [
+    (HABILITACAO_CRMV, 'Veterinário(a) com CRMV'),
+    (HABILITACAO_ESTAGIARIO, 'Estagiário(a) sob supervisão'),
+]
+
+HABILITACAO_LABELS = dict(HABILITACAO_CHOICES)
+
+
+class AssinaturaProfissional:
+    """Como um profissional deve ser identificado num documento que sai da clínica.
+
+    Existe para que nenhum template monte a atribuição legal por conta própria:
+    estagiário nunca tem CRMV, então quem responde pelo documento é o
+    supervisor. Ver `Veterinario.assinatura`.
+    """
+
+    __slots__ = ('nome', 'crmv', 'crmv_estado', 'papel', 'supervisor_nome',
+                 'supervisor_crmv', 'supervisor_crmv_estado', 'pode_assinar')
+
+    def __init__(self, *, nome, crmv=None, crmv_estado=None, papel=None,
+                 supervisor_nome=None, supervisor_crmv=None,
+                 supervisor_crmv_estado=None, pode_assinar=False):
+        self.nome = nome
+        self.crmv = crmv
+        self.crmv_estado = crmv_estado
+        self.papel = papel
+        self.supervisor_nome = supervisor_nome
+        self.supervisor_crmv = supervisor_crmv
+        self.supervisor_crmv_estado = supervisor_crmv_estado
+        self.pode_assinar = pode_assinar
+
+    @property
+    def crmv_formatado(self):
+        """CRMV legalmente responsável pelo documento, ou None."""
+        numero = self.crmv or self.supervisor_crmv
+        estado = self.crmv_estado if self.crmv else self.supervisor_crmv_estado
+        if not numero:
+            return None
+        return f"CRMV {numero}/{estado}" if estado else f"CRMV {numero}"
+
+    @property
+    def responsavel_tecnico(self):
+        """Nome de quem responde tecnicamente (supervisor, no caso do estagiário)."""
+        return self.supervisor_nome or self.nome
+
+    @property
+    def linha_completa(self):
+        """Atribuição pronta para impressão."""
+        partes = [self.nome]
+        if self.papel:
+            partes.append(self.papel)
+        if self.supervisor_nome:
+            supervisao = f"sob supervisão de {self.supervisor_nome}"
+            if self.supervisor_crmv:
+                sup_estado = self.supervisor_crmv_estado
+                sufixo = f"{self.supervisor_crmv}/{sup_estado}" if sup_estado else self.supervisor_crmv
+                supervisao += f" (CRMV {sufixo})"
+            partes.append(supervisao)
+        elif self.crmv_formatado:
+            partes.append(self.crmv_formatado)
+        return ' · '.join(partes)
+
+    def __str__(self):
+        return self.linha_completa
+
+
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
@@ -362,13 +431,27 @@ class Veterinario(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
-    crmv = db.Column(db.String(20), nullable=False)
+    # Estagiário não tem CRMV: a coluna é nullable e a habilitação diz se a
+    # pessoa pode assinar ato veterinário. Ver `pode_assinar` / `assinatura`.
+    crmv = db.Column(db.String(20), nullable=True)
     crmv_estado = db.Column(db.String(2), nullable=True)
+    habilitacao = db.Column(db.String(20), nullable=False, default=HABILITACAO_CRMV)
+    supervisor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
     public_profile_type = db.Column(db.String(20), nullable=False, default='profissional')
     public_visible = db.Column(db.Boolean, nullable=False, default=True)
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
+    supervisor = db.relationship(
+        'Veterinario',
+        remote_side=[id],
+        backref='supervisionados',
+        foreign_keys=[supervisor_id],
+    )
     specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')
     clinicas = db.relationship(
         'Clinica',
@@ -386,8 +469,63 @@ class Veterinario(db.Model):
     def specialty_list(self):
         return ", ".join(s.nome for s in self.specialties)
 
+    @property
+    def is_estagiario(self):
+        return (self.habilitacao or HABILITACAO_CRMV) == HABILITACAO_ESTAGIARIO
+
+    @property
+    def pode_assinar(self):
+        """True apenas para quem tem CRMV próprio.
+
+        Estagiário jamais assina: quem responde pelo documento é o supervisor.
+        """
+        return not self.is_estagiario and bool(self.crmv)
+
+    @property
+    def crmv_exibicao(self):
+        """CRMV para exibir na interface, ou None quando não existe.
+
+        Nunca inventa número: estagiário devolve None e a UI mostra o papel.
+        """
+        if self.is_estagiario or not self.crmv:
+            return None
+        return f"{self.crmv}/{self.crmv_estado}" if self.crmv_estado else self.crmv
+
+    @property
+    def habilitacao_label(self):
+        return HABILITACAO_LABELS.get(
+            self.habilitacao or HABILITACAO_CRMV, 'Veterinário(a) com CRMV'
+        )
+
+    @property
+    def assinatura(self):
+        """Atribuição legal deste profissional — ver `AssinaturaProfissional`."""
+        nome = getattr(self.user, 'name', None) or f'Profissional #{self.id}'
+        if not self.is_estagiario:
+            return AssinaturaProfissional(
+                nome=nome,
+                crmv=self.crmv,
+                crmv_estado=self.crmv_estado,
+                pode_assinar=bool(self.crmv),
+            )
+        supervisor = self.supervisor
+        supervisor_nome = getattr(getattr(supervisor, 'user', None), 'name', None)
+        # Supervisor precisa ele próprio ter CRMV para responder pelo documento.
+        supervisor_apto = bool(supervisor and supervisor.pode_assinar)
+        return AssinaturaProfissional(
+            nome=nome,
+            papel='Estagiário(a)',
+            supervisor_nome=supervisor_nome if supervisor_apto else None,
+            supervisor_crmv=supervisor.crmv if supervisor_apto else None,
+            supervisor_crmv_estado=supervisor.crmv_estado if supervisor_apto else None,
+            pode_assinar=False,
+        )
+
     def __str__(self):
-        return f"{self.user.name} (CRMV: {self.crmv})"
+        identificacao = self.crmv_exibicao
+        if identificacao:
+            return f"{self.user.name} (CRMV: {identificacao})"
+        return f"{self.user.name} ({self.habilitacao_label})"
 
 
 class VeterinarioAtendeCidade(db.Model):

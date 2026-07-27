@@ -168,9 +168,25 @@
                         {{ render_team_avatar(v.user, 'team-avatar-soft-success', 'bi-heart-pulse') }}
                         <div>
                           <h6 class="mb-1">{{ v.user.name }}</h6>
-                          <div class="text-muted small">CRMV: {{ v.crmv }}</div>
+                          {% if v.crmv_exibicao %}
+                          <div class="text-muted small">CRMV: {{ v.crmv_exibicao }}</div>
+                          {% elif v.is_estagiario %}
+                          <div class="text-muted small">
+                            {% if v.supervisor and v.supervisor.pode_assinar %}
+                            Supervisão: {{ v.supervisor.user.name }} (CRMV {{ v.supervisor.crmv_exibicao }})
+                            {% else %}
+                            <span class="text-danger">Sem supervisor definido</span>
+                            {% endif %}
+                          </div>
+                          {% else %}
+                          <div class="text-muted small">CRMV não informado</div>
+                          {% endif %}
                         </div>
+                        {% if v.is_estagiario %}
+                        <span class="badge badge-soft-warning">Estagiário(a)</span>
+                        {% else %}
                         <span class="badge badge-soft-success">Veterinário</span>
+                        {% endif %}
                         {% if is_owner_vet %}
                         <span class="badge badge-soft-warning"><i class="bi bi-star-fill me-1"></i>Proprietário</span>
                         {% endif %}
@@ -486,7 +502,7 @@
         {{ invite_form.email(class="form-control", list="all-vets-list") }}
         <datalist id="all-vets-list">
           {% for v in all_veterinarios %}
-          <option value="{{ v.user.email }}">{{ v.user.name }} (CRMV: {{ v.crmv }})</option>
+          <option value="{{ v.user.email }}">{{ v.user.name }}{% if v.crmv_exibicao %} (CRMV: {{ v.crmv_exibicao }}){% endif %}</option>
           {% endfor %}
         </datalist>
       </div>
@@ -510,8 +526,30 @@
           <div class="form-text">O profissional recebe por e-mail um link para criar a própria senha; o celular confirma a identidade no primeiro acesso.</div>
         </div>
         <div class="mb-3">
+          <label for="vet-habilitacao" class="form-label">Habilitação</label>
+          <select id="vet-habilitacao" name="habilitacao" class="form-select" data-habilitacao-select>
+            <option value="crmv" selected>Veterinário(a) com CRMV</option>
+            <option value="estagiario">Estagiário(a) sob supervisão</option>
+          </select>
+          <div class="form-text">
+            Estagiário(a) acessa o sistema por completo, mas não assina documento:
+            quem responde tecnicamente é o supervisor.
+          </div>
+        </div>
+        <div class="mb-3" data-habilitacao-campo="crmv">
           <label for="vet-crmv" class="form-label">CRMV</label>
-          <input type="text" id="vet-crmv" name="crmv" class="form-control" required>
+          <input type="text" id="vet-crmv" name="crmv" class="form-control">
+        </div>
+        <div class="mb-3" data-habilitacao-campo="supervisor" hidden>
+          <label for="vet-supervisor" class="form-label">Supervisor(a) responsável</label>
+          <select id="vet-supervisor" name="supervisor_id" class="form-select">
+            <option value="">Selecione o supervisor</option>
+            {% for cand in veterinarios %}
+            {% if cand.pode_assinar %}
+            <option value="{{ cand.id }}">{{ cand.user.name }} (CRMV {{ cand.crmv_exibicao }})</option>
+            {% endif %}
+            {% endfor %}
+          </select>
         </div>
         <button type="submit" class="btn btn-outline-primary w-100">Cadastrar e enviar convite</button>
       </form>
@@ -778,14 +816,39 @@
         {{ pf.name.label(class_="form-label fw-semibold") }}
         {{ pf.name(class="form-control") }}
       </div>
-      <div class="row g-2 mb-3">
+      {% if pode_editar %}
+      <div class="mb-3">
+        {{ pf.habilitacao.label(class_="form-label fw-semibold") }}
+        {{ pf.habilitacao(class="form-select", **{'data-habilitacao-select': 'true'}) }}
+        <div class="form-text">
+          Estagiário(a) usa o sistema por completo, mas não assina: os documentos
+          saem com o CRMV do supervisor.
+        </div>
+      </div>
+      {% else %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Habilitação</label>
+        <input type="text" class="form-control" value="{{ vet.habilitacao_label }}" readonly disabled>
+        <div class="form-text">Somente a gestão da clínica altera a habilitação.</div>
+      </div>
+      {% endif %}
+      <div class="row g-2 mb-3" data-habilitacao-campo="crmv"{% if vet.is_estagiario %} hidden{% endif %}>
         <div class="col-8">
           {{ pf.crmv.label(class_="form-label fw-semibold") }}
           {{ pf.crmv(class="form-control", placeholder="Ex: 12345") }}
+          {% for error in pf.crmv.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
         <div class="col-4">
           {{ pf.crmv_estado.label(class_="form-label fw-semibold") }}
           {{ pf.crmv_estado(class="form-select") }}
+        </div>
+      </div>
+      <div class="mb-3" data-habilitacao-campo="supervisor"{% if not vet.is_estagiario %} hidden{% endif %}>
+        {{ pf.supervisor_id.label(class_="form-label fw-semibold") }}
+        {{ pf.supervisor_id(class="form-select") }}
+        {% for error in pf.supervisor_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        <div class="form-text">
+          Responde tecnicamente pelos atendimentos e assina os documentos.
         </div>
       </div>
       <div class="mb-3">
@@ -815,3 +878,23 @@
 </div>
 {% endif %}
 {% endfor %}
+
+<script>
+  // Habilitação decide quais campos fazem sentido: CRMV para veterinário,
+  // supervisor para estagiário. Nunca os dois ao mesmo tempo.
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-habilitacao-select]').forEach((select) => {
+      const form = select.closest('form');
+      if (!form) return;
+      const campoCrmv = form.querySelector('[data-habilitacao-campo="crmv"]');
+      const campoSupervisor = form.querySelector('[data-habilitacao-campo="supervisor"]');
+      const sincronizar = () => {
+        const estagiario = select.value === 'estagiario';
+        if (campoCrmv) campoCrmv.hidden = estagiario;
+        if (campoSupervisor) campoSupervisor.hidden = !estagiario;
+      };
+      select.addEventListener('change', sincronizar);
+      sincronizar();
+    });
+  });
+</script>

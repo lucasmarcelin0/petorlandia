@@ -8,6 +8,7 @@ from extensions import db, mail
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
+from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
 from forms import APPOINTMENT_KIND_CHOICES, DIAS_SEMANA, ClinicAddSpecialistForm, ClinicAddStaffForm, ClinicForm, ClinicHoursForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm, ClinicInviteVeterinarianForm, ClinicProductEditForm, ClinicProductForm, ClinicStaffPermissionForm, InventoryItemForm, OrcamentoForm, VetProfileForm, VetScheduleForm, VeterinarianProfileForm
 from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, unique_items_by_id
 from models import (
@@ -627,10 +628,18 @@ def clinic_detail(clinica_id):
             formdata=request.form if request.method == 'POST' else None,
         )
         form.specialties.choices = [(s.id, s.nome) for s in all_specialties]
+        # Só veterinário com CRMV da própria clínica pode supervisionar.
+        form.supervisor_id.choices = [(0, 'Selecione o supervisor')] + [
+            (cand.id, f"{cand.user.name} (CRMV {cand.crmv_exibicao})")
+            for cand in vets_for_forms
+            if cand.id != v.id and cand.pode_assinar
+        ]
         if request.method == 'GET':
             form.name.data = v.user.name or ''
             form.phone.data = v.user.phone or ''
             form.email.data = v.user.email or ''
+            form.habilitacao.data = v.habilitacao or HABILITACAO_CRMV
+            form.supervisor_id.data = v.supervisor_id or 0
             form.crmv.data = v.crmv or ''
             form.crmv_estado.data = v.crmv_estado or ''
             form.specialties.data = [s.id for s in v.specialties]
@@ -1232,9 +1241,29 @@ def create_clinic_veterinario(clinica_id):
     email = request.form.get('email', '').strip().lower()
     crmv = request.form.get('crmv', '').strip()
     phone = normalize_phone(request.form.get('phone'))
+    habilitacao = request.form.get('habilitacao', HABILITACAO_CRMV).strip()
+    if habilitacao not in (HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO):
+        habilitacao = HABILITACAO_CRMV
+    is_estagiario = habilitacao == HABILITACAO_ESTAGIARIO
+    supervisor = None
 
-    if not name or not email or not crmv or not phone:
-        flash('Nome, e-mail, celular e CRMV são obrigatórios.', 'danger')
+    if not name or not email or not phone:
+        flash('Nome, e-mail e celular são obrigatórios.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    if is_estagiario:
+        # Estagiário não tem CRMV; em compensação precisa de responsável técnico.
+        crmv = ''
+        supervisor_id = request.form.get('supervisor_id', type=int)
+        supervisor = Veterinario.query.get(supervisor_id) if supervisor_id else None
+        if not supervisor or not supervisor.pode_assinar:
+            flash('Selecione o veterinário responsável pela supervisão do estagiário.', 'danger')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+        if supervisor.clinica_id != clinica.id and supervisor not in clinica.veterinarios_associados:
+            flash('O supervisor precisa ser um veterinário desta clínica.', 'danger')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+    elif not crmv:
+        flash('Informe o CRMV ou cadastre a pessoa como estagiária.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     if User.query.filter_by(email=email).first():
@@ -1245,7 +1274,7 @@ def create_clinic_veterinario(clinica_id):
         flash('Celular já cadastrado em outra conta.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
-    if Veterinario.query.filter_by(crmv=crmv).first():
+    if crmv and Veterinario.query.filter_by(crmv=crmv).first():
         flash('CRMV já cadastrado.', 'danger')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
@@ -1263,7 +1292,13 @@ def create_clinic_veterinario(clinica_id):
     user.clinica_id = clinica.id
     db.session.add(user)
 
-    veterinario = Veterinario(user=user, crmv=crmv, clinica=clinica)
+    veterinario = Veterinario(
+        user=user,
+        crmv=crmv or None,
+        clinica=clinica,
+        habilitacao=habilitacao,
+        supervisor_id=supervisor.id if supervisor else None,
+    )
     db.session.add(veterinario)
 
     db.session.add(ClinicStaff(clinic_id=clinica.id, user=user))

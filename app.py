@@ -132,6 +132,11 @@ from models import (
 )
 from models import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite  # noqa: E402
 from models import get_active_product_categories  # noqa: E402
+from models.usuarios import (  # noqa: E402
+    HABILITACAO_CHOICES,
+    HABILITACAO_CRMV,
+    HABILITACAO_ESTAGIARIO,
+)
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
     get_nfse_cancel_rules,
@@ -1902,6 +1907,8 @@ def _is_public_veterinarian(vet):
     return (
         bool(getattr(vet, 'public_visible', True))
         and profile_type == 'profissional'
+        # Estagiário nunca é ofertado publicamente como veterinário.
+        and bool(getattr(vet, 'pode_assinar', True))
         and bool(membership and membership.is_active())
     )
 
@@ -1919,6 +1926,9 @@ def _public_veterinarians_query():
         )
         .filter(Veterinario.public_visible.is_(True))
         .filter(Veterinario.public_profile_type == 'profissional')
+        # Estagiário nunca é ofertado publicamente como veterinário.
+        .filter(Veterinario.habilitacao == HABILITACAO_CRMV)
+        .filter(Veterinario.crmv.isnot(None))
         .filter(VeterinarianMembership.is_active_flag.is_(True))
         .order_by(User.name)
     )
@@ -2624,6 +2634,29 @@ def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]
         }
 
     return avatar_map
+
+
+def assinatura_de(alvo):
+    """Atribuição legal de um profissional, para uso nos documentos impressos.
+
+    Aceita indiferentemente um `User` (usa `user.veterinario`) ou um
+    `Veterinario`, porque os templates de impressão recebem ora um, ora outro.
+    Devolve `None` quando não há ficha profissional.
+
+    É o único ponto que decide qual CRMV vai para o papel — nenhum template
+    deve montar isso na mão. Ver `Veterinario.assinatura`.
+    """
+    if alvo is None:
+        return None
+    vet = getattr(alvo, 'veterinario', None) or (
+        alvo if hasattr(alvo, 'habilitacao') else None
+    )
+    if vet is None:
+        return None
+    return vet.assinatura
+
+
+app.jinja_env.globals['assinatura_de'] = assinatura_de
 
 
 def _ensure_veterinarian_profile(form=None):

@@ -29,6 +29,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from time_utils import normalize_to_utc, now_in_brazil, utcnow
 
 # Helpers ainda hospedados no app.py (realocação em fases futuras).
+from models.usuarios import HABILITACAO_CRMV  # noqa: E402
 from app import (  # noqa: E402
     EASTER_EGG_STATIC_DIR,
     PaymentPreferenceError,
@@ -820,6 +821,47 @@ def _can_edit_vet_profile(vet):
     return any(_user_can_manage_clinic(c) for c in clinicas)
 
 
+def _clinicas_do_vet(vet):
+    clinicas = list(vet.clinicas or [])
+    if vet.clinica and vet.clinica not in clinicas:
+        clinicas.append(vet.clinica)
+    return clinicas
+
+
+def _can_set_habilitacao(vet):
+    """Só quem gerencia a clínica (ou admin) define habilitação/supervisão.
+
+    Ninguém define a própria habilitação. A checagem de "self" vem ANTES da de
+    gestor porque `_user_can_manage_clinic` considera gestor qualquer
+    veterinário lotado na clínica — e o estagiário tem ficha de veterinário,
+    então sem esta guarda ele se auto-promoveria a "veterinário com CRMV"
+    editando o próprio perfil.
+    """
+    if _is_admin():
+        return True
+    if vet.user_id == current_user.id:
+        return False
+    return any(_user_can_manage_clinic(c) for c in _clinicas_do_vet(vet))
+
+
+def _supervisores_possiveis(vet):
+    """Veterinários com CRMV das clínicas do profissional, exceto ele mesmo."""
+    candidatos = []
+    vistos = set()
+    for clinica in _clinicas_do_vet(vet):
+        for candidato in list(getattr(clinica, 'veterinarios', []) or []) + list(
+            getattr(clinica, 'veterinarios_associados', []) or []
+        ):
+            if candidato.id == vet.id or candidato.id in vistos:
+                continue
+            if not candidato.pode_assinar:
+                continue
+            vistos.add(candidato.id)
+            candidatos.append(candidato)
+    candidatos.sort(key=lambda v: (getattr(getattr(v, 'user', None), 'name', '') or '').lower())
+    return candidatos
+
+
 @bp.route('/veterinario/<int:veterinario_id>/profile', methods=['POST'])
 @login_required
 def update_vet_profile(veterinario_id):
@@ -829,13 +871,30 @@ def update_vet_profile(veterinario_id):
         abort(403)
     form = VetProfileForm(prefix=f"vetprofile_{veterinario_id}")
     form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
+    form.supervisor_id.choices = [(0, 'Selecione o supervisor')] + [
+        (s.id, f"{s.user.name} (CRMV {s.crmv_exibicao})") for s in _supervisores_possiveis(vet)
+    ]
+    pode_habilitar = _can_set_habilitacao(vet)
+    if not pode_habilitar:
+        # Mantém o que já está gravado; o formulário do próprio profissional
+        # não decide a própria habilitação.
+        form.habilitacao.data = vet.habilitacao or HABILITACAO_CRMV
+        form.supervisor_id.data = vet.supervisor_id or 0
     next_url = request.form.get('next') or url_for('index')
     if form.validate_on_submit():
         vet.user.name = form.name.data.strip()
         if form.phone.data is not None:
             vet.user.phone = form.phone.data.strip() or None
-        vet.crmv = form.crmv.data.strip()
-        vet.crmv_estado = form.crmv_estado.data or None
+        if pode_habilitar:
+            vet.habilitacao = form.habilitacao.data
+            vet.supervisor_id = form.supervisor_id.data or None
+        if vet.is_estagiario:
+            # Nunca guarda CRMV para estagiário, venha de onde vier.
+            vet.crmv = None
+            vet.crmv_estado = None
+        else:
+            vet.crmv = (form.crmv.data or '').strip() or None
+            vet.crmv_estado = form.crmv_estado.data or None
         selected_ids = form.specialties.data or []
         vet.specialties = Specialty.query.filter(Specialty.id.in_(selected_ids)).all()
         _set_vet_coverage_cities(vet, form.cidades_atendidas.data)

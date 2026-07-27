@@ -169,6 +169,10 @@ class AppointmentForm(FlaskForm):
                 return f'Tutor #{tutor_id}'
             return 'Tutor não atribuído'
 
+        def _nome_relacionado(obj, atributo):
+            valor = getattr(obj, atributo, None)
+            return getattr(valor, 'name', None) or (valor if isinstance(valor, str) else None)
+
         records = []
         tutor_map = {}
         for animal in animals:
@@ -183,6 +187,16 @@ class AppointmentForm(FlaskForm):
                 'name': getattr(animal, 'name', None) or f'Animal #{animal_id}',
                 'tutor_id': tutor_id,
                 'tutor_name': _normalize_tutor_name(tutor_name, tutor_id),
+                # Campos abaixo alimentam a busca e as miniaturas do seletor:
+                # com muitos "Nina" na base, foto e dados do tutor são o que
+                # permite escolher o animal certo.
+                'photo': getattr(animal, 'image', None),
+                'tutor_photo': getattr(owner, 'profile_photo', None),
+                'species': _nome_relacionado(animal, 'species'),
+                'breed': _nome_relacionado(animal, 'breed'),
+                'microchip': getattr(animal, 'microchip_number', None),
+                'tutor_phone': getattr(owner, 'phone', None),
+                'tutor_email': getattr(owner, 'email', None),
             }
             records.append(record)
             if tutor_id:

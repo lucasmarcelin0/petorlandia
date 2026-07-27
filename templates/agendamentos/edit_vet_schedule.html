@@ -1,5 +1,10 @@
 {% extends "layout.html" %}
 
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/appointments.css') }}">
+{% endblock %}
+
 {% block main %}
 {% set calendar_pets_endpoint = url_for('api_clinic_pets', view_as='veterinario', veterinario_id=veterinario.id) %}
 {% set calendar_events_endpoint = url_for('api_my_appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
@@ -131,12 +136,15 @@
 
         <div class="collapse show" id="newAppointmentForm">
           <div class="appointments-form-wrapper">
-            <form method="POST" class="needs-validation" novalidate>
+            <form method="POST" class="needs-validation" novalidate data-appointment-form>
               {{ appointment_form.hidden_tag() }}
               <div class="row g-3">
                 <div class="col-md-6">
                   {{ appointment_form.animal_id.label(class="form-label fw-semibold") }}
-                  {{ appointment_form.animal_id(class="form-select") }}
+                  {{ appointment_form.animal_id(class="form-select", **{'data-appointment-animal-select': 'true'}) }}
+                  {# Alimenta o seletor com busca por animal/tutor e miniaturas.
+                     O <select> acima segue sendo o campo enviado no POST. #}
+                  <script type="application/json" data-appointment-animal-data>{{ (appointment_form.animal_data or [])|tojson }}</script>
                 </div>
                 <div class="col-md-6">
                   {{ appointment_form.veterinario_id.label(class="form-label fw-semibold") }}
@@ -1442,6 +1450,8 @@
 
 {% block scripts %}
   {{ super() }}
+
+  <script type="module" src="{{ url_for('static', filename='js/animal_picker.js') }}"></script>
 
   <script>
     // When a calendar slot is chosen, navigate to the Nova Consulta tab

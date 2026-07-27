@@ -65,6 +65,20 @@ def app():
         WTF_CSRF_ENABLED=False,
         RATELIMIT_ENABLED=False,
     )
+    # RATELIMIT_ENABLED no config não basta: o Limiter lê a flag na init e
+    # create_app() devolve sempre a mesma instância, então o storage acumula
+    # os logins de TODOS os arquivos de teste e a suíte começa a receber 429
+    # em quem roda por último. Zerar o storage é o que de fato vale.
+    #
+    # Não desligamos `limiter.enabled`: test_platform_hardening liga
+    # RATELIMIT_ENABLED em runtime para provar que o limite funciona, e um
+    # kill-switch no objeto tornaria esse teste incapaz de falhar.
+    from extensions import limiter
+
+    try:
+        limiter.reset()
+    except Exception:  # noqa: BLE001 - storage pode não suportar reset
+        pass
     with app.app_context():
         db.create_all()
         yield app

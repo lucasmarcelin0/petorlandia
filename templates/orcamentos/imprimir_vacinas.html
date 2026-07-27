@@ -1,3 +1,4 @@
+{% from 'components/assinatura.html' import valor_crmv, linha_atribuicao, bloco_assinatura %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -72,7 +73,7 @@
       <ul class="info-list">
         <li><span>Nome</span><span>{{ clinica.nome if clinica else '—' }}</span></li>
         <li><span>Veterinário</span><span>{{ veterinario.name if veterinario else '—' }}</span></li>
-        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ valor_crmv(veterinario) }}</span></li>
         <li><span>Telefone</span><span>{{ clinica.telefone if clinica and clinica.telefone else '—' }}</span></li>
       </ul>
     </section>
@@ -107,7 +108,7 @@
     <div class="signature">
       <div class="signature-line"></div>
       <span>{{ veterinario.name if veterinario else 'Responsável pela Aplicação' }}</span>
-      <span>CRMV {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '_________________________' }}</span>
+      {{ bloco_assinatura(veterinario, vazio='_________________________') }}
     </div>
     <div class="signature">
       <div class="signature-line"></div>

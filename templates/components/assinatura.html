@@ -1,0 +1,35 @@
+{# Atribuição legal de profissional nos documentos impressos.
+
+   Todo documento que sai da clínica deve usar estes macros em vez de ler
+   `.veterinario.crmv` direto: estagiário não tem CRMV e quem responde
+   tecnicamente é o supervisor. `assinatura_de` (global registrado em app.py)
+   aceita tanto User quanto Veterinario. #}
+
+{# Valor da célula "CRMV" numa ficha de dados. Nunca inventa número. #}
+{% macro valor_crmv(alvo, vazio='—') -%}
+  {%- set a = assinatura_de(alvo) -%}
+  {%- if a and a.crmv_formatado -%}
+    {{ a.crmv_formatado|replace('CRMV ', '') }}{% if not a.pode_assinar %} <small>(resp. técnico: {{ a.responsavel_tecnico }})</small>{% endif %}
+  {%- else -%}
+    {{ vazio }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Linha de atribuição completa: nome, papel e CRMV (ou supervisão). #}
+{% macro linha_atribuicao(alvo, vazio='—') -%}
+  {%- set a = assinatura_de(alvo) -%}
+  {%- if a -%}{{ a.linha_completa }}{%- else -%}{{ vazio }}{%- endif -%}
+{%- endmacro %}
+
+{# Bloco de assinatura no rodapé do documento. #}
+{% macro bloco_assinatura(alvo, vazio='_____________________________') -%}
+  {%- set a = assinatura_de(alvo) -%}
+  {%- if a and a.crmv_formatado -%}
+    <span>{{ a.crmv_formatado }}</span>
+    {%- if not a.pode_assinar %}
+    <span class="signature-supervision">Documento sob responsabilidade técnica de {{ a.responsavel_tecnico }}</span>
+    {%- endif -%}
+  {%- else -%}
+    <span>{{ vazio }}</span>
+  {%- endif -%}
+{%- endmacro %}
