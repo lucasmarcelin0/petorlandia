@@ -1,6 +1,6 @@
 import requests
 
-from flask import abort, current_app, redirect, render_template, session
+from flask import abort, current_app, redirect, render_template, session, url_for
 from flask_login import current_user
 from functools import wraps
 
@@ -804,6 +804,19 @@ def _build_calendar_event(*, event_id, title, start, end, event_type,
     return event
 
 
+def _calendar_media_url(value):
+    """Return a browser-safe URL for uploaded media used by calendar events."""
+
+    media = (value or '').strip() if isinstance(value, str) else value
+    if not media:
+        return None
+
+    if isinstance(media, str) and media.startswith(('http://', 'https://', '/')):
+        return media
+
+    return url_for('static', filename=str(media).removeprefix('static/'))
+
+
 def appointment_to_event(appointment):
     """Convert an ``Appointment`` into a FullCalendar-friendly event dict."""
 
@@ -829,9 +842,12 @@ def appointment_to_event(appointment):
         'status': getattr(appointment, 'status', None),
         'tutorId': getattr(appointment, 'tutor_id', None),
         'tutorName': getattr(tutor, 'name', None),
+        'tutorPhoto': _calendar_media_url(getattr(tutor, 'profile_photo', None)),
         'animalName': getattr(animal, 'name', None),
+        'animalImage': _calendar_media_url(getattr(animal, 'image', None)),
         'vetName': getattr(vet_user, 'name', None),
         'vetFullName': getattr(vet_user, 'name', None),
+        'vetPhoto': _calendar_media_url(getattr(vet_user, 'profile_photo', None)),
         'vetSpecialtyList': vet_specialty_list,
         'vetIsSpecialist': bool(vet_specialty_list),
         'notes': getattr(appointment, 'notes', None),
@@ -972,11 +988,14 @@ def consulta_to_event(consulta):
         'animalId': getattr(consulta, 'animal_id', None),
         'tutorId': getattr(tutor, 'id', None) if tutor else getattr(animal, 'user_id', None),
         'tutorName': getattr(tutor, 'name', None),
+        'tutorPhoto': _calendar_media_url(getattr(tutor, 'profile_photo', None)),
         'animalName': getattr(animal, 'name', None),
+        'animalImage': _calendar_media_url(getattr(animal, 'image', None)),
         'consultaId': getattr(consulta, 'id', None),
         'createdBy': getattr(consulta, 'created_by', None),
         'vetName': vet_full_name,
         'vetFullName': vet_full_name,
+        'vetPhoto': _calendar_media_url(getattr(vet_user, 'profile_photo', None)),
         'vetSpecialtyList': vet_profile_specialties,
         'vetIsSpecialist': bool(vet_profile_specialties),
         'veterinarioId': getattr(vet_profile, 'id', None),
@@ -987,6 +1006,9 @@ def consulta_to_event(consulta):
     if tutor is None and animal and getattr(animal, 'owner', None):
         extra_props['tutorName'] = getattr(animal.owner, 'name', None)
         extra_props['tutorId'] = getattr(animal.owner, 'id', None)
+        extra_props['tutorPhoto'] = _calendar_media_url(
+            getattr(animal.owner, 'profile_photo', None)
+        )
 
     title = getattr(consulta, 'queixa_principal', None)
     if not title:

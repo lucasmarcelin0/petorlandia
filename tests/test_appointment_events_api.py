@@ -46,12 +46,29 @@ def login(monkeypatch, user):
 
 def create_basic_appointment():
     clinic = Clinica(id=1, nome='Clinica')
-    tutor = User(id=1, name='Tutor', email='t@test')
+    tutor = User(
+        id=1,
+        name='Tutor',
+        email='t@test',
+        profile_photo='uploads/tutors/tutor.jpg',
+    )
     tutor.set_password('x')
-    vet_user = User(id=2, name='Vet', email='v@test', worker='veterinario')
+    vet_user = User(
+        id=2,
+        name='Vet',
+        email='v@test',
+        worker='veterinario',
+        profile_photo='https://cdn.example/vet.jpg',
+    )
     vet_user.set_password('x')
     vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
-    animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+    animal = Animal(
+        id=1,
+        name='Rex',
+        user_id=tutor.id,
+        clinica_id=clinic.id,
+        image='/static/uploads/animals/rex.jpg',
+    )
     plan = HealthPlan(id=1, name='Basic', price=10.0)
     sub = HealthSubscription(animal_id=animal.id, plan_id=plan.id, user_id=tutor.id, active=True)
     db.session.add_all([clinic, tutor, vet_user, vet, animal, plan, sub])
@@ -78,6 +95,9 @@ def test_my_appointments_returns_events(client, monkeypatch):
     assert data[0]['editable'] is True
     assert data[0]['extendedProps']['eventType'] == 'appointment'
     assert data[0]['extendedProps']['recordId'] == appt_id
+    assert data[0]['extendedProps']['animalImage'] == '/static/uploads/animals/rex.jpg'
+    assert data[0]['extendedProps']['tutorPhoto'].endswith('/static/uploads/tutors/tutor.jpg')
+    assert data[0]['extendedProps']['vetPhoto'] == 'https://cdn.example/vet.jpg'
     start_dt = datetime.fromisoformat(data[0]['start'])
     assert start_dt.tzinfo is not None
 

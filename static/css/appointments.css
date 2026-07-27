@@ -275,6 +275,7 @@
 .appointment-card__icon {
   width: 42px;
   height: 42px;
+  flex: 0 0 42px;
   border-radius: 50%;
   background: #f1f5f9;
   color: #1d4ed8;
@@ -282,6 +283,7 @@
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  overflow: hidden;
 }
 
 .appointment-card__icon.is-pet {
@@ -292,8 +294,25 @@
   color: #0ea5e9;
 }
 
+.appointment-card__icon.is-tutor {
+  color: #92400e;
+}
+
 .appointment-card__icon.is-kind {
   color: #6366f1;
+}
+
+.appointment-card__icon.has-photo {
+  background: #e2e8f0;
+  color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.appointment-card__icon.has-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .appointment-card__status-actions {

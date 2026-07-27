@@ -856,6 +856,7 @@
 #{{ component_id }} .tutor-calendar__appointment-icon {
   width: 46px;
   height: 46px;
+  flex: 0 0 46px;
   border-radius: 1rem;
   display: inline-flex;
   align-items: center;
@@ -863,6 +864,21 @@
   font-size: 1rem;
   background: rgba(59, 130, 246, 0.18);
   color: #1d4ed8;
+  overflow: hidden;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-icon.has-photo {
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+#{{ component_id }} .tutor-calendar__appointment-icon.has-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 #{{ component_id }} .tutor-calendar__appointment-icon.is-time {
@@ -3274,16 +3290,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const peopleGrid = document.createElement('div');
     peopleGrid.className = 'tutor-calendar__appointment-people';
 
-    function appendPerson(label, value, iconClass, modifier) {
+    function appendPerson(label, value, iconClass, modifier, photoUrl) {
       const person = document.createElement('div');
       person.className = 'tutor-calendar__appointment-person';
 
       const iconWrapper = document.createElement('span');
       iconWrapper.className = 'tutor-calendar__appointment-icon' + (modifier ? ` ${modifier}` : '');
-      const icon = document.createElement('i');
-      icon.className = iconClass;
-      icon.setAttribute('aria-hidden', 'true');
-      iconWrapper.appendChild(icon);
+      const safePhotoUrl = typeof photoUrl === 'string' ? photoUrl.trim() : '';
+      if (safePhotoUrl) {
+        iconWrapper.classList.add('has-photo');
+        const image = document.createElement('img');
+        image.src = safePhotoUrl;
+        image.alt = value ? `Foto de ${value}` : `Foto de ${label}`;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        iconWrapper.appendChild(image);
+      } else {
+        const icon = document.createElement('i');
+        icon.className = iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        iconWrapper.appendChild(icon);
+      }
       person.appendChild(iconWrapper);
 
       const textWrapper = document.createElement('div');
@@ -3304,11 +3331,11 @@ document.addEventListener('DOMContentLoaded', function() {
       peopleGrid.appendChild(person);
     }
 
-    appendPerson('Paciente', animalName, 'fa-solid fa-paw', 'is-pet');
+    appendPerson('Paciente', animalName, 'fa-solid fa-paw', 'is-pet', ext.animalImage || ext.petImage || ext.animalPhoto);
     if (tutorName) {
-      appendPerson('Tutor', tutorName, 'fa-solid fa-user', 'is-tutor');
+      appendPerson('Tutor', tutorName, 'fa-solid fa-user', 'is-tutor', ext.tutorPhoto || ext.tutorImage);
     }
-    appendPerson('Veterinário', vetName, 'fa-solid fa-user-doctor', 'is-vet');
+    appendPerson('Veterinário', vetName, 'fa-solid fa-user-doctor', 'is-vet', ext.vetPhoto || ext.veterinarioPhoto || ext.veterinarianPhoto);
 
     if (peopleGrid.childNodes.length) {
       card.appendChild(peopleGrid);

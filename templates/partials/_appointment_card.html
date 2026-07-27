@@ -1,8 +1,13 @@
 {% set day_key = appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') %}
 {% set scheduled_key = appt.scheduled_at|format_datetime_brazil('%Y-%m-%dT%H:%M') %}
 {% set day_label = appt.scheduled_at|format_datetime_brazil('%A, %d/%m/%Y') %}
-{% set tutor_name = appt.tutor.name if appt.tutor else (appt.animal.owner.name if appt.animal and appt.animal.owner else 'Tutor não informado') %}
-{% set vet_name = appt.veterinario.user.name if appt.veterinario and appt.veterinario.user else 'Profissional não definido' %}
+{% set tutor = appt.tutor if appt.tutor else (appt.animal.owner if appt.animal and appt.animal.owner else none) %}
+{% set vet_user = appt.veterinario.user if appt.veterinario and appt.veterinario.user else none %}
+{% set tutor_name = tutor.name if tutor else 'Tutor não informado' %}
+{% set vet_name = vet_user.name if vet_user else 'Profissional não definido' %}
+{% set animal_photo = appt.animal.image if appt.animal and appt.animal.image else none %}
+{% set tutor_photo = tutor.profile_photo if tutor and tutor.profile_photo else none %}
+{% set vet_photo = vet_user.profile_photo if vet_user and vet_user.profile_photo else none %}
 {% set status_labels = {'scheduled': 'A fazer', 'completed': 'Realizada', 'canceled': 'Cancelada', 'accepted': 'Aceita'} %}
 {% set status_label = status_labels.get(appt.status, 'Atualizado') %}
 {% set card_classes = 'appointment-card appointment-row ' + (appt.status or '') %}
@@ -30,7 +35,18 @@
           </div>
         </div>
         <div class="appointment-card__patient" aria-label="Paciente">
-          <span class="appointment-card__icon is-pet"><i class="fa-solid fa-paw"></i></span>
+          <span class="appointment-card__icon is-pet{% if animal_photo %} has-photo{% endif %}">
+            {% if animal_photo %}
+              <img
+                src="{{ animal_photo if animal_photo.startswith('http://') or animal_photo.startswith('https://') or animal_photo.startswith('/') else url_for('static', filename=animal_photo|replace('static/', '', 1)) }}"
+                alt="Foto de {{ appt.animal.name }}"
+                loading="lazy"
+                decoding="async"
+              >
+            {% else %}
+              <i class="fa-solid fa-paw"></i>
+            {% endif %}
+          </span>
           <div class="appointment-card__patient-text">
             <span class="appointment-card__patient-label">Paciente</span>
             <span class="appointment-card__patient-name">{{ appt.animal.name }}</span>
@@ -165,7 +181,36 @@
     </div>
     <div class="appointment-card__meta">
       <div class="appointment-card__meta-item">
-        <span class="appointment-card__icon is-vet"><i class="fa-solid fa-user-doctor"></i></span>
+        <span class="appointment-card__icon is-tutor{% if tutor_photo %} has-photo{% endif %}">
+          {% if tutor_photo %}
+            <img
+              src="{{ tutor_photo if tutor_photo.startswith('http://') or tutor_photo.startswith('https://') or tutor_photo.startswith('/') else url_for('static', filename=tutor_photo|replace('static/', '', 1)) }}"
+              alt="Foto de {{ tutor_name }}"
+              loading="lazy"
+              decoding="async"
+            >
+          {% else %}
+            <i class="fa-solid fa-user"></i>
+          {% endif %}
+        </span>
+        <div>
+          <span class="appointment-card__meta-label">Tutor</span>
+          <span class="appointment-card__meta-value">{{ tutor_name }}</span>
+        </div>
+      </div>
+      <div class="appointment-card__meta-item">
+        <span class="appointment-card__icon is-vet{% if vet_photo %} has-photo{% endif %}">
+          {% if vet_photo %}
+            <img
+              src="{{ vet_photo if vet_photo.startswith('http://') or vet_photo.startswith('https://') or vet_photo.startswith('/') else url_for('static', filename=vet_photo|replace('static/', '', 1)) }}"
+              alt="Foto de {{ vet_name }}"
+              loading="lazy"
+              decoding="async"
+            >
+          {% else %}
+            <i class="fa-solid fa-user-doctor"></i>
+          {% endif %}
+        </span>
         <div>
           <span class="appointment-card__meta-label">Profissional</span>
           <span class="appointment-card__meta-value">{{ vet_name }}</span>
