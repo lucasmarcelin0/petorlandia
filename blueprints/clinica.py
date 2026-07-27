@@ -8,7 +8,7 @@ from extensions import db, mail
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
-from forms import APPOINTMENT_KIND_CHOICES, ClinicAddSpecialistForm, ClinicAddStaffForm, ClinicForm, ClinicHoursForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm, ClinicInviteVeterinarianForm, ClinicProductEditForm, ClinicProductForm, ClinicStaffPermissionForm, InventoryItemForm, OrcamentoForm, VetProfileForm, VetScheduleForm, VeterinarianProfileForm
+from forms import APPOINTMENT_KIND_CHOICES, DIAS_SEMANA, ClinicAddSpecialistForm, ClinicAddStaffForm, ClinicForm, ClinicHoursForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm, ClinicInviteVeterinarianForm, ClinicProductEditForm, ClinicProductForm, ClinicStaffPermissionForm, InventoryItemForm, OrcamentoForm, VetProfileForm, VetScheduleForm, VeterinarianProfileForm
 from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, unique_items_by_id
 from models import (
     Animal,
@@ -1099,6 +1099,7 @@ def clinic_detail(clinica_id):
         veterinarios=veterinarios,
         all_veterinarios=all_veterinarios,
         vet_schedule_forms=vet_schedule_forms,
+        dias_semana=DIAS_SEMANA,
         staff_members=staff_members,
         staff_form=staff_form,
         specialists=specialists,
@@ -2310,20 +2311,88 @@ def remove_specialist(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#especialistas')
 
 
-@bp.route("/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete", methods=["POST"])
-@login_required
-def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
-    clinica = Clinica.query.get_or_404(clinica_id)
-    if not (_is_admin() or current_user.id == clinica.owner_id):
-        abort(403)
+def _get_clinic_vet_schedule(clinica, veterinario_id, horario_id):
+    """Busca o horário garantindo que ele pertence a um profissional da clínica."""
     horario = VetSchedule.query.get_or_404(horario_id)
     vet = horario.veterinario
     if vet.id != veterinario_id:
         abort(404)
-    if vet.clinica_id != clinica_id and vet not in clinica.veterinarios_associados:
+    if vet.clinica_id != clinica.id and vet not in clinica.veterinarios_associados:
         abort(404)
+    return horario
+
+
+@bp.route("/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete", methods=["POST"])
+@login_required
+def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    horario = _get_clinic_vet_schedule(clinica, veterinario_id, horario_id)
     db.session.delete(horario)
     db.session.commit()
     flash('Horário removido com sucesso.', 'success')
-    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#veterinarios')
+
+
+@bp.route("/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/edit", methods=["POST"])
+@login_required
+def update_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+    horario = _get_clinic_vet_schedule(clinica, veterinario_id, horario_id)
+    destino = url_for('clinic_detail', clinica_id=clinica_id) + '#veterinarios'
+
+    dia = (request.form.get('dia_semana') or '').strip()
+    if dia not in DIAS_SEMANA:
+        flash('Dia da semana inválido.', 'danger')
+        return redirect(destino)
+
+    horas = {}
+    for campo, obrigatorio in (
+        ('hora_inicio', True),
+        ('hora_fim', True),
+        ('intervalo_inicio', False),
+        ('intervalo_fim', False),
+    ):
+        bruto = (request.form.get(campo) or '').strip()
+        if not bruto:
+            if obrigatorio:
+                flash('Informe o horário de início e de fim.', 'danger')
+                return redirect(destino)
+            horas[campo] = None
+            continue
+        try:
+            horas[campo] = datetime.strptime(bruto, '%H:%M').time()
+        except ValueError:
+            flash('Horário em formato inválido.', 'danger')
+            return redirect(destino)
+
+    if horas['hora_inicio'] >= horas['hora_fim']:
+        flash('A hora de início deve ser anterior à hora de fim.', 'danger')
+        return redirect(destino)
+
+    if horas['intervalo_inicio'] and horas['intervalo_fim']:
+        if horas['intervalo_inicio'] >= horas['intervalo_fim']:
+            flash('O intervalo deve começar antes de terminar.', 'danger')
+            return redirect(destino)
+        if (
+            horas['intervalo_inicio'] < horas['hora_inicio']
+            or horas['intervalo_fim'] > horas['hora_fim']
+        ):
+            flash('O intervalo precisa estar dentro do expediente.', 'danger')
+            return redirect(destino)
+    elif horas['intervalo_inicio'] or horas['intervalo_fim']:
+        flash('Informe o início e o fim do intervalo.', 'danger')
+        return redirect(destino)
+
+    horario.dia_semana = dia
+    horario.hora_inicio = horas['hora_inicio']
+    horario.hora_fim = horas['hora_fim']
+    horario.intervalo_inicio = horas['intervalo_inicio']
+    horario.intervalo_fim = horas['intervalo_fim']
+    db.session.commit()
+    flash('Horário atualizado com sucesso.', 'success')
+    return redirect(destino)
 

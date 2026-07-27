@@ -79,8 +79,8 @@
                   </div>
                   {% if current_user.id == clinica.owner_id %}
                   <div class="dropdown ms-auto action-dropdown">
-                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do colaborador" title="Ações do colaborador">
-                      <i class="bi bi-three-dots-vertical"></i>
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do colaborador">
+                      <i class="bi bi-gear me-1"></i>Gerenciar
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                       <li>
@@ -182,15 +182,15 @@
                     </div>
                     {% if pode_editar or current_user.id == v.user.id %}
                     <div class="dropdown action-dropdown">
-                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do veterinário" title="Ações do veterinário">
-                        <i class="bi bi-three-dots"></i>
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do veterinário">
+                        <i class="bi bi-gear me-1"></i>Gerenciar
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">
-                        {% if current_user.id == v.user.id %}
+                        {% if pode_editar or current_user.id == v.user.id %}
                         <li>
                           <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetProfileOffcanvas-{{ v.id }}">
                             <i class="bi bi-person-gear"></i>
-                            Editar meu perfil
+                            {{ 'Editar meu perfil' if current_user.id == v.user.id else 'Editar dados' }}
                           </button>
                         </li>
                         {% if pode_editar %}<li><hr class="dropdown-divider"></li>{% endif %}
@@ -220,7 +220,14 @@
                     {% endif %}
                   </div>
                   <div class="schedule-summary">
-                    <h6 class="text-muted small text-uppercase mb-2">Disponibilidade</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <h6 class="text-muted small text-uppercase mb-0">Disponibilidade</h6>
+                      {% if pode_editar %}
+                      <button class="btn btn-sm btn-link p-0 text-decoration-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetScheduleOffcanvas-{{ v.id }}">
+                        <i class="bi bi-pencil-square me-1"></i>Editar horários
+                      </button>
+                      {% endif %}
+                    </div>
                     <ul class="list-unstyled mb-0 small">
                       {% for dia, horarios in schedule_summary.items() %}
                       <li class="d-flex align-items-center gap-2">
@@ -290,15 +297,15 @@
                     </div>
                     {% if pode_editar or current_user.id == s.user.id %}
                     <div class="dropdown action-dropdown">
-                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do especialista" title="Ações do especialista">
-                        <i class="bi bi-three-dots"></i>
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir ações do especialista">
+                        <i class="bi bi-gear me-1"></i>Gerenciar
                       </button>
                       <ul class="dropdown-menu dropdown-menu-end">
-                        {% if current_user.id == s.user.id %}
+                        {% if pode_editar or current_user.id == s.user.id %}
                         <li>
                           <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetProfileOffcanvas-{{ s.id }}">
                             <i class="bi bi-person-gear"></i>
-                            Editar meu perfil
+                            {{ 'Editar meu perfil' if current_user.id == s.user.id else 'Editar dados' }}
                           </button>
                         </li>
                         {% if pode_editar %}<li><hr class="dropdown-divider"></li>{% endif %}
@@ -634,21 +641,66 @@
       <h6>Horários cadastrados</h6>
       <div class="list-group list-group-flush">
         {% for h in vet.horarios %}
-        <div class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
-          <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=vet.id, horario_id=h.id) }}" class="ms-2">
-            {{ vet_schedule_forms[vet.id].csrf_token }}
-            <button type="submit" class="btn btn-sm btn-outline-danger">
-              <i class="bi bi-trash"></i>
-            </button>
-          </form>
+        <div class="list-group-item px-0">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <span>
+              {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+              {% if h.intervalo_inicio and h.intervalo_fim %}
+              <span class="text-muted small d-block">Intervalo {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</span>
+              {% endif %}
+            </span>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editSchedule-{{ h.id }}" aria-expanded="false" aria-controls="editSchedule-{{ h.id }}" aria-label="Editar horário de {{ h.dia_semana }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=vet.id, horario_id=h.id) }}">
+                {{ vet_schedule_forms[vet.id].csrf_token }}
+                <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Remover horário de {{ h.dia_semana }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
+          </div>
+          <div class="collapse mt-3" id="editSchedule-{{ h.id }}">
+            <form method="post" action="{{ url_for('update_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=vet.id, horario_id=h.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="mb-2">
+                <label class="form-label small" for="edit-dia-{{ h.id }}">Dia da semana</label>
+                <select class="form-select form-select-sm" id="edit-dia-{{ h.id }}" name="dia_semana">
+                  {% for dia in dias_semana %}
+                  <option value="{{ dia }}" {% if dia == h.dia_semana %}selected{% endif %}>{{ dia }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small" for="edit-inicio-{{ h.id }}">Início</label>
+                  <input type="time" class="form-control form-control-sm" id="edit-inicio-{{ h.id }}" name="hora_inicio" value="{{ h.hora_inicio.strftime('%H:%M') }}" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small" for="edit-fim-{{ h.id }}">Fim</label>
+                  <input type="time" class="form-control form-control-sm" id="edit-fim-{{ h.id }}" name="hora_fim" value="{{ h.hora_fim.strftime('%H:%M') }}" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small" for="edit-int-inicio-{{ h.id }}">Início do intervalo</label>
+                  <input type="time" class="form-control form-control-sm" id="edit-int-inicio-{{ h.id }}" name="intervalo_inicio" value="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}">
+                </div>
+                <div class="col-6">
+                  <label class="form-label small" for="edit-int-fim-{{ h.id }}">Fim do intervalo</label>
+                  <input type="time" class="form-control form-control-sm" id="edit-int-fim-{{ h.id }}" name="intervalo_fim" value="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">Salvar alterações</button>
+            </form>
+          </div>
         </div>
         {% else %}
         <div class="list-group-item text-muted">Sem horários cadastrados.</div>
         {% endfor %}
       </div>
     </div>
-    <form method="post" class="mt-4">
+    <h6 class="mt-4">Adicionar novo horário</h6>
+    <form method="post">
       {{ vet_schedule_forms[vet.id].hidden_tag() }}
       <div style="display:none;">{{ vet_schedule_forms[vet.id].veterinario_id() }}</div>
       <div class="mb-3">
@@ -711,11 +763,11 @@
   </div>
 </div>
 {% endif %}
-{% if current_user.id == vet.user.id and vet.id in vet_profile_forms %}
+{% if (pode_editar or current_user.id == vet.user.id) and vet.id in vet_profile_forms %}
 {% set pf = vet_profile_forms[vet.id] %}
 <div class="offcanvas offcanvas-end" tabindex="-1" id="vetProfileOffcanvas-{{ vet.id }}" aria-labelledby="vetProfileLabel-{{ vet.id }}">
   <div class="offcanvas-header">
-    <h5 id="vetProfileLabel-{{ vet.id }}"><i class="bi bi-person-gear me-2"></i>Editar meu perfil</h5>
+    <h5 id="vetProfileLabel-{{ vet.id }}"><i class="bi bi-person-gear me-2"></i>{{ 'Editar meu perfil' if current_user.id == vet.user.id else 'Editar dados de ' ~ vet.user.name }}</h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
   </div>
   <div class="offcanvas-body">

@@ -114,6 +114,17 @@ class VeterinarianMembershipRequestNewTrialForm(FlaskForm):
     submit = SubmitField('Iniciar nova avaliação gratuita')
 
 
+DIAS_SEMANA = [
+    'Segunda',
+    'Terça',
+    'Quarta',
+    'Quinta',
+    'Sexta',
+    'Sábado',
+    'Domingo',
+]
+
+
 class VetScheduleForm(FlaskForm):
     veterinario_id = SelectField(
         'Veterinário',
@@ -123,15 +134,7 @@ class VetScheduleForm(FlaskForm):
     )
     dias_semana = SelectMultipleField(
         'Dias da Semana',
-        choices=[
-            ('Segunda', 'Segunda'),
-            ('Terça', 'Terça'),
-            ('Quarta', 'Quarta'),
-            ('Quinta', 'Quinta'),
-            ('Sexta', 'Sexta'),
-            ('Sábado', 'Sábado'),
-            ('Domingo', 'Domingo'),
-        ],
+        choices=[(dia, dia) for dia in DIAS_SEMANA],
         validators=[DataRequired()],
         render_kw={"class": "form-select", "multiple": True},
     )

@@ -52,6 +52,7 @@ from app import (  # noqa: E402
     _service_lowest_public_price,
     _service_public_price_options,
     _set_vet_coverage_cities,
+    _user_can_manage_clinic,
     _vacinas_parceiro_serializer,
     _vacserv_refund_payment,
     _vet_all_public_cities,
@@ -809,12 +810,22 @@ def responder_solicitacao(request_id):
     return redirect(url_for('solicitacoes_recebidas'))
 
 
+def _can_edit_vet_profile(vet):
+    """O próprio profissional, um admin, ou quem gerencia uma clínica dele."""
+    if vet.user_id == current_user.id or _is_admin():
+        return True
+    clinicas = list(vet.clinicas or [])
+    if vet.clinica and vet.clinica not in clinicas:
+        clinicas.append(vet.clinica)
+    return any(_user_can_manage_clinic(c) for c in clinicas)
+
+
 @bp.route('/veterinario/<int:veterinario_id>/profile', methods=['POST'])
 @login_required
 def update_vet_profile(veterinario_id):
     from models import Specialty
     vet = Veterinario.query.get_or_404(veterinario_id)
-    if vet.user_id != current_user.id and not _is_admin():
+    if not _can_edit_vet_profile(vet):
         abort(403)
     form = VetProfileForm(prefix=f"vetprofile_{veterinario_id}")
     form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
