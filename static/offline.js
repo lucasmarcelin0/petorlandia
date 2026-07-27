@@ -236,7 +236,10 @@
   function showToast(message, category='success'){
     const toastEl = document.getElementById('actionToast');
     if(!toastEl) return;
-    toastEl.querySelector('.toast-body').textContent = message;
+    const text = typeof window.formatUserMessage === 'function'
+      ? window.formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+      : (typeof message === 'string' ? message : 'Ação concluída.');
+    toastEl.querySelector('.toast-body').textContent = text;
     toastEl.classList.remove('bg-danger','bg-info','bg-success','bg-warning','bg-primary','bg-secondary','bg-dark');
     toastEl.classList.add('bg-' + normalizeCategory(category));
     bootstrap.Toast.getOrCreateInstance(toastEl).show();

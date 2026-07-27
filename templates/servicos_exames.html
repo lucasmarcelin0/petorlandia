@@ -403,7 +403,9 @@ document.addEventListener('DOMContentLoaded', function () {
   function showFeedback(message, type = 'success') {
     if (!feedback) return;
     feedback.className = `alert alert-${type}`;
-    feedback.textContent = message;
+    feedback.textContent = typeof window.formatUserMessage === 'function'
+      ? window.formatUserMessage(message, type === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+      : (typeof message === 'string' ? message : 'Ação concluída.');
   }
 
   function resetTimes(message = 'Selecione...') {

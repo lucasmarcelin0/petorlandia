@@ -20,7 +20,9 @@ function createFeedbackManager(element) {
   return {
     show(type, message, timeout = 4000) {
       element.className = `${baseClasses.join(' ')} alert alert-${type}`.trim();
-      element.textContent = message;
+      element.textContent = typeof window.formatUserMessage === 'function'
+        ? window.formatUserMessage(message, type === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+        : (typeof message === 'string' ? message : 'Ação concluída.');
       element.classList.remove(HIDDEN_CLASS);
       if (hideTimeout) {
         clearTimeout(hideTimeout);

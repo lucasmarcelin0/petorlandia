@@ -283,13 +283,56 @@
       toastEl.classList.add('bg-' + normalizeToastCategory(category));
     }
 
+    function formatUserMessage(value, fallback = 'Ação processada.') {
+      if (value === null || value === undefined || value === '') {
+        return fallback;
+      }
+
+      if (typeof value === 'string') {
+        const cleaned = value.trim();
+        return cleaned && cleaned !== '[object Object]' ? cleaned : fallback;
+      }
+
+      if (Array.isArray(value)) {
+        const parts = value
+          .map(item => formatUserMessage(item, ''))
+          .filter(Boolean);
+        return parts.length ? parts.join(' ') : fallback;
+      }
+
+      if (typeof value === 'object') {
+        const preferredKeys = ['message', 'error', 'detail', 'description', 'reason'];
+        for (const key of preferredKeys) {
+          if (Object.prototype.hasOwnProperty.call(value, key)) {
+            const text = formatUserMessage(value[key], '');
+            if (text) return text;
+          }
+        }
+
+        if (value.errors && typeof value.errors === 'object') {
+          const parts = Object.values(value.errors)
+            .flatMap(item => Array.isArray(item) ? item : [item])
+            .map(item => formatUserMessage(item, ''))
+            .filter(Boolean);
+          if (parts.length) return parts.join(' ');
+        }
+
+        return fallback;
+      }
+
+      return String(value);
+    }
+
+    window.formatUserMessage = formatUserMessage;
+
     window.showAppToast = function showAppToast(message, category = 'info') {
       const toastEl = document.getElementById('actionToast');
+      const text = formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.');
       if (!toastEl || typeof bootstrap === 'undefined' || !bootstrap.Toast) {
-        window.alert(message);
+        window.alert(text);
         return;
       }
-      toastEl.querySelector('.toast-body').textContent = message;
+      toastEl.querySelector('.toast-body').textContent = text;
       applyToastTone(toastEl, category);
       new bootstrap.Toast(toastEl).show();
     };
@@ -302,7 +345,7 @@
     flashMessages.forEach(([category, message], idx) => {
       setTimeout(() => {
         const toastEl = document.getElementById('actionToast');
-        toastEl.querySelector('.toast-body').textContent = message;
+        toastEl.querySelector('.toast-body').textContent = formatUserMessage(message, 'Ação concluída.');
         applyToastTone(toastEl, category || 'success');
         new bootstrap.Toast(toastEl).show();
       }, idx * 1000);
@@ -453,7 +496,7 @@
 
       const ensureMessageCategory = (payload, fallbackMessage, fallbackCategory) => ({
         ...(payload || {}),
-        message: (payload && (payload.message || payload.error)) || fallbackMessage,
+        message: formatUserMessage(payload, fallbackMessage),
         category: (payload && payload.category) || fallbackCategory,
       });
 
@@ -466,7 +509,9 @@
       const parseErrorMessage = async (response, fallback = 'Erro ao processar ação') => {
         if (!response) return fallback;
         const data = await parseJsonSafe(response);
-        if (data?.message) return data.message;
+        if (data?.message || data?.error || data?.detail || data?.errors) {
+          return formatUserMessage(data, fallback);
+        }
         try {
           const text = await response.clone().text();
           const cleaned = text.trim();
@@ -480,7 +525,7 @@
       const showToast = (message, category = 'info') => {
         const toastEl = document.getElementById('actionToast');
         if (!toastEl) return;
-        toastEl.querySelector('.toast-body').textContent = message || '';
+        toastEl.querySelector('.toast-body').textContent = formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.');
         applyToastTone(toastEl, category);
         bootstrap.Toast.getOrCreateInstance(toastEl).show();
       };
@@ -530,7 +575,7 @@
                   const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
                   emitSyncEvent(queuedDetail);
                   showToast('Ação salva para sincronização quando estiver online.', 'info');
-                  return { success: true, message: queuedDetail.data.message, level: queuedDetail.data.category, successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
+                  return { success: true, message: formatUserMessage(queuedDetail.data, 'Aguardando conexão para concluir o envio.'), level: queuedDetail.data.category, successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
                 }
 
                 const data = await parseJsonSafe(response);
@@ -648,7 +693,7 @@
                   return { success: true, message: successData.message, level: successData.category };
                 }
 
-                const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
+                const errorMessage = formatUserMessage(data, '') || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
                 const errorData = ensureMessageCategory(data, errorMessage, errorCategory);
 
@@ -781,7 +826,7 @@
                 totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
               }
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Sucesso');
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
 
@@ -789,7 +834,7 @@
                 await window.refreshDeliverySections();
               }
 
-              return { success: true, message: data.message, level: data.category };
+              return { success: true, message: formatUserMessage(data, 'Sucesso'), level: data.category };
             }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
@@ -892,7 +937,7 @@
               }
 
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Sucesso');
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
 
@@ -900,16 +945,16 @@
                 await window.refreshDeliverySections();
               }
 
-              return { success: true, message: data.message, level: data.category };
+              return { success: true, message: formatUserMessage(data, 'Sucesso'), level: data.category };
             }
 
             let data = {};
             try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
+            toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Erro ao processar ação');
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
-            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+            return { success: false, message: formatUserMessage(data, 'Erro ao processar ação'), level: 'danger' };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
@@ -941,18 +986,18 @@
                 return { success: true, keepButton: true };
               }
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Sucesso');
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
-              return { success: true, message: data.message, level: data.category };
+              return { success: true, message: formatUserMessage(data, 'Sucesso'), level: data.category };
             }
             let data = {};
             try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
+            toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Erro ao processar ação');
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
-            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+            return { success: false, message: formatUserMessage(data, 'Erro ao processar ação'), level: 'danger' };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
@@ -1215,7 +1260,9 @@
               const ct = response && response.headers.get('Content-Type') || '';
               if (ct.includes('application/json')) {
                 const errData = await response.json();
-                if (errData && errData.error) errorMessage = errData.error;
+                if (errData && (errData.error || errData.message || errData.errors)) {
+                  errorMessage = formatUserMessage(errData, errorMessage);
+                }
               }
             } catch (_) {}
             if (placeholder) {
@@ -1274,22 +1321,23 @@
                   }
                 }
               }
-              if (data.message) {
+              const responseMessage = formatUserMessage(data, '');
+              if (responseMessage) {
                 const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = data.message;
+                toastEl.querySelector('.toast-body').textContent = responseMessage;
                 applyToastTone(toastEl, data.category || 'success');
                 new bootstrap.Toast(toastEl).show();
               }
-              return { success: true, message: data.message, level: data.category };
+              return { success: true, message: responseMessage, level: data.category };
             }
 
             let data = {};
             try { data = response ? await response.json() : {}; } catch (e) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
+            toastEl.querySelector('.toast-body').textContent = formatUserMessage(data, 'Erro ao processar ação');
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
-            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+            return { success: false, message: formatUserMessage(data, 'Erro ao processar ação'), level: 'danger' };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
@@ -1311,13 +1359,13 @@
       ];
 
       window.alert = message => {
-        const text = typeof message === 'string' ? message : String(message);
+        const text = formatUserMessage(message, 'Não foi possível concluir a ação.');
         const shouldSuppress = suppressedPatterns.some(pattern => pattern.test(text));
 
         if (shouldSuppress) {
           const toastEl = document.getElementById('actionToast');
           if (toastEl) {
-            toastEl.querySelector('.toast-body').textContent = text || 'Ação salva para sincronização quando estiver online.';
+            toastEl.querySelector('.toast-body').textContent = formatUserMessage(text, 'Ação salva para sincronização quando estiver online.');
             applyToastTone(toastEl, 'info');
             bootstrap.Toast.getOrCreateInstance(toastEl).show();
           } else {

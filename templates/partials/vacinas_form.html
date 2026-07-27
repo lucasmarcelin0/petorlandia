@@ -131,7 +131,9 @@
     let aplicadaCheckbox, aplicadaEmInput;
     function mostrarFeedback(msg, tipo = 'success') {
       const fb = document.getElementById('feedback-vacinas');
-      fb.textContent = msg;
+      fb.textContent = typeof window.formatUserMessage === 'function'
+        ? window.formatUserMessage(msg, tipo === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+        : (typeof msg === 'string' ? msg : 'Ação concluída.');
       fb.className = `alert alert-${tipo} d-block`;
       setTimeout(() => fb.classList.add('d-none'), 3000);
     }

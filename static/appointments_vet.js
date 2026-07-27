@@ -33,7 +33,11 @@ const STATUS_LABELS = {
 };
 
 function showToastMessage(message, category = 'info') {
-  if (!message) {
+  const text = typeof window.formatUserMessage === 'function'
+    ? window.formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+    : (typeof message === 'string' ? message : '');
+
+  if (!text) {
     return;
   }
 
@@ -45,7 +49,7 @@ function showToastMessage(message, category = 'info') {
 
   const body = toastEl.querySelector('.toast-body');
   if (body) {
-    body.textContent = message;
+    body.textContent = text;
   }
 
   if (typeof applyToastTone === 'function') {

@@ -753,7 +753,9 @@
 
     const setStatus = (message, isError = false) => {
       if (!status) return;
-      status.textContent = message || '';
+      status.textContent = typeof window.formatUserMessage === 'function'
+        ? window.formatUserMessage(message, '')
+        : (typeof message === 'string' ? message : '');
       status.classList.toggle('text-danger', isError);
     };
 
@@ -855,7 +857,9 @@
 
     const setStatus = (message, isError = false) => {
       if (!status) return;
-      status.textContent = message || '';
+      status.textContent = typeof window.formatUserMessage === 'function'
+        ? window.formatUserMessage(message, '')
+        : (typeof message === 'string' ? message : '');
       status.classList.toggle('text-danger', isError);
     };
 

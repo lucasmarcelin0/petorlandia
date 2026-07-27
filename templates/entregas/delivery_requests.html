@@ -110,7 +110,10 @@
 
     function showToastMessage(message, category = 'info') {
       if (!toastEl) return;
-      toastEl.querySelector('.toast-body').textContent = message;
+      const text = typeof window.formatUserMessage === 'function'
+        ? window.formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+        : (typeof message === 'string' ? message : 'Ação concluída.');
+      toastEl.querySelector('.toast-body').textContent = text;
       if (typeof applyToastTone === 'function') {
         applyToastTone(toastEl, category);
       }

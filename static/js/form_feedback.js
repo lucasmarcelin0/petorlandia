@@ -9,6 +9,29 @@
   const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
+  function formatMessage(value, fallback = '') {
+    if (window.formatUserMessage && typeof window.formatUserMessage === 'function') {
+      return window.formatUserMessage(value, fallback);
+    }
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'string') return value === '[object Object]' ? fallback : value;
+    if (Array.isArray(value)) return value.map(item => formatMessage(item, '')).filter(Boolean).join(' ') || fallback;
+    if (typeof value === 'object') {
+      if (value.message || value.error || value.detail) {
+        return formatMessage(value.message || value.error || value.detail, fallback);
+      }
+      if (value.errors && typeof value.errors === 'object') {
+        const parts = Object.values(value.errors)
+          .flatMap(item => Array.isArray(item) ? item : [item])
+          .map(item => formatMessage(item, ''))
+          .filter(Boolean);
+        if (parts.length) return parts.join(' ');
+      }
+      return fallback;
+    }
+    return String(value);
+  }
+
   function getButton(target) {
     if (!target) return null;
     if (target instanceof HTMLButtonElement) return target;
@@ -224,7 +247,7 @@
     if (!form) return;
     const status = form.querySelector('.form-status-message');
     if (!status) return;
-    status.textContent = message || '';
+    status.textContent = formatMessage(message, '');
     status.classList.remove('d-none');
     STATUS_VARIANTS.forEach(v => {
       status.classList.remove(`alert-${v}`);
@@ -251,8 +274,8 @@
       normalized.response = result;
     } else if (result && typeof result === 'object') {
       if ('success' in result) normalized.success = Boolean(result.success);
-      if ('message' in result && typeof result.message === 'string') {
-        normalized.message = result.message;
+      if ('message' in result) {
+        normalized.message = formatMessage(result.message, '');
       }
       if ('level' in result && typeof result.level === 'string') {
         normalized.level = result.level;
@@ -272,8 +295,8 @@
     if (typeof options.success === 'boolean') {
       normalized.success = options.success;
     }
-    if (typeof options.message === 'string') {
-      normalized.message = options.message;
+    if (Object.prototype.hasOwnProperty.call(options, 'message')) {
+      normalized.message = formatMessage(options.message, '');
     }
     if (typeof options.level === 'string') {
       normalized.level = options.level;
@@ -504,12 +527,12 @@
     const hadError = Boolean((detail.data && detail.data.success === false) || (detail.response && !detail.response.ok));
     if (hadError) {
       setIdle(button);
-      const errorMessage = detail.data && (detail.data.message || detail.data.error) || DEFAULT_ERROR_TEXT;
+      const errorMessage = formatMessage(detail.data, DEFAULT_ERROR_TEXT);
       showStatus(form, errorMessage, 'danger');
       return;
     }
 
-    const message = detail.data && detail.data.message;
+    const message = formatMessage(detail.data, '');
     setSuccess(button, { offlineQueued });
     if (message) {
       showStatus(form, message, 'success');

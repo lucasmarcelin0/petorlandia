@@ -828,9 +828,17 @@
             if (!toastContainer) return;
             const alert = document.createElement('div');
             const icon = type === 'success' ? 'fa-circle-check text-success' : (type === 'warning' ? 'fa-triangle-exclamation text-warning' : 'fa-circle-exclamation text-danger');
+            const text = typeof window.formatUserMessage === 'function'
+              ? window.formatUserMessage(message, type === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+              : (typeof message === 'string' ? message : 'Ação concluída.');
             alert.className = `alert alert-${type} shadow-sm d-flex align-items-center gap-2 mb-2`;
             alert.setAttribute('role', 'alert');
-            alert.innerHTML = `<i class="fas ${icon}"></i><div>${message}</div>`;
+            const iconEl = document.createElement('i');
+            iconEl.className = `fas ${icon}`;
+            const textEl = document.createElement('div');
+            textEl.textContent = text;
+            alert.appendChild(iconEl);
+            alert.appendChild(textEl);
             toastContainer.appendChild(alert);
             setTimeout(() => alert.remove(), 5000);
           }

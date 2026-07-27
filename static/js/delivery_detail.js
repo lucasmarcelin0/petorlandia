@@ -106,7 +106,9 @@ function showFormStatus(form, message, variant = 'info') {
     return;
   }
   const status = ensureStatusContainer(form);
-  status.textContent = message || '';
+  status.textContent = typeof window.formatUserMessage === 'function'
+    ? window.formatUserMessage(message, '')
+    : (typeof message === 'string' ? message : '');
   status.classList.remove('d-none');
   ['success', 'danger', 'warning', 'info'].forEach((v) => {
     status.classList.remove(`alert-${v}`);

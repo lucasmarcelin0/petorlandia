@@ -15,8 +15,11 @@ function getToastContainer() {
 function showToast(message, category = 'success') {
   const container = getToastContainer();
   const toast = document.createElement('div');
+  const text = typeof window.formatUserMessage === 'function'
+    ? window.formatUserMessage(message, category === 'danger' ? 'Não foi possível concluir a ação.' : 'Ação concluída.')
+    : (typeof message === 'string' ? message : 'Ação concluída.');
   toast.className = `toast-notification ${category}`;
-  toast.textContent = message;
+  toast.textContent = text;
   toast.style.cssText = `
     display: flex;
     align-items: center;
