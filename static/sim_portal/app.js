@@ -6,6 +6,54 @@ const API_ROOT = `${BASE_PATH}/api`;
 // Prefixo de docId usado para anexar o rotulo direto na tela de cada produto
 // (precisa bater com PRODUCT_LABEL_PREFIX no backend).
 const PRODUCT_LABEL_PREFIX = "rotulo-produto-";
+const LC84_URL = "https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1844-de-19-de-junho-de-2024-Extraordinaria.pdf";
+const DEC5374_URL = "https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1871-de-30-de-julho-de-2024_compressed.pdf";
+const LC104_URL = "https://dosp.com.br/exibe_do.php?i=ODM4OTQ0";
+const CFMV1177_URL = "https://www.legisweb.com.br/legislacao/?id=352065";
+const CFMV1562_URL = "https://www.crmvse.org.br/wp-content/uploads/2024/01/RESOLUCAO-CFMV-1562.pdf";
+const DOCUMENT_SOURCES = {
+  "requerimento-assinado": [
+    { text: "LC 84/2024, art. 11, I", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 1 (Anexo I)", url: DEC5374_URL },
+  ],
+  "plantas-baixas": [
+    { text: "LC 84/2024, art. 11, II", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 3 (Anexo III)", url: DEC5374_URL },
+  ],
+  "contrato-social-cnpj": [{ text: "LC 84/2024, art. 11, III", url: LC84_URL }],
+  "cpf-cnpj": [{ text: "LC 84/2024, art. 11, IV", url: LC84_URL }],
+  "inscricao-estadual": [{ text: "LC 84/2024, art. 11, V", url: LC84_URL }],
+  "alvara-prefeitura": [{ text: "LC 84/2024, art. 11, VI", url: LC84_URL }],
+  "certidoes-ambientais": [{ text: "LC 84/2024, art. 11, VII", url: LC84_URL }],
+  "exames-agua": [{ text: "LC 84/2024, art. 11, VIII", url: LC84_URL }],
+  "memorial-economico-sanitario": [
+    { text: "LC 84/2024, art. 11, IX", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 2 (Anexo II - MTSE)", url: DEC5374_URL },
+  ],
+  "manual-bpf": [{ text: "LC 84/2024, art. 11, X", url: LC84_URL }],
+  "registro-crmv": [
+    { text: "LC 84/2024, art. 11, XI, se aplicavel", url: LC84_URL },
+    { text: "Resolucao CFMV 1.177/2017", url: CFMV1177_URL },
+  ],
+  "comprovante-taxa": [
+    { text: "LC 84/2024, art. 11, XII", url: LC84_URL },
+    { text: "LC 104/2026, art. 3, par. unico (sem cobranca em 2026)", url: LC104_URL },
+  ],
+  "rotulos-produtos": [
+    { text: "LC 84/2024, art. 15, I e II", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 4 (Anexo IV)", url: DEC5374_URL },
+  ],
+  "doc-responsavel-legal": [
+    { text: "Documento de apoio: comprova quem assina o Anexo I e o termo de compromisso do Decreto 5.374/2024", url: DEC5374_URL },
+  ],
+  "art-responsavel-tecnico": [
+    { text: "Decreto 5.374/2024, Anexos I e II, pedem identificacao do RT", url: DEC5374_URL },
+    { text: "Resolucao CFMV 1.562/2023, art. 3", url: CFMV1562_URL },
+  ],
+  "planta-fluxo": [
+    { text: "Apoio tecnico ao MTSE: o Anexo II do Decreto 5.374/2024 pede disposicao das instalacoes e fluxo de producao", url: DEC5374_URL },
+  ],
+};
 
 // Opcoes/estruturas do Anexo IV. Declaradas antes de initialState porque a
 // semente do produto ja usa defaultNutritionRows() no carregamento do modulo.
@@ -181,15 +229,14 @@ const initialState = {
     { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
     { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
     { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
-    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Memorial descritivo economico e sanitario do estabelecimento", hint: "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
+    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Anexo II (MTSE) final assinado - Memorial tecnico-sanitario do estabelecimento", hint: "Este e o memorial descritivo economico e sanitario exigido pela lei. Preencha o MTSE no portal, imprima/salve em PDF, assine e envie aqui. Nao envie rascunho separado.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
     { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
     { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
     { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
-    { id: "mtse", group: "anexos", name: "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", hint: "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", required: false, status: "Em correcao", file: "MTSE_rascunho.pdf" },
-    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", required: false, status: "Pendente", file: "" },
-    { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel.", required: true, status: "Pendente", file: "" },
-    { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Anotacao de responsabilidade tecnica emitida no conselho do RT.", required: true, status: "Pendente", file: "" },
-    { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional; ajuda a analise do fluxo de producao.", required: false, status: "Pendente", file: "" },
+    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto). Este item existe porque produto e rotulo tambem precisam de registro.", required: false, status: "Pendente", file: "" },
+    { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel para confirmar quem assina o pedido e responde pelas declaracoes.", required: true, status: "Pendente", file: "" },
+    { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Comprova a responsabilidade tecnica informada nos formularios oficiais.", required: true, status: "Pendente", file: "" },
+    { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional se o fluxo ja estiver claro no MTSE e na planta. Ajuda a analise da recepcao, producao e expedicao.", required: false, status: "Pendente", file: "" },
   ],
   review: {
     decision: "Correcoes solicitadas",
@@ -255,12 +302,34 @@ const SAMPLE_STATUSES = ["Coletada", "Enviada ao laboratorio", "Resultado confor
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(initialState);
+  if (!raw) return normalizeState(structuredClone(initialState));
   try {
-    return deepMerge(structuredClone(initialState), JSON.parse(raw));
+    return normalizeState(deepMerge(structuredClone(initialState), JSON.parse(raw)));
   } catch {
-    return structuredClone(initialState);
+    return normalizeState(structuredClone(initialState));
   }
+}
+
+function normalizeState(nextState) {
+  if (!Array.isArray(nextState.documents)) nextState.documents = [];
+  const currentById = new Map(nextState.documents.map((doc) => [doc.id, doc]));
+  const knownIds = new Set(initialState.documents.map((doc) => doc.id));
+  const internalDocs = nextState.documents.filter((doc) => doc.internal && !knownIds.has(doc.id));
+  nextState.documents = initialState.documents.map((baseDoc) => {
+    const currentDoc = currentById.get(baseDoc.id);
+    return currentDoc ? deepMerge(structuredClone(baseDoc), currentDoc) : structuredClone(baseDoc);
+  }).concat(internalDocs).filter((doc) => doc.id !== "mtse");
+  const mtse = nextState.documents.find((doc) => doc.id === "memorial-economico-sanitario");
+  if (mtse) {
+    mtse.name = initialState.documents.find((doc) => doc.id === "memorial-economico-sanitario")?.name || mtse.name;
+    mtse.hint = initialState.documents.find((doc) => doc.id === "memorial-economico-sanitario")?.hint || mtse.hint;
+    mtse.required = true;
+    mtse.group = "art11";
+    mtse.item = "09";
+    mtse.formView = "establishment";
+    mtse.printForm = "mtse";
+  }
+  return nextState;
 }
 
 function deepMerge(base, patch) {
@@ -318,7 +387,7 @@ async function bootstrap() {
     session = sessionResponse.user;
     if (session) {
       const data = await api("/state");
-      state = deepMerge(structuredClone(initialState), data.state);
+      state = normalizeState(deepMerge(structuredClone(initialState), data.state));
       state.role = session.role;
       notifications = data.notifications || [];
       await loadRegistry();
@@ -986,9 +1055,10 @@ function renderEstablishment() {
 }
 
 function renderDocuments() {
-  const art11 = state.documents.filter((doc) => doc.group === "art11");
-  const anexos = state.documents.filter((doc) => !doc.internal && doc.group !== "art11");
-  const internalDocs = state.documents.filter((doc) => doc.internal);
+  const visibleDocuments = (state.documents || []).filter((doc) => doc.id !== "mtse");
+  const art11 = visibleDocuments.filter((doc) => doc.group === "art11");
+  const anexos = visibleDocuments.filter((doc) => !doc.internal && doc.group !== "art11");
+  const internalDocs = visibleDocuments.filter((doc) => doc.internal);
   const progress = art11Progress();
   const percent = progress.total ? Math.round((progress.sent / progress.total) * 100) : 0;
   return `
@@ -996,6 +1066,10 @@ function renderDocuments() {
       <div class="span-12 banner-warn">
         <strong>Taxa do SIM em 2026: nao e preciso pagar nada.</strong>
         A Taxa de Inspecao Sanitaria esta dispensada neste ano (LC 104/2026, art. 3, par. unico). O item 12 do checklist fica sem exigencia em 2026.
+      </div>
+      <div class="span-12 banner-warn legal-why">
+        <strong>Por que pedimos estes documentos?</strong>
+        Cada item abaixo mostra a fonte legal usada pelo SIM. O objetivo e cumprir a LC 84/2024 e os formularios oficiais do Decreto 5.374/2024, sem criar exigencia duplicada para o produtor.
       </div>
       <div class="span-8 panel">
         <div class="panel-header">
@@ -1008,7 +1082,8 @@ function renderDocuments() {
           ${art11.map(documentCard).join("")}
         </div>
         <div class="document-group">
-          <h3>Anexos complementares</h3>
+          <h3>Anexos complementares e produtos</h3>
+          <p class="muted small">Estes itens nao duplicam o checklist principal. Eles comprovam assinaturas, responsabilidade tecnica, fluxo produtivo ou registro de produto quando aplicavel.</p>
           ${anexos.map(documentCard).join("")}
         </div>
         ${state.role === "sim" ? `
@@ -1059,6 +1134,7 @@ function documentCard(doc) {
           <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
           ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
+          ${documentSourceHtml(doc)}
           <span>${documentSummary(doc)}</span>
           ${doc.formView && state.role === "establishment" ? `
             <div class="doc-quick-actions">
@@ -1093,6 +1169,16 @@ function documentCard(doc) {
       </div>
     </section>
   `;
+}
+
+function documentSourceHtml(doc) {
+  const sources = DOCUMENT_SOURCES[doc.id] || doc.sources || [];
+  if (!sources.length) return "";
+  return `<span class="doc-source"><strong>Fonte:</strong> ${sources.map((source) => (
+    source.url
+      ? `<a href="${source.url}" target="_blank" rel="noreferrer">${escapeHtml(source.text)}</a>`
+      : escapeHtml(source.text)
+  )).join(" + ")}</span>`;
 }
 
 function documentSummary(doc) {
@@ -2053,7 +2139,7 @@ async function login(email, password) {
     session = data.user;
     state.role = session.role;
     const remote = await api("/state");
-    state = deepMerge(structuredClone(initialState), remote.state);
+    state = normalizeState(deepMerge(structuredClone(initialState), remote.state));
     state.role = session.role;
     notifications = remote.notifications || [];
     await loadRegistry();
@@ -2082,7 +2168,7 @@ async function uploadDocument(docId, file) {
   form.append("file", file);
   try {
     const data = await api("/uploads", { method: "POST", body: form });
-    state = deepMerge(structuredClone(initialState), data.state);
+    state = normalizeState(deepMerge(structuredClone(initialState), data.state));
     state.role = session.role;
     notifications.unshift({
       title: "Anexo protocolado",

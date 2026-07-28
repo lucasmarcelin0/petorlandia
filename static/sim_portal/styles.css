@@ -1255,6 +1255,12 @@ table select:disabled {
 
 .banner-warn strong { display: block; }
 
+.banner-warn.legal-why {
+  background: #eef7f4;
+  border-color: #b7d9d0;
+  color: #17463d;
+}
+
 .doc-number {
   display: inline-flex;
   align-items: center;
@@ -1283,6 +1289,32 @@ table select:disabled {
 }
 
 .doc-hint a { color: var(--green); font-weight: 600; }
+
+.doc-source {
+  display: block;
+  margin: 6px 0;
+  padding: 7px 9px;
+  border-left: 3px solid var(--green);
+  background: #eef7f4;
+  color: #31524b;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.doc-source strong {
+  display: inline;
+  font-size: inherit;
+}
+
+.doc-source a {
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.doc-source a:hover {
+  text-decoration: underline;
+}
 
 .doc-quick-actions {
   display: flex;
