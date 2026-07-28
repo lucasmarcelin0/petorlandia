@@ -374,6 +374,7 @@ let session = null;
 let backendAvailable = false;
 let notifications = [];
 let activeUpload = null;
+let uploadPreviewZoom = null;
 let previewAccount = null;
 let registry = { accounts: [], establishments: [], fiscalActs: [], inspections: [], samples: [], audit: [] };
 let registryEditing = { establishment: null, inspection: null, sample: null };
@@ -1714,7 +1715,15 @@ function docxUrl(form) {
   return token ? `${API_ROOT}/forms/${form}.docx?token=${encodeURIComponent(token)}` : `${API_ROOT}/forms/${form}.docx`;
 }
 
+function isImageUpload(upload) {
+  const mimeType = String(upload.mimeType || "").toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  return /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(String(upload.file || ""));
+}
+
 function renderUploadModal(upload) {
+  const imagePreview = isImageUpload(upload);
+  const previewUrl = downloadUrl(upload.id);
   return `
     <div class="modal-backdrop" role="dialog" aria-modal="true">
       <section class="modal">
@@ -1733,14 +1742,99 @@ function renderUploadModal(upload) {
           <div class="full"><strong>SHA-256</strong><span>${upload.sha256}</span></div>
         </div>
         <div class="modal-actions">
-          <a class="btn" href="${downloadUrl(upload.id)}" target="_blank" rel="noreferrer">Abrir em nova aba</a>
-          <a class="btn primary" href="${downloadUrl(upload.id)}" download="${escapeHtml(upload.file || "")}">Baixar arquivo original</a>
+          <div class="modal-file-actions">
+            <a class="btn" href="${previewUrl}" target="_blank" rel="noreferrer">Abrir em nova aba</a>
+            <a class="btn primary" href="${previewUrl}" download="${escapeHtml(upload.file || "")}">Baixar arquivo original</a>
+          </div>
+          ${imagePreview ? `
+            <div class="preview-zoom-controls" role="toolbar" aria-label="Controles de zoom da pr&eacute;via">
+              <span class="preview-zoom-label">Zoom</span>
+              <button class="btn preview-zoom-button" type="button" data-preview-zoom="out" title="Reduzir" aria-label="Reduzir zoom">&minus;</button>
+              <output class="preview-zoom-value" data-preview-zoom-value aria-live="polite">Ajustar</output>
+              <button class="btn preview-zoom-button" type="button" data-preview-zoom="in" title="Ampliar" aria-label="Ampliar zoom">+</button>
+              <button class="btn preview-zoom-text" type="button" data-preview-zoom="actual">100%</button>
+              <button class="btn preview-zoom-text" type="button" data-preview-zoom="fit">Ajustar &agrave; largura</button>
+            </div>
+          ` : ""}
         </div>
-        <iframe class="upload-preview" src="${downloadUrl(upload.id)}" title="Previa do anexo ${upload.file}"></iframe>
+        ${imagePreview ? `
+          <div class="upload-preview upload-preview-viewport" data-upload-preview-viewport tabindex="0" aria-label="Pr&eacute;via ampli&aacute;vel de ${escapeHtml(upload.file || "anexo")}">
+            <div class="upload-preview-canvas">
+              <img class="upload-preview-image" data-upload-preview-image src="${previewUrl}" alt="Pr&eacute;via do anexo ${escapeHtml(upload.file || "")}" draggable="false">
+            </div>
+          </div>
+        ` : `
+          <iframe class="upload-preview" src="${previewUrl}" title="Previa do anexo ${escapeHtml(upload.file || "")}"></iframe>
+        `}
         <p class="small muted">Se a previa nao aparecer (ex.: .doc/.docx), use "Abrir em nova aba" ou baixe o arquivo.</p>
       </section>
     </div>
   `;
+}
+
+function bindUploadPreviewControls() {
+  const viewport = document.querySelector("[data-upload-preview-viewport]");
+  const image = document.querySelector("[data-upload-preview-image]");
+  const value = document.querySelector("[data-preview-zoom-value]");
+  if (!viewport || !image || !value) return;
+
+  const clampZoom = (zoom) => Math.min(4, Math.max(.25, zoom));
+  const displayedZoom = () => {
+    if (!image.naturalWidth) return uploadPreviewZoom || 1;
+    const renderedWidth = Number.parseFloat(image.style.width) || image.getBoundingClientRect().width;
+    return renderedWidth / image.naturalWidth;
+  };
+  const applyZoom = () => {
+    if (!image.naturalWidth) return;
+    const horizontalPadding = 24;
+    const availableWidth = Math.max(48, viewport.clientWidth - horizontalPadding);
+    const zoom = uploadPreviewZoom === null ? availableWidth / image.naturalWidth : uploadPreviewZoom;
+    image.style.width = `${Math.max(48, image.naturalWidth * zoom)}px`;
+    value.textContent = uploadPreviewZoom === null ? `Ajustar (${Math.round(zoom * 100)}%)` : `${Math.round(zoom * 100)}%`;
+    document.querySelector('[data-preview-zoom="out"]')?.toggleAttribute("disabled", zoom <= .25);
+    document.querySelector('[data-preview-zoom="in"]')?.toggleAttribute("disabled", zoom >= 4);
+  };
+
+  document.querySelectorAll("[data-preview-zoom]").forEach((control) => {
+    control.addEventListener("click", () => {
+      const action = control.dataset.previewZoom;
+      if (action === "fit") uploadPreviewZoom = null;
+      if (action === "actual") uploadPreviewZoom = 1;
+      if (action === "in" || action === "out") {
+        const direction = action === "in" ? 1 : -1;
+        const current = uploadPreviewZoom === null ? displayedZoom() : uploadPreviewZoom;
+        uploadPreviewZoom = clampZoom((Math.round(current * 4) + direction) / 4);
+      }
+      applyZoom();
+    });
+  });
+
+  let drag = null;
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || (viewport.scrollWidth <= viewport.clientWidth && viewport.scrollHeight <= viewport.clientHeight)) return;
+    drag = {
+      x: event.clientX,
+      y: event.clientY,
+      left: viewport.scrollLeft,
+      top: viewport.scrollTop,
+    };
+    viewport.setPointerCapture(event.pointerId);
+    viewport.classList.add("is-dragging");
+  });
+  viewport.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    viewport.scrollLeft = drag.left - (event.clientX - drag.x);
+    viewport.scrollTop = drag.top - (event.clientY - drag.y);
+  });
+  const finishDrag = () => {
+    drag = null;
+    viewport.classList.remove("is-dragging");
+  };
+  viewport.addEventListener("pointerup", finishDrag);
+  viewport.addEventListener("pointercancel", finishDrag);
+
+  if (image.complete) applyZoom();
+  else image.addEventListener("load", applyZoom, { once: true });
 }
 
 // Uma vez aprovado, o produto fica travado para edicao: qualquer alteracao
@@ -3684,6 +3778,7 @@ function bindEvents() {
     activeUpload = null;
     render();
   });
+  bindUploadPreviewControls();
   document.querySelectorAll("[data-print-form]").forEach((el) => {
     el.addEventListener("click", () => {
       state.printForm = el.dataset.printForm;
@@ -3867,6 +3962,7 @@ function openUpload(uploadId) {
     return;
   }
   activeUpload = upload;
+  uploadPreviewZoom = null;
   render();
 }
 

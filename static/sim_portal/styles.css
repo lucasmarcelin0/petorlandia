@@ -707,7 +707,57 @@ table select:disabled {
 }
 
 .modal-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
   margin: 14px 0;
+}
+
+.modal-file-actions,
+.preview-zoom-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.preview-zoom-controls {
+  background: #f3f7f5;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.preview-zoom-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 5px;
+  text-transform: uppercase;
+}
+
+.preview-zoom-controls .btn {
+  min-height: 34px;
+}
+
+.preview-zoom-button {
+  font-size: 20px;
+  min-width: 36px;
+  padding: 3px 10px;
+}
+
+.preview-zoom-text {
+  padding: 7px 10px;
+}
+
+.preview-zoom-value {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 84px;
+  text-align: center;
 }
 
 .upload-preview {
@@ -716,6 +766,43 @@ table select:disabled {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f4f7f5;
+}
+
+.upload-preview-viewport {
+  cursor: grab;
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: relative;
+  touch-action: none;
+}
+
+.upload-preview-viewport:focus-visible {
+  outline: 3px solid rgba(27, 105, 88, .22);
+  outline-offset: 2px;
+}
+
+.upload-preview-viewport.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.upload-preview-canvas {
+  align-items: flex-start;
+  display: flex;
+  justify-content: center;
+  min-height: 100%;
+  min-width: 100%;
+  padding: 12px;
+  width: max-content;
+}
+
+.upload-preview-image {
+  background: white;
+  box-shadow: 0 4px 18px rgba(18, 38, 33, .18);
+  display: block;
+  flex: 0 0 auto;
+  height: auto;
+  max-width: none;
 }
 
 .product-list {

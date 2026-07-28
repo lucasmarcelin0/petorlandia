@@ -90,6 +90,24 @@ def test_other_pages_remain_blocked_from_iframes(app):
     assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
 
 
+def test_image_preview_restores_zoom_and_pan_controls():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function isImageUpload(upload)" in script
+    assert 'data-preview-zoom="out"' in script
+    assert 'data-preview-zoom="in"' in script
+    assert 'data-preview-zoom="actual"' in script
+    assert 'data-preview-zoom="fit"' in script
+    assert "function bindUploadPreviewControls()" in script
+    assert "viewport.scrollLeft" in script
+    assert "viewport.scrollTop" in script
+    assert ".upload-preview-viewport" in styles
+    assert ".preview-zoom-controls" in styles
+    assert "cursor: grabbing;" in styles
+
+
 def test_product_docx_contains_official_anexo_iv_sections():
     state = deepcopy(SEED_STATE)
     product = state["products"][0]
