@@ -58,11 +58,10 @@
 
 /* Painel lateral de novo agendamento: largura confortável no desktop,
    tela cheia no celular. */
-/* Especificidade dobrada para vencer o padrão `.offcanvas` do Bootstrap
-   (400px), que tem a mesma especificidade e pode carregar depois. */
-.offcanvas.agenda-new-panel {
-  --bs-offcanvas-width: 38rem;
-  max-width: 100%;
+/* Painel de novo agendamento: abre no lugar, empurrando o conteúdo para
+   baixo. Uma borda de destaque deixa claro que é um bloco temporário. */
+.agenda-new-panel > .card {
+  border-left: 4px solid var(--agenda-tone-success, #15803d);
 }
 
 /* Ícone da aba Exames — antes era um roxo hard-coded inline no template. */

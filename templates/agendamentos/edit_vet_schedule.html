@@ -54,8 +54,9 @@
       {% if appointment_form %}
       <div class="mt-3">
         <button class="btn btn-success rounded-pill" type="button"
-                data-bs-toggle="offcanvas" data-bs-target="#newAppointmentPanel"
-                aria-controls="newAppointmentPanel">
+                data-bs-toggle="collapse" data-bs-target="#newAppointmentPanel"
+                aria-controls="newAppointmentPanel" aria-expanded="false"
+                data-agenda-new-toggle>
           <i class="fa-solid fa-plus me-2" aria-hidden="true"></i>Novo agendamento
         </button>
       </div>
@@ -102,9 +103,15 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="section-pacientes-tab" data-bs-toggle="tab" data-bs-target="#section-pacientes" type="button" role="tab" aria-controls="section-pacientes" aria-selected="false">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-animais-tab" data-bs-toggle="tab" data-bs-target="#section-animais" type="button" role="tab" aria-controls="section-animais" aria-selected="false">
         <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-paw"></i></span>
-        <span class="fw-semibold">Pacientes</span>
+        <span class="fw-semibold">Animais</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="section-tutores-tab" data-bs-toggle="tab" data-bs-target="#section-tutores" type="button" role="tab" aria-controls="section-tutores" aria-selected="false">
+        <span class="icon-circle bg-secondary text-white"><i class="fa-solid fa-users"></i></span>
+        <span class="fw-semibold">Tutores</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -115,32 +122,25 @@
     </li>
   </ul>
 
-  <div class="tab-content" id="vetScheduleSectionContent">
-
-  <!-- ===== Tab: Visão Geral ===== -->
-  <div class="tab-pane fade show active" id="section-overview" role="tabpanel" aria-labelledby="section-overview-tab" tabindex="0">
-    <div class="collapse show" id="{{ vet_calendar_collapse_id }}" data-calendar-collapse>
-      {% include 'partials/calendar_layout.html' %}
-    </div>
-  </div><!-- /tab-pane section-overview -->
-
   {% if appointment_form %}
   {#
-    Agendar deixou de ser uma aba: virou um painel lateral, para o profissional
-    marcar um encaixe sem perder a agenda de vista.
+    Agendar continua fora das abas, mas o painel abre NO LUGAR (empurrando o
+    conteúdo para baixo) em vez de sobrepor a agenda.
   #}
-  <div class="offcanvas offcanvas-end agenda-new-panel" tabindex="-1" id="newAppointmentPanel"
-       aria-labelledby="newAppointmentPanelLabel">
-    <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title" id="newAppointmentPanelLabel">
-        <i class="fa-solid fa-calendar-plus me-2" aria-hidden="true"></i>Agendar novo atendimento
-      </h5>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
-    </div>
-    <div class="offcanvas-body">
-      <div class="card border-0">
-        <div class="card-body p-0">
-          <p class="text-muted small mb-4">Selecione tutor, animal, profissional e o melhor horário disponível.</p>
+  <div class="collapse agenda-new-panel mb-4" id="newAppointmentPanel">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+          <div class="consultation-section-heading consultation-section-heading--consulta mb-0">
+            <span class="consultation-section-heading__icon"><i class="fa-solid fa-calendar-plus"></i></span>
+            <div>
+              <h5 class="mb-0">Agendar novo atendimento</h5>
+              <p class="mb-0 text-muted">Selecione tutor, animal, profissional e o melhor horário disponível.</p>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-toggle="collapse"
+                  data-bs-target="#newAppointmentPanel" aria-label="Fechar painel de agendamento"></button>
+        </div>
 
         <div class="collapse show" id="newAppointmentForm">
           <div class="appointments-form-wrapper">
@@ -241,12 +241,12 @@
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#scheduleOverviewCollapse"
-                    aria-expanded="true"
+                    aria-expanded="false"
                     aria-controls="scheduleOverviewCollapse"
                     data-show-label="Mostrar agenda"
                     data-hide-label="Ocultar agenda"
                   >
-                    Ocultar agenda
+                    Mostrar agenda
                   </button>
                 </div>
               </div>
@@ -286,17 +286,28 @@
                   </div>
                 </div>
               </div>
-              <div class="collapse show" id="scheduleOverviewCollapse">
+              {# Grade de disponibilidade começa recolhida: aberta, ela sozinha
+                 empurrava a página em ~2.600px agora que o painel é inline. #}
+              <div class="collapse" id="scheduleOverviewCollapse">
                 <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
               </div>
             </div>
           </div><!-- /appointments-form-wrapper -->
         </div><!-- /#newAppointmentForm -->
-        </div><!-- /card-body -->
-      </div><!-- /card -->
-    </div><!-- /offcanvas-body -->
+      </div><!-- /card-body -->
+    </div><!-- /card -->
   </div><!-- /#newAppointmentPanel -->
   {% endif %}
+
+  <div class="tab-content" id="vetScheduleSectionContent">
+
+  <!-- ===== Tab: Visão Geral ===== -->
+  <div class="tab-pane fade show active" id="section-overview" role="tabpanel" aria-labelledby="section-overview-tab" tabindex="0">
+    <div class="collapse show" id="{{ vet_calendar_collapse_id }}" data-calendar-collapse>
+      {% include 'partials/calendar_layout.html' %}
+    </div>
+  </div><!-- /tab-pane section-overview -->
+
 
   <!-- ===== Tab: Consultas ===== -->
   <div class="tab-pane fade" id="section-list" role="tabpanel" aria-labelledby="section-list-tab" tabindex="0">
@@ -1077,77 +1088,55 @@
 
   </div><!-- /tab-pane section-horarios -->
 
-  {#
-    Tutores e Animais eram duas abas de topo para o mesmo assunto. Viraram uma
-    aba "Pacientes" com um alternador interno: menos troca de contexto.
-  #}
-  <!-- ===== Tab: Pacientes ===== -->
-  <div class="tab-pane fade" id="section-pacientes" role="tabpanel" aria-labelledby="section-pacientes-tab" tabindex="0">
-    <ul class="nav nav-pills gap-2 mb-3" id="pacientesSubTabs" role="tablist" aria-label="Alternar entre animais e tutores">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="section-animais-tab" data-bs-toggle="tab" data-bs-target="#section-animais"
-                type="button" role="tab" aria-controls="section-animais" aria-selected="true">
-          <i class="fa-solid fa-paw me-1" aria-hidden="true"></i>Animais
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="section-tutores-tab" data-bs-toggle="tab" data-bs-target="#section-tutores"
-                type="button" role="tab" aria-controls="section-tutores" aria-selected="false">
-          <i class="fa-solid fa-users me-1" aria-hidden="true"></i>Tutores
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content" id="pacientesSubContent">
-      <div class="tab-pane fade show active" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
-        <div class="card shadow-sm border-0 rounded-4 mb-4">
-          <div class="card-body p-4">
-            {% include 'partials/animal_register_form.html' %}
-          </div>
-        </div>
-        <div id="animais-adicionados">
-          {% with
-            compact=True,
-            animais_adicionados=vet_animais_adicionados,
-            pagination=vet_animais_pagination,
-            scope=vet_animais_scope,
-            animal_search=vet_animal_search,
-            animal_sort=vet_animal_sort,
-            fetch_url=url_for('novo_animal'),
-            can_create_animals=True,
-            new_animal_url=url_for('novo_animal')
-          %}
-            {% include 'partials/animais_adicionados.html' %}
-          {% endwith %}
-        </div>
-      </div>
-
-      <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
-        <div class="card shadow-sm border-0 rounded-4 mb-4">
-          <div class="card-body p-4">
-            {% include 'partials/tutor_management_panel.html' %}
-          </div>
-        </div>
-        <div id="tutores-adicionados">
-          {% with
-            compact=True,
-            tutores_adicionados=vet_tutores_adicionados,
-            pagination=vet_tutores_pagination,
-            scope=vet_tutores_scope,
-            scope_param='tutor_scope',
-            search_param='tutor_search',
-            sort_param='tutor_sort',
-            page_param='tutor_page',
-            tutor_search=vet_tutor_search,
-            tutor_sort=vet_tutor_sort,
-            fetch_url=url_for('tutores')
-          %}
-            {% include 'partials/tutores_adicionados.html' %}
-          {% endwith %}
-        </div>
+  <!-- ===== Tab: Animais ===== -->
+  <div class="tab-pane fade" id="section-animais" role="tabpanel" aria-labelledby="section-animais-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        {% include 'partials/animal_register_form.html' %}
       </div>
     </div>
-  </div><!-- /tab-pane section-pacientes -->
+    <div id="animais-adicionados">
+      {% with
+        compact=True,
+        animais_adicionados=vet_animais_adicionados,
+        pagination=vet_animais_pagination,
+        scope=vet_animais_scope,
+        animal_search=vet_animal_search,
+        animal_sort=vet_animal_sort,
+        fetch_url=url_for('novo_animal'),
+        can_create_animals=True,
+        new_animal_url=url_for('novo_animal')
+      %}
+        {% include 'partials/animais_adicionados.html' %}
+      {% endwith %}
+    </div>
+  </div><!-- /tab-pane section-animais -->
+
+  <!-- ===== Tab: Tutores ===== -->
+  <div class="tab-pane fade" id="section-tutores" role="tabpanel" aria-labelledby="section-tutores-tab" tabindex="0">
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        {% include 'partials/tutor_management_panel.html' %}
+      </div>
+    </div>
+    <div id="tutores-adicionados">
+      {% with
+        compact=True,
+        tutores_adicionados=vet_tutores_adicionados,
+        pagination=vet_tutores_pagination,
+        scope=vet_tutores_scope,
+        scope_param='tutor_scope',
+        search_param='tutor_search',
+        sort_param='tutor_sort',
+        page_param='tutor_page',
+        tutor_search=vet_tutor_search,
+        tutor_sort=vet_tutor_sort,
+        fetch_url=url_for('tutores')
+      %}
+        {% include 'partials/tutores_adicionados.html' %}
+      {% endwith %}
+    </div>
+  </div><!-- /tab-pane section-tutores -->
 
   </div><!-- /tab-content -->
 
@@ -1403,13 +1392,17 @@
   <script type="module" src="{{ url_for('static', filename='js/animal_picker.js') }}"></script>
 
   <script>
-    // Escolher um horário no calendário abre o painel de novo agendamento
-    // (antes era uma aba; virou offcanvas para não perder a agenda de vista).
+    // Escolher um horário no calendário abre o painel de novo agendamento.
+    // O painel abre no lugar (logo abaixo das abas) e rola até ele, em vez de
+    // sobrepor a agenda.
     document.addEventListener('calendarSlotChosen', function () {
       var panel = document.getElementById('newAppointmentPanel');
-      if (panel && window.bootstrap && bootstrap.Offcanvas) {
-        bootstrap.Offcanvas.getOrCreateInstance(panel).show();
-      }
+      if (!panel || !window.bootstrap || !bootstrap.Collapse) return;
+      bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false }).show();
+      panel.addEventListener('shown.bs.collapse', function onShown() {
+        panel.removeEventListener('shown.bs.collapse', onShown);
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }, true);
 
     // Ao voltar para a Visão Geral, garante o calendário visível
