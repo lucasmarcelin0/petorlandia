@@ -153,3 +153,29 @@ def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     assert "lucasferreira@orlandia.sp.gov.br" in script
     assert "(31) 99950-5748" in script
     assert "let persistQueue = Promise.resolve();" in script
+
+
+def test_annexes_ii_to_vii_use_editable_official_a4_pages():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    expected_pages = {
+        "II": 5,
+        "III": 2,
+        "IV": 3,
+        "V": 2,
+        "VI": 2,
+        "VII": 2,
+    }
+    for annex, pages in expected_pages.items():
+        assert script.count(f'officialDocumentPage("{annex}"') == pages
+
+    assert "function officialTextarea(" in script
+    assert 'data-official-array-path="' in script
+    assert 'data-path="${path}"' in script
+    assert "PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA" in script
+    assert "lucasferreira@orlandia.sp.gov.br" in script
+    assert "@page official-document" in styles
+    assert ".official-document-page + .official-document-page" in styles
+    assert ".official-other-option > span" in styles

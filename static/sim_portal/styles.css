@@ -1370,6 +1370,403 @@ table select:disabled {
   border-bottom: 1px solid #111;
 }
 
+.official-other-option > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 1mm;
+  white-space: nowrap;
+}
+
+.official-other-option .official-fill-inline {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+
+.official-document-page {
+  page: official-document;
+  position: relative;
+  display: block;
+  font-size: 7.2pt;
+  line-height: 1.15;
+}
+
+.official-document-page .official-form-header {
+  margin-bottom: 2mm;
+}
+
+.official-document-page .official-service-masthead {
+  grid-template-columns: 17mm minmax(0, 1fr) 52mm;
+  gap: 2.5mm;
+  padding: 1.7mm 2mm;
+}
+
+.official-document-page .official-service-masthead img {
+  width: 16mm;
+  height: 16mm;
+}
+
+.official-document-page .official-government-lines strong {
+  font-size: 10.5pt;
+}
+
+.official-document-page .official-government-lines span {
+  font-size: 6.8pt;
+}
+
+.official-document-page .official-government-lines b,
+.official-document-page .official-service-contact {
+  font-size: 6.2pt;
+}
+
+.official-document-page .official-form-name {
+  gap: 3mm;
+  padding-top: 1.5mm;
+}
+
+.official-document-page .official-form-name strong {
+  font-size: 9.5pt;
+}
+
+.official-document-page .official-form-name span {
+  font-size: 8.3pt;
+}
+
+.official-page-body {
+  min-height: 0;
+  padding-bottom: 6mm;
+}
+
+.official-page-index {
+  position: absolute;
+  right: 12mm;
+  bottom: 5mm;
+  left: 12mm;
+  padding-top: 1mm;
+  border-top: 1px solid #777;
+  text-align: right;
+  font-size: 5.8pt;
+  color: #444;
+}
+
+.official-document-page .official-section-title {
+  margin: 2.2mm 0 .8mm;
+  font-size: 8.1pt;
+}
+
+.official-document-page .official-subsection-title {
+  margin: 1.8mm 0 .6mm;
+  font-size: 7.5pt;
+}
+
+.official-document-page .official-field {
+  min-height: 8.5mm;
+  padding: .8mm 1mm;
+}
+
+.official-document-page .official-field span {
+  font-size: 6.5pt;
+}
+
+.official-document-page .official-fill-input {
+  min-height: 4.2mm;
+  margin-top: .4mm;
+  padding: .35mm .7mm;
+  font-size: 7.1pt;
+}
+
+.official-fill-textarea {
+  height: var(--official-textarea-height);
+  min-height: var(--official-textarea-height);
+  resize: none;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.official-document-page .official-option {
+  min-height: 4mm;
+  line-height: 3.7mm;
+}
+
+.official-document-page .official-checkbox {
+  flex-basis: 3.5mm;
+  width: 3.5mm;
+  height: 3.5mm;
+}
+
+.official-inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2mm 5mm;
+  padding: .8mm 1mm;
+}
+
+.official-box {
+  border: 1.2px solid #111;
+}
+
+.official-option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5mm 4mm;
+  padding: 1.2mm 2mm;
+}
+
+.official-two-column-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.official-two-column-options > .official-box {
+  min-height: 36mm;
+  padding: 1.5mm 2mm;
+}
+
+.official-two-column-options > .official-box + .official-box {
+  border-left: 0;
+}
+
+.official-inline-entry {
+  display: flex;
+  align-items: center;
+  gap: 1mm;
+  margin-top: 1mm;
+  white-space: nowrap;
+}
+
+.official-inline-entry .official-fill-inline {
+  flex: 1;
+  width: auto;
+}
+
+.official-instruction {
+  margin: .6mm 0;
+  font-size: 6.6pt;
+  line-height: 1.25;
+  text-align: justify;
+}
+
+.official-petition {
+  padding: 2mm;
+  border: 1.2px solid #111;
+  font-size: 7.2pt;
+  line-height: 1.35;
+  text-align: justify;
+}
+
+.official-petition p {
+  margin: 1.2mm 0 0;
+}
+
+.official-table-label {
+  margin: 1.2mm 0 .6mm;
+  font-size: 6.8pt;
+  font-weight: 700;
+}
+
+.official-top-gap {
+  margin-top: 1.5mm;
+}
+
+.official-continuation-grid {
+  margin-top: 1mm;
+}
+
+.official-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 6.5pt;
+}
+
+.official-data-table th,
+.official-data-table td {
+  height: 6.5mm;
+  padding: .55mm .8mm;
+  border: 1.1px solid #111;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.official-data-table th {
+  background: #f1f2f1;
+  text-align: center;
+  font-size: 6.2pt;
+}
+
+.official-data-table .official-fill-input {
+  min-height: 4mm;
+  height: 4mm;
+  margin: 0;
+  padding: .2mm .5mm;
+  font-size: 6.7pt;
+}
+
+.official-compact-table th,
+.official-compact-table td {
+  height: 5.5mm;
+}
+
+.official-col-number {
+  width: 15%;
+}
+
+.official-fixed-cell {
+  background: #fafafa;
+  font-size: 6pt;
+  font-weight: 700;
+}
+
+.official-composition-table th:first-child,
+.official-composition-table td:first-child {
+  width: 22%;
+}
+
+.official-composition-table th:nth-child(3),
+.official-composition-table td:nth-child(3),
+.official-composition-table th:nth-child(4),
+.official-composition-table td:nth-child(4) {
+  width: 13%;
+}
+
+.official-nutrition-table th:nth-child(2),
+.official-nutrition-table td:nth-child(2),
+.official-nutrition-table th:nth-child(3),
+.official-nutrition-table td:nth-child(3) {
+  width: 18%;
+}
+
+.official-nutrition-table th,
+.official-nutrition-table td {
+  height: 5.2mm;
+}
+
+.official-plant-list {
+  display: grid;
+  gap: .7mm;
+  margin: 1.5mm 0 2mm;
+  padding: 1.2mm 2mm;
+  border: 1.2px solid #111;
+  font-size: 6.6pt;
+}
+
+.official-document-signatures {
+  display: grid;
+  grid-template-columns: .8fr 1.1fr 1.1fr;
+  min-height: 38mm;
+  margin-top: 2mm;
+  border: 1.2px solid #111;
+}
+
+.official-product-page .official-document-signatures {
+  min-height: 31mm;
+}
+
+.official-document-signatures > div {
+  display: flex;
+  min-width: 0;
+  padding: 1.5mm 2mm;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-left: 1px solid #111;
+  text-align: center;
+  font-size: 6.2pt;
+}
+
+.official-document-signatures > div:first-child {
+  border-left: 0;
+  justify-content: flex-start;
+}
+
+.official-document-signatures > div > span {
+  flex: 1;
+  min-height: 16mm;
+  margin-bottom: 1.2mm;
+  border-bottom: 1px solid #111;
+}
+
+.official-signature-location .official-fill-input {
+  flex: 1;
+  border-width: 0 0 1px;
+  border-color: #111;
+  border-radius: 0;
+  background: transparent;
+}
+
+.official-fixed-copy {
+  padding: 2.5mm;
+  border: 1.2px solid #111;
+  font-size: 7.4pt;
+  line-height: 1.45;
+  text-align: justify;
+}
+
+.official-fixed-copy .official-fill-inline {
+  width: 22mm;
+}
+
+.official-fiscal-signatures,
+.official-witness-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1.2px solid #111;
+}
+
+.official-fiscal-signatures > div,
+.official-witness-grid > div {
+  display: grid;
+  gap: .7mm;
+  min-height: 47mm;
+  padding: 1.5mm 2mm;
+}
+
+.official-fiscal-signatures > div + div,
+.official-witness-grid > div + div {
+  border-left: 1px solid #111;
+}
+
+.official-fiscal-signatures strong {
+  text-align: center;
+  font-size: 6.5pt;
+}
+
+.official-fiscal-signatures label,
+.official-witness-grid label {
+  display: flex;
+  align-items: center;
+  gap: 1mm;
+  font-size: 6.2pt;
+}
+
+.official-fiscal-signatures .official-fill-inline,
+.official-witness-grid .official-fill-inline {
+  flex: 1;
+  width: auto;
+}
+
+.official-fiscal-science-line {
+  min-height: 19mm;
+}
+
+.official-witness-grid > div {
+  min-height: 30mm;
+}
+
+.official-copies-note {
+  margin: 2mm 0 0;
+  padding: 1.5mm;
+  border: 1px solid #111;
+  font-size: 6.1pt;
+  line-height: 1.25;
+}
+
+.official-signature-page .official-document-signatures {
+  min-height: 85mm;
+}
+
 .toast {
   position: fixed;
   right: 22px;
@@ -1540,10 +1937,41 @@ table select:disabled {
   .official-fill-input {
     font-size: 7pt;
   }
+
+  .official-document-page .official-service-masthead {
+    grid-template-columns: 15mm minmax(0, 1fr);
+    gap: 2mm;
+  }
+
+  .official-document-page .official-service-masthead img {
+    width: 14mm;
+    height: 14mm;
+  }
+
+  .official-document-page .official-government-lines strong {
+    font-size: 8.2pt;
+  }
+
+  .official-document-page .official-government-lines span,
+  .official-document-page .official-government-lines b {
+    font-size: 5.8pt;
+  }
+
+  .official-document-page .official-service-contact {
+    grid-column: 1 / -1;
+    padding: 1.2mm 0 0;
+    border-top: 1px solid #111;
+    border-left: 0;
+  }
 }
 
 @media print {
   @page anexo-i {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  @page official-document {
     size: A4 portrait;
     margin: 8mm;
   }
@@ -1600,6 +2028,26 @@ table select:disabled {
     page-break-after: auto;
   }
 
+  .official-document-page {
+    height: 281mm;
+  }
+
+  .official-document-page + .official-document-page {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .official-document-page .official-form-header {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .official-document-page .official-page-index {
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+
   .official-fill-input,
   .official-fill-input:hover,
   .official-fill-input:focus,
@@ -1615,6 +2063,16 @@ table select:disabled {
     border-bottom: 1px solid #111;
   }
 
+  .official-fill-textarea {
+    overflow: hidden;
+    white-space: pre-wrap;
+  }
+
+  .official-page-body > .official-fill-textarea {
+    padding: .8mm;
+    border: 1.1px solid #111;
+  }
+
   .official-service-masthead img {
     filter: grayscale(1);
   }
@@ -1624,7 +2082,11 @@ table select:disabled {
   .official-classification,
   .official-request-box,
   .official-commitment,
-  .official-signatures {
+  .official-signatures,
+  .official-data-table,
+  .official-document-signatures,
+  .official-fiscal-signatures,
+  .official-witness-grid {
     break-inside: avoid;
     page-break-inside: avoid;
   }
