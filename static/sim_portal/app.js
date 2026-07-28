@@ -147,6 +147,9 @@ const initialState = {
     actType: "Registro de estabelecimento",
     otherAct: "",
     cadastralChangeType: "",
+    signaturePlaceDate: "",
+    inspectorName: "",
+    inspectorRegistration: "",
     commitment: "Declaro que as informacoes prestadas sao verdadeiras e que o estabelecimento se compromete a cumprir a legislacao sanitaria aplicavel aos produtos de origem animal.",
   },
   establishment: {
@@ -316,6 +319,7 @@ let registry = { establishments: [], fiscalActs: [], inspections: [], samples: [
 let registryEditing = { establishment: null, inspection: null, sample: null };
 let fiscalActContext = { establishmentId: "", status: "Lavrado", scienceDate: "", loadedNumber: "" };
 let state = loadState();
+let persistQueue = Promise.resolve();
 
 const SITUATIONS = ["Em registro", "Ativo", "Suspenso", "Interditado parcialmente", "Interditado totalmente", "Paralisado", "Cancelado"];
 const RISK_LEVELS = ["Baixo", "Medio", "Alto"];
@@ -454,13 +458,12 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function persistState() {
+function persistState() {
   if (!backendAvailable || !session) return;
-  try {
-    await api("/state", { method: "POST", body: { state } });
-  } catch (error) {
-    console.warn(error);
-  }
+  const snapshot = structuredClone(state);
+  persistQueue = persistQueue
+    .then(() => api("/state", { method: "POST", body: { state: snapshot } }))
+    .catch((error) => console.warn(error));
 }
 
 async function bootstrap() {
@@ -2036,9 +2039,27 @@ function masterRows() {
   `;
 }
 
-function officialValue(value) {
-  const text = String(value || "").trim();
-  return text ? escapeHtml(text) : "&nbsp;";
+function officialPathValue(path) {
+  return path.split(".").reduce((value, key) => value?.[key], state) ?? "";
+}
+
+function officialInput(path, options = {}) {
+  const value = options.value ?? officialPathValue(path);
+  const owner = options.owner || "establishment";
+  const readonly =
+    (owner === "establishment" && state.role !== "establishment") ||
+    (owner === "sim" && state.role !== "sim");
+  const binding = options.cnaePart
+    ? `data-official-cnae="${options.cnaePart}"`
+    : `data-path="${path}"`;
+  return `<input
+    class="official-fill-input ${options.inline ? "official-fill-inline" : ""}"
+    type="${options.type || "text"}"
+    ${binding}
+    value="${escapeHtml(value)}"
+    ${readonly ? "readonly" : ""}
+    aria-label="${escapeHtml(options.label || path)}"
+  >`;
 }
 
 function comparableOfficialValue(value) {
@@ -2050,17 +2071,29 @@ function comparableOfficialValue(value) {
     .trim();
 }
 
-function officialOption(label, selectedValue, aliases = []) {
+function officialOption(label, selectedValue, aliases = [], options = {}) {
   const selected = comparableOfficialValue(selectedValue);
-  const candidates = [label, ...aliases].map(comparableOfficialValue);
-  const checked = Boolean(selected) && candidates.some((candidate) => (
-    selected === candidate || selected.includes(candidate) || candidate.includes(selected)
-  ));
+  const optionValue = options.value || label;
+  const candidates = [optionValue, label, ...aliases].map(comparableOfficialValue);
+  const checked = Boolean(selected) && candidates.some((candidate) => selected === candidate);
+  const readonly = state.role !== "establishment";
+  const parentBinding = options.parentPath
+    ? `data-official-parent-path="${options.parentPath}" data-official-parent-value="${escapeHtml(options.parentValue || "")}"`
+    : "";
   return `
-    <div class="official-option">
-      <span class="official-checkbox" aria-hidden="true">${checked ? "X" : ""}</span>
+    <label class="official-option">
+      <input
+        class="official-checkbox"
+        type="radio"
+        name="official-${escapeHtml(options.path || "choice")}"
+        data-official-choice-path="${escapeHtml(options.path || "")}"
+        value="${escapeHtml(optionValue)}"
+        ${parentBinding}
+        ${checked ? "checked" : ""}
+        ${readonly ? "disabled" : ""}
+      >
       <span>${label}</span>
-    </div>
+    </label>
   `;
 }
 
@@ -2068,7 +2101,12 @@ function officialClassificationGroup(title, options) {
   return `
     <div class="official-classification-group">
       <div>${title}</div>
-      ${options.map((option) => officialOption(option, state.establishment.classification)).join("")}
+      ${options.map((option) => officialOption(
+        option,
+        state.establishment.classification,
+        [],
+        { path: "establishment.classification", value: option }
+      )).join("")}
     </div>
   `;
 }
@@ -2088,46 +2126,54 @@ function printAnexoI() {
       ? state.application.otherAct
       : ""
   );
-  const otherAct = comparableOfficialValue(actType).includes("outro")
-    ? state.application.otherAct
-    : "";
   return `
     <div class="official-form official-anexo-i">
       <section class="official-page official-anexo-i-page official-anexo-i-page-one">
         <header class="official-form-header">
-          <div class="official-annex-label">ANEXO I</div>
-          <img src="./assets/brasao-orlandia.png" alt="Brasao de Orlandia">
-          <div class="official-government-lines">
-            <strong>PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA-SP</strong>
-            <strong>SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECON&Ocirc;MICO E TURISMO</strong>
-            <strong>SERVI&Ccedil;O DE INSPE&Ccedil;&Atilde;O MUNICIPAL</strong>
+          <div class="official-service-masthead">
+            <img src="./assets/brasao-orlandia.png" alt="Brasao de Orlandia">
+            <div class="official-government-lines">
+              <strong>PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA</strong>
+              <span>Estado de S&atilde;o Paulo</span>
+              <b>SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECON&Ocirc;MICO E TURISMO</b>
+              <b>SERVI&Ccedil;O DE INSPE&Ccedil;&Atilde;O MUNICIPAL - SIM</b>
+            </div>
+            <div class="official-service-contact">
+              <strong>ATENDIMENTO DO SIM</strong>
+              <span>Lucas Marcelino Campos Ferreira</span>
+              <span>lucasferreira@orlandia.sp.gov.br</span>
+              <span>(31) 99950-5748</span>
+            </div>
           </div>
-          <div class="official-form-name">SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.</div>
+          <div class="official-form-name">
+            <strong>ANEXO I</strong>
+            <span>SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.</span>
+          </div>
         </header>
 
         <h3 class="official-section-title">1. INFORMA&Ccedil;&Otilde;ES DO ESTABELECIMENTO</h3>
         <div class="official-grid official-establishment-grid">
-          <div class="official-field official-span-12 official-field-tall"><span>NOME (Raz&atilde;o Social/Pessoa F&iacute;sica):</span><b>${officialValue(state.establishment.legalName)}</b></div>
-          <div class="official-field official-span-6"><span>CNPJ/CPF:</span><b>${officialValue(state.establishment.cnpj)}</b></div>
-          <div class="official-field official-span-6"><span>MATRIZ/EIRELI/ME/EPP:</span><b>${officialValue(state.establishment.legalNature)}</b></div>
-          <div class="official-field official-span-6"><span>IDENTIFICA&Ccedil;&Atilde;O DA ATIVIDADE ECON&Ocirc;MICA:</span><b>${officialValue(cnae.activity)}</b></div>
-          <div class="official-field official-span-6"><span>C&Oacute;DIGO DA ATIVIDADE CNAE:</span><b>${officialValue(cnae.code)}</b></div>
-          <div class="official-field official-span-12 official-field-address"><span>ENDERE&Ccedil;O:</span><b>${officialValue(state.establishment.address)}</b></div>
-          <div class="official-field official-span-4"><span>BAIRRO:</span><b>${officialValue(state.establishment.district)}</b></div>
-          <div class="official-field official-span-3"><span>MUNIC&Iacute;PIO:</span><b>${officialValue(state.establishment.city || "Orlandia")}</b></div>
-          <div class="official-field official-span-1"><span>UF:</span><b>${officialValue(state.establishment.state || "SP")}</b></div>
-          <div class="official-field official-span-4"><span>CEP:</span><b>${officialValue(state.establishment.zip || "14.620-000")}</b></div>
-          <div class="official-field official-span-8"><span>E-MAIL:</span><b>${officialValue(state.establishment.email)}</b></div>
-          <div class="official-field official-span-4"><span>TELEFONE:</span><b>${officialValue(state.establishment.phone)}</b></div>
+          <div class="official-field official-span-12 official-field-tall"><span>NOME (Raz&atilde;o Social/Pessoa F&iacute;sica):</span>${officialInput("establishment.legalName", { label: "Razao social ou nome" })}</div>
+          <div class="official-field official-span-6"><span>CNPJ/CPF:</span>${officialInput("establishment.cnpj", { label: "CNPJ ou CPF" })}</div>
+          <div class="official-field official-span-6"><span>MATRIZ/EIRELI/ME/EPP:</span>${officialInput("establishment.legalNature", { label: "Natureza juridica ou porte" })}</div>
+          <div class="official-field official-span-6"><span>IDENTIFICA&Ccedil;&Atilde;O DA ATIVIDADE ECON&Ocirc;MICA:</span>${officialInput("establishment.cnae", { value: cnae.activity, cnaePart: "activity", label: "Atividade economica" })}</div>
+          <div class="official-field official-span-6"><span>C&Oacute;DIGO DA ATIVIDADE CNAE:</span>${officialInput("establishment.cnae", { value: cnae.code, cnaePart: "code", label: "Codigo CNAE" })}</div>
+          <div class="official-field official-span-12 official-field-address"><span>ENDERE&Ccedil;O:</span>${officialInput("establishment.address", { label: "Endereco" })}</div>
+          <div class="official-field official-span-4"><span>BAIRRO:</span>${officialInput("establishment.district", { label: "Bairro" })}</div>
+          <div class="official-field official-span-3"><span>MUNIC&Iacute;PIO:</span>${officialInput("establishment.city", { label: "Municipio" })}</div>
+          <div class="official-field official-span-1"><span>UF:</span>${officialInput("establishment.state", { label: "UF" })}</div>
+          <div class="official-field official-span-4"><span>CEP:</span>${officialInput("establishment.zip", { label: "CEP" })}</div>
+          <div class="official-field official-span-8"><span>E-MAIL:</span>${officialInput("establishment.email", { type: "email", label: "E-mail" })}</div>
+          <div class="official-field official-span-4"><span>TELEFONE:</span>${officialInput("establishment.phone", { label: "Telefone" })}</div>
         </div>
 
         <h3 class="official-section-title">2. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL</h3>
         <div class="official-grid">
-          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL LEGAL:</span><b>${officialValue(state.legalResponsible.name)}</b></div>
-          <div class="official-field official-span-5"><span>CPF:</span><b>${officialValue(state.legalResponsible.cpf)}</b></div>
-          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL T&Eacute;CNICO - RT:</span><b>${officialValue(state.technicalResponsible.name)}</b></div>
-          <div class="official-field official-span-5"><span>CPF:</span><b>${officialValue(state.technicalResponsible.cpf)}</b></div>
-          <div class="official-field official-span-12 official-field-tall"><span>N&ordm; DE INSCRI&Ccedil;&Atilde;O DO RT NO CONSELHO DE CLASSE PROFISSIONAL/UF:</span><b>${officialValue(state.technicalResponsible.council)}</b></div>
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL LEGAL:</span>${officialInput("legalResponsible.name", { label: "Responsavel legal" })}</div>
+          <div class="official-field official-span-5"><span>CPF:</span>${officialInput("legalResponsible.cpf", { label: "CPF do responsavel legal" })}</div>
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL T&Eacute;CNICO - RT:</span>${officialInput("technicalResponsible.name", { label: "Responsavel tecnico" })}</div>
+          <div class="official-field official-span-5"><span>CPF:</span>${officialInput("technicalResponsible.cpf", { label: "CPF do responsavel tecnico" })}</div>
+          <div class="official-field official-span-12 official-field-tall"><span>N&ordm; DE INSCRI&Ccedil;&Atilde;O DO RT NO CONSELHO DE CLASSE PROFISSIONAL/UF:</span>${officialInput("technicalResponsible.council", { label: "Inscricao profissional do responsavel tecnico" })}</div>
         </div>
 
         <h3 class="official-section-title">3. CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
@@ -2160,31 +2206,94 @@ function printAnexoI() {
           <div class="official-small-business">
             <strong>Aten&ccedil;&atilde;o:</strong> O estabelecimento se enquadra nas especifica&ccedil;&otilde;es de
             &ldquo;Estabelecimento Agroindustrial de Pequeno Porte?&rdquo;
-            ${officialOption("Sim", state.establishment.smallBusiness)}
-            ${officialOption("Nao", state.establishment.smallBusiness)}
+            ${officialOption("Sim", state.establishment.smallBusiness, [], {
+              path: "establishment.smallBusiness",
+              value: "Sim",
+            })}
+            ${officialOption("Nao", state.establishment.smallBusiness, [], {
+              path: "establishment.smallBusiness",
+              value: "Nao",
+            })}
           </div>
         </div>
 
         <h3 class="official-section-title">4. TIPO DE SOLICITA&Ccedil;&Atilde;O</h3>
         <div class="official-request-box">
-          ${officialOption("Novo registro de estabelecimento", actType, ["Registro de estabelecimento"])}
-          ${officialOption("Renovacao do titulo de registro", actType)}
-          ${officialOption("Reforma ou ampliacao", actType)}
-          ${officialOption("Transferencia cadastral", actType)}
-          ${officialOption("Solicitacao de vistoria in loco", actType)}
-          ${officialOption("Paralisacao das atividades", actType)}
-          ${officialOption("Reinicio das atividades", actType)}
-          ${officialOption("Cancelamento do registro", actType)}
-          <div class="official-option official-other-option">
-            <span class="official-checkbox" aria-hidden="true">${otherAct ? "X" : ""}</span>
-            <span>Outro (especificar): <b>${officialValue(otherAct)}</b></span>
-          </div>
+          ${officialOption("Novo registro de estabelecimento", actType, ["Registro de estabelecimento"], {
+            path: "application.actType",
+            value: "Registro de estabelecimento",
+          })}
+          ${officialOption("Renovacao do titulo de registro", actType, [], {
+            path: "application.actType",
+            value: "Renovacao do titulo de registro",
+          })}
+          ${officialOption("Reforma ou ampliacao", actType, [], {
+            path: "application.actType",
+            value: "Reforma ou ampliacao",
+          })}
+          ${officialOption("Transferencia cadastral", actType, [], {
+            path: "application.actType",
+            value: "Transferencia cadastral",
+          })}
+          ${officialOption("Solicitacao de vistoria in loco", actType, [], {
+            path: "application.actType",
+            value: "Solicitacao de vistoria in loco",
+          })}
+          ${officialOption("Paralisacao das atividades", actType, [], {
+            path: "application.actType",
+            value: "Paralisacao das atividades",
+          })}
+          ${officialOption("Reinicio das atividades", actType, [], {
+            path: "application.actType",
+            value: "Reinicio das atividades",
+          })}
+          ${officialOption("Cancelamento do registro", actType, [], {
+            path: "application.actType",
+            value: "Cancelamento do registro",
+          })}
+          <label class="official-option official-other-option">
+            <input
+              class="official-checkbox"
+              type="radio"
+              name="official-application.actType"
+              data-official-choice-path="application.actType"
+              value="Outro ato"
+              ${comparableOfficialValue(actType) === "outro ato" ? "checked" : ""}
+              ${state.role !== "establishment" ? "disabled" : ""}
+            >
+            <span>Outro (especificar): ${officialInput("application.otherAct", { inline: true, label: "Outro tipo de solicitacao" })}</span>
+          </label>
           <div class="official-alteration-title">Altera&ccedil;&atilde;o cadastral (assinalar uma das op&ccedil;&otilde;es abaixo):</div>
-          ${officialOption("Alteracao de CNPJ", cadastralChange)}
-          ${officialOption("Alteracao de razao social", cadastralChange)}
-          ${officialOption("Classificacao do estabelecimento", cadastralChange)}
-          ${officialOption("Alteracao do endereco", cadastralChange)}
-          ${officialOption("Alteracao de responsavel tecnico", cadastralChange)}
+          ${officialOption("Alteracao de CNPJ", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de CNPJ",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao de razao social", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de razao social",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Classificacao do estabelecimento", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Classificacao do estabelecimento",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao do endereco", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao do endereco",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao de responsavel tecnico", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de responsavel tecnico",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
         </div>
 
         <h3 class="official-section-title">5. TERMO DE COMPROMISSO</h3>
@@ -2198,9 +2307,9 @@ function printAnexoI() {
         <div class="official-signatures">
           <div class="official-signature-meta">
             <strong>LOCAL E DATA</strong>
-            <div class="official-signature-line"></div>
-            <div>NOME DO AUTUANTE:</div>
-            <div>MATR&Iacute;CULA:</div>
+            ${officialInput("application.signaturePlaceDate", { label: "Local e data" })}
+            <div>NOME DO AUTUANTE: ${officialInput("application.inspectorName", { inline: true, owner: "sim", label: "Nome do autuante" })}</div>
+            <div>MATR&Iacute;CULA: ${officialInput("application.inspectorRegistration", { inline: true, owner: "sim", label: "Matricula do autuante" })}</div>
           </div>
           <div class="official-signature-people">
             <div><span class="official-signature-line"></span>ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL</div>
@@ -2373,7 +2482,42 @@ function bindEvents() {
     el.addEventListener("click", () => setView(el.dataset.view, el.dataset.formFocus || ""));
   });
   document.querySelectorAll("[data-path]").forEach((el) => {
-    el.addEventListener("input", () => update(el.dataset.path, el.value));
+    const eventName = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(eventName, () => update(el.dataset.path, el.value));
+  });
+  document.querySelectorAll("[data-official-choice-path]").forEach((el) => {
+    el.addEventListener("change", () => {
+      update(el.dataset.officialChoicePath, el.value);
+      if (el.dataset.officialParentPath) {
+        update(el.dataset.officialParentPath, el.dataset.officialParentValue || "");
+        document.querySelectorAll(
+          `[data-official-choice-path="${el.dataset.officialParentPath}"]`
+        ).forEach((choice) => {
+          choice.checked = false;
+        });
+      }
+      if (
+        el.dataset.officialChoicePath === "application.actType" &&
+        comparableOfficialValue(el.value) !== "alteracao cadastral"
+      ) {
+        update("application.cadastralChangeType", "");
+        document.querySelectorAll(
+          '[data-official-choice-path="application.cadastralChangeType"]'
+        ).forEach((choice) => {
+          choice.checked = false;
+        });
+      }
+    });
+  });
+  document.querySelectorAll("[data-official-cnae]").forEach((el) => {
+    el.addEventListener("input", () => {
+      const code = document.querySelector('[data-official-cnae="code"]')?.value || "";
+      const activity = document.querySelector('[data-official-cnae="activity"]')?.value || "";
+      update(
+        "establishment.cnae",
+        [code, activity].filter(Boolean).join(" - ")
+      );
+    });
   });
   document.querySelectorAll("[data-doc]").forEach((el) => {
     el.addEventListener("change", () => {

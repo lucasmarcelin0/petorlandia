@@ -148,3 +148,8 @@ def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     assert ".official-span-6 { grid-column: span 6; }" in styles
     assert "@page anexo-i" in styles
     assert "page-break-after: always" in styles
+    assert 'data-official-choice-path="application.actType"' in script
+    assert "official-fill-input" in script
+    assert "lucasferreira@orlandia.sp.gov.br" in script
+    assert "(31) 99950-5748" in script
+    assert "let persistQueue = Promise.resolve();" in script

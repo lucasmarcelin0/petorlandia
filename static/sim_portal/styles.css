@@ -1048,37 +1048,80 @@ table select:disabled {
 }
 
 .official-form-header {
-  text-align: center;
-  margin-bottom: 5mm;
+  margin-bottom: 4mm;
 }
 
-.official-annex-label {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 13pt;
-  font-weight: 700;
-  margin-bottom: 2.5mm;
+.official-service-masthead {
+  display: grid;
+  grid-template-columns: 20mm minmax(0, 1fr) 56mm;
+  align-items: center;
+  gap: 3mm;
+  padding: 2.5mm 3mm;
+  border-top: 1.5px solid #111;
+  border-bottom: 1.5px solid #111;
 }
 
-.official-form-header img {
+.official-service-masthead img {
   display: block;
-  width: 21mm;
-  height: 21mm;
+  width: 19mm;
+  height: 19mm;
   object-fit: contain;
-  margin: 0 auto 1.5mm;
+  filter: grayscale(1);
 }
 
 .official-government-lines {
   display: grid;
-  gap: .8mm;
-  font-size: 9.5pt;
+  gap: .5mm;
+  text-align: left;
+}
+
+.official-government-lines strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 12pt;
+  line-height: 1;
+}
+
+.official-government-lines span {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 7.5pt;
+}
+
+.official-government-lines b {
+  font-size: 7.3pt;
+}
+
+.official-service-contact {
+  display: grid;
+  gap: .6mm;
+  min-width: 0;
+  padding-left: 3mm;
+  border-left: 1px solid #111;
+  font-size: 6.8pt;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.official-service-contact strong {
+  font-size: 7.5pt;
 }
 
 .official-form-name {
-  border-top: 1px solid #111;
-  margin-top: 1.5mm;
-  padding-top: 1.5mm;
-  font-size: 10pt;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4mm;
+  padding: 2mm 2mm 0;
+  text-align: center;
   font-weight: 700;
+}
+
+.official-form-name strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11pt;
+}
+
+.official-form-name span {
+  font-size: 9.5pt;
 }
 
 .official-section-title {
@@ -1136,6 +1179,46 @@ table select:disabled {
   font-weight: 500;
 }
 
+.official-fill-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 5.2mm;
+  margin-top: .7mm;
+  padding: .6mm 1mm;
+  border: 1px solid #c9a74a;
+  border-radius: 2px;
+  outline: none;
+  background: #fffbea;
+  color: #111;
+  font: 500 8.2pt/1.2 Arial, Helvetica, sans-serif;
+  letter-spacing: 0;
+  box-sizing: border-box;
+}
+
+.official-fill-input:hover {
+  border-color: #9d7823;
+}
+
+.official-fill-input:focus {
+  border-color: #1d5f53;
+  box-shadow: 0 0 0 2px rgba(29, 95, 83, .16);
+  background: #fff;
+}
+
+.official-fill-input[readonly] {
+  border-color: transparent;
+  background: transparent;
+}
+
+.official-fill-inline {
+  display: inline-block;
+  width: min(62mm, 62%);
+  min-height: 4.5mm;
+  margin: 0 0 0 1mm;
+  vertical-align: middle;
+}
+
 .official-classification {
   border: 1.2px solid #111;
 }
@@ -1155,6 +1238,7 @@ table select:disabled {
   gap: 1.5mm;
   min-height: 4.5mm;
   line-height: 4.2mm;
+  cursor: pointer;
 }
 
 .official-classification-group .official-option {
@@ -1162,17 +1246,41 @@ table select:disabled {
 }
 
 .official-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
   display: inline-flex;
   flex: 0 0 4mm;
   width: 4mm;
   height: 4mm;
+  margin: 0;
   align-items: center;
   justify-content: center;
   border: 1px solid #111;
+  border-radius: 0;
+  background: #fff;
   font-size: 7pt;
   font-weight: 700;
   line-height: 1;
   box-sizing: border-box;
+  cursor: pointer;
+}
+
+.official-checkbox:checked::after {
+  content: "X";
+  display: block;
+  width: 100%;
+  text-align: center;
+  font: 700 7pt/3.6mm Arial, Helvetica, sans-serif;
+}
+
+.official-checkbox:focus-visible {
+  outline: 2px solid #1d5f53;
+  outline-offset: 1px;
+}
+
+.official-checkbox:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .official-classification-continuation {
@@ -1198,11 +1306,6 @@ table select:disabled {
 .official-request-box .official-option {
   min-height: 5mm;
   line-height: 4mm;
-}
-
-.official-other-option b {
-  display: inline;
-  font-weight: 500;
 }
 
 .official-alteration-title {
@@ -1235,6 +1338,15 @@ table select:disabled {
   grid-template-rows: auto 1fr auto auto;
   gap: 1.2mm;
   border-right: 1.2px solid #111;
+}
+
+.official-signature-meta > .official-fill-input {
+  align-self: stretch;
+  margin: 0;
+  border-width: 0 0 1px;
+  border-color: #111;
+  border-radius: 0;
+  background: transparent;
 }
 
 .official-signature-people {
@@ -1387,6 +1499,49 @@ table select:disabled {
   }
 }
 
+@media screen and (max-width: 600px) {
+  .official-page {
+    padding: 8mm 6mm;
+  }
+
+  .official-service-masthead {
+    grid-template-columns: 17mm minmax(0, 1fr);
+    gap: 2mm;
+  }
+
+  .official-service-masthead img {
+    width: 16mm;
+    height: 16mm;
+  }
+
+  .official-government-lines strong {
+    font-size: 8.5pt;
+  }
+
+  .official-government-lines b,
+  .official-government-lines span {
+    font-size: 6.2pt;
+  }
+
+  .official-service-contact {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+    padding: 1.5mm 0 0;
+    border-top: 1px solid #111;
+    border-left: 0;
+  }
+
+  .official-form-name {
+    align-items: center;
+    flex-direction: column;
+    gap: .8mm;
+  }
+
+  .official-fill-input {
+    font-size: 7pt;
+  }
+}
+
 @media print {
   @page anexo-i {
     size: A4 portrait;
@@ -1443,6 +1598,25 @@ table select:disabled {
   .official-page:last-child {
     break-after: auto;
     page-break-after: auto;
+  }
+
+  .official-fill-input,
+  .official-fill-input:hover,
+  .official-fill-input:focus,
+  .official-fill-input[readonly] {
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    color: #111;
+  }
+
+  .official-fill-inline {
+    border-bottom: 1px solid #111;
+  }
+
+  .official-service-masthead img {
+    filter: grayscale(1);
   }
 
   .official-section-title,
