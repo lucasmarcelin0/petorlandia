@@ -825,6 +825,57 @@
     color: #64748b;
     font-size: 0.85rem;
   }
+
+  .pmo-print-dd {
+    position: relative;
+  }
+
+  .pmo-print-dd__menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 1055;
+    min-width: 190px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+  }
+
+  .pmo-print-dd__menu[hidden] {
+    display: none;
+  }
+
+  .pmo-print-dd__hint {
+    padding: 4px 10px 8px;
+    font-size: 0.75rem;
+    color: #64748b;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 4px;
+    white-space: nowrap;
+  }
+
+  .pmo-print-dd__item {
+    display: block;
+    padding: 7px 10px;
+    border-radius: 7px;
+    color: #1f2937;
+    text-decoration: none;
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .pmo-print-dd__item:hover,
+  .pmo-print-dd__item:focus-visible {
+    background: #f1f5f9;
+    color: #1f2937;
+  }
+
+  .pmo-print-dd__item.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
 </style>
 {% endblock %}
 
@@ -943,41 +994,34 @@
                 <option value="recusou">Recusou</option>
               </select>
             </div>
-            <div class="btn-group" role="group">
-              <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" id="pmo-print-menu"
-                data-bs-toggle="dropdown" aria-expanded="false"
+            <div class="pmo-print-dd">
+              <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="pmo-print-menu"
+                aria-expanded="false" aria-haspopup="true"
                 title="Imprimir a lista do aplicador da aba selecionada">
                 <i class="fas fa-print me-1"></i> Imprimir
               </button>
-              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="pmo-print-menu">
-                <li>
-                  <a class="dropdown-item disabled" id="pmo-print-morning" href="#"
-                     data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='manha') }}">
-                    Manhã
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item disabled" id="pmo-print-afternoon" href="#"
-                     data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='tarde') }}">
-                    Tarde
-                  </a>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                  <span class="dropdown-item-text small text-muted" id="pmo-print-hint">Selecione uma aba com data.</span>
-                </li>
-              </ul>
+              <div class="pmo-print-dd__menu" id="pmo-print-menu-list" hidden>
+                <div class="pmo-print-dd__hint" id="pmo-print-hint">Selecione uma aba com data.</div>
+                <a class="pmo-print-dd__item is-disabled" id="pmo-print-morning" href="#"
+                   data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='manha') }}">
+                  <i class="fas fa-sun me-2 text-warning"></i>Manhã
+                </a>
+                <a class="pmo-print-dd__item is-disabled" id="pmo-print-afternoon" href="#"
+                   data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='tarde') }}">
+                  <i class="fas fa-cloud-sun me-2 text-secondary"></i>Tarde
+                </a>
+              </div>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-primary" id="pmo-open-next-route">
+            <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" id="pmo-open-next-route">
               <i class="fas fa-location-arrow me-1"></i> Próximo
             </button>
-            <button type="button" class="btn btn-sm btn-outline-success" id="pmo-optimize-route"
+            <button type="button" class="btn btn-sm btn-outline-success text-nowrap" id="pmo-optimize-route"
               data-preview-url="{{ url_for('vacina_pmo_route_preview') }}"
               data-route-url="{{ url_for('vacina_pmo_route_optimize') }}"
               data-undo-url="{{ url_for('vacina_pmo_route_undo') }}">
               <i class="fas fa-route me-1"></i> Otimizar rota
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="pmo-undo-route">
+            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="pmo-undo-route">
               <i class="fas fa-rotate-left me-1"></i> Desfazer
             </button>
           </div>
@@ -1585,6 +1629,8 @@
   const printMorningEl = document.getElementById('pmo-print-morning');
   const printAfternoonEl = document.getElementById('pmo-print-afternoon');
   const printHintEl = document.getElementById('pmo-print-hint');
+  const printMenuBtn = document.getElementById('pmo-print-menu');
+  const printMenuListEl = document.getElementById('pmo-print-menu-list');
   let allSheets = [];
 
   // A rota de impressão espera a data no formato dd-mm-aaaa (vira dd/mm/aaaa,
@@ -1606,12 +1652,12 @@
       if (!link) return;
       if (!dateSlug) {
         link.href = '#';
-        link.classList.add('disabled');
+        link.classList.add('is-disabled');
         link.setAttribute('aria-disabled', 'true');
         return;
       }
       link.href = link.dataset.baseUrl.replace('__DATE__', dateSlug);
-      link.classList.remove('disabled');
+      link.classList.remove('is-disabled');
       link.removeAttribute('aria-disabled');
     });
     if (printHintEl) {
@@ -1619,6 +1665,29 @@
         ? `Aba ${dateSlug.replace(/-/g, '/')}`
         : 'Selecione uma aba com data.';
     }
+  }
+
+  // Toggle proprio: o data-api de dropdown do Bootstrap nao dispara nesta pagina.
+  function setPrintMenuOpen(open) {
+    if (!printMenuBtn || !printMenuListEl) return;
+    printMenuListEl.hidden = !open;
+    printMenuBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  if (printMenuBtn && printMenuListEl) {
+    printMenuBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setPrintMenuOpen(printMenuListEl.hidden);
+    });
+    document.addEventListener('click', (event) => {
+      if (!printMenuListEl.hidden && !printMenuListEl.contains(event.target)) {
+        setPrintMenuOpen(false);
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setPrintMenuOpen(false);
+    });
   }
 
   // Lista sempre visível, agrupada em "Próximos dias" e "Dias anteriores".
