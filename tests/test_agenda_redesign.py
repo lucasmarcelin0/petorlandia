@@ -70,6 +70,74 @@ def _fake_vet(vet_user_id, vet_id, clinic_id):
     })()
 
 
+def test_partial_returns_only_agenda_fragment(client, monkeypatch):
+    """`?partial=agenda` devolve só o fragmento, para a troca via AJAX.
+
+    É o que evita recarregar a página inteira a cada clique no filtro.
+    """
+
+    with flask_app.app_context():
+        clinic, vet_user, vet, tutor, animal = _build_clinic()
+        db.session.add(Appointment(
+            id=1,
+            animal=animal,
+            tutor=tutor,
+            veterinario=vet,
+            scheduled_at=utcnow() + timedelta(hours=5),
+            status='scheduled',
+            kind='consulta',
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+        ))
+        db.session.commit()
+        ids = (vet_user.id, vet.id, clinic.id)
+
+    login(monkeypatch, _fake_vet(*ids))
+    base = '/appointments?view_as=veterinario&veterinario_id=1'
+
+    completa = client.get(base)
+    parcial = client.get(base + '&partial=agenda')
+    assert completa.status_code == 200
+    assert parcial.status_code == 200
+
+    html_parcial = parcial.data.decode()
+    assert 'id="agenda-content"' in html_parcial
+    # Fragmento não traz o documento nem a navegação por abas.
+    assert '<!DOCTYPE html>' not in html_parcial
+    assert 'vetScheduleSectionTabs' not in html_parcial
+    assert len(parcial.data) < len(completa.data)
+
+
+def test_partial_respects_kind_filter(client, monkeypatch):
+    """O filtro por tipo vale também no fragmento pedido via AJAX."""
+
+    with flask_app.app_context():
+        clinic, vet_user, vet, tutor, animal = _build_clinic()
+        db.session.add(Appointment(
+            id=1,
+            animal=animal,
+            tutor=tutor,
+            veterinario=vet,
+            scheduled_at=utcnow() + timedelta(hours=5),
+            status='scheduled',
+            kind='vacina',
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+        ))
+        db.session.commit()
+        ids = (vet_user.id, vet.id, clinic.id)
+
+    login(monkeypatch, _fake_vet(*ids))
+    base = '/appointments?view_as=veterinario&veterinario_id=1&partial=agenda'
+
+    todos = client.get(base + '&tipo=todos').data.decode()
+    exames = client.get(base + '&tipo=exame').data.decode()
+
+    assert 'data-appointment-id="1"' in todos
+    # A vacina não entra no recorte de exames.
+    assert 'data-appointment-id="1"' not in exames
+
+
 def test_action_forms_carry_csrf_token(client, monkeypatch):
     """Todo POST da agenda precisa do token: o app usa CSRFProtect global.
 

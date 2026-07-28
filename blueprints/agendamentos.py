@@ -1436,8 +1436,17 @@ def appointments():
         species_list = list_species()
         breed_list = list_breeds()
 
+        # Ao trocar periodo/tipo, a barra de filtros pede so o fragmento da
+        # agenda: a pagina nao recarrega e o profissional nao perde o lugar
+        # onde estava (aba aberta, rolagem, paineis expandidos).
+        template_name = (
+            'partials/agenda_content.html'
+            if request.args.get('partial') == 'agenda'
+            else 'agendamentos/edit_vet_schedule.html'
+        )
+
         return render_template(
-            'agendamentos/edit_vet_schedule.html',
+            template_name,
             schedule_form=schedule_form,
             appointment_form=appointment_form,
             veterinario=veterinario,

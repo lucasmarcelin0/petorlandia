@@ -58,6 +58,23 @@
 
 /* Painel lateral de novo agendamento: largura confortável no desktop,
    tela cheia no celular. */
+/* Atualização parcial: um leve esmaecer sinaliza que a agenda está sendo
+   recarregada, sem piscar a tela nem mover nada de lugar. */
+#agenda-content {
+  transition: opacity 0.15s ease;
+}
+
+.agenda-content--loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agenda-content {
+    transition: none;
+  }
+}
+
 /* Painel de novo agendamento: abre no lugar, empurrando o conteúdo para
    baixo. Uma borda de destaque deixa claro que é um bloco temporário. */
 .agenda-new-panel > .card {

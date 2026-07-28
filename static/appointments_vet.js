@@ -2623,6 +2623,15 @@ export function initVetSchedulePage(options = {}) {
   initScheduleOverview(root);
   animateCards(root);
 
+  // Depois de uma atualização parcial da agenda, o DOM trocado perde os
+  // listeners diretos. Estes bindings são idempotentes (guardam flag no
+  // elemento), então basta reexecutá-los sobre o conteúdo novo.
+  document.addEventListener('agenda:updated', () => {
+    bindAppointmentItems(root);
+    bindPastToggle(root);
+    bindExclusivePanels(root);
+  });
+
   const dateInput = document.getElementById('appointment-date');
   if (dateInput && dateInput.value) {
     updateAppointmentTimes({ root, dateInput });
