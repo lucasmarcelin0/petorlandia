@@ -28,6 +28,7 @@
       flex-wrap: wrap;
     }
     .header .sub strong { color: #000; }
+    .header .legend { font-size: 11pt; color: #555; }
 
     /* ── Navegação (oculta na impressão) ───────────────────────────────────── */
     .no-print {
@@ -80,15 +81,47 @@
     tbody tr:nth-child(even) td { background: #f0f4f8; }
 
     /* Colunas fixas */
-    .c-num  { width: 30px;  text-align: center; font-weight: 700; color: #555; }
-    .c-name { min-width: 160px; font-weight: 700; }
-    .c-addr { min-width: 180px; }
-    .c-tel  { min-width: 120px; white-space: nowrap; font-size: 12pt; }
-    .c-pet  { min-width: 140px; }
-    .c-obs  { min-width: 120px; font-size: 11pt; color: #333; }
-    .c-ok   { width: 38px;  text-align: center; font-size: 18pt; }
+    .c-num  { width: 26px;  text-align: center; font-weight: 700; color: #555; }
+    .c-name { width: 16%; font-weight: 700; }
+    .c-addr { width: 18%; }
+    .c-tel  { width: 11%; white-space: nowrap; font-size: 12pt; }
+    .c-pet  { width: 15%; }
+    .c-obs  { width: 16%; font-size: 11pt; color: #333; }
+    .c-ok   { width: 30px;  text-align: center; font-size: 18pt; }
+    .c-sign { width: 19%; }
 
-    .pet-row { display: block; line-height: 1.4; }
+    .pet-row { display: block; line-height: 1.5; }
+
+    /* Cão = etiqueta preenchida, gato = etiqueta vazada: continua legível em P&B. */
+    .pet-badge {
+      display: inline-block;
+      width: 1.5em;
+      height: 1.5em;
+      line-height: 1.42em;
+      text-align: center;
+      font-size: 0.68em;
+      font-weight: 700;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+    .pet-badge--cao  { background: #1a1a2e; color: #fff; border: 1.5px solid #1a1a2e; }
+    .pet-badge--gato { background: #fff; color: #1a1a2e; border: 1.5px solid #1a1a2e; }
+
+    .pet-count { display: block; font-size: 0.62em; color: #666; margin-top: 3px; }
+
+    /* Linha para o tutor assinar / escrever o nome. */
+    .sign-line {
+      display: block;
+      border-bottom: 1px solid #555;
+      height: 2.1em;
+    }
+    .sign-hint {
+      display: block;
+      font-size: 8pt;
+      color: #777;
+      margin-top: 2px;
+    }
 
     /* ── Impressão ──────────────────────────────────────────────────────────── */
     @media print {
@@ -105,6 +138,9 @@
       .c-ok   { font-size: 16pt; }
 
       tr { page-break-inside: avoid; }
+
+      /* Repete o cabeçalho da tabela quando a lista passa de uma página. */
+      thead { display: table-header-group; }
     }
 
     @page {
@@ -132,8 +168,24 @@
       <span>Cães: <strong>{{ visits|sum(attribute='dogs') }}</strong></span>
       <span>Gatos: <strong>{{ visits|sum(attribute='cats') }}</strong></span>
       <span>Total animais: <strong>{{ (visits|sum(attribute='dogs')) + (visits|sum(attribute='cats')) }}</strong></span>
+      <span class="legend">
+        <span class="pet-badge pet-badge--cao">C</span> cão
+        <span class="pet-badge pet-badge--gato">G</span> gato
+      </span>
     </div>
   </div>
+
+  {# Telefone legivel: 5516982116928 -> (16) 98211-6928 #}
+  {%- macro fone(raw) -%}
+    {%- set d = (raw or '') | replace('(', '') | replace(')', '') | replace('-', '')
+                             | replace(' ', '') | replace('+', '') | replace('.', '') -%}
+    {%- if d|length == 13 and d.startswith('55') -%}({{ d[2:4] }}) {{ d[4:9] }}-{{ d[9:] }}
+    {%- elif d|length == 12 and d.startswith('55') -%}({{ d[2:4] }}) {{ d[4:8] }}-{{ d[8:] }}
+    {%- elif d|length == 11 -%}({{ d[0:2] }}) {{ d[2:7] }}-{{ d[7:] }}
+    {%- elif d|length == 10 -%}({{ d[0:2] }}) {{ d[2:6] }}-{{ d[6:] }}
+    {%- else -%}{{ raw or '' }}
+    {%- endif -%}
+  {%- endmacro -%}
 
   {# ── Tabela ───────────────────────────────────────────────────────────────── #}
   {% if visits %}
@@ -147,6 +199,7 @@
         <th class="c-pet">Animais</th>
         <th class="c-obs">Observação</th>
         <th class="c-ok">✓</th>
+        <th class="c-sign">Assinatura do tutor</th>
       </tr>
     </thead>
     <tbody>
@@ -156,22 +209,39 @@
         <td class="c-name">{{ v.tutor_name }}</td>
         <td class="c-addr">{{ v.address or '—' }}</td>
         <td class="c-tel">
-          {{ v.phone1 or '' }}
-          {% if v.phone2 %}<br>{{ v.phone2 }}{% endif %}
+          {{ fone(v.phone1) }}
+          {% if v.phone2 %}<br>{{ fone(v.phone2) }}{% endif %}
         </td>
         <td class="c-pet">
           {% for a in v.animals %}
             <span class="pet-row">
-              {% if a.species == 'cao' %}🐕{% else %}🐈{% endif %}
+              {% if a.species == 'cao' %}
+                <span class="pet-badge pet-badge--cao" title="Cão">C</span>
+              {% else %}
+                <span class="pet-badge pet-badge--gato" title="Gato">G</span>
+              {% endif %}
               {{ a.name }}
             </span>
           {% else %}
-            {% if v.dogs %}🐕 {{ v.dogs }}{% endif %}
-            {% if v.cats %}🐈 {{ v.cats }}{% endif %}
+            {% if v.dogs %}
+              <span class="pet-row"><span class="pet-badge pet-badge--cao">C</span>{{ v.dogs }} cão(es)</span>
+            {% endif %}
+            {% if v.cats %}
+              <span class="pet-row"><span class="pet-badge pet-badge--gato">G</span>{{ v.cats }} gato(s)</span>
+            {% endif %}
           {% endfor %}
+          {% if v.dogs or v.cats %}
+            <span class="pet-count">
+              {{ v.dogs or 0 }} cão(es) · {{ v.cats or 0 }} gato(s)
+            </span>
+          {% endif %}
         </td>
         <td class="c-obs">{{ v.note or '' }}</td>
         <td class="c-ok">☐</td>
+        <td class="c-sign">
+          <span class="sign-line"></span>
+          <span class="sign-hint">Nome / assinatura</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
