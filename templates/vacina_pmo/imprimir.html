@@ -10,9 +10,9 @@
 
     body {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 15pt;
+      font-size: 13pt;
       margin: 0;
-      padding: 8mm 10mm;
+      padding: 5mm 8mm;
       background: #fff;
       color: #000;
     }
@@ -65,36 +65,36 @@
     thead th {
       background: #1a1a2e;
       color: #fff;
-      font-size: 11pt;
-      padding: 7px 8px;
+      font-size: 10pt;
+      padding: 5px 6px;
       text-align: left;
       white-space: nowrap;
     }
 
     tbody td {
-      padding: 7px 8px;
+      padding: 5px 6px;
       border-bottom: 1px solid #bbb;
       vertical-align: top;
-      font-size: 14pt;
+      font-size: 13pt;
     }
 
     tbody tr:nth-child(even) td { background: #f0f4f8; }
 
     /* Colunas fixas — cor/tamanho so no corpo, senao sobrescrevem o thead. */
     .c-num  { width: 26px;  text-align: center; }
-    .c-name { width: 16%; }
-    .c-addr { width: 18%; }
-    .c-tel  { width: 11%; white-space: nowrap; }
-    .c-pet  { width: 15%; }
-    .c-obs  { width: 16%; }
+    .c-name { width: 14%; }
+    .c-addr { width: 15%; }
+    .c-tel  { width: 10%; white-space: nowrap; }
+    .c-pet  { width: 26%; }
+    .c-obs  { width: 14%; }
     .c-ok   { width: 30px;  text-align: center; }
-    .c-sign { width: 19%; }
+    .c-sign { width: 15%; }
 
     tbody .c-num  { font-weight: 700; color: #555; }
     tbody .c-name { font-weight: 700; }
-    tbody .c-tel  { font-size: 12pt; }
-    tbody .c-obs  { font-size: 11pt; color: #333; }
-    tbody .c-ok   { font-size: 18pt; }
+    tbody .c-tel  { font-size: 11pt; }
+    tbody .c-obs  { font-size: 10pt; color: #333; }
+    tbody .c-ok   { font-size: 16pt; }
 
     .pet-row { display: block; line-height: 1.5; }
 
@@ -233,21 +233,12 @@
     body.super-compacta .rodape__totais { margin-bottom: 6px; font-size: 9pt; }
 
     /* ── Impressão ──────────────────────────────────────────────────────────── */
+    /* Esta página só existe para ser impressa, então a tela usa exatamente as
+       mesmas medidas do papel. Assim o que se vê é o que sai — e o ajuste
+       automático de densidade lá embaixo pode medir a página de verdade. */
     @media print {
       .no-print { display: none !important; }
-
-      body { padding: 5mm 8mm; font-size: 13pt; }
-
-      thead th { font-size: 10pt; padding: 5px 6px; }
-
-      tbody td { font-size: 13pt; padding: 5px 6px; }
-
-      tbody .c-tel  { font-size: 11pt; }
-      tbody .c-obs  { font-size: 10pt; }
-      tbody .c-ok   { font-size: 16pt; }
-
       tr { page-break-inside: avoid; }
-
       /* Repete o cabeçalho da tabela quando a lista passa de uma página. */
       thead { display: table-header-group; }
     }
@@ -409,6 +400,32 @@
   {% endif %}
 
   <script>
+    // A folha se mede sozinha. Nenhuma conta no servidor acerta a altura real,
+    // porque endereço e observação quebram linha conforme o texto. Aqui a
+    // página já está renderizada com as medidas do papel, então basta apertar
+    // a densidade até caber — e parar assim que couber, para não encolher
+    // além do necessário.
+    function ajustarDensidade() {
+      const cabecalho = document.querySelector('.header');
+      const rodape = document.querySelector('.rodape');
+      if (!cabecalho || !rodape) return;
+
+      // A4 paisagem: 210mm de altura, 22mm de margem, 10mm do padding do body.
+      const limite = 178 * (96 / 25.4);
+      const niveis = ['normal', 'compacta', 'super-compacta'];
+
+      for (const nivel of niveis) {
+        document.body.className = nivel;
+        const altura = rodape.getBoundingClientRect().bottom
+                     - cabecalho.getBoundingClientRect().top;
+        if (altura <= limite) return nivel;
+      }
+      return niveis[niveis.length - 1];
+    }
+
+    ajustarDensidade();
+    window.addEventListener('beforeprint', ajustarDensidade);
+
     // Em dispositivo móvel (<900px) abre impressão automaticamente
     if (window.innerWidth < 900) { window.addEventListener('load', () => window.print()); }
   </script>
