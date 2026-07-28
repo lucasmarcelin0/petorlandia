@@ -564,7 +564,7 @@ table select:disabled {
 
 .document-group {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   margin-top: 14px;
 }
 
@@ -2600,6 +2600,140 @@ table select:disabled {
   border-top-color: #19745e;
 }
 
+.document-card.registry-document {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dce5e2;
+  border-top: 3px solid #b8c9c4;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(23, 49, 45, .045);
+}
+
+.document-card.registry-document.required {
+  border-top-color: #397d6e;
+}
+
+.document-card.registry-document.received {
+  border-color: #bdd8cf;
+  border-top-color: #19745e;
+}
+
+.document-card.registry-document.internal {
+  border-color: #cfe0ef;
+  border-top-color: #5c83a5;
+  background: #fbfdff;
+}
+
+.registry-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 16px 11px;
+}
+
+.registry-card-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.registry-card-identity h3 {
+  margin: 2px 0 0;
+  color: #203a35;
+  font-size: .94rem;
+  line-height: 1.35;
+}
+
+.registry-card-kicker {
+  display: block;
+  color: #6c7e79;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.registry-document-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #edf4f1;
+  color: #236555;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.registry-document-number svg {
+  width: 18px;
+  height: 18px;
+}
+
+.registry-card-intro {
+  margin: 0;
+  padding: 0 16px 14px 68px;
+  color: #687773;
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.registry-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid #e4ebe8;
+  border-bottom: 1px solid #e4ebe8;
+  background: #fbfcfb;
+}
+
+.registry-flow .annex-flow-step {
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: minmax(92px, 1fr) auto;
+  gap: 9px 8px;
+  padding: 14px;
+}
+
+.registry-flow .annex-step-number {
+  width: 25px;
+  height: 25px;
+  font-size: .7rem;
+}
+
+.registry-flow .annex-step-copy strong {
+  font-size: .84rem;
+}
+
+.registry-flow .annex-step-copy p {
+  margin-top: 5px;
+  font-size: .72rem;
+}
+
+.registry-flow .annex-step-actions {
+  gap: 7px;
+}
+
+.registry-flow .annex-step-actions .btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: .76rem;
+}
+
+.registry-file-summary {
+  max-height: 3.1em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.registry-document .annex-card-details-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: #fff;
+}
+
 .annex-card-head {
   display: flex;
   align-items: center;
@@ -3016,6 +3150,65 @@ table select:disabled {
   scroll-margin-top: 96px;
 }
 
+.document-support-panel {
+  display: grid;
+  grid-template-columns: 1.1fr .85fr 1fr;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.document-support-block {
+  min-width: 0;
+  padding: 18px 20px;
+}
+
+.document-support-block + .document-support-block {
+  border-left: 1px solid var(--line);
+}
+
+.document-support-block .panel-header {
+  margin-bottom: 10px;
+}
+
+.document-support-block .panel-header h2 {
+  font-size: .95rem;
+}
+
+.document-support-check {
+  margin-top: 12px;
+}
+
+.support-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px;
+  border-radius: 9px;
+  background: #f0f7f4;
+  color: #2d5e53;
+}
+
+.support-feature svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.support-feature span,
+.support-feature strong {
+  display: block;
+}
+
+.support-feature span {
+  font-size: .75rem;
+  line-height: 1.4;
+}
+
+.support-feature strong {
+  margin-bottom: 2px;
+}
+
 .signer-steps {
   margin: 0 0 12px 18px;
   padding: 0;
@@ -3029,12 +3222,14 @@ table select:disabled {
 @media (max-width: 960px) {
   .official-annex-header,
   .annex-card-head,
+  .registry-card-head,
   .annex-focus-banner {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .annex-card-intro {
+  .annex-card-intro,
+  .registry-card-intro {
     padding-left: 20px;
   }
 
@@ -3044,11 +3239,13 @@ table select:disabled {
     width: 100%;
   }
 
-  .annex-flow {
+  .annex-flow,
+  .registry-flow {
     grid-template-columns: 1fr;
   }
 
-  .annex-flow-step {
+  .annex-flow .annex-flow-step,
+  .registry-flow .annex-flow-step {
     grid-template-rows: auto auto;
     border-right: 0;
     border-bottom: 1px solid #e1e9e6;
@@ -3074,7 +3271,22 @@ table select:disabled {
     border-bottom: 1px solid #e7ecea;
   }
 
+  .document-support-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .document-support-block + .document-support-block {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
   .form-anchor {
     scroll-margin-top: 190px;
+  }
+}
+
+@media (max-width: 600px) {
+  .registry-document .annex-card-details-grid {
+    grid-template-columns: 1fr;
   }
 }

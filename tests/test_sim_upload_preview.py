@@ -240,3 +240,21 @@ def test_official_document_cards_present_a_progressive_three_step_workflow():
     assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in styles
     assert ".annex-current-file" in styles
     assert ".annex-card-details-grid" in styles
+
+
+def test_remaining_registry_documents_follow_the_same_visual_workflow():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function registryDocumentCard" in script
+    assert 'class="document-card registry-document' in script
+    assert 'class="registry-flow" aria-label="Etapas de ${doc.name}"' in script
+    assert "Separe o documento correto" in script
+    assert "Orientações e base legal" in script
+    assert 'class="span-12 panel registry-documents-panel"' in script
+    assert 'class="span-12 panel document-support-panel"' in script
+    assert ".document-card.registry-document" in styles
+    assert ".registry-flow .annex-flow-step" in styles
+    assert ".registry-card-head" in styles
+    assert ".document-support-panel" in styles

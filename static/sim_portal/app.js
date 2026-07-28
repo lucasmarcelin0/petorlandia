@@ -1297,7 +1297,40 @@ function renderDocuments() {
           ${officialDocuments.map(({ annex, doc }) => documentCard(doc, { annex })).join("")}
         </div>
       </section>
-      <div class="span-8 panel">
+      <div class="span-12 panel document-support-panel">
+        <section class="document-support-block">
+          <div class="panel-header"><h2>Assine de graça no gov.br</h2></div>
+          <ol class="signer-steps">
+            <li>Imprima os formulários do portal em PDF.</li>
+            <li>Assine gratuitamente com sua conta gov.br prata ou ouro.</li>
+            <li>Volte ao item correspondente e envie o PDF assinado.</li>
+          </ol>
+          <a class="btn primary" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">Abrir assinador gov.br</a>
+          ${state.role === "establishment" ? `
+            <label class="check-item document-support-check">
+              <input type="checkbox" data-journey-signed ${state.journey?.signedAck ? "checked" : ""}>
+              <span>Já assinei meus documentos no gov.br</span>
+            </label>
+          ` : ""}
+        </section>
+        <section class="document-support-block">
+          <div class="panel-header"><h2>Rastreabilidade</h2></div>
+          <p class="muted small">Cada envio registra conta, horário, tamanho e hash SHA-256. Uma nova versão nunca apaga a anterior.</p>
+          <div class="support-feature">
+            ${icon("shield")}
+            <span><strong>Envio protegido</strong>Arquivos e responsáveis ficam identificados no processo.</span>
+          </div>
+        </section>
+        <section class="document-support-block">
+          <div class="panel-header"><h2>Histórico recente</h2></div>
+          <div class="timeline compact">
+            ${(state.stateHistory || []).slice(0, 4).map((item) => `
+              <div class="event"><div><strong>${item.reason}</strong><span>${item.changed_by_name} - ${formatDate(item.changed_at)}</span></div></div>
+            `).join("") || `<p class="muted small">As alterações aparecerão aqui.</p>`}
+          </div>
+        </section>
+      </div>
+      <div class="span-12 panel registry-documents-panel">
         <div class="panel-header">
           <div><h2>Demais documentos do registro</h2>
           <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : `Os Anexos I, II e III ja estao acima. Complete aqui os demais documentos do art. 11 da LC 84/2024. O progresso ${progress.sent}/${progress.total} considera todos os obrigatorios.`}</p></div>
@@ -1320,30 +1353,6 @@ function renderDocuments() {
           </div>
         ` : ""}
       </div>
-      <div class="span-4 panel">
-        <div class="panel-header"><h2>Assine de graca no gov.br</h2></div>
-        <ol class="signer-steps">
-          <li>Imprima os formularios do portal em PDF (botao Imprimir - salvar como PDF).</li>
-          <li>Acesse o assinador oficial e entre com sua conta gov.br (nivel prata ou ouro).</li>
-          <li>Envie o PDF, posicione a assinatura e baixe o arquivo assinado.</li>
-          <li>Volte aqui e envie o PDF assinado no item correspondente.</li>
-        </ol>
-        <a class="btn primary" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">Abrir assinador gov.br</a>
-        ${state.role === "establishment" ? `
-          <label class="check-item" style="margin-top:12px">
-            <input type="checkbox" data-journey-signed ${state.journey?.signedAck ? "checked" : ""}>
-            <span>Ja assinei meus documentos no gov.br</span>
-          </label>
-        ` : ""}
-        <div class="panel-header" style="margin-top:18px"><h2>Rastreabilidade</h2></div>
-        <p class="muted small">Cada envio registra conta, horario, tamanho e hash SHA-256. Reenviar cria nova versao; nada e apagado.</p>
-        <div class="panel-header" style="margin-top:18px"><h2>Historico de modificacoes</h2></div>
-        <div class="timeline compact">
-          ${(state.stateHistory || []).slice(0, 8).map((item) => `
-            <div class="event"><div><strong>${item.reason}</strong><span>${item.changed_by_name} - ${formatDate(item.changed_at)}</span></div></div>
-          `).join("") || `<p class="muted small">As alteracoes de ficha apareceriam aqui.</p>`}
-        </div>
-      </div>
     </div>
   `;
 }
@@ -1365,43 +1374,127 @@ function documentCard(doc, options = {}) {
       received,
     });
   }
-  return `
-    <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
-      <div class="document-main">
-        <div>
-          <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
-            ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
-          ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
-          ${documentSourceHtml(doc)}
-          ${documentExtraHtml(doc)}
-          <span>${isProductForm
-            ? `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}; cada produto gera seu proprio Anexo IV.`
-            : documentSummary(doc)}</span>
-        </div>
-        <div class="upload-controls">
-          ${canUpload && !isTaxWaived && !isProductForm ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
-          ${doc.uploadId ? `<button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>` : ""}
-          ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>` : ""}
-          ${isProductForm || (isTaxWaived && state.role !== "sim") ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
-            ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
-          </select>`}
-        </div>
-      </div>
-      ${isProductForm ? "" : `<div class="version-list">
+  return registryDocumentCard(doc, {
+    versions,
+    canUpload,
+    isTaxWaived,
+    received,
+  });
+}
+
+function registryDocumentCard(doc, context) {
+  const { versions, canUpload, isTaxWaived, received } = context;
+  const statusTone = received || isTaxWaived
+    ? "approved"
+    : (/corre/i.test(doc.status || "") ? "corrections" : "pending");
+  const statusText = isTaxWaived ? "Dispensado em 2026" : (received ? "Recebido" : (doc.status || "Pendente"));
+  const category = doc.internal
+    ? "Documento interno do SIM"
+    : (doc.item ? `Item ${doc.item} do checklist` : "Documento complementar");
+  const obligation = doc.required ? "obrigatório" : "quando aplicável";
+  const historyDetails = isTaxWaived ? "" : `
+    <details class="annex-details">
+      <summary>
+        <span>Histórico de arquivos</span>
+        <span class="annex-details-count">${versions.length}</span>
+      </summary>
+      <div class="annex-history">
         ${versions.length ? versions.map((version) => `
-          <div class="version-row">
+          <div class="annex-history-row">
             <div>
-              <strong>v${version.versionNo} - ${version.file}</strong>
-              <span>${version.uploadedBy} - ${formatDate(version.uploadedAt)} - ${formatBytes(version.sizeBytes)} - SHA-256 ${version.sha256.slice(0, 16)}...</span>
+              <strong>v${version.versionNo} · ${escapeHtml(version.file)}</strong>
+              <span>${escapeHtml(version.uploadedBy)} · ${formatDate(version.uploadedAt)} · ${formatBytes(version.sizeBytes)} · SHA-256 ${version.sha256.slice(0, 16)}...</span>
             </div>
-            <div class="upload-controls">
+            <div class="annex-file-actions">
               <button class="btn" data-open-upload="${version.id}">Abrir</button>
               <a class="btn" href="${downloadUrl(version.id)}" download="${escapeHtml(version.file || "")}">Baixar</a>
             </div>
           </div>
-        `).join("") : `<div class="empty small">Nenhuma versao enviada.</div>`}
-      </div>`}
-    </section>
+        `).join("") : `<div class="empty small">O histórico aparecerá depois do primeiro envio.</div>`}
+      </div>
+    </details>
+  `;
+  return `
+    <article class="document-card registry-document ${doc.internal ? "internal" : ""} ${doc.required ? "required" : ""} ${received ? "received" : ""}">
+      <header class="registry-card-head">
+        <div class="registry-card-identity">
+          <span class="registry-document-number">${received ? icon("check") : (doc.item || icon("file"))}</span>
+          <div>
+            <span class="registry-card-kicker">${category} · ${obligation}</span>
+            <h3>${doc.name}</h3>
+          </div>
+        </div>
+        <div class="annex-card-status">
+          ${state.role === "sim" ? `
+            <label>
+              <span>Status do SIM</span>
+              <select data-doc="${doc.id}">
+                ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
+              </select>
+            </label>
+          ` : `<span class="status ${statusTone}">${statusText}</span>`}
+        </div>
+      </header>
+      <p class="registry-card-intro">${doc.hint || "Confira a orientação, envie o arquivo e acompanhe a conferência pelo SIM."}</p>
+
+      <div class="registry-flow" aria-label="Etapas de ${doc.name}">
+        <section class="annex-flow-step">
+          <span class="annex-step-number">1</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">Preparar</span>
+            <strong>${isTaxWaived ? "Nenhuma providência necessária" : "Separe o documento correto"}</strong>
+            <p>${isTaxWaived ? "A taxa de inspeção sanitária está dispensada durante 2026." : "Confira se o arquivo está atualizado, completo e legível."}</p>
+          </div>
+          <div class="annex-step-actions">
+            ${doc.link ? `<a class="btn" href="${doc.link}" target="_blank" rel="noreferrer">${icon("file")}Abrir site oficial</a>` : ""}
+          </div>
+        </section>
+
+        <section class="annex-flow-step ${received ? "is-complete" : ""}">
+          <span class="annex-step-number">${received ? icon("check") : "2"}</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">${received ? "Enviado" : "Enviar"}</span>
+            <strong>${isTaxWaived ? "Envio dispensado" : (received ? "Arquivo recebido" : "Envie o arquivo")}</strong>
+            <p>${isTaxWaived ? "O item permanece no checklist apenas para registrar a dispensa legal." : (received ? "Se algo mudar, envie uma nova versão por aqui." : "A seleção do arquivo inicia o envio automaticamente.")}</p>
+          </div>
+          <div class="annex-step-actions">
+            ${canUpload && !isTaxWaived ? `
+              <label class="btn annex-upload-button">
+                ${icon("send")}<span>${received ? "Enviar nova versão" : "Selecionar e enviar"}</span>
+                <input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">
+              </label>
+            ` : ""}
+          </div>
+        </section>
+
+        <section class="annex-flow-step ${received || isTaxWaived ? "is-complete" : ""}">
+          <span class="annex-step-number">${received || isTaxWaived ? icon("check") : "3"}</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">Acompanhar</span>
+            <strong>${isTaxWaived ? "Item regularizado" : (received ? escapeHtml(doc.file || "Documento enviado") : "Aguardando envio")}</strong>
+            <p class="registry-file-summary">${isTaxWaived ? "Dispensado pela LC 104/2026." : escapeHtml(documentSummary(doc))}</p>
+          </div>
+          <div class="annex-step-actions">
+            ${doc.uploadId ? `
+              <button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>
+              <a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>
+            ` : ""}
+          </div>
+        </section>
+      </div>
+
+      <div class="annex-card-details-grid">
+        <details class="annex-details">
+          <summary><span>Orientações e base legal</span></summary>
+          <div class="annex-details-content">
+            <p>${doc.hint || "Documento utilizado na instrução do processo de registro."}</p>
+            ${documentSourceHtml(doc)}
+            ${documentExtraHtml(doc)}
+          </div>
+        </details>
+        ${historyDetails}
+      </div>
+    </article>
   `;
 }
 
