@@ -370,7 +370,7 @@ let session = null;
 let backendAvailable = false;
 let notifications = [];
 let activeUpload = null;
-let registry = { establishments: [], fiscalActs: [], inspections: [], samples: [], audit: [] };
+let registry = { accounts: [], establishments: [], fiscalActs: [], inspections: [], samples: [], audit: [] };
 let registryEditing = { establishment: null, inspection: null, sample: null };
 let fiscalActContext = { establishmentId: "", status: "Lavrado", scienceDate: "", loadedNumber: "" };
 let state = loadState();
@@ -767,6 +767,7 @@ function renderShell(content) {
     ["inspections", "shield", "Inspecoes"],
     ["fiscal", "file", "Atos fiscais"],
     ["samples", "clip", "Amostras"],
+    ["accounts", "shield", "Contas"],
     ["review", "shield", "Analise SIM"],
     ["documents", "clip", "Documentos"],
     ["print", "print", "Imprimir PDFs"],
@@ -872,6 +873,7 @@ function pageTitle() {
     registry: "Cadastro de estabelecimentos",
     inspections: "Inspecoes e fiscalizacoes",
     samples: "Coleta de amostras",
+    accounts: "Contas do Portal SIM",
     legislation: "Base legal do SIM",
   };
   return titles[state.view] || "Portal SIM";
@@ -1757,6 +1759,32 @@ function renderReview() {
         <table class="table">
           <thead><tr><th>Horario</th><th>Conta</th><th>Acao</th><th>Versao</th></tr></thead>
           <tbody>${state.audit.map((event) => `<tr><td>${formatDate(event.at)}</td><td>${event.who}</td><td>${event.action}</td><td>${event.version}</td></tr>`).join("")}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderAccounts() {
+  const accounts = registry.accounts || [];
+  return `
+    <div class="grid">
+      <div class="span-12 panel">
+        <div class="panel-header">
+          <div>
+            <h2>Contas com acesso ao portal</h2>
+            <p class="muted">Use esta lista para conferir o perfil e o último acesso relatado por cada conta. Senhas e sessões nunca são exibidas.</p>
+          </div>
+        </div>
+        <table class="table">
+          <thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Criada em</th></tr></thead>
+          <tbody>${accounts.length ? accounts.map((account) => `<tr>
+            <td><strong>${escapeHtml(account.name)}</strong><br><span class="muted small">${escapeHtml(account.email)}</span></td>
+            <td>${account.role === "sim" ? "Servidor SIM" : "Estabelecimento"}</td>
+            <td><span class="status ${account.active ? "approved" : "corrections"}">${account.active ? "Ativa" : "Inativa"}</span></td>
+            <td>${account.last_seen_at ? formatDate(account.last_seen_at) : "Nunca acessou"}</td>
+            <td>${formatDate(account.created_at)}</td>
+          </tr>`).join("") : '<tr><td colspan="5" class="muted">Nenhuma conta cadastrada.</td></tr>'}</tbody>
         </table>
       </div>
     </div>
@@ -3190,6 +3218,7 @@ function render() {
     registry: renderRegistry,
     inspections: renderInspections,
     samples: renderSamples,
+    accounts: renderAccounts,
     legislation: renderLegislation,
   };
   const establishmentViews = ["dashboard", "establishment", "documents", "products", "print"];

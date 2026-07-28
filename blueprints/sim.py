@@ -20,6 +20,7 @@ from io import BytesIO
 from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, redirect, request, send_file, send_from_directory
+from flask_login import current_user as petorlandia_current_user
 
 from extensions import csrf, db
 
@@ -448,22 +449,63 @@ def ensure_ready() -> None:
     _ready = True
 
 
+def _petorlandia_admin_as_sim_user() -> SimUser | None:
+    """Resolve a sessao principal de um admin como acesso interno ao SIM.
+
+    O portal ainda conserva as contas e tokens proprios para estabelecimentos e
+    acessos institucionais. Para a equipe administradora do PetOrlandia, porem,
+    a sessao Flask ja e a prova de autenticacao: a identidade correspondente no
+    SIM e criada na primeira visita, para que auditorias e anexos continuem
+    apontando para uma ``SimUser`` real.
+    """
+    if not getattr(petorlandia_current_user, "is_authenticated", False):
+        return None
+    if getattr(petorlandia_current_user, "role", None) != "admin":
+        return None
+
+    email = (getattr(petorlandia_current_user, "email", "") or "").strip().lower()
+    if not email:
+        return None
+
+    user = SimUser.query.filter_by(email=email).first()
+    if user:
+        # Nunca promove uma conta de estabelecimento que por acaso use o mesmo
+        # e-mail; somente identidades internas do SIM podem receber esse SSO.
+        return user if user.active and user.role == "sim" else None
+
+    user = SimUser(
+        email=email,
+        name=(getattr(petorlandia_current_user, "name", "") or email).strip(),
+        role="sim",
+        # Esta senha nao e utilizada: o acesso e autenticado pela sessao
+        # principal. Ainda assim a coluna permanece preenchida por integridade.
+        password_hash=password_hash(secrets.token_urlsafe(32)),
+        created_at=now_iso(),
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
 def current_user() -> SimUser | None:
     auth = request.headers.get("Authorization", "")
     token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
     if not token:
         token = request.args.get("token", "")
     if not token:
-        return None
+        return _petorlandia_admin_as_sim_user()
     session = db.session.get(SimSession, token)
     if not session:
         return None
     user = db.session.get(SimUser, session.user_id)
     if not user or not user.active:
-        return None
-    session.last_seen_at = now_iso()
-    db.session.commit()
-    return user
+        user = None
+    if user:
+        session.last_seen_at = now_iso()
+        db.session.commit()
+        return user
+
+    return _petorlandia_admin_as_sim_user()
 
 
 def public_user(user: SimUser | None) -> dict | None:
@@ -609,6 +651,11 @@ def model_dict(obj) -> dict:
 
 def registry_payload() -> dict:
     est_names = {est.id: (est.trade_name or est.legal_name) for est in SimEstablishment.query.all()}
+    last_seen_by_user = {}
+    for sim_session in SimSession.query.all():
+        previous = last_seen_by_user.get(sim_session.user_id)
+        if not previous or sim_session.last_seen_at > previous:
+            last_seen_by_user[sim_session.user_id] = sim_session.last_seen_at
 
     def with_name(obj):
         data = model_dict(obj)
@@ -616,6 +663,20 @@ def registry_payload() -> dict:
         return data
 
     return {
+        # O cadastro de contas e exclusivo da equipe SIM. Nunca expomos hash de
+        # senha ou token de sessao: a tela serve apenas para suporte e auditoria.
+        "accounts": [
+            {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role,
+                "active": user.active,
+                "created_at": user.created_at,
+                "last_seen_at": last_seen_by_user.get(user.id),
+            }
+            for user in SimUser.query.order_by(SimUser.name, SimUser.email).all()
+        ],
         "establishments": [model_dict(est) for est in SimEstablishment.query.order_by(SimEstablishment.legal_name).all()],
         "fiscalActs": [with_name(act) for act in SimFiscalAct.query.order_by(SimFiscalAct.id.desc()).all()],
         "inspections": [with_name(item) for item in SimInspection.query.order_by(SimInspection.inspection_date.desc(), SimInspection.id.desc()).all()],
