@@ -272,6 +272,142 @@ class Appointment(db.Model):
             is not None
         )
 
+    # -- Apresentação -----------------------------------------------------
+    # Rótulo, cor e ícone vêm sempre de services.appointment_status para que
+    # calendário, listas e cards mostrem exatamente a mesma coisa.
+
+    @property
+    def status_meta(self):
+        from services.appointment_status import status_meta
+
+        return status_meta(self.status)
+
+    @property
+    def status_label(self):
+        return self.status_meta['label']
+
+    @property
+    def display_kind(self):
+        """``kind`` normalizado para exibição (``general`` vira consulta)."""
+
+        from services.appointment_status import normalize_kind
+
+        return normalize_kind(self.kind, has_consulta=bool(self.consulta_id))
+
+    @property
+    def kind_meta(self):
+        from services.appointment_status import kind_meta
+
+        return kind_meta(self.display_kind)
+
+    @property
+    def kind_label(self):
+        return self.kind_meta['label']
+
+    # -- Duração e horários reais ----------------------------------------
+
+    @property
+    def duration(self):
+        from helpers import get_appointment_duration
+
+        return get_appointment_duration(self.kind)
+
+    @property
+    def duration_minutes(self):
+        from helpers import get_appointment_duration_minutes
+
+        return get_appointment_duration_minutes(self.kind)
+
+    @property
+    def ends_at(self):
+        if not self.scheduled_at:
+            return None
+        return self.scheduled_at + self.duration
+
+    @property
+    def started_at(self):
+        """Momento em que o atendimento realmente começou.
+
+        A consulta é criada quando o profissional abre o atendimento, então
+        ``Consulta.created_at`` é o horário real de início.
+        """
+
+        consulta = self.consulta
+        return getattr(consulta, 'created_at', None) if consulta else None
+
+    @property
+    def finished_at(self):
+        consulta = self.consulta
+        return getattr(consulta, 'finalizada_em', None) if consulta else None
+
+    @staticmethod
+    def _delta_minutes(later, earlier):
+        if not later or not earlier:
+            return None
+        if (later.tzinfo is None) != (earlier.tzinfo is None):
+            # Dados históricos misturam naive/aware; comparar como UTC naive.
+            later = later.replace(tzinfo=None) if later.tzinfo else later
+            earlier = earlier.replace(tzinfo=None) if earlier.tzinfo else earlier
+        return int(round((later - earlier).total_seconds() / 60))
+
+    @property
+    def delay_minutes(self):
+        """Atraso (em minutos) entre o horário marcado e o início real."""
+
+        delta = self._delta_minutes(self.started_at, self.scheduled_at)
+        if delta is None or delta <= 0:
+            return 0
+        return delta
+
+    @property
+    def actual_duration_minutes(self):
+        return self._delta_minutes(self.finished_at, self.started_at)
+
+    @property
+    def is_open(self):
+        from services.appointment_status import is_open_status
+
+        return is_open_status(self.status)
+
+    # Antecedência mínima exigida por ``update_appointment_status`` para aceitar.
+    ACCEPT_DEADLINE_MINUTES = 120
+
+    @property
+    def accept_time_left(self):
+        """Tempo restante para confirmar, ou ``None`` se não se aplica."""
+
+        if self.status != 'scheduled' or not self.scheduled_at:
+            return None
+        delta = self._delta_minutes(self.scheduled_at, utcnow())
+        if delta is None:
+            return None
+        return timedelta(minutes=delta - self.ACCEPT_DEADLINE_MINUTES)
+
+    @property
+    def can_be_accepted(self):
+        """``True`` se ainda dá tempo de confirmar este agendamento.
+
+        Evita oferecer um botão que o servidor recusaria com "Prazo expirado".
+        """
+
+        remaining = self.accept_time_left
+        return remaining is not None and remaining.total_seconds() > 0
+
+    @property
+    def running_late_minutes(self):
+        """Minutos de atraso de um agendamento que ainda não começou.
+
+        Retorna ``0`` quando o atendimento já começou, já passou por um estado
+        final, ou quando o horário marcado ainda não chegou.
+        """
+
+        if self.status not in {'scheduled', 'accepted'} or self.started_at:
+            return 0
+        delta = self._delta_minutes(utcnow(), self.scheduled_at)
+        if delta is None or delta <= 0:
+            return 0
+        return delta
+
     @staticmethod
     def _validate_subscription(mapper, connection, target):
         if current_app.config.get('REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT', False):

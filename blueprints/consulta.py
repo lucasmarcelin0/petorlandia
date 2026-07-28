@@ -3,7 +3,7 @@ from flask import Blueprint
 import json, os, re, unicodedata, uuid
 from authz import can_manage_budget, can_view_budget
 from context_processors import _invalidate_cached_context
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from extensions import db
@@ -497,6 +497,57 @@ def atualizar_protocolo_clinico_inline(consulta_id, protocol_id):
     })
 
 
+# Janela em que um atendimento iniciado "à mão" ainda é considerado o
+# cumprimento de um agendamento existente. Generosa no passado porque atrasos
+# são a regra, curta no futuro para não sequestrar o próximo paciente.
+AUTO_LINK_PAST_WINDOW = timedelta(hours=4)
+AUTO_LINK_FUTURE_WINDOW = timedelta(hours=2)
+
+
+def find_linkable_appointment(animal_id, *, clinica_id=None, veterinario_id=None):
+    """Encontra o agendamento que este atendimento provavelmente cumpre.
+
+    Sem isso, iniciar a consulta pela ficha do animal criava um atendimento
+    órfão e o agendamento ficava pendurado em ``accepted`` — o mesmo paciente
+    aparecia duas vezes na agenda do dia.
+    """
+
+    now = utcnow()
+    query = (
+        Appointment.query
+        .filter(Appointment.animal_id == animal_id)
+        .filter(Appointment.consulta_id.is_(None))
+        .filter(Appointment.status.in_(['scheduled', 'accepted', 'in_progress']))
+        .filter(Appointment.scheduled_at >= now - AUTO_LINK_PAST_WINDOW)
+        .filter(Appointment.scheduled_at <= now + AUTO_LINK_FUTURE_WINDOW)
+    )
+    if clinica_id:
+        query = query.filter(
+            or_(Appointment.clinica_id == clinica_id, Appointment.clinica_id.is_(None))
+        )
+    candidates = query.order_by(Appointment.scheduled_at).all()
+    if not candidates:
+        return None
+    if veterinario_id:
+        # O agendamento do próprio profissional tem precedência sobre o de um
+        # colega marcado para o mesmo paciente na mesma janela.
+        own = [a for a in candidates if a.veterinario_id == veterinario_id]
+        if own:
+            candidates = own
+
+    def _distance(appointment):
+        scheduled = appointment.scheduled_at
+        if scheduled is None:
+            return timedelta.max
+        reference = now
+        if (scheduled.tzinfo is None) != (reference.tzinfo is None):
+            scheduled = scheduled.replace(tzinfo=None) if scheduled.tzinfo else scheduled
+            reference = reference.replace(tzinfo=None) if reference.tzinfo else reference
+        return abs(scheduled - reference)
+
+    return min(candidates, key=_distance)
+
+
 @bp.route('/consulta/<int:animal_id>')
 @login_required
 def consulta_direct(animal_id):
@@ -566,20 +617,35 @@ def consulta_direct(animal_id):
                 db.session.add(consulta)
                 consulta_created = True
 
+        vet_profile = getattr(current_user, 'veterinario', None)
+
+        if not appointment and consulta and not edit_mode:
+            # Atendimento aberto pela ficha do animal: reaproveita o
+            # agendamento do horário em vez de criar um evento paralelo.
+            appointment = find_linkable_appointment(
+                animal.id,
+                clinica_id=clinica_id,
+                veterinario_id=getattr(vet_profile, 'id', None),
+            )
+
         if appointment and consulta:
             if appointment.consulta_id != consulta.id:
                 appointment.consulta = consulta
                 appointment_updated = True
 
-            vet_profile = getattr(current_user, 'veterinario', None)
             if (
                 vet_profile
                 and appointment.veterinario_id == getattr(vet_profile, 'id', None)
-                and appointment.status not in {'completed', 'canceled'}
-                and appointment.status != 'accepted'
+                and appointment.status not in {'completed', 'canceled', 'no_show'}
             ):
-                appointment.status = 'accepted'
-                appointment_updated = True
+                # Enquanto a consulta está aberta o agendamento fica "em
+                # atendimento"; ``finalizar_consulta`` promove para completed.
+                target_status = (
+                    'completed' if consulta.status == 'finalizada' else 'in_progress'
+                )
+                if appointment.status != target_status:
+                    appointment.status = target_status
+                    appointment_updated = True
 
         if consulta_created or appointment_updated:
             db.session.commit()

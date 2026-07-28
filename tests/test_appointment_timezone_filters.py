@@ -75,7 +75,10 @@ def test_late_brt_appointment_survives_local_filters(client, monkeypatch):
     resp = client.get(f'/appointments?start={start}&end={start}')
     assert resp.status_code == 200
     vet_html = resp.data.decode()
-    assert '01/05/2024 23:30' in vet_html
+    # A agenda passou a separar data e horário em campos próprios; o que importa
+    # aqui é que o agendamento das 23:30 BRT sobreviva ao filtro do dia local.
+    assert 'data-date-label="01/05/2024"' in vet_html
+    assert 'data-time="23:30"' in vet_html
 
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(admin_id))
     resp = client.get(f'/clinica/{clinic_id}?start={start}&end={start}')

@@ -8140,21 +8140,13 @@ def formatar_telefone(telefone: str) -> str:
         return f"+55{telefone}"
 
 
-APPOINTMENT_STATUS_LABELS = {
-    'scheduled': 'A fazer',
-    'accepted': 'Aceita',
-    'completed': 'Realizada',
-    'canceled': 'Cancelada',
-}
-
-APPOINTMENT_KIND_LABELS = {
-    'consulta': 'Consulta',
-    'retorno': 'Retorno',
-    'exame': 'Exame',
-    'banho_tosa': 'Banho e Tosa',
-    'vacina': 'Vacina',
-    'general': 'Geral',
-}
+# Rótulos de status/tipo vivem em services.appointment_status para que
+# calendário, listas e cards falem sempre a mesma língua. Reexportados aqui
+# porque blueprints legados importam esses nomes de ``app``.
+from services.appointment_status import (  # noqa: E402
+    APPOINTMENT_KIND_LABELS,
+    APPOINTMENT_STATUS_LABELS,
+)
 
 ORCAMENTO_STATUS_LABELS = {
     'draft': 'Rascunho',

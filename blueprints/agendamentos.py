@@ -47,13 +47,18 @@ from models import (
 )
 from repositories import AppointmentRepository, ClinicRepository
 from services import get_calendar_access_scope
+from services.appointment_status import (
+    SETTABLE_APPOINTMENT_STATUSES,
+    normalize_kind,
+    status_meta,
+)
 from services.fiscal.nfse_service import (
     build_nfse_payload_from_appointment,
     create_nfse_document,
     queue_emit_nfse,
 )
 from template_filters import format_datetime_brazil, format_timedelta
-from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
+from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, now_in_brazil, utcnow
 
 from app import (
     _build_veterinarian_activity_report,
@@ -418,6 +423,42 @@ def appointment_confirmation(appointment_id):
     if appointment.tutor_id != current_user.id:
         abort(403)
     return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
+
+
+def _agenda_quick_ranges(today=None):
+    """Intervalos prontos para a barra de filtros da agenda.
+
+    Antes o período só existia na querystring: não havia como saber qual
+    recorte estava ativo sem ler a barra de endereços.
+    """
+
+    today = today or date.today()
+    monday = today - timedelta(days=today.weekday())
+    if today.month == 12:
+        next_month_first = date(today.year + 1, 1, 1)
+    else:
+        next_month_first = date(today.year, today.month + 1, 1)
+    return [
+        {'key': 'today', 'label': 'Hoje', 'start': today, 'end': today},
+        {
+            'key': 'tomorrow',
+            'label': 'Amanhã',
+            'start': today + timedelta(days=1),
+            'end': today + timedelta(days=1),
+        },
+        {
+            'key': 'week',
+            'label': 'Semana',
+            'start': monday,
+            'end': monday + timedelta(days=6),
+        },
+        {
+            'key': 'month',
+            'label': 'Mês',
+            'start': today.replace(day=1),
+            'end': next_month_first - timedelta(days=1),
+        },
+    ]
 
 
 @bp.route("/appointments", methods=["GET", "POST"])
@@ -875,9 +916,7 @@ def appointments():
         pending_consults_waiting_others = []
         for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
-            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
-            if kind == 'general':
-                kind = 'consulta'
+            kind = normalize_kind(appt.kind, has_consulta=bool(appt.consulta_id))
             item = {'kind': kind, 'appt': appt}
             appointments_pending_consults.append(item)
             if appt.veterinario_id == veterinario.id:
@@ -965,8 +1004,10 @@ def appointments():
                 }
             )
 
+        # ``in_progress`` entra junto: é um agendamento confirmado cujo
+        # atendimento já começou, e precisa continuar visível na agenda.
         accepted_consultas_in_range = (
-            Appointment.query.filter(Appointment.status == 'accepted')
+            Appointment.query.filter(Appointment.status.in_(['accepted', 'in_progress']))
             .filter(Appointment.scheduled_at >= start_dt_utc)
             .filter(Appointment.scheduled_at < end_dt_utc)
             .filter(appointment_scope_filter)
@@ -994,9 +1035,7 @@ def appointments():
         )
         appointments_upcoming = []
         for appt in upcoming_consultas:
-            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
-            if kind == 'general':
-                kind = 'consulta'
+            kind = normalize_kind(appt.kind, has_consulta=bool(appt.consulta_id))
             appointments_upcoming.append({'kind': kind, 'appt': appt})
         for exam in upcoming_exams:
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
@@ -1062,6 +1101,8 @@ def appointments():
                     exam_blocks_by_consulta[consulta_ref].append(bloco)
 
         schedule_events = []
+        # Agendamentos já representados por uma consulta finalizada.
+        consulta_appointment_ids = set()
 
         def _consulta_timestamp(consulta_obj):
             if consulta_obj.finalizada_em:
@@ -1098,14 +1139,23 @@ def appointments():
                             'bloco_id': bloco.id,
                         }
                     )
+            appointment = consulta.appointment
+            if appointment is not None and getattr(appointment, 'id', None):
+                consulta_appointment_ids.add(appointment.id)
             schedule_events.append(
                 {
                     'kind': 'consulta_finalizada',
                     'timestamp': timestamp,
+                    'scheduled_at': getattr(appointment, 'scheduled_at', None),
+                    'started_at': consulta.created_at,
+                    'finished_at': consulta.finalizada_em,
+                    'delay_minutes': getattr(appointment, 'delay_minutes', 0)
+                    if appointment
+                    else 0,
                     'animal': consulta.animal,
                     'consulta': consulta,
                     'consulta_id': consulta.id,
-                    'appointment': consulta.appointment,
+                    'appointment': appointment,
                     'exam_summary': exam_summary,
                     'exam_blocks': relevant_blocks or [],
                     'exam_ids': exam_ids,
@@ -1115,10 +1165,19 @@ def appointments():
         for appt in past_accepted_consultas:
             if not appt.scheduled_at or not (start_dt_utc <= appt.scheduled_at < end_dt_utc):
                 continue
+            # O agendamento e sua consulta finalizada são o MESMO atendimento:
+            # sem este filtro o paciente das 11h aparecia duas vezes — uma no
+            # horário marcado e outra no horário em que a consulta terminou.
+            if appt.id in consulta_appointment_ids:
+                continue
             schedule_events.append(
                 {
                     'kind': 'consulta_aceita',
                     'timestamp': appt.scheduled_at,
+                    'scheduled_at': appt.scheduled_at,
+                    'started_at': appt.started_at,
+                    'finished_at': None,
+                    'delay_minutes': appt.delay_minutes,
                     'animal': appt.animal,
                     'consulta': appt.consulta,
                     'consulta_id': appt.consulta_id,
@@ -1163,6 +1222,121 @@ def appointments():
             key=lambda event: event.get('timestamp') or datetime.min,
             reverse=True,
         )
+
+        # ------------------------------------------------------------------
+        # Resumo do período: dá contexto em dois segundos, sem obrigar o
+        # profissional a abrir cada seção para saber como está o dia.
+        # ------------------------------------------------------------------
+        period_appointments = (
+            Appointment.query.filter(Appointment.scheduled_at >= start_dt_utc)
+            .filter(Appointment.scheduled_at < end_dt_utc)
+            .filter(appointment_scope_filter)
+            .options(joinedload(Appointment.consulta))
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        # Ids já exibidos na agenda cronológica. As demais seções pulam esses
+        # itens para que um atendimento nunca apareça duas vezes na página.
+        agenda_timeline_ids = {appt.id for appt in period_appointments}
+        status_counts = defaultdict(int)
+        late_appointments = []
+        next_appointment = None
+        for appt in period_appointments:
+            status_counts[appt.status] += 1
+            if appt.running_late_minutes:
+                late_appointments.append(appt)
+            scheduled_at_utc = (
+                normalize_to_utc(appt.scheduled_at) if appt.scheduled_at else None
+            )
+            if (
+                scheduled_at_utc
+                and scheduled_at_utc >= now
+                and appt.status in {'scheduled', 'accepted'}
+                and next_appointment is None
+            ):
+                next_appointment = appt
+
+        exam_count_in_period = (
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id)
+            .filter(ExamAppointment.scheduled_at >= start_dt_utc)
+            .filter(ExamAppointment.scheduled_at < end_dt_utc)
+            .filter(ExamAppointment.status.in_(['pending', 'confirmed']))
+            .count()
+        )
+
+        # Agenda cronológica do período, agrupada por dia e por profissional.
+        # É a visão que estava faltando: com muitos atendimentos no mesmo dia,
+        # a lista por status não mostra buracos, sobreposições nem a ordem real.
+        weekday_names = [
+            'Segunda-feira',
+            'Terça-feira',
+            'Quarta-feira',
+            'Quinta-feira',
+            'Sexta-feira',
+            'Sábado',
+            'Domingo',
+        ]
+        days_by_date = {}
+        for appt in period_appointments:
+            if not appt.scheduled_at:
+                continue
+            local_dt = coerce_to_brazil_tz(appt.scheduled_at)
+            day_key = local_dt.date()
+            day = days_by_date.get(day_key)
+            if day is None:
+                day = {
+                    'date': day_key,
+                    'weekday': weekday_names[day_key.weekday()],
+                    'is_today': day_key == date.today(),
+                    'appointments': [],
+                    'columns': [],
+                }
+                days_by_date[day_key] = day
+            day['appointments'].append(appt)
+
+        agenda_days = [days_by_date[key] for key in sorted(days_by_date)]
+        for day in agenda_days:
+            columns = {}
+            for appt in day['appointments']:
+                vet_id = appt.veterinario_id
+                column = columns.get(vet_id)
+                if column is None:
+                    vet_user = getattr(getattr(appt, 'veterinario', None), 'user', None)
+                    column = {
+                        'veterinario_id': vet_id,
+                        'name': getattr(vet_user, 'name', None) or 'Sem profissional',
+                        'appointments': [],
+                    }
+                    columns[vet_id] = column
+                column['appointments'].append(appt)
+            day['columns'] = sorted(columns.values(), key=lambda col: col['name'].lower())
+            # Colunas só ajudam quando há mais de um profissional no dia;
+            # caso contrário viram uma moldura vazia em volta da lista.
+            day['use_columns'] = len(day['columns']) > 1
+
+        period_days = max((end_dt.date() - start_dt.date()).days, 1)
+        agenda_summary = {
+            'total': len(period_appointments),
+            'scheduled': status_counts.get('scheduled', 0),
+            'accepted': status_counts.get('accepted', 0),
+            'in_progress': status_counts.get('in_progress', 0),
+            'completed': status_counts.get('completed', 0),
+            'no_show': status_counts.get('no_show', 0),
+            'canceled': status_counts.get('canceled', 0),
+            'open': sum(
+                status_counts.get(status, 0)
+                for status in ('scheduled', 'accepted', 'in_progress')
+            ),
+            'exams': exam_count_in_period,
+            'late': len(late_appointments),
+            'late_appointments': late_appointments[:5],
+            'next_appointment': next_appointment,
+            'start_date': start_dt.date(),
+            'end_date': (end_dt - timedelta(days=1)).date(),
+            'days': period_days,
+            'is_single_day': period_days == 1,
+            'is_today': period_days == 1 and start_dt.date() == date.today(),
+        }
 
         # Nota: os contadores de "visto" em sessão foram removidos — os badges
         # da navbar agora contam apenas itens acionáveis (exames pendentes e
@@ -1230,6 +1404,11 @@ def appointments():
             appointments_upcoming_for_me=appointments_upcoming_for_me,
             appointments_upcoming_requested=appointments_upcoming_requested,
             schedule_events=schedule_events,
+            agenda_summary=agenda_summary,
+            agenda_days=agenda_days,
+            agenda_timeline_ids=agenda_timeline_ids,
+            agenda_quick_ranges=_agenda_quick_ranges(),
+            agenda_now=now_in_brazil(),
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
@@ -2068,11 +2247,21 @@ def update_appointment_status(appointment_id):
 
     status_value = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
     status = (status_value or '').strip().lower()
-    allowed_statuses = {'scheduled', 'completed', 'canceled', 'accepted'}
-    if status not in allowed_statuses:
+    if status not in SETTABLE_APPOINTMENT_STATUSES:
         message = 'Status inválido.'
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'error')
+        return redirect(redirect_url)
+
+    # "Não compareceu" e "em atendimento" descrevem o que aconteceu na clínica:
+    # só quem trabalha nela pode registrar.
+    if status in {'no_show', 'in_progress'} and not (
+        current_user.role == 'admin' or is_vet or is_collaborator
+    ):
+        message = 'Somente a equipe da clínica pode registrar este status.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 403
         flash(message, 'error')
         return redirect(redirect_url)
 

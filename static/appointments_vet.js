@@ -25,11 +25,15 @@ const TYPE_LABELS = {
   vacina: 'Vacina'
 };
 
+// Espelha services/appointment_status.py. Só é usado como fallback: o rótulo
+// preferido chega em `data-status-label`, renderizado pelo servidor.
 const STATUS_LABELS = {
-  scheduled: 'A fazer',
-  completed: 'Realizada',
-  canceled: 'Cancelada',
-  accepted: 'Aceita'
+  scheduled: 'A confirmar',
+  accepted: 'Confirmada',
+  in_progress: 'Em atendimento',
+  completed: 'Finalizada',
+  no_show: 'Não compareceu',
+  canceled: 'Cancelada'
 };
 
 function showToastMessage(message, category = 'info') {
@@ -2221,7 +2225,9 @@ function bindAppointmentItems(root) {
     }
     item.dataset.vetScheduleBound = 'true';
     item.addEventListener('click', (event) => {
-      if (event.target.closest('.btn')) {
+      // Cliques em ações da linha (botão, item de menu, link, formulário) não
+      // devem abrir o modal de detalhes por cima da ação escolhida.
+      if (event.target.closest('.btn, .dropdown-item, .dropdown-menu, a, form')) {
         return;
       }
       if (event.target.closest(SCHEDULE_SELECTORS.wrapper)) {
@@ -2535,6 +2541,8 @@ function bindPastToggle(root) {
     toggleButton.innerHTML = isHidden
       ? '<i class="fas fa-chevron-down me-1"></i>Mostrar'
       : '<i class="fas fa-chevron-up me-1"></i>Ocultar';
+    // Mantém leitores de tela em sincronia com o estado visual.
+    toggleButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
   });
 }
 
