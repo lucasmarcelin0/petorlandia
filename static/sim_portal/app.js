@@ -2068,6 +2068,12 @@ function bindEvents() {
   document.querySelectorAll("[data-open-upload]").forEach((el) => {
     el.addEventListener("click", () => openUpload(el.dataset.openUpload));
   });
+  const modalBackdrop = document.querySelector(".modal-backdrop");
+  modalBackdrop?.addEventListener("click", (event) => {
+    if (event.target !== event.currentTarget) return;
+    activeUpload = null;
+    render();
+  });
   document.querySelectorAll("[data-print-form]").forEach((el) => {
     el.addEventListener("click", () => {
       state.printForm = el.dataset.printForm;
