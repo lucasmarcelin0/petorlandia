@@ -1480,9 +1480,50 @@ table select:disabled {
 .official-fill-textarea {
   height: var(--official-textarea-height);
   min-height: var(--official-textarea-height);
-  resize: none;
+  resize: vertical;
   overflow: auto;
   white-space: pre-wrap;
+}
+
+.official-print-value,
+.official-continuation-page {
+  display: none;
+}
+
+.digital-pdf .official-page {
+  border-color: #b9cfcd;
+}
+
+.digital-pdf .official-service-masthead {
+  border-color: #123d50;
+  background: linear-gradient(90deg, #edf7f5, #f8fbf1);
+}
+
+.digital-pdf .official-service-masthead img {
+  filter: none;
+}
+
+.digital-pdf .official-form-name,
+.digital-pdf .official-section-title {
+  color: #0e5e55;
+}
+
+.digital-pdf .official-data-table th,
+.digital-pdf .official-fixed-cell {
+  background: #e8f1ee;
+}
+
+.digital-pdf .official-grid,
+.digital-pdf .official-field,
+.digital-pdf .official-data-table th,
+.digital-pdf .official-data-table td,
+.digital-pdf .official-fixed-copy,
+.digital-pdf .official-box,
+.digital-pdf .official-request-box,
+.digital-pdf .official-document-signatures,
+.digital-pdf .official-fiscal-signatures,
+.digital-pdf .official-witness-grid {
+  border-color: #749c96;
 }
 
 .official-document-page .official-option {
@@ -2064,17 +2105,81 @@ table select:disabled {
   }
 
   .official-fill-textarea {
-    overflow: hidden;
-    white-space: pre-wrap;
+    display: none;
   }
 
-  .official-page-body > .official-fill-textarea {
+  .official-print-value {
+    display: block;
+    min-height: var(--official-textarea-height);
     padding: .8mm;
     border: 1.1px solid #111;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 7.1pt;
+  }
+
+  .official-continuation-page {
+    display: block;
+  }
+
+  .official-continuation-body {
+    display: grid;
+    gap: 3mm;
+  }
+
+  .official-continuation-description {
+    margin: 0;
+    color: #444;
+    font-size: 7.5pt;
+    font-weight: 700;
+  }
+
+  .official-continuation-text {
+    min-height: 220mm;
+    padding: 3mm;
+    border: 1.1px solid #111;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 8.5pt;
+    line-height: 1.45;
   }
 
   .official-service-masthead img {
     filter: grayscale(1);
+  }
+
+  body.digital-pdf .official-service-masthead img {
+    filter: none;
+  }
+
+  body.digital-pdf .official-service-masthead {
+    border-color: #123d50;
+    background: #edf7f5;
+  }
+
+  body.digital-pdf .official-form-name,
+  body.digital-pdf .official-section-title {
+    color: #0e5e55;
+  }
+
+  body.digital-pdf .official-data-table th,
+  body.digital-pdf .official-fixed-cell {
+    background: #e8f1ee;
+  }
+
+  body.digital-pdf .official-grid,
+  body.digital-pdf .official-field,
+  body.digital-pdf .official-data-table th,
+  body.digital-pdf .official-data-table td,
+  body.digital-pdf .official-print-value,
+  body.digital-pdf .official-continuation-text,
+  body.digital-pdf .official-fixed-copy,
+  body.digital-pdf .official-box,
+  body.digital-pdf .official-request-box,
+  body.digital-pdf .official-document-signatures,
+  body.digital-pdf .official-fiscal-signatures,
+  body.digital-pdf .official-witness-grid {
+    border-color: #749c96;
   }
 
   .official-section-title,

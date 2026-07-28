@@ -2116,10 +2116,11 @@ function renderPrint() {
   return `
     <div class="tabs no-print">${tabs.map(([id, label]) => `<button class="${state.printForm === id ? "active" : ""}" data-print-form="${id}">${label}</button>`).join("")}</div>
     <div class="actions no-print" style="margin-bottom:14px">
-      <button class="btn primary" data-action="print">${icon("print")}Imprimir</button>
+      <button class="btn" data-action="print">${icon("print")}Imprimir P&B</button>
+      <button class="btn primary" data-action="print-digital">${icon("print")}Gerar PDF colorido</button>
       ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<a class="btn" href="${docxUrl(state.printForm)}" title="Baixa uma versao Word editavel deste formulario">${icon("file")}Baixar Word (rascunho editavel)</a>` : ""}
     </div>
-    <p class="small muted no-print" style="margin:-6px 0 14px">Preencha diretamente nos campos amarelos da folha. As altera&ccedil;&otilde;es s&atilde;o salvas no processo; ao imprimir, os campos ficam com apar&ecirc;ncia limpa para assinatura.</p>
+    <p class="small muted no-print" style="margin:-6px 0 14px">Os campos narrativos crescem enquanto voc&ecirc; escreve. Se ultrapassarem a folha, o PDF cria p&aacute;ginas de continua&ccedil;&atilde;o automaticamente. Use <strong>Imprimir P&amp;B</strong> para a via f&iacute;sica e <strong>Gerar PDF colorido</strong> ao salvar digitalmente.</p>
     ${printSheet()}
   `;
 }
@@ -2192,6 +2193,93 @@ function officialTextarea(path, options = {}) {
     ${readonly ? "readonly" : ""}
     aria-label="${escapeHtml(options.label || path)}"
   >${escapeHtml(value)}</textarea>`;
+}
+
+function autoSizeOfficialTextarea(element) {
+  if (!element || !element.matches(".official-fill-textarea")) return;
+  const minimum = parseFloat(getComputedStyle(element).minHeight) || 0;
+  element.style.height = "auto";
+  element.style.height = `${Math.max(element.scrollHeight, minimum)}px`;
+}
+
+function splitContinuationText(value, maxCharacters = 2100) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  const pages = [];
+  let remaining = text;
+  while (remaining.length > maxCharacters) {
+    let cut = remaining.lastIndexOf("\n", maxCharacters);
+    if (cut < maxCharacters * .55) cut = remaining.lastIndexOf(" ", maxCharacters);
+    if (cut < maxCharacters * .55) cut = maxCharacters;
+    pages.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  pages.push(remaining);
+  return pages;
+}
+
+function cleanupPrintPreparation() {
+  document.querySelectorAll(".official-print-value, .official-continuation-page").forEach((element) => element.remove());
+  document.querySelectorAll(".official-fill-textarea.has-print-continuation").forEach((element) => {
+    element.classList.remove("has-print-continuation");
+  });
+  document.body.classList.remove("digital-pdf");
+}
+
+function prepareLongFormFields() {
+  cleanupPrintPreparation();
+  const form = document.querySelector(".official-form");
+  if (!form) return;
+  const header = form.querySelector(".official-form-header");
+  const annex = form.querySelector(".official-form-name strong")?.textContent || "ANEXO";
+  const formTitle = form.querySelector(".official-form-name span")?.textContent || "FORMULÁRIO";
+  const continuationPages = [];
+
+  form.querySelectorAll(".official-fill-textarea").forEach((field) => {
+    const value = field.value || "";
+    const label = field.getAttribute("aria-label") || "Campo descritivo";
+    const printValue = document.createElement("div");
+    printValue.className = "official-print-value";
+    const needsContinuation = value.length > 500 || value.split("\n").length > 12;
+    printValue.textContent = needsContinuation
+      ? "O conteúdo integral deste campo segue na página de continuação."
+      : value;
+    field.after(printValue);
+    if (!needsContinuation) return;
+
+    field.classList.add("has-print-continuation");
+    splitContinuationText(value).forEach((chunk, index, chunks) => {
+      const page = document.createElement("section");
+      page.className = "official-page official-document-page official-continuation-page";
+      if (header) page.append(header.cloneNode(true));
+      const title = document.createElement("div");
+      title.className = "official-form-name";
+      title.innerHTML = `<strong>${escapeHtml(annex)}</strong><span>CONTINUAÇÃO — ${escapeHtml(label)}</span>`;
+      const body = document.createElement("div");
+      body.className = "official-page-body official-continuation-body";
+      const description = document.createElement("p");
+      description.className = "official-continuation-description";
+      description.textContent = `${formTitle} · ${label}`;
+      const text = document.createElement("div");
+      text.className = "official-continuation-text";
+      text.textContent = chunk;
+      const pageIndex = document.createElement("div");
+      pageIndex.className = "official-page-index";
+      pageIndex.textContent = `CONTINUAÇÃO ${index + 1} DE ${chunks.length}`;
+      body.append(description, text);
+      page.append(title, body, pageIndex);
+      continuationPages.push(page);
+    });
+  });
+  continuationPages.forEach((page) => form.append(page));
+}
+
+function printDocument(mode = "paper") {
+  prepareLongFormFields();
+  document.body.classList.toggle("digital-pdf", mode === "digital");
+  const cleanup = () => cleanupPrintPreparation();
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
 }
 
 function officialDocumentHeader(number, title) {
@@ -3267,6 +3355,10 @@ function bindEvents() {
     const eventName = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(eventName, () => update(el.dataset.path, el.value));
   });
+  document.querySelectorAll(".official-fill-textarea").forEach((el) => {
+    autoSizeOfficialTextarea(el);
+    el.addEventListener("input", () => autoSizeOfficialTextarea(el));
+  });
   document.querySelectorAll("[data-official-choice-path]").forEach((el) => {
     el.addEventListener("change", () => {
       update(el.dataset.officialChoicePath, el.value);
@@ -3720,7 +3812,8 @@ function handleAction(action) {
   if (action === "approve") reviewDecision("approve");
   if (action === "reject") reviewDecision("reject");
   if (action === "corrections") reviewDecision("corrections");
-  if (action === "print") window.print();
+  if (action === "print") printDocument("paper");
+  if (action === "print-digital") printDocument("digital");
   if (action === "logout") logout();
   if (action === "close-modal") {
     activeUpload = null;

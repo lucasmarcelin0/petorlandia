@@ -179,3 +179,20 @@ def test_annexes_ii_to_vii_use_editable_official_a4_pages():
     assert "@page official-document" in styles
     assert ".official-document-page + .official-document-page" in styles
     assert ".official-other-option > span" in styles
+
+
+def test_print_forms_expand_on_screen_and_create_safe_colored_pdf_continuations():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'data-action="print-digital"' in script
+    assert "function autoSizeOfficialTextarea" in script
+    assert "function prepareLongFormFields" in script
+    assert "official-continuation-page" in script
+    assert "O conteúdo integral deste campo segue na página de continuação." in script
+    assert "printDocument(\"digital\")" in script
+    assert "resize: vertical;" in styles
+    assert ".digital-pdf .official-service-masthead" in styles
+    assert "body.digital-pdf .official-service-masthead img" in styles
+    assert ".official-continuation-text" in styles
