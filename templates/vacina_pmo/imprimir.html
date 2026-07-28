@@ -10,9 +10,13 @@
 
     body {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 15pt;
-      margin: 0;
-      padding: 8mm 10mm;
+      font-size: 13pt;
+      /* Largura util da A4 paisagem (297mm - 20mm de margem). Fixar isso faz a
+         tela ter exatamente a mesma quebra de linha do papel — sem isso o
+         ajuste de densidade media numa janela larga e escolhia errado. */
+      width: 277mm;
+      margin: 0 auto;
+      padding: 5mm 8mm;
       background: #fff;
       color: #000;
     }
@@ -28,6 +32,7 @@
       flex-wrap: wrap;
     }
     .header .sub strong { color: #000; }
+    .header .legend { font-size: 11pt; color: #555; }
 
     /* ── Navegação (oculta na impressão) ───────────────────────────────────── */
     .no-print {
@@ -64,47 +69,182 @@
     thead th {
       background: #1a1a2e;
       color: #fff;
-      font-size: 11pt;
-      padding: 7px 8px;
+      font-size: 10pt;
+      padding: 5px 6px;
       text-align: left;
       white-space: nowrap;
     }
 
     tbody td {
-      padding: 7px 8px;
+      padding: 5px 6px;
       border-bottom: 1px solid #bbb;
       vertical-align: top;
-      font-size: 14pt;
+      font-size: 13pt;
     }
 
     tbody tr:nth-child(even) td { background: #f0f4f8; }
 
-    /* Colunas fixas */
-    .c-num  { width: 30px;  text-align: center; font-weight: 700; color: #555; }
-    .c-name { min-width: 160px; font-weight: 700; }
-    .c-addr { min-width: 180px; }
-    .c-tel  { min-width: 120px; white-space: nowrap; font-size: 12pt; }
-    .c-pet  { min-width: 140px; }
-    .c-obs  { min-width: 120px; font-size: 11pt; color: #333; }
-    .c-ok   { width: 38px;  text-align: center; font-size: 18pt; }
+    /* Colunas fixas — cor/tamanho so no corpo, senao sobrescrevem o thead. */
+    .c-num  { width: 26px;  text-align: center; }
+    .c-name { width: 14%; }
+    .c-addr { width: 15%; }
+    .c-tel  { width: 10%; white-space: nowrap; }
+    .c-pet  { width: 26%; }
+    .c-obs  { width: 14%; }
+    .c-ok   { width: 30px;  text-align: center; }
+    .c-sign { width: 15%; }
 
-    .pet-row { display: block; line-height: 1.4; }
+    tbody .c-num  { font-weight: 700; color: #555; }
+    tbody .c-name { font-weight: 700; }
+    tbody .c-tel  { font-size: 11pt; }
+    tbody .c-obs  { font-size: 10pt; color: #333; }
+    tbody .c-ok   { font-size: 16pt; }
+
+    .pet-row { display: block; line-height: 1.5; }
+
+    /* Cão = etiqueta preenchida, gato = etiqueta vazada: continua legível em P&B. */
+    .pet-badge {
+      display: inline-block;
+      width: 1.5em;
+      height: 1.5em;
+      line-height: 1.42em;
+      text-align: center;
+      font-size: 0.68em;
+      font-weight: 700;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+    .pet-badge--cao  { background: #1a1a2e; color: #fff; border: 1.5px solid #1a1a2e; }
+    .pet-badge--gato { background: #fff; color: #1a1a2e; border: 1.5px solid #1a1a2e; }
+
+    .pet-count { display: block; font-size: 0.62em; color: #666; margin-top: 3px; }
+
+    /* Linha para o tutor assinar / escrever o nome. */
+    .sign-line {
+      display: block;
+      border-bottom: 1px solid #555;
+      height: 2.1em;
+    }
+    .sign-hint {
+      display: block;
+      font-size: 8pt;
+      color: #777;
+      margin-top: 2px;
+    }
+
+    /* ── Timbre / avisos ────────────────────────────────────────────────────── */
+    /* Timbre ao lado do titulo: em bloco proprio custava ~18mm de altura. */
+    .timbre { float: left; width: 62mm; height: auto; margin: 0 8mm 2mm 0; }
+    .header { overflow: hidden; }
+    .header .falta strong { font-size: 1.15em; }
+    .header .feito { color: #555; }
+    .header .aviso {
+      margin-top: 4px;
+      font-size: 10pt;
+      border-left: 4px solid #444;
+      padding: 3px 8px;
+      background: #f2f2f2;
+    }
+
+    /* Instrucao que vinha grudada no nome do tutor na planilha. */
+    .tag {
+      display: block;
+      font-size: 9pt;
+      font-weight: 400;
+      color: #444;
+      border: 1px solid #999;
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-top: 3px;
+    }
+    .tag--dup { border-style: dashed; }
+    tr.is-dup td { background: #ececec !important; }
+
+    /* ── Animais: pendente x ja vacinado ────────────────────────────────────── */
+    .pet-box {
+      display: inline-block;
+      width: 1.15em;
+      margin-right: 4px;
+      font-size: 1.05em;
+      vertical-align: -1px;
+    }
+    .pet-box--feito { font-weight: 700; }
+    .pet-row--feito {
+      color: #888;
+      text-decoration: line-through;
+      text-decoration-color: #aaa;
+    }
+    .pet-when { font-size: 0.72em; text-decoration: none; display: inline-block; }
+    .pet-count--ok { font-style: italic; }
+    .obs-row { display: block; line-height: 1.35; }
+    .obs-row + .obs-row { margin-top: 2px; }
+
+    /* Altura minima para caber a assinatura. */
+    tbody tr { height: 17mm; }
+
+    /* ── Rodape de fechamento ───────────────────────────────────────────────── */
+    .rodape {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 2px solid #1a1a2e;
+      page-break-inside: avoid;
+    }
+    .rodape__totais {
+      display: flex;
+      gap: 26px;
+      flex-wrap: wrap;
+      font-size: 11pt;
+      margin-bottom: 12px;
+    }
+    .campo {
+      display: inline-block;
+      width: 90px;
+      border-bottom: 1px solid #555;
+    }
+    .campo--curto { width: 55px; }
+    .rodape__assinaturas { display: flex; gap: 40px; }
+    .rodape__ass { flex: 1 1 0; max-width: 90mm; }
+
+    /* ── Densidade: aperta a folha para tentar fechar em uma pagina ─────────── */
+    /* Nos modos apertados os animais correm na linha em vez de empilhar:
+       e o que mais economiza altura numa casa com 3 ou 4 bichos. */
+    body.compacta .pet-row,
+    body.super-compacta .pet-row {
+      display: inline-block;
+      margin-right: 9px;
+      line-height: 1.25;
+    }
+
+    body.compacta .timbre { width: 55mm; }
+    body.compacta .header h1 { font-size: 16pt; }
+    body.compacta tbody tr { height: 12mm; }
+    body.compacta tbody td { padding: 4px 6px; font-size: 11pt; }
+    body.compacta tbody .c-obs { font-size: 9pt; }
+    body.compacta .sign-line { height: 1.5em; }
+    body.compacta .rodape { margin-top: 6px; }
+
+    body.super-compacta .timbre { width: 46mm; }
+    body.super-compacta .header h1 { font-size: 14pt; }
+    body.super-compacta .header .sub { font-size: 9pt; gap: 12px; }
+    body.super-compacta .header .legend { display: none; }
+    body.super-compacta tbody tr { height: 9mm; }
+    body.super-compacta tbody td { padding: 3px 5px; font-size: 9.5pt; }
+    body.super-compacta tbody .c-obs { font-size: 8pt; }
+    body.super-compacta .sign-line { height: 1.2em; }
+    body.super-compacta .sign-hint { display: none; }
+    body.super-compacta .rodape { margin-top: 4px; }
+    body.super-compacta .rodape__totais { margin-bottom: 6px; font-size: 9pt; }
 
     /* ── Impressão ──────────────────────────────────────────────────────────── */
+    /* Esta página só existe para ser impressa, então a tela usa exatamente as
+       mesmas medidas do papel. Assim o que se vê é o que sai — e o ajuste
+       automático de densidade lá embaixo pode medir a página de verdade. */
     @media print {
       .no-print { display: none !important; }
-
-      body { padding: 5mm 8mm; font-size: 13pt; }
-
-      thead th { font-size: 10pt; padding: 5px 6px; }
-
-      tbody td { font-size: 13pt; padding: 5px 6px; }
-
-      .c-tel  { font-size: 11pt; }
-      .c-obs  { font-size: 10pt; }
-      .c-ok   { font-size: 16pt; }
-
       tr { page-break-inside: avoid; }
+      /* Repete o cabeçalho da tabela quando a lista passa de uma página. */
+      thead { display: table-header-group; }
     }
 
     @page {
@@ -113,7 +253,7 @@
     }
   </style>
 </head>
-<body>
+<body class="{{ totals.densidade if totals is defined else 'normal' }}">
 
   {# ── Navegação ────────────────────────────────────────────────────────────── #}
   <div class="no-print">
@@ -126,14 +266,40 @@
 
   {# ── Cabeçalho ────────────────────────────────────────────────────────────── #}
   <div class="header">
-    <h1>Vacinação {{ sheet_title }} — {{ shift_label }}</h1>
+    <img class="timbre" src="{{ url_for('static', filename='img/timbre_orlandia.jpeg') }}"
+         alt="Prefeitura Municipal de Orlândia">
+    <h1>Vacinação antirrábica — {{ sheet_title }} · {{ shift_label }}</h1>
     <div class="sub">
-      <span>Tutores: <strong>{{ visits|length }}</strong></span>
-      <span>Cães: <strong>{{ visits|sum(attribute='dogs') }}</strong></span>
-      <span>Gatos: <strong>{{ visits|sum(attribute='cats') }}</strong></span>
-      <span>Total animais: <strong>{{ (visits|sum(attribute='dogs')) + (visits|sum(attribute='cats')) }}</strong></span>
+      <span>Residências: <strong>{{ totals.tutores }}</strong></span>
+      <span class="falta">A vacinar: <strong>{{ totals.pendentes }}</strong>
+        ({{ totals.pendentes_caes }}<span class="pet-badge pet-badge--cao">C</span>
+         {{ totals.pendentes_gatos }}<span class="pet-badge pet-badge--gato">G</span>)</span>
+      {% if totals.ja_vacinados %}
+        <span class="feito">Já vacinados nesta lista: <strong>{{ totals.ja_vacinados }}</strong></span>
+      {% endif %}
+      <span class="legend">
+        <span class="pet-badge pet-badge--cao">C</span> cão
+        <span class="pet-badge pet-badge--gato">G</span> gato
+      </span>
     </div>
+    {% if totals.duplicadas %}
+      <div class="aviso">
+        {{ totals.duplicadas }} linha(s) repetem um tutor que já aparece acima — confira antes de bater na porta.
+      </div>
+    {% endif %}
   </div>
+
+  {# Telefone legivel: 5516982116928 -> (16) 98211-6928 #}
+  {%- macro fone(raw) -%}
+    {%- set d = (raw or '') | replace('(', '') | replace(')', '') | replace('-', '')
+                             | replace(' ', '') | replace('+', '') | replace('.', '') -%}
+    {%- if d|length == 13 and d.startswith('55') -%}({{ d[2:4] }}) {{ d[4:9] }}-{{ d[9:] }}
+    {%- elif d|length == 12 and d.startswith('55') -%}({{ d[2:4] }}) {{ d[4:8] }}-{{ d[8:] }}
+    {%- elif d|length == 11 -%}({{ d[0:2] }}) {{ d[2:7] }}-{{ d[7:] }}
+    {%- elif d|length == 10 -%}({{ d[0:2] }}) {{ d[2:6] }}-{{ d[6:] }}
+    {%- else -%}{{ raw or '' }}
+    {%- endif -%}
+  {%- endmacro -%}
 
   {# ── Tabela ───────────────────────────────────────────────────────────────── #}
   {% if visits %}
@@ -147,40 +313,123 @@
         <th class="c-pet">Animais</th>
         <th class="c-obs">Observação</th>
         <th class="c-ok">✓</th>
+        <th class="c-sign">Assinatura do tutor</th>
       </tr>
     </thead>
     <tbody>
-      {% for v in visits %}
-      <tr>
+      {% for r in rows %}
+      {% set v = r.visit %}
+      <tr{% if r.duplicada_de %} class="is-dup"{% endif %}>
         <td class="c-num">{{ loop.index }}</td>
-        <td class="c-name">{{ v.tutor_name }}</td>
+        <td class="c-name">
+          {{ r.tutor }}
+          {% if r.instrucao %}<span class="tag">{{ r.instrucao }}</span>{% endif %}
+          {% if r.duplicada_de %}<span class="tag tag--dup">repete o nº {{ r.duplicada_de }}</span>{% endif %}
+        </td>
         <td class="c-addr">{{ v.address or '—' }}</td>
         <td class="c-tel">
-          {{ v.phone1 or '' }}
-          {% if v.phone2 %}<br>{{ v.phone2 }}{% endif %}
+          {{ fone(v.phone1) }}
+          {% if v.phone2 and v.phone2 != v.phone1 %}<br>{{ fone(v.phone2) }}{% endif %}
         </td>
         <td class="c-pet">
-          {% for a in v.animals %}
+          {% for a in r.pendentes %}
             <span class="pet-row">
-              {% if a.species == 'cao' %}🐕{% else %}🐈{% endif %}
+              <span class="pet-box">☐</span>
+              {% if a.species == 'cao' %}
+                <span class="pet-badge pet-badge--cao" title="Cão">C</span>
+              {% else %}
+                <span class="pet-badge pet-badge--gato" title="Gato">G</span>
+              {% endif %}
               {{ a.name }}
             </span>
-          {% else %}
-            {% if v.dogs %}🐕 {{ v.dogs }}{% endif %}
-            {% if v.cats %}🐈 {{ v.cats }}{% endif %}
           {% endfor %}
+
+          {% if not r.pendentes and not v.animals %}
+            {% if v.dogs %}
+              <span class="pet-row"><span class="pet-box">☐</span><span class="pet-badge pet-badge--cao">C</span>{{ v.dogs }} cão(es)</span>
+            {% endif %}
+            {% if v.cats %}
+              <span class="pet-row"><span class="pet-box">☐</span><span class="pet-badge pet-badge--gato">G</span>{{ v.cats }} gato(s)</span>
+            {% endif %}
+          {% endif %}
+
+          {% for a in r.vacinados %}
+            <span class="pet-row pet-row--feito">
+              <span class="pet-box pet-box--feito">✓</span>{{ a.name }}
+            </span>
+          {% endfor %}
+
+          {% for h in r.anteriores %}
+            <span class="pet-row pet-row--feito">
+              <span class="pet-box pet-box--feito">✓</span>{{ h.name }}
+              <span class="pet-when">em {{ h.quando }}</span>
+            </span>
+          {% endfor %}
+
+          {% if not r.pendentes and (r.vacinados or r.anteriores) %}
+            <span class="pet-count pet-count--ok">Nada pendente</span>
+          {% endif %}
         </td>
-        <td class="c-obs">{{ v.note or '' }}</td>
+        <td class="c-obs">
+          {% for n in r.notas %}<span class="obs-row">{{ n }}</span>{% endfor %}
+        </td>
         <td class="c-ok">☐</td>
+        <td class="c-sign">
+          <span class="sign-line"></span>
+          <span class="sign-hint">Nome / assinatura</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  <div class="rodape">
+    <div class="rodape__totais">
+      <span>Doses aplicadas: <span class="campo"></span></span>
+      <span>Perdas: <span class="campo campo--curto"></span></span>
+      <span>Frascos abertos: <span class="campo campo--curto"></span></span>
+    </div>
+    <div class="rodape__assinaturas">
+      <span class="rodape__ass">
+        <span class="sign-line"></span>
+        <span class="sign-hint">Aplicador(a)</span>
+      </span>
+      <span class="rodape__ass">
+        <span class="sign-line"></span>
+        <span class="sign-hint">Responsável técnico</span>
+      </span>
+    </div>
+  </div>
   {% else %}
   <p style="font-size:14pt; margin-top:20px;">Nenhum tutor sincronizado para este turno.</p>
   {% endif %}
 
   <script>
+    // A folha se mede sozinha. Nenhuma conta no servidor acerta a altura real,
+    // porque endereço e observação quebram linha conforme o texto. Aqui a
+    // página já está renderizada com as medidas do papel, então basta apertar
+    // a densidade até caber — e parar assim que couber, para não encolher
+    // além do necessário.
+    function ajustarDensidade() {
+      const cabecalho = document.querySelector('.header');
+      const rodape = document.querySelector('.rodape');
+      if (!cabecalho || !rodape) return;
+
+      // A4 paisagem: 210mm de altura, 22mm de margem, 10mm do padding do body.
+      const limite = 178 * (96 / 25.4);
+      const niveis = ['normal', 'compacta', 'super-compacta'];
+
+      for (const nivel of niveis) {
+        document.body.className = nivel;
+        const altura = rodape.getBoundingClientRect().bottom
+                     - cabecalho.getBoundingClientRect().top;
+        if (altura <= limite) return nivel;
+      }
+      return niveis[niveis.length - 1];
+    }
+
+    ajustarDensidade();
+    window.addEventListener('beforeprint', ajustarDensidade);
+
     // Em dispositivo móvel (<900px) abre impressão automaticamente
     if (window.innerWidth < 900) { window.addEventListener('load', () => window.print()); }
   </script>

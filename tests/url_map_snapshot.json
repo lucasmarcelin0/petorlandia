@@ -6515,11 +6515,6 @@
   "methods": "GET"
  },
  {
-  "endpoint": "vacina_pmo_agenda",
-  "rule": "/vacina-pmo/agenda",
-  "methods": "GET"
- },
- {
   "endpoint": "vacina_pmo_animal_name",
   "rule": "/vacina-pmo/animal/<int:animal_id>/name",
   "methods": "POST"
@@ -6607,11 +6602,6 @@
  {
   "endpoint": "vacina_pmo_routes.vacina_pmo",
   "rule": "/vacina-pmo",
-  "methods": "GET"
- },
- {
-  "endpoint": "vacina_pmo_routes.vacina_pmo_agenda",
-  "rule": "/vacina-pmo/agenda",
   "methods": "GET"
  },
  {

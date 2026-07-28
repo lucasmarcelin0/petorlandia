@@ -1,7 +1,7 @@
 """Views do domínio vacina_pmo_routes (migrado do app.py)."""
 from flask import Blueprint
 from PIL import Image
-import os, requests, threading as _pmo_threading, uuid
+import os, re, requests, threading as _pmo_threading, unicodedata, uuid
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from extensions import csrf, db
@@ -41,6 +41,216 @@ def upload_to_s3(*args, **kwargs):
 
 
 
+# Linhas que o proprio sistema escreve na observacao ao mudar o status de um
+# animal: "17:17 - Fred: remarcar." (as vezes prefixadas por "E - " pela
+# planilha). Sao ruido na folha do aplicador — o status ja vai por animal.
+_PMO_STATUS_LOG_RE = re.compile(
+    r'^(?:E\s*-\s*)?(?:\d{1,2}:\d{2}\s*-\s*)?[^:]{1,60}:\s*'
+    r'(?:pendente|vacinad[oa]|ausente|remarcar|recusou|parcial)\.?$',
+    re.IGNORECASE,
+)
+_PMO_TIME_PREFIX_RE = re.compile(r'^(?:E\s*-\s*)?\d{1,2}:\d{2}\s*-\s*')
+_PMO_DONE_STATUSES = ('vacinado',)
+
+
+def _pmo_note_livre(note):
+    """Mantem so o que uma pessoa escreveu, descartando o log de status."""
+    livres = []
+    for parte in str(note or '').split('|'):
+        texto = parte.strip()
+        if not texto or _PMO_STATUS_LOG_RE.match(texto):
+            continue
+        texto = _PMO_TIME_PREFIX_RE.sub('', texto).strip()
+        if texto and texto not in livres:
+            livres.append(texto)
+    return livres
+
+
+def _pmo_split_tutor(raw):
+    """Separa "Fulano -> Remarcar a partir de 22/07" em nome e instrucao."""
+    nome = str(raw or '').strip()
+    partes = re.split(r'\s*-+>\s*', nome, maxsplit=1)
+    if len(partes) == 2 and partes[1].strip():
+        return partes[0].strip(), partes[1].strip()
+    return nome, ''
+
+
+def _pmo_slug(value):
+    texto = unicodedata.normalize('NFKD', str(value or '').lower())
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r'[^a-z0-9]+', '', texto)
+
+
+def _pmo_tutor_key(visit):
+    """Chave para reconhecer o mesmo tutor entre abas (encaixes, remarcacoes)."""
+    digitos = re.sub(r'\D', '', visit.phone1 or '')
+    if len(digitos) >= 10:
+        return ('fone', digitos[-11:])
+    nome, _ = _pmo_split_tutor(visit.tutor_name)
+    return ('nome', _pmo_slug(nome), _pmo_slug(visit.address))
+
+
+def _pmo_sheet_date(sheet_title):
+    try:
+        return datetime.strptime(str(sheet_title or ''), '%d/%m/%Y').date()
+    except Exception:
+        return None
+
+
+def _pmo_vacinados_anteriores(visits, sheet_title):
+    """Animais que este tutor ja vacinou em abas anteriores.
+
+    Resolve a confusao dos encaixes: quando o tutor volta so com o animal que
+    faltou, a lista mostrava 1 animal sem dizer que os outros 2 ja estavam
+    vacinados. Aqui esse historico volta a aparecer, sem precisar apagar nada.
+    """
+    from models import PmoVaccinationAnimal, PmoVaccinationVisit
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
+
+    if not visits:
+        return {}
+
+    data_atual = _pmo_sheet_date(sheet_title)
+    ids_atuais = [v.id for v in visits]
+    fones = sorted({v.phone1 for v in visits if v.phone1})
+    nomes = sorted({v.tutor_name for v in visits if v.tutor_name})
+
+    filtros = []
+    if fones:
+        filtros.append(PmoVaccinationVisit.phone1.in_(fones))
+    if nomes:
+        filtros.append(PmoVaccinationVisit.tutor_name.in_(nomes))
+    if not filtros:
+        return {}
+
+    anteriores = (
+        PmoVaccinationVisit.query
+        .options(joinedload(PmoVaccinationVisit.animals))
+        .filter(PmoVaccinationVisit.id.notin_(ids_atuais), or_(*filtros))
+        .all()
+    )
+
+    por_chave = {}
+    for visita in anteriores:
+        data_ant = _pmo_sheet_date(visita.sheet_title)
+        # So conta o que aconteceu antes desta lista.
+        if data_atual and data_ant and data_ant >= data_atual:
+            continue
+        for animal in visita.animals:
+            if animal.status not in _PMO_DONE_STATUSES:
+                continue
+            por_chave.setdefault(_pmo_tutor_key(visita), []).append({
+                'name': animal.name,
+                'species': animal.species,
+                'quando': visita.sheet_title,
+                'ordem': data_ant or date.min,
+            })
+
+    resultado = {}
+    for visita in visits:
+        registros = por_chave.get(_pmo_tutor_key(visita), [])
+        if not registros:
+            continue
+        ja_listados = {_pmo_slug(a.name) for a in visita.animals}
+        vistos = set()
+        historico = []
+        for registro in sorted(registros, key=lambda r: r['ordem'], reverse=True):
+            chave = _pmo_slug(registro['name'])
+            if not chave or chave in ja_listados or chave in vistos:
+                continue
+            vistos.add(chave)
+            historico.append(registro)
+        if historico:
+            resultado[visita.id] = historico
+    return resultado
+
+
+def _build_pmo_print_rows(visits, sheet_title):
+    historico = _pmo_vacinados_anteriores(visits, sheet_title)
+    rows = []
+    primeira_ocorrencia = {}
+
+    for visita in visits:
+        nome, instrucao = _pmo_split_tutor(visita.tutor_name)
+        pendentes = [a for a in visita.animals if a.status not in _PMO_DONE_STATUSES]
+        vacinados = [a for a in visita.animals if a.status in _PMO_DONE_STATUSES]
+
+        chave = _pmo_tutor_key(visita)
+        duplicada_de = primeira_ocorrencia.get(chave)
+        if duplicada_de is None:
+            primeira_ocorrencia[chave] = len(rows) + 1
+
+        rows.append({
+            'visit': visita,
+            'tutor': nome or '—',
+            'instrucao': instrucao,
+            'notas': _pmo_note_livre(visita.note),
+            'pendentes': pendentes,
+            'vacinados': vacinados,
+            'anteriores': historico.get(visita.id, []),
+            'duplicada_de': duplicada_de,
+        })
+    return rows
+
+
+# Orcamento vertical de uma A4 paisagem: 210mm - 22mm de margem = 188mm.
+# Cabecalho com timbre ao lado (~14mm), cabecalho da tabela (~7mm), rodape
+# (~21mm) e o padding do body (~10mm) deixam ~136mm para as linhas.
+#
+# As constantes abaixo foram medidas na propria pagina renderizada com as
+# regras de impressao aplicadas, nao estimadas no olho: uma linha de conteudo
+# custa ~7mm em densidade normal e ~5.9mm nas compactas.
+_PMO_ALTURA_TABELA_MM = 136
+_PMO_DENSIDADES = (
+    # (nome, altura minima da linha, altura por linha de conteudo, animais por linha)
+    ('normal', 17, 7.0, 1),
+    ('compacta', 12, 5.9, 3),
+    ('super-compacta', 9, 4.8, 4),
+)
+
+
+def _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, animais_por_linha):
+    import math
+
+    total = 0.0
+    for row in rows:
+        animais = len(row['pendentes']) + len(row['vacinados']) + len(row['anteriores'])
+        # Nos modos compactos os animais correm na linha e quebram a cada N.
+        linhas_animais = math.ceil(animais / animais_por_linha) if animais else 0
+        linhas_nome = 1 + (1 if row['instrucao'] else 0) + (1 if row['duplicada_de'] else 0)
+        linhas = max(linhas_animais, len(row['notas']), linhas_nome, 1)
+        total += max(altura_minima, linhas * altura_linha + 3)
+    return total
+
+
+def _pmo_densidade(rows):
+    for nome, altura_minima, altura_linha, por_linha in _PMO_DENSIDADES:
+        altura = _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, por_linha)
+        if altura <= _PMO_ALTURA_TABELA_MM:
+            return nome
+    # Nao cabe nem no mais apertado: usa o menor e deixa quebrar a pagina.
+    return _PMO_DENSIDADES[-1][0]
+
+
+def _pmo_print_totals(rows):
+    pendentes = sum(len(r['pendentes']) for r in rows)
+    return {
+        'tutores': len(rows),
+        'pendentes': pendentes,
+        'pendentes_caes': sum(
+            1 for r in rows for a in r['pendentes'] if a.species == 'cao'
+        ),
+        'pendentes_gatos': sum(
+            1 for r in rows for a in r['pendentes'] if a.species != 'cao'
+        ),
+        'ja_vacinados': sum(len(r['vacinados']) for r in rows),
+        'com_historico': sum(1 for r in rows if r['anteriores']),
+        'duplicadas': sum(1 for r in rows if r['duplicada_de']),
+        'densidade': _pmo_densidade(rows),
+    }
+
+
 @bp.route('/vacina-pmo')
 @login_required
 def vacina_pmo():
@@ -52,52 +262,6 @@ def vacina_pmo():
 
     today = app_module.datetime.now(BR_TZ).date().isoformat()
     return render_template('vacina_pmo/dashboard.html', today=today)
-
-
-@bp.route('/vacina-pmo/agenda')
-@login_required
-def vacina_pmo_agenda():
-    if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
-    from models import PmoVaccinationVisit
-    from sqlalchemy import func
-    from datetime import datetime, date as _date
-    rows = (
-        db.session.query(
-            PmoVaccinationVisit.sheet_title,
-            PmoVaccinationVisit.shift,
-            func.count(PmoVaccinationVisit.id).label('tutores'),
-            func.sum(PmoVaccinationVisit.dogs).label('caes'),
-            func.sum(PmoVaccinationVisit.cats).label('gatos'),
-        )
-        .group_by(PmoVaccinationVisit.sheet_title, PmoVaccinationVisit.shift)
-        .all()
-    )
-    _weekdays_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-    dias = []
-    for r in rows:
-        try:
-            dt = datetime.strptime(r.sheet_title, '%d/%m/%Y').date()
-            weekday = _weekdays_pt[dt.weekday()]
-        except Exception:
-            dt = None
-            weekday = ''
-        date_str = r.sheet_title.replace('/', '-')
-        turno = 'manha' if r.shift == 'Manha' else 'tarde'
-        shift_label = 'Manhã' if r.shift == 'Manha' else 'Tarde'
-        dias.append(dict(
-            sheet_title=r.sheet_title,
-            date=dt,
-            weekday=weekday,
-            date_str=date_str,
-            turno=turno,
-            shift_label=shift_label,
-            tutores=r.tutores,
-            caes=int(r.caes or 0),
-            gatos=int(r.gatos or 0),
-        ))
-    dias.sort(key=lambda x: x['date'] or _date.min, reverse=True)
-    return render_template('vacina_pmo/agenda.html', dias=dias)
 
 
 @bp.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
@@ -451,9 +615,12 @@ def vacina_pmo_imprimir(date_str, turno):
         .order_by(PmoVaccinationVisit.source_row.asc())
         .all()
     )
+    rows = _build_pmo_print_rows(visits, sheet_title)
     return render_template(
         'vacina_pmo/imprimir.html',
         visits=visits,
+        rows=rows,
+        totals=_pmo_print_totals(rows),
         sheet_title=sheet_title,
         shift_label=shift_label,
         shift_key=shift_key,

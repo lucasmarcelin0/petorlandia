@@ -941,6 +941,119 @@ def test_vacina_pmo_dashboard_prefers_today_sheet(app, monkeypatch):
     assert "const toSelect = todaySheet?.gid ||" in body
 
 
+def test_vacina_pmo_dashboard_exposes_print_menu(app):
+    """O botão de imprimir fica no cabeçalho da lista e segue a aba selecionada."""
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-days@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+
+    response = client.get('/vacina-pmo')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="pmo-print-menu"' in body
+    assert '/vacina-pmo/imprimir/__DATE__/manha' in body
+    assert '/vacina-pmo/imprimir/__DATE__/tarde' in body
+    # O botão fica entre o filtro de Status e o "Próximo".
+    assert body.index('id="pmo-status-filter"') < body.index('id="pmo-print-menu"')
+    assert body.index('id="pmo-print-menu"') < body.index('id="pmo-open-next-route"')
+    # A parede de cards saiu.
+    assert 'pmo-print-card' not in body
+
+
+def _pmo_add_visit(title, row, tutor, phone, animais, gid='g', note=None, dogs=0, cats=0):
+    visit = PmoVaccinationVisit(
+        spreadsheet_id='s', sheet_gid=gid, sheet_title=title, shift='Manha',
+        source_row=row, tutor_name=tutor, address='Rua 14 centro, 394, Centro',
+        phone1=phone, dogs=dogs, cats=cats, password='PMO%04d' % row, note=note,
+    )
+    db.session.add(visit)
+    db.session.flush()
+    for position, (nome, especie, status) in enumerate(animais, 1):
+        db.session.add(PmoVaccinationAnimal(
+            visit_id=visit.id, position=position, name=nome,
+            species=especie, status=status,
+        ))
+    return visit
+
+
+def test_vacina_pmo_imprimir_mostra_pendentes_e_historico_do_encaixe(app):
+    """O encaixe volta so com o animal que faltou; a folha recupera o resto."""
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-print-status@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+
+        _pmo_add_visit(
+            '11/06/2026', 1, 'Maria de Jesus', '5516988078555',
+            [('Fred', 'gato', 'vacinado'), ('Lili', 'gato', 'vacinado'),
+             ('Oliver', 'gato', 'remarcar')],
+            gid='junho',
+        )
+        _pmo_add_visit(
+            '11/08/2026', 1, 'Maria de Jesus -> Remarcar a partir de 22/07/2026',
+            '5516988078555', [('Oliver', 'gato', 'pendente')], cats=1,
+            note='17:17 - Fred: vacinado. | 15:40 - Um gatinho morreu',
+        )
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+
+    response = client.get('/vacina-pmo/imprimir/11-08-2026/manha')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    # Só falta um animal, mesmo que a visita antiga tivesse três.
+    assert 'A vacinar: <strong>1</strong>' in body
+    # Os já vacinados voltam a aparecer, com a data de origem.
+    assert 'Fred' in body and 'Lili' in body
+    assert 'em 11/06/2026' in body
+    # O log automático de status sai; a observação escrita fica.
+    assert 'Fred: vacinado' not in body
+    assert 'Um gatinho morreu' in body
+    # O nome do tutor perde a instrução colada pela planilha.
+    assert 'Remarcar a partir de 22/07/2026</span>' in body
+
+
+def test_vacina_pmo_imprimir_marca_linha_duplicada(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-print-dup@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        for row in (1, 2):
+            _pmo_add_visit(
+                '11/08/2026', row, 'Maria de Jesus', '5516988078555',
+                [('Oliver', 'gato', 'pendente')], cats=1,
+            )
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+
+    response = client.get('/vacina-pmo/imprimir/11-08-2026/manha')
+
+    assert response.status_code == 200
+    assert 'repete o nº 1' in response.get_data(as_text=True)
+
+
 def test_payment_status_updates_from_api(monkeypatch, app):
     client = app.test_client()
 

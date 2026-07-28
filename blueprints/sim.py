@@ -46,6 +46,9 @@ ACT_PREFIXES = {
 # em vez do documento generico "rotulos-produtos" do checklist.
 PRODUCT_LABEL_PREFIX = "rotulo-produto-"
 
+# Estes dados pertencem ao MTSE e nao constituem anexos autonomos.
+RETIRED_DOCUMENT_IDS = {"mtse", "planta-fluxo"}
+
 
 # ---------------------------------------------------------------------------
 # Modelos (todas as tabelas prefixadas com sim_)
@@ -236,6 +239,7 @@ SIM_TABLES = [
 SEED_STATE = {
     "role": "establishment",
     "view": "dashboard",
+    "formFocus": "",
     "printForm": "anexoI",
     "protocol": {
         "id": PROCESS_ID,
@@ -261,7 +265,7 @@ SEED_STATE = {
     "legalResponsible": {"name": "Jose Francisco Guerra"},
     "documents": [
         {"id": "requerimento-assinado", "item": "01", "group": "art11", "name": "Requerimento ao SIM solicitando o registro", "hint": "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "anexoI"},
-        {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Preencha o Anexo III no portal. As plantas devem ser elaboradas por profissional habilitado e enviadas junto do memorial assinado.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "construction"},
         {"id": "contrato-social-cnpj", "item": "03", "group": "art11", "name": "Contrato ou estatuto social registrado, quando houver firma constituida", "hint": "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "cpf-cnpj", "item": "04", "group": "art11", "name": "CPF ou CNPJ, conforme o caso", "hint": "Cartao CNPJ: emissao gratuita no site da Receita Federal.", "link": "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "inscricao-estadual", "item": "05", "group": "art11", "name": "Inscricao estadual/ICMS ou inscricao de Produtor Rural", "hint": "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", "link": "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", "required": True, "status": "Pendente", "file": "", "internal": False},
@@ -272,11 +276,9 @@ SEED_STATE = {
         {"id": "manual-bpf", "item": "10", "group": "art11", "name": "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", "hint": "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "registro-crmv", "item": "11", "group": "art11", "name": "Registro do estabelecimento no CRMV-SP, se aplicavel", "hint": "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "comprovante-taxa", "item": "12", "group": "art11", "name": "Comprovante da Taxa de Inspecao Sanitaria", "hint": "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", "required": False, "status": "Dispensado em 2026", "file": "", "internal": False},
-        {"id": "mtse", "group": "anexos", "name": "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", "hint": "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", "required": False, "status": "Em correcao", "file": "MTSE_rascunho.pdf", "internal": False},
-        {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", "required": False, "status": "Pendente", "file": "", "internal": False},
+        {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Clique em Preencher Anexo IV. Cadastre um formulario por produto e anexe o respectivo rotulo; os dados da empresa entram automaticamente.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "doc-responsavel-legal", "group": "anexos", "name": "Documento do responsavel legal (RG/CPF ou CNH)", "hint": "Copia simples e legivel.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "art-responsavel-tecnico", "group": "anexos", "name": "ART ou contrato do responsavel tecnico", "hint": "Anotacao de responsabilidade tecnica emitida no conselho do RT.", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "planta-fluxo", "group": "anexos", "name": "Croqui de fluxo (apoio)", "hint": "Opcional; ajuda a analise do fluxo de producao.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "parecer-tecnico-sim", "name": "Parecer tecnico do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "checklist-inspecao-sim", "name": "Checklist de inspecao do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "despachos-internos-sim", "name": "Despachos internos / instrucoes", "required": False, "status": "Interno", "file": "", "internal": True},
@@ -298,6 +300,14 @@ SEED_STATE = {
             "conservation": "Refrigerado",
             "notes": "Denominacao e RTIQ precisam ser confirmados.",
             "requestNature": "Registro de produto e rotulo",
+            "natureOptions": [],
+            "labelTypes": [],
+            "primaryPackagingTypes": [],
+            "otherLabelType": "",
+            "otherPrimaryPackagingType": "",
+            "dateLotIndication": "",
+            "packageQuantity": "",
+            "labelingPresentation": "",
             "packageType": "",
             "labelFeatures": "",
             "composition": "",
@@ -465,6 +475,10 @@ def public_user(user: SimUser | None) -> dict | None:
 def get_state() -> dict:
     row = db.session.get(SimProcessState, PROCESS_ID)
     state = json.loads(row.state_json)
+    state["documents"] = [
+        doc for doc in state.get("documents", [])
+        if doc.get("id") not in RETIRED_DOCUMENT_IDS
+    ]
     existing = {doc.get("id") for doc in state.get("documents", [])}
     for doc in SEED_STATE["documents"]:
         if doc["id"] not in existing:
@@ -729,7 +743,7 @@ def build_form_docx(form: str, state: dict):
             ("Funcionarios", prod.get("employees")),
             ("Lavanderia", prod.get("laundry")),
             ("Terreno e area de localizacao", " / ".join(p for p in [prod.get("landDetails"), prod.get("locationArea")] if p)),
-            ("Fluxo e disposicao das instalacoes", prod.get("flow")),
+            ("12. Disposicao das instalacoes e fluxo de producao", prod.get("flow")),
             ("Equipamentos", prod.get("equipment")),
             ("Piso, paredes e impermeabilizacao", prod.get("floorWalls")),
             ("Janelas, portas, teto e bloqueio sanitario", prod.get("doorsWindowsCeiling")),
@@ -760,6 +774,14 @@ def build_form_docx(form: str, state: dict):
     elif form == "produto":
         product = _selected_product(state)
         nature = ", ".join(product.get("natureOptions") or []) or product.get("requestNature")
+        label_types = ", ".join([
+            *(product.get("labelTypes") or []),
+            product.get("otherLabelType") or "",
+        ]).strip(", ")
+        package_types = ", ".join([
+            *(product.get("primaryPackagingTypes") or []),
+            product.get("otherPrimaryPackagingType") or product.get("packageType") or "",
+        ]).strip(", ")
         doc.add_paragraph(
             "Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo "
             "qualificado, atraves do seu representante legal e do seu responsavel "
@@ -769,33 +791,36 @@ def build_form_docx(form: str, state: dict):
             ("Classificacao do estabelecimento", e.get("classification")),
             ("SIM do estabelecimento", e.get("simNumber")),
             ("Responsavel legal", lr.get("name")),
-            ("Natureza da solicitacao", nature),
-            ("Nome do produto", product.get("name")),
+            ("4. Nome do produto", product.get("name")),
             ("Marca", product.get("brand")),
             ("N. registro de rotulo", product.get("labelRegistration")),
-            ("Conservacao", product.get("conservation")),
-            ("Embalagem", product.get("packageType")),
-            ("Caracteristicas do rotulo/embalagem", product.get("labelFeatures")),
+            ("5. Natureza da solicitacao", nature),
+            ("6.1 Rotulo", label_types),
+            ("6.2 Embalagem primaria", package_types),
+            ("Indicacao da data de fabricacao, validade e lote", product.get("dateLotIndication")),
+            ("Quantidade de produto por embalagem", product.get("packageQuantity")),
+            ("Apresentacao das informacoes de rotulagem", product.get("labelingPresentation") or product.get("labelFeatures")),
         ]
         _kv_table(doc, pairs)
 
         comp_rows = product.get("compositionRows") or []
-        doc.add_heading("Composicao do produto", level=2)
+        doc.add_heading("7. Composicao do produto", level=2)
         if comp_rows:
-            table = doc.add_table(rows=1, cols=3)
+            table = doc.add_table(rows=1, cols=4)
             table.style = "Table Grid"
             hdr = table.rows[0].cells
-            hdr[0].text, hdr[1].text, hdr[2].text = "Materia-prima / ingrediente", "kg ou L", "%"
+            hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Tipo", "Materia-prima / ingrediente", "kg ou L", "%"
             for row in comp_rows:
                 cells = table.add_row().cells
-                cells[0].text = _s(row.get("ingredient"))
-                cells[1].text = _s(row.get("amount"))
-                cells[2].text = _s(row.get("pct"))
+                cells[0].text = _s(row.get("kind") or "Materia-prima")
+                cells[1].text = _s(row.get("ingredient"))
+                cells[2].text = _s(row.get("amount"))
+                cells[3].text = _s(row.get("pct"))
         else:
             doc.add_paragraph(_s(product.get("composition")))
 
         nut_rows = product.get("nutritionRows") or []
-        doc.add_heading(f"Informacao nutricional - porcao de {_s(product.get('nutritionPortion'))}", level=2)
+        doc.add_heading(f"8. Informacao nutricional - porcao de {_s(product.get('nutritionPortion'))}", level=2)
         if nut_rows:
             table = doc.add_table(rows=1, cols=3)
             table.style = "Table Grid"
@@ -810,11 +835,11 @@ def build_form_docx(form: str, state: dict):
             doc.add_paragraph(_s(product.get("nutrition")))
 
         _kv_table(doc, [
-            ("Processo de fabricacao", product.get("manufacturingProcess")),
-            ("Processo de embalagem", product.get("packagingProcess")),
-            ("Condicoes de armazenamento", product.get("storageConditions")),
-            ("Medidas de controle de qualidade", product.get("notes")),
-            ("Transporte e expedicao", product.get("marketTransport")),
+            ("9. Processo de fabricacao", product.get("manufacturingProcess")),
+            ("10. Processo de embalagem", product.get("packagingProcess")),
+            ("11. Condicoes de armazenamento", product.get("storageConditions") or product.get("conservation")),
+            ("12. Medidas de controle de qualidade", product.get("notes")),
+            ("13. Transporte e expedicao", product.get("marketTransport")),
         ])
 
     doc.add_paragraph("")
@@ -1048,15 +1073,19 @@ def get_blueprint():
             abort(404)
         if user.role != "sim" and row.visibility == "sim":
             return jsonify({"error": "Anexo interno do SIM."}), 403
-        # "inline" (padrao) permite pre-visualizar PDF/imagem no iframe do modal
-        # sem forcar download; o botao de baixar usa o atributo HTML "download"
-        # para salvar o arquivo mesmo com essa disposicao.
-        return send_file(
+        # A politica global bloqueia qualquer pagina dentro de iframe. Para os
+        # anexos autenticados, liberamos somente a mesma origem, permitindo a
+        # previa no modal sem tornar o arquivo incorporavel por outros sites.
+        response = send_file(
             BytesIO(row.content),
             mimetype=row.mime_type or "application/octet-stream",
             as_attachment=bool(request.args.get("download")),
             download_name=row.original_name,
         )
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
 
     @bp.route("/api/forms/<form>.docx")
     def sim_form_docx(form: str):

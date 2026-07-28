@@ -13032,7 +13032,6 @@ from blueprints.site import (  # noqa: E402,F401
 from blueprints.vacina_pmo import (  # noqa: E402,F401
     castracao_pmo_solicitar,
     vacina_pmo,
-    vacina_pmo_agenda,
     vacina_pmo_animal_name,
     vacina_pmo_animal_photo,
     vacina_pmo_animal_photo_src,

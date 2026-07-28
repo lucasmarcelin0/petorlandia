@@ -6,6 +6,103 @@ const API_ROOT = `${BASE_PATH}/api`;
 // Prefixo de docId usado para anexar o rotulo direto na tela de cada produto
 // (precisa bater com PRODUCT_LABEL_PREFIX no backend).
 const PRODUCT_LABEL_PREFIX = "rotulo-produto-";
+const LC84_URL = "https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1844-de-19-de-junho-de-2024-Extraordinaria.pdf";
+const DEC5374_URL = "https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024/08/Edicao-1871-de-30-de-julho-de-2024_compressed.pdf";
+const LC104_URL = "https://dosp.com.br/exibe_do.php?i=ODM4OTQ0";
+const CFMV1177_URL = "https://www.legisweb.com.br/legislacao/?id=352065";
+const CFMV1562_URL = "https://www.crmvse.org.br/wp-content/uploads/2024/01/RESOLUCAO-CFMV-1562.pdf";
+const CETESB_PORTAL_URL = "https://e.cetesb.sp.gov.br/portal-servicos-frontend/servicos-disponiveis?aba=servicos";
+const CETESB_PROCESSO_GUERRA_URL = "https://licenciamento.cetesb.sp.gov.br/cetesb/processo_resultado2.asp?razao=LF+%2D+GUERRA+MILK+LTDA++%2D+ME&muni=ORL%C2NDIA&logrd=RUA+F&nmuncp=491&nseqnc=1249&cgc=12934929000177";
+const CETESB_FATOR_COMPLEXIDADE_URL = "https://repositorio.cetesb.sp.gov.br/bitstreams/0cfd2bf7-65c7-40d1-90d0-286191d285b4/download";
+const DEC8468_URL = "https://licenciamento.cetesb.sp.gov.br/legislacao/estadual/decretos/1976_dec_est_8468.pdf";
+const DOCUMENT_SOURCES = {
+  "requerimento-assinado": [
+    { text: "LC 84/2024, art. 11, I", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 1 (Anexo I)", url: DEC5374_URL },
+  ],
+  "plantas-baixas": [
+    { text: "LC 84/2024, art. 11, II", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 3 (Anexo III)", url: DEC5374_URL },
+  ],
+  "contrato-social-cnpj": [{ text: "LC 84/2024, art. 11, III", url: LC84_URL }],
+  "cpf-cnpj": [{ text: "LC 84/2024, art. 11, IV", url: LC84_URL }],
+  "inscricao-estadual": [{ text: "LC 84/2024, art. 11, V", url: LC84_URL }],
+  "alvara-prefeitura": [{ text: "LC 84/2024, art. 11, VI", url: LC84_URL }],
+  "certidoes-ambientais": [
+    { text: "LC 84/2024, art. 11, VII", url: LC84_URL },
+    { text: "CETESB - Portal de Licenciamento Ambiental", url: CETESB_PORTAL_URL },
+    { text: "CETESB - fator de complexidade da atividade", url: CETESB_FATOR_COMPLEXIDADE_URL },
+    { text: "Decreto estadual 8.468/1976, art. 71", url: DEC8468_URL },
+  ],
+  "exames-agua": [{ text: "LC 84/2024, art. 11, VIII", url: LC84_URL }],
+  "memorial-economico-sanitario": [
+    { text: "LC 84/2024, art. 11, IX", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 2 (Anexo II - MTSE)", url: DEC5374_URL },
+  ],
+  "manual-bpf": [{ text: "LC 84/2024, art. 11, X", url: LC84_URL }],
+  "registro-crmv": [
+    { text: "LC 84/2024, art. 11, XI, se aplicavel", url: LC84_URL },
+    { text: "Resolucao CFMV 1.177/2017", url: CFMV1177_URL },
+  ],
+  "comprovante-taxa": [
+    { text: "LC 84/2024, art. 11, XII", url: LC84_URL },
+    { text: "LC 104/2026, art. 3, par. unico (sem cobranca em 2026)", url: LC104_URL },
+  ],
+  "rotulos-produtos": [
+    { text: "LC 84/2024, art. 15, I e II", url: LC84_URL },
+    { text: "Decreto 5.374/2024, art. 4 (Anexo IV)", url: DEC5374_URL },
+  ],
+  "doc-responsavel-legal": [
+    { text: "Documento de apoio: comprova quem assina o Anexo I e o termo de compromisso do Decreto 5.374/2024", url: DEC5374_URL },
+  ],
+  "art-responsavel-tecnico": [
+    { text: "Decreto 5.374/2024, Anexos I e II, pedem identificacao do RT", url: DEC5374_URL },
+    { text: "Resolucao CFMV 1.562/2023, art. 3", url: CFMV1562_URL },
+  ],
+};
+const OFFICIAL_ANNEXES = [
+  {
+    documentId: "requerimento-assinado",
+    number: "I",
+    title: "Requerimento ao SIM - solicitacao de atos",
+    destination: "Depois de assinado, envie neste mesmo item. Corresponde ao item 01 do checklist.",
+    view: "establishment",
+    formFocus: "anexo-i",
+    printForm: "anexoI",
+    page: 14,
+  },
+  {
+    documentId: "memorial-economico-sanitario",
+    number: "II",
+    title: "Memorial Tecnico-Sanitario do Estabelecimento - MTSE",
+    destination: "A versao final assinada atende o item 09 do checklist. Nao e necessario enviar outro rascunho.",
+    view: "establishment",
+    formFocus: "anexo-ii",
+    printForm: "mtse",
+    page: 16,
+  },
+  {
+    documentId: "plantas-baixas",
+    number: "III",
+    title: "Memorial descritivo de construcao ou reforma",
+    destination: "Envie o memorial assinado junto das plantas exigidas no item 02 do checklist.",
+    view: "establishment",
+    formFocus: "anexo-iii",
+    printForm: "construction",
+    page: 22,
+  },
+  {
+    documentId: "rotulos-produtos",
+    number: "IV",
+    title: "Registro de rotulo e/ou produto de origem animal",
+    destination: "Obrigatorio para cada produto: preencha um formulario e anexe o respectivo rotulo.",
+    view: "products",
+    formFocus: "",
+    printForm: "",
+    page: 24,
+  },
+];
+const OFFICIAL_ANNEX_BY_DOCUMENT = new Map(OFFICIAL_ANNEXES.map((annex) => [annex.documentId, annex]));
 
 // Opcoes/estruturas do Anexo IV. Declaradas antes de initialState porque a
 // semente do produto ja usa defaultNutritionRows() no carregamento do modulo.
@@ -17,6 +114,8 @@ const PRODUCT_NATURE_OPTIONS = [
   "Cancelamento de produto",
   "Cancelamento de rotulo",
 ];
+const PRODUCT_LABEL_TYPE_OPTIONS = ["Impresso", "Etiqueta", "Litografado", "Gravado em relevo"];
+const PRODUCT_PRIMARY_PACKAGE_OPTIONS = ["Plastico", "Lata", "Papel", "Embalagem natural"];
 const NUTRITION_LABELS = [
   "Valor energetico (kcal)",
   "Carboidratos (g)",
@@ -31,9 +130,14 @@ function defaultNutritionRows() {
   return NUTRITION_LABELS.map((label) => ({ label, qty: "", pct: "" }));
 }
 
+function blankRows(count, fields) {
+  return Array.from({ length: count }, () => Object.fromEntries(fields.map((field) => [field, ""])));
+}
+
 const initialState = {
   role: "establishment",
   view: "dashboard",
+  formFocus: "",
   printForm: "anexoI",
   protocol: {
     id: "SIM-ORL-2026-0001",
@@ -46,6 +150,10 @@ const initialState = {
   application: {
     actType: "Registro de estabelecimento",
     otherAct: "",
+    cadastralChangeType: "",
+    signaturePlaceDate: "",
+    inspectorName: "",
+    inspectorRegistration: "",
     commitment: "Declaro que as informacoes prestadas sao verdadeiras e que o estabelecimento se compromete a cumprir a legislacao sanitaria aplicavel aos produtos de origem animal.",
   },
   establishment: {
@@ -114,6 +222,24 @@ const initialState = {
     storage: "",
     labAnalysis: "",
     productionSchedule: "",
+    activityRows: blankRows(5, ["number", "activity"]),
+    productCapacityRows: blankRows(4, ["product", "temperature", "capacity"]),
+    receivedProductRows: blankRows(4, ["product", "average"]),
+    rawMaterialRows: blankRows(4, ["product", "manufacturer", "cnpj", "registration"]),
+    employeeTotal: "",
+    employeeMale: "",
+    employeeFemale: "",
+    laundryType: "",
+    laundryCompany: "",
+    laundryCnpj: "",
+    alreadyBuilt: "",
+    landTotalArea: "",
+    landBuildArea: "",
+    usefulArea: "",
+    streetSetback: "",
+    equipmentRows: blankRows(5, ["location", "equipment", "quantity", "material"]),
+    productionScheduleRows: blankRows(6, ["day", "time"]),
+    signaturePlaceDate: "",
   },
   construction: {
     requestReason: "",
@@ -123,6 +249,22 @@ const initialState = {
     coldRooms: "",
     waterAndSewage: "",
     observations: "",
+    locationArea: "",
+    landTotalArea: "",
+    landBuildArea: "",
+    usefulArea: "",
+    streetSetback: "",
+    boundariesAccess: "",
+    ceilingHeight: "",
+    roof: "",
+    ceilings: "",
+    doorsWindowsExhaust: "",
+    floorsBaseboards: "",
+    walls: "",
+    waterPiping: "",
+    wastewater: "",
+    heatColdIce: "",
+    signaturePlaceDate: "",
   },
   products: [
     {
@@ -142,6 +284,13 @@ const initialState = {
       notes: "Denominacao e RTIQ precisam ser confirmados.",
       requestNature: "Registro de produto e rotulo",
       natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
       packageType: "",
       labelRegistration: "",
       labelFeatures: "",
@@ -154,6 +303,8 @@ const initialState = {
       packagingProcess: "",
       storageConditions: "",
       marketTransport: "",
+      qualityControls: "",
+      signaturePlaceDate: "",
     },
   ],
   fiscalAct: {
@@ -168,28 +319,41 @@ const initialState = {
     attenuatingAggravating: "",
     notification: "",
     witnesses: "",
+    time: "",
+    seizedDestination: "",
+    aggravating: "",
+    warningDeadlineDays: "",
+    signaturePlaceDate: "",
+    inspectorName: "Lucas Marcelino Campos Ferreira",
+    inspectorRegistration: "",
+    acknowledgedBy: "",
+    acknowledgedDocument: "",
+    witnessOneName: "",
+    witnessOneDocument: "",
+    witnessTwoName: "",
+    witnessTwoDocument: "",
+    infringementRows: blankRows(4, ["article", "item"]),
+    seizedItemRows: blankRows(4, ["quantity", "unit", "description"]),
   },
   journey: {
     signedAck: false,
   },
   documents: [
     { id: "requerimento-assinado", item: "01", group: "art11", name: "Requerimento ao SIM solicitando o registro", hint: "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "anexoI" },
-    { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", required: true, status: "Pendente", file: "" },
+    { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Preencha o Anexo III no portal. As plantas devem ser elaboradas por profissional habilitado e enviadas junto do memorial assinado.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "construction" },
     { id: "contrato-social-cnpj", item: "03", group: "art11", name: "Contrato ou estatuto social registrado, quando houver firma constituida", hint: "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", required: true, status: "Pendente", file: "" },
     { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
     { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", link: "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", required: true, status: "Pendente", file: "" },
     { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
-    { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
+    { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: para laticinios, consulte primeiro o portal de licenciamento. Se o enquadramento simplificado nao estiver disponivel, siga o fluxo indicado pela CETESB para Licenca de Operacao/MCE.", required: true, status: "Pendente", file: "" },
     { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
-    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Memorial descritivo economico e sanitario do estabelecimento", hint: "Preencha o Anexo II (MTSE) no portal: ele atende este item. Imprima, assine e envie.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
+    { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Anexo II (MTSE) final assinado - Memorial tecnico-sanitario do estabelecimento", hint: "Este e o memorial descritivo economico e sanitario exigido pela lei. Preencha o MTSE no portal, imprima/salve em PDF, assine e envie aqui. Nao envie rascunho separado.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
     { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
     { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
     { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
-    { id: "mtse", group: "anexos", name: "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", hint: "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", required: false, status: "Em correcao", file: "MTSE_rascunho.pdf" },
-    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", required: false, status: "Pendente", file: "" },
-    { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel.", required: true, status: "Pendente", file: "" },
-    { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Anotacao de responsabilidade tecnica emitida no conselho do RT.", required: true, status: "Pendente", file: "" },
-    { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional; ajuda a analise do fluxo de producao.", required: false, status: "Pendente", file: "" },
+    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Clique em Preencher Anexo IV. Cadastre um formulario por produto e anexe o respectivo rotulo; os dados da empresa entram automaticamente.", required: false, status: "Pendente", file: "" },
+    { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel para confirmar quem assina o pedido e responde pelas declaracoes.", required: true, status: "Pendente", file: "" },
+    { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Comprova a responsabilidade tecnica informada nos formularios oficiais.", required: true, status: "Pendente", file: "" },
   ],
   review: {
     decision: "Correcoes solicitadas",
@@ -210,6 +374,7 @@ let registry = { establishments: [], fiscalActs: [], inspections: [], samples: [
 let registryEditing = { establishment: null, inspection: null, sample: null };
 let fiscalActContext = { establishmentId: "", status: "Lavrado", scienceDate: "", loadedNumber: "" };
 let state = loadState();
+let persistQueue = Promise.resolve();
 
 const SITUATIONS = ["Em registro", "Ativo", "Suspenso", "Interditado parcialmente", "Interditado totalmente", "Paralisado", "Cancelado"];
 const RISK_LEVELS = ["Baixo", "Medio", "Alto"];
@@ -255,12 +420,60 @@ const SAMPLE_STATUSES = ["Coletada", "Enviada ao laboratorio", "Resultado confor
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(initialState);
+  if (!raw) return normalizeState(structuredClone(initialState));
   try {
-    return deepMerge(structuredClone(initialState), JSON.parse(raw));
+    return normalizeState(deepMerge(structuredClone(initialState), JSON.parse(raw)));
   } catch {
-    return structuredClone(initialState);
+    return normalizeState(structuredClone(initialState));
   }
+}
+
+function normalizeState(nextState) {
+  if (!Array.isArray(nextState.documents)) nextState.documents = [];
+  const currentById = new Map(nextState.documents.map((doc) => [doc.id, doc]));
+  const knownIds = new Set(initialState.documents.map((doc) => doc.id));
+  const internalDocs = nextState.documents.filter((doc) => doc.internal && !knownIds.has(doc.id));
+  nextState.documents = initialState.documents.map((baseDoc) => {
+    const currentDoc = currentById.get(baseDoc.id);
+    return currentDoc ? deepMerge(structuredClone(baseDoc), currentDoc) : structuredClone(baseDoc);
+  }).concat(internalDocs).filter((doc) => !["mtse", "planta-fluxo"].includes(doc.id));
+  const mtse = nextState.documents.find((doc) => doc.id === "memorial-economico-sanitario");
+  if (mtse) {
+    mtse.name = initialState.documents.find((doc) => doc.id === "memorial-economico-sanitario")?.name || mtse.name;
+    mtse.hint = initialState.documents.find((doc) => doc.id === "memorial-economico-sanitario")?.hint || mtse.hint;
+    mtse.required = true;
+    mtse.group = "art11";
+    mtse.item = "09";
+    mtse.formView = "establishment";
+    mtse.printForm = "mtse";
+  }
+  if (!Array.isArray(nextState.products)) nextState.products = [];
+  nextState.products = nextState.products.map((product) => {
+    const normalized = {
+      natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
+      qualityControls: "",
+      signaturePlaceDate: "",
+      ...product,
+    };
+    if (!normalized.storageConditions && normalized.conservation) {
+      normalized.storageConditions = normalized.conservation;
+    }
+    if (!normalized.otherPrimaryPackagingType && normalized.packageType) {
+      normalized.otherPrimaryPackagingType = normalized.packageType;
+    }
+    if (!normalized.labelingPresentation && normalized.labelFeatures) {
+      normalized.labelingPresentation = normalized.labelFeatures;
+    }
+    return normalized;
+  });
+  return nextState;
 }
 
 function deepMerge(base, patch) {
@@ -302,13 +515,12 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function persistState() {
+function persistState() {
   if (!backendAvailable || !session) return;
-  try {
-    await api("/state", { method: "POST", body: { state } });
-  } catch (error) {
-    console.warn(error);
-  }
+  const snapshot = structuredClone(state);
+  persistQueue = persistQueue
+    .then(() => api("/state", { method: "POST", body: { state: snapshot } }))
+    .catch((error) => console.warn(error));
 }
 
 async function bootstrap() {
@@ -318,7 +530,7 @@ async function bootstrap() {
     session = sessionResponse.user;
     if (session) {
       const data = await api("/state");
-      state = deepMerge(structuredClone(initialState), data.state);
+      state = normalizeState(deepMerge(structuredClone(initialState), data.state));
       state.role = session.role;
       notifications = data.notifications || [];
       await loadRegistry();
@@ -421,16 +633,29 @@ function setRole(role) {
   render();
 }
 
-function setView(view) {
+function setView(view, formFocus = "") {
   state.view = view;
+  if (view === "establishment") state.formFocus = formFocus;
   saveState();
   render();
+  if (view === "establishment" && formFocus) {
+    requestAnimationFrame(() => {
+      document.querySelector(`#form-${formFocus}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 function update(path, value) {
   const parts = path.split(".");
   let target = state;
-  for (let i = 0; i < parts.length - 1; i += 1) target = target[parts[i]];
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i];
+    const nextKey = parts[i + 1];
+    if (target[key] == null || typeof target[key] !== "object") {
+      target[key] = /^\d+$/.test(nextKey) ? [] : {};
+    }
+    target = target[key];
+  }
   target[parts.at(-1)] = value;
   saveState();
 }
@@ -709,8 +934,8 @@ function journeySteps() {
   const submitted = ["review", "approved"].includes(state.protocol.status);
   const approved = state.protocol.status === "approved";
   return [
-    { id: "ficha", title: "Preencher a ficha do estabelecimento", desc: "Dados da empresa, responsavel legal e responsavel tecnico. Preencha uma vez; o portal reaproveita em todos os formularios.", done: fichaDone, view: "establishment", cta: "Abrir ficha" },
-    { id: "mtse", title: "Descrever a producao (Memorial/MTSE)", desc: "Atividades, capacidade, agua, higiene e fluxo. Atende o item 09 do checklist.", done: mtseDone, view: "establishment", cta: "Preencher memorial" },
+    { id: "ficha", title: "Preencher a ficha do estabelecimento", desc: "Dados da empresa, responsavel legal e responsavel tecnico. Preencha uma vez; o portal reaproveita em todos os formularios.", done: fichaDone, view: "establishment", formFocus: "anexo-i", cta: "Abrir ficha" },
+    { id: "mtse", title: "Descrever a producao (Memorial/MTSE)", desc: "Atividades, capacidade, agua, higiene e fluxo. Atende o item 09 do checklist.", done: mtseDone, view: "establishment", formFocus: "anexo-ii", cta: "Preencher memorial" },
     { id: "produtos", title: "Cadastrar os produtos", desc: "Um Anexo IV por produto: nome, composicao, rotulo e conservacao.", done: productsDone, view: "products", cta: "Cadastrar produtos" },
     { id: "assinar", title: "Imprimir e assinar no gov.br", desc: "Imprima os formularios em PDF e assine de graca com sua conta gov.br, sem cartorio.", done: signDone, view: "print", cta: "Ver formularios" },
     { id: "documentos", title: `Enviar os documentos (${docs.sent} de ${docs.total})`, desc: "Checklist oficial do art. 11 da LC 84/2024. Cada item diz onde conseguir o documento.", done: docsDone, view: "documents", cta: "Enviar documentos" },
@@ -742,7 +967,7 @@ function renderJourney() {
           </div>
           ${current.action === "submit"
             ? `<button class="btn primary" data-action="submit">${icon("send")}${current.cta}</button>`
-            : `<button class="btn primary" data-view="${current.view}">${current.cta}</button>`}
+            : `<button class="btn primary" data-view="${current.view}" ${current.formFocus ? `data-form-focus="${current.formFocus}"` : ""}>${current.cta}</button>`}
         </div>
       ` : `
         <div class="next-action done">
@@ -751,7 +976,7 @@ function renderJourney() {
       `}
       <div class="journey-steps">
         ${steps.map((step, index) => `
-          <button class="journey-step ${step.done ? "done" : ""} ${current && step.id === current.id ? "current" : ""}" data-view="${step.view}">
+          <button class="journey-step ${step.done ? "done" : ""} ${current && step.id === current.id ? "current" : ""}" data-view="${step.view}" ${step.formFocus ? `data-form-focus="${step.formFocus}"` : ""}>
             <span class="step-badge">${step.done ? "&#10003;" : index + 1}</span>
             <span class="step-text"><strong>${step.title}</strong><span>${step.desc}</span></span>
           </button>
@@ -866,9 +1091,23 @@ function nextActions() {
 }
 
 function renderEstablishment() {
+  const focusedAnnex = OFFICIAL_ANNEXES.find((annex) => annex.formFocus === state.formFocus);
+  const focusedBanner = focusedAnnex ? `
+    <div class="span-12 annex-focus-banner">
+      <div>
+        <strong>Preenchendo o Anexo ${focusedAnnex.number}</strong>
+        <span>${focusedAnnex.title}. Os dados comuns da empresa sao reaproveitados automaticamente.</span>
+      </div>
+      <div class="doc-quick-actions">
+        ${focusedAnnex.printForm ? `<button class="btn primary" data-view="print" data-print-form="${focusedAnnex.printForm}">${icon("print")}Gerar para assinar</button>` : ""}
+        <a class="btn" href="${DEC5374_URL}#page=${focusedAnnex.page}" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
+      </div>
+    </div>
+  ` : "";
   return `
     <div class="grid">
-      <div class="span-8 panel">
+      ${focusedBanner}
+      <div class="span-8 panel form-anchor" id="form-anexo-i">
         <div class="panel-header"><div><h2>Anexo I - Informacoes do estabelecimento</h2><p class="muted">Base do requerimento, MTSE, produto/rotulo e atos fiscais.</p></div><span class="status ${statusClass(state.protocol.status)}">${statusLabel()}</span></div>
         <div class="form-grid">
           ${input("establishment.legalName", "Razao social / nome", { owner: "establishment" })}
@@ -941,10 +1180,18 @@ function renderEstablishment() {
             "Outro ato"
           ], { owner: "establishment" })}
           ${input("application.otherAct", "Outro ato / complemento", { owner: "establishment" })}
+          ${selectInput("application.cadastralChangeType", "Tipo de alteracao cadastral (se aplicavel)", [
+            "",
+            "Alteracao de CNPJ",
+            "Alteracao de razao social",
+            "Classificacao do estabelecimento",
+            "Alteracao do endereco",
+            "Alteracao de responsavel tecnico"
+          ], { owner: "establishment" })}
           ${input("application.commitment", "Termo de compromisso", { textarea: true, full: true, owner: "establishment" })}
         </div>
       </div>
-      <div class="span-12 panel">
+      <div class="span-12 panel form-anchor" id="form-anexo-ii">
         <div class="panel-header"><h2>Anexo II - Memorial tecnico-sanitario do estabelecimento</h2></div>
         <div class="form-grid">
           ${input("production.activities", "Lista de atividades gerais", { textarea: true, owner: "establishment" })}
@@ -954,7 +1201,7 @@ function renderEstablishment() {
           ${input("production.laundry", "Lavanderia", { textarea: true, owner: "establishment" })}
           ${input("production.landDetails", "Detalhes do terreno", { textarea: true, owner: "establishment" })}
           ${input("production.locationArea", "Area de localizacao", { textarea: true, owner: "establishment" })}
-          ${input("production.flow", "Disposicao das instalacoes e fluxo de producao", { textarea: true, owner: "establishment" })}
+          ${input("production.flow", "12. Disposicao das instalacoes e fluxo de producao", { textarea: true, owner: "establishment" })}
           ${input("production.equipment", "Equipamentos", { textarea: true, owner: "establishment" })}
           ${input("production.floorWalls", "Piso e material de impermeabilizacao", { textarea: true, owner: "establishment" })}
           ${input("production.doorsWindowsCeiling", "Janelas, portas, teto e bloqueio sanitario", { textarea: true, owner: "establishment" })}
@@ -969,7 +1216,7 @@ function renderEstablishment() {
           ${input("production.qualityControls", "Controles de qualidade e autocontroles", { textarea: true, full: true, owner: "establishment" })}
         </div>
       </div>
-      <div class="span-12 panel">
+      <div class="span-12 panel form-anchor" id="form-anexo-iii">
         <div class="panel-header"><h2>Anexo III - Memorial descritivo de construcao/reforma</h2></div>
         <div class="form-grid">
           ${input("construction.requestReason", "Motivo da obra/reforma/ampliacao", { owner: "establishment" })}
@@ -986,9 +1233,16 @@ function renderEstablishment() {
 }
 
 function renderDocuments() {
-  const art11 = state.documents.filter((doc) => doc.group === "art11");
-  const anexos = state.documents.filter((doc) => !doc.internal && doc.group !== "art11");
-  const internalDocs = state.documents.filter((doc) => doc.internal);
+  const visibleDocuments = (state.documents || []).filter((doc) => doc.id !== "mtse");
+  const art11 = visibleDocuments.filter((doc) => doc.group === "art11");
+  const officialDocumentIds = new Set(OFFICIAL_ANNEXES.map((annex) => annex.documentId));
+  const officialDocuments = OFFICIAL_ANNEXES.map((annex) => ({
+    annex,
+    doc: visibleDocuments.find((doc) => doc.id === annex.documentId),
+  })).filter((item) => item.doc);
+  const remainingArt11 = art11.filter((doc) => !officialDocumentIds.has(doc.id));
+  const anexos = visibleDocuments.filter((doc) => !doc.internal && doc.group !== "art11" && !officialDocumentIds.has(doc.id));
+  const internalDocs = visibleDocuments.filter((doc) => doc.internal);
   const progress = art11Progress();
   const percent = progress.total ? Math.round((progress.sent / progress.total) * 100) : 0;
   return `
@@ -997,18 +1251,35 @@ function renderDocuments() {
         <strong>Taxa do SIM em 2026: nao e preciso pagar nada.</strong>
         A Taxa de Inspecao Sanitaria esta dispensada neste ano (LC 104/2026, art. 3, par. unico). O item 12 do checklist fica sem exigencia em 2026.
       </div>
+      <div class="span-12 banner-warn legal-why">
+        <strong>Por que pedimos estes documentos?</strong>
+        Cada item abaixo mostra a fonte legal usada pelo SIM. O objetivo e cumprir a LC 84/2024 e os formularios oficiais do Decreto 5.374/2024, sem criar exigencia duplicada para o produtor. Itens com * sao obrigatorios; os condicionais informam quando se aplicam.
+      </div>
+      <section class="span-12 official-annex-section">
+        <div class="official-annex-header">
+          <div>
+            <h2>Formularios oficiais, na ordem</h2>
+            <p>Comece por aqui. Preencha no portal, confira com o modelo publicado pela Prefeitura, gere o documento, assine e envie no proprio item.</p>
+          </div>
+          <span class="annex-law">Decreto 5.374/2024</span>
+        </div>
+        <div class="official-annex-list">
+          ${officialDocuments.map(({ annex, doc }) => documentCard(doc, { annex })).join("")}
+        </div>
+      </section>
       <div class="span-8 panel">
         <div class="panel-header">
-          <div><h2>Checklist do registro - art. 11 da LC 84/2024</h2>
-          <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : "Envie cada documento em PDF. Cada item explica o que e e onde conseguir."}</p></div>
+          <div><h2>Demais documentos do registro</h2>
+          <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : `Os Anexos I, II e III ja estao acima. Complete aqui os demais documentos do art. 11 da LC 84/2024. O progresso ${progress.sent}/${progress.total} considera todos os obrigatorios.`}</p></div>
           <span class="journey-score">${progress.sent}/${progress.total}</span>
         </div>
         <div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>
         <div class="document-group">
-          ${art11.map(documentCard).join("")}
+          ${remainingArt11.map(documentCard).join("")}
         </div>
         <div class="document-group">
-          <h3>Anexos complementares</h3>
+          <h3>Comprovantes complementares</h3>
+          <p class="muted small">Estes itens nao duplicam os formularios oficiais. Eles confirmam a identidade de quem assina e a responsabilidade tecnica informada no processo.</p>
           ${anexos.map(documentCard).join("")}
         </div>
         ${state.role === "sim" ? `
@@ -1047,37 +1318,50 @@ function renderDocuments() {
   `;
 }
 
-function documentCard(doc) {
+function documentCard(doc, options = {}) {
   const versions = doc.versions || [];
   const canUpload = backendAvailable && (state.role === "sim" || !doc.internal);
   const isTaxWaived = doc.id === "comprovante-taxa";
+  const isProductForm = doc.id === "rotulos-produtos";
+  const annex = options.annex || OFFICIAL_ANNEX_BY_DOCUMENT.get(doc.id);
+  const products = isProductForm ? visibleProducts() : [];
   const received = docReceived(doc);
   return `
-    <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
+    <section class="document-card ${annex ? "official-annex" : ""} ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
       <div class="document-main">
         <div>
-          <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
-          ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
+          ${annex ? `
+            <div class="official-annex-title">
+              <span class="official-annex-number">${received ? "&#10003;" : `ANEXO ${annex.number}`}</span>
+              <strong>${annex.title}${doc.required ? " *" : ""}</strong>
+            </div>
+          ` : `<strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
+            ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>`}
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
-          <span>${documentSummary(doc)}</span>
-          ${doc.formView && state.role === "establishment" ? `
+          ${annex ? `<span class="annex-destination">${annex.destination}</span>` : ""}
+          ${documentSourceHtml(doc)}
+          ${documentExtraHtml(doc)}
+          <span>${isProductForm
+            ? `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}; cada produto gera seu proprio Anexo IV.`
+            : documentSummary(doc)}</span>
+          ${annex ? `
             <div class="doc-quick-actions">
-              <button class="btn" data-view="${doc.formView}">${icon("file")}Preencher ficha</button>
-              <button class="btn" data-view="print" data-print-form="${doc.printForm}">${icon("print")}Imprimir formulario</button>
-              <a class="btn" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">${icon("shield")}Assinar no gov.br</a>
+              <button class="btn primary" data-view="${annex.view}" ${annex.formFocus ? `data-form-focus="${annex.formFocus}"` : ""}>${icon("file")}Preencher Anexo ${annex.number}</button>
+              <a class="btn" href="${DEC5374_URL}#page=${annex.page}" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
+              ${annex.printForm ? `<button class="btn" data-view="print" data-print-form="${annex.printForm}">${icon("print")}Gerar para assinar</button>` : ""}
             </div>
           ` : ""}
         </div>
         <div class="upload-controls">
-          ${canUpload && !isTaxWaived ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
+          ${canUpload && !isTaxWaived && !isProductForm ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
           ${doc.uploadId ? `<button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>` : ""}
           ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>` : ""}
-          ${isTaxWaived && state.role !== "sim" ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
+          ${isProductForm || (isTaxWaived && state.role !== "sim") ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
             ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
           </select>`}
         </div>
       </div>
-      <div class="version-list">
+      ${isProductForm ? "" : `<div class="version-list">
         ${versions.length ? versions.map((version) => `
           <div class="version-row">
             <div>
@@ -1090,8 +1374,38 @@ function documentCard(doc) {
             </div>
           </div>
         `).join("") : `<div class="empty small">Nenhuma versao enviada.</div>`}
-      </div>
+      </div>`}
     </section>
+  `;
+}
+
+function documentSourceHtml(doc) {
+  const sources = DOCUMENT_SOURCES[doc.id] || doc.sources || [];
+  if (!sources.length) return "";
+  return `<span class="doc-source"><strong>Fonte:</strong> ${sources.map((source) => (
+    source.url
+      ? `<a href="${source.url}" target="_blank" rel="noreferrer">${escapeHtml(source.text)}</a>`
+      : escapeHtml(source.text)
+  )).join(" + ")}</span>`;
+}
+
+function documentExtraHtml(doc) {
+  if (doc.id !== "certidoes-ambientais") return "";
+  return `
+    <div class="doc-guidance">
+      <strong>Roteiro CETESB para laticinios</strong>
+      <ol>
+        <li>Entre no portal e tente o licenciamento ambiental pelo servico disponivel para a atividade.</li>
+        <li>Se o sistema permitir o enquadramento simplificado, salve a licenca ou dispensa emitida e envie neste item.</li>
+        <li>Se o sistema nao permitir, siga a orientacao da CETESB para Licenca de Operacao/MCE e anexe o protocolo ou a licenca emitida.</li>
+        <li>Quando ja houver historico CETESB, anexe tambem a consulta do processo para facilitar a analise.</li>
+      </ol>
+      <p>A atividade "fabricacao de produtos do laticinio" aparece na tabela da CETESB com fator de complexidade 3,0. Pelo Decreto estadual 8.468/1976, art. 71, atividades com W = 3 tem Licenca de Operacao com validade de 3 anos. Por isso, uma LO antiga precisa ser conferida ou renovada antes do registro no SIM.</p>
+      <p class="doc-guidance-links">
+        <a href="${CETESB_PORTAL_URL}" target="_blank" rel="noreferrer">Abrir portal CETESB</a>
+        <a href="${CETESB_PROCESSO_GUERRA_URL}" target="_blank" rel="noreferrer">Ver exemplo do processo Guerra Milk</a>
+      </p>
+    </div>
   `;
 }
 
@@ -1185,7 +1499,11 @@ function renderProducts() {
     <div class="grid">
       <div class="span-12 panel">
         <div class="panel-header">
-          <div><h2>Produtos e rotulos</h2><p class="muted">Cada produto puxa automaticamente os dados da ficha mestre para o Anexo IV. Produtos aprovados ficam travados; alteracoes abrem uma nova versao.</p></div>
+          <div>
+            <h2>Anexo IV - produtos e rotulos</h2>
+            <p class="muted">Preencha um cadastro por produto. O portal inclui automaticamente os dados da empresa e monta o formulario oficial para assinatura.</p>
+            <a class="source-link" href="${DEC5374_URL}#page=24" target="_blank" rel="noreferrer">Modelo oficial - Decreto 5.374/2024, paginas 24 a 26</a>
+          </div>
           ${state.role === "establishment" ? `<button class="btn primary" data-action="add-product">Adicionar produto</button>` : ""}
         </div>
         <div class="product-list">
@@ -1241,7 +1559,7 @@ function productNatureBlock(product, locked) {
   const legacy = !selected.length && product.requestNature ? product.requestNature : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Natureza da solicitacao</label>
+      <label class="struct-label">5. Natureza da solicitacao</label>
       <div class="check-grid">
         ${PRODUCT_NATURE_OPTIONS.map((opt) => `
           <label class="check-item">
@@ -1255,24 +1573,46 @@ function productNatureBlock(product, locked) {
   `;
 }
 
+function productOptionBlock(product, field, label, options, locked) {
+  const selected = Array.isArray(product[field]) ? product[field] : [];
+  return `
+    <div class="struct-block">
+      <label class="struct-label">${label}</label>
+      <div class="check-grid">
+        ${options.map((option) => `
+          <label class="check-item">
+            <input type="checkbox" data-poption="${product.id}" data-poption-field="${field}" value="${escapeHtml(option)}" ${selected.includes(option) ? "checked" : ""} ${locked ? "disabled" : ""}>
+            <span>${option}</span>
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 // Composicao do produto: tabela dinamica (materia-prima, kg/L, %).
 function productCompositionBlock(product, locked) {
   const rows = product.compositionRows || [];
   const legacy = !rows.length && product.composition ? product.composition : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Composicao do produto</label>
+      <label class="struct-label">7. Composicao do produto</label>
       <table class="struct-table">
-        <thead><tr><th>Materia-prima / ingrediente</th><th class="num">kg ou L</th><th class="num">%</th><th></th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Materia-prima / ingrediente</th><th class="num">kg ou L</th><th class="num">%</th><th></th></tr></thead>
         <tbody>
           ${rows.length ? rows.map((row) => `
             <tr>
+              <td>
+                <select data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="kind" ${locked ? "disabled" : ""}>
+                  ${["Materia-prima", "Ingrediente"].map((kind) => `<option ${kind === (row.kind || "Materia-prima") ? "selected" : ""}>${kind}</option>`).join("")}
+                </select>
+              </td>
               <td><input data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="ingredient" value="${escapeHtml(row.ingredient || "")}" ${locked ? "disabled" : ""}></td>
               <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="amount" value="${escapeHtml(row.amount || "")}" ${locked ? "disabled" : ""}></td>
               <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="pct" value="${escapeHtml(row.pct || "")}" ${locked ? "disabled" : ""}></td>
               <td>${locked ? "" : `<button class="btn danger btn-mini" data-product-action="del-comp-row" data-product-id="${product.id}" data-row-id="${row.id}">Remover</button>`}</td>
             </tr>
-          `).join("") : `<tr><td colspan="4" class="empty small">Nenhum ingrediente informado.</td></tr>`}
+          `).join("") : `<tr><td colspan="5" class="empty small">Nenhuma materia-prima ou ingrediente informado.</td></tr>`}
         </tbody>
       </table>
       ${locked ? "" : `<button class="btn btn-mini" data-product-action="add-comp-row" data-product-id="${product.id}">Adicionar ingrediente</button>`}
@@ -1287,7 +1627,7 @@ function productNutritionBlock(product, locked) {
   const legacy = product.nutrition ? product.nutrition : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Informacao nutricional</label>
+      <label class="struct-label">8. Informacao nutricional</label>
       <div class="field" style="max-width:280px">
         <label>Quantidade por porcao de<span>Estabelecimento</span></label>
         <input data-pnutport="${product.id}" value="${escapeHtml(product.nutritionPortion || "")}" placeholder="ex.: 100 g" ${locked ? "disabled" : ""}>
@@ -1321,7 +1661,7 @@ function productEditor(product, opts = {}) {
   const canDelete = state.role === "establishment" && !opts.readOnlyHistory && product.status !== "Aprovado";
   const metaSummary = [
     product.brand && `Marca: ${escapeHtml(product.brand)}`,
-    product.conservation && `Conservacao: ${escapeHtml(product.conservation)}`,
+    (product.storageConditions || product.conservation) && `Armazenamento: ${escapeHtml(product.storageConditions || product.conservation)}`,
     product.labelUploadId ? "Rotulo enviado" : "Rotulo pendente",
     product.submittedAt ? `Enviado em ${formatDate(product.submittedAt)}` : null,
   ].filter(Boolean).join(" &middot; ");
@@ -1335,26 +1675,45 @@ function productEditor(product, opts = {}) {
       ${product.status === "Aprovado" ? `<p class="small muted">Aprovado em ${formatDate(product.approvedAt)} por ${product.approvedBy || "SIM"}. Este produto esta travado para edicao.</p>` : ""}
       ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
       ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
-      ${productLabelCard(product, locked)}
-      ${productNatureBlock(product, locked)}
-      <div class="form-grid">
-        ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
-        ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
-        ${productField(product, "labelRegistration", "N. registro de rotulo", { readOnlyHistory: locked })}
-        ${productField(product, "conservation", "Condicoes de conservacao", { readOnlyHistory: locked })}
-        ${productField(product, "packageType", "Tipo de embalagem", { readOnlyHistory: locked })}
-        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true, full: true, readOnlyHistory: locked })}
+      <div class="official-form-note">
+        <strong>Dados do estabelecimento ja preenchidos</strong>
+        <span>Razao social, endereco, CNPJ, inscricao estadual e responsavel legal vem automaticamente da ficha mestre.</span>
       </div>
-      ${productCompositionBlock(product, locked)}
-      ${productNutritionBlock(product, locked)}
-      <div class="form-grid">
-        ${productField(product, "manufacturingProcess", "Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "packagingProcess", "Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "storageConditions", "Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "notes", "Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true, full: true, readOnlyHistory: locked })}
+      <div class="product-section">
+        <h4>4. Identificacao do produto</h4>
+        <div class="form-grid">
+          ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
+          ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
+          ${productField(product, "labelRegistration", "N. registro de rotulo", { readOnlyHistory: locked })}
+        </div>
+      </div>
+      <div class="product-section">${productNatureBlock(product, locked)}</div>
+      <div class="product-section">
+        <h4>6. Caracteristicas do rotulo e da embalagem</h4>
+        ${productOptionBlock(product, "labelTypes", "6.1 Rotulo", PRODUCT_LABEL_TYPE_OPTIONS, locked)}
+        ${productOptionBlock(product, "primaryPackagingTypes", "6.2 Embalagem primaria", PRODUCT_PRIMARY_PACKAGE_OPTIONS, locked)}
+        <div class="form-grid">
+          ${productField(product, "otherLabelType", "Outro tipo de rotulo", { readOnlyHistory: locked })}
+          ${productField(product, "otherPrimaryPackagingType", "Outro tipo de embalagem primaria", { readOnlyHistory: locked })}
+          ${productField(product, "dateLotIndication", "Indicacao da data de fabricacao, validade e lote", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "packageQuantity", "Quantidade de produto por embalagem", { readOnlyHistory: locked })}
+          ${productField(product, "labelingPresentation", "Apresentacao das informacoes de rotulagem", { textarea: true, full: true, readOnlyHistory: locked })}
+        </div>
+        ${productLabelCard(product, locked)}
+      </div>
+      <div class="product-section">${productCompositionBlock(product, locked)}</div>
+      <div class="product-section">${productNutritionBlock(product, locked)}</div>
+      <div class="product-section">
+        <div class="form-grid">
+          ${productField(product, "manufacturingProcess", "9. Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "packagingProcess", "10. Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "storageConditions", "11. Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "notes", "12. Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "marketTransport", "13. Transporte e expedicao ao mercado consumidor", { textarea: true, full: true, readOnlyHistory: locked })}
+        </div>
       </div>
       <div class="product-actions">
+        <button class="btn" data-product-action="print" data-product-id="${product.id}">${icon("print")}Gerar Anexo IV</button>
         ${canSubmit ? `<button class="btn primary" data-product-action="submit" data-product-id="${product.id}">Enviar produto para analise</button>` : ""}
         ${canCancel ? `<button class="btn" data-product-action="cancel-submit" data-product-id="${product.id}">Cancelar envio e editar</button>` : ""}
         ${canReview ? `
@@ -1686,14 +2045,14 @@ function renderFiscalActs() {
 function renderPrint() {
   const establishmentTabs = [
     ["anexoI", "Anexo I"],
-    ["mtse", "MTSE"],
-    ["construction", "Construcao/reforma"],
-    ["produto", "Produto/rotulo"],
+    ["mtse", "Anexo II - MTSE"],
+    ["construction", "Anexo III - Obras"],
+    ["produto", "Anexo IV - Produto"],
   ];
   const fiscalTabs = [
-    ["infracao", "Auto de infracao"],
-    ["advertencia", "Advertencia"],
-    ["apreensao", "Apreensao"],
+    ["infracao", "Anexo V - Infracao"],
+    ["advertencia", "Anexo VI - Advertencia"],
+    ["apreensao", "Anexo VII - Apreensao"],
   ];
   // Atos fiscais (infracao/advertencia/apreensao) sao ferramenta exclusiva do
   // fiscal: o estabelecimento nao lavra nem imprime esses modelos por conta propria.
@@ -1707,7 +2066,7 @@ function renderPrint() {
       <button class="btn primary" data-action="print">${icon("print")}Imprimir</button>
       ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<a class="btn" href="${docxUrl(state.printForm)}" title="Baixa uma versao Word editavel deste formulario">${icon("file")}Baixar Word (rascunho editavel)</a>` : ""}
     </div>
-    ${["anexoI", "mtse", "construction", "produto"].includes(state.printForm) ? `<p class="small muted no-print" style="margin:-6px 0 14px">O Word e um rascunho para editar com liberdade. A via oficial continua sendo o PDF assinado no gov.br.</p>` : ""}
+    <p class="small muted no-print" style="margin:-6px 0 14px">Preencha diretamente nos campos amarelos da folha. As altera&ccedil;&otilde;es s&atilde;o salvas no processo; ao imprimir, os campos ficam com apar&ecirc;ncia limpa para assinatura.</p>
     ${printSheet()}
   `;
 }
@@ -1744,146 +2103,1074 @@ function masterRows() {
   `;
 }
 
+function officialPathValue(path) {
+  return path.split(".").reduce((value, key) => value?.[key], state) ?? "";
+}
+
+function officialInput(path, options = {}) {
+  const value = options.value ?? officialPathValue(path);
+  const owner = options.owner || "establishment";
+  const readonly =
+    (owner === "establishment" && state.role !== "establishment") ||
+    (owner === "sim" && state.role !== "sim");
+  const binding = options.cnaePart
+    ? `data-official-cnae="${options.cnaePart}"`
+    : `data-path="${path}"`;
+  return `<input
+    class="official-fill-input ${options.inline ? "official-fill-inline" : ""}"
+    type="${options.type || "text"}"
+    ${binding}
+    value="${escapeHtml(value)}"
+    ${readonly ? "readonly" : ""}
+    aria-label="${escapeHtml(options.label || path)}"
+  >`;
+}
+
+function officialTextarea(path, options = {}) {
+  const value = options.value ?? officialPathValue(path);
+  const owner = options.owner || "establishment";
+  const readonly =
+    (owner === "establishment" && state.role !== "establishment") ||
+    (owner === "sim" && state.role !== "sim");
+  return `<textarea
+    class="official-fill-input official-fill-textarea"
+    data-path="${path}"
+    style="--official-textarea-height:${options.height || 12}mm"
+    ${readonly ? "readonly" : ""}
+    aria-label="${escapeHtml(options.label || path)}"
+  >${escapeHtml(value)}</textarea>`;
+}
+
+function officialDocumentHeader(number, title) {
+  return `
+    <header class="official-form-header">
+      <div class="official-service-masthead">
+        <img src="./assets/brasao-orlandia.png" alt="Brasao de Orlandia">
+        <div class="official-government-lines">
+          <strong>PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA</strong>
+          <span>Estado de S&atilde;o Paulo</span>
+          <b>SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECON&Ocirc;MICO E TURISMO</b>
+          <b>SERVI&Ccedil;O DE INSPE&Ccedil;&Atilde;O MUNICIPAL - SIM</b>
+        </div>
+        <div class="official-service-contact">
+          <strong>ATENDIMENTO DO SIM</strong>
+          <span>Lucas Marcelino Campos Ferreira</span>
+          <span>lucasferreira@orlandia.sp.gov.br</span>
+          <span>(31) 99950-5748</span>
+        </div>
+      </div>
+      <div class="official-form-name">
+        <strong>ANEXO ${number}</strong>
+        <span>${title}</span>
+      </div>
+    </header>
+  `;
+}
+
+function officialField(label, path, options = {}) {
+  const span = options.span || 12;
+  const heightClass = options.tall ? " official-field-tall" : "";
+  const owner = options.owner || "establishment";
+  const control = options.textarea
+    ? officialTextarea(path, { ...options, owner, label: options.ariaLabel || label })
+    : officialInput(path, { ...options, owner, label: options.ariaLabel || label });
+  return `<div class="official-field official-span-${span}${heightClass}"><span>${label}</span>${control}</div>`;
+}
+
+function officialTableInput(path, options = {}) {
+  if (options.textarea) {
+    return officialTextarea(path, {
+      ...options,
+      height: options.height || 8,
+      label: options.label || path,
+    });
+  }
+  return officialInput(path, { ...options, label: options.label || path });
+}
+
+function comparableOfficialValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function officialOption(label, selectedValue, aliases = [], options = {}) {
+  const selected = comparableOfficialValue(selectedValue);
+  const optionValue = options.value || label;
+  const candidates = [optionValue, label, ...aliases].map(comparableOfficialValue);
+  const checked = Boolean(selected) && candidates.some((candidate) => selected === candidate);
+  const owner = options.owner || "establishment";
+  const readonly =
+    (owner === "establishment" && state.role !== "establishment") ||
+    (owner === "sim" && state.role !== "sim");
+  const parentBinding = options.parentPath
+    ? `data-official-parent-path="${options.parentPath}" data-official-parent-value="${escapeHtml(options.parentValue || "")}"`
+    : "";
+  return `
+    <label class="official-option">
+      <input
+        class="official-checkbox"
+        type="radio"
+        name="official-${escapeHtml(options.path || "choice")}"
+        data-official-choice-path="${escapeHtml(options.path || "")}"
+        value="${escapeHtml(optionValue)}"
+        ${parentBinding}
+        ${checked ? "checked" : ""}
+        ${readonly ? "disabled" : ""}
+      >
+      <span>${label}</span>
+    </label>
+  `;
+}
+
+function officialCheck(label, path, optionValue, options = {}) {
+  const selected = options.selectedValues ?? officialPathValue(path);
+  const checked = Array.isArray(selected) && selected.some(
+    (value) => comparableOfficialValue(value) === comparableOfficialValue(optionValue)
+  );
+  const owner = options.owner || "establishment";
+  const readonly =
+    (owner === "establishment" && state.role !== "establishment") ||
+    (owner === "sim" && state.role !== "sim");
+  return `
+    <label class="official-option">
+      <input
+        class="official-checkbox"
+        type="checkbox"
+        data-official-array-path="${escapeHtml(path)}"
+        value="${escapeHtml(optionValue)}"
+        ${checked ? "checked" : ""}
+        ${readonly ? "disabled" : ""}
+      >
+      <span>${label}</span>
+    </label>
+  `;
+}
+
+function officialSignatureBlock(options = {}) {
+  const owner = options.owner || "establishment";
+  const path = options.path || "application.signaturePlaceDate";
+  return `
+    <div class="official-document-signatures">
+      <div class="official-signature-location">
+        <strong>LOCAL E DATA</strong>
+        ${officialInput(path, { owner, label: "Local e data" })}
+      </div>
+      <div><span></span>${options.left || "ASSINATURA DO PROPRIETARIO OU RESPONSAVEL LEGAL"}</div>
+      <div><span></span>${options.right || "ASSINATURA DO RESPONSAVEL TECNICO"}</div>
+    </div>
+  `;
+}
+
+function officialDocumentPage(number, title, page, totalPages, body, className = "") {
+  return `
+    <section class="official-page official-document-page ${className}">
+      ${officialDocumentHeader(number, title)}
+      <div class="official-page-body">${body}</div>
+      <div class="official-page-index">ANEXO ${number} - P&Aacute;GINA ${page} DE ${totalPages}</div>
+    </section>
+  `;
+}
+
+function officialClassificationGroup(title, options) {
+  return `
+    <div class="official-classification-group">
+      <div>${title}</div>
+      ${options.map((option) => officialOption(
+        option,
+        state.establishment.classification,
+        [],
+        { path: "establishment.classification", value: option }
+      )).join("")}
+    </div>
+  `;
+}
+
+function cnaeParts() {
+  const raw = String(state.establishment.cnae || "").trim();
+  const match = raw.match(/^([0-9.\-/]+)\s*-\s*(.+)$/);
+  if (!match) return { code: raw, activity: raw };
+  return { code: match[1], activity: match[2] };
+}
+
 function printAnexoI() {
-  return `${printHeader("ANEXO I - SOLICITACAO DE ATOS DO S.I.M.")}
-    <table class="print-table">${masterRows()}
-      <tr><th>Natureza juridica / porte</th><td>${state.establishment.legalNature || "&nbsp;"}</td><th>Agroindustria de pequeno porte?</th><td>${state.establishment.smallBusiness || "Nao"}</td></tr>
-      <tr><th>Responsavel legal</th><td>${state.legalResponsible.name}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel tecnico - RT</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.technicalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>N. de inscricao do RT no conselho de classe/UF</th><td colspan="3">${state.technicalResponsible.council || "&nbsp;"}</td></tr>
-      <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
-      <tr><th>Tipo de solicitacao</th><td colspan="3">${state.application.actType}${state.application.otherAct ? ` - ${state.application.otherAct}` : ""}</td></tr>
-      <tr><th>Termo de compromisso</th><td colspan="3">${state.application.commitment}</td></tr>
-    </table>
-    <table class="print-table sign-meta">
-      <tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr>
-      <tr><th>Nome do autuante</th><td>&nbsp;</td><th>Matricula</th><td>&nbsp;</td></tr>
-    </table>
-    <div class="signature"><div>Assinatura do proprietario ou responsavel legal</div><div>Assinatura do responsavel tecnico</div></div>
-  </div>`;
+  const cnae = cnaeParts();
+  const actType = state.application.actType || "";
+  const cadastralChange = state.application.cadastralChangeType || (
+    comparableOfficialValue(actType).includes("alteracao cadastral")
+      ? state.application.otherAct
+      : ""
+  );
+  return `
+    <div class="official-form official-anexo-i">
+      <section class="official-page official-anexo-i-page official-anexo-i-page-one">
+        ${officialDocumentHeader("I", "SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.")}
+
+        <h3 class="official-section-title">1. INFORMA&Ccedil;&Otilde;ES DO ESTABELECIMENTO</h3>
+        <div class="official-grid official-establishment-grid">
+          <div class="official-field official-span-12 official-field-tall"><span>NOME (Raz&atilde;o Social/Pessoa F&iacute;sica):</span>${officialInput("establishment.legalName", { label: "Razao social ou nome" })}</div>
+          <div class="official-field official-span-6"><span>CNPJ/CPF:</span>${officialInput("establishment.cnpj", { label: "CNPJ ou CPF" })}</div>
+          <div class="official-field official-span-6"><span>MATRIZ/EIRELI/ME/EPP:</span>${officialInput("establishment.legalNature", { label: "Natureza juridica ou porte" })}</div>
+          <div class="official-field official-span-6"><span>IDENTIFICA&Ccedil;&Atilde;O DA ATIVIDADE ECON&Ocirc;MICA:</span>${officialInput("establishment.cnae", { value: cnae.activity, cnaePart: "activity", label: "Atividade economica" })}</div>
+          <div class="official-field official-span-6"><span>C&Oacute;DIGO DA ATIVIDADE CNAE:</span>${officialInput("establishment.cnae", { value: cnae.code, cnaePart: "code", label: "Codigo CNAE" })}</div>
+          <div class="official-field official-span-12 official-field-address"><span>ENDERE&Ccedil;O:</span>${officialInput("establishment.address", { label: "Endereco" })}</div>
+          <div class="official-field official-span-4"><span>BAIRRO:</span>${officialInput("establishment.district", { label: "Bairro" })}</div>
+          <div class="official-field official-span-3"><span>MUNIC&Iacute;PIO:</span>${officialInput("establishment.city", { label: "Municipio" })}</div>
+          <div class="official-field official-span-1"><span>UF:</span>${officialInput("establishment.state", { label: "UF" })}</div>
+          <div class="official-field official-span-4"><span>CEP:</span>${officialInput("establishment.zip", { label: "CEP" })}</div>
+          <div class="official-field official-span-8"><span>E-MAIL:</span>${officialInput("establishment.email", { type: "email", label: "E-mail" })}</div>
+          <div class="official-field official-span-4"><span>TELEFONE:</span>${officialInput("establishment.phone", { label: "Telefone" })}</div>
+        </div>
+
+        <h3 class="official-section-title">2. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL</h3>
+        <div class="official-grid">
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL LEGAL:</span>${officialInput("legalResponsible.name", { label: "Responsavel legal" })}</div>
+          <div class="official-field official-span-5"><span>CPF:</span>${officialInput("legalResponsible.cpf", { label: "CPF do responsavel legal" })}</div>
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL T&Eacute;CNICO - RT:</span>${officialInput("technicalResponsible.name", { label: "Responsavel tecnico" })}</div>
+          <div class="official-field official-span-5"><span>CPF:</span>${officialInput("technicalResponsible.cpf", { label: "CPF do responsavel tecnico" })}</div>
+          <div class="official-field official-span-12 official-field-tall"><span>N&ordm; DE INSCRI&Ccedil;&Atilde;O DO RT NO CONSELHO DE CLASSE PROFISSIONAL/UF:</span>${officialInput("technicalResponsible.council", { label: "Inscricao profissional do responsavel tecnico" })}</div>
+        </div>
+
+        <h3 class="official-section-title">3. CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+        <div class="official-classification">
+          ${officialClassificationGroup("Estabelecimento de carne e derivados", [
+            "Unidade de beneficiamento de carne e produtos carneos",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de pescado e derivados", [
+            "Unidade de beneficiamento de pescado e produtos de pescado",
+            "Estacao depuradora de moluscos bivalves",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de ovos e derivados", [
+            "Granja avicola",
+            "Unidade de beneficiamento de ovos e derivados",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de leite e derivados", [
+            "Granja leiteira",
+            "Posto de refrigeracao",
+            "Unidade de beneficiamento de leite e derivados",
+            "Queijaria",
+          ])}
+        </div>
+      </section>
+
+      <section class="official-page official-anexo-i-page official-anexo-i-page-two">
+        <div class="official-classification official-classification-continuation">
+          ${officialClassificationGroup("Estabelecimento de produtos de abelha e derivados", [
+            "Unidade de beneficiamento de produtos de abelhas",
+          ])}
+          <div class="official-small-business">
+            <strong>Aten&ccedil;&atilde;o:</strong> O estabelecimento se enquadra nas especifica&ccedil;&otilde;es de
+            &ldquo;Estabelecimento Agroindustrial de Pequeno Porte?&rdquo;
+            ${officialOption("Sim", state.establishment.smallBusiness, [], {
+              path: "establishment.smallBusiness",
+              value: "Sim",
+            })}
+            ${officialOption("Nao", state.establishment.smallBusiness, [], {
+              path: "establishment.smallBusiness",
+              value: "Nao",
+            })}
+          </div>
+        </div>
+
+        <h3 class="official-section-title">4. TIPO DE SOLICITA&Ccedil;&Atilde;O</h3>
+        <div class="official-request-box">
+          ${officialOption("Novo registro de estabelecimento", actType, ["Registro de estabelecimento"], {
+            path: "application.actType",
+            value: "Registro de estabelecimento",
+          })}
+          ${officialOption("Renovacao do titulo de registro", actType, [], {
+            path: "application.actType",
+            value: "Renovacao do titulo de registro",
+          })}
+          ${officialOption("Reforma ou ampliacao", actType, [], {
+            path: "application.actType",
+            value: "Reforma ou ampliacao",
+          })}
+          ${officialOption("Transferencia cadastral", actType, [], {
+            path: "application.actType",
+            value: "Transferencia cadastral",
+          })}
+          ${officialOption("Solicitacao de vistoria in loco", actType, [], {
+            path: "application.actType",
+            value: "Solicitacao de vistoria in loco",
+          })}
+          ${officialOption("Paralisacao das atividades", actType, [], {
+            path: "application.actType",
+            value: "Paralisacao das atividades",
+          })}
+          ${officialOption("Reinicio das atividades", actType, [], {
+            path: "application.actType",
+            value: "Reinicio das atividades",
+          })}
+          ${officialOption("Cancelamento do registro", actType, [], {
+            path: "application.actType",
+            value: "Cancelamento do registro",
+          })}
+          <label class="official-option official-other-option">
+            <input
+              class="official-checkbox"
+              type="radio"
+              name="official-application.actType"
+              data-official-choice-path="application.actType"
+              value="Outro ato"
+              ${comparableOfficialValue(actType) === "outro ato" ? "checked" : ""}
+              ${state.role !== "establishment" ? "disabled" : ""}
+            >
+            <span>Outro (especificar): ${officialInput("application.otherAct", { inline: true, label: "Outro tipo de solicitacao" })}</span>
+          </label>
+          <div class="official-alteration-title">Altera&ccedil;&atilde;o cadastral (assinalar uma das op&ccedil;&otilde;es abaixo):</div>
+          ${officialOption("Alteracao de CNPJ", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de CNPJ",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao de razao social", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de razao social",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Classificacao do estabelecimento", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Classificacao do estabelecimento",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao do endereco", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao do endereco",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+          ${officialOption("Alteracao de responsavel tecnico", cadastralChange, [], {
+            path: "application.cadastralChangeType",
+            value: "Alteracao de responsavel tecnico",
+            parentPath: "application.actType",
+            parentValue: "Alteracao cadastral",
+          })}
+        </div>
+
+        <h3 class="official-section-title">5. TERMO DE COMPROMISSO</h3>
+        <div class="official-commitment">
+          DECLARAMOS CUMPRIR A LEGISLA&Ccedil;&Atilde;O VIGENTE E ASSUMIMOS, CIVIL E CRIMINALMENTE,
+          INTEIRA RESPONSABILIDADE PELA VERACIDADE DAS INFORMA&Ccedil;&Otilde;ES PRESTADAS NESTE
+          FORMUL&Aacute;RIO E SEUS ANEXOS.
+        </div>
+
+        <h3 class="official-section-title">6. ASSINATURAS DOS RESPONS&Aacute;VEIS</h3>
+        <div class="official-signatures">
+          <div class="official-signature-meta">
+            <strong>LOCAL E DATA</strong>
+            ${officialInput("application.signaturePlaceDate", { label: "Local e data" })}
+            <div>NOME DO AUTUANTE: ${officialInput("application.inspectorName", { inline: true, owner: "sim", label: "Nome do autuante" })}</div>
+            <div>MATR&Iacute;CULA: ${officialInput("application.inspectorRegistration", { inline: true, owner: "sim", label: "Matricula do autuante" })}</div>
+          </div>
+          <div class="official-signature-people">
+            <div><span class="official-signature-line"></span>ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL</div>
+            <div><span class="official-signature-line"></span>ASSINATURA DO RESPONS&Aacute;VEL T&Eacute;CNICO</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function printMtse() {
-  return `${printHeader("ANEXO II - MEMORIAL TECNICO-SANITARIO DO ESTABELECIMENTO")}
-    <table class="print-table">${masterRows()}
-      <tr><th>N. do registro no S.I.M.</th><td>${state.establishment.simNumber || "&nbsp;"}</td><th>Tipo de vinculo com o imovel</th><td>${state.establishment.propertyLink || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel legal</th><td>${state.legalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Endereco residencial do responsavel legal</th><td colspan="3">${[state.legalResponsible.address, state.legalResponsible.district, state.legalResponsible.city, state.legalResponsible.state, state.legalResponsible.zip].filter(Boolean).join(", ") || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel tecnico</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.technicalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Endereco residencial do responsavel tecnico</th><td colspan="3">${[state.technicalResponsible.address, state.technicalResponsible.district, state.technicalResponsible.city, state.technicalResponsible.state, state.technicalResponsible.zip].filter(Boolean).join(", ") || "&nbsp;"}</td></tr>
-      <tr><th>N. de inscricao do RT no conselho de classe/UF</th><td colspan="3">${state.technicalResponsible.council || "&nbsp;"}</td></tr>
-      <tr><th>Classificacao</th><td colspan="3">${state.establishment.classification}</td></tr>
-      <tr><th>Atividades gerais</th><td colspan="3">${state.production.activities || "&nbsp;"}</td></tr>
-      <tr><th>Produtos e capacidade mensal</th><td colspan="3">${state.production.monthlyCapacity || "&nbsp;"}</td></tr>
-      <tr><th>Origem da materia-prima / rastreamento</th><td colspan="3">${state.production.rawMaterialOrigin || "&nbsp;"}</td></tr>
-      <tr><th>Funcionarios</th><td colspan="3">${state.production.employees || "&nbsp;"}</td></tr>
-      <tr><th>Lavanderia</th><td colspan="3">${state.production.laundry || "&nbsp;"}</td></tr>
-      <tr><th>Terreno e area de localizacao</th><td colspan="3">${[state.production.landDetails, state.production.locationArea].filter(Boolean).join(" / ") || "&nbsp;"}</td></tr>
-      <tr><th>Fluxo e disposicao das instalacoes</th><td colspan="3">${state.production.flow || "&nbsp;"}</td></tr>
-      <tr><th>Equipamentos</th><td colspan="3">${state.production.equipment || "&nbsp;"}</td></tr>
-      <tr><th>Piso, paredes e impermeabilizacao</th><td colspan="3">${state.production.floorWalls || "&nbsp;"}</td></tr>
-      <tr><th>Janelas, portas, teto e bloqueio sanitario</th><td colspan="3">${state.production.doorsWindowsCeiling || "&nbsp;"}</td></tr>
-      <tr><th>Banheiros, vestiarios e funcionarios</th><td colspan="3">${state.production.bathrooms || "&nbsp;"}</td></tr>
-      <tr><th>Iluminacao e ventilacao</th><td colspan="3">${state.production.lightingVentilation || "&nbsp;"}</td></tr>
-      <tr><th>Depositos</th><td colspan="3">${state.production.storage || "&nbsp;"}</td></tr>
-      <tr><th>Abastecimento de agua</th><td colspan="3">${state.production.waterSupply || "&nbsp;"}</td></tr>
-      <tr><th>Aguas servidas</th><td colspan="3">${state.production.effluents || "&nbsp;"}</td></tr>
-      <tr><th>Transporte</th><td colspan="3">${state.production.transport || "&nbsp;"}</td></tr>
-      <tr><th>Analises laboratoriais</th><td colspan="3">${state.production.labAnalysis || "&nbsp;"}</td></tr>
-      <tr><th>Dias e horarios de producao</th><td colspan="3">${state.production.productionSchedule || "&nbsp;"}</td></tr>
-      <tr><th>Controles de qualidade</th><td colspan="3">${state.production.qualityControls || "&nbsp;"}</td></tr>
+  const title = "MEMORIAL T&Eacute;CNICO-SANIT&Aacute;RIO DO ESTABELECIMENTO - MTSE";
+  const propertyLink = state.establishment.propertyLink || "";
+  const laundryType = state.production.laundryType || state.production.laundry || "";
+  const classificationOptions = [
+    "Estacao depuradora de moluscos bivalves",
+    "Unidade de beneficiamento de ovos e derivados",
+    "Granja avicola",
+    "Unidade de beneficiamento de pescado e produtos de pescado",
+    "Granja leiteira",
+    "Unidade de beneficiamento de produtos de abelhas",
+    "Unidade de beneficiamento de carne e produtos carneos",
+    "Posto de refrigeracao",
+    "Unidade de beneficiamento de leite e derivados",
+    "Queijaria",
+  ];
+  const pageOne = `
+    <h3 class="official-section-title">1. INFORMA&Ccedil;&Otilde;ES DO ESTABELECIMENTO</h3>
+    <div class="official-grid">
+      ${officialField("Nome (Raz&atilde;o Social/Pessoa F&iacute;sica):", "establishment.legalName", { span: 12 })}
+      ${officialField("CNPJ/CPF:", "establishment.cnpj", { span: 7 })}
+      ${officialField("N&ordm; do registro no S.I.M.:", "establishment.simNumber", { span: 5 })}
+      ${officialField("Inscri&ccedil;&atilde;o Estadual:", "establishment.stateRegistration", { span: 6 })}
+      ${officialField("Inscri&ccedil;&atilde;o Municipal:", "establishment.municipalRegistration", { span: 6 })}
+      ${officialField("Endere&ccedil;o:", "establishment.address", { span: 12 })}
+      ${officialField("Bairro:", "establishment.district", { span: 3 })}
+      ${officialField("Munic&iacute;pio:", "establishment.city", { span: 4 })}
+      ${officialField("UF:", "establishment.state", { span: 1 })}
+      ${officialField("CEP:", "establishment.zip", { span: 4 })}
+      ${officialField("E-mail:", "establishment.email", { span: 8, type: "email" })}
+      ${officialField("Telefone:", "establishment.phone", { span: 4 })}
+      <div class="official-field official-span-12">
+        <span>Tipo de v&iacute;nculo com o im&oacute;vel:</span>
+        <div class="official-inline-options">
+          ${officialOption("Propriet&aacute;rio", propertyLink, ["Proprietario"], { path: "establishment.propertyLink", value: "Proprietario" })}
+          ${officialOption("Locat&aacute;rio", propertyLink, ["Locatario"], { path: "establishment.propertyLink", value: "Locatario" })}
+          ${officialOption("Outro", propertyLink, [], { path: "establishment.propertyLink", value: "Outro" })}
+        </div>
+      </div>
+    </div>
+    <h3 class="official-section-title">2. CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+    <div class="official-option-grid official-box">
+      ${classificationOptions.map((option) => officialOption(
+        option,
+        state.establishment.classification,
+        [],
+        { path: "establishment.classification", value: option }
+      )).join("")}
+    </div>
+    <h3 class="official-section-title">3. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL LEGAL</h3>
+    <div class="official-grid">
+      ${officialField("Nome:", "legalResponsible.name", { span: 8 })}
+      ${officialField("CPF:", "legalResponsible.cpf", { span: 4 })}
+      ${officialField("Endere&ccedil;o residencial:", "legalResponsible.address", { span: 12 })}
+      ${officialField("Bairro:", "legalResponsible.district", { span: 3 })}
+      ${officialField("Cidade:", "legalResponsible.city", { span: 4 })}
+      ${officialField("UF:", "legalResponsible.state", { span: 1 })}
+      ${officialField("CEP:", "legalResponsible.zip", { span: 4 })}
+      ${officialField("Telefone:", "legalResponsible.phone", { span: 4 })}
+      ${officialField("E-mail:", "legalResponsible.email", { span: 8, type: "email" })}
+    </div>
+    <h3 class="official-section-title">4. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL T&Eacute;CNICO</h3>
+    <div class="official-grid">
+      ${officialField("Nome:", "technicalResponsible.name", { span: 8 })}
+      ${officialField("CPF:", "technicalResponsible.cpf", { span: 4 })}
+      ${officialField("Endere&ccedil;o residencial:", "technicalResponsible.address", { span: 12 })}
+    </div>
+  `;
+  const pageTwo = `
+    <div class="official-grid official-continuation-grid">
+      ${officialField("Bairro:", "technicalResponsible.district", { span: 3 })}
+      ${officialField("Cidade:", "technicalResponsible.city", { span: 4 })}
+      ${officialField("UF:", "technicalResponsible.state", { span: 1 })}
+      ${officialField("CEP:", "technicalResponsible.zip", { span: 4 })}
+      ${officialField("Telefone:", "technicalResponsible.phone", { span: 4 })}
+      ${officialField("E-mail:", "technicalResponsible.email", { span: 8, type: "email" })}
+      ${officialField("N&ordm; de inscri&ccedil;&atilde;o no conselho de classe profissional/UF:", "technicalResponsible.council", { span: 12 })}
+    </div>
+    <h3 class="official-section-title">5. LISTA DE ATIVIDADES GERAIS DO ESTABELECIMENTO</h3>
+    <table class="official-data-table">
+      <thead><tr><th class="official-col-number">N&ordm;</th><th>LISTA DE ATIVIDADES</th></tr></thead>
+      <tbody>${Array.from({ length: 5 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.activityRows.${index}.number`, { label: `Numero da atividade ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.activityRows.${index}.activity`, {
+            value: officialPathValue(`production.activityRows.${index}.activity`) || (index === 0 ? state.production.activities : ""),
+            label: `Atividade ${index + 1}`,
+          })}</td>
+        </tr>
+      `).join("")}</tbody>
     </table>
-    <table class="print-table sign-meta"><tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr></table>
-    <div class="signature"><div>Assinatura do proprietario ou responsavel legal</div><div>Assinatura do responsavel tecnico</div></div>
+    <h3 class="official-section-title">6. PRODUTOS E CAPACIDADE MENSAL</h3>
+    <div class="official-grid">
+      ${officialField("Capacidade total mensal de produ&ccedil;&atilde;o:", "production.monthlyCapacity", { span: 12 })}
+    </div>
+    <div class="official-table-label">Produtos produzidos:</div>
+    <table class="official-data-table official-compact-table">
+      <thead><tr><th>Denomina&ccedil;&atilde;o de venda conforme RTIQ ou nomenclatura oficial</th><th>Intervalo de temperatura de conserva&ccedil;&atilde;o</th><th>Capacidade m&aacute;xima de produ&ccedil;&atilde;o</th></tr></thead>
+      <tbody>${Array.from({ length: 4 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.productCapacityRows.${index}.product`, { label: `Produto produzido ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.productCapacityRows.${index}.temperature`, { label: `Temperatura ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.productCapacityRows.${index}.capacity`, { label: `Capacidade ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <div class="official-grid official-top-gap">
+      ${officialField("Capacidade total mensal de recebimento:", "production.receivedCapacity", { span: 12 })}
+    </div>
+    <div class="official-table-label">Produtos recebidos:</div>
+    <table class="official-data-table official-compact-table">
+      <thead><tr><th>Denomina&ccedil;&atilde;o de venda conforme RTIQ ou nomenclatura oficial</th><th>M&eacute;dia de recebimento em kg ou L</th></tr></thead>
+      <tbody>${Array.from({ length: 4 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.receivedProductRows.${index}.product`, { label: `Produto recebido ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.receivedProductRows.${index}.average`, { label: `Media de recebimento ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <h3 class="official-section-title">7. ORIGEM DA MAT&Eacute;RIA-PRIMA (RASTREAMENTO)</h3>
+    <table class="official-data-table official-compact-table">
+      <thead><tr><th>Descri&ccedil;&atilde;o do produto</th><th>Raz&atilde;o social do fabricante</th><th>CNPJ</th><th>N&ordm; de registro no &oacute;rg&atilde;o competente</th></tr></thead>
+      <tbody>${Array.from({ length: 4 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.rawMaterialRows.${index}.product`, {
+            value: officialPathValue(`production.rawMaterialRows.${index}.product`) || (index === 0 ? state.production.rawMaterialOrigin : ""),
+            label: `Materia-prima ${index + 1}`,
+          })}</td>
+          <td>${officialTableInput(`production.rawMaterialRows.${index}.manufacturer`, { label: `Fabricante ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.rawMaterialRows.${index}.cnpj`, { label: `CNPJ do fabricante ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.rawMaterialRows.${index}.registration`, { label: `Registro do fabricante ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <h3 class="official-section-title">8. FUNCION&Aacute;RIOS</h3>
+    <div class="official-grid">
+      ${officialField("Total de funcion&aacute;rios:", "production.employeeTotal", { span: 4, value: state.production.employeeTotal || state.production.employees })}
+      ${officialField("Masculinos:", "production.employeeMale", { span: 4 })}
+      ${officialField("Femininos:", "production.employeeFemale", { span: 4 })}
+    </div>
+    <h3 class="official-section-title">9. LAVANDERIA</h3>
+    <div class="official-inline-options official-box">
+      ${officialOption("Pr&oacute;pria", laundryType, ["Propria"], { path: "production.laundryType", value: "Propria" })}
+      ${officialOption("Terceirizada", laundryType, [], { path: "production.laundryType", value: "Terceirizada" })}
+    </div>
+  `;
+  const pageThree = `
+    <div class="official-table-label">Se terceirizada, informar:</div>
+    <div class="official-grid">
+      ${officialField("Raz&atilde;o social:", "production.laundryCompany", { span: 8 })}
+      ${officialField("CNPJ:", "production.laundryCnpj", { span: 4 })}
+    </div>
+    <h3 class="official-section-title">10. DETALHES DO TERRENO</h3>
+    <div class="official-grid">
+      <div class="official-field official-span-12">
+        <span>O estabelecimento j&aacute; est&aacute; constru&iacute;do?</span>
+        <div class="official-inline-options">
+          ${officialOption("Sim", state.production.alreadyBuilt, [], { path: "production.alreadyBuilt", value: "Sim" })}
+          ${officialOption("N&atilde;o", state.production.alreadyBuilt, ["Nao"], { path: "production.alreadyBuilt", value: "Nao" })}
+        </div>
+      </div>
+      ${officialField("&Aacute;rea total do terreno (m&sup2;):", "production.landTotalArea", { span: 6 })}
+      ${officialField("&Aacute;rea a ser constru&iacute;da (m&sup2;):", "production.landBuildArea", { span: 6 })}
+      ${officialField("&Aacute;rea &uacute;til (m&sup2;):", "production.usefulArea", { span: 6, value: state.production.usefulArea || state.establishment.area })}
+      ${officialField("Recuo do alinhamento da rua (m):", "production.streetSetback", { span: 6 })}
+    </div>
+    <h3 class="official-section-title">11. &Aacute;REA DE LOCALIZA&Ccedil;&Atilde;O</h3>
+    <div class="official-inline-options official-box">
+      ${officialOption("Urbana", state.production.locationArea, [], { path: "production.locationArea", value: "Urbana" })}
+      ${officialOption("Rural", state.production.locationArea, [], { path: "production.locationArea", value: "Rural" })}
+    </div>
+    <h3 class="official-section-title">12. DISPOSI&Ccedil;&Atilde;O DAS INSTALA&Ccedil;&Otilde;ES E FLUXO DE PRODU&Ccedil;&Atilde;O</h3>
+    <p class="official-instruction">Listar os setores da ind&uacute;stria, descrevendo sua localiza&ccedil;&atilde;o e destina&ccedil;&atilde;o. Descrever tamb&eacute;m o fluxo de produ&ccedil;&atilde;o, desde a recep&ccedil;&atilde;o da mat&eacute;ria-prima at&eacute; a expedi&ccedil;&atilde;o do produto final.</p>
+    ${officialTextarea("production.flow", { height: 58, label: "Disposicao das instalacoes e fluxo de producao" })}
+    <h3 class="official-section-title">13. EQUIPAMENTOS</h3>
+    <table class="official-data-table">
+      <thead><tr><th>Localiza&ccedil;&atilde;o</th><th>Equipamento</th><th>Quantidade</th><th>Material</th></tr></thead>
+      <tbody>${Array.from({ length: 5 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.equipmentRows.${index}.location`, { label: `Local do equipamento ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.equipmentRows.${index}.equipment`, {
+            value: officialPathValue(`production.equipmentRows.${index}.equipment`) || (index === 0 ? state.production.equipment : ""),
+            label: `Equipamento ${index + 1}`,
+          })}</td>
+          <td>${officialTableInput(`production.equipmentRows.${index}.quantity`, { label: `Quantidade ${index + 1}` })}</td>
+          <td>${officialTableInput(`production.equipmentRows.${index}.material`, { label: `Material ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <h3 class="official-section-title">14. NATUREZA DO PISO E MATERIAL DE IMPERMEABILIZA&Ccedil;&Atilde;O</h3>
+    <p class="official-instruction">Descrever material e cor.</p>
+    ${officialTextarea("production.floorWalls", { height: 16, label: "Piso e impermeabilizacao" })}
+  `;
+  const pageFour = `
+    <h3 class="official-section-title">15. JANELAS, PORTAS, TETO, SISTEMA DE BLOQUEIO SANIT&Aacute;RIO E CONTROLE DE VETORES</h3>
+    <p class="official-instruction">Descrever tipo de material, forma de apresenta&ccedil;&atilde;o e o sistema de bloqueio sanit&aacute;rio.</p>
+    ${officialTextarea("production.doorsWindowsCeiling", { height: 10, label: "Janelas, portas, teto e bloqueio sanitario" })}
+    <h3 class="official-section-title">16. BANHEIROS/VESTU&Aacute;RIOS/INSTALA&Ccedil;&Otilde;ES PARA FUNCION&Aacute;RIOS</h3>
+    <p class="official-instruction">Descrever localiza&ccedil;&atilde;o, pisos, tetos, paredes e cores. Listar vasos sanit&aacute;rios, pias, chuveiros e arm&aacute;rios.</p>
+    ${officialTextarea("production.bathrooms", { height: 10, label: "Banheiros e vestiarios" })}
+    <h3 class="official-section-title">17. ILUMINA&Ccedil;&Atilde;O E VENTILA&Ccedil;&Atilde;O</h3>
+    <p class="official-instruction">Descrever tipo de ilumina&ccedil;&atilde;o (artificial ou natural) e ventila&ccedil;&atilde;o.</p>
+    ${officialTextarea("production.lightingVentilation", { height: 8, label: "Iluminacao e ventilacao" })}
+    <h3 class="official-section-title">18. DEP&Oacute;SITO DE EMBALAGENS, MAT&Eacute;RIAS-PRIMAS, CONDIMENTOS E UTENS&Iacute;LIOS</h3>
+    <p class="official-instruction">Descrever localiza&ccedil;&atilde;o, pisos, tetos, paredes e cores.</p>
+    ${officialTextarea("production.storage", { height: 8, label: "Depositos" })}
+    <h3 class="official-section-title">19. SISTEMA DE ABASTECIMENTO DE &Aacute;GUA</h3>
+    <p class="official-instruction">Informar proced&ecirc;ncia, vaz&atilde;o, capta&ccedil;&atilde;o, dep&oacute;sito, capacidade e distribui&ccedil;&atilde;o.</p>
+    ${officialTextarea("production.waterSupply", { height: 8, label: "Abastecimento de agua" })}
+    <h3 class="official-section-title">20. DESTINO DAS &Aacute;GUAS SERVIDAS</h3>
+    ${officialTextarea("production.effluents", { height: 8, label: "Destino das aguas servidas" })}
+    <h3 class="official-section-title">21. TRANSPORTE DE PRODUTOS EXPEDIDOS</h3>
+    <p class="official-instruction">Descrever os meios de transporte usados na recep&ccedil;&atilde;o e expedi&ccedil;&atilde;o, incluindo tipo de ve&iacute;culo e temperatura.</p>
+    ${officialTextarea("production.transport", { height: 8, label: "Transporte de produtos" })}
+    <h3 class="official-section-title">22. AN&Aacute;LISES LABORATORIAIS</h3>
+    <p class="official-instruction">Indicar as an&aacute;lises realizadas em laborat&oacute;rio pr&oacute;prio e terceirizado.</p>
+    ${officialTextarea("production.labAnalysis", { height: 8, label: "Analises laboratoriais" })}
+    <h3 class="official-section-title">21. DIAS E HOR&Aacute;RIOS DE PRODU&Ccedil;&Atilde;O</h3>
+    <table class="official-data-table official-compact-table">
+      <thead><tr><th>Dias da semana</th><th>Hor&aacute;rio</th></tr></thead>
+      <tbody>${Array.from({ length: 6 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`production.productionScheduleRows.${index}.day`, {
+            value: officialPathValue(`production.productionScheduleRows.${index}.day`) || (index === 0 ? state.production.productionSchedule : ""),
+            label: `Dia de producao ${index + 1}`,
+          })}</td>
+          <td>${officialTableInput(`production.productionScheduleRows.${index}.time`, { label: `Horario de producao ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+  const pageFive = `
+    <h3 class="official-section-title">22. ASSINATURAS DOS RESPONS&Aacute;VEIS</h3>
+    ${officialSignatureBlock({
+      path: "production.signaturePlaceDate",
+      left: "ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL",
+      right: "ASSINATURA DO RESPONS&Aacute;VEL T&Eacute;CNICO",
+    })}
+  `;
+  return `<div class="official-form official-document">
+    ${officialDocumentPage("II", title, 1, 5, pageOne, "official-mtse-page")}
+    ${officialDocumentPage("II", title, 2, 5, pageTwo, "official-mtse-page")}
+    ${officialDocumentPage("II", title, 3, 5, pageThree, "official-mtse-page")}
+    ${officialDocumentPage("II", title, 4, 5, pageFour, "official-mtse-page")}
+    ${officialDocumentPage("II", title, 5, 5, pageFive, "official-mtse-page official-signature-page")}
   </div>`;
 }
 
 function printConstruction() {
-  return `${printHeader("ANEXO III - MEMORIAL DESCRITIVO DE CONSTRUCAO/REFORMA")}
-    <table class="print-table">${masterRows()}
-      <tr><th>Caracterizacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
-      <tr><th>Motivo</th><td colspan="3">${state.construction.requestReason || state.application.actType || "&nbsp;"}</td></tr>
-      <tr><th>Ambientes e dependencias</th><td colspan="3">${state.construction.rooms || "&nbsp;"}</td></tr>
-      <tr><th>Descricao da construcao</th><td colspan="3">${state.construction.buildingDescription || "&nbsp;"}</td></tr>
-      <tr><th>Materiais e acabamentos</th><td colspan="3">${state.construction.materials || "&nbsp;"}</td></tr>
-      <tr><th>Camara fria / temperatura</th><td colspan="3">${state.construction.coldRooms || "&nbsp;"}</td></tr>
-      <tr><th>Agua, esgoto e drenagem</th><td colspan="3">${state.construction.waterAndSewage || "&nbsp;"}</td></tr>
-      <tr><th>Observacao</th><td colspan="3">${state.construction.observations || "&nbsp;"}</td></tr>
-    </table>
-    <div class="signature"><div>Responsavel legal</div><div>Responsavel tecnico</div></div>
+  const title = "MEMORIAL DESCRITIVO DE CONSTRU&Ccedil;&Atilde;O/REFORMA";
+  const locationArea = state.construction.locationArea || state.production.locationArea || "";
+  const pageOne = `
+    <h3 class="official-section-title">1. IDENTIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+    <div class="official-grid">
+      ${officialField("RAZ&Atilde;O SOCIAL / NOME DO PRODUTOR", "establishment.legalName", { span: 12 })}
+      ${officialField("NOME FANTASIA", "establishment.tradeName", { span: 12 })}
+      ${officialField("CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO", "establishment.classification", { span: 12 })}
+      ${officialField("CNPJ/CPF", "establishment.cnpj", { span: 7 })}
+      ${officialField("INSCRI&Ccedil;&Atilde;O ESTADUAL", "establishment.stateRegistration", { span: 5 })}
+      ${officialField("RESPONS&Aacute;VEL LEGAL PELO ESTABELECIMENTO", "legalResponsible.name", { span: 12 })}
+    </div>
+    <h3 class="official-section-title">2. LOCALIZA&Ccedil;&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("ENDERE&Ccedil;O", "establishment.address", { span: 12 })}
+      ${officialField("BAIRRO/LOCALIDADE", "establishment.district", { span: 4 })}
+      ${officialField("MUNIC&Iacute;PIO", "establishment.city", { span: 3 })}
+      ${officialField("UF", "establishment.state", { span: 1 })}
+      ${officialField("CEP", "establishment.zip", { span: 4 })}
+      ${officialField("E-MAIL", "establishment.email", { span: 8, type: "email" })}
+      ${officialField("TELEFONE", "establishment.phone", { span: 4 })}
+    </div>
+    <h3 class="official-section-title">3. CARACTERIZA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+    <div class="official-grid">
+      <div class="official-field official-span-12">
+        <span>LOCALIZA&Ccedil;&Atilde;O - ZONA:</span>
+        <div class="official-inline-options">
+          ${officialOption("Rural", locationArea, [], { path: "construction.locationArea", value: "Rural" })}
+          ${officialOption("Urbana", locationArea, [], { path: "construction.locationArea", value: "Urbana" })}
+        </div>
+      </div>
+      ${officialField("&Aacute;REA TOTAL DO TERRENO (m&sup2;):", "construction.landTotalArea", { span: 6, value: state.construction.landTotalArea || state.production.landTotalArea })}
+      ${officialField("&Aacute;REA A SER CONSTRU&Iacute;DA (m&sup2;):", "construction.landBuildArea", { span: 6, value: state.construction.landBuildArea || state.production.landBuildArea })}
+      ${officialField("&Aacute;REA &Uacute;TIL (m&sup2;):", "construction.usefulArea", { span: 6, value: state.construction.usefulArea || state.production.usefulArea || state.establishment.area })}
+      ${officialField("RECUO DAS RUAS, AVENIDAS E ESTRADAS (m):", "construction.streetSetback", { span: 6, value: state.construction.streetSetback || state.production.streetSetback })}
+      ${officialField("CONFRONTANTES E VIAS DE ACESSO:", "construction.boundariesAccess", { span: 12, textarea: true, height: 19 })}
+    </div>
+    <h3 class="official-section-title">4. DESCRI&Ccedil;&Atilde;O DA CONSTRU&Ccedil;&Atilde;O</h3>
+    <h4 class="official-subsection-title">4.1. P&Eacute; DIREITO</h4>
+    ${officialTextarea("construction.ceilingHeight", {
+      value: state.construction.ceilingHeight || state.construction.buildingDescription,
+      height: 31,
+      label: "Pe direito",
+    })}
+  `;
+  const pageTwo = `
+    <h4 class="official-subsection-title">4.2. COBERTURA/TELHADO</h4>
+    ${officialTextarea("construction.roof", { height: 11, label: "Cobertura e telhado" })}
+    <h4 class="official-subsection-title">4.3. FORROS</h4>
+    ${officialTextarea("construction.ceilings", { height: 11, label: "Forros" })}
+    <h4 class="official-subsection-title">4.4. PORTAS, JANELAS E EXAUSTORES</h4>
+    ${officialTextarea("construction.doorsWindowsExhaust", { height: 12, label: "Portas, janelas e exaustores" })}
+    <h4 class="official-subsection-title">4.5. PISO E RODAP&Eacute;S</h4>
+    ${officialTextarea("construction.floorsBaseboards", {
+      value: state.construction.floorsBaseboards || state.construction.materials,
+      height: 11,
+      label: "Piso e rodapes",
+    })}
+    <h4 class="official-subsection-title">4.6. PAREDES</h4>
+    ${officialTextarea("construction.walls", { height: 11, label: "Paredes" })}
+    <h4 class="official-subsection-title">4.7. INSTALA&Ccedil;&Otilde;ES DE &Aacute;GUA E CANALIZA&Ccedil;&Atilde;O</h4>
+    ${officialTextarea("construction.waterPiping", {
+      value: state.construction.waterPiping || state.construction.waterAndSewage,
+      height: 12,
+      label: "Instalacoes de agua e canalizacao",
+    })}
+    <h4 class="official-subsection-title">4.8. SISTEMA DE ESCOAMENTO DAS &Aacute;GUAS RESIDUAIS</h4>
+    ${officialTextarea("construction.wastewater", { height: 12, label: "Escoamento de aguas residuais" })}
+    <h4 class="official-subsection-title">4.9. FONTE PRODUTORA DE CALOR, BANCO DE &Aacute;GUA GELADA E F&Aacute;BRICA DE GELO</h4>
+    ${officialTextarea("construction.heatColdIce", {
+      value: state.construction.heatColdIce || state.construction.coldRooms,
+      height: 12,
+      label: "Calor, agua gelada e fabrica de gelo",
+    })}
+    <h3 class="official-section-title">5. OBSERVA&Ccedil;&Atilde;O</h3>
+    ${officialTextarea("construction.observations", { height: 10, label: "Observacoes" })}
+    <div class="official-plant-list">
+      <strong>5.1. ANEXAR PLANTAS</strong>
+      <span>5.1.1 Situa&ccedil;&atilde;o na escala de 1/500</span>
+      <span>5.1.2 Baixa na escala de 1/100 (com layout dos equipamentos)</span>
+      <span>5.1.3 Fachada na escala de 1/50</span>
+      <span>5.1.4 Cortes na escala de 1/50</span>
+    </div>
+    ${officialSignatureBlock({
+      path: "construction.signaturePlaceDate",
+      left: "CARIMBO E ASSINATURA DO RESPONS&Aacute;VEL LEGAL DA FIRMA",
+      right: "CARIMBO E ASSINATURA DO RESPONS&Aacute;VEL PELO PROJETO",
+    })}
+  `;
+  return `<div class="official-form official-document">
+    ${officialDocumentPage("III", title, 1, 2, pageOne, "official-construction-page")}
+    ${officialDocumentPage("III", title, 2, 2, pageTwo, "official-construction-page")}
   </div>`;
 }
 
 function printProduct() {
   const options = visibleProducts();
   const product = options.find((item) => item.id === state.printProductId) || options[0] || { name: "", brand: "", conservation: "", notes: "" };
+  const productIndex = Math.max(0, state.products.findIndex((item) => item.id === product.id));
+  const productPath = `products.${productIndex}`;
   const picker = options.length > 1 ? `
     <div class="tabs no-print" style="margin-bottom:12px">
       ${options.map((item) => `<button class="${item.id === product.id ? "active" : ""}" data-print-product="${item.id}">${escapeHtml(item.name || "Sem nome")}</button>`).join("")}
     </div>
   ` : "";
-  const natureText = (product.natureOptions && product.natureOptions.length)
-    ? product.natureOptions.join(", ")
-    : (product.requestNature || "&nbsp;");
-  const compRows = product.compositionRows || [];
-  const nutRows = product.nutritionRows || [];
-  const hasNut = Boolean(product.nutritionPortion) || nutRows.some((row) => row.qty || row.pct);
-  const compBlock = compRows.length
-    ? `<table class="print-table">
-        <tr><th colspan="3">Composicao do produto</th></tr>
-        <tr><th>Materia-prima / ingrediente</th><th>kg ou L</th><th>%</th></tr>
-        ${compRows.map((row) => `<tr><td>${escapeHtml(row.ingredient || "") || "&nbsp;"}</td><td>${escapeHtml(row.amount || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
-      </table>`
-    : `<table class="print-table"><tr><th>Composicao do produto</th><td colspan="2">${product.composition || "&nbsp;"}</td></tr></table>`;
-  const nutBlock = hasNut
-    ? `<table class="print-table">
-        <tr><th colspan="3">Informacao nutricional - porcao de ${escapeHtml(product.nutritionPortion || "") || "&nbsp;"}</th></tr>
-        <tr><th>Nutriente</th><th>Quantidade</th><th>% VD</th></tr>
-        ${nutRows.map((row) => `<tr><td>${row.label}</td><td>${escapeHtml(row.qty || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
-      </table>`
-    : (product.nutrition ? `<table class="print-table"><tr><th>Informacao nutricional</th><td>${product.nutrition}</td></tr></table>` : "");
-  return `${picker}${printHeader("ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL")}
-    <p class="petition">Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo qualificado, atraves do seu representante legal e do seu responsavel tecnico, requer o atendimento da solicitacao especificada neste documento.</p>
-    <table class="print-table">${masterRows()}
-      <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
-      <tr><th>SIM do estabelecimento</th><td>${state.establishment.simNumber}</td><th>Responsavel legal</th><td>${state.legalResponsible.name}</td></tr>
-      <tr><th>Natureza da solicitacao</th><td colspan="3">${natureText}</td></tr>
-      <tr><th>Nome do produto</th><td>${product.name}</td><th>Marca</th><td>${product.brand}</td></tr>
-      <tr><th>N. registro de rotulo</th><td>${product.labelRegistration || "&nbsp;"}</td><th>Conservacao</th><td>${product.conservation || "&nbsp;"}</td></tr>
-      <tr><th>Embalagem</th><td colspan="3">${product.packageType || "&nbsp;"}</td></tr>
-      <tr><th>Caracteristicas do rotulo/embalagem</th><td colspan="3">${product.labelFeatures || "&nbsp;"}</td></tr>
+  const inferredNature = product.natureOptions?.length
+    ? product.natureOptions
+    : PRODUCT_NATURE_OPTIONS.filter((option) => comparableOfficialValue(product.requestNature).includes(comparableOfficialValue(option)));
+  const title = "REGISTRO DE R&Oacute;TULO E/OU PRODUTO DE ORIGEM ANIMAL";
+  const pageOne = `
+    <h3 class="official-section-title">1. PETI&Ccedil;&Atilde;O</h3>
+    <div class="official-petition">
+      <strong>SENHOR DIRETOR DA DIVIS&Atilde;O DE AGRONEG&Oacute;CIOS,</strong>
+      <p>O estabelecimento abaixo qualificado, atrav&eacute;s do seu representante legal e do seu respons&aacute;vel t&eacute;cnico, requer que seja providenciado o atendimento da solicita&ccedil;&atilde;o especificada neste documento.</p>
+    </div>
+    <h3 class="official-section-title">2. IDENTIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+    <div class="official-grid">
+      ${officialField("RAZ&Atilde;O SOCIAL / NOME DO PRODUTOR", "establishment.legalName", { span: 12 })}
+      ${officialField("NOME FANTASIA", "establishment.tradeName", { span: 12 })}
+      ${officialField("CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO", "establishment.classification", { span: 12 })}
+      ${officialField("S.I.M. DO ESTABELECIMENTO", "establishment.simNumber", { span: 12 })}
+      ${officialField("CNPJ/CPF", "establishment.cnpj", { span: 7 })}
+      ${officialField("INSCRI&Ccedil;&Atilde;O ESTADUAL", "establishment.stateRegistration", { span: 5 })}
+      ${officialField("RESPONS&Aacute;VEL LEGAL PELO ESTABELECIMENTO", "legalResponsible.name", { span: 12 })}
+    </div>
+    <h3 class="official-section-title">3. LOCALIZA&Ccedil;&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("ENDERE&Ccedil;O", "establishment.address", { span: 12 })}
+      ${officialField("BAIRRO/LOCALIDADE", "establishment.district", { span: 4 })}
+      ${officialField("MUNIC&Iacute;PIO", "establishment.city", { span: 3 })}
+      ${officialField("UF", "establishment.state", { span: 1 })}
+      ${officialField("CEP", "establishment.zip", { span: 4 })}
+      ${officialField("E-MAIL", "establishment.email", { span: 8, type: "email" })}
+      ${officialField("TELEFONE", "establishment.phone", { span: 4 })}
+    </div>
+  `;
+  const pageTwo = `
+    <h3 class="official-section-title">4. IDENTIFICA&Ccedil;&Atilde;O DO PRODUTO</h3>
+    <div class="official-grid">
+      ${officialField("NOME DO PRODUTO", `${productPath}.name`, { span: 12 })}
+      ${officialField("MARCA", `${productPath}.brand`, { span: 12 })}
+      ${officialField("N&ordm; REGISTRO DE R&Oacute;TULO", `${productPath}.labelRegistration`, { span: 12 })}
+    </div>
+    <h3 class="official-section-title">5. NATUREZA DA SOLICITA&Ccedil;&Atilde;O</h3>
+    <div class="official-option-grid official-box">
+      ${PRODUCT_NATURE_OPTIONS.map((option) => officialCheck(
+        option,
+        `${productPath}.natureOptions`,
+        option,
+        { selectedValues: inferredNature }
+      )).join("")}
+    </div>
+    <h3 class="official-section-title">6. CARACTER&Iacute;STICAS DO R&Oacute;TULO E DA EMBALAGEM</h3>
+    <div class="official-two-column-options">
+      <div class="official-box">
+        <strong>6.1 R&Oacute;TULO</strong>
+        ${PRODUCT_LABEL_TYPE_OPTIONS.map((option) => officialCheck(option, `${productPath}.labelTypes`, option)).join("")}
+        <label class="official-inline-entry">OUTRO: ${officialInput(`${productPath}.otherLabelType`, { inline: true, label: "Outro tipo de rotulo" })}</label>
+      </div>
+      <div class="official-box">
+        <strong>6.2 EMBALAGEM PRIM&Aacute;RIA</strong>
+        ${PRODUCT_PRIMARY_PACKAGE_OPTIONS.map((option) => officialCheck(option, `${productPath}.primaryPackagingTypes`, option)).join("")}
+        <label class="official-inline-entry">OUTRA: ${officialInput(`${productPath}.otherPrimaryPackagingType`, {
+          value: product.otherPrimaryPackagingType || product.packageType,
+          inline: true,
+          label: "Outro tipo de embalagem",
+        })}</label>
+      </div>
+    </div>
+    <div class="official-grid official-top-gap">
+      ${officialField("INDICA&Ccedil;&Atilde;O DA DATA DE FABRICA&Ccedil;&Atilde;O, VALIDADE E LOTE", `${productPath}.dateLotIndication`, { span: 7, textarea: true, height: 14 })}
+      ${officialField("QUANTIDADE DE PRODUTO POR EMBALAGEM", `${productPath}.packageQuantity`, { span: 5, textarea: true, height: 14 })}
+      ${officialField("APRESENTA&Ccedil;&Atilde;O DAS INFORMA&Ccedil;&Otilde;ES DE ROTULAGEM", `${productPath}.labelingPresentation`, {
+        value: product.labelingPresentation || product.labelFeatures,
+        span: 12,
+        textarea: true,
+        height: 15,
+      })}
+    </div>
+    <h3 class="official-section-title">7. COMPOSI&Ccedil;&Atilde;O DO PRODUTO</h3>
+    <table class="official-data-table official-composition-table">
+      <thead><tr><th>TIPO</th><th>MAT&Eacute;RIA-PRIMA / INGREDIENTE</th><th>kg ou L</th><th>%</th></tr></thead>
+      <tbody>${Array.from({ length: 10 }, (_, index) => `
+        <tr>
+          <td class="official-fixed-cell">${index < 5 ? "MAT&Eacute;RIA-PRIMA" : "INGREDIENTE"}</td>
+          <td>${officialTableInput(`${productPath}.compositionRows.${index}.ingredient`, { label: `Componente ${index + 1}` })}</td>
+          <td>${officialTableInput(`${productPath}.compositionRows.${index}.amount`, { label: `Quantidade do componente ${index + 1}` })}</td>
+          <td>${officialTableInput(`${productPath}.compositionRows.${index}.pct`, { label: `Percentual do componente ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
     </table>
-    ${compBlock}
-    ${nutBlock}
-    <table class="print-table">
-      <tr><th>Processo de fabricacao</th><td colspan="3">${product.manufacturingProcess || "&nbsp;"}</td></tr>
-      <tr><th>Processo de embalagem</th><td colspan="3">${product.packagingProcess || "&nbsp;"}</td></tr>
-      <tr><th>Condicoes de armazenamento</th><td colspan="3">${product.storageConditions || "&nbsp;"}</td></tr>
-      <tr><th>Medidas de controle de qualidade</th><td colspan="3">${product.notes || state.production.qualityControls || "&nbsp;"}</td></tr>
-      <tr><th>Transporte e expedicao ao mercado consumidor</th><td colspan="3">${product.marketTransport || state.production.transport || "&nbsp;"}</td></tr>
+  `;
+  const pageThree = `
+    <h3 class="official-section-title">8. INFORMA&Ccedil;&Atilde;O NUTRICIONAL</h3>
+    <div class="official-grid">
+      ${officialField("QUANTIDADE POR POR&Ccedil;&Atilde;O DE", `${productPath}.nutritionPortion`, { span: 12 })}
+    </div>
+    <table class="official-data-table official-nutrition-table">
+      <thead><tr><th>NUTRIENTE</th><th>QUANTIDADE</th><th>%</th></tr></thead>
+      <tbody>${NUTRITION_LABELS.map((label, index) => `
+        <tr>
+          <td class="official-fixed-cell">${label.toUpperCase()}</td>
+          <td>${officialTableInput(`${productPath}.nutritionRows.${index}.qty`, { label: `Quantidade de ${label}` })}</td>
+          <td>${officialTableInput(`${productPath}.nutritionRows.${index}.pct`, { label: `Percentual de ${label}` })}</td>
+        </tr>
+      `).join("")}</tbody>
     </table>
-    <table class="print-table sign-meta"><tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr></table>
-    <div class="signature"><div>Carimbo e assinatura do responsavel legal da firma</div><div>Carimbo e assinatura do responsavel pelo projeto</div></div>
+    <h3 class="official-section-title">9. PROCESSO DE FABRICA&Ccedil;&Atilde;O</h3>
+    ${officialTextarea(`${productPath}.manufacturingProcess`, { height: 14, label: "Processo de fabricacao" })}
+    <h3 class="official-section-title">10. PROCESSO DE EMBALAGEM</h3>
+    <p class="official-instruction">Nos casos de registro ou altera&ccedil;&atilde;o de r&oacute;tulo, anexar o leiaute do r&oacute;tulo do produto com assinatura e carimbo da empresa e de seu respons&aacute;vel t&eacute;cnico.</p>
+    ${officialTextarea(`${productPath}.packagingProcess`, { height: 12, label: "Processo de embalagem" })}
+    <h3 class="official-section-title">11. CONDI&Ccedil;&Otilde;ES DE ARMAZENAMENTO</h3>
+    ${officialTextarea(`${productPath}.storageConditions`, {
+      value: product.storageConditions || product.conservation,
+      height: 9,
+      label: "Condicoes de armazenamento",
+    })}
+    <h3 class="official-section-title">12. MEDIDAS DE CONTROLE DE QUALIDADE</h3>
+    ${officialTextarea(`${productPath}.qualityControls`, {
+      value: product.qualityControls || product.notes || state.production.qualityControls,
+      height: 9,
+      label: "Medidas de controle de qualidade",
+    })}
+    <h3 class="official-section-title">13. TRANSPORTE E EXPEDI&Ccedil;&Atilde;O DO PRODUTO PARA O MERCADO CONSUMIDOR</h3>
+    ${officialTextarea(`${productPath}.marketTransport`, {
+      value: product.marketTransport || state.production.transport,
+      height: 9,
+      label: "Transporte e expedicao",
+    })}
+    ${officialSignatureBlock({
+      path: `${productPath}.signaturePlaceDate`,
+      left: "CARIMBO E ASSINATURA DO RESPONS&Aacute;VEL LEGAL DA FIRMA",
+      right: "CARIMBO E ASSINATURA DO RESPONS&Aacute;VEL PELO PROJETO",
+    })}
+  `;
+  return `${picker}<div class="official-form official-document">
+    ${officialDocumentPage("IV", title, 1, 3, pageOne, "official-product-page")}
+    ${officialDocumentPage("IV", title, 2, 3, pageTwo, "official-product-page")}
+    ${officialDocumentPage("IV", title, 3, 3, pageThree, "official-product-page")}
+  </div>`;
+}
+
+function fiscalIdentitySection(subjectLabel) {
+  return `
+    <h3 class="official-section-title">1. DADOS DO ${subjectLabel}</h3>
+    <div class="official-grid">
+      ${officialField("NOME (Raz&atilde;o Social/Pessoa F&iacute;sica):", "establishment.legalName", { span: 12, owner: "sim" })}
+      ${officialField("CNPJ/CPF:", "establishment.cnpj", { span: 7, owner: "sim" })}
+      ${officialField("REGISTRO NO S.I.M.:", "establishment.simNumber", { span: 5, owner: "sim" })}
+      ${officialField("ENDERE&Ccedil;O:", "establishment.address", { span: 12, owner: "sim" })}
+      ${officialField("BAIRRO:", "establishment.district", { span: 3, owner: "sim" })}
+      ${officialField("MUNIC&Iacute;PIO:", "establishment.city", { span: 4, owner: "sim" })}
+      ${officialField("UF:", "establishment.state", { span: 1, owner: "sim" })}
+      ${officialField("CEP:", "establishment.zip", { span: 4, owner: "sim" })}
+    </div>
+    <h3 class="official-section-title">2. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL PELO ESTABELECIMENTO</h3>
+    <div class="official-grid">
+      ${officialField("RESPONS&Aacute;VEL LEGAL:", "legalResponsible.name", { span: 8, owner: "sim" })}
+      ${officialField("CPF:", "legalResponsible.cpf", { span: 4, owner: "sim" })}
+    </div>
+  `;
+}
+
+function fiscalSignatureSection(subjectLabel) {
+  return `
+    <div class="official-fiscal-signatures">
+      <div>
+        <strong>LOCAL, DATA E ASSINATURA</strong>
+        ${officialInput("fiscalAct.signaturePlaceDate", { owner: "sim", label: "Local e data" })}
+        <span class="official-signature-line"></span>
+        <label>Nome do fiscal: ${officialInput("fiscalAct.inspectorName", { inline: true, owner: "sim", label: "Nome do fiscal" })}</label>
+        <label>Matr&iacute;cula: ${officialInput("fiscalAct.inspectorRegistration", { inline: true, owner: "sim", label: "Matricula do fiscal" })}</label>
+      </div>
+      <div>
+        <strong>CI&Ecirc;NCIA DO ${subjectLabel}</strong>
+        <span class="official-signature-line official-fiscal-science-line"></span>
+        <label>Nome: ${officialInput("fiscalAct.acknowledgedBy", { inline: true, owner: "sim", label: `Nome do ${subjectLabel.toLowerCase()}` })}</label>
+        <label>CPF/RG: ${officialInput("fiscalAct.acknowledgedDocument", { inline: true, owner: "sim", label: `Documento do ${subjectLabel.toLowerCase()}` })}</label>
+      </div>
+    </div>
+  `;
+}
+
+function fiscalCopiesNote() {
+  return `<p class="official-copies-note">4 VIAS (1&ordf; via - infrator; 2&ordf; via - instru&ccedil;&atilde;o do processo; 3&ordf; via - arquivo no &oacute;rg&atilde;o competente; 4&ordf; via - permanece no bloco do agente de fiscaliza&ccedil;&atilde;o).</p>`;
+}
+
+function printInfraction() {
+  const title = "AUTO DE INFRA&Ccedil;&Atilde;O";
+  const pageOne = `
+    ${fiscalIdentitySection("AUTUADO")}
+    <h3 class="official-section-title">3. DA INFRA&Ccedil;&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("N&uacute;mero do Auto de Infra&ccedil;&atilde;o:", "fiscalAct.number", { span: 12, owner: "sim" })}
+      ${officialField("Local da Infra&ccedil;&atilde;o:", "fiscalAct.inspectionPlace", {
+        span: 12,
+        owner: "sim",
+        value: state.fiscalAct.inspectionPlace || `${state.establishment.address}, ${state.establishment.district}`,
+      })}
+      ${officialField("Data da Infra&ccedil;&atilde;o:", "fiscalAct.date", { span: 6, owner: "sim", type: "date" })}
+      ${officialField("Hor&aacute;rio de Constata&ccedil;&atilde;o da Infra&ccedil;&atilde;o:", "fiscalAct.time", { span: 6, owner: "sim", type: "time" })}
+      ${officialField("Dispositivos Legais Infringidos:", "fiscalAct.legalBasis", { span: 12, owner: "sim", textarea: true, height: 25 })}
+      ${officialField("Motivo da Autua&ccedil;&atilde;o:", "fiscalAct.facts", { span: 12, owner: "sim", textarea: true, height: 57 })}
+    </div>
+  `;
+  const pageTwo = `
+    <h3 class="official-section-title">4. MATERIAL APREENDIDO</h3>
+    <div class="official-grid">
+      ${officialField("Caracteriza&ccedil;&atilde;o:", "fiscalAct.seizedMaterial", { span: 12, owner: "sim", textarea: true, height: 23 })}
+      ${officialField("Destino dado:", "fiscalAct.seizedDestination", { span: 12, owner: "sim", textarea: true, height: 20 })}
+    </div>
+    <h3 class="official-section-title">5. OUTRAS INFORMA&Ccedil;&Otilde;ES</h3>
+    <p class="official-instruction">Descrever minuciosamente os fatos em ordem cronol&oacute;gica, os procedimentos adotados, o motivo de eventual condena&ccedil;&atilde;o, apreens&atilde;o ou inutiliza&ccedil;&atilde;o, hor&aacute;rios e demais informa&ccedil;&otilde;es relevantes.</p>
+    ${officialTextarea("fiscalAct.otherInfo", { owner: "sim", height: 72, label: "Outras informacoes" })}
+    <h3 class="official-section-title">6. ASSINATURAS DO AUTUANTE E DO AUTUADO</h3>
+    ${fiscalSignatureSection("AUTUADO")}
+    <h3 class="official-section-title">7. TESTEMUNHAS</h3>
+    <div class="official-witness-grid">
+      <div>
+        <span class="official-signature-line"></span>
+        <label>Nome: ${officialInput("fiscalAct.witnessOneName", { inline: true, owner: "sim", label: "Nome da primeira testemunha" })}</label>
+        <label>CPF/RG: ${officialInput("fiscalAct.witnessOneDocument", { inline: true, owner: "sim", label: "Documento da primeira testemunha" })}</label>
+      </div>
+      <div>
+        <span class="official-signature-line"></span>
+        <label>Nome: ${officialInput("fiscalAct.witnessTwoName", { inline: true, owner: "sim", label: "Nome da segunda testemunha" })}</label>
+        <label>CPF/RG: ${officialInput("fiscalAct.witnessTwoDocument", { inline: true, owner: "sim", label: "Documento da segunda testemunha" })}</label>
+      </div>
+    </div>
+    ${fiscalCopiesNote()}
+  `;
+  return `<div class="official-form official-document">
+    ${officialDocumentPage("V", title, 1, 2, pageOne, "official-fiscal-page")}
+    ${officialDocumentPage("V", title, 2, 2, pageTwo, "official-fiscal-page")}
+  </div>`;
+}
+
+function printWarning() {
+  const title = "TERMO DE ADVERT&Ecirc;NCIA";
+  const pageOne = `
+    ${fiscalIdentitySection("ADVERTIDO")}
+    <h3 class="official-section-title">3. DADOS DA FISCALIZA&Ccedil;&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("LOCAL ONDE FOI REALIZADA A FISCALIZA&Ccedil;&Atilde;O:", "fiscalAct.inspectionPlace", {
+        span: 12,
+        owner: "sim",
+        value: state.fiscalAct.inspectionPlace || `${state.establishment.address}, ${state.establishment.district}`,
+      })}
+      ${officialField("DATA:", "fiscalAct.date", { span: 6, owner: "sim", type: "date" })}
+      ${officialField("HOR&Aacute;RIO:", "fiscalAct.time", { span: 6, owner: "sim", type: "time" })}
+    </div>
+    <h3 class="official-section-title">4. DAS INFRA&Ccedil;&Otilde;ES</h3>
+    <p class="official-instruction">Na fiscaliza&ccedil;&atilde;o realizada no estabelecimento acima identificado foram constatadas as infra&ccedil;&otilde;es tipificadas nos seguintes dispositivos da Lei Complementar n&ordm; 84/2024:</p>
+    <table class="official-data-table">
+      <thead><tr><th>Art.</th><th>Inciso</th></tr></thead>
+      <tbody>${Array.from({ length: 4 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`fiscalAct.infringementRows.${index}.article`, { owner: "sim", label: `Artigo ${index + 1}` })}</td>
+          <td>${officialTableInput(`fiscalAct.infringementRows.${index}.item`, { owner: "sim", label: `Inciso ${index + 1}` })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <h3 class="official-section-title">5. CIRCUNST&Acirc;NCIAS ATENUANTES E AGRAVANTES</h3>
+    <div class="official-table-label">Atenuantes:</div>
+    ${officialTextarea("fiscalAct.attenuatingAggravating", { owner: "sim", height: 31, label: "Circunstancias atenuantes" })}
+  `;
+  const pageTwo = `
+    <div class="official-table-label">Agravantes:</div>
+    ${officialTextarea("fiscalAct.aggravating", { owner: "sim", height: 39, label: "Circunstancias agravantes" })}
+    <h3 class="official-section-title">6. NOTIFICA&Ccedil;&Atilde;O E ORIENTA&Ccedil;&Atilde;O</h3>
+    <div class="official-fixed-copy">
+      Considerando ser prim&aacute;rio ou n&atilde;o ter agido com dolo ou m&aacute;-f&eacute;, o notificado acima qualificado fica advertido quanto &agrave; constata&ccedil;&atilde;o das infra&ccedil;&otilde;es apontadas e orientado a san&aacute;-las no prazo de
+      ${officialInput("fiscalAct.warningDeadlineDays", { inline: true, owner: "sim", label: "Prazo em dias" })}
+      dias, a contar da data de ci&ecirc;ncia desta advert&ecirc;ncia, sob pena de ser lavrado o competente Auto de Infra&ccedil;&atilde;o e aplicadas as penalidades previstas na legisla&ccedil;&atilde;o vigente.
+    </div>
+    <div class="official-table-label">Orienta&ccedil;&otilde;es complementares:</div>
+    ${officialTextarea("fiscalAct.notification", { owner: "sim", height: 48, label: "Orientacoes complementares" })}
+    <h3 class="official-section-title">7. ASSINATURAS</h3>
+    ${fiscalSignatureSection("ADVERTIDO")}
+    ${fiscalCopiesNote()}
+  `;
+  return `<div class="official-form official-document">
+    ${officialDocumentPage("VI", title, 1, 2, pageOne, "official-fiscal-page")}
+    ${officialDocumentPage("VI", title, 2, 2, pageTwo, "official-fiscal-page")}
+  </div>`;
+}
+
+function printSeizure() {
+  const title = "AUTO DE APREENS&Atilde;O";
+  const pageOne = `
+    ${fiscalIdentitySection("INFRATOR")}
+    <h3 class="official-section-title">3. DADOS DA APREENS&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("LOCAL ONDE FOI REALIZADA A APREENS&Atilde;O:", "fiscalAct.inspectionPlace", {
+        span: 12,
+        owner: "sim",
+        value: state.fiscalAct.inspectionPlace || `${state.establishment.address}, ${state.establishment.district}`,
+      })}
+      ${officialField("DATA:", "fiscalAct.date", { span: 6, owner: "sim", type: "date" })}
+      ${officialField("HOR&Aacute;RIO:", "fiscalAct.time", { span: 6, owner: "sim", type: "time" })}
+    </div>
+    <div class="official-table-label">Foram apreendidos os seguintes bens e/ou produtos:</div>
+    <table class="official-data-table">
+      <thead><tr><th>Quantidade</th><th>Unidade</th><th>Descri&ccedil;&atilde;o</th></tr></thead>
+      <tbody>${Array.from({ length: 4 }, (_, index) => `
+        <tr>
+          <td>${officialTableInput(`fiscalAct.seizedItemRows.${index}.quantity`, { owner: "sim", label: `Quantidade apreendida ${index + 1}` })}</td>
+          <td>${officialTableInput(`fiscalAct.seizedItemRows.${index}.unit`, { owner: "sim", label: `Unidade apreendida ${index + 1}` })}</td>
+          <td>${officialTableInput(`fiscalAct.seizedItemRows.${index}.description`, {
+            owner: "sim",
+            value: officialPathValue(`fiscalAct.seizedItemRows.${index}.description`) || (index === 0 ? state.fiscalAct.seizedMaterial : ""),
+            label: `Descricao do item apreendido ${index + 1}`,
+          })}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+    <h3 class="official-section-title">4. MOTIVO DA APREENS&Atilde;O</h3>
+    <div class="official-grid">
+      ${officialField("Dispositivos legais infringidos:", "fiscalAct.legalBasis", { span: 12, owner: "sim", textarea: true, height: 25 })}
+      ${officialField("Circunst&acirc;ncias da apreens&atilde;o:", "fiscalAct.facts", { span: 12, owner: "sim", textarea: true, height: 43 })}
+    </div>
+    <h3 class="official-section-title">5. INFORMA&Ccedil;&Atilde;O AO INFRATOR</h3>
+  `;
+  const pageTwo = `
+    <div class="official-fixed-copy">
+      Os bens e/ou produtos apreendidos ficar&atilde;o, pelo prazo legal, depositados no local abaixo indicado, at&eacute; a regulariza&ccedil;&atilde;o do motivo determinante para a apreens&atilde;o ou, n&atilde;o ocorrendo, a sua destina&ccedil;&atilde;o final na forma da legisla&ccedil;&atilde;o vigente:
+    </div>
+    ${officialTextarea("fiscalAct.seizedDestination", { owner: "sim", height: 70, label: "Local de deposito dos bens apreendidos" })}
+    <h3 class="official-section-title">6. ASSINATURAS</h3>
+    ${fiscalSignatureSection("INFRATOR")}
+    ${fiscalCopiesNote()}
+  `;
+  return `<div class="official-form official-document">
+    ${officialDocumentPage("VII", title, 1, 2, pageOne, "official-fiscal-page")}
+    ${officialDocumentPage("VII", title, 2, 2, pageTwo, "official-fiscal-page")}
   </div>`;
 }
 
 function printFiscal(title) {
-  return `${printHeader(title)}
-    <table class="print-table">${masterRows()}
-      <tr><th>Numero</th><td>${state.fiscalAct.number || "&nbsp;"}</td><th>Data</th><td>${state.fiscalAct.date || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel pelo estabelecimento</th><td>${state.legalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Local da fiscalizacao</th><td colspan="3">${state.fiscalAct.inspectionPlace || `${state.establishment.address}, ${state.establishment.district}`}</td></tr>
-      <tr><th>Dispositivos legais</th><td colspan="3">${state.fiscalAct.legalBasis || "&nbsp;"}</td></tr>
-      <tr><th>Infracao / fatos constatados</th><td colspan="3" style="height:120px">${state.fiscalAct.facts || "&nbsp;"}</td></tr>
-      <tr><th>Material apreendido</th><td colspan="3">${state.fiscalAct.seizedMaterial || "&nbsp;"}</td></tr>
-      <tr><th>Atenuantes e agravantes</th><td colspan="3">${state.fiscalAct.attenuatingAggravating || "&nbsp;"}</td></tr>
-      <tr><th>Notificacao e orientacao</th><td colspan="3">${state.fiscalAct.notification || "&nbsp;"}</td></tr>
-      <tr><th>Outras informacoes</th><td colspan="3">${state.fiscalAct.otherInfo || "&nbsp;"}</td></tr>
-      <tr><th>Testemunhas</th><td colspan="3">${state.fiscalAct.witnesses || "&nbsp;"}</td></tr>
-    </table>
-    <p>Modelo destinado a impressao em 4 vias, conforme anexos fiscais do Decreto municipal n. 5.374/2024.</p>
-    <div class="signature"><div>Fiscal do SIM</div><div>Ciencia do autuado</div></div>
-  </div>`;
+  if (title === "TERMO DE ADVERTENCIA") return printWarning();
+  if (title === "AUTO DE APREENSAO") return printSeizure();
+  return printInfraction();
 }
 
 function render() {
@@ -1915,9 +3202,58 @@ function render() {
 
 function bindEvents() {
   document.querySelectorAll("[data-role]").forEach((el) => el.addEventListener("click", () => setRole(el.dataset.role)));
-  document.querySelectorAll("[data-view]").forEach((el) => el.addEventListener("click", () => setView(el.dataset.view)));
+  document.querySelectorAll("[data-view]").forEach((el) => {
+    el.addEventListener("click", () => setView(el.dataset.view, el.dataset.formFocus || ""));
+  });
   document.querySelectorAll("[data-path]").forEach((el) => {
-    el.addEventListener("input", () => update(el.dataset.path, el.value));
+    const eventName = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(eventName, () => update(el.dataset.path, el.value));
+  });
+  document.querySelectorAll("[data-official-choice-path]").forEach((el) => {
+    el.addEventListener("change", () => {
+      update(el.dataset.officialChoicePath, el.value);
+      if (el.dataset.officialParentPath) {
+        update(el.dataset.officialParentPath, el.dataset.officialParentValue || "");
+        document.querySelectorAll(
+          `[data-official-choice-path="${el.dataset.officialParentPath}"]`
+        ).forEach((choice) => {
+          choice.checked = false;
+        });
+      }
+      if (
+        el.dataset.officialChoicePath === "application.actType" &&
+        comparableOfficialValue(el.value) !== "alteracao cadastral"
+      ) {
+        update("application.cadastralChangeType", "");
+        document.querySelectorAll(
+          '[data-official-choice-path="application.cadastralChangeType"]'
+        ).forEach((choice) => {
+          choice.checked = false;
+        });
+      }
+    });
+  });
+  document.querySelectorAll("[data-official-array-path]").forEach((el) => {
+    el.addEventListener("change", () => {
+      const current = officialPathValue(el.dataset.officialArrayPath);
+      const values = Array.isArray(current) ? [...current] : [];
+      const normalizedValue = comparableOfficialValue(el.value);
+      const filtered = values.filter(
+        (value) => comparableOfficialValue(value) !== normalizedValue
+      );
+      if (el.checked) filtered.push(el.value);
+      update(el.dataset.officialArrayPath, filtered);
+    });
+  });
+  document.querySelectorAll("[data-official-cnae]").forEach((el) => {
+    el.addEventListener("input", () => {
+      const code = document.querySelector('[data-official-cnae="code"]')?.value || "";
+      const activity = document.querySelector('[data-official-cnae="activity"]')?.value || "";
+      update(
+        "establishment.cnae",
+        [code, activity].filter(Boolean).join(" - ")
+      );
+    });
   });
   document.querySelectorAll("[data-doc]").forEach((el) => {
     el.addEventListener("change", () => {
@@ -1933,7 +3269,10 @@ function bindEvents() {
     el.addEventListener("change", updateProduct);
   });
   document.querySelectorAll("[data-pnature]").forEach((el) => el.addEventListener("change", toggleNature));
-  document.querySelectorAll("[data-pcomp]").forEach((el) => el.addEventListener("input", updateCompRow));
+  document.querySelectorAll("[data-poption]").forEach((el) => el.addEventListener("change", toggleProductOption));
+  document.querySelectorAll("[data-pcomp]").forEach((el) => {
+    el.addEventListener(el.tagName === "SELECT" ? "change" : "input", updateCompRow);
+  });
   document.querySelectorAll("[data-pnut]").forEach((el) => el.addEventListener("input", updateNutRow));
   document.querySelectorAll("[data-pnutport]").forEach((el) => el.addEventListener("input", updateNutPortion));
   document.querySelectorAll("[data-product-action]").forEach((el) => {
@@ -1951,6 +3290,12 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-open-upload]").forEach((el) => {
     el.addEventListener("click", () => openUpload(el.dataset.openUpload));
+  });
+  const modalBackdrop = document.querySelector(".modal-backdrop");
+  modalBackdrop?.addEventListener("click", (event) => {
+    if (event.target !== event.currentTarget) return;
+    activeUpload = null;
+    render();
   });
   document.querySelectorAll("[data-print-form]").forEach((el) => {
     el.addEventListener("click", () => {
@@ -2053,7 +3398,7 @@ async function login(email, password) {
     session = data.user;
     state.role = session.role;
     const remote = await api("/state");
-    state = deepMerge(structuredClone(initialState), remote.state);
+    state = normalizeState(deepMerge(structuredClone(initialState), remote.state));
     state.role = session.role;
     notifications = remote.notifications || [];
     await loadRegistry();
@@ -2082,7 +3427,7 @@ async function uploadDocument(docId, file) {
   form.append("file", file);
   try {
     const data = await api("/uploads", { method: "POST", body: form });
-    state = deepMerge(structuredClone(initialState), data.state);
+    state = normalizeState(deepMerge(structuredClone(initialState), data.state));
     state.role = session.role;
     notifications.unshift({
       title: "Anexo protocolado",
@@ -2134,6 +3479,20 @@ function toggleNature(event) {
   saveState();
 }
 
+function toggleProductOption(event) {
+  const product = editableProduct(event.target.dataset.poption);
+  const field = event.target.dataset.poptionField;
+  if (!product || !field) return;
+  if (!Array.isArray(product[field])) product[field] = [];
+  const value = event.target.value;
+  if (event.target.checked) {
+    if (!product[field].includes(value)) product[field].push(value);
+  } else {
+    product[field] = product[field].filter((item) => item !== value);
+  }
+  saveState();
+}
+
 function updateCompRow(event) {
   const product = editableProduct(event.target.dataset.pcomp);
   if (!product) return;
@@ -2164,6 +3523,14 @@ function handleProductAction(action, productId, rowId) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return;
   const who = state.role === "sim" ? "Lucas Marcelino Campos Ferreira" : state.establishment.tradeName;
+  if (action === "print") {
+    state.printProductId = product.id;
+    state.printForm = "produto";
+    state.view = "print";
+    saveState();
+    render();
+    return;
+  }
   if (action === "submit") {
     if (isProductLocked(product)) return;
     if (!product.labelUploadId) {
@@ -2232,7 +3599,7 @@ function handleProductAction(action, productId, rowId) {
   if (action === "add-comp-row") {
     if (isProductLocked(product) || state.role !== "establishment") return;
     if (!Array.isArray(product.compositionRows)) product.compositionRows = [];
-    product.compositionRows.push({ id: crypto.randomUUID(), ingredient: "", amount: "", pct: "" });
+    product.compositionRows.push({ id: crypto.randomUUID(), kind: "Materia-prima", ingredient: "", amount: "", pct: "" });
   }
   if (action === "del-comp-row") {
     if (isProductLocked(product) || state.role !== "establishment") return;
@@ -2375,6 +3742,13 @@ function handleAction(action) {
       notes: "",
       requestNature: "Registro de produto e rotulo",
       natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
       packageType: "",
       labelRegistration: "",
       labelFeatures: "",
