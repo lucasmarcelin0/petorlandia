@@ -130,7 +130,9 @@
     }
 
     /* ── Timbre / avisos ────────────────────────────────────────────────────── */
-    .timbre { display: block; width: 100%; max-width: 165mm; height: auto; margin-bottom: 4px; }
+    /* Timbre ao lado do titulo: em bloco proprio custava ~18mm de altura. */
+    .timbre { float: left; width: 62mm; height: auto; margin: 0 8mm 2mm 0; }
+    .header { overflow: hidden; }
     .header .falta strong { font-size: 1.15em; }
     .header .feito { color: #555; }
     .header .aviso {
@@ -201,25 +203,34 @@
     .rodape__ass { flex: 1 1 0; max-width: 90mm; }
 
     /* ── Densidade: aperta a folha para tentar fechar em uma pagina ─────────── */
-    body.compacta .timbre { max-width: 125mm; }
-    body.compacta .header h1 { font-size: 17pt; }
+    /* Nos modos apertados os animais correm na linha em vez de empilhar:
+       e o que mais economiza altura numa casa com 3 ou 4 bichos. */
+    body.compacta .pet-row,
+    body.super-compacta .pet-row {
+      display: inline-block;
+      margin-right: 9px;
+      line-height: 1.25;
+    }
+
+    body.compacta .timbre { width: 55mm; }
+    body.compacta .header h1 { font-size: 16pt; }
     body.compacta tbody tr { height: 12mm; }
     body.compacta tbody td { padding: 4px 6px; font-size: 11pt; }
     body.compacta tbody .c-obs { font-size: 9pt; }
-    body.compacta .pet-row { line-height: 1.3; }
     body.compacta .sign-line { height: 1.5em; }
+    body.compacta .rodape { margin-top: 6px; }
 
-    body.super-compacta .timbre { max-width: 105mm; }
-    body.super-compacta .header h1 { font-size: 15pt; }
-    body.super-compacta .header .sub { font-size: 10pt; gap: 12px; }
+    body.super-compacta .timbre { width: 46mm; }
+    body.super-compacta .header h1 { font-size: 14pt; }
+    body.super-compacta .header .sub { font-size: 9pt; gap: 12px; }
     body.super-compacta .header .legend { display: none; }
     body.super-compacta tbody tr { height: 9mm; }
-    body.super-compacta tbody td { padding: 3px 5px; font-size: 10pt; }
+    body.super-compacta tbody td { padding: 3px 5px; font-size: 9.5pt; }
     body.super-compacta tbody .c-obs { font-size: 8pt; }
-    body.super-compacta .pet-row { line-height: 1.2; }
     body.super-compacta .sign-line { height: 1.2em; }
     body.super-compacta .sign-hint { display: none; }
-    body.super-compacta .rodape { margin-top: 6px; }
+    body.super-compacta .rodape { margin-top: 4px; }
+    body.super-compacta .rodape__totais { margin-bottom: 6px; font-size: 9pt; }
 
     /* ── Impressão ──────────────────────────────────────────────────────────── */
     @media print {
@@ -259,10 +270,9 @@
   </div>
 
   {# ── Cabeçalho ────────────────────────────────────────────────────────────── #}
-  <img class="timbre" src="{{ url_for('static', filename='img/timbre_orlandia.jpeg') }}"
-       alt="Prefeitura Municipal de Orlândia">
-
   <div class="header">
+    <img class="timbre" src="{{ url_for('static', filename='img/timbre_orlandia.jpeg') }}"
+         alt="Prefeitura Municipal de Orlândia">
     <h1>Vacinação antirrábica — {{ sheet_title }} · {{ shift_label }}</h1>
     <div class="sub">
       <span>Residências: <strong>{{ totals.tutores }}</strong></span>

@@ -197,31 +197,39 @@ def _build_pmo_print_rows(visits, sheet_title):
 
 
 # Orcamento vertical de uma A4 paisagem: 210mm - 22mm de margem = 188mm.
-# Timbre + cabecalho consomem ~32mm e o rodape ~28mm, sobrando ~128mm para a
-# tabela. Cada nivel de densidade tem uma altura minima de linha; escolhemos o
-# mais folgado que ainda fecha em uma pagina.
-_PMO_ALTURA_TABELA_MM = 128
+# Cabecalho com timbre ao lado (~14mm), cabecalho da tabela (~7mm), rodape
+# (~21mm) e o padding do body (~10mm) deixam ~136mm para as linhas.
+#
+# As constantes abaixo foram medidas na propria pagina renderizada com as
+# regras de impressao aplicadas, nao estimadas no olho: uma linha de conteudo
+# custa ~7mm em densidade normal e ~5.9mm nas compactas.
+_PMO_ALTURA_TABELA_MM = 136
 _PMO_DENSIDADES = (
-    # (nome, altura minima da linha em mm, altura de cada linha de conteudo)
-    ('normal', 17, 5.6),
-    ('compacta', 12, 4.6),
-    ('super-compacta', 9, 3.9),
+    # (nome, altura minima da linha, altura por linha de conteudo, animais por linha)
+    ('normal', 17, 7.0, 1),
+    ('compacta', 12, 5.9, 3),
+    ('super-compacta', 9, 4.8, 4),
 )
 
 
-def _pmo_altura_estimada_mm(rows, altura_minima, altura_linha):
+def _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, animais_por_linha):
+    import math
+
     total = 0.0
     for row in rows:
-        linhas_animais = len(row['pendentes']) + len(row['vacinados']) + len(row['anteriores'])
+        animais = len(row['pendentes']) + len(row['vacinados']) + len(row['anteriores'])
+        # Nos modos compactos os animais correm na linha e quebram a cada N.
+        linhas_animais = math.ceil(animais / animais_por_linha) if animais else 0
         linhas_nome = 1 + (1 if row['instrucao'] else 0) + (1 if row['duplicada_de'] else 0)
-        linhas = max(linhas_animais, len(row['notas']), linhas_nome, 2)
+        linhas = max(linhas_animais, len(row['notas']), linhas_nome, 1)
         total += max(altura_minima, linhas * altura_linha + 3)
     return total
 
 
 def _pmo_densidade(rows):
-    for nome, altura_minima, altura_linha in _PMO_DENSIDADES:
-        if _pmo_altura_estimada_mm(rows, altura_minima, altura_linha) <= _PMO_ALTURA_TABELA_MM:
+    for nome, altura_minima, altura_linha, por_linha in _PMO_DENSIDADES:
+        altura = _pmo_altura_estimada_mm(rows, altura_minima, altura_linha, por_linha)
+        if altura <= _PMO_ALTURA_TABELA_MM:
             return nome
     # Nao cabe nem no mais apertado: usa o menor e deixa quebrar a pagina.
     return _PMO_DENSIDADES[-1][0]
