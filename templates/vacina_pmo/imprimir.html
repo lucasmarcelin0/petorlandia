@@ -129,6 +129,86 @@
       margin-top: 2px;
     }
 
+    /* ── Timbre / avisos ────────────────────────────────────────────────────── */
+    .timbre { display: block; width: 100%; max-width: 165mm; height: auto; margin-bottom: 4px; }
+    .header .falta strong { font-size: 1.15em; }
+    .header .feito { color: #555; }
+    .header .aviso {
+      margin-top: 4px;
+      font-size: 10pt;
+      border-left: 4px solid #444;
+      padding: 3px 8px;
+      background: #f2f2f2;
+    }
+
+    /* Instrucao que vinha grudada no nome do tutor na planilha. */
+    .tag {
+      display: block;
+      font-size: 9pt;
+      font-weight: 400;
+      color: #444;
+      border: 1px solid #999;
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-top: 3px;
+    }
+    .tag--dup { border-style: dashed; }
+    tr.is-dup td { background: #ececec !important; }
+
+    /* ── Animais: pendente x ja vacinado ────────────────────────────────────── */
+    .pet-box {
+      display: inline-block;
+      width: 1.15em;
+      margin-right: 4px;
+      font-size: 1.05em;
+      vertical-align: -1px;
+    }
+    .pet-box--feito { font-weight: 700; }
+    .pet-row--feito {
+      color: #888;
+      text-decoration: line-through;
+      text-decoration-color: #aaa;
+    }
+    .pet-when { font-size: 0.72em; text-decoration: none; display: inline-block; }
+    .pet-count--ok { font-style: italic; }
+    .obs-row { display: block; line-height: 1.35; }
+    .obs-row + .obs-row { margin-top: 2px; }
+
+    /* Altura minima para caber a assinatura. */
+    tbody tr { height: 17mm; }
+
+    /* ── Rodape de fechamento ───────────────────────────────────────────────── */
+    .rodape {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 2px solid #1a1a2e;
+      page-break-inside: avoid;
+    }
+    .rodape__totais {
+      display: flex;
+      gap: 26px;
+      flex-wrap: wrap;
+      font-size: 11pt;
+      margin-bottom: 12px;
+    }
+    .campo {
+      display: inline-block;
+      width: 90px;
+      border-bottom: 1px solid #555;
+    }
+    .campo--curto { width: 55px; }
+    .rodape__assinaturas { display: flex; gap: 40px; }
+    .rodape__ass { flex: 1 1 0; max-width: 90mm; }
+
+    /* ── Densidade: aperta a folha quando a lista e grande ──────────────────── */
+    body.compacta { font-size: 12pt; }
+    body.compacta .timbre { max-width: 120mm; }
+    body.compacta .header h1 { font-size: 17pt; }
+    body.compacta tbody tr { height: 13mm; }
+    body.compacta tbody td { padding: 4px 6px; font-size: 11pt; }
+    body.compacta tbody .c-obs { font-size: 9pt; }
+    body.compacta .sign-line { height: 1.6em; }
+
     /* ── Impressão ──────────────────────────────────────────────────────────── */
     @media print {
       .no-print { display: none !important; }
@@ -155,7 +235,7 @@
     }
   </style>
 </head>
-<body>
+<body class="{{ totals.densidade if totals is defined else 'normal' }}">
 
   {# ── Navegação ────────────────────────────────────────────────────────────── #}
   <div class="no-print">
@@ -167,18 +247,29 @@
   </div>
 
   {# ── Cabeçalho ────────────────────────────────────────────────────────────── #}
+  <img class="timbre" src="{{ url_for('static', filename='img/timbre_orlandia.jpeg') }}"
+       alt="Prefeitura Municipal de Orlândia">
+
   <div class="header">
-    <h1>Vacinação {{ sheet_title }} — {{ shift_label }}</h1>
+    <h1>Vacinação antirrábica — {{ sheet_title }} · {{ shift_label }}</h1>
     <div class="sub">
-      <span>Tutores: <strong>{{ visits|length }}</strong></span>
-      <span>Cães: <strong>{{ visits|sum(attribute='dogs') }}</strong></span>
-      <span>Gatos: <strong>{{ visits|sum(attribute='cats') }}</strong></span>
-      <span>Total animais: <strong>{{ (visits|sum(attribute='dogs')) + (visits|sum(attribute='cats')) }}</strong></span>
+      <span>Residências: <strong>{{ totals.tutores }}</strong></span>
+      <span class="falta">A vacinar: <strong>{{ totals.pendentes }}</strong>
+        ({{ totals.pendentes_caes }}<span class="pet-badge pet-badge--cao">C</span>
+         {{ totals.pendentes_gatos }}<span class="pet-badge pet-badge--gato">G</span>)</span>
+      {% if totals.ja_vacinados %}
+        <span class="feito">Já vacinados nesta lista: <strong>{{ totals.ja_vacinados }}</strong></span>
+      {% endif %}
       <span class="legend">
         <span class="pet-badge pet-badge--cao">C</span> cão
         <span class="pet-badge pet-badge--gato">G</span> gato
       </span>
     </div>
+    {% if totals.duplicadas %}
+      <div class="aviso">
+        {{ totals.duplicadas }} linha(s) repetem um tutor que já aparece acima — confira antes de bater na porta.
+      </div>
+    {% endif %}
   </div>
 
   {# Telefone legivel: 5516982116928 -> (16) 98211-6928 #}
@@ -209,18 +300,24 @@
       </tr>
     </thead>
     <tbody>
-      {% for v in visits %}
-      <tr>
+      {% for r in rows %}
+      {% set v = r.visit %}
+      <tr{% if r.duplicada_de %} class="is-dup"{% endif %}>
         <td class="c-num">{{ loop.index }}</td>
-        <td class="c-name">{{ v.tutor_name }}</td>
+        <td class="c-name">
+          {{ r.tutor }}
+          {% if r.instrucao %}<span class="tag">{{ r.instrucao }}</span>{% endif %}
+          {% if r.duplicada_de %}<span class="tag tag--dup">repete o nº {{ r.duplicada_de }}</span>{% endif %}
+        </td>
         <td class="c-addr">{{ v.address or '—' }}</td>
         <td class="c-tel">
           {{ fone(v.phone1) }}
-          {% if v.phone2 %}<br>{{ fone(v.phone2) }}{% endif %}
+          {% if v.phone2 and v.phone2 != v.phone1 %}<br>{{ fone(v.phone2) }}{% endif %}
         </td>
         <td class="c-pet">
-          {% for a in v.animals %}
+          {% for a in r.pendentes %}
             <span class="pet-row">
+              <span class="pet-box">☐</span>
               {% if a.species == 'cao' %}
                 <span class="pet-badge pet-badge--cao" title="Cão">C</span>
               {% else %}
@@ -228,22 +325,37 @@
               {% endif %}
               {{ a.name }}
             </span>
-          {% else %}
+          {% endfor %}
+
+          {% if not r.pendentes and not v.animals %}
             {% if v.dogs %}
-              <span class="pet-row"><span class="pet-badge pet-badge--cao">C</span>{{ v.dogs }} cão(es)</span>
+              <span class="pet-row"><span class="pet-box">☐</span><span class="pet-badge pet-badge--cao">C</span>{{ v.dogs }} cão(es)</span>
             {% endif %}
             {% if v.cats %}
-              <span class="pet-row"><span class="pet-badge pet-badge--gato">G</span>{{ v.cats }} gato(s)</span>
+              <span class="pet-row"><span class="pet-box">☐</span><span class="pet-badge pet-badge--gato">G</span>{{ v.cats }} gato(s)</span>
             {% endif %}
-          {% endfor %}
-          {# So mostra o previsto quando diverge dos animais nomeados — ai vale o alerta. #}
-          {% if v.animals and (v.dogs or 0) + (v.cats or 0) != v.animals|length %}
-            <span class="pet-count">
-              Planilha prevê {{ v.dogs or 0 }} cão(es) · {{ v.cats or 0 }} gato(s)
+          {% endif %}
+
+          {% for a in r.vacinados %}
+            <span class="pet-row pet-row--feito">
+              <span class="pet-box pet-box--feito">✓</span>{{ a.name }}
             </span>
+          {% endfor %}
+
+          {% for h in r.anteriores %}
+            <span class="pet-row pet-row--feito">
+              <span class="pet-box pet-box--feito">✓</span>{{ h.name }}
+              <span class="pet-when">em {{ h.quando }}</span>
+            </span>
+          {% endfor %}
+
+          {% if not r.pendentes and (r.vacinados or r.anteriores) %}
+            <span class="pet-count pet-count--ok">Nada pendente</span>
           {% endif %}
         </td>
-        <td class="c-obs">{{ v.note or '' }}</td>
+        <td class="c-obs">
+          {% for n in r.notas %}<span class="obs-row">{{ n }}</span>{% endfor %}
+        </td>
         <td class="c-ok">☐</td>
         <td class="c-sign">
           <span class="sign-line"></span>
@@ -253,6 +365,23 @@
       {% endfor %}
     </tbody>
   </table>
+  <div class="rodape">
+    <div class="rodape__totais">
+      <span>Doses aplicadas: <span class="campo"></span></span>
+      <span>Perdas: <span class="campo campo--curto"></span></span>
+      <span>Frascos abertos: <span class="campo campo--curto"></span></span>
+    </div>
+    <div class="rodape__assinaturas">
+      <span class="rodape__ass">
+        <span class="sign-line"></span>
+        <span class="sign-hint">Aplicador(a)</span>
+      </span>
+      <span class="rodape__ass">
+        <span class="sign-line"></span>
+        <span class="sign-hint">Responsável técnico</span>
+      </span>
+    </div>
+  </div>
   {% else %}
   <p style="font-size:14pt; margin-top:20px;">Nenhum tutor sincronizado para este turno.</p>
   {% endif %}
