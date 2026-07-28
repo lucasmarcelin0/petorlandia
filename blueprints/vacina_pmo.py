@@ -196,6 +196,37 @@ def _build_pmo_print_rows(visits, sheet_title):
     return rows
 
 
+# Orcamento vertical de uma A4 paisagem: 210mm - 22mm de margem = 188mm.
+# Timbre + cabecalho consomem ~32mm e o rodape ~28mm, sobrando ~128mm para a
+# tabela. Cada nivel de densidade tem uma altura minima de linha; escolhemos o
+# mais folgado que ainda fecha em uma pagina.
+_PMO_ALTURA_TABELA_MM = 128
+_PMO_DENSIDADES = (
+    # (nome, altura minima da linha em mm, altura de cada linha de conteudo)
+    ('normal', 17, 5.6),
+    ('compacta', 12, 4.6),
+    ('super-compacta', 9, 3.9),
+)
+
+
+def _pmo_altura_estimada_mm(rows, altura_minima, altura_linha):
+    total = 0.0
+    for row in rows:
+        linhas_animais = len(row['pendentes']) + len(row['vacinados']) + len(row['anteriores'])
+        linhas_nome = 1 + (1 if row['instrucao'] else 0) + (1 if row['duplicada_de'] else 0)
+        linhas = max(linhas_animais, len(row['notas']), linhas_nome, 2)
+        total += max(altura_minima, linhas * altura_linha + 3)
+    return total
+
+
+def _pmo_densidade(rows):
+    for nome, altura_minima, altura_linha in _PMO_DENSIDADES:
+        if _pmo_altura_estimada_mm(rows, altura_minima, altura_linha) <= _PMO_ALTURA_TABELA_MM:
+            return nome
+    # Nao cabe nem no mais apertado: usa o menor e deixa quebrar a pagina.
+    return _PMO_DENSIDADES[-1][0]
+
+
 def _pmo_print_totals(rows):
     pendentes = sum(len(r['pendentes']) for r in rows)
     return {
@@ -210,8 +241,7 @@ def _pmo_print_totals(rows):
         'ja_vacinados': sum(len(r['vacinados']) for r in rows),
         'com_historico': sum(1 for r in rows if r['anteriores']),
         'duplicadas': sum(1 for r in rows if r['duplicada_de']),
-        # Controla a densidade da folha para caber em uma pagina.
-        'densidade': 'compacta' if pendentes > 26 or len(rows) > 14 else 'normal',
+        'densidade': _pmo_densidade(rows),
     }
 
 

@@ -200,14 +200,26 @@
     .rodape__assinaturas { display: flex; gap: 40px; }
     .rodape__ass { flex: 1 1 0; max-width: 90mm; }
 
-    /* ── Densidade: aperta a folha quando a lista e grande ──────────────────── */
-    body.compacta { font-size: 12pt; }
-    body.compacta .timbre { max-width: 120mm; }
+    /* ── Densidade: aperta a folha para tentar fechar em uma pagina ─────────── */
+    body.compacta .timbre { max-width: 125mm; }
     body.compacta .header h1 { font-size: 17pt; }
-    body.compacta tbody tr { height: 13mm; }
+    body.compacta tbody tr { height: 12mm; }
     body.compacta tbody td { padding: 4px 6px; font-size: 11pt; }
     body.compacta tbody .c-obs { font-size: 9pt; }
-    body.compacta .sign-line { height: 1.6em; }
+    body.compacta .pet-row { line-height: 1.3; }
+    body.compacta .sign-line { height: 1.5em; }
+
+    body.super-compacta .timbre { max-width: 105mm; }
+    body.super-compacta .header h1 { font-size: 15pt; }
+    body.super-compacta .header .sub { font-size: 10pt; gap: 12px; }
+    body.super-compacta .header .legend { display: none; }
+    body.super-compacta tbody tr { height: 9mm; }
+    body.super-compacta tbody td { padding: 3px 5px; font-size: 10pt; }
+    body.super-compacta tbody .c-obs { font-size: 8pt; }
+    body.super-compacta .pet-row { line-height: 1.2; }
+    body.super-compacta .sign-line { height: 1.2em; }
+    body.super-compacta .sign-hint { display: none; }
+    body.super-compacta .rodape { margin-top: 6px; }
 
     /* ── Impressão ──────────────────────────────────────────────────────────── */
     @media print {
