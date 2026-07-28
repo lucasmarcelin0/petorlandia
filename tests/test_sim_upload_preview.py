@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from io import BytesIO
 
 from blueprints.sim import (
@@ -14,6 +15,11 @@ from extensions import db
 
 def test_uploaded_pdf_can_be_previewed_only_on_same_origin(app):
     token = "sim-preview-test-token"
+    legacy_state = deepcopy(SEED_STATE)
+    legacy_state["documents"].extend([
+        {"id": "mtse", "group": "anexos", "name": "MTSE rascunho"},
+        {"id": "planta-fluxo", "group": "anexos", "name": "Croqui de fluxo"},
+    ])
     with app.app_context():
         user = SimUser(
             email="preview@example.test",
@@ -35,7 +41,7 @@ def test_uploaded_pdf_can_be_previewed_only_on_same_origin(app):
         db.session.add(
             SimProcessState(
                 process_id=PROCESS_ID,
-                state_json=json.dumps(SEED_STATE),
+                state_json=json.dumps(legacy_state),
                 updated_at=now_iso(),
             )
         )
@@ -43,6 +49,10 @@ def test_uploaded_pdf_can_be_previewed_only_on_same_origin(app):
 
     client = app.test_client()
     authorization = {"Authorization": f"Bearer {token}"}
+    state = client.get("/sim/api/state", headers=authorization).get_json()["state"]
+    document_ids = {document["id"] for document in state["documents"]}
+    assert "mtse" not in document_ids
+    assert "planta-fluxo" not in document_ids
 
     upload = client.post(
         "/sim/api/uploads",

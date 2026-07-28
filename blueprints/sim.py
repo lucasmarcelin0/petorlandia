@@ -46,6 +46,9 @@ ACT_PREFIXES = {
 # em vez do documento generico "rotulos-produtos" do checklist.
 PRODUCT_LABEL_PREFIX = "rotulo-produto-"
 
+# Estes dados pertencem ao MTSE e nao constituem anexos autonomos.
+RETIRED_DOCUMENT_IDS = {"mtse", "planta-fluxo"}
+
 
 # ---------------------------------------------------------------------------
 # Modelos (todas as tabelas prefixadas com sim_)
@@ -272,11 +275,9 @@ SEED_STATE = {
         {"id": "manual-bpf", "item": "10", "group": "art11", "name": "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", "hint": "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "registro-crmv", "item": "11", "group": "art11", "name": "Registro do estabelecimento no CRMV-SP, se aplicavel", "hint": "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "comprovante-taxa", "item": "12", "group": "art11", "name": "Comprovante da Taxa de Inspecao Sanitaria", "hint": "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", "required": False, "status": "Dispensado em 2026", "file": "", "internal": False},
-        {"id": "mtse", "group": "anexos", "name": "Anexo II - Memorial Tecnico-Sanitario (rascunho de trabalho)", "hint": "Versao de trabalho do MTSE; a versao final assinada vai no item 09.", "required": False, "status": "Em correcao", "file": "MTSE_rascunho.pdf", "internal": False},
         {"id": "rotulos-produtos", "group": "anexos", "name": "Anexo IV - Rotulos e memoriais por produto", "hint": "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto); aqui e so um resumo.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "doc-responsavel-legal", "group": "anexos", "name": "Documento do responsavel legal (RG/CPF ou CNH)", "hint": "Copia simples e legivel.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "art-responsavel-tecnico", "group": "anexos", "name": "ART ou contrato do responsavel tecnico", "hint": "Anotacao de responsabilidade tecnica emitida no conselho do RT.", "required": True, "status": "Pendente", "file": "", "internal": False},
-        {"id": "planta-fluxo", "group": "anexos", "name": "Croqui de fluxo (apoio)", "hint": "Opcional; ajuda a analise do fluxo de producao.", "required": False, "status": "Pendente", "file": "", "internal": False},
         {"id": "parecer-tecnico-sim", "name": "Parecer tecnico do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "checklist-inspecao-sim", "name": "Checklist de inspecao do SIM", "required": False, "status": "Interno", "file": "", "internal": True},
         {"id": "despachos-internos-sim", "name": "Despachos internos / instrucoes", "required": False, "status": "Interno", "file": "", "internal": True},
@@ -465,6 +466,10 @@ def public_user(user: SimUser | None) -> dict | None:
 def get_state() -> dict:
     row = db.session.get(SimProcessState, PROCESS_ID)
     state = json.loads(row.state_json)
+    state["documents"] = [
+        doc for doc in state.get("documents", [])
+        if doc.get("id") not in RETIRED_DOCUMENT_IDS
+    ]
     existing = {doc.get("id") for doc in state.get("documents", [])}
     for doc in SEED_STATE["documents"]:
         if doc["id"] not in existing:
@@ -729,7 +734,7 @@ def build_form_docx(form: str, state: dict):
             ("Funcionarios", prod.get("employees")),
             ("Lavanderia", prod.get("laundry")),
             ("Terreno e area de localizacao", " / ".join(p for p in [prod.get("landDetails"), prod.get("locationArea")] if p)),
-            ("Fluxo e disposicao das instalacoes", prod.get("flow")),
+            ("12. Disposicao das instalacoes e fluxo de producao", prod.get("flow")),
             ("Equipamentos", prod.get("equipment")),
             ("Piso, paredes e impermeabilizacao", prod.get("floorWalls")),
             ("Janelas, portas, teto e bloqueio sanitario", prod.get("doorsWindowsCeiling")),

@@ -59,9 +59,6 @@ const DOCUMENT_SOURCES = {
     { text: "Decreto 5.374/2024, Anexos I e II, pedem identificacao do RT", url: DEC5374_URL },
     { text: "Resolucao CFMV 1.562/2023, art. 3", url: CFMV1562_URL },
   ],
-  "planta-fluxo": [
-    { text: "Apoio tecnico ao MTSE: o Anexo II do Decreto 5.374/2024 pede disposicao das instalacoes e fluxo de producao", url: DEC5374_URL },
-  ],
 };
 
 // Opcoes/estruturas do Anexo IV. Declaradas antes de initialState porque a
@@ -245,7 +242,6 @@ const initialState = {
     { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto). Este item existe porque produto e rotulo tambem precisam de registro.", required: false, status: "Pendente", file: "" },
     { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel para confirmar quem assina o pedido e responde pelas declaracoes.", required: true, status: "Pendente", file: "" },
     { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Comprova a responsabilidade tecnica informada nos formularios oficiais.", required: true, status: "Pendente", file: "" },
-    { id: "planta-fluxo", group: "anexos", name: "Croqui de fluxo (apoio)", hint: "Opcional se o fluxo ja estiver claro no MTSE e na planta. Ajuda a analise da recepcao, producao e expedicao.", required: false, status: "Pendente", file: "" },
   ],
   review: {
     decision: "Correcoes solicitadas",
@@ -327,7 +323,7 @@ function normalizeState(nextState) {
   nextState.documents = initialState.documents.map((baseDoc) => {
     const currentDoc = currentById.get(baseDoc.id);
     return currentDoc ? deepMerge(structuredClone(baseDoc), currentDoc) : structuredClone(baseDoc);
-  }).concat(internalDocs).filter((doc) => doc.id !== "mtse");
+  }).concat(internalDocs).filter((doc) => !["mtse", "planta-fluxo"].includes(doc.id));
   const mtse = nextState.documents.find((doc) => doc.id === "memorial-economico-sanitario");
   if (mtse) {
     mtse.name = initialState.documents.find((doc) => doc.id === "memorial-economico-sanitario")?.name || mtse.name;
@@ -1032,7 +1028,7 @@ function renderEstablishment() {
           ${input("production.laundry", "Lavanderia", { textarea: true, owner: "establishment" })}
           ${input("production.landDetails", "Detalhes do terreno", { textarea: true, owner: "establishment" })}
           ${input("production.locationArea", "Area de localizacao", { textarea: true, owner: "establishment" })}
-          ${input("production.flow", "Disposicao das instalacoes e fluxo de producao", { textarea: true, owner: "establishment" })}
+          ${input("production.flow", "12. Disposicao das instalacoes e fluxo de producao", { textarea: true, owner: "establishment" })}
           ${input("production.equipment", "Equipamentos", { textarea: true, owner: "establishment" })}
           ${input("production.floorWalls", "Piso e material de impermeabilizacao", { textarea: true, owner: "establishment" })}
           ${input("production.doorsWindowsCeiling", "Janelas, portas, teto e bloqueio sanitario", { textarea: true, owner: "establishment" })}
@@ -1895,7 +1891,7 @@ function printMtse() {
       <tr><th>Funcionarios</th><td colspan="3">${state.production.employees || "&nbsp;"}</td></tr>
       <tr><th>Lavanderia</th><td colspan="3">${state.production.laundry || "&nbsp;"}</td></tr>
       <tr><th>Terreno e area de localizacao</th><td colspan="3">${[state.production.landDetails, state.production.locationArea].filter(Boolean).join(" / ") || "&nbsp;"}</td></tr>
-      <tr><th>Fluxo e disposicao das instalacoes</th><td colspan="3">${state.production.flow || "&nbsp;"}</td></tr>
+      <tr><th>12. Disposicao das instalacoes e fluxo de producao</th><td colspan="3">${state.production.flow || "&nbsp;"}</td></tr>
       <tr><th>Equipamentos</th><td colspan="3">${state.production.equipment || "&nbsp;"}</td></tr>
       <tr><th>Piso, paredes e impermeabilizacao</th><td colspan="3">${state.production.floorWalls || "&nbsp;"}</td></tr>
       <tr><th>Janelas, portas, teto e bloqueio sanitario</th><td colspan="3">${state.production.doorsWindowsCeiling || "&nbsp;"}</td></tr>
