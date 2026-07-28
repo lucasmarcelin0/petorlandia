@@ -196,3 +196,15 @@ def test_print_forms_expand_on_screen_and_create_safe_colored_pdf_continuations(
     assert ".digital-pdf .official-service-masthead" in styles
     assert "body.digital-pdf .official-service-masthead img" in styles
     assert ".official-continuation-text" in styles
+
+
+def test_screen_editing_uses_a_distinct_comfortable_layout_from_printing():
+    project_root = Path(__file__).resolve().parents[1]
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "Tela de preenchimento: conforto visual e hierarquia" in styles
+    assert "@media screen" in styles
+    assert "min-height: 0;" in styles
+    assert "border-radius: 16px;" in styles
+    assert "background: linear-gradient(145deg, #ffffff 0%, #f7fbfa 100%);" in styles
+    assert "@media print" in styles

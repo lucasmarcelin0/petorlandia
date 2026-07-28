@@ -1804,6 +1804,142 @@ table select:disabled {
   line-height: 1.25;
 }
 
+/* Tela de preenchimento: conforto visual e hierarquia. A folha oficial volta
+   integralmente ao preto e branco dentro de @media print, abaixo. */
+@media screen {
+  .official-form {
+    color: #18312f;
+  }
+
+  .official-page {
+    max-width: 1180px;
+    min-height: 0;
+    margin: 0 auto 26px;
+    padding: 28px;
+    border: 1px solid #d8e5e1;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #ffffff 0%, #f7fbfa 100%);
+    box-shadow: 0 16px 38px rgba(18, 61, 80, .10);
+  }
+
+  .official-service-masthead {
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(100deg, #e8f4f1, #f5f8e9);
+    box-shadow: inset 0 0 0 1px #c9ddd6;
+  }
+
+  .official-service-masthead img {
+    filter: none;
+  }
+
+  .official-service-contact {
+    padding-left: 14px;
+    border-color: #9bbab1;
+  }
+
+  .official-form-name {
+    width: fit-content;
+    margin: 14px auto 0;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #0e5e55;
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(14, 94, 85, .18);
+  }
+
+  .official-form-name strong,
+  .official-form-name span {
+    color: inherit;
+  }
+
+  .official-section-title {
+    margin: 24px 0 10px;
+    padding: 9px 12px;
+    border-left: 4px solid #d5a725;
+    border-radius: 5px;
+    background: #edf6f3;
+    color: #0e5e55;
+    font-size: 10.5pt;
+  }
+
+  .official-grid {
+    gap: 8px;
+    border: 0;
+  }
+
+  .official-field {
+    min-height: 72px;
+    padding: 10px 12px;
+    border: 1px solid #c8dbd5;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 2px 5px rgba(18, 61, 80, .04);
+  }
+
+  .official-document-page .official-field {
+    min-height: 64px;
+    padding: 9px 10px;
+  }
+
+  .official-field span,
+  .official-document-page .official-field span {
+    margin-bottom: 4px;
+    color: #3e615b;
+    font-size: 8pt;
+    font-weight: 700;
+  }
+
+  .official-fill-input {
+    border-color: #b6cec7;
+    border-radius: 6px;
+    background: #fcfffe;
+  }
+
+  .official-fill-input:focus {
+    border-color: #0e7d70;
+    box-shadow: 0 0 0 3px rgba(14, 125, 112, .14);
+  }
+
+  .official-data-table {
+    overflow: hidden;
+    border: 1px solid #c8dbd5;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .official-data-table th,
+  .official-data-table td {
+    border-color: #c8dbd5;
+  }
+
+  .official-data-table th,
+  .official-fixed-cell {
+    background: #eaf4f1;
+    color: #24554d;
+  }
+
+  .official-fixed-copy,
+  .official-box,
+  .official-request-box,
+  .official-commitment,
+  .official-document-signatures,
+  .official-fiscal-signatures,
+  .official-witness-grid,
+  .official-copies-note {
+    border-color: #b8d0ca;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .official-page-index {
+    margin-top: 18px;
+    color: #5f7e78;
+    font-weight: 700;
+  }
+}
+
 .official-signature-page .official-document-signatures {
   min-height: 85mm;
 }
