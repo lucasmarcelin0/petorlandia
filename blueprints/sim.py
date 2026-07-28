@@ -735,12 +735,104 @@ def _residential(person: dict) -> str:
 
 
 def _kv_table(doc, pairs) -> None:
+    """Cria campos Word editáveis em uma grade semelhante à folha oficial."""
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Pt
+
     table = doc.add_table(rows=0, cols=2)
     table.style = "Table Grid"
     for key, value in pairs:
         cells = table.add_row().cells
-        cells[0].text = _s(key)
-        cells[1].text = _s(value)
+        cells[0].width = Pt(150)
+        for cell in cells:
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            shading = OxmlElement("w:shd")
+            shading.set(qn("w:fill"), "F7FAF9")
+            cell._tc.get_or_add_tcPr().append(shading)
+        label = cells[0].paragraphs[0]
+        label.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        label.paragraph_format.space_after = Pt(0)
+        label_run = label.add_run(_s(key).upper())
+        label_run.bold = True
+        label_run.font.size = Pt(7)
+        response = cells[1].paragraphs[0]
+        response.paragraph_format.space_after = Pt(0)
+        response_run = response.add_run(_s(value))
+        response_run.font.size = Pt(9)
+
+
+def _docx_configure_official_form(doc, title: str) -> None:
+    """Aplica a identidade estrutural do formulário oficial ao arquivo Word."""
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Cm, Pt
+
+    section = doc.sections[0]
+    section.top_margin = Cm(1.2)
+    section.bottom_margin = Cm(1.2)
+    section.left_margin = Cm(1.25)
+    section.right_margin = Cm(1.25)
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Arial"
+    normal.font.size = Pt(9)
+
+    header = doc.add_table(rows=1, cols=3)
+    header.style = "Table Grid"
+    header.alignment = WD_TABLE_ALIGNMENT.CENTER
+    cells = header.rows[0].cells
+    for cell in cells:
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    logo_path = PORTAL_STATIC_DIR / "assets" / "brasao-orlandia.png"
+    if logo_path.exists():
+        cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cells[0].paragraphs[0].add_run().add_picture(str(logo_path), width=Cm(1.6))
+
+    masthead = cells[1].paragraphs[0]
+    masthead.paragraph_format.space_after = Pt(0)
+    for text, size, bold in (
+        ("PREFEITURA MUNICIPAL DE ORLÂNDIA", 10, True),
+        ("Estado de São Paulo", 7, False),
+        ("SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECONÔMICO E TURISMO", 6.5, True),
+        ("SERVIÇO DE INSPEÇÃO MUNICIPAL - SIM", 6.5, True),
+    ):
+        run = masthead.add_run(text + "\n")
+        run.bold = bold
+        run.font.size = Pt(size)
+
+    contact = cells[2].paragraphs[0]
+    contact.paragraph_format.space_after = Pt(0)
+    for text, bold in (
+        ("ATENDIMENTO DO SIM", True),
+        ("Lucas Marcelino Campos Ferreira", False),
+        ("lucasferreira@orlandia.sp.gov.br", False),
+        ("(31) 99950-5748", False),
+    ):
+        run = contact.add_run(text + "\n")
+        run.bold = bold
+        run.font.size = Pt(6.5)
+
+    heading = doc.add_paragraph()
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    heading.paragraph_format.space_before = Pt(8)
+    heading.paragraph_format.space_after = Pt(6)
+    run = heading.add_run(title)
+    run.bold = True
+    run.font.size = Pt(12)
+
+
+def _docx_section(doc, title: str) -> None:
+    from docx.shared import Pt
+
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(8)
+    paragraph.paragraph_format.space_after = Pt(3)
+    run = paragraph.add_run(title.upper())
+    run.bold = True
+    run.font.size = Pt(10)
 
 
 def _visible_products(state: dict) -> list:
@@ -757,14 +849,11 @@ def _selected_product(state: dict):
 
 
 def build_form_docx(form: str, state: dict):
-    """Monta um Document (python-docx) do formulario pedido a partir do state."""
+    """Monta um Word editável com a mesma estrutura da via oficial impressa."""
     from docx import Document
 
     doc = Document()
-    doc.add_paragraph("PREFEITURA MUNICIPAL DE ORLANDIA-SP")
-    doc.add_paragraph("SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECONOMICO E TURISMO")
-    doc.add_paragraph("SERVICO DE INSPECAO MUNICIPAL")
-    doc.add_heading(FORM_TITLES.get(form, "FORMULARIO S.I.M."), level=1)
+    _docx_configure_official_form(doc, FORM_TITLES.get(form, "FORMULÁRIO S.I.M."))
 
     e = state.get("establishment", {})
     lr = state.get("legalResponsible", {})
@@ -772,7 +861,10 @@ def build_form_docx(form: str, state: dict):
 
     if form == "anexoI":
         app = state.get("application", {})
-        pairs = _master_pairs(state) + [
+        _docx_section(doc, "1. Identificação do estabelecimento")
+        _kv_table(doc, _master_pairs(state))
+        _docx_section(doc, "2. Responsáveis e solicitação")
+        _kv_table(doc, [
             ("Natureza juridica / porte", e.get("legalNature")),
             ("Agroindustria de pequeno porte?", e.get("smallBusiness")),
             ("Responsavel legal", lr.get("name")),
@@ -783,11 +875,13 @@ def build_form_docx(form: str, state: dict):
             ("Classificacao do estabelecimento", e.get("classification")),
             ("Tipo de solicitacao", (state.get("application", {}).get("actType", "") + (f" - {app.get('otherAct')}" if app.get("otherAct") else ""))),
             ("Termo de compromisso", app.get("commitment")),
-        ]
-        _kv_table(doc, pairs)
+        ])
     elif form == "mtse":
         prod = state.get("production", {})
-        pairs = _master_pairs(state) + [
+        _docx_section(doc, "1. Identificação do estabelecimento")
+        _kv_table(doc, _master_pairs(state))
+        _docx_section(doc, "2. Memorial técnico-sanitário")
+        _kv_table(doc, [
             ("N. do registro no S.I.M.", e.get("simNumber")),
             ("Tipo de vinculo com o imovel", e.get("propertyLink")),
             ("Responsavel legal", lr.get("name")),
@@ -817,11 +911,13 @@ def build_form_docx(form: str, state: dict):
             ("Analises laboratoriais", prod.get("labAnalysis")),
             ("Dias e horarios de producao", prod.get("productionSchedule")),
             ("Controles de qualidade", prod.get("qualityControls")),
-        ]
-        _kv_table(doc, pairs)
+        ])
     elif form == "construction":
         c = state.get("construction", {})
-        pairs = _master_pairs(state) + [
+        _docx_section(doc, "1. Identificação do estabelecimento")
+        _kv_table(doc, _master_pairs(state))
+        _docx_section(doc, "2. Memorial descritivo")
+        _kv_table(doc, [
             ("Caracterizacao do estabelecimento", e.get("classification")),
             ("Motivo", c.get("requestReason") or state.get("application", {}).get("actType")),
             ("Ambientes e dependencias", c.get("rooms")),
@@ -830,8 +926,7 @@ def build_form_docx(form: str, state: dict):
             ("Camara fria / temperatura", c.get("coldRooms")),
             ("Agua, esgoto e drenagem", c.get("waterAndSewage")),
             ("Observacao", c.get("observations")),
-        ]
-        _kv_table(doc, pairs)
+        ])
     elif form == "produto":
         product = _selected_product(state)
         nature = ", ".join(product.get("natureOptions") or []) or product.get("requestNature")
@@ -843,12 +938,15 @@ def build_form_docx(form: str, state: dict):
             *(product.get("primaryPackagingTypes") or []),
             product.get("otherPrimaryPackagingType") or product.get("packageType") or "",
         ]).strip(", ")
+        _docx_section(doc, "1. Identificação do estabelecimento")
+        _kv_table(doc, _master_pairs(state))
+        _docx_section(doc, "2. Solicitação de registro")
         doc.add_paragraph(
             "Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo "
             "qualificado, atraves do seu representante legal e do seu responsavel "
             "tecnico, requer o atendimento da solicitacao especificada neste documento."
         )
-        pairs = _master_pairs(state) + [
+        _kv_table(doc, [
             ("Classificacao do estabelecimento", e.get("classification")),
             ("SIM do estabelecimento", e.get("simNumber")),
             ("Responsavel legal", lr.get("name")),
@@ -861,11 +959,10 @@ def build_form_docx(form: str, state: dict):
             ("Indicacao da data de fabricacao, validade e lote", product.get("dateLotIndication")),
             ("Quantidade de produto por embalagem", product.get("packageQuantity")),
             ("Apresentacao das informacoes de rotulagem", product.get("labelingPresentation") or product.get("labelFeatures")),
-        ]
-        _kv_table(doc, pairs)
+        ])
 
         comp_rows = product.get("compositionRows") or []
-        doc.add_heading("7. Composicao do produto", level=2)
+        _docx_section(doc, "3. Composição do produto")
         if comp_rows:
             table = doc.add_table(rows=1, cols=4)
             table.style = "Table Grid"
@@ -881,7 +978,7 @@ def build_form_docx(form: str, state: dict):
             doc.add_paragraph(_s(product.get("composition")))
 
         nut_rows = product.get("nutritionRows") or []
-        doc.add_heading(f"8. Informacao nutricional - porcao de {_s(product.get('nutritionPortion'))}", level=2)
+        _docx_section(doc, f"4. Informação nutricional - porção de {_s(product.get('nutritionPortion'))}")
         if nut_rows:
             table = doc.add_table(rows=1, cols=3)
             table.style = "Table Grid"
@@ -895,6 +992,7 @@ def build_form_docx(form: str, state: dict):
         elif product.get("nutrition"):
             doc.add_paragraph(_s(product.get("nutrition")))
 
+        _docx_section(doc, "5. Processo produtivo e controles")
         _kv_table(doc, [
             ("9. Processo de fabricacao", product.get("manufacturingProcess")),
             ("10. Processo de embalagem", product.get("packagingProcess")),
@@ -903,11 +1001,12 @@ def build_form_docx(form: str, state: dict):
             ("13. Transporte e expedicao", product.get("marketTransport")),
         ])
 
-    doc.add_paragraph("")
-    doc.add_paragraph("Local e data: __________________________________________")
-    doc.add_paragraph("")
-    doc.add_paragraph("Assinatura do proprietario ou responsavel legal: ____________________")
-    doc.add_paragraph("Assinatura do responsavel tecnico: __________________________________")
+    _docx_section(doc, "Assinaturas")
+    _kv_table(doc, [
+        ("Local e data", ""),
+        ("Assinatura do proprietário ou responsável legal", ""),
+        ("Assinatura do responsável técnico", ""),
+    ])
     return doc
 
 

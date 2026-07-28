@@ -137,6 +137,10 @@ def test_product_docx_contains_official_anexo_iv_sections():
     ):
         assert expected in text
 
+    assert "PREFEITURA MUNICIPAL DE ORLÂNDIA" in text
+    assert "1. IDENTIFICAÇÃO DO ESTABELECIMENTO" in text
+    assert "5. PROCESSO PRODUTIVO E CONTROLES" in text
+
 
 def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     project_root = Path(__file__).resolve().parents[1]
