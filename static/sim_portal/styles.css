@@ -1024,6 +1024,240 @@ table select:disabled {
   font-size: 12px;
 }
 
+.official-form {
+  color: #111;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.official-page {
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 18px;
+  padding: 11mm 12mm;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #c9cfcc;
+  box-shadow: 0 10px 28px rgba(24, 35, 33, .12);
+}
+
+.official-anexo-i-page {
+  page: anexo-i;
+  font-size: 8.5pt;
+  line-height: 1.18;
+}
+
+.official-form-header {
+  text-align: center;
+  margin-bottom: 5mm;
+}
+
+.official-annex-label {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13pt;
+  font-weight: 700;
+  margin-bottom: 2.5mm;
+}
+
+.official-form-header img {
+  display: block;
+  width: 21mm;
+  height: 21mm;
+  object-fit: contain;
+  margin: 0 auto 1.5mm;
+}
+
+.official-government-lines {
+  display: grid;
+  gap: .8mm;
+  font-size: 9.5pt;
+}
+
+.official-form-name {
+  border-top: 1px solid #111;
+  margin-top: 1.5mm;
+  padding-top: 1.5mm;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.official-section-title {
+  margin: 4mm 0 1.2mm;
+  font-size: 9.5pt;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.official-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  border-top: 1.2px solid #111;
+  border-left: 1.2px solid #111;
+}
+
+.official-span-12 { grid-column: span 12; }
+.official-span-8 { grid-column: span 8; }
+.official-span-7 { grid-column: span 7; }
+.official-span-6 { grid-column: span 6; }
+.official-span-5 { grid-column: span 5; }
+.official-span-4 { grid-column: span 4; }
+.official-span-3 { grid-column: span 3; }
+.official-span-1 { grid-column: span 1; }
+
+.official-field {
+  min-height: 11mm;
+  padding: 1.2mm 1.5mm;
+  border-right: 1.2px solid #111;
+  border-bottom: 1.2px solid #111;
+  overflow-wrap: anywhere;
+}
+
+.official-field-tall {
+  min-height: 14mm;
+}
+
+.official-field-address {
+  min-height: 15mm;
+}
+
+.official-field span,
+.official-field b {
+  display: block;
+}
+
+.official-field span {
+  font-size: 7.6pt;
+}
+
+.official-field b {
+  margin-top: 1.2mm;
+  font-size: 8.2pt;
+  font-weight: 500;
+}
+
+.official-classification {
+  border: 1.2px solid #111;
+}
+
+.official-classification-group {
+  padding: 1.1mm 2mm;
+  border-bottom: 1px solid #111;
+}
+
+.official-classification-group:last-child {
+  border-bottom: 0;
+}
+
+.official-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5mm;
+  min-height: 4.5mm;
+  line-height: 4.2mm;
+}
+
+.official-classification-group .official-option {
+  margin-left: 1mm;
+}
+
+.official-checkbox {
+  display: inline-flex;
+  flex: 0 0 4mm;
+  width: 4mm;
+  height: 4mm;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #111;
+  font-size: 7pt;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.official-classification-continuation {
+  margin-top: 1mm;
+}
+
+.official-small-business {
+  padding: 1.5mm 2mm;
+  line-height: 4.5mm;
+}
+
+.official-small-business .official-option {
+  display: inline-flex;
+  margin-left: 2mm;
+  vertical-align: middle;
+}
+
+.official-request-box {
+  padding: 1.5mm 2mm 2mm;
+  border: 1.2px solid #111;
+}
+
+.official-request-box .official-option {
+  min-height: 5mm;
+  line-height: 4mm;
+}
+
+.official-other-option b {
+  display: inline;
+  font-weight: 500;
+}
+
+.official-alteration-title {
+  margin: 3mm 0 1.5mm;
+}
+
+.official-commitment {
+  padding: 2mm;
+  border: 1.2px solid #111;
+  font-size: 9pt;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: justify;
+}
+
+.official-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 45mm;
+  border: 1.2px solid #111;
+}
+
+.official-signature-meta,
+.official-signature-people {
+  padding: 2mm 3mm;
+}
+
+.official-signature-meta {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 1.2mm;
+  border-right: 1.2px solid #111;
+}
+
+.official-signature-people {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 5mm;
+}
+
+.official-signature-people div {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  text-align: center;
+  font-size: 7.5pt;
+}
+
+.official-signature-line {
+  display: block;
+  min-height: 10mm;
+  margin-bottom: 1.5mm;
+  border-bottom: 1px solid #111;
+}
+
 .toast {
   position: fixed;
   right: 22px;
@@ -1154,6 +1388,11 @@ table select:disabled {
 }
 
 @media print {
+  @page anexo-i {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
   body {
     background: white;
   }
@@ -1181,6 +1420,39 @@ table select:disabled {
 
   .print-sheet {
     max-width: none;
+  }
+
+  .official-form {
+    margin: 0;
+  }
+
+  .official-page {
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    break-after: page;
+    page-break-after: always;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .official-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .official-section-title,
+  .official-grid,
+  .official-classification,
+  .official-request-box,
+  .official-commitment,
+  .official-signatures {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 

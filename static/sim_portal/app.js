@@ -146,6 +146,7 @@ const initialState = {
   application: {
     actType: "Registro de estabelecimento",
     otherAct: "",
+    cadastralChangeType: "",
     commitment: "Declaro que as informacoes prestadas sao verdadeiras e que o estabelecimento se compromete a cumprir a legislacao sanitaria aplicavel aos produtos de origem animal.",
   },
   establishment: {
@@ -1112,6 +1113,14 @@ function renderEstablishment() {
             "Outro ato"
           ], { owner: "establishment" })}
           ${input("application.otherAct", "Outro ato / complemento", { owner: "establishment" })}
+          ${selectInput("application.cadastralChangeType", "Tipo de alteracao cadastral (se aplicavel)", [
+            "",
+            "Alteracao de CNPJ",
+            "Alteracao de razao social",
+            "Classificacao do estabelecimento",
+            "Alteracao do endereco",
+            "Alteracao de responsavel tecnico"
+          ], { owner: "establishment" })}
           ${input("application.commitment", "Termo de compromisso", { textarea: true, full: true, owner: "establishment" })}
         </div>
       </div>
@@ -2027,23 +2036,180 @@ function masterRows() {
   `;
 }
 
+function officialValue(value) {
+  const text = String(value || "").trim();
+  return text ? escapeHtml(text) : "&nbsp;";
+}
+
+function comparableOfficialValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function officialOption(label, selectedValue, aliases = []) {
+  const selected = comparableOfficialValue(selectedValue);
+  const candidates = [label, ...aliases].map(comparableOfficialValue);
+  const checked = Boolean(selected) && candidates.some((candidate) => (
+    selected === candidate || selected.includes(candidate) || candidate.includes(selected)
+  ));
+  return `
+    <div class="official-option">
+      <span class="official-checkbox" aria-hidden="true">${checked ? "X" : ""}</span>
+      <span>${label}</span>
+    </div>
+  `;
+}
+
+function officialClassificationGroup(title, options) {
+  return `
+    <div class="official-classification-group">
+      <div>${title}</div>
+      ${options.map((option) => officialOption(option, state.establishment.classification)).join("")}
+    </div>
+  `;
+}
+
+function cnaeParts() {
+  const raw = String(state.establishment.cnae || "").trim();
+  const match = raw.match(/^([0-9.\-/]+)\s*-\s*(.+)$/);
+  if (!match) return { code: raw, activity: raw };
+  return { code: match[1], activity: match[2] };
+}
+
 function printAnexoI() {
-  return `${printHeader("ANEXO I - SOLICITACAO DE ATOS DO S.I.M.")}
-    <table class="print-table">${masterRows()}
-      <tr><th>Natureza juridica / porte</th><td>${state.establishment.legalNature || "&nbsp;"}</td><th>Agroindustria de pequeno porte?</th><td>${state.establishment.smallBusiness || "Nao"}</td></tr>
-      <tr><th>Responsavel legal</th><td>${state.legalResponsible.name}</td><th>CPF</th><td>${state.legalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>Responsavel tecnico - RT</th><td>${state.technicalResponsible.name || "&nbsp;"}</td><th>CPF</th><td>${state.technicalResponsible.cpf || "&nbsp;"}</td></tr>
-      <tr><th>N. de inscricao do RT no conselho de classe/UF</th><td colspan="3">${state.technicalResponsible.council || "&nbsp;"}</td></tr>
-      <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
-      <tr><th>Tipo de solicitacao</th><td colspan="3">${state.application.actType}${state.application.otherAct ? ` - ${state.application.otherAct}` : ""}</td></tr>
-      <tr><th>Termo de compromisso</th><td colspan="3">${state.application.commitment}</td></tr>
-    </table>
-    <table class="print-table sign-meta">
-      <tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr>
-      <tr><th>Nome do autuante</th><td>&nbsp;</td><th>Matricula</th><td>&nbsp;</td></tr>
-    </table>
-    <div class="signature"><div>Assinatura do proprietario ou responsavel legal</div><div>Assinatura do responsavel tecnico</div></div>
-  </div>`;
+  const cnae = cnaeParts();
+  const actType = state.application.actType || "";
+  const cadastralChange = state.application.cadastralChangeType || (
+    comparableOfficialValue(actType).includes("alteracao cadastral")
+      ? state.application.otherAct
+      : ""
+  );
+  const otherAct = comparableOfficialValue(actType).includes("outro")
+    ? state.application.otherAct
+    : "";
+  return `
+    <div class="official-form official-anexo-i">
+      <section class="official-page official-anexo-i-page official-anexo-i-page-one">
+        <header class="official-form-header">
+          <div class="official-annex-label">ANEXO I</div>
+          <img src="./assets/brasao-orlandia.png" alt="Brasao de Orlandia">
+          <div class="official-government-lines">
+            <strong>PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA-SP</strong>
+            <strong>SECRETARIA MUNICIPAL DE DESENVOLVIMENTO ECON&Ocirc;MICO E TURISMO</strong>
+            <strong>SERVI&Ccedil;O DE INSPE&Ccedil;&Atilde;O MUNICIPAL</strong>
+          </div>
+          <div class="official-form-name">SOLICITA&Ccedil;&Atilde;O DE ATOS DO S.I.M.</div>
+        </header>
+
+        <h3 class="official-section-title">1. INFORMA&Ccedil;&Otilde;ES DO ESTABELECIMENTO</h3>
+        <div class="official-grid official-establishment-grid">
+          <div class="official-field official-span-12 official-field-tall"><span>NOME (Raz&atilde;o Social/Pessoa F&iacute;sica):</span><b>${officialValue(state.establishment.legalName)}</b></div>
+          <div class="official-field official-span-6"><span>CNPJ/CPF:</span><b>${officialValue(state.establishment.cnpj)}</b></div>
+          <div class="official-field official-span-6"><span>MATRIZ/EIRELI/ME/EPP:</span><b>${officialValue(state.establishment.legalNature)}</b></div>
+          <div class="official-field official-span-6"><span>IDENTIFICA&Ccedil;&Atilde;O DA ATIVIDADE ECON&Ocirc;MICA:</span><b>${officialValue(cnae.activity)}</b></div>
+          <div class="official-field official-span-6"><span>C&Oacute;DIGO DA ATIVIDADE CNAE:</span><b>${officialValue(cnae.code)}</b></div>
+          <div class="official-field official-span-12 official-field-address"><span>ENDERE&Ccedil;O:</span><b>${officialValue(state.establishment.address)}</b></div>
+          <div class="official-field official-span-4"><span>BAIRRO:</span><b>${officialValue(state.establishment.district)}</b></div>
+          <div class="official-field official-span-3"><span>MUNIC&Iacute;PIO:</span><b>${officialValue(state.establishment.city || "Orlandia")}</b></div>
+          <div class="official-field official-span-1"><span>UF:</span><b>${officialValue(state.establishment.state || "SP")}</b></div>
+          <div class="official-field official-span-4"><span>CEP:</span><b>${officialValue(state.establishment.zip || "14.620-000")}</b></div>
+          <div class="official-field official-span-8"><span>E-MAIL:</span><b>${officialValue(state.establishment.email)}</b></div>
+          <div class="official-field official-span-4"><span>TELEFONE:</span><b>${officialValue(state.establishment.phone)}</b></div>
+        </div>
+
+        <h3 class="official-section-title">2. INFORMA&Ccedil;&Otilde;ES DO RESPONS&Aacute;VEL</h3>
+        <div class="official-grid">
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL LEGAL:</span><b>${officialValue(state.legalResponsible.name)}</b></div>
+          <div class="official-field official-span-5"><span>CPF:</span><b>${officialValue(state.legalResponsible.cpf)}</b></div>
+          <div class="official-field official-span-7"><span>RESPONS&Aacute;VEL T&Eacute;CNICO - RT:</span><b>${officialValue(state.technicalResponsible.name)}</b></div>
+          <div class="official-field official-span-5"><span>CPF:</span><b>${officialValue(state.technicalResponsible.cpf)}</b></div>
+          <div class="official-field official-span-12 official-field-tall"><span>N&ordm; DE INSCRI&Ccedil;&Atilde;O DO RT NO CONSELHO DE CLASSE PROFISSIONAL/UF:</span><b>${officialValue(state.technicalResponsible.council)}</b></div>
+        </div>
+
+        <h3 class="official-section-title">3. CLASSIFICA&Ccedil;&Atilde;O DO ESTABELECIMENTO</h3>
+        <div class="official-classification">
+          ${officialClassificationGroup("Estabelecimento de carne e derivados", [
+            "Unidade de beneficiamento de carne e produtos carneos",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de pescado e derivados", [
+            "Unidade de beneficiamento de pescado e produtos de pescado",
+            "Estacao depuradora de moluscos bivalves",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de ovos e derivados", [
+            "Granja avicola",
+            "Unidade de beneficiamento de ovos e derivados",
+          ])}
+          ${officialClassificationGroup("Estabelecimento de leite e derivados", [
+            "Granja leiteira",
+            "Posto de refrigeracao",
+            "Unidade de beneficiamento de leite e derivados",
+            "Queijaria",
+          ])}
+        </div>
+      </section>
+
+      <section class="official-page official-anexo-i-page official-anexo-i-page-two">
+        <div class="official-classification official-classification-continuation">
+          ${officialClassificationGroup("Estabelecimento de produtos de abelha e derivados", [
+            "Unidade de beneficiamento de produtos de abelhas",
+          ])}
+          <div class="official-small-business">
+            <strong>Aten&ccedil;&atilde;o:</strong> O estabelecimento se enquadra nas especifica&ccedil;&otilde;es de
+            &ldquo;Estabelecimento Agroindustrial de Pequeno Porte?&rdquo;
+            ${officialOption("Sim", state.establishment.smallBusiness)}
+            ${officialOption("Nao", state.establishment.smallBusiness)}
+          </div>
+        </div>
+
+        <h3 class="official-section-title">4. TIPO DE SOLICITA&Ccedil;&Atilde;O</h3>
+        <div class="official-request-box">
+          ${officialOption("Novo registro de estabelecimento", actType, ["Registro de estabelecimento"])}
+          ${officialOption("Renovacao do titulo de registro", actType)}
+          ${officialOption("Reforma ou ampliacao", actType)}
+          ${officialOption("Transferencia cadastral", actType)}
+          ${officialOption("Solicitacao de vistoria in loco", actType)}
+          ${officialOption("Paralisacao das atividades", actType)}
+          ${officialOption("Reinicio das atividades", actType)}
+          ${officialOption("Cancelamento do registro", actType)}
+          <div class="official-option official-other-option">
+            <span class="official-checkbox" aria-hidden="true">${otherAct ? "X" : ""}</span>
+            <span>Outro (especificar): <b>${officialValue(otherAct)}</b></span>
+          </div>
+          <div class="official-alteration-title">Altera&ccedil;&atilde;o cadastral (assinalar uma das op&ccedil;&otilde;es abaixo):</div>
+          ${officialOption("Alteracao de CNPJ", cadastralChange)}
+          ${officialOption("Alteracao de razao social", cadastralChange)}
+          ${officialOption("Classificacao do estabelecimento", cadastralChange)}
+          ${officialOption("Alteracao do endereco", cadastralChange)}
+          ${officialOption("Alteracao de responsavel tecnico", cadastralChange)}
+        </div>
+
+        <h3 class="official-section-title">5. TERMO DE COMPROMISSO</h3>
+        <div class="official-commitment">
+          DECLARAMOS CUMPRIR A LEGISLA&Ccedil;&Atilde;O VIGENTE E ASSUMIMOS, CIVIL E CRIMINALMENTE,
+          INTEIRA RESPONSABILIDADE PELA VERACIDADE DAS INFORMA&Ccedil;&Otilde;ES PRESTADAS NESTE
+          FORMUL&Aacute;RIO E SEUS ANEXOS.
+        </div>
+
+        <h3 class="official-section-title">6. ASSINATURAS DOS RESPONS&Aacute;VEIS</h3>
+        <div class="official-signatures">
+          <div class="official-signature-meta">
+            <strong>LOCAL E DATA</strong>
+            <div class="official-signature-line"></div>
+            <div>NOME DO AUTUANTE:</div>
+            <div>MATR&Iacute;CULA:</div>
+          </div>
+          <div class="official-signature-people">
+            <div><span class="official-signature-line"></span>ASSINATURA DO PROPRIET&Aacute;RIO OU RESPONS&Aacute;VEL LEGAL</div>
+            <div><span class="official-signature-line"></span>ASSINATURA DO RESPONS&Aacute;VEL T&Eacute;CNICO</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function printMtse() {

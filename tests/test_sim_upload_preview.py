@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from io import BytesIO
+from pathlib import Path
 
 from blueprints.sim import (
     PROCESS_ID,
@@ -135,3 +136,15 @@ def test_product_docx_contains_official_anexo_iv_sections():
         "Manter refrigerado",
     ):
         assert expected in text
+
+
+def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert script.count('<section class="official-page official-anexo-i-page') == 2
+    assert "official-field span-" not in script
+    assert ".official-span-6 { grid-column: span 6; }" in styles
+    assert "@page anexo-i" in styles
+    assert "page-break-after: always" in styles
