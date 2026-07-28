@@ -239,6 +239,7 @@ SIM_TABLES = [
 SEED_STATE = {
     "role": "establishment",
     "view": "dashboard",
+    "formFocus": "",
     "printForm": "anexoI",
     "protocol": {
         "id": PROCESS_ID,
@@ -264,7 +265,7 @@ SEED_STATE = {
     "legalResponsible": {"name": "Jose Francisco Guerra"},
     "documents": [
         {"id": "requerimento-assinado", "item": "01", "group": "art11", "name": "Requerimento ao SIM solicitando o registro", "hint": "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "anexoI"},
-        {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", "required": True, "status": "Pendente", "file": "", "internal": False},
+        {"id": "plantas-baixas", "item": "02", "group": "art11", "name": "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", "hint": "Preencha o Anexo III no portal. As plantas devem ser elaboradas por profissional habilitado e enviadas junto do memorial assinado.", "required": True, "status": "Pendente", "file": "", "internal": False, "formView": "establishment", "printForm": "construction"},
         {"id": "contrato-social-cnpj", "item": "03", "group": "art11", "name": "Contrato ou estatuto social registrado, quando houver firma constituida", "hint": "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "cpf-cnpj", "item": "04", "group": "art11", "name": "CPF ou CNPJ, conforme o caso", "hint": "Cartao CNPJ: emissao gratuita no site da Receita Federal.", "link": "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", "required": True, "status": "Pendente", "file": "", "internal": False},
         {"id": "inscricao-estadual", "item": "05", "group": "art11", "name": "Inscricao estadual/ICMS ou inscricao de Produtor Rural", "hint": "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", "link": "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", "required": True, "status": "Pendente", "file": "", "internal": False},

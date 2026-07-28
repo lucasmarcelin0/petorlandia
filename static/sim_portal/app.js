@@ -60,6 +60,49 @@ const DOCUMENT_SOURCES = {
     { text: "Resolucao CFMV 1.562/2023, art. 3", url: CFMV1562_URL },
   ],
 };
+const OFFICIAL_ANNEXES = [
+  {
+    documentId: "requerimento-assinado",
+    number: "I",
+    title: "Requerimento ao SIM - solicitacao de atos",
+    destination: "Depois de assinado, envie neste mesmo item. Corresponde ao item 01 do checklist.",
+    view: "establishment",
+    formFocus: "anexo-i",
+    printForm: "anexoI",
+    page: 14,
+  },
+  {
+    documentId: "memorial-economico-sanitario",
+    number: "II",
+    title: "Memorial Tecnico-Sanitario do Estabelecimento - MTSE",
+    destination: "A versao final assinada atende o item 09 do checklist. Nao e necessario enviar outro rascunho.",
+    view: "establishment",
+    formFocus: "anexo-ii",
+    printForm: "mtse",
+    page: 16,
+  },
+  {
+    documentId: "plantas-baixas",
+    number: "III",
+    title: "Memorial descritivo de construcao ou reforma",
+    destination: "Envie o memorial assinado junto das plantas exigidas no item 02 do checklist.",
+    view: "establishment",
+    formFocus: "anexo-iii",
+    printForm: "construction",
+    page: 22,
+  },
+  {
+    documentId: "rotulos-produtos",
+    number: "IV",
+    title: "Registro de rotulo e/ou produto de origem animal",
+    destination: "Obrigatorio para cada produto: preencha um formulario e anexe o respectivo rotulo.",
+    view: "products",
+    formFocus: "",
+    printForm: "",
+    page: 24,
+  },
+];
+const OFFICIAL_ANNEX_BY_DOCUMENT = new Map(OFFICIAL_ANNEXES.map((annex) => [annex.documentId, annex]));
 
 // Opcoes/estruturas do Anexo IV. Declaradas antes de initialState porque a
 // semente do produto ja usa defaultNutritionRows() no carregamento do modulo.
@@ -90,6 +133,7 @@ function defaultNutritionRows() {
 const initialState = {
   role: "establishment",
   view: "dashboard",
+  formFocus: "",
   printForm: "anexoI",
   protocol: {
     id: "SIM-ORL-2026-0001",
@@ -237,7 +281,7 @@ const initialState = {
   },
   documents: [
     { id: "requerimento-assinado", item: "01", group: "art11", name: "Requerimento ao SIM solicitando o registro", hint: "Preencha a ficha no portal, imprima o Anexo I, assine no gov.br e envie aqui.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "anexoI" },
-    { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Elaborados por profissional habilitado; o Anexo III do portal ajuda no memorial descritivo.", required: true, status: "Pendente", file: "" },
+    { id: "plantas-baixas", item: "02", group: "art11", name: "Planta baixa ou croqui das construcoes/reformas + memorial descritivo da construcao", hint: "Preencha o Anexo III no portal. As plantas devem ser elaboradas por profissional habilitado e enviadas junto do memorial assinado.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "construction" },
     { id: "contrato-social-cnpj", item: "03", group: "art11", name: "Contrato ou estatuto social registrado, quando houver firma constituida", hint: "Junta Comercial (empresas) ou cartorio; MEI usa o Certificado CCMEI.", required: true, status: "Pendente", file: "" },
     { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
     { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", link: "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", required: true, status: "Pendente", file: "" },
@@ -528,10 +572,16 @@ function setRole(role) {
   render();
 }
 
-function setView(view) {
+function setView(view, formFocus = "") {
   state.view = view;
+  if (view === "establishment") state.formFocus = formFocus;
   saveState();
   render();
+  if (view === "establishment" && formFocus) {
+    requestAnimationFrame(() => {
+      document.querySelector(`#form-${formFocus}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 function update(path, value) {
@@ -816,8 +866,8 @@ function journeySteps() {
   const submitted = ["review", "approved"].includes(state.protocol.status);
   const approved = state.protocol.status === "approved";
   return [
-    { id: "ficha", title: "Preencher a ficha do estabelecimento", desc: "Dados da empresa, responsavel legal e responsavel tecnico. Preencha uma vez; o portal reaproveita em todos os formularios.", done: fichaDone, view: "establishment", cta: "Abrir ficha" },
-    { id: "mtse", title: "Descrever a producao (Memorial/MTSE)", desc: "Atividades, capacidade, agua, higiene e fluxo. Atende o item 09 do checklist.", done: mtseDone, view: "establishment", cta: "Preencher memorial" },
+    { id: "ficha", title: "Preencher a ficha do estabelecimento", desc: "Dados da empresa, responsavel legal e responsavel tecnico. Preencha uma vez; o portal reaproveita em todos os formularios.", done: fichaDone, view: "establishment", formFocus: "anexo-i", cta: "Abrir ficha" },
+    { id: "mtse", title: "Descrever a producao (Memorial/MTSE)", desc: "Atividades, capacidade, agua, higiene e fluxo. Atende o item 09 do checklist.", done: mtseDone, view: "establishment", formFocus: "anexo-ii", cta: "Preencher memorial" },
     { id: "produtos", title: "Cadastrar os produtos", desc: "Um Anexo IV por produto: nome, composicao, rotulo e conservacao.", done: productsDone, view: "products", cta: "Cadastrar produtos" },
     { id: "assinar", title: "Imprimir e assinar no gov.br", desc: "Imprima os formularios em PDF e assine de graca com sua conta gov.br, sem cartorio.", done: signDone, view: "print", cta: "Ver formularios" },
     { id: "documentos", title: `Enviar os documentos (${docs.sent} de ${docs.total})`, desc: "Checklist oficial do art. 11 da LC 84/2024. Cada item diz onde conseguir o documento.", done: docsDone, view: "documents", cta: "Enviar documentos" },
@@ -849,7 +899,7 @@ function renderJourney() {
           </div>
           ${current.action === "submit"
             ? `<button class="btn primary" data-action="submit">${icon("send")}${current.cta}</button>`
-            : `<button class="btn primary" data-view="${current.view}">${current.cta}</button>`}
+            : `<button class="btn primary" data-view="${current.view}" ${current.formFocus ? `data-form-focus="${current.formFocus}"` : ""}>${current.cta}</button>`}
         </div>
       ` : `
         <div class="next-action done">
@@ -858,7 +908,7 @@ function renderJourney() {
       `}
       <div class="journey-steps">
         ${steps.map((step, index) => `
-          <button class="journey-step ${step.done ? "done" : ""} ${current && step.id === current.id ? "current" : ""}" data-view="${step.view}">
+          <button class="journey-step ${step.done ? "done" : ""} ${current && step.id === current.id ? "current" : ""}" data-view="${step.view}" ${step.formFocus ? `data-form-focus="${step.formFocus}"` : ""}>
             <span class="step-badge">${step.done ? "&#10003;" : index + 1}</span>
             <span class="step-text"><strong>${step.title}</strong><span>${step.desc}</span></span>
           </button>
@@ -973,9 +1023,23 @@ function nextActions() {
 }
 
 function renderEstablishment() {
+  const focusedAnnex = OFFICIAL_ANNEXES.find((annex) => annex.formFocus === state.formFocus);
+  const focusedBanner = focusedAnnex ? `
+    <div class="span-12 annex-focus-banner">
+      <div>
+        <strong>Preenchendo o Anexo ${focusedAnnex.number}</strong>
+        <span>${focusedAnnex.title}. Os dados comuns da empresa sao reaproveitados automaticamente.</span>
+      </div>
+      <div class="doc-quick-actions">
+        ${focusedAnnex.printForm ? `<button class="btn primary" data-view="print" data-print-form="${focusedAnnex.printForm}">${icon("print")}Gerar para assinar</button>` : ""}
+        <a class="btn" href="${DEC5374_URL}#page=${focusedAnnex.page}" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
+      </div>
+    </div>
+  ` : "";
   return `
     <div class="grid">
-      <div class="span-8 panel">
+      ${focusedBanner}
+      <div class="span-8 panel form-anchor" id="form-anexo-i">
         <div class="panel-header"><div><h2>Anexo I - Informacoes do estabelecimento</h2><p class="muted">Base do requerimento, MTSE, produto/rotulo e atos fiscais.</p></div><span class="status ${statusClass(state.protocol.status)}">${statusLabel()}</span></div>
         <div class="form-grid">
           ${input("establishment.legalName", "Razao social / nome", { owner: "establishment" })}
@@ -1051,7 +1115,7 @@ function renderEstablishment() {
           ${input("application.commitment", "Termo de compromisso", { textarea: true, full: true, owner: "establishment" })}
         </div>
       </div>
-      <div class="span-12 panel">
+      <div class="span-12 panel form-anchor" id="form-anexo-ii">
         <div class="panel-header"><h2>Anexo II - Memorial tecnico-sanitario do estabelecimento</h2></div>
         <div class="form-grid">
           ${input("production.activities", "Lista de atividades gerais", { textarea: true, owner: "establishment" })}
@@ -1076,7 +1140,7 @@ function renderEstablishment() {
           ${input("production.qualityControls", "Controles de qualidade e autocontroles", { textarea: true, full: true, owner: "establishment" })}
         </div>
       </div>
-      <div class="span-12 panel">
+      <div class="span-12 panel form-anchor" id="form-anexo-iii">
         <div class="panel-header"><h2>Anexo III - Memorial descritivo de construcao/reforma</h2></div>
         <div class="form-grid">
           ${input("construction.requestReason", "Motivo da obra/reforma/ampliacao", { owner: "establishment" })}
@@ -1095,7 +1159,13 @@ function renderEstablishment() {
 function renderDocuments() {
   const visibleDocuments = (state.documents || []).filter((doc) => doc.id !== "mtse");
   const art11 = visibleDocuments.filter((doc) => doc.group === "art11");
-  const anexos = visibleDocuments.filter((doc) => !doc.internal && doc.group !== "art11");
+  const officialDocumentIds = new Set(OFFICIAL_ANNEXES.map((annex) => annex.documentId));
+  const officialDocuments = OFFICIAL_ANNEXES.map((annex) => ({
+    annex,
+    doc: visibleDocuments.find((doc) => doc.id === annex.documentId),
+  })).filter((item) => item.doc);
+  const remainingArt11 = art11.filter((doc) => !officialDocumentIds.has(doc.id));
+  const anexos = visibleDocuments.filter((doc) => !doc.internal && doc.group !== "art11" && !officialDocumentIds.has(doc.id));
   const internalDocs = visibleDocuments.filter((doc) => doc.internal);
   const progress = art11Progress();
   const percent = progress.total ? Math.round((progress.sent / progress.total) * 100) : 0;
@@ -1107,21 +1177,33 @@ function renderDocuments() {
       </div>
       <div class="span-12 banner-warn legal-why">
         <strong>Por que pedimos estes documentos?</strong>
-        Cada item abaixo mostra a fonte legal usada pelo SIM. O objetivo e cumprir a LC 84/2024 e os formularios oficiais do Decreto 5.374/2024, sem criar exigencia duplicada para o produtor.
+        Cada item abaixo mostra a fonte legal usada pelo SIM. O objetivo e cumprir a LC 84/2024 e os formularios oficiais do Decreto 5.374/2024, sem criar exigencia duplicada para o produtor. Itens com * sao obrigatorios; os condicionais informam quando se aplicam.
       </div>
+      <section class="span-12 official-annex-section">
+        <div class="official-annex-header">
+          <div>
+            <h2>Formularios oficiais, na ordem</h2>
+            <p>Comece por aqui. Preencha no portal, confira com o modelo publicado pela Prefeitura, gere o documento, assine e envie no proprio item.</p>
+          </div>
+          <span class="annex-law">Decreto 5.374/2024</span>
+        </div>
+        <div class="official-annex-list">
+          ${officialDocuments.map(({ annex, doc }) => documentCard(doc, { annex })).join("")}
+        </div>
+      </section>
       <div class="span-8 panel">
         <div class="panel-header">
-          <div><h2>Checklist do registro - art. 11 da LC 84/2024</h2>
-          <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : "Envie cada documento em PDF. Cada item explica o que e e onde conseguir."}</p></div>
+          <div><h2>Demais documentos do registro</h2>
+          <p class="muted">${state.role === "sim" ? "O SIM confere documentos e define o status." : `Os Anexos I, II e III ja estao acima. Complete aqui os demais documentos do art. 11 da LC 84/2024. O progresso ${progress.sent}/${progress.total} considera todos os obrigatorios.`}</p></div>
           <span class="journey-score">${progress.sent}/${progress.total}</span>
         </div>
         <div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div>
         <div class="document-group">
-          ${art11.map(documentCard).join("")}
+          ${remainingArt11.map(documentCard).join("")}
         </div>
         <div class="document-group">
-          <h3>Anexos complementares e produtos</h3>
-          <p class="muted small">Estes itens nao duplicam o checklist principal. Eles comprovam assinaturas, responsabilidade tecnica, fluxo produtivo ou registro de produto quando aplicavel.</p>
+          <h3>Comprovantes complementares</h3>
+          <p class="muted small">Estes itens nao duplicam os formularios oficiais. Eles confirmam a identidade de quem assina e a responsabilidade tecnica informada no processo.</p>
           ${anexos.map(documentCard).join("")}
         </div>
         ${state.role === "sim" ? `
@@ -1160,36 +1242,37 @@ function renderDocuments() {
   `;
 }
 
-function documentCard(doc) {
+function documentCard(doc, options = {}) {
   const versions = doc.versions || [];
   const canUpload = backendAvailable && (state.role === "sim" || !doc.internal);
   const isTaxWaived = doc.id === "comprovante-taxa";
   const isProductForm = doc.id === "rotulos-produtos";
+  const annex = options.annex || OFFICIAL_ANNEX_BY_DOCUMENT.get(doc.id);
   const products = isProductForm ? visibleProducts() : [];
   const received = docReceived(doc);
   return `
-    <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
+    <section class="document-card ${annex ? "official-annex" : ""} ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
       <div class="document-main">
         <div>
-          <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
-          ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
+          ${annex ? `
+            <div class="official-annex-title">
+              <span class="official-annex-number">${received ? "&#10003;" : `ANEXO ${annex.number}`}</span>
+              <strong>${annex.title}${doc.required ? " *" : ""}</strong>
+            </div>
+          ` : `<strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
+            ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>`}
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
+          ${annex ? `<span class="annex-destination">${annex.destination}</span>` : ""}
           ${documentSourceHtml(doc)}
           ${documentExtraHtml(doc)}
           <span>${isProductForm
             ? `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}; cada produto gera seu proprio Anexo IV.`
             : documentSummary(doc)}</span>
-          ${isProductForm ? `
+          ${annex ? `
             <div class="doc-quick-actions">
-              <button class="btn primary" data-view="products">${icon("file")}Preencher Anexo IV</button>
-              <a class="btn" href="${DEC5374_URL}#page=24" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
-            </div>
-          ` : ""}
-          ${doc.formView && state.role === "establishment" ? `
-            <div class="doc-quick-actions">
-              <button class="btn" data-view="${doc.formView}">${icon("file")}Preencher ficha</button>
-              <button class="btn" data-view="print" data-print-form="${doc.printForm}">${icon("print")}Imprimir formulario</button>
-              <a class="btn" href="${GOVBR_SIGNER_URL}" target="_blank" rel="noreferrer">${icon("shield")}Assinar no gov.br</a>
+              <button class="btn primary" data-view="${annex.view}" ${annex.formFocus ? `data-form-focus="${annex.formFocus}"` : ""}>${icon("file")}Preencher Anexo ${annex.number}</button>
+              <a class="btn" href="${DEC5374_URL}#page=${annex.page}" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
+              ${annex.printForm ? `<button class="btn" data-view="print" data-print-form="${annex.printForm}">${icon("print")}Gerar para assinar</button>` : ""}
             </div>
           ` : ""}
         </div>
@@ -2120,7 +2203,9 @@ function render() {
 
 function bindEvents() {
   document.querySelectorAll("[data-role]").forEach((el) => el.addEventListener("click", () => setRole(el.dataset.role)));
-  document.querySelectorAll("[data-view]").forEach((el) => el.addEventListener("click", () => setView(el.dataset.view)));
+  document.querySelectorAll("[data-view]").forEach((el) => {
+    el.addEventListener("click", () => setView(el.dataset.view, el.dataset.formFocus || ""));
+  });
   document.querySelectorAll("[data-path]").forEach((el) => {
     el.addEventListener("input", () => update(el.dataset.path, el.value));
   });

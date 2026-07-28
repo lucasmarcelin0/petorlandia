@@ -1396,6 +1396,118 @@ table select:disabled {
   font-size: .8rem;
 }
 
+.official-annex-section {
+  display: grid;
+  gap: 12px;
+}
+
+.official-annex-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px;
+}
+
+.official-annex-header h2,
+.official-annex-header p {
+  margin: 0;
+}
+
+.official-annex-header p {
+  max-width: 780px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .85rem;
+  line-height: 1.45;
+}
+
+.annex-law {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.official-annex-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-card.official-annex {
+  background: white;
+  border-left: 4px solid var(--green);
+}
+
+.document-card.official-annex > .document-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.document-card.official-annex > .document-main > .upload-controls {
+  justify-content: flex-start;
+}
+
+.document-card.official-annex input[type="file"] {
+  width: 360px;
+  max-width: 100%;
+}
+
+.official-annex-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.document-main .official-annex-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 74px;
+  min-height: 26px;
+  margin: 0;
+  border: 1px solid #9bc4b8;
+  border-radius: 5px;
+  background: #eef7f4;
+  color: #17463d;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.official-annex-title strong {
+  font-size: .96rem;
+}
+
+.document-main .annex-destination {
+  color: #3f514c;
+  font-weight: 600;
+}
+
+.annex-focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border: 1px solid #b7d9d0;
+  border-left: 4px solid var(--green);
+  background: #eef7f4;
+}
+
+.annex-focus-banner strong,
+.annex-focus-banner span {
+  display: block;
+}
+
+.annex-focus-banner span {
+  margin-top: 3px;
+  color: #47615b;
+  font-size: .8rem;
+}
+
+.form-anchor {
+  scroll-margin-top: 96px;
+}
+
 .signer-steps {
   margin: 0 0 12px 18px;
   padding: 0;
@@ -1405,3 +1517,20 @@ table select:disabled {
 }
 
 .signer-steps li { margin-bottom: 6px; }
+
+@media (max-width: 960px) {
+  .official-annex-header,
+  .official-annex-title,
+  .annex-focus-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .document-main .official-annex-number {
+    flex-basis: auto;
+  }
+
+  .form-anchor {
+    scroll-margin-top: 190px;
+  }
+}
