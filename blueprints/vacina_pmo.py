@@ -97,11 +97,7 @@ def vacina_pmo():
     import app as app_module
 
     today = app_module.datetime.now(BR_TZ).date().isoformat()
-    return render_template(
-        'vacina_pmo/dashboard.html',
-        today=today,
-        dias_impressao=_vacina_pmo_listas_impressao(),
-    )
+    return render_template('vacina_pmo/dashboard.html', today=today)
 
 
 @bp.route('/vacina-pmo/agenda')

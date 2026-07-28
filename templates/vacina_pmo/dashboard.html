@@ -825,69 +825,6 @@
     color: #64748b;
     font-size: 0.85rem;
   }
-
-  .pmo-print-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 10px;
-  }
-
-  .pmo-print-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid #e2e8f0;
-    border-left: 5px solid #0ea5e9;
-    border-radius: 10px;
-    background: #fff;
-    color: inherit;
-    text-decoration: none;
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
-  }
-
-  .pmo-print-card[hidden] {
-    display: none;
-  }
-
-  .pmo-print-card.is-tarde {
-    border-left-color: #f59e0b;
-  }
-
-  .pmo-print-card:hover,
-  .pmo-print-card:focus-visible {
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
-    transform: translateY(-1px);
-    color: inherit;
-  }
-
-  .pmo-print-card__date {
-    font-weight: 600;
-    line-height: 1.2;
-  }
-
-  .pmo-print-card__meta {
-    font-size: 0.8rem;
-    color: #64748b;
-  }
-
-  .pmo-print-card__badge {
-    margin-left: auto;
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: #e0f2fe;
-    color: #0369a1;
-    white-space: nowrap;
-  }
-
-  .pmo-print-card.is-tarde .pmo-print-card__badge {
-    background: #fef3c7;
-    color: #b45309;
-  }
 </style>
 {% endblock %}
 
@@ -950,47 +887,6 @@
     </div>
   </div>
 
-  <section class="pmo-panel mb-3">
-    <div class="pmo-panel__header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-      <div>
-        <h2 class="h5 mb-0">Listas para impressão</h2>
-        <div class="text-muted small">Escolha o dia e o turno para abrir a lista do aplicador pronta para imprimir.</div>
-      </div>
-      {% if dias_impressao %}
-      <div class="d-flex align-items-center gap-2">
-        <label for="pmo-print-search" class="visually-hidden">Buscar dia</label>
-        <input type="search" id="pmo-print-search" class="form-control form-control-sm"
-               placeholder="Buscar dia (ex.: 06/10)" autocomplete="off" style="max-width: 220px;">
-      </div>
-      {% endif %}
-    </div>
-    <div class="pmo-panel__body">
-      {% if dias_impressao %}
-      <div class="pmo-print-grid" id="pmo-print-grid">
-        {% for d in dias_impressao %}
-        <a class="pmo-print-card {{ 'is-tarde' if d.turno == 'tarde' else 'is-manha' }}"
-           data-search="{{ d.sheet_title }} {{ d.weekday }} {{ d.shift_label }}"
-           href="{{ url_for('vacina_pmo_imprimir', date_str=d.date_str, turno=d.turno) }}">
-          <i class="fas fa-print text-muted"></i>
-          <span>
-            <span class="pmo-print-card__date d-block">{{ d.sheet_title }}</span>
-            <span class="pmo-print-card__meta">
-              {% if d.weekday %}{{ d.weekday }} &middot; {% endif %}{{ d.tutores }} tutores &middot; {{ d.caes + d.gatos }} animais
-            </span>
-          </span>
-          <span class="pmo-print-card__badge">{{ d.shift_label }}</span>
-        </a>
-        {% endfor %}
-      </div>
-      <div class="text-muted small mt-2" id="pmo-print-empty" hidden>Nenhum dia encontrado com esse filtro.</div>
-      {% else %}
-      <div class="text-muted small">
-        Nenhuma lista salva ainda. Selecione uma aba acima e clique em <strong>Sincronizar aba</strong> para gerar a lista de impressão.
-      </div>
-      {% endif %}
-    </div>
-  </section>
-
   <div class="row g-3 mb-3">
     <div class="col-6 col-lg-3">
       <div class="pmo-stat">
@@ -1046,6 +942,31 @@
                 <option value="remarcar">Remarcar</option>
                 <option value="recusou">Recusou</option>
               </select>
+            </div>
+            <div class="btn-group" role="group">
+              <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" id="pmo-print-menu"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                title="Imprimir a lista do aplicador da aba selecionada">
+                <i class="fas fa-print me-1"></i> Imprimir
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="pmo-print-menu">
+                <li>
+                  <a class="dropdown-item disabled" id="pmo-print-morning" href="#"
+                     data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='manha') }}">
+                    Manhã
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item disabled" id="pmo-print-afternoon" href="#"
+                     data-base-url="{{ url_for('vacina_pmo_imprimir', date_str='__DATE__', turno='tarde') }}">
+                    Tarde
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <span class="dropdown-item-text small text-muted" id="pmo-print-hint">Selecione uma aba com data.</span>
+                </li>
+              </ul>
             </div>
             <button type="button" class="btn btn-sm btn-outline-primary" id="pmo-open-next-route">
               <i class="fas fa-location-arrow me-1"></i> Próximo
@@ -1661,7 +1582,44 @@
   const sheetEl = document.getElementById('pmo-sheet');
   const sheetSearchEl = document.getElementById('pmo-sheet-search');
   const sheetInfoEl = document.getElementById('pmo-sheet-info');
+  const printMorningEl = document.getElementById('pmo-print-morning');
+  const printAfternoonEl = document.getElementById('pmo-print-afternoon');
+  const printHintEl = document.getElementById('pmo-print-hint');
   let allSheets = [];
+
+  // A rota de impressão espera a data no formato dd-mm-aaaa (vira dd/mm/aaaa,
+  // que é o nome da aba usado como sheet_title no banco).
+  function selectedPrintDateSlug() {
+    const option = sheetEl.selectedOptions[0];
+    const isoMatch = (option?.dataset.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+
+    const title = option?.dataset.title || option?.textContent || '';
+    const titleMatch = title.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
+    if (!titleMatch) return '';
+    return [titleMatch[1].padStart(2, '0'), titleMatch[2].padStart(2, '0'), titleMatch[3]].join('-');
+  }
+
+  function updatePrintLinks() {
+    const dateSlug = selectedPrintDateSlug();
+    [printMorningEl, printAfternoonEl].forEach((link) => {
+      if (!link) return;
+      if (!dateSlug) {
+        link.href = '#';
+        link.classList.add('disabled');
+        link.setAttribute('aria-disabled', 'true');
+        return;
+      }
+      link.href = link.dataset.baseUrl.replace('__DATE__', dateSlug);
+      link.classList.remove('disabled');
+      link.removeAttribute('aria-disabled');
+    });
+    if (printHintEl) {
+      printHintEl.textContent = dateSlug
+        ? `Aba ${dateSlug.replace(/-/g, '/')}`
+        : 'Selecione uma aba com data.';
+    }
+  }
 
   // Lista sempre visível, agrupada em "Próximos dias" e "Dias anteriores".
   // Mais próximo de hoje aparece primeiro em cada grupo.
@@ -1703,6 +1661,7 @@
     sheetEl.innerHTML = html || '<option value="">Nenhuma aba encontrada</option>';
 
     if (selGid && list.some((s) => s.gid === selGid)) sheetEl.value = selGid;
+    updatePrintLinks();
   }
 
   const shiftEl = document.getElementById('pmo-shift');
@@ -2014,6 +1973,7 @@
       if (toSelect) {
         sheetEl.value = toSelect;
         localStorage.setItem('pmo_sheet_gid', toSelect);
+        updatePrintLinks();
       }
       sheetInfoEl.textContent = todaySheet
         ? `Aba de hoje selecionada: ${displayDate(today)}.`
@@ -3275,6 +3235,7 @@
   evalScopeAllBtn?.addEventListener('click', () => setEvalScope('all'));
   sheetEl.addEventListener('change', () => {
     if (sheetEl.value) localStorage.setItem('pmo_sheet_gid', sheetEl.value);
+    updatePrintLinks();
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
       ? `Data selecionada: ${displayDate(date)}. Carregando estado salvo desta aba...`
@@ -3285,21 +3246,6 @@
     sheetSearchEl.addEventListener('input', () => renderSheetOptions(sheetSearchEl.value));
   }
 
-  const printSearchEl = document.getElementById('pmo-print-search');
-  const printGridEl = document.getElementById('pmo-print-grid');
-  const printEmptyEl = document.getElementById('pmo-print-empty');
-  if (printSearchEl && printGridEl) {
-    printSearchEl.addEventListener('input', () => {
-      const term = printSearchEl.value.trim().toLowerCase();
-      let visible = 0;
-      printGridEl.querySelectorAll('.pmo-print-card').forEach((card) => {
-        const match = !term || (card.dataset.search || '').toLowerCase().includes(term);
-        card.hidden = !match;
-        if (match) visible += 1;
-      });
-      if (printEmptyEl) printEmptyEl.hidden = visible > 0;
-    });
-  }
   // Abre já na aba de hoje (a selecionada), não na última aba salva.
   loadSheets().then(() => loadSelectedSheet({ syncWhenEmpty: true }));
   render();

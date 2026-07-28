@@ -941,13 +941,42 @@ def test_vacina_pmo_dashboard_prefers_today_sheet(app, monkeypatch):
     assert "const toSelect = todaySheet?.gid ||" in body
 
 
-def test_vacina_pmo_dashboard_lists_saved_days_for_printing(app):
+def test_vacina_pmo_dashboard_exposes_print_menu(app):
+    """O botão de imprimir fica no cabeçalho da lista e segue a aba selecionada."""
     client = app.test_client()
 
     with app.app_context():
         db.drop_all()
         db.create_all()
         admin = User(name='PMO Admin', email='pmo-days@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+
+    response = client.get('/vacina-pmo')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="pmo-print-menu"' in body
+    assert '/vacina-pmo/imprimir/__DATE__/manha' in body
+    assert '/vacina-pmo/imprimir/__DATE__/tarde' in body
+    # O botão fica entre o filtro de Status e o "Próximo".
+    assert body.index('id="pmo-status-filter"') < body.index('id="pmo-print-menu"')
+    assert body.index('id="pmo-print-menu"') < body.index('id="pmo-open-next-route"')
+    # A parede de cards saiu.
+    assert 'pmo-print-card' not in body
+
+
+def test_vacina_pmo_agenda_lists_saved_days(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-agenda@test', role='admin')
         admin.set_password('x')
         db.session.add(admin)
 
@@ -971,11 +1000,10 @@ def test_vacina_pmo_dashboard_lists_saved_days_for_printing(app):
 
     login(client, admin_id)
 
-    response = client.get('/vacina-pmo')
+    response = client.get('/vacina-pmo/agenda')
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert 'Listas para impressão' in body
     assert '/vacina-pmo/imprimir/06-10-2026/manha' in body
     assert '/vacina-pmo/imprimir/06-10-2026/tarde' in body
     # Manhã aparece antes de Tarde no mesmo dia.
