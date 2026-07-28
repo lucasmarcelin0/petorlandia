@@ -1043,8 +1043,8 @@ table select:disabled {
 
 .official-anexo-i-page {
   page: anexo-i;
-  font-size: 8.5pt;
-  line-height: 1.18;
+  font-size: 10pt;
+  line-height: 1.25;
 }
 
 .official-form-header {
@@ -1126,7 +1126,7 @@ table select:disabled {
 
 .official-section-title {
   margin: 4mm 0 1.2mm;
-  font-size: 9.5pt;
+  font-size: 11pt;
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: 0;
@@ -1170,12 +1170,12 @@ table select:disabled {
 }
 
 .official-field span {
-  font-size: 7.6pt;
+  font-size: 8.5pt;
 }
 
 .official-field b {
   margin-top: 1.2mm;
-  font-size: 8.2pt;
+  font-size: 10pt;
   font-weight: 500;
 }
 
@@ -1191,7 +1191,7 @@ table select:disabled {
   outline: none;
   background: #fffbea;
   color: #111;
-  font: 500 8.2pt/1.2 Arial, Helvetica, sans-serif;
+  font: 500 10pt/1.25 Arial, Helvetica, sans-serif;
   letter-spacing: 0;
   box-sizing: border-box;
 }
@@ -1389,8 +1389,9 @@ table select:disabled {
   page: official-document;
   position: relative;
   display: block;
-  font-size: 7.2pt;
-  line-height: 1.15;
+  /* Texto de leitura em impressão: não reduzimos conteúdo para caber na folha. */
+  font-size: 9pt;
+  line-height: 1.25;
 }
 
 .official-document-page .official-form-header {
@@ -1453,28 +1454,28 @@ table select:disabled {
 
 .official-document-page .official-section-title {
   margin: 2.2mm 0 .8mm;
-  font-size: 8.1pt;
+  font-size: 10pt;
 }
 
 .official-document-page .official-subsection-title {
   margin: 1.8mm 0 .6mm;
-  font-size: 7.5pt;
+  font-size: 8.5pt;
 }
 
 .official-document-page .official-field {
-  min-height: 8.5mm;
+  min-height: 10mm;
   padding: .8mm 1mm;
 }
 
 .official-document-page .official-field span {
-  font-size: 6.5pt;
+  font-size: 7.5pt;
 }
 
 .official-document-page .official-fill-input {
-  min-height: 4.2mm;
+  min-height: 4.8mm;
   margin-top: .4mm;
   padding: .35mm .7mm;
-  font-size: 7.1pt;
+  font-size: 9.5pt;
 }
 
 .official-fill-textarea {
@@ -1585,7 +1586,7 @@ table select:disabled {
 
 .official-instruction {
   margin: .6mm 0;
-  font-size: 6.6pt;
+  font-size: 8pt;
   line-height: 1.25;
   text-align: justify;
 }
@@ -1593,7 +1594,7 @@ table select:disabled {
 .official-petition {
   padding: 2mm;
   border: 1.2px solid #111;
-  font-size: 7.2pt;
+  font-size: 9pt;
   line-height: 1.35;
   text-align: justify;
 }
@@ -1604,7 +1605,7 @@ table select:disabled {
 
 .official-table-label {
   margin: 1.2mm 0 .6mm;
-  font-size: 6.8pt;
+  font-size: 8pt;
   font-weight: 700;
 }
 
@@ -1620,7 +1621,7 @@ table select:disabled {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 6.5pt;
+  font-size: 8.5pt;
 }
 
 .official-data-table th,
@@ -1635,15 +1636,15 @@ table select:disabled {
 .official-data-table th {
   background: #f1f2f1;
   text-align: center;
-  font-size: 6.2pt;
+  font-size: 7.5pt;
 }
 
 .official-data-table .official-fill-input {
-  min-height: 4mm;
-  height: 4mm;
+  min-height: 4.8mm;
+  height: 4.8mm;
   margin: 0;
   padding: .2mm .5mm;
-  font-size: 6.7pt;
+  font-size: 8.5pt;
 }
 
 .official-compact-table th,
@@ -1657,7 +1658,7 @@ table select:disabled {
 
 .official-fixed-cell {
   background: #fafafa;
-  font-size: 6pt;
+  font-size: 7.5pt;
   font-weight: 700;
 }
 
@@ -1691,7 +1692,7 @@ table select:disabled {
   margin: 1.5mm 0 2mm;
   padding: 1.2mm 2mm;
   border: 1.2px solid #111;
-  font-size: 6.6pt;
+  font-size: 8pt;
 }
 
 .official-document-signatures {
@@ -1714,7 +1715,7 @@ table select:disabled {
   justify-content: flex-end;
   border-left: 1px solid #111;
   text-align: center;
-  font-size: 6.2pt;
+  font-size: 7.5pt;
 }
 
 .official-document-signatures > div:first-child {
@@ -1740,7 +1741,7 @@ table select:disabled {
 .official-fixed-copy {
   padding: 2.5mm;
   border: 1.2px solid #111;
-  font-size: 7.4pt;
+  font-size: 9pt;
   line-height: 1.45;
   text-align: justify;
 }
@@ -1771,7 +1772,7 @@ table select:disabled {
 
 .official-fiscal-signatures strong {
   text-align: center;
-  font-size: 6.5pt;
+  font-size: 8pt;
 }
 
 .official-fiscal-signatures label,
@@ -1779,7 +1780,7 @@ table select:disabled {
   display: flex;
   align-items: center;
   gap: 1mm;
-  font-size: 6.2pt;
+  font-size: 7.5pt;
 }
 
 .official-fiscal-signatures .official-fill-inline,
@@ -1800,7 +1801,7 @@ table select:disabled {
   margin: 2mm 0 0;
   padding: 1.5mm;
   border: 1px solid #111;
-  font-size: 6.1pt;
+  font-size: 7.5pt;
   line-height: 1.25;
 }
 
@@ -2251,7 +2252,8 @@ table select:disabled {
     border: 1.1px solid #111;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 7.1pt;
+    font-size: 9.5pt;
+    line-height: 1.3;
   }
 
   .official-continuation-page {
@@ -2266,7 +2268,7 @@ table select:disabled {
   .official-continuation-description {
     margin: 0;
     color: #444;
-    font-size: 7.5pt;
+    font-size: 9pt;
     font-weight: 700;
   }
 
@@ -2276,7 +2278,7 @@ table select:disabled {
     border: 1.1px solid #111;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 8.5pt;
+    font-size: 10pt;
     line-height: 1.45;
   }
 

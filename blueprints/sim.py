@@ -754,14 +754,17 @@ def _kv_table(doc, pairs) -> None:
             cell._tc.get_or_add_tcPr().append(shading)
         label = cells[0].paragraphs[0]
         label.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        label.paragraph_format.space_after = Pt(0)
+        label.paragraph_format.space_after = Pt(2)
         label_run = label.add_run(_s(key).upper())
         label_run.bold = True
-        label_run.font.size = Pt(7)
+        # Os rótulos ficam discretos, mas ainda legíveis em uma impressão comum.
+        label_run.font.size = Pt(9)
         response = cells[1].paragraphs[0]
-        response.paragraph_format.space_after = Pt(0)
+        response.paragraph_format.space_after = Pt(3)
         response_run = response.add_run(_s(value))
-        response_run.font.size = Pt(9)
+        # O conteúdo preenchido deve usar o tamanho padrão esperado em Word.
+        # As linhas expandem e o documento segue para outra página quando preciso.
+        response_run.font.size = Pt(12)
 
 
 def _docx_configure_official_form(doc, title: str) -> None:
@@ -778,7 +781,7 @@ def _docx_configure_official_form(doc, title: str) -> None:
 
     normal = doc.styles["Normal"]
     normal.font.name = "Arial"
-    normal.font.size = Pt(9)
+    normal.font.size = Pt(12)
 
     header = doc.add_table(rows=1, cols=3)
     header.style = "Table Grid"
@@ -821,7 +824,7 @@ def _docx_configure_official_form(doc, title: str) -> None:
     heading.paragraph_format.space_after = Pt(6)
     run = heading.add_run(title)
     run.bold = True
-    run.font.size = Pt(12)
+    run.font.size = Pt(14)
 
 
 def _docx_section(doc, title: str) -> None:
@@ -832,7 +835,7 @@ def _docx_section(doc, title: str) -> None:
     paragraph.paragraph_format.space_after = Pt(3)
     run = paragraph.add_run(title.upper())
     run.bold = True
-    run.font.size = Pt(10)
+    run.font.size = Pt(12)
 
 
 def _visible_products(state: dict) -> list:

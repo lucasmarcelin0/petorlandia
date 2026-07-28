@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -140,6 +141,7 @@ def test_product_docx_contains_official_anexo_iv_sections():
     assert "PREFEITURA MUNICIPAL DE ORLÂNDIA" in text
     assert "1. IDENTIFICAÇÃO DO ESTABELECIMENTO" in text
     assert "5. PROCESSO PRODUTIVO E CONTROLES" in text
+    assert document.styles["Normal"].font.size.pt == 12
 
 
 def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
@@ -200,6 +202,16 @@ def test_print_forms_expand_on_screen_and_create_safe_colored_pdf_continuations(
     assert ".digital-pdf .official-service-masthead" in styles
     assert "body.digital-pdf .official-service-masthead img" in styles
     assert ".official-continuation-text" in styles
+
+
+def test_printable_forms_use_legible_type_instead_of_shrinking_filled_content():
+    project_root = Path(__file__).resolve().parents[1]
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "font: 500 10pt/1.25 Arial, Helvetica, sans-serif;" in styles
+    assert ".official-document-page .official-fill-input" in styles
+    assert "font-size: 9.5pt;" in styles
+    assert re.search(r"\.official-continuation-text\s*\{[^}]*font-size:\s*10pt;", styles, re.DOTALL)
 
 
 def test_screen_editing_uses_a_distinct_comfortable_layout_from_printing():
