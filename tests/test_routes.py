@@ -1054,49 +1054,6 @@ def test_vacina_pmo_imprimir_marca_linha_duplicada(app):
     assert 'repete o nº 1' in response.get_data(as_text=True)
 
 
-def test_vacina_pmo_agenda_lists_saved_days(app):
-    client = app.test_client()
-
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-        admin = User(name='PMO Admin', email='pmo-agenda@test', role='admin')
-        admin.set_password('x')
-        db.session.add(admin)
-
-        for shift, dogs, cats in (('Manha', 3, 1), ('Tarde', 2, 0)):
-            db.session.add(
-                PmoVaccinationVisit(
-                    spreadsheet_id='sheet-pmo',
-                    sheet_gid='999',
-                    sheet_title='06/10/2026',
-                    shift=shift,
-                    source_row=1 if shift == 'Manha' else 2,
-                    tutor_name=f'Tutor {shift}',
-                    address='Rua 1',
-                    dogs=dogs,
-                    cats=cats,
-                    password=f'PMO{shift[:4].upper()}1',
-                )
-            )
-        db.session.commit()
-        admin_id = admin.id
-
-    login(client, admin_id)
-
-    response = client.get('/vacina-pmo/agenda')
-
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert '/vacina-pmo/imprimir/06-10-2026/manha' in body
-    assert '/vacina-pmo/imprimir/06-10-2026/tarde' in body
-    # Manhã aparece antes de Tarde no mesmo dia.
-    assert body.index('/vacina-pmo/imprimir/06-10-2026/manha') < body.index(
-        '/vacina-pmo/imprimir/06-10-2026/tarde'
-    )
-    assert 'Terça' in body
-
-
 def test_payment_status_updates_from_api(monkeypatch, app):
     client = app.test_client()
 
