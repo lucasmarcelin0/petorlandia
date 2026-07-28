@@ -8,6 +8,7 @@ from blueprints.sim import (
     SimProcessState,
     SimSession,
     SimUser,
+    build_form_docx,
     now_iso,
 )
 from extensions import db
@@ -85,3 +86,52 @@ def test_other_pages_remain_blocked_from_iframes(app):
     assert response.status_code == 200
     assert response.headers["X-Frame-Options"] == "DENY"
     assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_product_docx_contains_official_anexo_iv_sections():
+    state = deepcopy(SEED_STATE)
+    product = state["products"][0]
+    state["printProductId"] = product["id"]
+    product.update({
+        "labelTypes": ["Impresso", "Etiqueta"],
+        "primaryPackagingTypes": ["Plastico"],
+        "dateLotIndication": "Impressao no verso",
+        "packageQuantity": "500 g",
+        "labelingPresentation": "Rotulo colorido anexado",
+        "compositionRows": [{
+            "id": "ingredient-test",
+            "kind": "Ingrediente",
+            "ingredient": "Sal",
+            "amount": "0,01 kg",
+            "pct": "2%",
+        }],
+        "storageConditions": "Manter refrigerado",
+    })
+
+    document = build_form_docx("produto", state)
+    text = "\n".join([
+        *(paragraph.text for paragraph in document.paragraphs),
+        *(
+            cell.text
+            for table in document.tables
+            for row in table.rows
+            for cell in row.cells
+        ),
+    ])
+
+    for expected in (
+        "4. Nome do produto",
+        "5. Natureza da solicitacao",
+        "6.1 Rotulo",
+        "6.2 Embalagem primaria",
+        "7. Composicao do produto",
+        "8. Informacao nutricional",
+        "9. Processo de fabricacao",
+        "10. Processo de embalagem",
+        "11. Condicoes de armazenamento",
+        "12. Medidas de controle de qualidade",
+        "13. Transporte e expedicao",
+        "Impresso, Etiqueta",
+        "Manter refrigerado",
+    ):
+        assert expected in text

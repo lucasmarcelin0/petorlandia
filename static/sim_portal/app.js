@@ -71,6 +71,8 @@ const PRODUCT_NATURE_OPTIONS = [
   "Cancelamento de produto",
   "Cancelamento de rotulo",
 ];
+const PRODUCT_LABEL_TYPE_OPTIONS = ["Impresso", "Etiqueta", "Litografado", "Gravado em relevo"];
+const PRODUCT_PRIMARY_PACKAGE_OPTIONS = ["Plastico", "Lata", "Papel", "Embalagem natural"];
 const NUTRITION_LABELS = [
   "Valor energetico (kcal)",
   "Carboidratos (g)",
@@ -196,6 +198,13 @@ const initialState = {
       notes: "Denominacao e RTIQ precisam ser confirmados.",
       requestNature: "Registro de produto e rotulo",
       natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
       packageType: "",
       labelRegistration: "",
       labelFeatures: "",
@@ -239,7 +248,7 @@ const initialState = {
     { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
     { id: "registro-crmv", item: "11", group: "art11", name: "Registro do estabelecimento no CRMV-SP, se aplicavel", hint: "Confirme com o responsavel tecnico se a atividade exige registro no conselho.", required: false, status: "Pendente", file: "" },
     { id: "comprovante-taxa", item: "12", group: "art11", name: "Comprovante da Taxa de Inspecao Sanitaria", hint: "DISPENSADO em 2026: os servicos do art. 175-C sao prestados sem cobranca neste ano (LC 104/2026, art. 3, par. unico).", required: false, status: "Dispensado em 2026", file: "" },
-    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Envie o rotulo de cada produto direto na tela Produtos (um anexo por produto). Este item existe porque produto e rotulo tambem precisam de registro.", required: false, status: "Pendente", file: "" },
+    { id: "rotulos-produtos", group: "anexos", name: "Anexo IV - Rotulos e memoriais por produto", hint: "Clique em Preencher Anexo IV. Cadastre um formulario por produto e anexe o respectivo rotulo; os dados da empresa entram automaticamente.", required: false, status: "Pendente", file: "" },
     { id: "doc-responsavel-legal", group: "anexos", name: "Documento do responsavel legal (RG/CPF ou CNH)", hint: "Copia simples e legivel para confirmar quem assina o pedido e responde pelas declaracoes.", required: true, status: "Pendente", file: "" },
     { id: "art-responsavel-tecnico", group: "anexos", name: "ART ou contrato do responsavel tecnico", hint: "Comprova a responsabilidade tecnica informada nos formularios oficiais.", required: true, status: "Pendente", file: "" },
   ],
@@ -334,6 +343,30 @@ function normalizeState(nextState) {
     mtse.formView = "establishment";
     mtse.printForm = "mtse";
   }
+  if (!Array.isArray(nextState.products)) nextState.products = [];
+  nextState.products = nextState.products.map((product) => {
+    const normalized = {
+      natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
+      ...product,
+    };
+    if (!normalized.storageConditions && normalized.conservation) {
+      normalized.storageConditions = normalized.conservation;
+    }
+    if (!normalized.otherPrimaryPackagingType && normalized.packageType) {
+      normalized.otherPrimaryPackagingType = normalized.packageType;
+    }
+    if (!normalized.labelingPresentation && normalized.labelFeatures) {
+      normalized.labelingPresentation = normalized.labelFeatures;
+    }
+    return normalized;
+  });
   return nextState;
 }
 
@@ -1131,6 +1164,8 @@ function documentCard(doc) {
   const versions = doc.versions || [];
   const canUpload = backendAvailable && (state.role === "sim" || !doc.internal);
   const isTaxWaived = doc.id === "comprovante-taxa";
+  const isProductForm = doc.id === "rotulos-produtos";
+  const products = isProductForm ? visibleProducts() : [];
   const received = docReceived(doc);
   return `
     <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
@@ -1141,7 +1176,15 @@ function documentCard(doc) {
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
           ${documentSourceHtml(doc)}
           ${documentExtraHtml(doc)}
-          <span>${documentSummary(doc)}</span>
+          <span>${isProductForm
+            ? `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}; cada produto gera seu proprio Anexo IV.`
+            : documentSummary(doc)}</span>
+          ${isProductForm ? `
+            <div class="doc-quick-actions">
+              <button class="btn primary" data-view="products">${icon("file")}Preencher Anexo IV</button>
+              <a class="btn" href="${DEC5374_URL}#page=24" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
+            </div>
+          ` : ""}
           ${doc.formView && state.role === "establishment" ? `
             <div class="doc-quick-actions">
               <button class="btn" data-view="${doc.formView}">${icon("file")}Preencher ficha</button>
@@ -1151,15 +1194,15 @@ function documentCard(doc) {
           ` : ""}
         </div>
         <div class="upload-controls">
-          ${canUpload && !isTaxWaived ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
+          ${canUpload && !isTaxWaived && !isProductForm ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
           ${doc.uploadId ? `<button class="btn" data-open-upload="${doc.uploadId}">Abrir atual</button>` : ""}
           ${doc.uploadId ? `<a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>` : ""}
-          ${isTaxWaived && state.role !== "sim" ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
+          ${isProductForm || (isTaxWaived && state.role !== "sim") ? "" : `<select data-doc="${doc.id}" ${state.role === "sim" ? "" : "disabled"}>
             ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
           </select>`}
         </div>
       </div>
-      <div class="version-list">
+      ${isProductForm ? "" : `<div class="version-list">
         ${versions.length ? versions.map((version) => `
           <div class="version-row">
             <div>
@@ -1172,7 +1215,7 @@ function documentCard(doc) {
             </div>
           </div>
         `).join("") : `<div class="empty small">Nenhuma versao enviada.</div>`}
-      </div>
+      </div>`}
     </section>
   `;
 }
@@ -1297,7 +1340,11 @@ function renderProducts() {
     <div class="grid">
       <div class="span-12 panel">
         <div class="panel-header">
-          <div><h2>Produtos e rotulos</h2><p class="muted">Cada produto puxa automaticamente os dados da ficha mestre para o Anexo IV. Produtos aprovados ficam travados; alteracoes abrem uma nova versao.</p></div>
+          <div>
+            <h2>Anexo IV - produtos e rotulos</h2>
+            <p class="muted">Preencha um cadastro por produto. O portal inclui automaticamente os dados da empresa e monta o formulario oficial para assinatura.</p>
+            <a class="source-link" href="${DEC5374_URL}#page=24" target="_blank" rel="noreferrer">Modelo oficial - Decreto 5.374/2024, paginas 24 a 26</a>
+          </div>
           ${state.role === "establishment" ? `<button class="btn primary" data-action="add-product">Adicionar produto</button>` : ""}
         </div>
         <div class="product-list">
@@ -1353,7 +1400,7 @@ function productNatureBlock(product, locked) {
   const legacy = !selected.length && product.requestNature ? product.requestNature : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Natureza da solicitacao</label>
+      <label class="struct-label">5. Natureza da solicitacao</label>
       <div class="check-grid">
         ${PRODUCT_NATURE_OPTIONS.map((opt) => `
           <label class="check-item">
@@ -1367,24 +1414,46 @@ function productNatureBlock(product, locked) {
   `;
 }
 
+function productOptionBlock(product, field, label, options, locked) {
+  const selected = Array.isArray(product[field]) ? product[field] : [];
+  return `
+    <div class="struct-block">
+      <label class="struct-label">${label}</label>
+      <div class="check-grid">
+        ${options.map((option) => `
+          <label class="check-item">
+            <input type="checkbox" data-poption="${product.id}" data-poption-field="${field}" value="${escapeHtml(option)}" ${selected.includes(option) ? "checked" : ""} ${locked ? "disabled" : ""}>
+            <span>${option}</span>
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 // Composicao do produto: tabela dinamica (materia-prima, kg/L, %).
 function productCompositionBlock(product, locked) {
   const rows = product.compositionRows || [];
   const legacy = !rows.length && product.composition ? product.composition : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Composicao do produto</label>
+      <label class="struct-label">7. Composicao do produto</label>
       <table class="struct-table">
-        <thead><tr><th>Materia-prima / ingrediente</th><th class="num">kg ou L</th><th class="num">%</th><th></th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Materia-prima / ingrediente</th><th class="num">kg ou L</th><th class="num">%</th><th></th></tr></thead>
         <tbody>
           ${rows.length ? rows.map((row) => `
             <tr>
+              <td>
+                <select data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="kind" ${locked ? "disabled" : ""}>
+                  ${["Materia-prima", "Ingrediente"].map((kind) => `<option ${kind === (row.kind || "Materia-prima") ? "selected" : ""}>${kind}</option>`).join("")}
+                </select>
+              </td>
               <td><input data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="ingredient" value="${escapeHtml(row.ingredient || "")}" ${locked ? "disabled" : ""}></td>
               <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="amount" value="${escapeHtml(row.amount || "")}" ${locked ? "disabled" : ""}></td>
               <td><input class="num" data-pcomp="${product.id}" data-cid="${row.id}" data-cfield="pct" value="${escapeHtml(row.pct || "")}" ${locked ? "disabled" : ""}></td>
               <td>${locked ? "" : `<button class="btn danger btn-mini" data-product-action="del-comp-row" data-product-id="${product.id}" data-row-id="${row.id}">Remover</button>`}</td>
             </tr>
-          `).join("") : `<tr><td colspan="4" class="empty small">Nenhum ingrediente informado.</td></tr>`}
+          `).join("") : `<tr><td colspan="5" class="empty small">Nenhuma materia-prima ou ingrediente informado.</td></tr>`}
         </tbody>
       </table>
       ${locked ? "" : `<button class="btn btn-mini" data-product-action="add-comp-row" data-product-id="${product.id}">Adicionar ingrediente</button>`}
@@ -1399,7 +1468,7 @@ function productNutritionBlock(product, locked) {
   const legacy = product.nutrition ? product.nutrition : "";
   return `
     <div class="struct-block">
-      <label class="struct-label">Informacao nutricional</label>
+      <label class="struct-label">8. Informacao nutricional</label>
       <div class="field" style="max-width:280px">
         <label>Quantidade por porcao de<span>Estabelecimento</span></label>
         <input data-pnutport="${product.id}" value="${escapeHtml(product.nutritionPortion || "")}" placeholder="ex.: 100 g" ${locked ? "disabled" : ""}>
@@ -1433,7 +1502,7 @@ function productEditor(product, opts = {}) {
   const canDelete = state.role === "establishment" && !opts.readOnlyHistory && product.status !== "Aprovado";
   const metaSummary = [
     product.brand && `Marca: ${escapeHtml(product.brand)}`,
-    product.conservation && `Conservacao: ${escapeHtml(product.conservation)}`,
+    (product.storageConditions || product.conservation) && `Armazenamento: ${escapeHtml(product.storageConditions || product.conservation)}`,
     product.labelUploadId ? "Rotulo enviado" : "Rotulo pendente",
     product.submittedAt ? `Enviado em ${formatDate(product.submittedAt)}` : null,
   ].filter(Boolean).join(" &middot; ");
@@ -1447,26 +1516,45 @@ function productEditor(product, opts = {}) {
       ${product.status === "Aprovado" ? `<p class="small muted">Aprovado em ${formatDate(product.approvedAt)} por ${product.approvedBy || "SIM"}. Este produto esta travado para edicao.</p>` : ""}
       ${product.status === "Correcoes solicitadas" && product.simNote ? `<p class="small" style="color:#b45309"><strong>Correcoes pedidas pelo SIM:</strong> ${escapeHtml(product.simNote)}</p>` : ""}
       ${opts.readOnlyHistory ? `<p class="small muted">Substituido por uma versao mais recente em ${formatDate(product.supersededAt)}.</p>` : ""}
-      ${productLabelCard(product, locked)}
-      ${productNatureBlock(product, locked)}
-      <div class="form-grid">
-        ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
-        ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
-        ${productField(product, "labelRegistration", "N. registro de rotulo", { readOnlyHistory: locked })}
-        ${productField(product, "conservation", "Condicoes de conservacao", { readOnlyHistory: locked })}
-        ${productField(product, "packageType", "Tipo de embalagem", { readOnlyHistory: locked })}
-        ${productField(product, "labelFeatures", "Caracteristicas do rotulo e da embalagem", { textarea: true, full: true, readOnlyHistory: locked })}
+      <div class="official-form-note">
+        <strong>Dados do estabelecimento ja preenchidos</strong>
+        <span>Razao social, endereco, CNPJ, inscricao estadual e responsavel legal vem automaticamente da ficha mestre.</span>
       </div>
-      ${productCompositionBlock(product, locked)}
-      ${productNutritionBlock(product, locked)}
-      <div class="form-grid">
-        ${productField(product, "manufacturingProcess", "Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "packagingProcess", "Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "storageConditions", "Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "notes", "Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
-        ${productField(product, "marketTransport", "Transporte e expedicao ao mercado consumidor", { textarea: true, full: true, readOnlyHistory: locked })}
+      <div class="product-section">
+        <h4>4. Identificacao do produto</h4>
+        <div class="form-grid">
+          ${productField(product, "name", "Nome do produto", { readOnlyHistory: locked })}
+          ${productField(product, "brand", "Marca", { readOnlyHistory: locked })}
+          ${productField(product, "labelRegistration", "N. registro de rotulo", { readOnlyHistory: locked })}
+        </div>
+      </div>
+      <div class="product-section">${productNatureBlock(product, locked)}</div>
+      <div class="product-section">
+        <h4>6. Caracteristicas do rotulo e da embalagem</h4>
+        ${productOptionBlock(product, "labelTypes", "6.1 Rotulo", PRODUCT_LABEL_TYPE_OPTIONS, locked)}
+        ${productOptionBlock(product, "primaryPackagingTypes", "6.2 Embalagem primaria", PRODUCT_PRIMARY_PACKAGE_OPTIONS, locked)}
+        <div class="form-grid">
+          ${productField(product, "otherLabelType", "Outro tipo de rotulo", { readOnlyHistory: locked })}
+          ${productField(product, "otherPrimaryPackagingType", "Outro tipo de embalagem primaria", { readOnlyHistory: locked })}
+          ${productField(product, "dateLotIndication", "Indicacao da data de fabricacao, validade e lote", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "packageQuantity", "Quantidade de produto por embalagem", { readOnlyHistory: locked })}
+          ${productField(product, "labelingPresentation", "Apresentacao das informacoes de rotulagem", { textarea: true, full: true, readOnlyHistory: locked })}
+        </div>
+        ${productLabelCard(product, locked)}
+      </div>
+      <div class="product-section">${productCompositionBlock(product, locked)}</div>
+      <div class="product-section">${productNutritionBlock(product, locked)}</div>
+      <div class="product-section">
+        <div class="form-grid">
+          ${productField(product, "manufacturingProcess", "9. Processo de fabricacao", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "packagingProcess", "10. Processo de embalagem", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "storageConditions", "11. Condicoes de armazenamento", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "notes", "12. Medidas de controle de qualidade", { textarea: true, readOnlyHistory: locked })}
+          ${productField(product, "marketTransport", "13. Transporte e expedicao ao mercado consumidor", { textarea: true, full: true, readOnlyHistory: locked })}
+        </div>
       </div>
       <div class="product-actions">
+        <button class="btn" data-product-action="print" data-product-id="${product.id}">${icon("print")}Gerar Anexo IV</button>
         ${canSubmit ? `<button class="btn primary" data-product-action="submit" data-product-id="${product.id}">Enviar produto para analise</button>` : ""}
         ${canCancel ? `<button class="btn" data-product-action="cancel-submit" data-product-id="${product.id}">Cancelar envio e editar</button>` : ""}
         ${canReview ? `
@@ -1937,42 +2025,47 @@ function printProduct() {
   const natureText = (product.natureOptions && product.natureOptions.length)
     ? product.natureOptions.join(", ")
     : (product.requestNature || "&nbsp;");
+  const labelTypes = [...(product.labelTypes || []), product.otherLabelType].filter(Boolean).join(", ") || "&nbsp;";
+  const packageTypes = [...(product.primaryPackagingTypes || []), product.otherPrimaryPackagingType || product.packageType].filter(Boolean).join(", ") || "&nbsp;";
   const compRows = product.compositionRows || [];
   const nutRows = product.nutritionRows || [];
-  const hasNut = Boolean(product.nutritionPortion) || nutRows.some((row) => row.qty || row.pct);
   const compBlock = compRows.length
     ? `<table class="print-table">
-        <tr><th colspan="3">Composicao do produto</th></tr>
-        <tr><th>Materia-prima / ingrediente</th><th>kg ou L</th><th>%</th></tr>
-        ${compRows.map((row) => `<tr><td>${escapeHtml(row.ingredient || "") || "&nbsp;"}</td><td>${escapeHtml(row.amount || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
+        <tr><th colspan="4">7. Composicao do produto</th></tr>
+        <tr><th>Tipo</th><th>Materia-prima / ingrediente</th><th>kg ou L</th><th>%</th></tr>
+        ${compRows.map((row) => `<tr><td>${escapeHtml(row.kind || "Materia-prima")}</td><td>${escapeHtml(row.ingredient || "") || "&nbsp;"}</td><td>${escapeHtml(row.amount || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
       </table>`
-    : `<table class="print-table"><tr><th>Composicao do produto</th><td colspan="2">${product.composition || "&nbsp;"}</td></tr></table>`;
-  const nutBlock = hasNut
-    ? `<table class="print-table">
-        <tr><th colspan="3">Informacao nutricional - porcao de ${escapeHtml(product.nutritionPortion || "") || "&nbsp;"}</th></tr>
-        <tr><th>Nutriente</th><th>Quantidade</th><th>% VD</th></tr>
-        ${nutRows.map((row) => `<tr><td>${row.label}</td><td>${escapeHtml(row.qty || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
-      </table>`
-    : (product.nutrition ? `<table class="print-table"><tr><th>Informacao nutricional</th><td>${product.nutrition}</td></tr></table>` : "");
+    : `<table class="print-table"><tr><th>7. Composicao do produto</th><td colspan="3">${product.composition || "&nbsp;"}</td></tr></table>`;
+  const printableNutRows = nutRows.length
+    ? nutRows
+    : [{ label: product.nutrition || "Informacao nutricional", qty: "", pct: "" }];
+  const nutBlock = `<table class="print-table">
+    <tr><th colspan="3">8. Informacao nutricional - porcao de ${escapeHtml(product.nutritionPortion || "") || "&nbsp;"}</th></tr>
+    <tr><th>Nutriente</th><th>Quantidade</th><th>% VD</th></tr>
+    ${printableNutRows.map((row) => `<tr><td>${escapeHtml(row.label || "") || "&nbsp;"}</td><td>${escapeHtml(row.qty || "") || "&nbsp;"}</td><td>${escapeHtml(row.pct || "") || "&nbsp;"}</td></tr>`).join("")}
+  </table>`;
   return `${picker}${printHeader("ANEXO IV - REGISTRO DE ROTULO E/OU PRODUTO DE ORIGEM ANIMAL")}
     <p class="petition">Senhor Diretor da Divisao de Agronegocios, o estabelecimento abaixo qualificado, atraves do seu representante legal e do seu responsavel tecnico, requer o atendimento da solicitacao especificada neste documento.</p>
     <table class="print-table">${masterRows()}
       <tr><th>Classificacao do estabelecimento</th><td colspan="3">${state.establishment.classification}</td></tr>
       <tr><th>SIM do estabelecimento</th><td>${state.establishment.simNumber}</td><th>Responsavel legal</th><td>${state.legalResponsible.name}</td></tr>
-      <tr><th>Natureza da solicitacao</th><td colspan="3">${natureText}</td></tr>
-      <tr><th>Nome do produto</th><td>${product.name}</td><th>Marca</th><td>${product.brand}</td></tr>
-      <tr><th>N. registro de rotulo</th><td>${product.labelRegistration || "&nbsp;"}</td><th>Conservacao</th><td>${product.conservation || "&nbsp;"}</td></tr>
-      <tr><th>Embalagem</th><td colspan="3">${product.packageType || "&nbsp;"}</td></tr>
-      <tr><th>Caracteristicas do rotulo/embalagem</th><td colspan="3">${product.labelFeatures || "&nbsp;"}</td></tr>
+      <tr><th>4. Nome do produto</th><td>${product.name}</td><th>Marca</th><td>${product.brand}</td></tr>
+      <tr><th>N. registro de rotulo</th><td colspan="3">${product.labelRegistration || "&nbsp;"}</td></tr>
+      <tr><th>5. Natureza da solicitacao</th><td colspan="3">${natureText}</td></tr>
+      <tr><th>6.1 Rotulo</th><td colspan="3">${labelTypes}</td></tr>
+      <tr><th>6.2 Embalagem primaria</th><td colspan="3">${packageTypes}</td></tr>
+      <tr><th>Indicacao da data de fabricacao, validade e lote</th><td colspan="3">${product.dateLotIndication || "&nbsp;"}</td></tr>
+      <tr><th>Quantidade de produto por embalagem</th><td colspan="3">${product.packageQuantity || "&nbsp;"}</td></tr>
+      <tr><th>Apresentacao das informacoes de rotulagem</th><td colspan="3">${product.labelingPresentation || product.labelFeatures || "&nbsp;"}</td></tr>
     </table>
     ${compBlock}
     ${nutBlock}
     <table class="print-table">
-      <tr><th>Processo de fabricacao</th><td colspan="3">${product.manufacturingProcess || "&nbsp;"}</td></tr>
-      <tr><th>Processo de embalagem</th><td colspan="3">${product.packagingProcess || "&nbsp;"}</td></tr>
-      <tr><th>Condicoes de armazenamento</th><td colspan="3">${product.storageConditions || "&nbsp;"}</td></tr>
-      <tr><th>Medidas de controle de qualidade</th><td colspan="3">${product.notes || state.production.qualityControls || "&nbsp;"}</td></tr>
-      <tr><th>Transporte e expedicao ao mercado consumidor</th><td colspan="3">${product.marketTransport || state.production.transport || "&nbsp;"}</td></tr>
+      <tr><th>9. Processo de fabricacao</th><td colspan="3">${product.manufacturingProcess || "&nbsp;"}</td></tr>
+      <tr><th>10. Processo de embalagem</th><td colspan="3">${product.packagingProcess || "&nbsp;"}</td></tr>
+      <tr><th>11. Condicoes de armazenamento</th><td colspan="3">${product.storageConditions || product.conservation || "&nbsp;"}</td></tr>
+      <tr><th>12. Medidas de controle de qualidade</th><td colspan="3">${product.notes || state.production.qualityControls || "&nbsp;"}</td></tr>
+      <tr><th>13. Transporte e expedicao ao mercado consumidor</th><td colspan="3">${product.marketTransport || state.production.transport || "&nbsp;"}</td></tr>
     </table>
     <table class="print-table sign-meta"><tr><th>Local e data</th><td colspan="3">&nbsp;</td></tr></table>
     <div class="signature"><div>Carimbo e assinatura do responsavel legal da firma</div><div>Carimbo e assinatura do responsavel pelo projeto</div></div>
@@ -2045,7 +2138,10 @@ function bindEvents() {
     el.addEventListener("change", updateProduct);
   });
   document.querySelectorAll("[data-pnature]").forEach((el) => el.addEventListener("change", toggleNature));
-  document.querySelectorAll("[data-pcomp]").forEach((el) => el.addEventListener("input", updateCompRow));
+  document.querySelectorAll("[data-poption]").forEach((el) => el.addEventListener("change", toggleProductOption));
+  document.querySelectorAll("[data-pcomp]").forEach((el) => {
+    el.addEventListener(el.tagName === "SELECT" ? "change" : "input", updateCompRow);
+  });
   document.querySelectorAll("[data-pnut]").forEach((el) => el.addEventListener("input", updateNutRow));
   document.querySelectorAll("[data-pnutport]").forEach((el) => el.addEventListener("input", updateNutPortion));
   document.querySelectorAll("[data-product-action]").forEach((el) => {
@@ -2252,6 +2348,20 @@ function toggleNature(event) {
   saveState();
 }
 
+function toggleProductOption(event) {
+  const product = editableProduct(event.target.dataset.poption);
+  const field = event.target.dataset.poptionField;
+  if (!product || !field) return;
+  if (!Array.isArray(product[field])) product[field] = [];
+  const value = event.target.value;
+  if (event.target.checked) {
+    if (!product[field].includes(value)) product[field].push(value);
+  } else {
+    product[field] = product[field].filter((item) => item !== value);
+  }
+  saveState();
+}
+
 function updateCompRow(event) {
   const product = editableProduct(event.target.dataset.pcomp);
   if (!product) return;
@@ -2282,6 +2392,14 @@ function handleProductAction(action, productId, rowId) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return;
   const who = state.role === "sim" ? "Lucas Marcelino Campos Ferreira" : state.establishment.tradeName;
+  if (action === "print") {
+    state.printProductId = product.id;
+    state.printForm = "produto";
+    state.view = "print";
+    saveState();
+    render();
+    return;
+  }
   if (action === "submit") {
     if (isProductLocked(product)) return;
     if (!product.labelUploadId) {
@@ -2350,7 +2468,7 @@ function handleProductAction(action, productId, rowId) {
   if (action === "add-comp-row") {
     if (isProductLocked(product) || state.role !== "establishment") return;
     if (!Array.isArray(product.compositionRows)) product.compositionRows = [];
-    product.compositionRows.push({ id: crypto.randomUUID(), ingredient: "", amount: "", pct: "" });
+    product.compositionRows.push({ id: crypto.randomUUID(), kind: "Materia-prima", ingredient: "", amount: "", pct: "" });
   }
   if (action === "del-comp-row") {
     if (isProductLocked(product) || state.role !== "establishment") return;
@@ -2493,6 +2611,13 @@ function handleAction(action) {
       notes: "",
       requestNature: "Registro de produto e rotulo",
       natureOptions: [],
+      labelTypes: [],
+      primaryPackagingTypes: [],
+      otherLabelType: "",
+      otherPrimaryPackagingType: "",
+      dateLotIndication: "",
+      packageQuantity: "",
+      labelingPresentation: "",
       packageType: "",
       labelRegistration: "",
       labelFeatures: "",
