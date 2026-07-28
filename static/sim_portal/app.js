@@ -64,7 +64,8 @@ const OFFICIAL_ANNEXES = [
   {
     documentId: "requerimento-assinado",
     number: "I",
-    title: "Requerimento ao SIM - solicitacao de atos",
+    title: "Requerimento ao SIM - solicitação de atos",
+    intro: "Preencha os dados no portal; eles serão reaproveitados nos próximos formulários.",
     destination: "Depois de assinado, envie neste mesmo item. Corresponde ao item 01 do checklist.",
     view: "establishment",
     formFocus: "anexo-i",
@@ -74,8 +75,9 @@ const OFFICIAL_ANNEXES = [
   {
     documentId: "memorial-economico-sanitario",
     number: "II",
-    title: "Memorial Tecnico-Sanitario do Estabelecimento - MTSE",
-    destination: "A versao final assinada atende o item 09 do checklist. Nao e necessario enviar outro rascunho.",
+    title: "Memorial Técnico-Sanitário do Estabelecimento - MTSE",
+    intro: "Descreva instalações, produção, higiene e controles do estabelecimento.",
+    destination: "A versão final assinada atende o item 09 do checklist. Não é necessário enviar outro rascunho.",
     view: "establishment",
     formFocus: "anexo-ii",
     printForm: "mtse",
@@ -84,7 +86,8 @@ const OFFICIAL_ANNEXES = [
   {
     documentId: "plantas-baixas",
     number: "III",
-    title: "Memorial descritivo de construcao ou reforma",
+    title: "Memorial descritivo de construção ou reforma",
+    intro: "Detalhe a construção ou reforma e reúna as plantas exigidas.",
     destination: "Envie o memorial assinado junto das plantas exigidas no item 02 do checklist.",
     view: "establishment",
     formFocus: "anexo-iii",
@@ -94,8 +97,9 @@ const OFFICIAL_ANNEXES = [
   {
     documentId: "rotulos-produtos",
     number: "IV",
-    title: "Registro de rotulo e/ou produto de origem animal",
-    destination: "Obrigatorio para cada produto: preencha um formulario e anexe o respectivo rotulo.",
+    title: "Registro de rótulo e/ou produto de origem animal",
+    intro: "Crie um formulário para cada produto e anexe o respectivo rótulo.",
+    destination: "Obrigatório para cada produto: preencha um formulário e anexe o respectivo rótulo.",
     view: "products",
     formFocus: "",
     printForm: "",
@@ -1284,8 +1288,8 @@ function renderDocuments() {
       <section class="span-12 official-annex-section">
         <div class="official-annex-header">
           <div>
-            <h2>Formularios oficiais, na ordem</h2>
-            <p>Comece por aqui. Preencha no portal, confira com o modelo publicado pela Prefeitura, gere o documento, assine e envie no proprio item.</p>
+            <h2>Formulários oficiais, na ordem</h2>
+            <p>Comece por aqui. Preencha no portal, confira com o modelo publicado pela Prefeitura, gere o documento, assine e envie no próprio item.</p>
           </div>
           <span class="annex-law">Decreto 5.374/2024</span>
         </div>
@@ -1352,31 +1356,27 @@ function documentCard(doc, options = {}) {
   const annex = options.annex || OFFICIAL_ANNEX_BY_DOCUMENT.get(doc.id);
   const products = isProductForm ? visibleProducts() : [];
   const received = docReceived(doc);
+  if (annex) {
+    return officialAnnexCard(doc, annex, {
+      versions,
+      canUpload,
+      isProductForm,
+      products,
+      received,
+    });
+  }
   return `
-    <section class="document-card ${annex ? "official-annex" : ""} ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
+    <section class="document-card ${doc.internal ? "internal" : ""} ${received ? "received" : ""}">
       <div class="document-main">
         <div>
-          ${annex ? `
-            <div class="official-annex-title">
-              <span class="official-annex-number">${received ? "&#10003;" : `ANEXO ${annex.number}`}</span>
-              <strong>${annex.title}${doc.required ? " *" : ""}</strong>
-            </div>
-          ` : `<strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
-            ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>`}
+          <strong>${doc.item ? `<span class="doc-number ${received ? "ok" : ""}">${received ? "&#10003;" : doc.item}</span>` : ""}${doc.name}${doc.required ? " *" : ""}
+            ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
-          ${annex ? `<span class="annex-destination">${annex.destination}</span>` : ""}
           ${documentSourceHtml(doc)}
           ${documentExtraHtml(doc)}
           <span>${isProductForm
             ? `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}; cada produto gera seu proprio Anexo IV.`
             : documentSummary(doc)}</span>
-          ${annex ? `
-            <div class="doc-quick-actions">
-              <button class="btn primary" data-view="${annex.view}" ${annex.formFocus ? `data-form-focus="${annex.formFocus}"` : ""}>${icon("file")}Preencher Anexo ${annex.number}</button>
-              <a class="btn" href="${DEC5374_URL}#page=${annex.page}" target="_blank" rel="noreferrer">${icon("file")}Ver modelo oficial</a>
-              ${annex.printForm ? `<button class="btn" data-view="print" data-print-form="${annex.printForm}">${icon("print")}Gerar para assinar</button>` : ""}
-            </div>
-          ` : ""}
         </div>
         <div class="upload-controls">
           ${canUpload && !isTaxWaived && !isProductForm ? `<input type="file" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">` : ""}
@@ -1402,6 +1402,150 @@ function documentCard(doc, options = {}) {
         `).join("") : `<div class="empty small">Nenhuma versao enviada.</div>`}
       </div>`}
     </section>
+  `;
+}
+
+function officialAnnexCard(doc, annex, context) {
+  const { versions, canUpload, isProductForm, products, received } = context;
+  const statusTone = received
+    ? "approved"
+    : (/corre/i.test(doc.status || "") ? "corrections" : "pending");
+  const statusText = received ? "Documento enviado" : (doc.status || "Pendente");
+  const productCount = `${products.length} ${products.length === 1 ? "produto cadastrado" : "produtos cadastrados"}`;
+  const currentFile = !isProductForm && doc.uploadId ? `
+    <div class="annex-current-file">
+      <div class="annex-current-file-icon">${icon("check")}</div>
+      <div>
+        <span>Último envio</span>
+        <strong>${escapeHtml(doc.file || "Documento enviado")}</strong>
+        <small>${escapeHtml(documentSummary(doc))}</small>
+      </div>
+      <div class="annex-file-actions">
+        <button class="btn" data-open-upload="${doc.uploadId}">Abrir</button>
+        <a class="btn" href="${downloadUrl(doc.uploadId)}" download="${escapeHtml(doc.file || "")}">Baixar</a>
+      </div>
+    </div>
+  ` : `
+    <div class="annex-current-file empty-state">
+      <div class="annex-current-file-icon">${icon(isProductForm ? "file" : "send")}</div>
+      <div>
+        <span>${isProductForm ? "Produtos e rótulos" : "Envio"}</span>
+        <strong>${isProductForm ? productCount : "Nenhum documento enviado"}</strong>
+        <small>${isProductForm ? "O Anexo IV é gerado individualmente na área de produtos." : "Depois de assinar, selecione o PDF na etapa 3."}</small>
+      </div>
+    </div>
+  `;
+  const legalDetails = `
+    <details class="annex-details">
+      <summary>
+        <span>Base legal e orientação de envio</span>
+      </summary>
+      <div class="annex-details-content">
+        <p>${annex.destination}</p>
+        ${documentSourceHtml(doc)}
+        ${documentExtraHtml(doc)}
+      </div>
+    </details>
+  `;
+  const historyDetails = isProductForm ? "" : `
+    <details class="annex-details">
+      <summary>
+        <span>Histórico de arquivos</span>
+        <span class="annex-details-count">${versions.length}</span>
+      </summary>
+      <div class="annex-history">
+        ${versions.length ? versions.map((version) => `
+          <div class="annex-history-row">
+            <div>
+              <strong>v${version.versionNo} · ${escapeHtml(version.file)}</strong>
+              <span>${escapeHtml(version.uploadedBy)} · ${formatDate(version.uploadedAt)} · ${formatBytes(version.sizeBytes)} · SHA-256 ${version.sha256.slice(0, 16)}...</span>
+            </div>
+            <div class="annex-file-actions">
+              <button class="btn" data-open-upload="${version.id}">Abrir</button>
+              <a class="btn" href="${downloadUrl(version.id)}" download="${escapeHtml(version.file || "")}">Baixar</a>
+            </div>
+          </div>
+        `).join("") : `<div class="empty small">O histórico aparecerá depois do primeiro envio.</div>`}
+      </div>
+    </details>
+  `;
+  return `
+    <article class="document-card official-annex ${received ? "received" : ""}">
+      <header class="annex-card-head">
+        <div class="annex-card-identity">
+          <span class="official-annex-number">${received ? icon("check") : annex.number}</span>
+          <div>
+            <span class="annex-card-kicker">Anexo ${annex.number}${doc.required ? " · obrigatório" : ""}</span>
+            <h3>${annex.title}</h3>
+          </div>
+        </div>
+        <div class="annex-card-status">
+          ${state.role === "sim" && !isProductForm ? `
+            <label>
+              <span>Status do SIM</span>
+              <select data-doc="${doc.id}">
+                ${["Pendente", "Em correcao", "Recebido", "Interno", "Dispensado em 2026"].map((status) => `<option ${doc.status === status ? "selected" : ""}>${status}</option>`).join("")}
+              </select>
+            </label>
+          ` : `<span class="status ${statusTone}">${statusText}</span>`}
+        </div>
+      </header>
+      <p class="annex-card-intro">${annex.intro || doc.hint || annex.destination}</p>
+
+      <div class="annex-flow" aria-label="Etapas do Anexo ${annex.number}">
+        <section class="annex-flow-step">
+          <span class="annex-step-number">1</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">${isProductForm ? "Cadastrar" : "Preparar"}</span>
+            <strong>${isProductForm ? "Cadastre cada produto" : `Preencha o Anexo ${annex.number}`}</strong>
+            <p>${isProductForm ? "Informe composição, processo e apresentação do rótulo." : "Os dados já cadastrados são reaproveitados automaticamente."}</p>
+          </div>
+          <div class="annex-step-actions">
+            <button class="btn primary" data-view="${annex.view}" ${annex.formFocus ? `data-form-focus="${annex.formFocus}"` : ""}>${icon("file")}${isProductForm ? "Abrir produtos" : "Começar preenchimento"}</button>
+            <a class="annex-text-link" href="${DEC5374_URL}#page=${annex.page}" target="_blank" rel="noreferrer">Consultar modelo oficial</a>
+          </div>
+        </section>
+
+        <section class="annex-flow-step">
+          <span class="annex-step-number">2</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">${isProductForm ? "Finalizar" : "Revisar e assinar"}</span>
+            <strong>${isProductForm ? "Gere um formulário por produto" : "Gere o documento final"}</strong>
+            <p>${isProductForm ? "Cada produto terá seu próprio Anexo IV e respectivo rótulo." : "Confira o conteúdo, salve o PDF e assine gratuitamente pelo gov.br."}</p>
+          </div>
+          <div class="annex-step-actions">
+            ${annex.printForm
+              ? `<button class="btn" data-view="print" data-print-form="${annex.printForm}">${icon("print")}Gerar para assinar</button>`
+              : `<button class="btn" data-view="${annex.view}">${icon("print")}Gerar por produto</button>`}
+          </div>
+        </section>
+
+        <section class="annex-flow-step ${received ? "is-complete" : ""}">
+          <span class="annex-step-number">${received ? icon("check") : "3"}</span>
+          <div class="annex-step-copy">
+            <span class="annex-step-kicker">${received ? "Concluído" : "Enviar"}</span>
+            <strong>${isProductForm ? "Anexe o rótulo de cada produto" : (received ? "Documento recebido" : "Envie o PDF assinado")}</strong>
+            <p>${isProductForm ? "O envio do rótulo acontece dentro do cadastro do produto." : (received ? "Você pode abrir o arquivo ou enviar uma nova versão." : "A seleção do arquivo já inicia o envio com rastreabilidade.")}</p>
+          </div>
+          <div class="annex-step-actions">
+            ${isProductForm
+              ? `<button class="btn" data-view="products">${icon("send")}Gerenciar rótulos</button>`
+              : (canUpload ? `
+                <label class="btn annex-upload-button">
+                  ${icon("send")}<span>${received ? "Enviar nova versão" : "Selecionar e enviar PDF"}</span>
+                  <input type="file" accept=".pdf,image/*" data-upload-doc="${doc.id}" aria-label="Enviar ${doc.name}">
+                </label>
+              ` : "")}
+          </div>
+        </section>
+      </div>
+
+      ${currentFile}
+      <div class="annex-card-details-grid">
+        ${legalDetails}
+        ${historyDetails}
+      </div>
+    </article>
   `;
 }
 

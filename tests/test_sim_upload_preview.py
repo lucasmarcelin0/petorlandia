@@ -224,3 +224,19 @@ def test_screen_editing_uses_a_distinct_comfortable_layout_from_printing():
     assert "border-radius: 16px;" in styles
     assert "background: linear-gradient(145deg, #ffffff 0%, #f7fbfa 100%);" in styles
     assert "@media print" in styles
+
+
+def test_official_document_cards_present_a_progressive_three_step_workflow():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'class="annex-flow" aria-label="Etapas do Anexo ${annex.number}"' in script
+    assert script.count('class="annex-flow-step') >= 3
+    assert 'class="btn annex-upload-button"' in script
+    assert '<details class="annex-details">' in script
+    assert "Base legal e orientação de envio" in script
+    assert "Histórico de arquivos" in script
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in styles
+    assert ".annex-current-file" in styles
+    assert ".annex-card-details-grid" in styles

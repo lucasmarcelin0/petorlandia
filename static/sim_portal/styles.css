@@ -2582,55 +2582,412 @@ table select:disabled {
 
 .official-annex-list {
   display: grid;
-  gap: 10px;
+  gap: 16px;
 }
 
 .document-card.official-annex {
+  padding: 0;
+  overflow: hidden;
   background: white;
-  border-left: 4px solid var(--green);
+  border: 1px solid #d9e3df;
+  border-top: 4px solid var(--green);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(23, 49, 45, .06);
 }
 
-.document-card.official-annex > .document-main {
-  grid-template-columns: minmax(0, 1fr);
+.document-card.official-annex.received {
+  border-color: #bcd8ce;
+  border-top-color: #19745e;
 }
 
-.document-card.official-annex > .document-main > .upload-controls {
-  justify-content: flex-start;
-}
-
-.document-card.official-annex input[type="file"] {
-  width: 360px;
-  max-width: 100%;
-}
-
-.official-annex-title {
+.annex-card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 14px;
 }
 
-.document-main .official-annex-number {
+.annex-card-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.annex-card-identity h3 {
+  margin: 2px 0 0;
+  color: #18312f;
+  font-size: 1.08rem;
+  line-height: 1.3;
+}
+
+.annex-card-kicker {
+  display: block;
+  color: #58706a;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.official-annex-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 74px;
-  min-height: 26px;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
   margin: 0;
-  border: 1px solid #9bc4b8;
-  border-radius: 5px;
-  background: #eef7f4;
-  color: #17463d;
-  font-size: .7rem;
+  border-radius: 12px;
+  background: #e7f3ef;
+  color: #145b4c;
+  font-size: 1rem;
   font-weight: 800;
 }
 
-.official-annex-title strong {
-  font-size: .96rem;
+.official-annex-number svg {
+  width: 20px;
+  height: 20px;
 }
 
-.document-main .annex-destination {
-  color: #3f514c;
-  font-weight: 600;
+.annex-card-status {
+  flex: 0 0 auto;
+}
+
+.annex-card-status label {
+  display: grid;
+  gap: 4px;
+}
+
+.annex-card-status label > span {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.annex-card-status select {
+  min-width: 150px;
+}
+
+.annex-card-intro {
+  max-width: 920px;
+  margin: 0;
+  padding: 0 20px 18px 78px;
+  color: #5d6d69;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+
+.annex-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid #e1e9e6;
+  border-bottom: 1px solid #e1e9e6;
+  background: #fbfcfb;
+}
+
+.annex-flow-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-rows: minmax(116px, 1fr) auto;
+  gap: 12px 10px;
+  min-width: 0;
+  padding: 18px;
+  border-right: 1px solid #e1e9e6;
+}
+
+.annex-flow-step:last-child {
+  border-right: 0;
+}
+
+.annex-flow-step.is-complete {
+  background: #f1f8f5;
+}
+
+.annex-step-number {
+  display: inline-flex;
+  grid-row: 1 / span 2;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #b5ccc5;
+  border-radius: 999px;
+  background: #fff;
+  color: #1f6255;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.annex-flow-step.is-complete .annex-step-number {
+  border-color: #1d745f;
+  background: #1d745f;
+  color: #fff;
+}
+
+.annex-step-number svg {
+  width: 15px;
+  height: 15px;
+}
+
+.annex-step-copy {
+  min-width: 0;
+}
+
+.annex-step-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #68807a;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.annex-step-copy strong {
+  display: block;
+  color: #203b36;
+  font-size: .94rem;
+  line-height: 1.35;
+}
+
+.annex-step-copy p {
+  margin: 7px 0 0;
+  color: #687773;
+  font-size: .8rem;
+  line-height: 1.45;
+}
+
+.annex-step-actions {
+  display: flex;
+  grid-column: 2;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.annex-step-actions .btn {
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.annex-text-link {
+  color: #27685b;
+  font-size: .76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.annex-text-link:hover {
+  text-decoration: underline;
+}
+
+.annex-upload-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.annex-upload-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.annex-upload-button:focus-within {
+  outline: 3px solid rgba(29, 116, 95, .2);
+  outline-offset: 2px;
+}
+
+.annex-current-file {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 20px;
+  padding: 13px 14px;
+  border: 1px solid #dce7e3;
+  border-radius: 10px;
+  background: #f8fbfa;
+}
+
+.annex-current-file.empty-state {
+  grid-template-columns: 38px minmax(0, 1fr);
+  border-style: dashed;
+  background: #fcfdfc;
+}
+
+.annex-current-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #e6f2ee;
+  color: #1d6959;
+}
+
+.annex-current-file > div:nth-child(2) {
+  min-width: 0;
+}
+
+.annex-current-file span,
+.annex-current-file strong,
+.annex-current-file small {
+  display: block;
+}
+
+.annex-current-file span {
+  color: #70807c;
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.annex-current-file strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #263e39;
+  font-size: .86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annex-current-file small {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: #788681;
+  font-size: .72rem;
+}
+
+.annex-file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.annex-file-actions .btn {
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.annex-card-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  border-top: 1px solid #e7ecea;
+}
+
+.annex-details {
+  min-width: 0;
+  border-right: 1px solid #e7ecea;
+}
+
+.annex-details:last-child {
+  border-right: 0;
+}
+
+.annex-details summary {
+  display: flex;
+  min-height: 46px;
+  padding: 0 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #435c56;
+  font-size: .78rem;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+}
+
+.annex-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.annex-details summary::after {
+  content: "+";
+  margin-left: auto;
+  color: #1d6959;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.annex-details[open] summary::after {
+  content: "−";
+}
+
+.annex-details-count {
+  margin-left: auto;
+  color: #7b8985;
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+.annex-details-count {
+  display: inline-flex;
+  min-width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edf3f1;
+}
+
+.annex-details-content,
+.annex-history {
+  padding: 0 20px 16px;
+}
+
+.annex-details-content p {
+  margin: 0 0 9px;
+  color: #5d6d69;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+
+.annex-details-content .doc-source {
+  margin: 0;
+}
+
+.annex-history {
+  display: grid;
+  gap: 8px;
+}
+
+.annex-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e1e8e5;
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.annex-history-row strong,
+.annex-history-row span {
+  display: block;
+}
+
+.annex-history-row strong {
+  color: #304943;
+  font-size: .78rem;
+}
+
+.annex-history-row span {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: #7a8783;
+  font-size: .7rem;
 }
 
 .annex-focus-banner {
@@ -2671,14 +3028,50 @@ table select:disabled {
 
 @media (max-width: 960px) {
   .official-annex-header,
-  .official-annex-title,
+  .annex-card-head,
   .annex-focus-banner {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .document-main .official-annex-number {
-    flex-basis: auto;
+  .annex-card-intro {
+    padding-left: 20px;
+  }
+
+  .annex-card-status,
+  .annex-card-status label,
+  .annex-card-status select {
+    width: 100%;
+  }
+
+  .annex-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .annex-flow-step {
+    grid-template-rows: auto auto;
+    border-right: 0;
+    border-bottom: 1px solid #e1e9e6;
+  }
+
+  .annex-flow-step:last-child {
+    border-bottom: 0;
+  }
+
+  .annex-current-file,
+  .annex-history-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .annex-current-file .annex-file-actions,
+  .annex-history-row .annex-file-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .annex-details {
+    border-right: 0;
+    border-bottom: 1px solid #e7ecea;
   }
 
   .form-anchor {
