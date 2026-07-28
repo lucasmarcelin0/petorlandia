@@ -16,6 +16,24 @@
   .pmo-step .l { font-size: .78rem; color: #6b7280; }
   .pmo-section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
   .pmo-cob-row { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; background: #fff; }
+  .pmo-cob-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #eef2ff;
+    color: #64748b;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .pmo-frascos-summary {
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    background: #fffbeb;
+    color: #78350f;
+  }
+  .pmo-frascos-details summary { cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -144,12 +162,42 @@
       </div>
     </div>
   </div>
-  {% for alert in frascos.alerts %}
-    <div class="alert alert-warning py-2 small mb-2">⚠️ {{ alert }}</div>
-  {% endfor %}
-  {% for anomaly in frascos.anomalies %}
-    <div class="alert alert-secondary py-2 small mb-2">🔎 {{ anomaly }}</div>
-  {% endfor %}
+  {% if frascos.alerts %}
+    <div class="pmo-frascos-summary p-3 mb-3 small">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <div class="fw-semibold">Ajustes pendentes no controle de frascos</div>
+          <div>
+            {{ frascos.alerts|length }} sobra(s) vencida(s) ou incompatíveis com o próximo dia.
+            Registre o descarte/perda correspondente para limpar estes avisos.
+          </div>
+        </div>
+        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+          {{ frascos.alerts|length }} aviso(s)
+        </span>
+      </div>
+      <details class="pmo-frascos-details mt-2">
+        <summary class="fw-semibold">Ver detalhes dos frascos</summary>
+        <ul class="mb-0 mt-2 ps-3">
+          {% for alert in frascos.alerts %}
+            <li>{{ alert }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    </div>
+  {% endif %}
+  {% if frascos.anomalies %}
+    <details class="alert alert-secondary py-2 small mb-3 pmo-frascos-details">
+      <summary class="fw-semibold">
+        {{ frascos.anomalies|length }} ponto(s) para revisar na planilha Controle de doses
+      </summary>
+      <ul class="mb-0 mt-2 ps-3">
+        {% for anomaly in frascos.anomalies %}
+          <li>{{ anomaly }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
   {% if frascos.days %}
   <details class="mb-4">
     <summary class="small text-muted" style="cursor:pointer;">Linha do tempo dos frascos ({{ frascos.days|length }} dias de vacinação)</summary>
@@ -347,6 +395,12 @@
 
   const SPECIES_ICON = { cao: '🐕', gato: '🐈' };
 
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    }[char]));
+  }
+
   function renderAnimal(a) {
     const s = STATUS[a.status_key] || STATUS.expired;
     const daysText = a.days_left > 0
@@ -356,18 +410,29 @@
     const barPct = Math.max(0, Math.min(100, Math.round(a.days_left / 3.65)));
     const barColor = a.status_key === 'protected' ? '#34d399' : a.status_key === 'expiring' ? '#fbbf24' : '#f87171';
     const waBtn = a.phone_wa
-      ? `<a href="https://wa.me/${a.phone_wa}?text=${encodeURIComponent(a.wa_msg)}" target="_blank" rel="noopener"
+      ? `<a href="https://wa.me/${encodeURIComponent(a.phone_wa)}?text=${encodeURIComponent(a.wa_msg)}" target="_blank" rel="noopener"
             class="btn btn-sm btn-outline-success" title="Enviar lembrete pelo WhatsApp">
            <i class="fa-brands fa-whatsapp me-1"></i>Lembrete
          </a>`
       : `<span class="text-muted small">Sem telefone</span>`;
+    const fichaBtn = a.profile_url
+      ? `<a href="${esc(a.profile_url)}" class="btn btn-sm btn-outline-primary" title="Abrir ficha do animal">
+           <i class="fa-solid fa-file-medical me-1"></i>Ficha
+         </a>`
+      : '';
+    const avatar = a.image_url
+      ? `<img src="${esc(a.image_url)}" alt="Foto de ${esc(a.animal_name)}" class="pmo-cob-avatar" loading="lazy">`
+      : `<span class="pmo-cob-avatar">${SPECIES_ICON[a.species] || '🐾'}</span>`;
 
     return `
       <div class="pmo-cob-row">
         <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-          <div>
-            <span class="fw-semibold">${SPECIES_ICON[a.species] || '🐾'} ${a.animal_name}</span>
-            <span class="text-muted small ms-1">· ${a.tutor}</span>
+          <div class="d-flex align-items-center gap-2 min-w-0">
+            ${avatar}
+            <span class="d-flex flex-column min-w-0">
+              <span class="fw-semibold">${esc(a.animal_name)}</span>
+              <span class="text-muted small">Tutor: ${esc(a.tutor)}</span>
+            </span>
           </div>
           <span class="badge rounded-pill" style="background:${s.bg};color:${s.color};">
             <i class="fa-solid ${s.icon} me-1"></i>${s.label}
@@ -378,12 +443,15 @@
         </div>
         <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
           <span class="small text-muted">
-            <i class="fa-solid fa-syringe me-1"></i>${a.vaccine_date}
+            <i class="fa-solid fa-syringe me-1"></i>${esc(a.vaccine_date)}
             &nbsp;→&nbsp;
-            <i class="fa-solid fa-calendar-xmark me-1"></i>${a.expiry_date}
-            &nbsp;·&nbsp;<strong>${daysText}</strong>
+            <i class="fa-solid fa-calendar-xmark me-1"></i>${esc(a.expiry_date)}
+            &nbsp;·&nbsp;<strong>${esc(daysText)}</strong>
           </span>
-          ${waBtn}
+          <span class="d-flex gap-2 flex-wrap">
+            ${fichaBtn}
+            ${waBtn}
+          </span>
         </div>
       </div>`;
   }

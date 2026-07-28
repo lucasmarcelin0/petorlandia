@@ -27,6 +27,17 @@
     {% endfor %}
   {% endwith %}
 
+  {% if form_errors %}
+    <div class="alert alert-warning small" role="alert">
+      <div class="fw-semibold mb-1">Confira estes pontos antes de enviar:</div>
+      <ul class="mb-0 ps-3">
+        {% for message in form_errors %}
+          <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   {% if success_token %}
   <div class="card border-0 shadow-sm rounded-4 mb-4 border-success-subtle" style="background: var(--bs-success-bg-subtle, #d1e7dd);">
     <div class="card-body p-4 d-flex gap-3 align-items-start">
@@ -49,7 +60,7 @@
   </div>
   {% endif %}
 
-  <form method="post" novalidate>
+  <form method="post" id="pmo-request-form" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Dados do tutor -->
@@ -68,7 +79,8 @@
               name="tutor"
               class="form-control"
               value="{{ form_state.tutor }}"
-              required>
+              required
+              data-pmo-required-message="Informe o nome completo do tutor.">
           </div>
           <div class="col-md-6">
             <label for="email" class="form-label small fw-semibold">E-mail</label>
@@ -98,7 +110,8 @@
               class="form-control"
               value="{{ form_state.phone }}"
               placeholder="(16) 99999-9999"
-              required>
+              required
+              data-pmo-required-message="Informe um telefone para contato.">
           </div>
           <div class="col-md-6">
             <label for="phone2" class="form-label small fw-semibold">Telefone 2 ou recado</label>
@@ -130,7 +143,8 @@
               class="form-control"
               value="{{ form_state.address_street }}"
               placeholder="Ex.: Rua 28"
-              required>
+              required
+              data-pmo-required-message="Informe a rua ou avenida.">
           </div>
           <div class="col-md-4">
             <label for="address_number" class="form-label small fw-semibold">Número</label>
@@ -161,7 +175,8 @@
               class="form-control"
               value="{{ form_state.address_neighborhood }}"
               placeholder="Ex.: Jd. São João"
-              required>
+              required
+              data-pmo-required-message="Informe o bairro.">
           </div>
           <div class="col-12">
             <div class="form-check">
@@ -226,6 +241,9 @@
             </label>
           {% endfor %}
         </div>
+        <div class="form-text text-danger d-none" data-pmo-group-error="animal_ids">
+          Selecione ao menos um animal para receber a visita.
+        </div>
         <div class="alert alert-warning small mt-3 mb-0">
           <i class="fa-solid fa-triangle-exclamation me-1"></i>
           Se o animal ja recebeu vacina antirrabica ha menos de 1 ano, em geral nao precisa receber outra dose agora. Em caso de duvida, envie a solicitacao e informe a equipe no contato de confirmacao.
@@ -265,6 +283,9 @@
               <i class="fa-solid fa-cloud-sun me-1"></i> Tarde
             </label>
           </div>
+        </div>
+        <div class="form-text text-danger d-none" data-pmo-group-error="shift">
+          Selecione Manhã ou Tarde.
         </div>
 
         <div class="mt-3">
@@ -392,7 +413,7 @@
 </div>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const form = document.querySelector('form');
+    const form = document.getElementById('pmo-request-form');
     const summary = {
       tutor: document.querySelector('[data-summary="tutor"]'),
       phone: document.querySelector('[data-summary="phone"]'),
@@ -405,6 +426,76 @@
     const selectedAnimalNames = () => Array.from(document.querySelectorAll('input[name="animal_ids"]:checked'))
       .map((input) => input.closest('label')?.querySelector('.fw-semibold')?.textContent.trim())
       .filter(Boolean);
+
+    function setFieldError(field, message) {
+      field.classList.add('is-invalid');
+      field.setAttribute('aria-invalid', 'true');
+      let feedback = field.parentElement.querySelector('.pmo-field-feedback');
+      if (!feedback) {
+        feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback d-block pmo-field-feedback';
+        field.insertAdjacentElement('afterend', feedback);
+      }
+      feedback.textContent = message;
+    }
+
+    function clearFieldError(field) {
+      field.classList.remove('is-invalid');
+      field.removeAttribute('aria-invalid');
+      field.parentElement.querySelector('.pmo-field-feedback')?.remove();
+    }
+
+    function setGroupError(name, show) {
+      const groupError = document.querySelector(`[data-pmo-group-error="${name}"]`);
+      groupError?.classList.toggle('d-none', !show);
+      document.querySelectorAll(`[name="${name}"]`).forEach((field) => {
+        field.classList.toggle('is-invalid', show);
+        const label = document.querySelector(`label[for="${field.id}"]`);
+        label?.classList.toggle('border-danger', show);
+        if (show) {
+          field.setAttribute('aria-invalid', 'true');
+        } else {
+          field.removeAttribute('aria-invalid');
+        }
+      });
+    }
+
+    function validateBeforeSubmit() {
+      let firstInvalid = null;
+      form.querySelectorAll('[required]').forEach((field) => {
+        if (field.type !== 'radio') {
+          clearFieldError(field);
+        }
+      });
+      setGroupError('animal_ids', false);
+      setGroupError('shift', false);
+
+      form.querySelectorAll('input[required]:not([type="radio"]), select[required], textarea[required]').forEach((field) => {
+        if (!field.value.trim()) {
+          setFieldError(field, field.dataset.pmoRequiredMessage || 'Preencha este campo.');
+          firstInvalid ||= field;
+        }
+      });
+
+      const hasAnimals = document.querySelectorAll('input[name="animal_ids"]:checked').length > 0;
+      if (!hasAnimals) {
+        setGroupError('animal_ids', true);
+        firstInvalid ||= document.querySelector('input[name="animal_ids"]');
+      }
+
+      const shift = document.querySelector('input[name="shift"]:checked');
+      if (!shift) {
+        setGroupError('shift', true);
+        firstInvalid ||= document.querySelector('input[name="shift"]');
+      }
+
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus({ preventScroll: true });
+        return false;
+      }
+      return true;
+    }
 
     function updateSummary() {
       const addressParts = [
@@ -428,11 +519,22 @@
     });
     form?.addEventListener('submit', (event) => {
       updateSummary();
-      const animals = selectedAnimalNames();
-      const ok = window.confirm(
-        `Confirmar solicitacao da vacina?\n\nEndereco: ${summary.address.textContent}\nAnimais: ${animals.join(', ') || '-'}\n\nSe estiver tudo certo, clique em OK.`
-      );
-      if (!ok) event.preventDefault();
+      if (!validateBeforeSubmit()) {
+        event.preventDefault();
+      }
+    });
+    form?.addEventListener('input', (event) => {
+      if (event.target.matches('[required]')) {
+        clearFieldError(event.target);
+      }
+    });
+    form?.addEventListener('change', (event) => {
+      if (event.target.name === 'animal_ids') {
+        setGroupError('animal_ids', document.querySelectorAll('input[name="animal_ids"]:checked').length === 0);
+      }
+      if (event.target.name === 'shift') {
+        setGroupError('shift', !document.querySelector('input[name="shift"]:checked'));
+      }
     });
     updateSummary();
   });

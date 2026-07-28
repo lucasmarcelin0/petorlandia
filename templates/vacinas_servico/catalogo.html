@@ -250,6 +250,9 @@
           <span><strong id="vacserv-selected-count">0</strong> vacina(s) selecionada(s)</span>
           <strong id="vacserv-selected-subtotal">R$ 0,00</strong>
         </div>
+        <div class="form-text text-danger d-none" id="vacserv-vaccine-error">
+          Escolha pelo menos uma vacina para continuar.
+        </div>
       </div>
     </div>
 
@@ -290,6 +293,9 @@
           <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
         </a>
         {% endif %}
+        <div class="form-text text-danger d-none" id="vacserv-pet-error">
+          Escolha pelo menos um pet para continuar.
+        </div>
         <div id="vacserv-total-wrap" class="vacserv-selection-summary rounded-3 p-3 mt-3 d-none">
           <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <span id="vacserv-total-breakdown" class="small"></span>
@@ -428,20 +434,44 @@
       }
     };
 
-    vacChecks.forEach(c => c.addEventListener('change', updateSummary));
-    petChecks.forEach(c => c.addEventListener('change', updateSummary));
+    const vaccineError = document.getElementById('vacserv-vaccine-error');
+    const petError = document.getElementById('vacserv-pet-error');
+
+    vacChecks.forEach(c => c.addEventListener('change', () => {
+      updateSummary();
+      if (vacChecks.some(check => check.checked)) {
+        vaccineError?.classList.add('d-none');
+        vacChecks.forEach(check => check.classList.remove('is-invalid'));
+      }
+    }));
+    petChecks.forEach(c => c.addEventListener('change', () => {
+      updateSummary();
+      if (petChecks.some(check => check.checked)) {
+        petError?.classList.add('d-none');
+        petChecks.forEach(check => check.classList.remove('is-invalid'));
+      }
+    }));
 
     form?.addEventListener('submit', event => {
+      vaccineError?.classList.add('d-none');
+      petError?.classList.add('d-none');
+      vacChecks.forEach(c => c.classList.remove('is-invalid'));
+      petChecks.forEach(c => c.classList.remove('is-invalid'));
+
       if (!vacChecks.some(c => c.checked)) {
         event.preventDefault();
+        vaccineError?.classList.remove('d-none');
+        vacChecks.forEach(c => c.classList.add('is-invalid'));
         vacChecks[0]?.focus();
-        alert('Escolha pelo menos uma vacina.');
+        vacChecks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
       if (!petChecks.some(c => c.checked)) {
         event.preventDefault();
+        petError?.classList.remove('d-none');
+        petChecks.forEach(c => c.classList.add('is-invalid'));
         petChecks[0]?.focus();
-        alert('Escolha pelo menos um pet.');
+        petChecks[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
 

@@ -4455,11 +4455,18 @@ def get_vacina_pmo_cobertura_detail() -> list[dict[str, Any]]:
         )
 
         result.append({
+            "animal_id": a.animal_id,
             "animal_name": a.name,
             "species": a.species,
             "tutor": a.visit.tutor_name,
             "phone": phone_raw or "",
             "phone_wa": phone_wa,
+            "image_url": (a.animal.image if a.animal and a.animal.image else ""),
+            "profile_url": (
+                url_for("ficha_animal", animal_id=a.animal_id)
+                if a.animal_id and has_request_context()
+                else ""
+            ),
             "vaccine_date": vdate.strftime("%d/%m/%Y"),
             "expiry_date": expiry.strftime("%d/%m/%Y"),
             "days_left": days_left,
