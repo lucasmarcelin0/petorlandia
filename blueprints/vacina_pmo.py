@@ -251,6 +251,33 @@ def _pmo_print_totals(rows):
     }
 
 
+
+def _mensagem_falha_solicitacao(exc: Exception) -> str:
+    """Traduz falhas de envio para uma mensagem que o tutor entenda.
+
+    O texto cru da Google Sheets API (HttpError 403, URL da planilha, etc.)
+    nao ajuda quem esta preenchendo o formulario e ainda expoe detalhe interno.
+    O erro completo continua no log via logger.exception.
+    """
+
+    detalhe = str(exc)
+    if "403" in detalhe or "does not have permission" in detalhe:
+        return (
+            "Não foi possível registrar sua solicitação porque a planilha do "
+            "programa está sem permissão de acesso. Já avisamos a equipe — "
+            "tente de novo mais tarde ou entre em contato."
+        )
+    if "404" in detalhe or "Requested entity was not found" in detalhe:
+        return (
+            "Não foi possível registrar sua solicitação porque a planilha do "
+            "programa não foi encontrada. Já avisamos a equipe."
+        )
+    return (
+        "Não foi possível enviar a solicitação agora. Tente novamente em "
+        "alguns minutos."
+    )
+
+
 @bp.route('/vacina-pmo')
 @login_required
 def vacina_pmo():
@@ -1120,7 +1147,7 @@ def vacina_pmo_solicitar():
                 return redirect(url_for('vacina_pmo_solicitar'))
             except Exception as exc:
                 current_app.logger.exception("Falha ao enviar solicitação Vacina PMO")
-                flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
+                flash(_mensagem_falha_solicitacao(exc), 'danger')
 
     from services.vacina_pmo_service import PMO_REQUEST_SHEET_DEFAULT_TITLE, PMO_REQUEST_SHEET_TITLE_ENV
     request_sheet_title = os.getenv(PMO_REQUEST_SHEET_TITLE_ENV, PMO_REQUEST_SHEET_DEFAULT_TITLE)
@@ -1310,7 +1337,7 @@ def castracao_pmo_solicitar():
                 return redirect(url_for('castracao_pmo_solicitar'))
             except Exception as exc:
                 current_app.logger.exception("Falha ao enviar solicitação Castração PMO")
-                flash(f'Não foi possível enviar a solicitação agora: {exc}', 'danger')
+                flash(_mensagem_falha_solicitacao(exc), 'danger')
 
     request_sheet_title = os.getenv(
         PMO_CASTRATION_REQUEST_SHEET_TITLE_ENV,
