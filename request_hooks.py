@@ -43,7 +43,11 @@ def _set_request_id_header(response):
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
-            "img-src 'self' data: https:; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
+            # jsdelivr precisa estar em font-src: o CSS do bootstrap-icons vem
+            # de la e referencia a fonte no mesmo host. Sem isso a fonte era
+            # bloqueada e todo icone `bi-*` virava um retangulo vazio.
+            "img-src 'self' data: https:; "
+            "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
             "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com; "

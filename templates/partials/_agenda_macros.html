@@ -90,6 +90,7 @@
   {% if appt.status == 'scheduled' %}
     {% if can_respond and appt.can_be_accepted %}
     <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="agenda-row__form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="status" value="accepted">
       <button type="submit" class="btn btn-sm btn-success agenda-row__primary">
         <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -165,6 +166,7 @@
       <li><hr class="dropdown-divider"></li>
       <li>
         <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="no_show">
           <button type="submit" class="dropdown-item">
             <i class="fa-solid fa-user-slash me-2" aria-hidden="true"></i>Marcar como falta
@@ -173,6 +175,7 @@
       </li>
       <li>
         <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="status" value="canceled">
           <button type="submit" class="dropdown-item text-danger">
             <i class="fa-solid fa-ban me-2" aria-hidden="true"></i>Cancelar agendamento
@@ -263,6 +266,87 @@
       {{ overflow_menu(appt, appt.animal_id, tutor.id if tutor else None) }}
     </div>
   </div>
+{% endmacro %}
+
+{#
+  Exames vivem em ExamAppointment e não têm os metadados de Appointment, mas
+  ocupam a mesma linha do tempo — então ganham uma linha equivalente.
+#}
+{% macro exam_row(exam, show_vet=False, show_date=False) %}
+  {% set animal = exam.animal %}
+  {% set tutor = animal.owner if animal else None %}
+  {% set especialista = exam.specialist.user if exam.specialist and exam.specialist.user else None %}
+  {% set pendente = exam.status == 'pending' %}
+  <div class="list-group-item agenda-row agenda-row--purple appointment-item"
+       data-appointment-id="{{ exam.id }}"
+       data-type="exame"
+       data-status="{{ exam.status }}"
+       data-status-label="{{ exam.status_display }}">
+    <div class="agenda-row__time">
+      <span class="agenda-row__time-start">{{ exam.scheduled_at|format_datetime_brazil('%H:%M') }}</span>
+      {% if show_date %}
+        <span class="agenda-row__time-duration">{{ exam.scheduled_at|format_datetime_brazil('%d/%m') }}</span>
+      {% endif %}
+    </div>
+    <div class="agenda-row__body">
+      {{ patient_line(animal, tutor) }}
+      <div class="agenda-row__tags">
+        <span class="agenda-badge agenda-badge--purple">
+          <i class="fa-solid fa-vial" aria-hidden="true"></i>{{ exam.exam_name or 'Exame' }}
+        </span>
+        <span class="agenda-badge agenda-badge--{{ 'warning' if pendente else 'success' }}">
+          <i class="fa-solid fa-{{ 'hourglass-half' if pendente else 'circle-check' }}" aria-hidden="true"></i>
+          {{ exam.status_display }}
+        </span>
+        {% if show_vet and especialista %}
+          <span class="agenda-badge agenda-badge--muted agenda-badge--soft">
+            <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>{{ especialista.name }}
+          </span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="agenda-row__actions">
+      {#
+        A aba antiga apontava para `accept_exam_request`/`decline_exam_request`,
+        que nunca existiram no app — o guard silenciava os botões e a lista
+        ficava sem ação nenhuma. A rota real é `update_exam_appointment_status`.
+      #}
+      {% if pendente %}
+        <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=exam.id) }}"
+              class="agenda-row__form" data-agenda-exam-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="confirmed">
+          <button type="submit" class="btn btn-sm btn-success agenda-row__primary">
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
+            <span class="agenda-row__primary-label">Aceitar</span>
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=exam.id) }}"
+              class="agenda-row__form" data-agenda-exam-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="canceled">
+          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Recusar exame">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </form>
+      {% elif animal %}
+        <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}"
+           class="btn btn-sm btn-outline-primary agenda-row__primary">
+          <i class="fa-solid fa-file-medical" aria-hidden="true"></i>
+          <span class="agenda-row__primary-label">Ficha</span>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{# Despacha o item da linha do tempo para a linha certa (consulta ou exame). #}
+{% macro timeline_row(item, show_vet=False, show_date=False) %}
+  {% if item.type == 'exam' %}
+    {{ exam_row(item.obj, show_vet=show_vet, show_date=show_date) }}
+  {% else %}
+    {{ appointment_row(item.obj, kind=item.kind, show_vet=show_vet, show_date=show_date) }}
+  {% endif %}
 {% endmacro %}
 
 {#

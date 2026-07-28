@@ -2528,6 +2528,8 @@ function bindCalendarSlotHandler(root) {
   root.dataset.calendarSlotHandlerBound = 'true';
 }
 
+// O histórico virou um collapse do Bootstrap para participar do grupo
+// exclusivo (ver bindExclusivePanels). Aqui só mantemos o rótulo em sincronia.
 function bindPastToggle(root) {
   const toggleButton = document.getElementById('toggle-past');
   const pastList = document.getElementById('past-list');
@@ -2535,14 +2537,49 @@ function bindPastToggle(root) {
     return;
   }
   toggleButton.dataset.vetScheduleBound = 'true';
-  toggleButton.addEventListener('click', () => {
-    pastList.classList.toggle('d-none');
-    const isHidden = pastList.classList.contains('d-none');
-    toggleButton.innerHTML = isHidden
-      ? '<i class="fas fa-chevron-down me-1"></i>Mostrar'
-      : '<i class="fas fa-chevron-up me-1"></i>Ocultar';
-    // Mantém leitores de tela em sincronia com o estado visual.
-    toggleButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+
+  const syncLabel = () => {
+    const expanded = pastList.classList.contains('show');
+    toggleButton.innerHTML = expanded
+      ? '<i class="fas fa-chevron-up me-1"></i>Ocultar'
+      : '<i class="fas fa-chevron-down me-1"></i>Mostrar';
+    toggleButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  };
+
+  pastList.addEventListener('shown.bs.collapse', syncLabel);
+  pastList.addEventListener('hidden.bs.collapse', syncLabel);
+  syncLabel();
+}
+
+// Painéis de disclosure da agenda: cada um abre e fecha no clique, e abrir um
+// fecha os demais. Sem isso dava para empilhar o painel de agendamento e o
+// histórico abertos ao mesmo tempo, enterrando a agenda.
+function bindExclusivePanels(root) {
+  if (typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+    return;
+  }
+  const panels = Array.from(document.querySelectorAll('[data-agenda-panel]'));
+  if (panels.length < 2) {
+    return;
+  }
+  panels.forEach((panel) => {
+    if (panel.dataset.exclusiveBound === 'true') {
+      return;
+    }
+    panel.dataset.exclusiveBound = 'true';
+    panel.addEventListener('show.bs.collapse', (event) => {
+      // Ignora eventos borbulhados de collapses aninhados (ex.: a grade de
+      // disponibilidade dentro do painel de agendamento).
+      if (event.target !== panel) {
+        return;
+      }
+      panels.forEach((other) => {
+        if (other === panel || !other.classList.contains('show')) {
+          return;
+        }
+        bootstrap.Collapse.getOrCreateInstance(other, { toggle: false }).hide();
+      });
+    });
   });
 }
 
@@ -2579,6 +2616,7 @@ export function initVetSchedulePage(options = {}) {
   bindExamRequesterDefaultButton(root);
   bindExamRequesterSave(root);
   bindPastToggle(root);
+  bindExclusivePanels(root);
   bindScheduleCollapse(root);
   bindScheduleModalButton(root);
   bindCalendarSlotHandler(root);

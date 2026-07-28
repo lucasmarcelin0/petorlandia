@@ -11,6 +11,7 @@ os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import re
 from datetime import datetime, timedelta
 
 import flask_login.utils as login_utils
@@ -67,6 +68,48 @@ def _fake_vet(vet_user_id, vet_id, clinic_id):
             'clinica_id': clinic_id,
         })(),
     })()
+
+
+def test_action_forms_carry_csrf_token(client, monkeypatch):
+    """Todo POST da agenda precisa do token: o app usa CSRFProtect global.
+
+    Sem o campo, os botões Confirmar / Marcar falta / Cancelar respondiam 400 e
+    pareciam simplesmente não funcionar.
+    """
+
+    with flask_app.app_context():
+        clinic, vet_user, vet, tutor, animal = _build_clinic()
+        db.session.add(Appointment(
+            id=1,
+            animal=animal,
+            tutor=tutor,
+            veterinario=vet,
+            scheduled_at=utcnow() + timedelta(hours=5),
+            status='scheduled',
+            kind='consulta',
+            clinica_id=clinic.id,
+            created_by=vet_user.id,
+        ))
+        db.session.commit()
+        ids = (vet_user.id, vet.id, clinic.id)
+
+    login(monkeypatch, _fake_vet(*ids))
+    resp = client.get('/appointments?view_as=veterinario&veterinario_id=1')
+    assert resp.status_code == 200
+    html = resp.data.decode()
+
+    # Formulários de mudança de status são escritos à mão (não são WTForms com
+    # hidden_tag), então precisam declarar o csrf_token explicitamente.
+    forms = [
+        corpo
+        for abertura, corpo in re.findall(
+            r'(<form[^>]*method="POST"[^>]*>)(.*?)</form>', html, re.S
+        )
+        if '/status' in abertura
+    ]
+    assert forms, 'a agenda deveria renderizar formulários de status'
+    sem_token = [f for f in forms if 'name="csrf_token"' not in f]
+    assert not sem_token, f'{len(sem_token)} formulário(s) de status sem csrf_token'
 
 
 def test_finalized_appointment_appears_once_in_agenda(client, monkeypatch):

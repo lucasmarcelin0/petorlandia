@@ -425,6 +425,18 @@ def appointment_confirmation(appointment_id):
     return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
 
 
+# Filtros de tipo oferecidos na barra da agenda. A chave casa com o ``kind``
+# normalizado dos itens da linha do tempo.
+AGENDA_KIND_FILTERS = {
+    'todos': 'Todos',
+    'consulta': 'Consultas',
+    'retorno': 'Retornos',
+    'exame': 'Exames',
+    'vacina': 'Vacinas',
+    'banho_tosa': 'Banho e Tosa',
+}
+
+
 def _agenda_quick_ranges(today=None):
     """Intervalos prontos para a barra de filtros da agenda.
 
@@ -1256,13 +1268,18 @@ def appointments():
             ):
                 next_appointment = appt
 
-        exam_count_in_period = (
+        # Exames entram na mesma linha do tempo das consultas: para o
+        # profissional, o que importa e a ordem em que as coisas acontecem, nao
+        # em qual tabela elas moram.
+        period_exams = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id)
             .filter(ExamAppointment.scheduled_at >= start_dt_utc)
             .filter(ExamAppointment.scheduled_at < end_dt_utc)
             .filter(ExamAppointment.status.in_(['pending', 'confirmed']))
-            .count()
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
         )
+        exam_count_in_period = len(period_exams)
 
         # Agenda cronológica do período, agrupada por dia e por profissional.
         # É a visão que estava faltando: com muitos atendimentos no mesmo dia,
@@ -1276,39 +1293,74 @@ def appointments():
             'Sábado',
             'Domingo',
         ]
-        days_by_date = {}
+        # Itens da linha do tempo, normalizados para consultas e exames
+        # conviverem na mesma lista ordenada por horário.
+        timeline_items = []
         for appt in period_appointments:
             if not appt.scheduled_at:
                 continue
-            local_dt = coerce_to_brazil_tz(appt.scheduled_at)
-            day_key = local_dt.date()
+            vet_user = getattr(getattr(appt, 'veterinario', None), 'user', None)
+            timeline_items.append({
+                'type': 'appointment',
+                'obj': appt,
+                'scheduled_at': appt.scheduled_at,
+                'kind': appt.display_kind,
+                'veterinario_id': appt.veterinario_id,
+                'vet_name': getattr(vet_user, 'name', None) or 'Sem profissional',
+            })
+        for exam in period_exams:
+            if not exam.scheduled_at:
+                continue
+            specialist_user = getattr(getattr(exam, 'specialist', None), 'user', None)
+            timeline_items.append({
+                'type': 'exam',
+                'obj': exam,
+                'scheduled_at': exam.scheduled_at,
+                'kind': 'exame',
+                'veterinario_id': exam.specialist_id,
+                'vet_name': getattr(specialist_user, 'name', None) or 'Sem profissional',
+            })
+
+        # Filtro por tipo de atendimento na própria agenda.
+        agenda_kind_filter = (request.args.get('tipo') or 'todos').strip().lower()
+        if agenda_kind_filter not in AGENDA_KIND_FILTERS:
+            agenda_kind_filter = 'todos'
+        if agenda_kind_filter != 'todos':
+            timeline_items = [
+                item for item in timeline_items if item['kind'] == agenda_kind_filter
+            ]
+
+        timeline_items.sort(key=lambda item: normalize_to_utc(item['scheduled_at']))
+
+        days_by_date = {}
+        for item in timeline_items:
+            day_key = coerce_to_brazil_tz(item['scheduled_at']).date()
             day = days_by_date.get(day_key)
             if day is None:
                 day = {
                     'date': day_key,
                     'weekday': weekday_names[day_key.weekday()],
                     'is_today': day_key == date.today(),
-                    'appointments': [],
+                    'items': [],
                     'columns': [],
                 }
                 days_by_date[day_key] = day
-            day['appointments'].append(appt)
+            day['items'].append(item)
 
         agenda_days = [days_by_date[key] for key in sorted(days_by_date)]
         for day in agenda_days:
             columns = {}
-            for appt in day['appointments']:
-                vet_id = appt.veterinario_id
+            for item in day['items']:
+                vet_id = item['veterinario_id']
                 column = columns.get(vet_id)
                 if column is None:
-                    vet_user = getattr(getattr(appt, 'veterinario', None), 'user', None)
                     column = {
                         'veterinario_id': vet_id,
-                        'name': getattr(vet_user, 'name', None) or 'Sem profissional',
-                        'appointments': [],
+                        'name': item['vet_name'],
+                        'items': [],
                     }
                     columns[vet_id] = column
-                column['appointments'].append(appt)
+                column['items'].append(item)
             day['columns'] = sorted(columns.values(), key=lambda col: col['name'].lower())
             # Colunas só ajudam quando há mais de um profissional no dia;
             # caso contrário viram uma moldura vazia em volta da lista.
@@ -1407,6 +1459,8 @@ def appointments():
             agenda_summary=agenda_summary,
             agenda_days=agenda_days,
             agenda_timeline_ids=agenda_timeline_ids,
+            agenda_kind_filters=AGENDA_KIND_FILTERS,
+            agenda_kind_filter=agenda_kind_filter,
             agenda_quick_ranges=_agenda_quick_ranges(),
             agenda_now=now_in_brazil(),
             start_dt=start_dt,

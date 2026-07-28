@@ -94,15 +94,6 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="section-exames-tab" data-bs-toggle="tab" data-bs-target="#section-exames" type="button" role="tab" aria-controls="section-exames" aria-selected="false">
-        <span class="icon-circle agenda-icon-exames"><i class="fa-solid fa-clipboard-pulse"></i></span>
-        <span class="fw-semibold">Exames</span>
-        {% if exams_pending_to_accept %}
-        <span class="agenda-count">{{ exams_pending_to_accept|length }}</span>
-        {% endif %}
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="section-animais-tab" data-bs-toggle="tab" data-bs-target="#section-animais" type="button" role="tab" aria-controls="section-animais" aria-selected="false">
         <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-paw"></i></span>
         <span class="fw-semibold">Animais</span>
@@ -127,7 +118,7 @@
     Agendar continua fora das abas, mas o painel abre NO LUGAR (empurrando o
     conteúdo para baixo) em vez de sobrepor a agenda.
   #}
-  <div class="collapse agenda-new-panel mb-4" id="newAppointmentPanel">
+  <div class="collapse agenda-new-panel mb-4" id="newAppointmentPanel" data-agenda-panel>
     <div class="card shadow-sm border-0 rounded-4">
       <div class="card-body p-4">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
@@ -318,7 +309,8 @@
       qual recorte estava ativo sem ler a barra de endereços.
     #}
     <form method="get" id="agenda-filter-form" class="agenda-filterbar mb-3">
-      {% for arg_key, arg_val in request.args.items() if arg_key not in ['start', 'end'] %}
+      {# `tipo` tem input próprio logo abaixo; repetir aqui duplicaria o campo. #}
+      {% for arg_key, arg_val in request.args.items() if arg_key not in ['start', 'end', 'tipo'] %}
       <input type="hidden" name="{{ arg_key }}" value="{{ arg_val }}">
       {% endfor %}
 
@@ -346,6 +338,21 @@
           </button>
         {% endfor %}
       </div>
+
+      {# Filtro por tipo: consultas e exames dividem a mesma agenda, então o
+         recorte por tipo mora aqui, junto do período. #}
+      <div class="agenda-filterbar__range" role="group" aria-label="Filtrar por tipo">
+        {% for key, rotulo in agenda_kind_filters.items() %}
+          {% set ativo = agenda_kind_filter == key %}
+          <button type="button"
+                  class="btn {{ 'btn-primary' if ativo else 'btn-outline-secondary' }}"
+                  data-agenda-kind="{{ key }}"
+                  aria-pressed="{{ 'true' if ativo else 'false' }}">
+            {{ rotulo }}
+          </button>
+        {% endfor %}
+      </div>
+      <input type="hidden" name="tipo" value="{{ agenda_kind_filter }}" data-agenda-kind-input>
 
       <div class="d-flex align-items-center gap-2 flex-wrap agenda-filterbar__spacer">
         <label class="visually-hidden" for="agenda-start">Data inicial</label>
@@ -426,7 +433,7 @@
           <span class="consultation-section-heading__icon"><i class="fa-solid fa-timeline"></i></span>
           <div class="flex-grow-1">
             <h5 class="mb-0">Agenda do período</h5>
-            <p class="mb-0 text-muted">Todos os atendimentos em ordem cronológica.</p>
+            <p class="mb-0 text-muted">Consultas e exames em ordem cronológica.</p>
           </div>
           {{ agenda.section_count(agenda_summary.total, 'atendimento') }}
         </div>
@@ -436,18 +443,18 @@
           atendimento ainda por vir. É o que mostra, de relance, o que já
           passou e o que ainda falta.
         #}
-        {% macro day_list(appointments, is_today, show_vet=False) %}
+        {% macro day_list(items, is_today, show_vet=False) %}
           {% set marker = namespace(rendered=False) %}
-          {% for appt in appointments %}
+          {% for item in items %}
             {% if is_today and not marker.rendered
-                  and appt.scheduled_at|format_datetime_brazil('%H:%M') > agenda_now.strftime('%H:%M') %}
+                  and item.scheduled_at|format_datetime_brazil('%H:%M') > agenda_now.strftime('%H:%M') %}
               {% set marker.rendered = True %}
               <div class="agenda-now-line" aria-label="Horário atual">
                 <span class="agenda-now-line__dot" aria-hidden="true"></span>
                 agora {{ agenda_now.strftime('%H:%M') }}
               </div>
             {% endif %}
-            {{ agenda.appointment_row(appt, show_vet=show_vet) }}
+            {{ agenda.timeline_row(item, show_vet=show_vet) }}
           {% endfor %}
           {% if is_today and not marker.rendered %}
             <div class="agenda-now-line" aria-label="Horário atual">
@@ -463,7 +470,7 @@
               <h6 class="text-uppercase small fw-bold text-muted mb-2">
                 {{ day.weekday }}, {{ day.date.strftime('%d/%m/%Y') }}
                 {% if day.is_today %}<span class="agenda-badge agenda-badge--danger ms-2">Hoje</span>{% endif %}
-                {{ agenda.section_count(day.appointments|length, 'atendimento') }}
+                {{ agenda.section_count(day['items']|length, 'atendimento') }}
               </h6>
 
               {% if day.use_columns %}
@@ -475,17 +482,17 @@
                     <div class="agenda-columns__head">
                       <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>
                       <span class="text-truncate">{{ column.name }}</span>
-                      {{ agenda.section_count(column.appointments|length, 'atendimento') }}
+                      {{ agenda.section_count(column['items']|length, 'atendimento') }}
                     </div>
                     <div class="list-group list-group-flush agenda-columns__body">
-                      {{ day_list(column.appointments, day.is_today) }}
+                      {{ day_list(column['items'], day.is_today) }}
                     </div>
                   </div>
                   {% endfor %}
                 </div>
               {% else %}
                 <div class="list-group list-group-flush border rounded-3 overflow-hidden">
-                  {{ day_list(day.appointments, day.is_today) }}
+                  {{ day_list(day['items'], day.is_today) }}
                 </div>
               {% endif %}
             </div>
@@ -507,6 +514,56 @@
         cobre (itens fora do período, exames, consultas sem agendamento).
         Assim um atendimento nunca aparece duas vezes na mesma página.
       #}
+
+      {#
+        Exames que dependem de um aceite seu. Ficam aqui, e não numa aba
+        separada, porque são pendências acionáveis da mesma agenda.
+      #}
+      {% set exam_ids_na_agenda = [] %}
+      {% for day in agenda_days %}
+        {% for item in day['items'] %}
+          {% if item.type == 'exam' %}{% set _ = exam_ids_na_agenda.append(item.obj.id) %}{% endif %}
+        {% endfor %}
+      {% endfor %}
+      {% set exames_pendentes = exams_pending_to_accept | rejectattr('id', 'in', exam_ids_na_agenda) | list %}
+      {% if exames_pendentes or exams_waiting_other_vets %}
+      <div class="card schedule-card">
+        <div class="schedule-card__header schedule-card__header--secondary">
+          <div class="schedule-card__header-icon" aria-hidden="true">
+            <i class="fa-solid fa-vial" aria-hidden="true"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h5 class="schedule-card__title mb-1">Exames</h5>
+            <p class="schedule-card__subtitle mb-0">Solicitações fora do período selecionado.</p>
+          </div>
+          {{ agenda.section_count((exames_pendentes|length) + (exams_waiting_other_vets|length), 'exame') }}
+        </div>
+        <div class="card-body p-0">
+          <div class="list-group list-group-flush">
+            {% if exames_pendentes %}
+            <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
+              <i class="fas fa-vial me-2"></i>Aguardando sua aceitação
+              {{ agenda.section_count(exames_pendentes|length, 'item', 'itens') }}
+            </div>
+            {% for exam in exames_pendentes %}
+              {{ agenda.exam_row(exam, show_date=True) }}
+            {% endfor %}
+            {% endif %}
+
+            {% if exams_waiting_other_vets %}
+            <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
+              <i class="fas fa-user-md me-2"></i>Aguardando outros profissionais
+              {{ agenda.section_count(exams_waiting_other_vets|length, 'item', 'itens') }}
+            </div>
+            {% for entry in exams_waiting_other_vets %}
+              {{ agenda.exam_row(entry.exam, show_vet=True, show_date=True) }}
+            {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Agendamentos aguardando resposta -->
       {% set pending_mine = pending_consults_for_me | rejectattr('appt.id', 'in', agenda_timeline_ids) | list %}
       {% set pending_others = pending_consults_waiting_others | rejectattr('appt.id', 'in', agenda_timeline_ids) | list %}
@@ -574,7 +631,7 @@
             <i class="fas fa-calendar-check" aria-hidden="true"></i>
           </div>
           <div class="flex-grow-1">
-            <h5 class="schedule-card__title mb-1">Exames e outros compromissos</h5>
+            <h5 class="schedule-card__title mb-1">Outros compromissos</h5>
             <p class="schedule-card__subtitle mb-0">O que não aparece na agenda cronológica acima.</p>
           </div>
           {{ agenda.section_count(upcoming_total, 'atendimento') }}
@@ -657,7 +714,9 @@
       {% endfor %}
       {% set retornos = schedule_events | selectattr('kind', 'equalto', 'retorno')
            | rejectattr('appointment.id', 'in', agenda_timeline_ids) | list %}
-      {% set exames = schedule_events | selectattr('kind', 'equalto', 'exame') | list %}
+      {# Exames confirmados ja estao na agenda cronologica acima. #}
+      {% set exames = schedule_events | selectattr('kind', 'equalto', 'exame')
+           | rejectattr('exam.id', 'in', exam_ids_na_agenda) | list %}
       {% set consultas_passadas = finalizadas + aceitas %}
       <div class="card schedule-card">
         <div class="schedule-card__header schedule-card__header--secondary">
@@ -677,12 +736,13 @@
               </p>
             </div>
           </div>
-          <button id="toggle-past" class="btn btn-sm btn-light mt-3 mt-sm-0"
+          <button id="toggle-past" class="btn btn-sm btn-light mt-3 mt-sm-0" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#past-list"
                   aria-expanded="false" aria-controls="past-list">
             <i class="fas fa-chevron-down me-1"></i>Mostrar
           </button>
         </div>
-        <div class="card-body p-0 d-none" id="past-list">
+        <div class="card-body p-0 collapse" id="past-list" data-agenda-panel>
           <div class="list-group list-group-flush">
             <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small">
               Consultas
@@ -841,93 +901,6 @@
 
     </div><!-- /d-flex flex-column gap-4 -->
   </div><!-- /tab-pane section-list -->
-
-  <!-- ===== Tab: Exames ===== -->
-  <div class="tab-pane fade" id="section-exames" role="tabpanel" aria-labelledby="section-exames-tab" tabindex="0">
-    <div class="card shadow-sm border-0 rounded-4 mb-4">
-      <div class="card-body p-4">
-        <div class="consultation-section-heading consultation-section-heading--exames mb-4">
-          <span class="consultation-section-heading__icon"><i class="fa-solid fa-clipboard-pulse"></i></span>
-          <div>
-            <h5 class="mb-0">Agenda de Exames</h5>
-            <p class="mb-0 text-muted">Exames aguardando confirmação ou execução pelo especialista.</p>
-          </div>
-        </div>
-
-        <div class="list-group list-group-flush">
-          {% if exams_pending_to_accept or exams_waiting_other_vets %}
-            {% if exams_pending_to_accept %}
-            <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
-              <i class="fas fa-vial me-2"></i>Exames aguardando sua aceitação
-            </div>
-            {% for exam in exams_pending_to_accept %}
-              {% set can_respond = exam.time_left.total_seconds() > 0 %}
-              <div class="list-group-item list-group-item-action appointment-item"
-                  data-appointment-id="{{ exam.id }}"
-                  data-type="exame"
-                  data-status="{{ exam.status }}"
-                  data-status-label="{{ exam.status_display }}">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div class="d-flex align-items-center">
-                    <div class="me-3">
-                      <i class="fas fa-vial fa-2x text-info"></i>
-                    </div>
-                    <div>
-                      <h6 class="mb-0">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ exam.animal.name if exam.animal else '—' }}</h6>
-                      <small class="text-muted">Tutor: {{ exam.animal.owner.name if exam.animal and exam.animal.owner else '—' }}</small>
-                      <div class="mt-1">
-                        {% if can_respond %}
-                          <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ exam.time_left|format_timedelta }}</small>
-                        {% else %}
-                          <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
-                        {% endif %}
-                      </div>
-                    </div>
-                  </div>
-                  {% if can_respond and 'accept_exam_request' in current_app.view_functions %}
-                  <div class="d-flex gap-2">
-                    <form method="POST" action="{{ url_for('accept_exam_request', exam_id=exam.id) }}">
-                      <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
-                    </form>
-                    <form method="POST" action="{{ url_for('decline_exam_request', exam_id=exam.id) }}">
-                      <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-times me-1"></i>Recusar</button>
-                    </form>
-                  </div>
-                  {% endif %}
-                </div>
-              </div>
-            {% endfor %}
-            {% endif %}
-
-            {% if exams_waiting_other_vets %}
-            <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
-              <i class="fas fa-user-md me-2"></i>Exames aguardando outros profissionais
-            </div>
-            {% for exam in exams_waiting_other_vets %}
-              <div class="list-group-item list-group-item-action">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 class="mb-0">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ exam.animal.name if exam.animal else '—' }}</h6>
-                    <small class="text-muted">Tutor: {{ exam.animal.owner.name if exam.animal and exam.animal.owner else '—' }}</small>
-                    <div class="mt-1">
-                      <small class="text-muted"><i class="fas fa-user-md me-1"></i>Especialista responsável: {{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '—' }}</small>
-                    </div>
-                  </div>
-                  <span class="schedule-card__tag schedule-card__tag--secondary"><i class="fas fa-hourglass-half me-1"></i>Aguardando</span>
-                </div>
-              </div>
-            {% endfor %}
-            {% endif %}
-          {% else %}
-            <div class="list-group-item text-center py-4">
-              <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
-              <p class="text-muted mb-0">Não há exames pendentes.</p>
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div><!-- /tab-pane section-exames -->
 
   <!-- ===== Tab: Horários ===== -->
   <div class="tab-pane fade" id="section-horarios" role="tabpanel" aria-labelledby="section-horarios-tab" tabindex="0">
@@ -1464,6 +1437,45 @@
       // Datas digitadas à mão não correspondem a nenhum atalho.
       [startInput, endInput].forEach((input) => {
         input.addEventListener('change', () => remember(null));
+      });
+
+      // Aceitar/recusar exame: a rota responde JSON, então enviamos por fetch
+      // e recarregamos — sem isso o profissional via o JSON cru na tela.
+      document.querySelectorAll('[data-agenda-exam-action]').forEach((examForm) => {
+        examForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const botao = examForm.querySelector('button[type="submit"]');
+          if (botao) botao.disabled = true;
+          try {
+            const resposta = await fetch(examForm.action, {
+              method: 'POST',
+              body: new FormData(examForm),
+              headers: { 'X-Requested-With': 'XMLHttpRequest' },
+              credentials: 'same-origin',
+            });
+            const dados = await resposta.json().catch(() => ({}));
+            if (!resposta.ok || dados.success === false) {
+              window.alert(dados.message || 'Não foi possível atualizar o exame.');
+              if (botao) botao.disabled = false;
+              return;
+            }
+            window.location.reload();
+          } catch (erro) {
+            window.alert('Não foi possível atualizar o exame.');
+            if (botao) botao.disabled = false;
+          }
+        });
+      });
+
+      // Filtro por tipo (consultas, exames, vacinas...) recarrega a agenda.
+      const kindInput = form.querySelector('[data-agenda-kind-input]');
+      form.querySelectorAll('[data-agenda-kind]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (kindInput) {
+            kindInput.value = button.dataset.agendaKind || 'todos';
+          }
+          submitForm();
+        });
       });
     });
   </script>
