@@ -1,0 +1,77 @@
+import json
+from io import BytesIO
+
+from blueprints.sim import (
+    PROCESS_ID,
+    SEED_STATE,
+    SimProcessState,
+    SimSession,
+    SimUser,
+    now_iso,
+)
+from extensions import db
+
+
+def test_uploaded_pdf_can_be_previewed_only_on_same_origin(app):
+    token = "sim-preview-test-token"
+    with app.app_context():
+        user = SimUser(
+            email="preview@example.test",
+            name="Estabelecimento de teste",
+            role="establishment",
+            password_hash="unused",
+            created_at=now_iso(),
+        )
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(
+            SimSession(
+                token=token,
+                user_id=user.id,
+                created_at=now_iso(),
+                last_seen_at=now_iso(),
+            )
+        )
+        db.session.add(
+            SimProcessState(
+                process_id=PROCESS_ID,
+                state_json=json.dumps(SEED_STATE),
+                updated_at=now_iso(),
+            )
+        )
+        db.session.commit()
+
+    client = app.test_client()
+    authorization = {"Authorization": f"Bearer {token}"}
+
+    upload = client.post(
+        "/sim/api/uploads",
+        headers=authorization,
+        data={
+            "docId": "certidoes-ambientais",
+            "file": (BytesIO(b"%PDF-1.4\n%%EOF"), "licenca-ambiental.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert upload.status_code == 200
+    upload_id = upload.get_json()["upload"]["id"]
+
+    preview = client.get(
+        f"/sim/api/uploads/{upload_id}",
+        headers=authorization,
+    )
+
+    assert preview.status_code == 200
+    assert preview.content_type == "application/pdf"
+    assert preview.headers["Content-Disposition"].startswith("inline;")
+    assert preview.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert preview.headers["Content-Security-Policy"] == "frame-ancestors 'self'"
+    assert preview.headers["Cache-Control"] == "private, no-store"
+
+
+def test_other_pages_remain_blocked_from_iframes(app):
+    response = app.test_client().get("/live")
+
+    assert response.status_code == 200
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]

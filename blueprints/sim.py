@@ -1048,15 +1048,19 @@ def get_blueprint():
             abort(404)
         if user.role != "sim" and row.visibility == "sim":
             return jsonify({"error": "Anexo interno do SIM."}), 403
-        # "inline" (padrao) permite pre-visualizar PDF/imagem no iframe do modal
-        # sem forcar download; o botao de baixar usa o atributo HTML "download"
-        # para salvar o arquivo mesmo com essa disposicao.
-        return send_file(
+        # A politica global bloqueia qualquer pagina dentro de iframe. Para os
+        # anexos autenticados, liberamos somente a mesma origem, permitindo a
+        # previa no modal sem tornar o arquivo incorporavel por outros sites.
+        response = send_file(
             BytesIO(row.content),
             mimetype=row.mime_type or "application/octet-stream",
             as_attachment=bool(request.args.get("download")),
             download_name=row.original_name,
         )
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
 
     @bp.route("/api/forms/<form>.docx")
     def sim_form_docx(form: str):
