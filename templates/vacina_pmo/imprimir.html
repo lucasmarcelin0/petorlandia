@@ -80,15 +80,21 @@
 
     tbody tr:nth-child(even) td { background: #f0f4f8; }
 
-    /* Colunas fixas */
-    .c-num  { width: 26px;  text-align: center; font-weight: 700; color: #555; }
-    .c-name { width: 16%; font-weight: 700; }
+    /* Colunas fixas — cor/tamanho so no corpo, senao sobrescrevem o thead. */
+    .c-num  { width: 26px;  text-align: center; }
+    .c-name { width: 16%; }
     .c-addr { width: 18%; }
-    .c-tel  { width: 11%; white-space: nowrap; font-size: 12pt; }
+    .c-tel  { width: 11%; white-space: nowrap; }
     .c-pet  { width: 15%; }
-    .c-obs  { width: 16%; font-size: 11pt; color: #333; }
-    .c-ok   { width: 30px;  text-align: center; font-size: 18pt; }
+    .c-obs  { width: 16%; }
+    .c-ok   { width: 30px;  text-align: center; }
     .c-sign { width: 19%; }
+
+    tbody .c-num  { font-weight: 700; color: #555; }
+    tbody .c-name { font-weight: 700; }
+    tbody .c-tel  { font-size: 12pt; }
+    tbody .c-obs  { font-size: 11pt; color: #333; }
+    tbody .c-ok   { font-size: 18pt; }
 
     .pet-row { display: block; line-height: 1.5; }
 
@@ -133,9 +139,9 @@
 
       tbody td { font-size: 13pt; padding: 5px 6px; }
 
-      .c-tel  { font-size: 11pt; }
-      .c-obs  { font-size: 10pt; }
-      .c-ok   { font-size: 16pt; }
+      tbody .c-tel  { font-size: 11pt; }
+      tbody .c-obs  { font-size: 10pt; }
+      tbody .c-ok   { font-size: 16pt; }
 
       tr { page-break-inside: avoid; }
 
@@ -230,9 +236,10 @@
               <span class="pet-row"><span class="pet-badge pet-badge--gato">G</span>{{ v.cats }} gato(s)</span>
             {% endif %}
           {% endfor %}
-          {% if v.dogs or v.cats %}
+          {# So mostra o previsto quando diverge dos animais nomeados — ai vale o alerta. #}
+          {% if v.animals and (v.dogs or 0) + (v.cats or 0) != v.animals|length %}
             <span class="pet-count">
-              {{ v.dogs or 0 }} cão(es) · {{ v.cats or 0 }} gato(s)
+              Planilha prevê {{ v.dogs or 0 }} cão(es) · {{ v.cats or 0 }} gato(s)
             </span>
           {% endif %}
         </td>
