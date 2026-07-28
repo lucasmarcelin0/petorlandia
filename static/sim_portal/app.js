@@ -11,6 +11,10 @@ const DEC5374_URL = "https://www.orlandia.sp.gov.br/novo/wp-content/uploads/2024
 const LC104_URL = "https://dosp.com.br/exibe_do.php?i=ODM4OTQ0";
 const CFMV1177_URL = "https://www.legisweb.com.br/legislacao/?id=352065";
 const CFMV1562_URL = "https://www.crmvse.org.br/wp-content/uploads/2024/01/RESOLUCAO-CFMV-1562.pdf";
+const CETESB_PORTAL_URL = "https://e.cetesb.sp.gov.br/portal-servicos-frontend/servicos-disponiveis?aba=servicos";
+const CETESB_PROCESSO_GUERRA_URL = "https://licenciamento.cetesb.sp.gov.br/cetesb/processo_resultado2.asp?razao=LF+%2D+GUERRA+MILK+LTDA++%2D+ME&muni=ORL%C2NDIA&logrd=RUA+F&nmuncp=491&nseqnc=1249&cgc=12934929000177";
+const CETESB_FATOR_COMPLEXIDADE_URL = "https://repositorio.cetesb.sp.gov.br/bitstreams/0cfd2bf7-65c7-40d1-90d0-286191d285b4/download";
+const DEC8468_URL = "https://licenciamento.cetesb.sp.gov.br/legislacao/estadual/decretos/1976_dec_est_8468.pdf";
 const DOCUMENT_SOURCES = {
   "requerimento-assinado": [
     { text: "LC 84/2024, art. 11, I", url: LC84_URL },
@@ -24,7 +28,12 @@ const DOCUMENT_SOURCES = {
   "cpf-cnpj": [{ text: "LC 84/2024, art. 11, IV", url: LC84_URL }],
   "inscricao-estadual": [{ text: "LC 84/2024, art. 11, V", url: LC84_URL }],
   "alvara-prefeitura": [{ text: "LC 84/2024, art. 11, VI", url: LC84_URL }],
-  "certidoes-ambientais": [{ text: "LC 84/2024, art. 11, VII", url: LC84_URL }],
+  "certidoes-ambientais": [
+    { text: "LC 84/2024, art. 11, VII", url: LC84_URL },
+    { text: "CETESB - Portal de Licenciamento Ambiental", url: CETESB_PORTAL_URL },
+    { text: "CETESB - fator de complexidade da atividade", url: CETESB_FATOR_COMPLEXIDADE_URL },
+    { text: "Decreto estadual 8.468/1976, art. 71", url: DEC8468_URL },
+  ],
   "exames-agua": [{ text: "LC 84/2024, art. 11, VIII", url: LC84_URL }],
   "memorial-economico-sanitario": [
     { text: "LC 84/2024, art. 11, IX", url: LC84_URL },
@@ -227,7 +236,7 @@ const initialState = {
     { id: "cpf-cnpj", item: "04", group: "art11", name: "CPF ou CNPJ, conforme o caso", hint: "Cartao CNPJ: emissao gratuita no site da Receita Federal.", link: "https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/cnpjreva_solicitacao.asp", required: true, status: "Pendente", file: "" },
     { id: "inscricao-estadual", item: "05", group: "art11", name: "Inscricao estadual/ICMS ou inscricao de Produtor Rural", hint: "Consulte de graca no Cadesp/Sefaz-SP e anexe a tela; produtor rural usa a inscricao de produtor.", link: "https://www.cadesp.fazenda.sp.gov.br/Pages/Cadastro/Consultas/ConsultaPublica/ConsultaPublica.aspx?idServicoCarta=BDAB67E2-FE2D-44D7-8D19-2CDF9015E3A9", required: true, status: "Pendente", file: "" },
     { id: "alvara-prefeitura", item: "06", group: "art11", name: "Alvara de construcao e/ou localizacao e funcionamento", hint: "Emitido pela Prefeitura de Orlandia (setor de obras/tributos), ou documento equivalente.", required: true, status: "Pendente", file: "" },
-    { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: licenca de operacao ou certidao de dispensa, conforme a atividade.", required: true, status: "Pendente", file: "" },
+    { id: "certidoes-ambientais", item: "07", group: "art11", name: "Licenca ambiental ou dispensa emitida pelo orgao ambiental", hint: "CETESB: para laticinios, consulte primeiro o portal de licenciamento. Se o enquadramento simplificado nao estiver disponivel, siga o fluxo indicado pela CETESB para Licenca de Operacao/MCE.", required: true, status: "Pendente", file: "" },
     { id: "exames-agua", item: "08", group: "art11", name: "Exames fisico-quimico e microbiologico da agua de abastecimento", hint: "Laboratorio credenciado; colete conforme orientacao do laboratorio.", required: true, status: "Pendente", file: "" },
     { id: "memorial-economico-sanitario", item: "09", group: "art11", name: "Anexo II (MTSE) final assinado - Memorial tecnico-sanitario do estabelecimento", hint: "Este e o memorial descritivo economico e sanitario exigido pela lei. Preencha o MTSE no portal, imprima/salve em PDF, assine e envie aqui. Nao envie rascunho separado.", required: true, status: "Pendente", file: "", formView: "establishment", printForm: "mtse" },
     { id: "manual-bpf", item: "10", group: "art11", name: "Manual de Boas Praticas de Fabricacao de Alimentos - BPF", hint: "Elaborado com o responsavel tecnico; descreve higiene, processos e controles do estabelecimento.", required: true, status: "Pendente", file: "" },
@@ -1135,6 +1144,7 @@ function documentCard(doc) {
           ${isTaxWaived ? `<span class="status approved" style="margin-left:8px">Sem taxa em 2026</span>` : ""}</strong>
           ${doc.hint ? `<span class="doc-hint">${doc.hint}${doc.link ? ` <a href="${doc.link}" target="_blank" rel="noreferrer">Abrir site</a>` : ""}</span>` : ""}
           ${documentSourceHtml(doc)}
+          ${documentExtraHtml(doc)}
           <span>${documentSummary(doc)}</span>
           ${doc.formView && state.role === "establishment" ? `
             <div class="doc-quick-actions">
@@ -1179,6 +1189,26 @@ function documentSourceHtml(doc) {
       ? `<a href="${source.url}" target="_blank" rel="noreferrer">${escapeHtml(source.text)}</a>`
       : escapeHtml(source.text)
   )).join(" + ")}</span>`;
+}
+
+function documentExtraHtml(doc) {
+  if (doc.id !== "certidoes-ambientais") return "";
+  return `
+    <div class="doc-guidance">
+      <strong>Roteiro CETESB para laticinios</strong>
+      <ol>
+        <li>Entre no portal e tente o licenciamento ambiental pelo servico disponivel para a atividade.</li>
+        <li>Se o sistema permitir o enquadramento simplificado, salve a licenca ou dispensa emitida e envie neste item.</li>
+        <li>Se o sistema nao permitir, siga a orientacao da CETESB para Licenca de Operacao/MCE e anexe o protocolo ou a licenca emitida.</li>
+        <li>Quando ja houver historico CETESB, anexe tambem a consulta do processo para facilitar a analise.</li>
+      </ol>
+      <p>A atividade "fabricacao de produtos do laticinio" aparece na tabela da CETESB com fator de complexidade 3,0. Pelo Decreto estadual 8.468/1976, art. 71, atividades com W = 3 tem Licenca de Operacao com validade de 3 anos. Por isso, uma LO antiga precisa ser conferida ou renovada antes do registro no SIM.</p>
+      <p class="doc-guidance-links">
+        <a href="${CETESB_PORTAL_URL}" target="_blank" rel="noreferrer">Abrir portal CETESB</a>
+        <a href="${CETESB_PROCESSO_GUERRA_URL}" target="_blank" rel="noreferrer">Ver exemplo do processo Guerra Milk</a>
+      </p>
+    </div>
+  `;
 }
 
 function documentSummary(doc) {

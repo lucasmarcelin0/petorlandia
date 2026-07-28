@@ -1316,6 +1316,48 @@ table select:disabled {
   text-decoration: underline;
 }
 
+.doc-guidance {
+  display: block;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #d8e6e1;
+  border-radius: 8px;
+  background: #fbfdfc;
+  color: #2f4742;
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.doc-guidance strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: .82rem;
+}
+
+.doc-guidance ol {
+  margin: 0 0 8px 18px;
+  padding: 0;
+}
+
+.doc-guidance li {
+  margin-bottom: 4px;
+}
+
+.doc-guidance p {
+  margin: 8px 0 0;
+}
+
+.doc-guidance-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doc-guidance-links a {
+  color: var(--green);
+  font-weight: 700;
+}
+
 .doc-quick-actions {
   display: flex;
   flex-wrap: wrap;
