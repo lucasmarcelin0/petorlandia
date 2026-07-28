@@ -1,6 +1,9 @@
+import json
+from copy import deepcopy
+
 from models.usuarios import User
 
-from blueprints.sim import SimSession, SimUser, now_iso
+from blueprints.sim import PROCESS_ID, SEED_STATE, SimProcessState, SimSession, SimUser, now_iso
 from extensions import db
 
 
@@ -76,6 +79,11 @@ def test_sim_admin_can_list_accounts_without_sensitive_credentials(app):
             created_at=now_iso(),
             last_seen_at="2026-07-28T09:00:00-03:00",
         ))
+        db.session.add(SimProcessState(
+            process_id=PROCESS_ID,
+            state_json=json.dumps(deepcopy(SEED_STATE)),
+            updated_at=now_iso(),
+        ))
         db.session.commit()
         admin_id = admin.id
 
@@ -97,3 +105,13 @@ def test_sim_admin_can_list_accounts_without_sensitive_credentials(app):
     }
     assert "password_hash" not in account
     assert "token" not in account
+
+    preview = client.get(f"/sim/api/accounts/{account['id']}/preview")
+    assert preview.status_code == 200
+    assert preview.get_json()["account"] == {
+        "email": "estabelecimento@example.test",
+        "name": "Estabelecimento de teste",
+        "role": "establishment",
+    }
+    assert preview.get_json()["state"]["role"] == "establishment"
+    assert all(not document.get("internal") for document in preview.get_json()["state"]["documents"])

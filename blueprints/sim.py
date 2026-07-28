@@ -1186,6 +1186,39 @@ def get_blueprint():
             return jsonify({"error": "Area exclusiva do SIM."}), 403
         return jsonify({"registry": registry_payload()})
 
+    @bp.route("/api/accounts/<int:account_id>/preview")
+    def sim_account_preview(account_id: int):
+        """Retorna a mesma visao filtrada do portal para suporte, sem login como a conta."""
+        user = require_sim()
+        if not user:
+            return jsonify({"error": "Area exclusiva do SIM."}), 403
+        account = db.session.get(SimUser, account_id)
+        if not account or not account.active:
+            abort(404)
+        notifications = [
+            {
+                "id": item.id,
+                "to_role": item.to_role,
+                "title": item.title,
+                "message": item.message,
+                "upload_id": item.upload_id,
+                "document_id": item.document_id,
+                "created_at": item.created_at,
+                "read_at": item.read_at,
+            }
+            for item in SimNotification.query.filter(
+                SimNotification.process_id == PROCESS_ID,
+                SimNotification.to_role.in_([account.role, "all"]),
+            ).order_by(SimNotification.id.desc()).limit(50)
+        ]
+        state = hydrate_state(account.role)
+        state["role"] = account.role
+        return jsonify({
+            "account": public_user(account),
+            "state": state,
+            "notifications": notifications,
+        })
+
     def registry_save(table: str):
         user = require_sim()
         if not user:

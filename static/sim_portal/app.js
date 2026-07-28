@@ -370,6 +370,7 @@ let session = null;
 let backendAvailable = false;
 let notifications = [];
 let activeUpload = null;
+let previewAccount = null;
 let registry = { accounts: [], establishments: [], fiscalActs: [], inspections: [], samples: [], audit: [] };
 let registryEditing = { establishment: null, inspection: null, sample: null };
 let fiscalActContext = { establishmentId: "", status: "Lavrado", scienceDate: "", loadedNumber: "" };
@@ -495,12 +496,17 @@ function deepMerge(base, patch) {
 }
 
 function saveState() {
+  if (previewAccount) return;
   state.protocol.updatedAt = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   persistState();
 }
 
 async function api(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  if (previewAccount && !["GET", "HEAD"].includes(method)) {
+    throw new Error("A visualizacao de suporte e somente leitura.");
+  }
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = { ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -646,6 +652,11 @@ function setView(view, formFocus = "") {
 }
 
 function update(path, value) {
+  if (previewAccount) {
+    toast("A visualizacao de suporte e somente leitura.");
+    render();
+    return;
+  }
   const parts = path.split(".");
   let target = state;
   for (let i = 0; i < parts.length - 1; i += 1) {
@@ -837,6 +848,19 @@ function renderLogin() {
 }
 
 function accountPanel() {
+  if (previewAccount) {
+    return `
+      <div class="mode-switch">
+        <label>Visualizacao de suporte</label>
+        <div class="account-box">
+          <strong>${escapeHtml(previewAccount.name)}</strong>
+          <span>${escapeHtml(previewAccount.email)}</span>
+          <span>Somente leitura</span>
+        </div>
+        <button class="btn ghost" data-exit-preview>Voltar para minha conta</button>
+      </div>
+    `;
+  }
   if (backendAvailable && session) {
     return `
       <div class="mode-switch">
@@ -1777,14 +1801,15 @@ function renderAccounts() {
           </div>
         </div>
         <table class="table">
-          <thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Criada em</th></tr></thead>
+          <thead><tr><th>Conta</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Criada em</th><th></th></tr></thead>
           <tbody>${accounts.length ? accounts.map((account) => `<tr>
             <td><strong>${escapeHtml(account.name)}</strong><br><span class="muted small">${escapeHtml(account.email)}</span></td>
             <td>${account.role === "sim" ? "Servidor SIM" : "Estabelecimento"}</td>
             <td><span class="status ${account.active ? "approved" : "corrections"}">${account.active ? "Ativa" : "Inativa"}</span></td>
             <td>${account.last_seen_at ? formatDate(account.last_seen_at) : "Nunca acessou"}</td>
             <td>${formatDate(account.created_at)}</td>
-          </tr>`).join("") : '<tr><td colspan="5" class="muted">Nenhuma conta cadastrada.</td></tr>'}</tbody>
+            <td><button class="btn" data-preview-account="${account.id}">Ver como esta conta</button></td>
+          </tr>`).join("") : '<tr><td colspan="6" class="muted">Nenhuma conta cadastrada.</td></tr>'}</tbody>
         </table>
       </div>
     </div>
@@ -3234,6 +3259,10 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((el) => {
     el.addEventListener("click", () => setView(el.dataset.view, el.dataset.formFocus || ""));
   });
+  document.querySelectorAll("[data-preview-account]").forEach((el) => {
+    el.addEventListener("click", () => startAccountPreview(el.dataset.previewAccount));
+  });
+  document.querySelector("[data-exit-preview]")?.addEventListener("click", exitAccountPreview);
   document.querySelectorAll("[data-path]").forEach((el) => {
     const eventName = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(eventName, () => update(el.dataset.path, el.value));
@@ -3382,6 +3411,36 @@ async function saveRegistryRecord(path, body, message) {
     toast(error.message);
     return null;
   }
+}
+
+async function startAccountPreview(accountId) {
+  try {
+    const data = await api(`/accounts/${accountId}/preview`);
+    previewAccount = data.account;
+    state = normalizeState(deepMerge(structuredClone(initialState), data.state));
+    state.role = previewAccount.role;
+    state.view = "dashboard";
+    notifications = data.notifications || [];
+    render();
+    toast(`Visualizando como ${previewAccount.name}. Nenhuma alteracao pode ser salva.`);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function exitAccountPreview() {
+  previewAccount = null;
+  try {
+    const data = await api("/state");
+    state = normalizeState(deepMerge(structuredClone(initialState), data.state));
+    state.role = session.role;
+    state.view = "accounts";
+    notifications = data.notifications || [];
+    await loadRegistry();
+  } catch (error) {
+    toast(error.message);
+  }
+  render();
 }
 
 function loadActForPrint(actId) {
