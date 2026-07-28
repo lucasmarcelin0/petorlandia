@@ -41,27 +41,14 @@ def upload_to_s3(*args, **kwargs):
 
 
 
-@bp.route('/vacina-pmo')
-@login_required
-def vacina_pmo():
-    if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
-    # datetime resolvido via módulo app em tempo de request: testes congelam a
-    # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
-    import app as app_module
-
-    today = app_module.datetime.now(BR_TZ).date().isoformat()
-    return render_template('vacina_pmo/dashboard.html', today=today)
+_PMO_WEEKDAYS_PT = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 
 
-@bp.route('/vacina-pmo/agenda')
-@login_required
-def vacina_pmo_agenda():
-    if current_user.role not in ('admin', 'vacinador'):
-        abort(403)
+def _vacina_pmo_listas_impressao():
+    """Dias/turnos já sincronizados no banco, prontos para imprimir."""
     from models import PmoVaccinationVisit
     from sqlalchemy import func
-    from datetime import datetime, date as _date
+
     rows = (
         db.session.query(
             PmoVaccinationVisit.sheet_title,
@@ -73,31 +60,56 @@ def vacina_pmo_agenda():
         .group_by(PmoVaccinationVisit.sheet_title, PmoVaccinationVisit.shift)
         .all()
     )
-    _weekdays_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
     dias = []
     for r in rows:
         try:
             dt = datetime.strptime(r.sheet_title, '%d/%m/%Y').date()
-            weekday = _weekdays_pt[dt.weekday()]
+            weekday = _PMO_WEEKDAYS_PT[dt.weekday()]
         except Exception:
             dt = None
             weekday = ''
-        date_str = r.sheet_title.replace('/', '-')
-        turno = 'manha' if r.shift == 'Manha' else 'tarde'
-        shift_label = 'Manhã' if r.shift == 'Manha' else 'Tarde'
         dias.append(dict(
             sheet_title=r.sheet_title,
             date=dt,
             weekday=weekday,
-            date_str=date_str,
-            turno=turno,
-            shift_label=shift_label,
+            date_str=r.sheet_title.replace('/', '-'),
+            turno='manha' if r.shift == 'Manha' else 'tarde',
+            shift_key=r.shift,
+            shift_label='Manhã' if r.shift == 'Manha' else 'Tarde',
             tutores=r.tutores,
             caes=int(r.caes or 0),
             gatos=int(r.gatos or 0),
         ))
-    dias.sort(key=lambda x: x['date'] or _date.min, reverse=True)
-    return render_template('vacina_pmo/agenda.html', dias=dias)
+
+    # Mais recente primeiro; manhã antes de tarde no mesmo dia.
+    dias.sort(key=lambda x: (x['date'] or date.min, x['shift_key'] == 'Manha'), reverse=True)
+    return dias
+
+
+@bp.route('/vacina-pmo')
+@login_required
+def vacina_pmo():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    # datetime resolvido via módulo app em tempo de request: testes congelam a
+    # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
+    import app as app_module
+
+    today = app_module.datetime.now(BR_TZ).date().isoformat()
+    return render_template(
+        'vacina_pmo/dashboard.html',
+        today=today,
+        dias_impressao=_vacina_pmo_listas_impressao(),
+    )
+
+
+@bp.route('/vacina-pmo/agenda')
+@login_required
+def vacina_pmo_agenda():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    return render_template('vacina_pmo/agenda.html', dias=_vacina_pmo_listas_impressao())
 
 
 @bp.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
