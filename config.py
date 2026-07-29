@@ -194,6 +194,11 @@ class Config:
     VETERINARIAN_MEMBERSHIP_BILLING_DAYS = int(
         os.environ.get("VETERINARIAN_MEMBERSHIP_BILLING_DAYS", "30")
     )
+    # Plano anual: cobrado de uma vez, a cada 12 meses. O padrão equivale a
+    # 10 mensalidades — dois meses grátis em troca do caixa antecipado.
+    VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE = float(
+        os.environ.get("VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE", "600.00")
+    )
 
     # Missing integration credentials disable the endpoint instead of
     # authorizing every caller.

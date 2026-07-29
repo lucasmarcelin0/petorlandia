@@ -149,16 +149,19 @@ class RegistrationForm(FlaskForm):
         ],
         render_kw={"required": True, "aria-required": "true", "autocomplete": "new-password", "minlength": "6"},
     )
+    # Opcional desde que o cadastro passou a usar um único campo de senha com
+    # botão de mostrar/ocultar. Quando enviado (integrações e testes antigos),
+    # continua tendo de bater com `password`.
     confirm_password = PasswordField(
         'Confirme a senha',
         validators=[
-            DataRequired(message="Repita a senha para confirmar"),
+            Optional(),
             EqualTo('password', message='As senhas digitadas não são iguais')
         ],
-        render_kw={"required": True, "aria-required": "true", "autocomplete": "new-password", "minlength": "6"},
+        render_kw={"autocomplete": "new-password", "minlength": "6"},
     )
 
-    submit = SubmitField('Criar conta')
+    submit = SubmitField('Criar conta grátis')
 
 
 class LoginForm(FlaskForm):

@@ -2723,6 +2723,20 @@ def _resolve_membership_from_payment(payment):
     return VeterinarianMembership.query.get(membership_id)
 
 
+def _membership_cycle_days(payment) -> int:
+    """Dias de acesso concedidos por um pagamento de assinatura.
+
+    O ``external_reference`` carrega o ciclo contratado no sufixo
+    (``vet-membership-12-anual``). Referências antigas, sem sufixo, seguem
+    valendo o ciclo mensal padrão.
+    """
+
+    external = (getattr(payment, 'external_reference', '') or '').lower()
+    if external.endswith('-anual'):
+        return 365
+    return int(current_app.config.get('VETERINARIAN_MEMBERSHIP_BILLING_DAYS', 30) or 30)
+
+
 def _sync_veterinarian_membership_payment(payment):
     membership = _resolve_membership_from_payment(payment)
     if not membership:
@@ -2730,7 +2744,7 @@ def _sync_veterinarian_membership_payment(payment):
 
     membership.last_payment_id = payment.id
     if payment.status == PaymentStatus.COMPLETED:
-        cycle_days = current_app.config.get('VETERINARIAN_MEMBERSHIP_BILLING_DAYS', 30)
+        cycle_days = _membership_cycle_days(payment)
         now = utcnow()
         start_from = membership.paid_until if membership.paid_until and membership.paid_until > now else now
         membership.paid_until = start_from + timedelta(days=cycle_days)
@@ -8514,6 +8528,92 @@ def enviar_lembretes_tratamento() -> None:
         db.session.commit()
 
 
+#: Dias que faltam para o fim da avaliação em que disparamos um aviso.
+#: 0 = último dia. É nesses três toques que a maior parte da conversão de
+#: trial acontece; mais que isso vira ruído.
+TRIAL_REMINDER_OFFSETS = (5, 1, 0)
+
+
+def enviar_lembretes_fim_trial() -> None:
+    """Job diário: avisa o profissional que a avaliação gratuita está acabando.
+
+    Sem esse aviso, o trial termina em silêncio e o acesso pausa sem que o
+    veterinário tenha decidido nada — perda de cliente por esquecimento, não
+    por falta de interesse.
+    """
+    from models import VeterinarianMembership
+    from services.notifications import notify_user
+
+    with app.app_context():
+        base_url = _notification_base_url()
+        hoje = now_in_brazil().date()
+        enviados = 0
+
+        memberships = (
+            VeterinarianMembership.query
+            .filter(VeterinarianMembership.trial_ends_at.isnot(None))
+            .all()
+        )
+
+        for membership in memberships:
+            # Quem já pagou não recebe aviso de fim de avaliação.
+            if membership.has_valid_payment():
+                continue
+
+            trial_end = VeterinarianMembership._as_timezone_aware(membership.trial_ends_at)
+            if trial_end is None:
+                continue
+
+            dias_restantes = (coerce_to_brazil_tz(trial_end).date() - hoje).days
+            if dias_restantes not in TRIAL_REMINDER_OFFSETS:
+                continue
+
+            vet = getattr(membership, 'veterinario', None)
+            user = getattr(vet, 'user', None)
+            if user is None:
+                continue
+
+            primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+            link = f'{base_url}/veterinario/assinatura'
+
+            if dias_restantes == 0:
+                assunto = 'Hoje é o último dia da sua avaliação — PetOrlândia'
+                abertura = (
+                    f'Olá {primeiro_nome}! Hoje é o último dia da sua avaliação gratuita '
+                    'da PetOrlândia.'
+                )
+            else:
+                plural = 's' if dias_restantes > 1 else ''
+                verbo = 'Faltam' if dias_restantes > 1 else 'Falta'
+                assunto = (
+                    f'{verbo} {dias_restantes} dia{plural} da sua avaliação — PetOrlândia'
+                )
+                abertura = (
+                    f'Olá {primeiro_nome}! Sua avaliação gratuita da PetOrlândia termina '
+                    f'em {dias_restantes} dia{plural}.'
+                )
+
+            notify_user(
+                user,
+                assunto,
+                (
+                    f'{abertura}\n\n'
+                    'Para continuar com agenda, prontuário, vacinas e financeiro sem '
+                    'interrupção, ative a assinatura por aqui:\n'
+                    f'{link}\n\n'
+                    'Se preferir não continuar, não precisa fazer nada — não cobramos '
+                    'nada e seus registros continuam guardados caso você volte depois.'
+                ),
+                kind='trial_ending',
+            )
+            enviados += 1
+
+        db.session.commit()
+        current_app.logger.info(
+            '[Trial] Lembretes de fim de avaliação enviados: %s', enviados
+        )
+
+
 def _run_financial_snapshot_job() -> None:
     """Daily hook executed by APScheduler to refresh monthly snapshots."""
 
@@ -8543,6 +8643,7 @@ if not app.config.get("TESTING") and os.getenv("ENABLE_WEB_SCHEDULER") == "1":
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
     scheduler.add_job(enviar_lembretes_tratamento, 'cron', hour=9)
     scheduler.add_job(enviar_lembretes_recebimento, 'cron', hour=10)
+    scheduler.add_job(enviar_lembretes_fim_trial, 'cron', hour=11)
     scheduler.add_job(_run_financial_snapshot_job, 'cron', hour=2, minute=30)
     scheduler.add_job(_run_mercadopago_oauth_renewal_job, 'cron', hour=3, minute=15)
     scheduler.start()

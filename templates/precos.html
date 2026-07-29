@@ -1,0 +1,172 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Preços — PetOrlândia para clínicas veterinárias{% endblock %}
+{% block meta_description %}R$ {{ '%.0f'|format(monthly_price) }} por mês, com {{ trial_days }} dias grátis e sem cartão de crédito. Agenda, prontuário, vacinas e financeiro da sua clínica em um só sistema.{% endblock %}
+
+{% block main %}
+<div class="container precos-page">
+
+  <header class="precos-hero">
+    <span class="precos-kicker">Preço</span>
+    <h1>Um plano. Sem taxa de instalação, sem fidelidade.</h1>
+    <p class="precos-lead">
+      Você usa {{ trial_days }} dias sem pagar nada e sem cadastrar cartão. Se não servir para a sua rotina,
+      é só não continuar — não cobramos nada e você leva seus dados embora.
+    </p>
+  </header>
+
+  <div class="precos-grid">
+
+    <section class="precos-card precos-card--featured" aria-labelledby="plano-mensal">
+      <span class="precos-tag">Mais escolhido</span>
+      <h2 id="plano-mensal">Mensal</h2>
+      <p class="precos-amount">
+        <span class="precos-currency">R$</span>{{ '%.0f'|format(monthly_price) }}<span class="precos-period">/mês</span>
+      </p>
+      <p class="precos-amount-note">por clínica — profissionais e pacientes ilimitados</p>
+
+      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
+        Começar {{ trial_days }} dias grátis
+      </a>
+      <p class="precos-cta-note">Não pedimos cartão de crédito para começar.</p>
+
+      <ul class="precos-list">
+        <li>Agenda compartilhada da equipe, com lembrete automático para o tutor</li>
+        <li>Prontuário eletrônico completo: histórico, exames, prescrições e anexos</li>
+        <li>Carteira de vacinas com aviso de dose atrasada</li>
+        <li>Financeiro: orçamentos, recebimentos e relatório mensal</li>
+        <li>Emissão de documentos e nota fiscal de serviço</li>
+        <li>Acesso pelo celular, sem instalar nada</li>
+        <li>Suporte direto com quem desenvolve o sistema</li>
+      </ul>
+    </section>
+
+    <section class="precos-card" aria-labelledby="plano-anual">
+      <span class="precos-tag precos-tag--muted">Economize {{ months_free }} meses</span>
+      <h2 id="plano-anual">Anual</h2>
+      <p class="precos-amount">
+        <span class="precos-currency">R$</span>{{ '%.0f'|format(annual_monthly_price) }}<span class="precos-period">/mês</span>
+      </p>
+      <p class="precos-amount-note">
+        R$ {{ '%.0f'|format(annual_price) }} cobrados uma vez por ano
+      </p>
+
+      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta precos-cta--outline">
+        Começar {{ trial_days }} dias grátis
+      </a>
+      <p class="precos-cta-note">Você escolhe mensal ou anual no fim do teste.</p>
+
+      <ul class="precos-list">
+        <li>Tudo o que está no plano mensal</li>
+        <li>{{ months_free }} mensalidades de desconto por ano</li>
+        <li>Preço travado durante os 12 meses</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <section class="precos-included" aria-labelledby="incluso-title">
+    <h2 id="incluso-title">O que não custa a mais</h2>
+    <div class="precos-included-grid">
+      <div>
+        <strong>Migrar sua agenda</strong>
+        <p>A gente importa sua lista de tutores e pets junto com você, sem cobrar por isso.</p>
+      </div>
+      <div>
+        <strong>Treinar sua equipe</strong>
+        <p>Uma conversa de 30 minutos com quem vai usar o sistema no dia a dia.</p>
+      </div>
+      <div>
+        <strong>Atualizações</strong>
+        <p>Toda função nova entra no seu plano automaticamente.</p>
+      </div>
+      <div>
+        <strong>Usuários da clínica</strong>
+        <p>Cadastre quantos veterinários e recepcionistas precisar.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="precos-faq" aria-labelledby="faq-title">
+    <h2 id="faq-title">Perguntas que todo mundo faz antes de assinar</h2>
+
+    <details class="precos-faq-item">
+      <summary>Os dados dos meus pacientes são meus?</summary>
+      <p>
+        São. O prontuário, o histórico e a lista de clientes pertencem à clínica. A qualquer momento
+        você pode exportar tudo, e se decidir sair leva os dados com você.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>Consigo trazer a agenda e os clientes que já tenho?</summary>
+      <p>
+        Sim. Se hoje está em planilha, caderno ou outro sistema, mandamos o modelo de planilha
+        e fazemos a importação junto com você antes de o teste começar a contar.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>E se eu quiser cancelar?</summary>
+      <p>
+        Cancela pelo próprio sistema, sem ligar para ninguém e sem multa. O acesso continua até o
+        fim do período já pago e depois a cobrança simplesmente para.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>Preciso instalar alguma coisa?</summary>
+      <p>
+        Não. Funciona no navegador do computador e do celular. Se a internet cair no meio de um
+        atendimento, o sistema guarda o que você digitou e envia quando a conexão voltar.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>Quem cobra do tutor: eu ou a PetOrlândia?</summary>
+      <p>
+        Você. A PetOrlândia cobra apenas a mensalidade do sistema — o que o tutor paga pela consulta
+        é da clínica, e não retemos nenhum percentual do seu atendimento.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>O que acontece quando os {{ trial_days }} dias acabam?</summary>
+      <p>
+        Avisamos por e-mail antes de terminar. Se você não assinar, o acesso às ferramentas
+        profissionais pausa, mas nada é apagado: ao assinar depois, está tudo onde você deixou.
+      </p>
+    </details>
+  </section>
+
+  <section class="precos-closing">
+    <h2>Quer ver funcionando antes de decidir?</h2>
+    <p>
+      São 15 minutos por vídeo chamada, mostrando o sistema com um caso parecido com o da sua clínica.
+    </p>
+    <div class="precos-closing-actions">
+      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
+        Começar {{ trial_days }} dias grátis
+      </a>
+      {# O canal de contato depende do que está configurado no ambiente:
+         WhatsApp quando há SUPPORT_PHONE, e-mail quando há SUPPORT_EMAIL,
+         e a página de suporte como último recurso — nunca fica sem saída. #}
+      {% if whatsapp_contact_url %}
+      <a href="{{ whatsapp_contact_url }}" class="precos-cta precos-cta--outline" target="_blank" rel="noopener">
+        Falar no WhatsApp
+      </a>
+      {% elif support_email %}
+      <a href="mailto:{{ support_email }}?subject=Quero%20ver%20uma%20demonstra%C3%A7%C3%A3o%20da%20PetOrl%C3%A2ndia"
+         class="precos-cta precos-cta--outline">
+        Agendar demonstração
+      </a>
+      {% else %}
+      <a href="{{ url_for('support') }}" class="precos-cta precos-cta--outline">
+        Agendar demonstração
+      </a>
+      {% endif %}
+    </div>
+  </section>
+
+</div>
+{% endblock %}

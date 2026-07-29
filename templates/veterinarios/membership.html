@@ -1,7 +1,15 @@
 {% extends "layout.html" %}
+
+{% block page_title %}Minha assinatura — PetOrlândia{% endblock %}
+
 {% block main %}
-<div class="container py-4">
-  <h1 class="mb-4">Assinatura de Veterinário</h1>
+<div class="container py-4" style="max-width: 940px;">
+
+  <h1 class="h3 mb-1">Minha assinatura</h1>
+  <p class="text-muted mb-4">
+    A assinatura mantém ativas as ferramentas profissionais: agenda, prontuário, vacinas,
+    exames, documentos e financeiro da clínica.
+  </p>
 
   {% if status == 'success' %}
     <div class="alert alert-success">Pagamento confirmado! Sua assinatura será atualizada em instantes.</div>
@@ -12,56 +20,173 @@
   {% endif %}
 
   {% if membership %}
-    <div class="card mb-4">
-      <div class="card-body">
-        <h2 class="h5">Status atual</h2>
-        <dl class="row mb-0">
-          <dt class="col-sm-4">Veterinário desde</dt>
-          <dd class="col-sm-8">{{ membership.started_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</dd>
-
-          <dt class="col-sm-4">Fim do período de avaliação</dt>
-          <dd class="col-sm-8">{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</dd>
-
-          <dt class="col-sm-4">Próxima cobrança</dt>
-          <dd class="col-sm-8">
-            {% if membership.paid_until %}
-              {{ membership.paid_until|format_datetime_brazil('%d/%m/%Y %H:%M') }}
-            {% else %}
-              <span class="text-muted">Nenhum pagamento registrado</span>
-            {% endif %}
-          </dd>
-        </dl>
-
-        {% if membership.is_trial_active() %}
-          <div class="alert alert-info mt-3">
-            <strong>Período de teste ativo.</strong> {{ membership.remaining_trial_days() }} dia(s) restante(s) antes da necessidade de pagamento.
-          </div>
-        {% elif membership.has_valid_payment() %}
-          <div class="alert alert-success mt-3">
-            Assinatura ativa até {{ membership.paid_until|format_datetime_brazil('%d/%m/%Y') }}.
-          </div>
-        {% else %}
-          <div class="alert alert-warning mt-3">
-            Sua assinatura está inativa. Efetue o pagamento para continuar utilizando as ferramentas de veterinário.
-          </div>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-
-  <div class="card">
-    <div class="card-body">
-      <h2 class="h5">Ativar ou renovar assinatura</h2>
-      <p class="mb-3">
-        Valor da assinatura: <strong>R$ {{ '%.2f'|format(price) }}</strong> por {{ trial_days }} dias.
-      </p>
-      <form method="post" action="{{ url_for('veterinarian_membership_checkout') }}">
-        {{ checkout_form.hidden_tag() }}
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-cash-coin me-1"></i> Pagar com Mercado Pago
-        </button>
-      </form>
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-4">
+      {% if membership.has_valid_payment() %}
+        <span class="badge bg-success-subtle text-success mb-2">Assinatura ativa</span>
+        <h2 class="h5 mb-1">Tudo certo por aqui.</h2>
+        <p class="text-muted mb-0">
+          Sua próxima renovação automática é em
+          <strong>{{ membership.paid_until|format_datetime_brazil('%d/%m/%Y') }}</strong>.
+          A cobrança acontece sozinha pelo Mercado Pago — você não precisa fazer nada.
+        </p>
+      {% elif membership.is_trial_active() %}
+        <span class="badge bg-primary-subtle text-primary mb-2">Avaliação gratuita</span>
+        <h2 class="h5 mb-1">
+          Faltam {{ membership.remaining_trial_days() }} dia(s) de avaliação.
+        </h2>
+        <p class="text-muted mb-0">
+          Termina em <strong>{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>.
+          Você não precisa esperar o fim para assinar: ao ativar agora, a primeira cobrança
+          só acontece quando a avaliação terminar.
+        </p>
+      {% else %}
+        <span class="badge bg-warning-subtle text-warning-emphasis mb-2">Assinatura inativa</span>
+        <h2 class="h5 mb-1">Suas ferramentas profissionais estão pausadas.</h2>
+        <p class="text-muted mb-0">
+          Nada foi apagado — prontuários, agenda e histórico continuam guardados.
+          Ao ativar a assinatura, tudo volta exatamente como você deixou.
+        </p>
+      {% endif %}
     </div>
   </div>
+  {% endif %}
+
+  <h2 class="h5 mb-3">Escolha como quer pagar</h2>
+
+  <form method="post" action="{{ url_for('veterinarian_membership_checkout') }}">
+    {{ checkout_form.hidden_tag() }}
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-6">
+        <label class="membership-plan h-100" for="plano-mensal">
+          <input class="form-check-input" type="radio" name="plano" id="plano-mensal"
+                 value="mensal" checked>
+          <span class="membership-plan__body">
+            <span class="membership-plan__name">Mensal</span>
+            <span class="membership-plan__price">R$ {{ '%.0f'|format(price) }}<small>/mês</small></span>
+            <span class="membership-plan__note">Cobrança automática todo mês. Cancela quando quiser.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="col-md-6">
+        <label class="membership-plan h-100" for="plano-anual">
+          <input class="form-check-input" type="radio" name="plano" id="plano-anual" value="anual">
+          <span class="membership-plan__body">
+            <span class="membership-plan__name">
+              Anual
+              {% if months_free > 0 %}
+              <span class="badge bg-success-subtle text-success ms-1">{{ months_free }} meses grátis</span>
+              {% endif %}
+            </span>
+            <span class="membership-plan__price">R$ {{ '%.0f'|format(annual_monthly_price) }}<small>/mês</small></span>
+            <span class="membership-plan__note">
+              R$ {{ '%.0f'|format(annual_price) }} cobrados uma vez por ano. Preço travado por 12 meses.
+            </span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg rounded-pill px-4">
+      <i class="bi bi-cash-coin me-1"></i> Ativar assinatura
+    </button>
+    <p class="text-muted small mt-2 mb-0">
+      Pagamento pelo Mercado Pago (cartão, Pix ou boleto). A renovação é automática e você
+      cancela pelo próprio Mercado Pago ou falando com a gente, sem multa.
+    </p>
+  </form>
+
+  {% if membership %}
+  <details class="mt-4">
+    <summary class="text-muted small">Detalhes da conta</summary>
+    <dl class="row mt-3 mb-0 small">
+      <dt class="col-sm-4">Profissional desde</dt>
+      <dd class="col-sm-8">{{ membership.started_at|format_datetime_brazil('%d/%m/%Y') }}</dd>
+
+      <dt class="col-sm-4">Fim da avaliação gratuita</dt>
+      <dd class="col-sm-8">{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</dd>
+
+      <dt class="col-sm-4">Acesso pago até</dt>
+      <dd class="col-sm-8">
+        {% if membership.paid_until %}
+          {{ membership.paid_until|format_datetime_brazil('%d/%m/%Y') }}
+        {% else %}
+          <span class="text-muted">Nenhum pagamento registrado</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </details>
+  {% endif %}
+
 </div>
+
+<style>
+  .membership-plan {
+    display: block;
+    position: relative;
+    border: 1px solid rgba(15, 23, 42, .14);
+    border-radius: 16px;
+    padding: 1.15rem 1.25rem 1.15rem 2.9rem;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+
+  .membership-plan:hover {
+    border-color: rgba(13, 110, 253, .45);
+  }
+
+  .membership-plan .form-check-input {
+    position: absolute;
+    top: 1.45rem;
+    left: 1.1rem;
+    margin: 0;
+  }
+
+  .membership-plan:has(.form-check-input:checked) {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, .12);
+  }
+
+  .membership-plan:has(.form-check-input:focus-visible) {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+  }
+
+  .membership-plan__body {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+  }
+
+  .membership-plan__name {
+    font-weight: 600;
+  }
+
+  .membership-plan__price {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .membership-plan__price small {
+    font-size: .95rem;
+    font-weight: 500;
+    color: #6c757d;
+  }
+
+  .membership-plan__note {
+    font-size: .85rem;
+    color: #6c757d;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .membership-plan {
+      transition: none;
+    }
+  }
+</style>
 {% endblock %}

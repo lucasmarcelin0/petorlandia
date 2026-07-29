@@ -5,6 +5,9 @@ flag_key — chave da SiteFlag (ex: 'loja_em_breve')
 ativo — boolean True/False (ex: site_flags.loja_em_breve)
 titulo — texto do h2 (ex: 'Loja PetOrlândia')
 descricao — parágrafo abaixo (opcional)
+waitlist_feature — chave aceita por /lista-de-espera ('loja' | 'plano_saude').
+                   Quando informada, o overlay captura contato em vez de ser
+                   apenas um aviso sem saída.
 is_admin — boolean (ex: is_admin)
 #}
 {% if ativo %}
@@ -18,9 +21,27 @@ is_admin — boolean (ex: is_admin)
             {% if descricao %}{{ descricao }}{% else %}Estamos preparando tudo com carinho. Em breve você poderá acessar
             esta funcionalidade!{% endif %}
         </p>
+
+        {% if waitlist_feature %}
+        <form id="waitlistForm" class="em-breve-waitlist" novalidate>
+            <label for="waitlistContact" class="em-breve-waitlist__label">
+                Quer ser avisado quando abrir?
+            </label>
+            <div class="em-breve-waitlist__row">
+                <input type="text" id="waitlistContact" name="contact" class="form-control"
+                       placeholder="Seu e-mail ou WhatsApp" autocomplete="email"
+                       value="{{ current_user.email if current_user.is_authenticated else '' }}"
+                       required>
+                <button type="submit" class="btn btn-light fw-semibold">Avise-me</button>
+            </div>
+            <p class="em-breve-waitlist__feedback" id="waitlistFeedback" role="status" aria-live="polite"></p>
+        </form>
+        {% else %}
         <span class="badge em-breve-badge">
             <i class="fa-regular fa-clock me-1"></i> Em breve
         </span>
+        {% endif %}
+
         <div class="mt-4">
             <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-sm">
                 <i class="fa-solid fa-house me-1"></i> Voltar ao início
@@ -28,6 +49,63 @@ is_admin — boolean (ex: is_admin)
         </div>
     </div>
 </div>
+
+{% if waitlist_feature %}
+<script>
+    (function () {
+        var form = document.getElementById('waitlistForm');
+        if (!form) return;
+        var input = document.getElementById('waitlistContact');
+        var feedback = document.getElementById('waitlistFeedback');
+        var button = form.querySelector('button[type="submit"]');
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var contact = (input.value || '').trim();
+            if (!contact) {
+                feedback.textContent = 'Informe um e-mail ou celular para a gente avisar você.';
+                feedback.className = 'em-breve-waitlist__feedback is-error';
+                input.focus();
+                return;
+            }
+
+            button.disabled = true;
+            var originalLabel = button.textContent;
+            button.textContent = 'Enviando...';
+
+            fetch('{{ url_for("waitlist_signup") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    feature: '{{ waitlist_feature }}',
+                    contact: contact
+                })
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    feedback.textContent = data.message;
+                    feedback.className = 'em-breve-waitlist__feedback ' + (data.success ? 'is-ok' : 'is-error');
+                    if (data.success) {
+                        form.querySelector('.em-breve-waitlist__row').style.display = 'none';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = originalLabel;
+                    }
+                })
+                .catch(function () {
+                    feedback.textContent = 'Não conseguimos registrar agora. Tente de novo em instantes.';
+                    feedback.className = 'em-breve-waitlist__feedback is-error';
+                    button.disabled = false;
+                    button.textContent = originalLabel;
+                });
+        });
+    })();
+</script>
+{% endif %}
 {% endif %}
 
 {% set _is_site_admin = current_user.is_authenticated and current_user.role == 'admin' %}

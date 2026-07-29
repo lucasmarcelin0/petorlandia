@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Sobre a PetOrlândia — quem faz e por quê{% endblock %}
+{% block meta_description %}A PetOrlândia é desenvolvida por um médico-veterinário de Orlândia-SP que vive a rotina de clínica. Conheça o propósito, os valores e quem está por trás do sistema.{% endblock %}
+
+{% block main %}
+<section class="landing-page" aria-labelledby="sobre-title">
+
+  <div class="landing-section">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Sobre o projeto</span>
+      <h2 id="sobre-title">Uma plataforma criada por quem atende, para quem atende.</h2>
+      <p>
+        A PetOrlândia nasceu de um incômodo concreto: o cuidado com o animal ficava espalhado entre
+        agenda de papel, mensagens soltas no WhatsApp e planilhas que ninguém atualizava. A proposta é
+        reunir num só lugar o que realmente muda o dia da clínica e a vida do tutor.
+      </p>
+    </div>
+  </div>
+
+  <section class="landing-section">
+    <div class="landing-section__grid landing-section__grid--story">
+      <article class="landing-panel landing-panel--accent">
+        <span class="landing-section-kicker">Quem desenvolve</span>
+        <h2>Lucas Marcelino Campos Ferreira</h2>
+        <div class="landing-founder-intro">
+          <div class="landing-founder-intro__copy">
+            <p>
+              Médico-veterinário com formação complementar em tecnologia pelo <strong>CS50x de HarvardX</strong>
+              e mestrando em Biotecnologia e Bioprocessos. Ele atende, conhece a rotina de consultório e
+              escreve o código do sistema — quando você manda uma dúvida pelo suporte, quem responde é ele.
+            </p>
+          </div>
+          <aside class="landing-founder-profile">
+            <div class="landing-founder-photo-shell">
+              <img
+                src="{{ url_for('static', filename='uploads/founder/lucas-founder-clean.jpeg') }}"
+                alt="Lucas Marcelino Campos Ferreira sorrindo em frente a um prédio histórico."
+                class="landing-founder-photo">
+            </div>
+            <div class="landing-founder-profile__body">
+              <strong>Lucas</strong>
+              <span>Médico-veterinário</span>
+            </div>
+          </aside>
+        </div>
+        <p>
+          A tecnologia entra como ferramenta para simplificar processos e apoiar um cuidado mais claro —
+          não para adicionar mais uma tela na rotina de quem já tem pouco tempo.
+        </p>
+      </article>
+
+      <article class="landing-panel">
+        <span class="landing-section-kicker">Onde estamos</span>
+        <h2>Orlândia-SP, e crescendo pela região.</h2>
+        <p>
+          O sistema é usado na prática em Orlândia, incluindo a operação de serviços públicos gratuitos
+          em parceria com a Prefeitura Municipal — campanha de antirrábica e castração passam por aqui.
+        </p>
+        <p>
+          Estar perto é parte do produto: dá para marcar uma conversa presencial, e as decisões do que
+          construir em seguida saem das clínicas que usam o sistema todo dia.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-section" aria-labelledby="proposito-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Propósito</span>
+      <h2 id="proposito-title">Missão, visão e valores.</h2>
+    </div>
+
+    <div class="landing-purpose-grid">
+      <article class="landing-purpose-card landing-purpose-card--mission">
+        <div class="landing-purpose-icon">
+          <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+        </div>
+        <h3>Missão</h3>
+        <p>
+          Facilitar o cuidado com os animais integrando atendimento, organização, conveniência e gestão em
+          uma experiência simples, acolhedora e confiável.
+        </p>
+      </article>
+
+      <article class="landing-purpose-card landing-purpose-card--vision">
+        <div class="landing-purpose-icon">
+          <i class="fa-solid fa-binoculars" aria-hidden="true"></i>
+        </div>
+        <h3>Visão</h3>
+        <p>
+          Ser referência em experiência digital para o universo pet, conectando tutores, clínicas e
+          serviços com proximidade, eficiência e confiança.
+        </p>
+      </article>
+
+      <article class="landing-purpose-card landing-purpose-card--values">
+        <div class="landing-purpose-icon">
+          <i class="fa-solid fa-gem" aria-hidden="true"></i>
+        </div>
+        <h3>Valores</h3>
+        <ul class="landing-value-list">
+          <li>
+            <i class="fa-solid fa-shield-heart" aria-hidden="true"></i>
+            <span>Cuidado com responsabilidade em cada etapa.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-comments" aria-hidden="true"></i>
+            <span>Comunicação clara e próxima com as pessoas.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
+            <span>Tecnologia útil, pensada para a rotina real.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-handshake-angle" aria-hidden="true"></i>
+            <span>Confiança para tutores, profissionais e clínicas.</span>
+          </li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-cta-banner" aria-labelledby="sobre-cta-title">
+    <div>
+      <span class="landing-section-kicker">Começar</span>
+      <h2 id="sobre-cta-title">Quer ver o sistema funcionando na sua clínica?</h2>
+      <p>São 30 dias grátis, sem cartão de crédito.</p>
+    </div>
+
+    <div class="landing-actions landing-actions--compact" aria-label="Ações finais">
+      <a href="{{ url_for('register') }}" class="landing-btn landing-btn--primary">Criar conta grátis</a>
+      <a href="{{ url_for('precos') }}" class="landing-btn landing-btn--secondary landing-btn--light">Ver preços</a>
+    </div>
+  </section>
+
+</section>
+{% endblock %}

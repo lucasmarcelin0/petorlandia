@@ -158,7 +158,8 @@ def veterinarian_membership():
     status = request.args.get('status')
 
     checkout_form = VeterinarianMembershipCheckoutForm()
-    price = _get_veterinarian_membership_price()
+    price = float(_get_veterinarian_membership_price())
+    annual_price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', price * 10))
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
 
     return render_template(
@@ -166,6 +167,9 @@ def veterinarian_membership():
         membership=membership,
         checkout_form=checkout_form,
         price=price,
+        annual_price=annual_price,
+        annual_monthly_price=annual_price / 12 if annual_price else 0.0,
+        months_free=int((price * 12 - annual_price) // price) if price else 0,
         trial_days=trial_days,
         status=status,
     )
@@ -194,20 +198,35 @@ def veterinarian_membership_checkout():
     if membership:
         membership.ensure_trial_dates(trial_days)
 
-    price = _get_veterinarian_membership_price()
+    # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
+    # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
+    plano = (form.plano.data or 'mensal').strip().lower()
+    if plano == 'anual':
+        price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', 0) or 0)
+        frequency = 12
+        ciclo_label = 'anual'
+    else:
+        plano = 'mensal'
+        price = float(_get_veterinarian_membership_price())
+        frequency = 1
+        ciclo_label = 'mensal'
+
+    if price <= 0:
+        flash('Plano indisponível no momento. Fale com o suporte.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
 
     if membership and membership.id is None:
         db.session.flush()
 
     reason_suffix = current_user.name.strip() if (current_user.name or '').strip() else current_user.email
-    reason = f'Assinatura Profissional PetOrlândia - {reason_suffix}'
+    reason = f'Assinatura Profissional PetOrlândia ({ciclo_label}) - {reason_suffix}'
 
     preapproval_data = {
         'reason': reason,
         'back_url': url_for('veterinarian_membership', _external=True),
         'payer_email': current_user.email,
         'auto_recurring': {
-            'frequency': 1,
+            'frequency': frequency,
             'frequency_type': 'months',
             'transaction_amount': float(price),
             'currency_id': 'BRL',
@@ -215,7 +234,9 @@ def veterinarian_membership_checkout():
     }
 
     if membership and membership.id:
-        preapproval_data['external_reference'] = f'vet-membership-{membership.id}'
+        # O sufixo do ciclo permite ao webhook estender o acesso pelo período
+        # certo (30 dias no mensal, 365 no anual).
+        preapproval_data['external_reference'] = f'vet-membership-{membership.id}-{plano}'
 
     try:
         resp = mp_sdk().preapproval().create(preapproval_data)
@@ -346,10 +367,29 @@ def painel_dashboard():
     return redirect(url_for('painel_admin.index'))
 
 
+def _landing_screenshot() -> str | None:
+    """Caminho estático do print do produto usado no topo da landing.
+
+    A imagem é opcional: enquanto não existir um print real, a landing mostra
+    um resumo em texto no lugar — nunca uma tela fictícia passando por real.
+    """
+
+    candidate = 'img/landing-agenda.png'
+    static_folder = current_app.static_folder
+    if static_folder and os.path.exists(os.path.join(static_folder, *candidate.split('/'))):
+        return candidate
+    return None
+
+
 @bp.route('/')
 def index():
     if not current_user.is_authenticated:
-        return render_template('index.html')
+        return render_template(
+            'index.html',
+            landing_screenshot=_landing_screenshot(),
+            trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
+            monthly_price=float(_get_veterinarian_membership_price()),
+        )
 
     meus_pets = (
         Animal.query
@@ -399,6 +439,98 @@ def index():
         proximas_vacinas=proximas_vacinas,
         proximos_agendamentos=proximos_agendamentos,
     )
+
+
+@bp.route('/precos')
+def precos():
+    """Página pública de preço. Não exige login: é a resposta para quem recebe
+    o link e quer saber quanto custa antes de criar conta."""
+
+    trial_days = int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30)
+    monthly = float(_get_veterinarian_membership_price())
+    annual = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', monthly * 10))
+    annual_monthly = annual / 12 if annual else 0.0
+    # Quantas mensalidades o plano anual economiza, arredondado para baixo.
+    months_free = int((monthly * 12 - annual) // monthly) if monthly else 0
+
+    track_event('pricing_viewed')
+
+    return render_template(
+        'precos.html',
+        trial_days=trial_days,
+        monthly_price=monthly,
+        annual_price=annual,
+        annual_monthly_price=annual_monthly,
+        months_free=months_free,
+        support_email=current_app.config.get('SUPPORT_EMAIL'),
+    )
+
+
+#: Funcionalidades que aceitam inscrição na lista de espera.
+WAITLIST_FEATURES = {
+    'loja': 'Loja PetOrlândia',
+    'plano_saude': 'Plano de Saúde Pet',
+}
+
+
+@bp.route('/lista-de-espera', methods=['POST'])
+def waitlist_signup():
+    """Registra interesse numa funcionalidade ainda não publicada.
+
+    Responde sempre em JSON: o formulário do overlay envia por fetch e mostra
+    a confirmação sem recarregar a página.
+    """
+    from models import WaitlistLead
+
+    payload = request.get_json(silent=True) or request.form
+    feature = (payload.get('feature') or '').strip().lower()
+    contact = (payload.get('contact') or '').strip().lower()
+    city = (payload.get('city') or '').strip() or None
+
+    if feature not in WAITLIST_FEATURES:
+        return jsonify({'success': False, 'message': 'Funcionalidade inválida.'}), 400
+
+    # Validação deliberadamente frouxa: aceita e-mail ou telefone, porque
+    # exigir formato exato aqui só serve para perder contato.
+    if len(contact) < 6 or ('@' not in contact and not any(ch.isdigit() for ch in contact)):
+        return jsonify({
+            'success': False,
+            'message': 'Informe um e-mail ou celular para a gente avisar você.',
+        }), 400
+
+    existing = WaitlistLead.query.filter_by(feature=feature, contact=contact).first()
+    if existing is None:
+        lead = WaitlistLead(
+            feature=feature,
+            contact=contact[:180],
+            city=city[:120] if city else None,
+            user_id=current_user.id if current_user.is_authenticated else None,
+        )
+        db.session.add(lead)
+        try:
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            # Corrida entre dois envios simultâneos: o contato já está salvo,
+            # que é exatamente o resultado desejado.
+            db.session.rollback()
+
+    track_event('waitlist_joined', channel=feature)
+
+    return jsonify({
+        'success': True,
+        'message': 'Pronto! Avisamos você assim que abrir.',
+    })
+
+
+@bp.route('/sobre')
+def sobre():
+    """História, propósito e quem está por trás do produto.
+
+    Esse conteúdo saiu da home para não competir com a oferta: continua sendo
+    prova de credibilidade, mas para quem escolhe procurar por ela.
+    """
+
+    return render_template('sobre.html')
 
 
 @bp.route('/privacy')
@@ -471,7 +603,19 @@ def robots_txt():
 def sitemap_xml():
     """Small explicit sitemap for stable, public acquisition pages."""
     base = _oauth_issuer()
-    paths = ('/', '/loja', '/servicos', '/privacy', '/terms', '/support', '/chatgpt')
+    paths = (
+        '/',
+        '/precos',
+        '/sobre',
+        '/parceiros/clinica',
+        '/parceiros/loja',
+        '/loja',
+        '/servicos',
+        '/privacy',
+        '/terms',
+        '/support',
+        '/chatgpt',
+    )
     body = ''.join(f'<url><loc>{base}{path}</loc></url>' for path in paths)
     response = make_response(
         '<?xml version="1.0" encoding="UTF-8"?>'

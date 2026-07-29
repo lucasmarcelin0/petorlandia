@@ -107,6 +107,7 @@ try:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        WaitlistLead,
         clinica_has_column,
         get_clinica_field,
     )
@@ -159,6 +160,7 @@ except ImportError:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        WaitlistLead,
         clinica_has_column,
         get_clinica_field,
     )
@@ -699,6 +701,30 @@ class VeterinarioAdmin(MyModelView):
     form_columns = ['user', 'crmv', 'clinica', 'specialties']
     column_list = ['id', 'user', 'crmv', 'clinica', 'specialty_list']
     column_labels = {'specialty_list': 'Especialidades'}
+
+
+class WaitlistLeadAdmin(MyModelView):
+    """Contatos capturados nas páginas ainda não publicadas.
+
+    É a primeira lista de clientes de cada linha nova: ao abrir a loja ou o
+    plano de saúde, esses são os primeiros a avisar.
+    """
+
+    can_create = False
+    can_edit = False
+    column_default_sort = ('created_at', True)
+
+    column_list = ('feature', 'contact', 'city', 'user', 'created_at', 'notified_at')
+    column_labels = {
+        'feature': 'Funcionalidade',
+        'contact': 'Contato',
+        'city': 'Cidade',
+        'user': 'Usuário',
+        'created_at': 'Entrou em',
+        'notified_at': 'Avisado em',
+    }
+    column_filters = ('feature', 'created_at', 'notified_at')
+    column_searchable_list = ('contact', 'city')
 
 
 class VeterinarianMembershipAdmin(MyModelView):
@@ -1473,6 +1499,11 @@ def init_admin(app):
         VeterinarianMembership, db.session,
         name='Assinaturas de Veterinários', category='Veterinários',
         menu_icon_type='fa', menu_icon_value='fa-id-card'
+    ))
+    admin.add_view(WaitlistLeadAdmin(
+        WaitlistLead, db.session,
+        name='Lista de espera',
+        menu_icon_type='fa', menu_icon_value='fa-bell'
     ))
     admin.add_view(VeterinarioAdmin(
         Veterinario, db.session,

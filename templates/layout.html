@@ -3,13 +3,38 @@
 <html lang="pt-BR">
 
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  {# Título e descrição por página. Cada template pode sobrescrever os dois
+     blocos abaixo; o mesmo texto alimenta as tags Open Graph/Twitter, então a
+     prévia no WhatsApp e no Instagram acompanha a página compartilhada. #}
+  {# O padrão é deliberadamente neutro: páginas internas (laudo do tutor,
+     convites, prontuário) não podem herdar preço nem oferta de teste. Quem
+     vende — landing e /precos — sobrescreve os dois blocos. #}
+  <title>{% block page_title %}PetOrlândia{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}PetOrlândia — cuidado, agenda e histórico do seu pet em um só lugar.{% endblock %}">
+
+  {% set _og_image = og_image if og_image is defined and og_image else 'img/og-petorlandia.png' %}
+  <link rel="canonical" href="{{ request.base_url }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="PetOrlândia">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:title" content="{{ self.page_title()|trim }}">
+  <meta property="og:description" content="{{ self.meta_description()|trim }}">
+  <meta property="og:url" content="{{ request.base_url }}">
+  <meta property="og:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ self.page_title()|trim }}">
+  <meta name="twitter:description" content="{{ self.meta_description()|trim }}">
+  <meta name="twitter:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
+
   {% block head %}
   {% endblock %}
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato-32.png') }}">
 
-  <meta charset="UTF-8">
-  <title>PetOrlândia 🐶</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#4e73df">
   <meta name="csrf-token" content="{{ csrf_token() }}">

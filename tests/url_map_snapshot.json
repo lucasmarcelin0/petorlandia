@@ -635,6 +635,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "api_integrations_orthanc_webhook",
+  "rule": "/api/integrations/orthanc/webhook",
+  "methods": "POST"
+ },
+ {
   "endpoint": "api_integrations_pets",
   "rule": "/api/integrations/pets",
   "methods": "GET"
@@ -852,6 +857,11 @@
  {
   "endpoint": "api_routes.api_integrations_operational_assistant",
   "rule": "/api/integrations/assistant",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "api_routes.api_integrations_orthanc_webhook",
+  "rule": "/api/integrations/orthanc/webhook",
   "methods": "POST"
  },
  {
@@ -2097,6 +2107,11 @@
  {
   "endpoint": "clinica_routes.update_inventory_item",
   "rule": "/estoque/item/<int:item_id>/atualizar",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "clinica_routes.update_vet_schedule_clinic",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/edit",
   "methods": "POST"
  },
  {
@@ -3520,6 +3535,16 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "health_live",
+  "rule": "/live",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "health_ready",
+  "rule": "/ready",
+  "methods": "GET"
+ },
+ {
   "endpoint": "healthplan.action_view",
   "rule": "/painel/healthplan/action/",
   "methods": "POST"
@@ -4765,6 +4790,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "pacs_onboarding",
+  "rule": "/integracoes/pacs",
+  "methods": "GET"
+ },
+ {
   "endpoint": "pagar_consulta_orcamento",
   "rule": "/consulta/<int:consulta_id>/pagar_orcamento",
   "methods": "GET"
@@ -5093,6 +5123,11 @@
   "endpoint": "planosaude_animal",
   "rule": "/animal/<int:animal_id>/planosaude",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "precos",
+  "rule": "/precos",
+  "methods": "GET"
  },
  {
   "endpoint": "prescricao.action_view",
@@ -5610,6 +5645,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "robots_txt",
+  "rule": "/robots.txt",
+  "methods": "GET"
+ },
+ {
   "endpoint": "rodar_rotina",
   "rule": "/sfa/rotina",
   "methods": "POST"
@@ -5900,6 +5940,81 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "sim_portal.sim_download",
+  "rule": "/sim/api/uploads/<upload_id>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_establishments",
+  "rule": "/sim/api/establishments",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_fiscal_acts",
+  "rule": "/sim/api/fiscal-acts",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_form_docx",
+  "rule": "/sim/api/forms/<form>.docx",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_index",
+  "rule": "/sim/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_inspections",
+  "rule": "/sim/api/inspections",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_login",
+  "rule": "/sim/api/login",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_logout",
+  "rule": "/sim/api/logout",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_registry",
+  "rule": "/sim/api/registry",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_samples",
+  "rule": "/sim/api/samples",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_session",
+  "rule": "/sim/api/session",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_state",
+  "rule": "/sim/api/state",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_state_update",
+  "rule": "/sim/api/state",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sim_portal.sim_static",
+  "rule": "/sim/<path:filename>",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sim_portal.sim_upload",
+  "rule": "/sim/api/uploads",
+  "methods": "POST"
+ },
+ {
   "endpoint": "site_routes.admin_pagar_repasses_frete",
   "rule": "/admin/repasses-frete/pagar/<int:worker_id>",
   "methods": "POST"
@@ -5940,6 +6055,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "site_routes.pacs_onboarding",
+  "rule": "/integracoes/pacs",
+  "methods": "GET"
+ },
+ {
   "endpoint": "site_routes.painel_dashboard",
   "rule": "/painel",
   "methods": "GET"
@@ -5948,6 +6068,11 @@
   "endpoint": "site_routes.parceiro_vacinas_precos",
   "rule": "/parceiro/vacinas/<token>",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "site_routes.precos",
+  "rule": "/precos",
+  "methods": "GET"
  },
  {
   "endpoint": "site_routes.privacy",
@@ -5963,6 +6088,11 @@
   "endpoint": "site_routes.responder_solicitacao",
   "rule": "/solicitacoes/<int:request_id>/responder",
   "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.robots_txt",
+  "rule": "/robots.txt",
+  "methods": "GET"
  },
  {
   "endpoint": "site_routes.secret_game",
@@ -6045,6 +6175,16 @@
   "methods": "POST"
  },
  {
+  "endpoint": "site_routes.sitemap_xml",
+  "rule": "/sitemap.xml",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.sobre",
+  "rule": "/sobre",
+  "methods": "GET"
+ },
+ {
   "endpoint": "site_routes.solicitacoes_recebidas",
   "rule": "/solicitacoes-recebidas",
   "methods": "GET"
@@ -6088,6 +6228,21 @@
   "endpoint": "site_routes.veterinarian_request_new_trial",
   "rule": "/veterinario/assinatura/<int:membership_id>/nova_avaliacao",
   "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.waitlist_signup",
+  "rule": "/lista-de-espera",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "sitemap_xml",
+  "rule": "/sitemap.xml",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "sobre",
+  "rule": "/sobre",
+  "methods": "GET"
  },
  {
   "endpoint": "solicitacoes_recebidas",
@@ -6457,6 +6612,11 @@
  {
   "endpoint": "update_vet_profile",
   "rule": "/veterinario/<int:veterinario_id>/profile",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "update_vet_schedule_clinic",
+  "rule": "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/edit",
   "methods": "POST"
  },
  {
@@ -6992,6 +7152,56 @@
  {
   "endpoint": "vetschedule.index_view",
   "rule": "/painel/vetschedule/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "waitlist_signup",
+  "rule": "/lista-de-espera",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "waitlistlead.action_view",
+  "rule": "/painel/waitlistlead/action/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "waitlistlead.ajax_lookup",
+  "rule": "/painel/waitlistlead/ajax/lookup/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "waitlistlead.ajax_update",
+  "rule": "/painel/waitlistlead/ajax/update/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "waitlistlead.create_view",
+  "rule": "/painel/waitlistlead/new/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "waitlistlead.delete_view",
+  "rule": "/painel/waitlistlead/delete/",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "waitlistlead.details_view",
+  "rule": "/painel/waitlistlead/details/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "waitlistlead.edit_view",
+  "rule": "/painel/waitlistlead/edit/",
+  "methods": "GET,POST"
+ },
+ {
+  "endpoint": "waitlistlead.export",
+  "rule": "/painel/waitlistlead/export/<export_type>/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "waitlistlead.index_view",
+  "rule": "/painel/waitlistlead/",
   "methods": "GET"
  },
  {

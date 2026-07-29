@@ -3533,3 +3533,646 @@ body {
     padding-inline: 0.55rem;
   }
 }
+
+/* ============================================================
+   Página pública de preços (/precos)
+   Reaproveita a paleta da landing: verde para ação, dourado para
+   destaque. Cartões em superfície branca sobre o fundo do body.
+   ============================================================ */
+.precos-page {
+  max-width: 1080px;
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+.precos-hero {
+  text-align: center;
+  max-width: 46rem;
+  margin: 0 auto 2.75rem;
+}
+
+.precos-kicker {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1f7a52;
+  margin-bottom: 0.6rem;
+}
+
+.precos-hero h1 {
+  font-size: clamp(1.9rem, 4vw, 2.9rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  margin: 0 0 0.9rem;
+}
+
+.precos-lead {
+  font-size: 1.05rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+.precos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.precos-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 22px;
+  padding: 2rem 1.75rem 1.75rem;
+  box-shadow: 0 18px 40px -34px rgba(15, 23, 42, 0.5);
+}
+
+.precos-card--featured {
+  border-color: rgba(31, 122, 82, 0.4);
+  box-shadow: 0 26px 56px -34px rgba(31, 122, 82, 0.6);
+}
+
+.precos-tag {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: #1f7a52;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.9rem;
+}
+
+.precos-tag--muted {
+  background: #f3e6c4;
+  color: #7a5a00;
+}
+
+.precos-card h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+}
+
+.precos-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  font-size: clamp(2.6rem, 6vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.precos-currency {
+  font-size: 0.4em;
+  font-weight: 700;
+  align-self: flex-start;
+  padding-top: 0.35em;
+}
+
+.precos-period {
+  font-size: 0.3em;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0;
+}
+
+.precos-amount-note {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0.5rem 0 1.35rem;
+}
+
+.precos-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.35rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #1f7a52 0%, #2e9c72 100%);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 24px 42px -28px rgba(31, 122, 82, 0.72);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.precos-cta:hover,
+.precos-cta:focus-visible {
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.precos-cta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.22rem rgba(31, 122, 82, 0.3);
+}
+
+.precos-cta--outline {
+  background: #fff;
+  color: #1f7a52;
+  border-color: rgba(31, 122, 82, 0.45);
+  box-shadow: none;
+}
+
+.precos-cta--outline:hover,
+.precos-cta--outline:focus-visible {
+  color: #14603f;
+}
+
+.precos-cta-note {
+  text-align: center;
+  font-size: 0.83rem;
+  color: #6b7280;
+  margin: 0.6rem 0 1.4rem;
+}
+
+.precos-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.precos-list li {
+  position: relative;
+  padding-left: 1.7rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.precos-list li::before {
+  content: "\f00c";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  color: #1f7a52;
+  font-size: 0.85rem;
+}
+
+.precos-included {
+  margin-top: 3.5rem;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 22px;
+  padding: 2rem 1.75rem;
+}
+
+.precos-included h2,
+.precos-faq h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.3rem;
+  text-wrap: balance;
+}
+
+.precos-included-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.4rem;
+}
+
+.precos-included-grid strong {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.precos-included-grid p {
+  color: #6b7280;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.precos-faq {
+  margin-top: 3.5rem;
+}
+
+.precos-faq-item {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.precos-faq-item summary {
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.precos-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.precos-faq-item summary::after {
+  content: "+";
+  font-size: 1.4rem;
+  font-weight: 400;
+  line-height: 1;
+  color: #1f7a52;
+  flex: none;
+}
+
+.precos-faq-item[open] summary::after {
+  content: "\2013";
+}
+
+.precos-faq-item summary:focus-visible {
+  outline: 2px solid #1f7a52;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.precos-faq-item p {
+  margin: 0.8rem 0 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+  max-width: 62ch;
+}
+
+.precos-closing {
+  margin-top: 3.5rem;
+  text-align: center;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 22px;
+  padding: 2.25rem 1.75rem;
+}
+
+.precos-closing h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.6rem;
+  text-wrap: balance;
+}
+
+.precos-closing p {
+  color: #6b7280;
+  margin: 0 0 1.5rem;
+}
+
+.precos-closing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.precos-closing-actions .precos-cta {
+  min-width: 15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .precos-cta {
+    transition: none;
+  }
+  .precos-cta:hover,
+  .precos-cta:focus-visible {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Landing de aquisição (visitante deslogado)
+   Complementa os estilos .landing-* já existentes com os
+   elementos novos: preço no hero, faixa de credibilidade,
+   passos numerados e botão flutuante de WhatsApp.
+   ============================================================ */
+.landing-price-line {
+  margin: 1rem 0 0;
+  font-size: 1.05rem;
+  color: #1f2937;
+}
+
+.landing-price-line strong {
+  font-size: 1.25rem;
+  color: #1f7a52;
+}
+
+.landing-reassurance {
+  margin: 1rem 0 0;
+  font-size: 0.87rem;
+  color: #6b7280;
+}
+
+.landing-shot {
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 30px 60px -34px rgba(15, 23, 42, 0.55);
+}
+
+.landing-trust {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 18px;
+  padding: 1.1rem 1.4rem;
+  margin-top: 2.5rem;
+}
+
+.landing-trust__seal {
+  width: 56px;
+  height: auto;
+  flex: none;
+}
+
+.landing-trust p {
+  margin: 0;
+  font-size: 0.97rem;
+  color: #374151;
+  max-width: 62ch;
+}
+
+.landing-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(31, 122, 82, 0.1);
+  color: #1f7a52;
+  font-size: 1.2rem;
+  margin-bottom: 0.9rem;
+}
+
+.landing-steps {
+  list-style: none;
+  counter-reset: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.landing-steps li {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 18px;
+  padding: 1.5rem 1.35rem;
+}
+
+.landing-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #1f7a52;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.8rem;
+}
+
+.landing-steps h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+}
+
+.landing-steps p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.94rem;
+}
+
+.landing-pricing-teaser {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: #fff;
+  border: 1px solid rgba(31, 122, 82, 0.28);
+  border-radius: 22px;
+  padding: 2rem 1.85rem;
+}
+
+.landing-pricing-teaser h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.landing-pricing-teaser p {
+  margin: 0;
+  color: #4b5563;
+  max-width: 52ch;
+}
+
+.whatsapp-float {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1030;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.8rem 1.15rem;
+  border-radius: 999px;
+  background: #1f9d55;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 16px 34px -18px rgba(31, 157, 85, 0.9);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.whatsapp-float:hover,
+.whatsapp-float:focus-visible {
+  background: #17864a;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.whatsapp-float:focus-visible {
+  outline: 3px solid rgba(31, 157, 85, 0.45);
+  outline-offset: 3px;
+}
+
+.whatsapp-float i {
+  font-size: 1.3rem;
+}
+
+@media (max-width: 575.98px) {
+  .whatsapp-float span {
+    display: none;
+  }
+  .whatsapp-float {
+    padding: 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatsapp-float {
+    transition: none;
+  }
+  .whatsapp-float:hover,
+  .whatsapp-float:focus-visible {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Overlay "Em breve" + captura de lista de espera
+   As classes .em-breve-* eram usadas no template sem nenhum
+   estilo definido: o aviso aparecia como texto solto e a página
+   de trás continuava acessível. Aqui viram overlay de fato.
+   ============================================================ */
+.em-breve-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(9, 17, 30, 0.92);
+  backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+
+.em-breve-card {
+  width: 100%;
+  max-width: 30rem;
+  text-align: center;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  padding: 2.25rem 1.75rem;
+}
+
+.em-breve-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  margin-bottom: 1rem;
+}
+
+.em-breve-icon {
+  font-size: 1.6rem;
+  color: #ffd479;
+}
+
+.em-breve-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.6rem;
+  text-wrap: balance;
+}
+
+.em-breve-sub {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.97rem;
+  margin: 0 0 1.4rem;
+}
+
+.em-breve-badge {
+  background: rgba(255, 212, 121, 0.18);
+  color: #ffd479;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+}
+
+.em-breve-waitlist {
+  text-align: left;
+}
+
+.em-breve-waitlist__label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.93rem;
+  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.em-breve-waitlist__row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.em-breve-waitlist__row .form-control {
+  flex: 1 1 12rem;
+  min-width: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding-inline: 1rem;
+}
+
+.em-breve-waitlist__row .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.em-breve-waitlist__row .form-control:focus {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: #ffd479;
+  box-shadow: 0 0 0 0.2rem rgba(255, 212, 121, 0.25);
+  color: #fff;
+}
+
+.em-breve-waitlist__row .btn {
+  border-radius: 999px;
+  padding-inline: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.em-breve-waitlist__feedback {
+  margin: 0.7rem 0 0;
+  font-size: 0.88rem;
+  min-height: 1.2em;
+}
+
+.em-breve-waitlist__feedback.is-ok {
+  color: #7fe0a8;
+}
+
+.em-breve-waitlist__feedback.is-error {
+  color: #ffb0a0;
+}
+
+@media (max-width: 400px) {
+  .em-breve-waitlist__row .btn {
+    width: 100%;
+  }
+}

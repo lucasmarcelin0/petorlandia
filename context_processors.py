@@ -374,6 +374,26 @@ def inject_whatsapp_helpers():
     return dict(whatsapp_chat_url=whatsapp_chat_url)
 
 
+def inject_public_contact():
+    """Contato público usado nas páginas de aquisição (preços, landing).
+
+    Quando ``SUPPORT_PHONE`` não está configurado, as views caem no e-mail de
+    suporte — por isso o valor pode ser ``None`` sem quebrar os templates.
+    """
+
+    message = (
+        'Oi! Vi o site da PetOrlândia e queria entender melhor como funciona '
+        'para a minha clínica.'
+    )
+    return dict(
+        whatsapp_contact_url=whatsapp_chat_url(
+            current_app.config.get('SUPPORT_PHONE'), message
+        ),
+        support_contact_email=current_app.config.get('SUPPORT_EMAIL'),
+        trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
+    )
+
+
 def inject_site_flags():
     """Injeta feature flags do banco no contexto de todos os templates."""
     from models.base import SiteFlag
@@ -411,6 +431,7 @@ _PROCESSORS = (
     inject_minha_casa_de_racao,
     inject_current_app,
     inject_whatsapp_helpers,
+    inject_public_contact,
     inject_site_flags,
     inject_mp_public_key,
     inject_default_pickup_address,

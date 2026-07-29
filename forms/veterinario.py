@@ -108,6 +108,13 @@ class ParceiroDemotionForm(FlaskForm):
 
 
 class VeterinarianMembershipCheckoutForm(FlaskForm):
+    # 'mensal' fica como default para que integrações e testes que só enviam o
+    # submit continuem contratando o ciclo mensal, como antes.
+    plano = SelectField(
+        'Ciclo de cobrança',
+        choices=[('mensal', 'Mensal'), ('anual', 'Anual')],
+        default='mensal',
+    )
     submit = SubmitField('Ativar assinatura')
 
 

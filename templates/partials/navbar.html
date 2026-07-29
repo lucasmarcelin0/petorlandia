@@ -233,8 +233,13 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('loja') }}">
-            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+          <a class="nav-link" href="{{ url_for('precos') }}">
+            <i class="fas fa-tag me-1 text-success"></i> Preços
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('parceiro_clinica_landing') }}">
+            <i class="fas fa-hospital me-1 text-primary"></i> Para clínicas
           </a>
         </li>
         <li class="nav-item">
@@ -243,13 +248,18 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('register') }}">
-            <i class="fas fa-user-plus me-1 text-success"></i> Registrar
+          <a class="nav-link" href="{{ url_for('loja') }}">
+            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('login_view') }}">
             <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link fw-semibold text-success" href="{{ url_for('register') }}">
+            <i class="fas fa-user-plus me-1"></i> Criar conta grátis
           </a>
         </li>
         {% endif %}

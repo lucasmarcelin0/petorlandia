@@ -26,7 +26,9 @@ def main():
         for r in app.url_map.iter_rules()
     )
     out = PROJECT_ROOT / "tests" / "url_map_snapshot.json"
-    with open(out, "w", encoding="utf-8") as f:
+    # newline="\n": sem isso, rodar no Windows reescreve o arquivo inteiro em
+    # CRLF e o diff cobre as ~7 mil linhas, escondendo a mudanca real de rotas.
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(
             [{"endpoint": e, "rule": r, "methods": m} for e, r, m in rules],
             f,

@@ -12,6 +12,7 @@ from app import (
     app,
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
+    enviar_lembretes_fim_trial,
     enviar_lembretes_recebimento,
     enviar_lembretes_tratamento,
     verificar_datas_proximas,
@@ -170,6 +171,7 @@ def main() -> None:
         ('lembretes-consultas-exames-vacinas', verificar_datas_proximas, 8, 0),
         ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
         ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
+        ('lembretes-fim-trial', enviar_lembretes_fim_trial, 11, 0),
         ('snapshot-financeiro', _run_financial_snapshot_job, 2, 30),
         ('mercadopago-oauth-renewal', _run_mercadopago_oauth_renewal_job, 3, 15),
     ]

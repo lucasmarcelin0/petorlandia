@@ -145,6 +145,7 @@ __all__ = [
     "ReferralCode",
     "ReferralSignup",
     "SiteFlag",
+    "WaitlistLead",
     "AdminActionNotification",
     "AnimalHealthRecord",
     "CarteirinhaImportacao",

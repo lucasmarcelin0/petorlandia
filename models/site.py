@@ -82,3 +82,32 @@ class SiteFlag(db.Model):
         db.session.commit()
         return row
 
+
+
+class WaitlistLead(db.Model):
+    """Interesse registrado numa funcionalidade ainda não publicada.
+
+    Substitui o beco sem saída do overlay "Em breve": em vez de o visitante
+    sair sem deixar rastro, ele informa um contato e vira lista de aviso —
+    e, na prática, a primeira lista de clientes de cada linha nova.
+    """
+
+    __tablename__ = 'waitlist_lead'
+    __table_args__ = (
+        db.UniqueConstraint('feature', 'contact', name='uq_waitlist_feature_contact'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: Chave da funcionalidade ('loja', 'plano_saude').
+    feature = db.Column(db.String(60), nullable=False, index=True)
+    #: E-mail ou telefone, normalizado em minúsculas e sem espaços nas pontas.
+    contact = db.Column(db.String(180), nullable=False)
+    city = db.Column(db.String(120), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    user = db.relationship('User')
+
+    def __repr__(self) -> str:  # pragma: no cover - conveniência de debug
+        return f'<WaitlistLead {self.feature} {self.contact}>'
