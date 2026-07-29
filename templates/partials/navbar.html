@@ -16,7 +16,7 @@
     </button>
 
     <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-      <ul class="navbar-nav app-navbar-nav align-items-lg-center gap-lg-1">
+      <ul class="navbar-nav app-navbar-nav align-items-lg-center gap-lg-1{% if not current_user.is_authenticated %} public-navbar-nav{% endif %}">
         {% if is_admin %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
