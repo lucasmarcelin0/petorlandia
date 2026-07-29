@@ -5940,6 +5940,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "sim_portal.sim_account_preview",
+  "rule": "/sim/api/accounts/<int:account_id>/preview",
+  "methods": "GET"
+ },
+ {
   "endpoint": "sim_portal.sim_download",
   "rule": "/sim/api/uploads/<upload_id>",
   "methods": "GET"
