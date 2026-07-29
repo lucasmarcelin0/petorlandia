@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import logging
 from weakref import WeakKeyDictionary
 
-from flask import current_app, g, has_request_context, request
+from flask import current_app, g, has_app_context, has_request_context, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mail import Mail
@@ -163,6 +163,17 @@ def _receive_load(target, context):
     Uses cached column names per model class for better performance.
     """
     try:
+        # Flask-Session compara `expiry` com datetime.utcnow() (naive). Não
+        # devemos aplicar a normalização dos modelos de domínio à tabela
+        # interna de sessão, ou a leitura do cookie falha no request seguinte.
+        session_table = (
+            current_app.config.get("SESSION_SQLALCHEMY_TABLE", "sessions")
+            if has_app_context()
+            else "sessions"
+        )
+        if getattr(target, "__tablename__", None) == session_table:
+            return
+
         datetime_columns = _get_datetime_columns(type(target))
         if not datetime_columns:
             return

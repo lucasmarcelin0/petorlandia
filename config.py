@@ -66,6 +66,15 @@ class Config:
     }
     SESSION_TYPE = os.environ.get("SESSION_TYPE", "filesystem")
     SESSION_PERMANENT = True
+    # No Heroku, SESSION_TYPE=sqlalchemy evita que logins sejam perdidos a
+    # cada deploy. A instância SQLAlchemy é injetada em app.py depois do
+    # db.init_app(), quando a extensão já pode usar o banco configurado.
+    SESSION_SQLALCHEMY_TABLE = os.environ.get(
+        "SESSION_SQLALCHEMY_TABLE", "web_sessions"
+    )
+    SESSION_CLEANUP_N_REQUESTS = int(
+        os.environ.get("SESSION_CLEANUP_N_REQUESTS", "100")
+    )
     # Long-lived sessions increase the blast radius of a stolen cookie.
     PERMANENT_SESSION_LIFETIME = timedelta(
         days=int(os.environ.get("PERMANENT_SESSION_LIFETIME_DAYS", "30"))

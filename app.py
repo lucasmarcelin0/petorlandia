@@ -304,6 +304,10 @@ db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
 mail.init_app(app)
 login.init_app(app)
+if str(app.config.get("SESSION_TYPE", "")).lower() == "sqlalchemy":
+    # Compartilha a conexão principal em vez de criar uma segunda instância
+    # SQLAlchemy. Isso torna sessões persistentes entre dynos e deploys.
+    app.config["SESSION_SQLALCHEMY"] = db
 session_ext.init_app(app)
 babel.init_app(app)
 csrf.init_app(app)
