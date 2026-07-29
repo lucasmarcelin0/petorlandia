@@ -179,8 +179,15 @@
           </ul>
         </li>
         {% else %}
+        {% if current_user.worker == 'estudante' %}
         <li class="nav-item">
-          <a class="nav-link nav-link--primary" href="{{ url_for('list_animals', scope='meus') }}">
+          <a class="nav-link nav-link--primary" href="{{ url_for('student_hub') }}">
+            <i class="fas fa-graduation-cap me-1 text-info"></i> Estudar
+          </a>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+          <a class="nav-link{% if current_user.worker != 'estudante' %} nav-link--primary{% endif %}" href="{{ url_for('list_animals', scope='meus') }}">
             <i class="fas fa-dog me-1 text-primary"></i> Meus pets
           </a>
         </li>

@@ -60,11 +60,15 @@ def test_cadastro_de_estudante_volta_para_hub_gratuito(app, client):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/estudantes")
+    student = User.query.filter_by(email="ana.estudante@example.com").one()
+    assert student.worker == "estudante"
 
     hub = client.get("/estudantes")
     html = hub.get_data(as_text=True)
     assert hub.status_code == 200
     assert "Biblioteca educacional" in html
+    assert 'href="/estudantes"' in html
+    assert "Estudar" in html
     assert "Uso responsável" in html
 
 

@@ -337,7 +337,11 @@ def register():
             email=normalized_email,
             phone=normalized_phone,
             profile_photo=photo_url,
-            endereco=endereco
+            endereco=endereco,
+            # Mantém a porta de entrada educacional disponível depois do
+            # primeiro acesso. Ao se tornar profissional, o onboarding de
+            # clínica substitui este marcador pelo papel correspondente.
+            worker='estudante' if audience == 'student' else None,
         )
         user.set_password(form.password.data)
 
@@ -549,6 +553,8 @@ def google_callback():
         return redirect(url_for('login_view'))
 
     email = normalize_email(claims.get('email'))
+    sanitized_next = _sanitize_login_next_url(next_url)
+    is_student_flow = urlparse(sanitized_next).path == url_for('student_hub')
     user = User.query.filter(func.lower(User.email) == email).first()
     created = False
 
@@ -557,6 +563,7 @@ def google_callback():
             name=(claims.get('name') or '').strip() or email.split('@')[0],
             email=email,
             profile_photo=claims.get('picture') or None,
+            worker='estudante' if is_student_flow else None,
         )
         # Conta sem senha utilizável: quem entrou pelo Google continua entrando
         # pelo Google, ou define uma senha depois em "esqueci minha senha".
@@ -575,26 +582,17 @@ def google_callback():
     session.permanent = True
 
     if created:
-        channel = (
-            'student_google'
-            if urlparse(_sanitize_login_next_url(next_url)).path == url_for('student_hub')
-            else 'google'
-        )
+        channel = 'student_google' if is_student_flow else 'google'
         track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
         flash('Conta criada com o Google. Bem-vindo!', 'success')
-        sanitized_next = _sanitize_login_next_url(next_url)
         if urlparse(sanitized_next).path == url_for('index'):
             sanitized_next = url_for('onboarding')
         return redirect(sanitized_next)
 
-    channel = (
-        'student_google'
-        if urlparse(_sanitize_login_next_url(next_url)).path == url_for('student_hub')
-        else 'google'
-    )
+    channel = 'student_google' if is_student_flow else 'google'
     track_event('login_succeeded', role=getattr(user, 'role', None), channel=channel)
     flash('Login realizado com sucesso!', 'success')
-    return redirect(_sanitize_login_next_url(next_url))
+    return redirect(sanitized_next)
 
 
 @bp.route("/logout", methods=['GET'])
