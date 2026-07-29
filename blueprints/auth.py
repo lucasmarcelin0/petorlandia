@@ -462,8 +462,15 @@ def google_callback():
     """Recebe o retorno do Google, valida e entra na conta."""
     from services import google_login as google
 
+    # Sem credenciais configuradas o fluxo não existe. Antes isso devolvia um
+    # 404 cru — quem clicasse no link achava que o site estava quebrado.
     if not google.is_enabled():
-        abort(404)
+        flash(
+            'Login com Google ainda não está ativo. Entre com e-mail e senha, '
+            'ou crie sua conta em menos de um minuto.',
+            'info',
+        )
+        return redirect(url_for('login_view'))
 
     next_url = session.pop(google.NEXT_SESSION_KEY, None) or url_for('index')
     expected_state = session.pop(google.STATE_SESSION_KEY, None)

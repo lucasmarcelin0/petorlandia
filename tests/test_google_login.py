@@ -43,8 +43,11 @@ def test_botao_some_quando_nao_ha_credenciais(app, client):
     app.config['GOOGLE_OAUTH_CLIENT_SECRET'] = None
 
     assert 'google-btn' not in client.get('/login').get_data(as_text=True)
-    # Sem credenciais o callback nem existe, para não expor um fluxo pela metade.
-    assert client.get('/auth/google/callback').status_code == 404
+    # Sem credenciais o callback não pode devolver 404 cru: quem chegar nele
+    # (link antigo, favorito) volta para o login com explicação.
+    response = client.get('/auth/google/callback')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
 
 
 def test_inicio_do_fluxo_guarda_state_na_sessao(client):

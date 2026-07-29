@@ -1,7 +1,7 @@
 """Views do domínio site_routes (migrado do app.py)."""
 from flask import Blueprint
 import os, re, requests
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from extensions import csrf, db
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
@@ -221,16 +221,29 @@ def veterinarian_membership_checkout():
     reason_suffix = current_user.name.strip() if (current_user.name or '').strip() else current_user.email
     reason = f'Assinatura Profissional PetOrlândia ({ciclo_label}) - {reason_suffix}'
 
+    auto_recurring = {
+        'frequency': frequency,
+        'frequency_type': 'months',
+        'transaction_amount': float(price),
+        'currency_id': 'BRL',
+    }
+
+    # Assinar durante a avaliação cadastra o cartão agora, mas a primeira
+    # cobrança só cai no fim do teste. Sem esse start_date o Mercado Pago
+    # cobraria na hora da autorização — e a promessa da tela seria falsa.
+    if membership and membership.is_trial_active():
+        trial_end = membership._as_timezone_aware(membership.trial_ends_at)
+        if trial_end:
+            auto_recurring['start_date'] = (
+                trial_end.astimezone(timezone.utc)
+                .strftime('%Y-%m-%dT%H:%M:%S.000Z')
+            )
+
     preapproval_data = {
         'reason': reason,
         'back_url': url_for('veterinarian_membership', _external=True),
         'payer_email': current_user.email,
-        'auto_recurring': {
-            'frequency': frequency,
-            'frequency_type': 'months',
-            'transaction_amount': float(price),
-            'currency_id': 'BRL',
-        },
+        'auto_recurring': auto_recurring,
     }
 
     if membership and membership.id:

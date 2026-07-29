@@ -35,10 +35,16 @@
         <h2 class="h5 mb-1">
           Faltam {{ membership.remaining_trial_days() }} dia(s) de avaliação.
         </h2>
-        <p class="text-muted mb-0">
+        <p class="text-muted mb-2">
           Termina em <strong>{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>.
-          Você não precisa esperar o fim para assinar: ao ativar agora, a primeira cobrança
-          só acontece quando a avaliação terminar.
+        </p>
+        <p class="text-muted mb-0">
+          Deixando o pagamento configurado agora, você não corre o risco de perder o acesso
+          no meio de um atendimento por esquecimento — e
+          <strong>a primeira cobrança só acontece em
+          {{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>,
+          quando a avaliação terminar. Até lá não cobramos nada, e você pode cancelar a
+          qualquer momento sem pagar.
         </p>
       {% else %}
         <span class="badge bg-warning-subtle text-warning-emphasis mb-2">Assinatura inativa</span>
