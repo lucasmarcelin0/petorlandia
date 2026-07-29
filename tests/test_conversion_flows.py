@@ -36,6 +36,31 @@ def test_register_preserva_destino_de_aquisicao(app, client):
     assert response.headers["Location"].endswith("/minha-clinica")
 
 
+def test_home_unifica_os_perfis_e_nao_expoe_preco_de_clinica_ao_tutor(client):
+    response = client.get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Uma plataforma. Toda a rede de cuidado." in html
+    assert "Sou tutor" in html
+    assert "Tenho clínica" in html
+    assert "Sou veterinário" in html
+    assert "Sou estudante" in html
+    assert "Grátis para tutores" in html
+    assert "R$ 60/mês por veterinário" not in html
+
+
+def test_home_carrega_fragmento_especifico_sem_misturar_precos(client):
+    tutor = client.get("/inicio/perfil/tutor")
+    clinic = client.get("/inicio/perfil/clinica")
+
+    assert tutor.status_code == 200
+    assert "Grátis para tutores" in tutor.get_data(as_text=True)
+    assert "R$ 60/mês por veterinário" not in tutor.get_data(as_text=True)
+    assert clinic.status_code == 200
+    assert "R$ 60/mês por veterinário" in clinic.get_data(as_text=True)
+
+
 def test_porta_de_entrada_do_estudante_tem_login_e_cadastro_direcionado(app, client):
     response = client.get("/estudantes")
     html = response.get_data(as_text=True)
@@ -70,6 +95,57 @@ def test_cadastro_de_estudante_volta_para_hub_gratuito(app, client):
     assert 'href="/estudantes"' in html
     assert "Estudar" in html
     assert "Uso responsável" in html
+    assert "/estudantes/pratica" in html
+
+
+def test_estudante_acompanha_fluxo_completo_em_ambiente_ficticio(app, client):
+    student = User(
+        name="Bruno Estudante",
+        email="bruno.estudante@example.com",
+        worker="estudante",
+    )
+    student.set_password("segredo123")
+    db.session.add(student)
+    db.session.commit()
+
+    with client.session_transaction() as session:
+        session["_user_id"] = str(student.id)
+        session["_fresh"] = True
+
+    response = client.get("/estudantes/pratica")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Modo de prática segura" in html
+    assert "Paciente fictício" in html
+    assert "Somente leitura" in html
+    assert "Sem doses ou prescrições" in html
+    assert "Acolhimento" in html
+    assert "Alta e continuidade" in html
+
+    stage = client.get("/estudantes/pratica/etapa/raciocinio")
+    assert stage.status_code == 200
+    assert "Lista de problemas e raciocínio clínico" in stage.get_data(as_text=True)
+
+
+def test_login_de_estudante_promove_conta_legada_para_area_educacional(app, client):
+    legacy = User(name="Conta Legada", email="legada@example.com")
+    legacy.set_password("segredo123")
+    db.session.add(legacy)
+    db.session.commit()
+
+    response = client.post(
+        "/login",
+        data={
+            "login": "legada@example.com",
+            "password": "segredo123",
+            "audience": "student",
+            "next": "/estudantes/pratica",
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/estudantes/pratica")
+    assert db.session.get(User, legacy.id).worker == "estudante"
 
 
 def test_ativacao_da_clinica_cria_veterinario_e_avaliacao(app, client, monkeypatch):

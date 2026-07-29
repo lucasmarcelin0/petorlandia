@@ -45,6 +45,46 @@ def test_registration_can_start_without_address(app):
     assert response.headers['Location'].endswith('/comecar')
 
 
+def test_html_csrf_failure_returns_to_form_instead_of_raw_400(app):
+    original = app.config.get('WTF_CSRF_ENABLED')
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        client = app.test_client()
+        response = client.post(
+            '/register',
+            data={
+                'name': 'Sessão Antiga',
+                'email': 'sessao.antiga@example.com',
+                'password': 'segura123',
+            },
+            headers={
+                'Accept': 'text/html',
+                'Referer': 'http://localhost/register?next=/minha-clinica',
+            },
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert response.headers['Location'] == '/register?next=/minha-clinica'
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = original
+
+
+def test_json_csrf_failure_keeps_structured_400(app):
+    original = app.config.get('WTF_CSRF_ENABLED')
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        client = app.test_client()
+        response = client.post(
+            '/register',
+            json={'name': 'Sessão Antiga'},
+            headers={'Accept': 'application/json'},
+        )
+        assert response.status_code == 400
+        assert response.get_json()['error'] == 'CSRF token missing or invalid'
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = original
+
+
 def test_login_rate_limit_is_enforced_when_enabled(app):
     app.config['RATELIMIT_ENABLED'] = True
     client = app.test_client()

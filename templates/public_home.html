@@ -1,0 +1,196 @@
+{% extends "layout.html" %}
+
+{% block page_title %}PetOrlândia — toda a jornada veterinária em um só lugar{% endblock %}
+{% block meta_description %}Tutores, clínicas, veterinários e estudantes conectados à mesma jornada de cuidado: serviços, histórico, agenda e aprendizado em uma única plataforma.{% endblock %}
+
+{% block main %}
+<main class="unified-home" aria-labelledby="unified-home-title">
+  <section class="unified-hero">
+    <div class="unified-hero__copy">
+      <span class="unified-kicker">
+        <i class="fa-solid fa-link" aria-hidden="true"></i>
+        Uma plataforma. Toda a rede de cuidado.
+      </span>
+      <h1 id="unified-home-title">Toda a jornada veterinária, conectada em um só lugar.</h1>
+      <p>
+        O tutor encontra atendimento e acompanha o pet. A clínica organiza a operação.
+        O veterinário atende com o histórico certo. E o estudante aprende o fluxo em um ambiente seguro.
+      </p>
+      <div class="unified-hero__actions">
+        <a href="#perfis" class="unified-btn unified-btn--primary">
+          Encontrar minha entrada <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+        </a>
+        <a href="{{ url_for('servicos') }}" class="unified-btn unified-btn--secondary">
+          Ver serviços por cidade
+        </a>
+      </div>
+      <ul class="unified-hero__trust" aria-label="Compromissos da plataforma">
+        <li><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Dados protegidos</li>
+        <li><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> Funciona no celular</li>
+        <li><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Atendimento local</li>
+      </ul>
+    </div>
+
+    <div class="unified-network" aria-label="A jornada conectada na PetOrlândia">
+      <div class="unified-network__center">
+        <img src="{{ url_for('static', filename='pastorgato-96.png') }}"
+             alt="" width="96" height="91">
+        <strong>PetOrlândia</strong>
+        <span>um histórico compartilhado com permissão</span>
+      </div>
+      <div class="unified-network__role unified-network__role--tutor">
+        <i class="fa-solid fa-heart" aria-hidden="true"></i><span>Tutor</span>
+      </div>
+      <div class="unified-network__role unified-network__role--clinic">
+        <i class="fa-solid fa-hospital" aria-hidden="true"></i><span>Clínica</span>
+      </div>
+      <div class="unified-network__role unified-network__role--vet">
+        <i class="fa-solid fa-user-doctor" aria-hidden="true"></i><span>Veterinário</span>
+      </div>
+      <div class="unified-network__role unified-network__role--student">
+        <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i><span>Estudante</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona" class="unified-section" aria-labelledby="journey-title">
+    <header class="unified-section__heading">
+      <span class="unified-kicker">Uma jornada, não quatro produtos</span>
+      <h2 id="journey-title">A informação acompanha o cuidado — com cada pessoa vendo apenas o que precisa.</h2>
+    </header>
+    <ol class="unified-journey">
+      <li>
+        <span>1</span>
+        <i class="fa-solid fa-magnifying-glass-location" aria-hidden="true"></i>
+        <h3>O tutor encontra</h3>
+        <p>Escolhe a cidade, compara serviços e agenda sem descobrir caminhos desconectados.</p>
+      </li>
+      <li>
+        <span>2</span>
+        <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+        <h3>A clínica organiza</h3>
+        <p>Recepção, agenda e cadastro preparam o atendimento no mesmo sistema.</p>
+      </li>
+      <li>
+        <span>3</span>
+        <i class="fa-solid fa-stethoscope" aria-hidden="true"></i>
+        <h3>O veterinário cuida</h3>
+        <p>Histórico, exame, plano, documentos e retorno formam um prontuário contínuo.</p>
+      </li>
+      <li>
+        <span>4</span>
+        <i class="fa-solid fa-bell" aria-hidden="true"></i>
+        <h3>O cuidado continua</h3>
+        <p>O tutor recebe o que é dele; a equipe mantém a operação; o estudante aprende em simulação.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="perfis" class="unified-section unified-profiles" aria-labelledby="profiles-title">
+    <header class="unified-section__heading">
+      <span class="unified-kicker">A mesma plataforma, adaptada a você</span>
+      <h2 id="profiles-title">O que você veio resolver hoje?</h2>
+      <p>Escolha um perfil. Mostraremos só os benefícios, condições e próximos passos relevantes para ele.</p>
+    </header>
+
+    <div class="unified-profile-tabs" role="tablist" aria-label="Escolher perfil">
+      {% set profile_labels = {
+        'tutor': ('fa-heart', 'Sou tutor'),
+        'clinica': ('fa-hospital', 'Tenho clínica'),
+        'veterinario': ('fa-user-doctor', 'Sou veterinário'),
+        'estudante': ('fa-graduation-cap', 'Sou estudante')
+      } %}
+      {% for key in profile_keys %}
+      <a href="{{ url_for('index', perfil=key) }}#perfis"
+         class="unified-profile-tab{% if key == selected_profile %} is-active{% endif %}"
+         role="tab"
+         aria-selected="{{ 'true' if key == selected_profile else 'false' }}"
+         data-profile="{{ key }}">
+        <i class="fa-solid {{ profile_labels[key][0] }}" aria-hidden="true"></i>
+        {{ profile_labels[key][1] }}
+      </a>
+      {% endfor %}
+    </div>
+
+    <div id="unified-profile-content" class="unified-profile-content" aria-live="polite">
+      {% include 'partials/public_profile_panel.html' %}
+    </div>
+    <p id="unified-profile-status" class="visually-hidden" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="unified-proof" aria-labelledby="proof-title">
+    <div>
+      <span class="unified-kicker">Tecnologia próxima de quem atende</span>
+      <h2 id="proof-title">Feita em Orlândia-SP e usada em cuidado real.</h2>
+      <p>
+        A PetOrlândia conecta campanhas públicas, serviços locais e rotina clínica.
+        O produto cresce a partir do que tutores e equipes realmente precisam fazer.
+      </p>
+    </div>
+    <div class="unified-proof__facts">
+      <span><i class="fa-solid fa-syringe" aria-hidden="true"></i> Campanhas municipais</span>
+      <span><i class="fa-solid fa-lock" aria-hidden="true"></i> Permissões por perfil</span>
+      <span><i class="fa-solid fa-headset" aria-hidden="true"></i> Suporte próximo</span>
+    </div>
+  </section>
+
+  <section class="unified-final-cta" aria-labelledby="unified-final-title">
+    <div>
+      <span class="unified-kicker">Comece pelo que importa agora</span>
+      <h2 id="unified-final-title">Seu próximo cuidado já pode nascer organizado.</h2>
+    </div>
+    <a href="#perfis" class="unified-btn unified-btn--light">Escolher meu perfil</a>
+  </section>
+</main>
+
+<script>
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-profile]'));
+  var content = document.getElementById('unified-profile-content');
+  var status = document.getElementById('unified-profile-status');
+  if (!tabs.length || !content) return;
+  var controller;
+
+  function selectTab(selected) {
+    tabs.forEach(function (tab) {
+      var active = tab === selected;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function (event) {
+      if (!window.fetch) return;
+      event.preventDefault();
+      var profile = tab.dataset.profile;
+      if (controller) controller.abort();
+      controller = new AbortController();
+      selectTab(tab);
+      content.classList.add('is-loading');
+      if (status) status.textContent = 'Atualizando conteúdo para ' + tab.textContent.trim() + '.';
+      fetch('/inicio/perfil/' + encodeURIComponent(profile), {
+        headers: {'Accept': 'text/html'},
+        signal: controller.signal
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('profile_failed');
+          return response.text();
+        })
+        .then(function (html) {
+          content.innerHTML = html;
+          window.history.replaceState({}, '', '/?perfil=' + encodeURIComponent(profile) + '#perfis');
+          if (status) status.textContent = 'Conteúdo atualizado.';
+        })
+        .catch(function (error) {
+          if (error.name === 'AbortError') return;
+          window.location.href = tab.href;
+        })
+        .finally(function () {
+          content.classList.remove('is-loading');
+        });
+    });
+  });
+})();
+</script>
+{% endblock %}

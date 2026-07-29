@@ -2,7 +2,7 @@
 from flask import Blueprint
 import os, re, requests
 from datetime import date, datetime, timedelta, timezone
-from extensions import csrf, db
+from extensions import csrf, db, limiter
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
@@ -535,17 +535,124 @@ def _landing_screenshot() -> str | None:
     return None
 
 
+PUBLIC_PROFILE_KEYS = ('tutor', 'clinica', 'veterinario', 'estudante')
+
+
+def _public_profile_data(profile_key: str) -> dict:
+    """Conteúdo da mesma plataforma, adaptado à intenção do visitante."""
+
+    profile_key = profile_key if profile_key in PUBLIC_PROFILE_KEYS else 'tutor'
+    trial_days = int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30)
+    monthly_price = float(_get_veterinarian_membership_price())
+    profiles = {
+        'tutor': {
+            'key': 'tutor',
+            'icon': 'fa-heart',
+            'eyebrow': 'Para quem cuida',
+            'title': 'A saúde do seu pet sem informação espalhada.',
+            'description': (
+                'Carteira de vacinas, histórico, exames e próximos cuidados ficam '
+                'juntos — e você encontra atendimento pela sua cidade.'
+            ),
+            'benefits': [
+                'Conta gratuita para tutores, sem cartão.',
+                'Um histórico por pet, acessível no celular.',
+                'Serviços e profissionais filtrados pela sua cidade.',
+            ],
+            'primary_label': 'Criar conta de tutor',
+            'primary_url': url_for('register'),
+            'secondary_label': 'Ver serviços na minha cidade',
+            'secondary_url': url_for('servicos'),
+            'reassurance': 'Grátis para tutores. Seus dados continuam seus.',
+        },
+        'clinica': {
+            'key': 'clinica',
+            'icon': 'fa-hospital',
+            'eyebrow': 'Para clínicas',
+            'title': 'Equipe, pacientes e financeiro no mesmo fluxo.',
+            'description': (
+                'A recepção agenda, o veterinário atende, o prontuário é atualizado '
+                'e o tutor acompanha — sem repetir cadastro nem procurar no WhatsApp.'
+            ),
+            'benefits': [
+                'Agenda compartilhada e lembretes automáticos.',
+                'Prontuário, vacinas, exames e documentos conectados.',
+                'Orçamentos e recebimentos visíveis para quem administra.',
+            ],
+            'primary_label': f'Começar {trial_days} dias grátis',
+            'primary_url': url_for('register', next=url_for('minha_clinica')),
+            'secondary_label': 'Conhecer a solução para clínicas',
+            'secondary_url': url_for('parceiro_clinica_landing'),
+            'price': f'R$ {monthly_price:.0f}/mês por veterinário',
+            'reassurance': (
+                f'Primeira cobrança só no {trial_days + 1}º dia. Sem fidelidade.'
+            ),
+        },
+        'veterinario': {
+            'key': 'veterinario',
+            'icon': 'fa-user-doctor',
+            'eyebrow': 'Para médicos-veterinários',
+            'title': 'Menos tempo procurando. Mais contexto para atender.',
+            'description': (
+                'Veja a agenda do dia, abra o histórico certo e registre a evolução '
+                'do paciente num fluxo que acompanha o atendimento.'
+            ),
+            'benefits': [
+                'Agenda, triagem e prontuário na sequência do trabalho.',
+                'Exames, prescrições e retornos na ficha do paciente.',
+                'Acesso pelo computador ou celular, dentro e fora da clínica.',
+            ],
+            'primary_label': 'Criar meu acesso profissional',
+            'primary_url': url_for('register', next=url_for('minha_clinica')),
+            'secondary_label': 'Ver a rotina profissional',
+            'secondary_url': url_for('parceiro_clinica_landing'),
+            'reassurance': 'Seu acesso acompanha a clínica e respeita as permissões da equipe.',
+        },
+        'estudante': {
+            'key': 'estudante',
+            'icon': 'fa-graduation-cap',
+            'eyebrow': 'Para estudantes',
+            'title': 'Aprenda o fluxo da prática sem tocar em dados reais.',
+            'description': (
+                'Acompanhe um caso fictício da recepção à alta, entenda como cada '
+                'etapa vira registro e conheça cedo a rotina digital da profissão.'
+            ),
+            'benefits': [
+                'Ambiente educacional gratuito e separado da operação real.',
+                'Caso fictício guiado por todas as etapas do atendimento.',
+                'Sem prescrever, alterar prontuários ou acessar pacientes reais.',
+            ],
+            'primary_label': 'Criar conta de estudante',
+            'primary_url': url_for(
+                'register',
+                next=url_for('student_practice'),
+                audience='student',
+            ),
+            'secondary_label': 'Conhecer o espaço do estudante',
+            'secondary_url': url_for('student_hub'),
+            'reassurance': 'Gratuito. Conteúdo educacional, com supervisão profissional sempre recomendada.',
+        },
+    }
+    return profiles[profile_key]
+
+
 @bp.route('/')
 def index():
     if not current_user.is_authenticated:
         from services.public_stats import public_stats
 
+        selected_profile = (request.args.get('perfil') or 'tutor').strip().lower()
+        if selected_profile not in PUBLIC_PROFILE_KEYS:
+            selected_profile = 'tutor'
         return render_template(
-            'index.html',
+            'public_home.html',
             landing_screenshot=_landing_screenshot(),
             trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
             monthly_price=float(_get_veterinarian_membership_price()),
             stats=public_stats(),
+            selected_profile=selected_profile,
+            profile=_public_profile_data(selected_profile),
+            profile_keys=PUBLIC_PROFILE_KEYS,
         )
 
     meus_pets = (
@@ -595,6 +702,18 @@ def index():
         doses_atrasadas=doses_atrasadas,
         proximas_vacinas=proximas_vacinas,
         proximos_agendamentos=proximos_agendamentos,
+    )
+
+
+@bp.route('/inicio/perfil/<profile_key>')
+def public_profile_panel(profile_key):
+    """Fragmento progressivo da home; também funciona sem JavaScript."""
+
+    if profile_key not in PUBLIC_PROFILE_KEYS:
+        abort(404)
+    return render_template(
+        'partials/public_profile_panel.html',
+        profile=_public_profile_data(profile_key),
     )
 
 
@@ -778,6 +897,172 @@ def student_hub():
         'estudantes.html',
         form=LoginForm(),
         student_next=url_for('student_hub'),
+    )
+
+
+STUDENT_PRACTICE_STAGES = (
+    {
+        'key': 'acolhimento',
+        'short': 'Acolhimento',
+        'icon': 'fa-clipboard-user',
+        'title': '1. Recepção e identificação segura',
+        'objective': 'Entender o contexto antes de abrir qualquer conduta clínica.',
+        'scenario': (
+            'Nina é uma paciente fictícia: cadela, sem raça definida, 4 anos. '
+            'A tutora relata apatia e redução do apetite desde ontem.'
+        ),
+        'actions': [
+            'Confirmar tutor, paciente, espécie, idade e contato.',
+            'Registrar a queixa principal com as palavras da tutora.',
+            'Sinalizar urgência sem transformar a recepção em diagnóstico.',
+        ],
+        'record': 'Cadastro do paciente, motivo da visita e horário de chegada.',
+        'safety': 'Nenhum dado desta simulação é salvo em prontuários reais.',
+    },
+    {
+        'key': 'triagem',
+        'short': 'Triagem',
+        'icon': 'fa-heart-pulse',
+        'title': '2. Triagem e prioridade',
+        'objective': 'Reconhecer sinais de risco e organizar a ordem do atendimento.',
+        'scenario': (
+            'Na simulação, Nina está consciente e responsiva. A equipe registra '
+            'parâmetros fictícios e observa se há sinais que exigem atendimento imediato.'
+        ),
+        'actions': [
+            'Observar estado geral, respiração, perfusão e nível de consciência.',
+            'Registrar parâmetros e quem realizou a triagem.',
+            'Encaminhar sinais críticos ao médico-veterinário sem demora.',
+        ],
+        'record': 'Sinais observados, parâmetros, classificação e responsável pela triagem.',
+        'safety': 'Valores e condutas devem ser ensinados e validados por um supervisor.',
+    },
+    {
+        'key': 'anamnese',
+        'short': 'Anamnese',
+        'icon': 'fa-comments',
+        'title': '3. Anamnese orientada',
+        'objective': 'Transformar o relato em uma história clínica clara e verificável.',
+        'scenario': (
+            'A tutora informa mudança recente de alimentação e passeio em uma área '
+            'com vegetação. Vacinação e controle de parasitas precisam ser conferidos.'
+        ),
+        'actions': [
+            'Explorar início, duração, evolução e fatores associados à queixa.',
+            'Revisar alimentação, ambiente, medicamentos e histórico preventivo.',
+            'Separar fatos observados de interpretações ou hipóteses.',
+        ],
+        'record': 'História atual, antecedentes, rotina, prevenção e respostas negativas relevantes.',
+        'safety': 'Uma boa anamnese orienta o raciocínio, mas não substitui o exame físico.',
+    },
+    {
+        'key': 'exame',
+        'short': 'Exame físico',
+        'icon': 'fa-stethoscope',
+        'title': '4. Exame físico e achados',
+        'objective': 'Registrar o que foi examinado de forma completa e rastreável.',
+        'scenario': (
+            'O caso apresenta achados fictícios para discussão em aula. O estudante '
+            'acompanha a estrutura do registro, sem executar ou validar condutas sozinho.'
+        ),
+        'actions': [
+            'Seguir uma sequência consistente para não esquecer sistemas.',
+            'Descrever achados antes de nomear possíveis causas.',
+            'Marcar itens não avaliados e o motivo, em vez de deixá-los ambíguos.',
+        ],
+        'record': 'Exame geral, sistemas avaliados, achados e identificação do examinador.',
+        'safety': 'Exame físico exige técnica, bem-estar animal e supervisão presencial.',
+    },
+    {
+        'key': 'raciocinio',
+        'short': 'Raciocínio',
+        'icon': 'fa-diagram-project',
+        'title': '5. Lista de problemas e raciocínio clínico',
+        'objective': 'Conectar evidências sem confundir hipótese com diagnóstico.',
+        'scenario': (
+            'Com a história e o exame fictícios reunidos, a equipe organiza problemas, '
+            'hipóteses e perguntas que ainda precisam de resposta.'
+        ),
+        'actions': [
+            'Criar uma lista objetiva de problemas ativos.',
+            'Relacionar hipóteses a evidências favoráveis e contrárias.',
+            'Definir quais informações ou exames mudariam a decisão.',
+        ],
+        'record': 'Problemas, hipóteses, justificativas e plano de investigação.',
+        'safety': 'O estudante propõe para discussão; o profissional responsável decide.',
+    },
+    {
+        'key': 'plano',
+        'short': 'Plano e registros',
+        'icon': 'fa-file-medical',
+        'title': '6. Exames, plano e documentação',
+        'objective': 'Entender por que cada solicitação precisa estar ligada a uma pergunta clínica.',
+        'scenario': (
+            'A simulação mostra como pedidos, resultados e consentimentos se conectam '
+            'à evolução, sem oferecer doses, receitas ou ordens aplicáveis a pacientes reais.'
+        ),
+        'actions': [
+            'Explicar à tutora a finalidade, limitações e próximos passos.',
+            'Associar pedidos e anexos ao atendimento correto.',
+            'Documentar decisões, consentimentos e orientações com linguagem clara.',
+        ],
+        'record': 'Plano acordado, solicitações, resultados recebidos e evolução assinada.',
+        'safety': 'Prescrição e solicitação real são atos do médico-veterinário habilitado.',
+    },
+    {
+        'key': 'alta',
+        'short': 'Alta e continuidade',
+        'icon': 'fa-house-medical-circle-check',
+        'title': '7. Alta, retorno e continuidade do cuidado',
+        'objective': 'Fechar o atendimento com responsabilidades e sinais de alerta compreensíveis.',
+        'scenario': (
+            'Ao final do caso fictício, a tutora recebe orientações simuladas, sinais '
+            'para reavaliação e um retorno organizado na agenda.'
+        ),
+        'actions': [
+            'Confirmar que a tutora compreendeu o plano e pode tirar dúvidas.',
+            'Registrar sinais de alerta e quando procurar atendimento novamente.',
+            'Agendar retorno e conectar lembretes, financeiro e histórico do paciente.',
+        ],
+        'record': 'Resumo de alta, orientações, pendências, retorno e responsável técnico.',
+        'safety': 'Na prática, toda alta deve refletir o caso individual e a decisão profissional.',
+    },
+)
+
+
+def _student_practice_stage(stage_key: str | None) -> tuple[dict, int]:
+    for index, stage in enumerate(STUDENT_PRACTICE_STAGES):
+        if stage['key'] == stage_key:
+            return stage, index
+    return STUDENT_PRACTICE_STAGES[0], 0
+
+
+@bp.route('/estudantes/pratica')
+@login_required
+def student_practice():
+    """Simulador educacional: fluxo completo, fictício e sem escrita clínica."""
+
+    stage, stage_index = _student_practice_stage(request.args.get('etapa'))
+    track_event('student_practice_viewed', stage=stage['key'])
+    return render_template(
+        'student_practice.html',
+        stages=STUDENT_PRACTICE_STAGES,
+        stage=stage,
+        stage_index=stage_index,
+    )
+
+
+@bp.route('/estudantes/pratica/etapa/<stage_key>')
+@login_required
+def student_practice_stage(stage_key):
+    stage, stage_index = _student_practice_stage(stage_key)
+    if stage['key'] != stage_key:
+        abort(404)
+    return render_template(
+        'partials/student_practice_stage.html',
+        stages=STUDENT_PRACTICE_STAGES,
+        stage=stage,
+        stage_index=stage_index,
     )
 
 
@@ -1428,10 +1713,21 @@ def servicos():
     elif user_city and _normalize_public_text(user_city) in cities_by_key:
         selected_city = cities_by_key[_normalize_public_text(user_city)]
     else:
-        selected_city = cities_by_key.get('belo horizonte') or (cities[0] if cities else '')
+        # Sem uma escolha explícita, não presuma uma cidade. O visitante pode
+        # consultar toda a oferta ou autorizar a geolocalização no navegador.
+        selected_city = ''
+
+    if selected_city and _normalize_public_text(selected_city) not in cities_by_key:
+        # A geolocalização pode retornar uma cidade onde ainda não há oferta.
+        # Mantê-la visível evita que o seletor pareça ter ignorado a pessoa.
+        cities = [selected_city, *cities]
 
     selected_city_key = _normalize_public_text(selected_city)
-    city_services = _professional_service_query(audience=audience, city=selected_city)
+    selected_city_label = selected_city or 'sua região'
+    city_services = _professional_service_query(
+        audience=audience,
+        city=selected_city or None,
+    )
     consulta_services = [service for service in city_services if service.service_type == 'consulta']
     exam_services = [
         service for service in city_services
@@ -1444,7 +1740,11 @@ def servicos():
         or _is_robson_santos_public_profile(service.veterinario)
     ]
     vaccine_city_keys = {_normalize_public_text(city) for city in vaccine_cities}
-    has_paid_vaccines = selected_city_key in vaccine_city_keys
+    has_paid_vaccines = (
+        selected_city_key in vaccine_city_keys
+        if selected_city
+        else bool(vaccine_city_keys)
+    )
     has_consultas = bool(consulta_services)
     has_exames = bool(ultrasound_services)
     consulta_names = ', '.join(
@@ -1510,12 +1810,12 @@ def servicos():
             'color': 'success',
             'title': 'Vacinas em domicílio',
             'description': (
-                f'Escolha as vacinas disponíveis em {selected_city}, informe os pets e conclua '
+                f'Escolha as vacinas disponíveis em {selected_city_label}, informe os pets e conclua '
                 'o pagamento online.'
                 if has_paid_vaccines
-                else f'O catálogo de vacinas em domicílio para {selected_city} está em preparação.'
+                else f'O catálogo de vacinas em domicílio para {selected_city_label} está em preparação.'
             ),
-            'url': url_for('servicos_vacinas', cidade=selected_city),
+            'url': url_for('servicos_vacinas', **({'cidade': selected_city} if selected_city else {})),
             'cta': 'Escolher vacina',
             'soon': not has_paid_vaccines,
         },
@@ -1524,13 +1824,13 @@ def servicos():
             'color': 'info',
             'title': 'Consultas',
             'description': (
-                f'Agende consultas veterinárias em {selected_city}'
+                f'Agende consultas veterinárias em {selected_city_label}'
                 + (f' com {consulta_names}.' if consulta_names else '.')
                 + (f' A partir de {consulta_lowest_price}.' if consulta_lowest_price else '')
                 if has_consultas
-                else f'Agendamento de consultas veterinárias em {selected_city} em breve.'
+                else f'Agendamento de consultas veterinárias em {selected_city_label} em breve.'
             ),
-            'url': url_for('veterinarios', cidade=selected_city),
+            'url': url_for('veterinarios', **({'cidade': selected_city} if selected_city else {})),
             'cta': 'Ver profissionais',
             'soon': not has_consultas,
             'highlight': consulta_names if has_consultas else None,
@@ -1540,16 +1840,16 @@ def servicos():
             'color': 'primary',
             'title': 'Exames',
             'description': (
-                f'Solicite exames em {selected_city}'
+                f'Solicite exames em {selected_city_label}'
                 + (f' com {exame_names}. Ultrassonografia disponível.' if exame_names else '.')
                 + (f' A partir de {exame_lowest_price}.' if exame_lowest_price else '')
                 if has_exames
-                else f'Solicitação de exames com profissionais de {selected_city} em breve.'
+                else f'Solicitação de exames com profissionais de {selected_city_label} em breve.'
             ),
             'url': (
-                url_for('servicos_ultrassom', cidade=selected_city)
+                url_for('servicos_ultrassom', **({'cidade': selected_city} if selected_city else {}))
                 if audience == 'clinic'
-                else url_for('servicos_exames', cidade=selected_city)
+                else url_for('servicos_exames', **({'cidade': selected_city} if selected_city else {}))
             ),
             'cta': 'Ver profissionais' if audience == 'clinic' else 'Escolher pet',
             'soon': not has_exames,
@@ -1568,10 +1868,10 @@ def servicos():
             'color': 'info',
             'title': 'Ultrassom a domicílio',
             'description': (
-                f'Ultrassonografia para o seu pet em {selected_city}, na clínica ou em '
+                f'Ultrassonografia para o seu pet em {selected_city_label}, na clínica ou em '
                 'casa, com laudo digital.'
             ),
-            'url': url_for('servicos_ultrassom', cidade=selected_city),
+            'url': url_for('servicos_ultrassom', **({'cidade': selected_city} if selected_city else {})),
             'cta': 'Ver e contratar',
         })
 
@@ -1731,13 +2031,21 @@ def servicos_ultrassom():
 
 
 @bp.route('/api/geo/cidade')
-@login_required
+@limiter.limit('20 per minute')
 def api_geo_cidade():
     """Reverse geocode da localização do navegador (lat/lon) → cidade.
 
     Alimenta o botão 'usar minha localização' nas páginas de serviços.
     """
-    cidade = reverse_geocode_city(request.args.get('lat'), request.args.get('lon'))
+    try:
+        latitude = float(request.args.get('lat', ''))
+        longitude = float(request.args.get('lon', ''))
+    except (TypeError, ValueError):
+        return jsonify({'cidade': None, 'error': 'Coordenadas inválidas.'}), 400
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return jsonify({'cidade': None, 'error': 'Coordenadas inválidas.'}), 400
+
+    cidade = reverse_geocode_city(latitude, longitude)
     if not cidade:
         return jsonify({'cidade': None}), 404
     return jsonify({'cidade': cidade})

@@ -156,7 +156,25 @@ def handle_csrf_error(err):
         }
         return jsonify(payload), 400
     db.session.rollback()
-    return render_template("errors/http.html", error=err), 400
+    flash(
+        "Sua sessão foi atualizada. Confira os dados e envie o formulário novamente.",
+        "warning",
+    )
+
+    # Uma falha de CSRF pode acontecer após muito tempo com o formulário
+    # aberto ou durante uma troca de sessão. Para HTML, devolvemos a pessoa ao
+    # próprio formulário em vez de expor uma página técnica "400 Bad Request".
+    redirect_target = request.path
+    if request.referrer:
+        parsed_referrer = urlsplit(request.referrer)
+        if (
+            parsed_referrer.scheme in {"http", "https"}
+            and parsed_referrer.netloc == request.host
+        ):
+            redirect_target = urlunsplit(
+                ("", "", parsed_referrer.path or request.path, parsed_referrer.query, "")
+            )
+    return redirect(redirect_target, code=303)
 
 
 def handle_unhandled_exception(err):

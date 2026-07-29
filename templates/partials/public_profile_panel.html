@@ -1,0 +1,30 @@
+<article class="unified-profile-panel unified-profile-panel--{{ profile.key }}" data-profile-panel="{{ profile.key }}">
+  <div class="unified-profile-panel__copy">
+    <span class="unified-profile-panel__eyebrow">
+      <i class="fa-solid {{ profile.icon }}" aria-hidden="true"></i>
+      {{ profile.eyebrow }}
+    </span>
+    <h3>{{ profile.title }}</h3>
+    <p>{{ profile.description }}</p>
+    <ul>
+      {% for benefit in profile.benefits %}
+      <li><i class="fa-solid fa-check" aria-hidden="true"></i><span>{{ benefit }}</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="unified-profile-panel__action">
+    {% if profile.price %}
+    <p class="unified-profile-panel__price">{{ profile.price }}</p>
+    {% endif %}
+    <a class="unified-btn unified-btn--primary"
+       href="{{ profile.primary_url }}"
+       data-cta="home_{{ profile.key }}_primary">
+      {{ profile.primary_label }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    </a>
+    <a class="unified-btn unified-btn--secondary" href="{{ profile.secondary_url }}">
+      {{ profile.secondary_label }}
+    </a>
+    <small>{{ profile.reassurance }}</small>
+  </div>
+</article>

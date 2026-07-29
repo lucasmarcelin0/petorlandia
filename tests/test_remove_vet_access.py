@@ -51,4 +51,4 @@ def test_removed_vet_cannot_access_clinic(monkeypatch, app):
         # But can create a new clinic
         resp = client.get('/minha-clinica')
         assert resp.status_code == 200
-        assert b'Criar Cl' in resp.data
+        assert 'Vamos colocar sua clínica para funcionar.' in resp.get_data(as_text=True)

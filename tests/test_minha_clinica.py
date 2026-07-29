@@ -50,7 +50,7 @@ def test_vet_without_clinic_can_create(monkeypatch, app):
 
         resp = client.get('/minha-clinica')
         assert resp.status_code == 200
-        assert b'Criar Cl' in resp.data
+        assert 'Vamos colocar sua clínica para funcionar.' in resp.get_data(as_text=True)
 
         db.session.remove()
         db.drop_all()

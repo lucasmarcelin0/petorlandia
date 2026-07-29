@@ -74,6 +74,20 @@
     </div>
   </header>
 
+  <a href="{{ url_for('student_practice') }}" class="student-practice-entry">
+    <span class="student-practice-entry__icon">
+      <i class="fa-solid fa-laptop-medical" aria-hidden="true"></i>
+    </span>
+    <span class="student-practice-entry__copy">
+      <span class="student-kicker">Novo · prática segura</span>
+      <strong>Acompanhe um atendimento fictício da recepção à alta</strong>
+      <small>Veja triagem, anamnese, exame, raciocínio, registros e continuidade — sem tocar em pacientes reais.</small>
+    </span>
+    <span class="student-practice-entry__cta">
+      Iniciar prática guiada <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    </span>
+  </a>
+
   <div class="student-dashboard">
     <section class="student-library" aria-labelledby="student-library-title">
       <div class="student-library__heading">
@@ -101,6 +115,10 @@
 
     <aside class="student-next-steps">
       <h2>Continue explorando</h2>
+      <a href="{{ url_for('student_practice') }}">
+        <i class="fa-solid fa-route" aria-hidden="true"></i>
+        <span><strong>Praticar o fluxo completo</strong><small>Um caso fictício, etapa por etapa.</small></span>
+      </a>
       <a href="{{ url_for('add_animal') }}">
         <i class="fa-solid fa-paw" aria-hidden="true"></i>
         <span><strong>Organize o histórico de um pet</strong><small>Veja como dados de saúde ficam reunidos.</small></span>

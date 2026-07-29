@@ -1,0 +1,58 @@
+<article class="practice-stage-card" data-stage="{{ stage.key }}" tabindex="-1">
+  <header>
+    <span class="practice-stage-card__icon"><i class="fa-solid {{ stage.icon }}" aria-hidden="true"></i></span>
+    <div>
+      <span class="practice-stage-card__step">Etapa {{ stage_index + 1 }} de {{ stages|length }}</span>
+      <h2 id="practice-stage-title">{{ stage.title }}</h2>
+      <p>{{ stage.objective }}</p>
+    </div>
+  </header>
+
+  <div class="practice-stage-card__scenario">
+    <strong><i class="fa-solid fa-dog" aria-hidden="true"></i> Caso fictício: Nina</strong>
+    <p>{{ stage.scenario }}</p>
+  </div>
+
+  <div class="practice-stage-card__grid">
+    <section>
+      <h3>O que observar nesta etapa</h3>
+      <ul>
+        {% for action in stage.actions %}
+        <li><i class="fa-solid fa-check" aria-hidden="true"></i><span>{{ action }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    <section>
+      <h3>O que vira registro</h3>
+      <p>{{ stage.record }}</p>
+      <div class="practice-safety-note">
+        <i class="fa-solid fa-shield-heart" aria-hidden="true"></i>
+        <span>{{ stage.safety }}</span>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    {% if stage_index > 0 %}
+    <a href="{{ url_for('student_practice', etapa=stages[stage_index - 1].key) }}"
+       class="practice-stage-nav"
+       data-practice-stage="{{ stages[stage_index - 1].key }}">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Etapa anterior
+    </a>
+    {% else %}
+    <span></span>
+    {% endif %}
+
+    {% if stage_index + 1 < stages|length %}
+    <a href="{{ url_for('student_practice', etapa=stages[stage_index + 1].key) }}"
+       class="practice-stage-nav practice-stage-nav--next"
+       data-practice-stage="{{ stages[stage_index + 1].key }}">
+      Marcar como vista e continuar <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    </a>
+    {% else %}
+    <a href="{{ url_for('student_hub') }}" class="practice-stage-nav practice-stage-nav--next">
+      Concluir simulação <i class="fa-solid fa-check" aria-hidden="true"></i>
+    </a>
+    {% endif %}
+  </footer>
+</article>

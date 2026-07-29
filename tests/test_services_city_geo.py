@@ -53,10 +53,18 @@ def _make_vet(name, email, city=None, coverage=(), specialty=None):
     return vet
 
 
-def test_api_geo_cidade_requires_login(client):
+def test_api_geo_cidade_is_public_for_anonymous_service_filter(app, client, monkeypatch):
+    app_module = sys.modules[app.import_name]
+    monkeypatch.setattr(app_module, 'reverse_geocode_city', lambda lat, lon: 'Contagem')
     resp = client.get('/api/geo/cidade', query_string={'lat': '-19.9', 'lon': '-44.0'})
-    assert resp.status_code == 302
-    assert '/login' in resp.headers['Location']
+    assert resp.status_code == 200
+    assert resp.get_json()['cidade'] == 'Contagem'
+
+
+def test_api_geo_cidade_rejects_invalid_coordinates(client):
+    resp = client.get('/api/geo/cidade', query_string={'lat': '999', 'lon': 'texto'})
+    assert resp.status_code == 400
+    assert resp.get_json()['cidade'] is None
 
 
 def test_api_geo_cidade_returns_city(app, client, monkeypatch):
@@ -129,6 +137,13 @@ def test_servicos_auto_locate_on_without_registered_city(app, client):
     body = client.get('/servicos').get_data(as_text=True)
     assert 'service-locate-btn' in body
     assert 'data-auto-locate="1"' in body
+
+
+def test_servicos_anonymous_starts_with_all_cities_instead_of_bh(client):
+    body = client.get('/servicos').get_data(as_text=True)
+    assert 'Todas as cidades' in body
+    assert '<option value="" selected>Todas as cidades</option>' in body
+    assert 'Serviços PetOrlândia disponíveis' in body
 
 
 def test_servicos_auto_locate_off_with_registered_city(app, client):

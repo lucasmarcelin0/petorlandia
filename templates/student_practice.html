@@ -1,0 +1,117 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Prática guiada para estudantes — PetOrlândia{% endblock %}
+{% block meta_description %}Acompanhe um caso veterinário fictício da recepção à alta em um ambiente educacional seguro, sem acessar pacientes ou prontuários reais.{% endblock %}
+
+{% block main %}
+<main class="practice-page" aria-labelledby="practice-title">
+  <header class="practice-hero">
+    <div>
+      <span class="student-kicker"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> Modo de prática segura</span>
+      <h1 id="practice-title">Acompanhe o fluxo inteiro de um atendimento veterinário.</h1>
+      <p>
+        Um caso fictício, da chegada à alta, para entender como a prática e o sistema se conectam.
+        Você não acessa pacientes reais e nenhuma ação altera a operação de uma clínica.
+      </p>
+    </div>
+    <aside>
+      <strong><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Ambiente educacional</strong>
+      <span>Paciente fictício</span>
+      <span>Somente leitura</span>
+      <span>Sem doses ou prescrições</span>
+    </aside>
+  </header>
+
+  <nav class="practice-rail" aria-label="Etapas da prática">
+    {% for item in stages %}
+    <a href="{{ url_for('student_practice', etapa=item.key) }}"
+       class="{% if item.key == stage.key %}is-active{% endif %}"
+       data-practice-stage="{{ item.key }}"
+       aria-current="{{ 'step' if item.key == stage.key else 'false' }}">
+      <span>{{ loop.index }}</span>
+      <i class="fa-solid {{ item.icon }}" aria-hidden="true"></i>
+      <strong>{{ item.short }}</strong>
+    </a>
+    {% endfor %}
+  </nav>
+
+  <div class="practice-progress" aria-hidden="true">
+    <span id="practice-progress-bar" style="width: {{ ((stage_index + 1) / (stages|length) * 100)|round }}%"></span>
+  </div>
+  <p id="practice-status" class="visually-hidden" role="status" aria-live="polite"></p>
+
+  <div id="practice-stage-content">
+    {% include 'partials/student_practice_stage.html' %}
+  </div>
+
+  <section class="practice-supervision">
+    <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>
+    <div>
+      <h2>Aprender o sistema não substitui aprender com pessoas.</h2>
+      <p>Use a simulação para preparar perguntas e reconhecer o fluxo. Técnica, julgamento clínico e decisões para pacientes reais exigem médico-veterinário supervisor e fontes atualizadas.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var stageKeys = {{ stages|map(attribute='key')|list|tojson }};
+  var content = document.getElementById('practice-stage-content');
+  var status = document.getElementById('practice-status');
+  var progress = document.getElementById('practice-progress-bar');
+  var controller;
+  if (!content) return;
+
+  function bind() {
+    document.querySelectorAll('[data-practice-stage]').forEach(function (link) {
+      if (link.dataset.practiceBound) return;
+      link.dataset.practiceBound = '1';
+      link.addEventListener('click', function (event) {
+        if (!window.fetch) return;
+        event.preventDefault();
+        loadStage(link.dataset.practiceStage);
+      });
+    });
+  }
+
+  function loadStage(stageKey) {
+    if (controller) controller.abort();
+    controller = new AbortController();
+    content.classList.add('is-loading');
+    if (status) status.textContent = 'Carregando etapa.';
+    fetch('/estudantes/pratica/etapa/' + encodeURIComponent(stageKey), {
+      headers: {'Accept': 'text/html'},
+      signal: controller.signal
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error('stage_failed');
+        return response.text();
+      })
+      .then(function (html) {
+        content.innerHTML = html;
+        var index = stageKeys.indexOf(stageKey);
+        document.querySelectorAll('.practice-rail [data-practice-stage]').forEach(function (link) {
+          var active = link.dataset.practiceStage === stageKey;
+          link.classList.toggle('is-active', active);
+          link.setAttribute('aria-current', active ? 'step' : 'false');
+        });
+        if (progress && index >= 0) progress.style.width = (((index + 1) / stageKeys.length) * 100) + '%';
+        window.history.replaceState({}, '', '/estudantes/pratica?etapa=' + encodeURIComponent(stageKey));
+        bind();
+        var card = content.querySelector('.practice-stage-card');
+        if (card) card.focus({preventScroll: true});
+        if (status) status.textContent = 'Etapa carregada.';
+      })
+      .catch(function (error) {
+        if (error.name === 'AbortError') return;
+        window.location.href = '/estudantes/pratica?etapa=' + encodeURIComponent(stageKey);
+      })
+      .finally(function () {
+        content.classList.remove('is-loading');
+      });
+  }
+
+  bind();
+})();
+</script>
+{% endblock %}

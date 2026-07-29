@@ -446,6 +446,11 @@ def login_view():
             )
 
         if user and user.check_password(form.password.data):
+            if audience == 'student' and not user.worker:
+                # Contas antigas também ganham a entrada educacional quando a
+                # pessoa escolhe explicitamente "entrar como estudante".
+                user.worker = 'estudante'
+                db.session.commit()
             login_user(user, remember=form.remember.data)
             track_event(
                 'login_succeeded',
@@ -554,7 +559,7 @@ def google_callback():
 
     email = normalize_email(claims.get('email'))
     sanitized_next = _sanitize_login_next_url(next_url)
-    is_student_flow = urlparse(sanitized_next).path == url_for('student_hub')
+    is_student_flow = urlparse(sanitized_next).path.startswith(url_for('student_hub'))
     user = User.query.filter(func.lower(User.email) == email).first()
     created = False
 
@@ -577,6 +582,9 @@ def google_callback():
             current_app.logger.exception('Falha ao criar conta via Google')
             flash('Não conseguimos criar sua conta agora. Tente novamente.', 'danger')
             return redirect(url_for('login_view'))
+    elif is_student_flow and not user.worker:
+        user.worker = 'estudante'
+        db.session.commit()
 
     login_user(user, remember=True)
     session.permanent = True

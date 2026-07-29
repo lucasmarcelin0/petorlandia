@@ -235,23 +235,13 @@
         {% endif %}
         {% else %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('precos') }}">
-            <i class="fas fa-tag me-1 text-success"></i> Preços
+          <a class="nav-link" href="{{ url_for('index') }}#como-funciona">
+            <i class="fas fa-link me-1 text-primary"></i> Como funciona
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('parceiro_clinica_landing') }}">
-            <i class="fas fa-hospital me-1 text-primary"></i> Clínicas
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('para_tutores') }}">
-            <i class="fas fa-heart me-1 text-danger"></i> Tutores
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('student_hub') }}">
-            <i class="fas fa-graduation-cap me-1 text-info"></i> Estudantes
+          <a class="nav-link" href="{{ url_for('index') }}#perfis">
+            <i class="fas fa-users me-1 text-success"></i> Para quem é
           </a>
         </li>
         <li class="nav-item">
@@ -265,8 +255,8 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link nav-link--cta fw-semibold text-success" href="{{ url_for('register') }}">
-            <i class="fas fa-user-plus me-1"></i> Criar conta
+          <a class="nav-link nav-link--cta fw-semibold text-success" href="{{ url_for('index') }}#perfis">
+            <i class="fas fa-arrow-right me-1"></i> Começar
           </a>
         </li>
         {% endif %}

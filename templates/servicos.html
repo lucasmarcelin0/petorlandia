@@ -229,7 +229,8 @@
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
     <h1 class="fw-bold mb-2 text-primary">
-      <i class="fa-solid fa-paw me-2"></i> Serviços PetOrlândia
+      <i class="fa-solid fa-paw me-2"></i>
+      {% if selected_city %}Serviços PetOrlândia em {{ selected_city }}{% else %}Serviços PetOrlândia disponíveis{% endif %}
     </h1>
     <p class="text-muted mx-auto" style="max-width: 780px;">
       Agende vacinas, consultas, exames e outros cuidados para o seu pet.
@@ -249,6 +250,7 @@
     </div>
     <div class="col-12 col-md-5 col-lg-4">
       <select id="service-city" name="cidade" class="form-select form-select-lg" onchange="this.form.submit()">
+        <option value="" {% if not selected_city %}selected{% endif %}>Todas as cidades</option>
         {% for city in cities %}
         <option value="{{ city }}" {% if city==selected_city %}selected{% endif %}>{{ city }}</option>
         {% endfor %}
@@ -259,6 +261,7 @@
         data-auto-locate="{{ '1' if auto_locate else '0' }}">
         <i class="fa-solid fa-location-crosshairs me-1"></i> Usar minha localiza&ccedil;&atilde;o
       </button>
+      <p id="service-location-status" class="small text-muted mt-2 mb-0" role="status" aria-live="polite"></p>
     </div>
   </form>
 </section>
@@ -266,13 +269,22 @@
 <script>
   (function () {
     var btn = document.getElementById('service-locate-btn');
+    var status = document.getElementById('service-location-status');
     if (!btn) return;
     function locate() {
-      if (!navigator.geolocation) { return; }
+      if (!navigator.geolocation) {
+        if (status) status.textContent = 'Seu navegador não oferece localização. Escolha uma cidade na lista.';
+        return;
+      }
       var original = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Localizando...';
-      function restore() { btn.disabled = false; btn.innerHTML = original; }
+      if (status) status.textContent = 'Pedindo sua localização ao navegador…';
+      function restore(message) {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        if (status) status.textContent = message || '';
+      }
       navigator.geolocation.getCurrentPosition(function (pos) {
         fetch('/api/geo/cidade?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude,
           { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
@@ -282,14 +294,23 @@
               var url = new URL(window.location.href);
               url.searchParams.set('cidade', data.cidade);
               window.location.href = url.toString();
-            } else { restore(); }
+            } else {
+              restore('Não conseguimos reconhecer sua cidade. Você ainda pode escolhê-la na lista.');
+            }
           })
-          .catch(function () { restore(); });
-      }, function () { restore(); }, { timeout: 10000 });
+          .catch(function () {
+            restore('A localização falhou agora. Você ainda pode escolher a cidade na lista.');
+          });
+      }, function (error) {
+        var message = error && error.code === 1
+          ? 'Localização não autorizada. Mostramos todas as cidades para você.'
+          : 'Não conseguimos obter sua localização. Mostramos todas as cidades para você.';
+        restore(message);
+      }, { timeout: 10000, maximumAge: 300000 });
     }
     btn.addEventListener('click', locate);
-    if (btn.dataset.autoLocate === '1' && !sessionStorage.getItem('svc_geo_tried')) {
-      sessionStorage.setItem('svc_geo_tried', '1');
+    if (btn.dataset.autoLocate === '1' && !sessionStorage.getItem('svc_geo_tried_v2')) {
+      sessionStorage.setItem('svc_geo_tried_v2', '1');
       locate();
     }
   })();
@@ -374,7 +395,9 @@
 {% endif %}
 
 <div class="mb-3 {% if pmo_services or bh_services %}mt-5 pt-4 border-top{% endif %}">
-  <h2 class="h4 fw-bold mb-1">Serviços PetOrlândia em {{ selected_city }}</h2>
+  <h2 class="h4 fw-bold mb-1">
+    {% if selected_city %}Serviços PetOrlândia em {{ selected_city }}{% else %}Serviços em todas as cidades disponíveis{% endif %}
+  </h2>
   <p class="text-muted small mb-0">Vacinas em domicílio, consultas e exames com profissionais parceiros. A
     disponibilidade é confirmada dentro de cada serviço.</p>
 </div>
