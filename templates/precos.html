@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 
 {% block page_title %}Preços — PetOrlândia para clínicas veterinárias{% endblock %}
-{% block meta_description %}R$ {{ '%.0f'|format(monthly_price) }} por mês, com {{ trial_days }} dias grátis e sem cartão de crédito. Agenda, prontuário, vacinas e financeiro da sua clínica em um só sistema.{% endblock %}
+{% block meta_description %}R$ {{ '%.0f'|format(monthly_price) }} por mês por veterinário, com {{ trial_days }} dias grátis. Agenda, prontuário, vacinas e financeiro em um só sistema.{% endblock %}
 
 {% block main %}
 <div class="container precos-page">
@@ -10,8 +10,9 @@
     <span class="precos-kicker">Preço</span>
     <h1>Um plano. Sem taxa de instalação, sem fidelidade.</h1>
     <p class="precos-lead">
-      Você usa {{ trial_days }} dias sem pagar nada e sem cadastrar cartão. Se não servir para a sua rotina,
-      é só não continuar — não cobramos nada e você leva seus dados embora.
+      Você usa {{ trial_days }} dias sem pagar nada. A forma de pagamento fica cadastrada no início
+      para o acesso não cair sozinho no meio de um atendimento — e a primeira cobrança só acontece
+      no {{ trial_days + 1 }}º dia. Cancelou antes disso, não paga nada e leva seus dados embora.
     </p>
   </header>
 
@@ -23,12 +24,14 @@
       <p class="precos-amount">
         <span class="precos-currency">R$</span>{{ '%.0f'|format(monthly_price) }}<span class="precos-period">/mês</span>
       </p>
-      <p class="precos-amount-note">por clínica — profissionais e pacientes ilimitados</p>
+      <p class="precos-amount-note">por veterinário — pacientes ilimitados e recepção incluída</p>
 
       <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
         Começar {{ trial_days }} dias grátis
       </a>
-      <p class="precos-cta-note">Não pedimos cartão de crédito para começar.</p>
+      <p class="precos-cta-note">
+        Primeira cobrança só no {{ trial_days + 1 }}º dia. Cancele antes e não paga nada.
+      </p>
 
       <ul class="precos-list">
         <li>Agenda compartilhada da equipe, com lembrete automático para o tutor</li>
@@ -54,7 +57,9 @@
       <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta precos-cta--outline">
         Começar {{ trial_days }} dias grátis
       </a>
-      <p class="precos-cta-note">Você escolhe mensal ou anual no fim do teste.</p>
+      <p class="precos-cta-note">
+        Você escolhe mensal ou anual ao cadastrar o pagamento.
+      </p>
 
       <ul class="precos-list">
         <li>Tudo o que está no plano mensal</li>
@@ -81,8 +86,8 @@
         <p>Toda função nova entra no seu plano automaticamente.</p>
       </div>
       <div>
-        <strong>Usuários da clínica</strong>
-        <p>Cadastre quantos veterinários e recepcionistas precisar.</p>
+        <strong>Equipe da clínica</strong>
+        <p>Recepção e colaboradores estão incluídos. Cada veterinário ativo contrata o próprio plano.</p>
       </div>
     </div>
   </section>
@@ -133,8 +138,26 @@
     <details class="precos-faq-item">
       <summary>O que acontece quando os {{ trial_days }} dias acabam?</summary>
       <p>
-        Avisamos por e-mail antes de terminar. Se você não assinar, o acesso às ferramentas
-        profissionais pausa, mas nada é apagado: ao assinar depois, está tudo onde você deixou.
+        No {{ trial_days + 1 }}º dia cobramos <strong>R$ {{ '%.0f'|format(monthly_price) }}</strong>
+        na forma de pagamento que você cadastrou, e o sistema continua funcionando sem interrupção.
+        Avisamos por e-mail antes disso — no 25º, no 29º e no último dia — para você não ser
+        pego de surpresa.
+      </p>
+      <p>
+        Se cancelar em qualquer momento dentro dos {{ trial_days }} dias, a cobrança não acontece
+        e você não paga nada.
+      </p>
+    </details>
+
+    <details class="precos-faq-item">
+      <summary>Por que preciso cadastrar o pagamento se o teste é grátis?</summary>
+      <p>
+        Para o acesso não cair sozinho no {{ trial_days + 1 }}º dia. Sem o pagamento configurado,
+        a clínica perderia agenda e prontuário no meio do expediente só porque ninguém lembrou de
+        assinar — e é justamente aí que o sistema já virou parte da rotina.
+      </p>
+      <p>
+        Nenhum valor é cobrado durante o teste. O cartão fica guardado no Mercado Pago, não conosco.
       </p>
     </details>
   </section>
@@ -148,23 +171,12 @@
       <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
         Começar {{ trial_days }} dias grátis
       </a>
-      {# O canal de contato depende do que está configurado no ambiente:
-         WhatsApp quando há SUPPORT_PHONE, e-mail quando há SUPPORT_EMAIL,
-         e a página de suporte como último recurso — nunca fica sem saída. #}
-      {% if whatsapp_contact_url %}
-      <a href="{{ whatsapp_contact_url }}" class="precos-cta precos-cta--outline" target="_blank" rel="noopener">
-        Falar no WhatsApp
-      </a>
-      {% elif support_email %}
-      <a href="mailto:{{ support_email }}?subject=Quero%20ver%20uma%20demonstra%C3%A7%C3%A3o%20da%20PetOrl%C3%A2ndia"
-         class="precos-cta precos-cta--outline">
+      <button type="button" class="precos-cta precos-cta--outline"
+         data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+         data-lead-capture data-lead-feature="demo_clinica"
+         data-cta="pricing_demo">
         Agendar demonstração
-      </a>
-      {% else %}
-      <a href="{{ url_for('support') }}" class="precos-cta precos-cta--outline">
-        Agendar demonstração
-      </a>
-      {% endif %}
+      </button>
     </div>
   </section>
 

@@ -1,26 +1,37 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Criar conta grátis — PetOrlândia{% endblock %}
-{% block meta_description %}Crie sua conta na PetOrlândia em menos de um minuto. 30 dias grátis, sem cartão de crédito.{% endblock %}
+{% block page_title %}{% if audience == 'student' %}Criar conta de estudante — PetOrlândia{% else %}Criar conta grátis — PetOrlândia{% endif %}{% endblock %}
+{% block meta_description %}{% if audience == 'student' %}Crie gratuitamente seu acesso ao espaço para estudantes de Medicina Veterinária.{% else %}Crie sua conta na PetOrlândia em menos de um minuto. 30 dias grátis para clínicas, e grátis para sempre para tutores.{% endif %}{% endblock %}
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
     <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 460px;">
+        {% if audience == 'student' %}
+        <span class="student-auth__eyebrow">Espaço do estudante</span>
+        <h1 class="mb-1 text-center h3">Criar conta de estudante</h1>
+        {% else %}
         <h1 class="mb-1 text-center h3">Criar sua conta</h1>
+        {% endif %}
         <p class="text-center text-muted mb-1">
-            {{ trial_days|default(30) }} dias grátis. <strong>Não pedimos cartão de crédito.</strong>
+            Leva menos de um minuto. <strong>{% if audience == 'student' %}É gratuito.{% else %}Nada é cobrado agora.{% endif %}</strong>
         </p>
         <p class="text-center text-muted small mb-4">
+            {% if audience == 'student' %}
+            Comece a conhecer a rotina digital veterinária sem precisar de CRMV.
+            {% else %}
             Endereço, foto e dados da clínica você completa depois, quando precisar.
+            {% endif %}
         </p>
 
-        {% with label='Criar conta com Google' %}
+        {% with label='Criar conta com Google', next_url=next_url %}
           {% include 'components/google_button.html' %}
         {% endwith %}
 
         <form method="POST" action="{{ url_for('register') }}" enctype="multipart/form-data" class="js-auth-form"
             data-no-whatsapp data-loading-timeout="off" data-loading-text="Criando sua conta...">
             {{ form.hidden_tag() }}
+            <input type="hidden" name="next" value="{{ next_url }}">
+            {% if audience %}<input type="hidden" name="audience" value="{{ audience }}">{% endif %}
 
             <div class="mb-3">
                 <label for="name" class="form-label">Nome completo</label>
@@ -82,7 +93,7 @@
 
             <div class="text-center mt-3">
                 <span class="text-muted">Já tem uma conta?</span>
-                <a href="{{ url_for('login_view') }}" class="text-decoration-none fw-semibold">Entrar</a>
+                <a href="{{ url_for('login_view', next=next_url, audience=audience) }}" class="text-decoration-none fw-semibold">Entrar</a>
             </div>
         </form>
     </div>

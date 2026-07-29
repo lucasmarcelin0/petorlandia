@@ -24,7 +24,7 @@
       <h2>Tenho uma clínica veterinária</h2>
       <p>
         Cadastre a clínica e ative agenda, prontuário, vacinas e financeiro.
-        São {{ trial_days }} dias grátis, sem cartão.
+        São {{ trial_days }} dias grátis, com a primeira cobrança só no {{ trial_days + 1 }}º dia.
       </p>
       <a href="{{ url_for('minha_clinica') }}" class="onboarding-cta"
          data-cta="onboarding_clinica">
@@ -94,9 +94,13 @@
         <i class="fa-brands fa-whatsapp me-1"></i> Falar no WhatsApp
       </a>
       {% else %}
-      <a href="{{ url_for('support') }}" class="onboarding-cta" data-cta="onboarding_suporte">
-        Falar com o suporte
-      </a>
+      <button type="button" class="onboarding-cta"
+         data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+         data-lead-capture data-lead-feature="demo_clinica"
+         data-lead-title="Configurar minha clínica com ajuda"
+         data-cta="onboarding_demo">
+        Agendar configuração
+      </button>
       {% endif %}
       <a href="{{ url_for('index') }}" class="onboarding-skip">Explorar por conta própria</a>
     </div>

@@ -8585,17 +8585,32 @@ def enviar_lembretes_fim_trial() -> None:
                     f'em {dias_restantes} dia{plural}.'
                 )
 
+            # Aviso de cobrança automática precisa dizer exatamente o que vai
+            # acontecer. Quem tem pagamento cadastrado será cobrado; quem não
+            # tem, perde acesso. Trocar essas duas mensagens seria pegar o
+            # cliente de surpresa na fatura.
+            data_cobranca = coerce_to_brazil_tz(trial_end).strftime('%d/%m/%Y')
+            if membership.has_payment_method():
+                preco = _format_reais(_get_veterinarian_membership_price())
+                fecho = (
+                    f'Sua assinatura está configurada: vamos cobrar {preco} em '
+                    f'{data_cobranca} e o sistema continua funcionando sem interrupção.\n\n'
+                    'Se você não quiser continuar, cancele até essa data e nada será '
+                    f'cobrado:\n{link}'
+                )
+            else:
+                fecho = (
+                    'Para continuar com agenda, prontuário, vacinas e financeiro sem '
+                    f'interrupção, configure o pagamento por aqui:\n{link}\n\n'
+                    f'Sem isso, o acesso às ferramentas profissionais pausa em '
+                    f'{data_cobranca}. Nada é apagado — seus registros continuam '
+                    'guardados caso você volte depois.'
+                )
+
             notify_user(
                 user,
                 assunto,
-                (
-                    f'{abertura}\n\n'
-                    'Para continuar com agenda, prontuário, vacinas e financeiro sem '
-                    'interrupção, ative a assinatura por aqui:\n'
-                    f'{link}\n\n'
-                    'Se preferir não continuar, não precisa fazer nada — não cobramos '
-                    'nada e seus registros continuam guardados caso você volte depois.'
-                ),
+                f'{abertura}\n\n{fecho}',
                 kind='trial_ending',
             )
             enviados += 1

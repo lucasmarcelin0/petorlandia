@@ -49,8 +49,24 @@ from models import PRODUCT_CATEGORY_CHOICES
 
 
 
+_CLINIC_UF_CHOICES = [
+    ('', 'Selecione'),
+    *[(uf, uf) for uf in (
+        'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+        'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+        'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+    )],
+]
+
+
 class ClinicForm(FlaskForm):
-    nome = StringField('Nome', validators=[DataRequired()])
+    nome = StringField('Nome da clínica', validators=[DataRequired(), Length(max=120)])
+    sou_veterinario = BooleanField(
+        'Sou médico-veterinário e vou usar a plataforma',
+        default=True,
+    )
+    crmv = StringField('Número do CRMV', validators=[Optional(), Length(max=20)])
+    crmv_estado = SelectField('UF do CRMV', choices=_CLINIC_UF_CHOICES, default='')
     cnpj = StringField('CNPJ', validators=[Optional()])
     endereco = StringField('Endereço', validators=[Optional()])
     telefone = StringField('Telefone', validators=[Optional()])
@@ -73,6 +89,17 @@ class ClinicForm(FlaskForm):
     photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
     photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
     submit = SubmitField('Salvar')
+
+    def validate(self, **kwargs):  # type: ignore[override]
+        valid = super().validate(**kwargs)
+        if self.sou_veterinario.data:
+            if not (self.crmv.data or '').strip():
+                self.crmv.errors.append('Informe seu CRMV para ativar o acesso profissional.')
+                valid = False
+            if not self.crmv_estado.data:
+                self.crmv_estado.errors.append('Selecione a UF do seu CRMV.')
+                valid = False
+        return valid
 
     def validate_cnpj(self, field):
         if not field.data:
@@ -208,4 +235,3 @@ class OrcamentoForm(FlaskForm):
     clinica_id = HiddenField(validators=[DataRequired()])
     descricao = StringField('Descrição', validators=[DataRequired(), Length(max=200)])
     submit = SubmitField('Salvar')
-

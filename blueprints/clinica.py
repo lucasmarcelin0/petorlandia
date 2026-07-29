@@ -10,7 +10,7 @@ from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
 from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
 from forms import APPOINTMENT_KIND_CHOICES, DIAS_SEMANA, ClinicAddSpecialistForm, ClinicAddStaffForm, ClinicForm, ClinicHoursForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm, ClinicInviteVeterinarianForm, ClinicProductEditForm, ClinicProductForm, ClinicStaffPermissionForm, InventoryItemForm, OrcamentoForm, VetProfileForm, VetScheduleForm, VeterinarianProfileForm
-from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, unique_items_by_id
+from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, grant_veterinarian_role, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, unique_items_by_id
 from models import (
     Animal,
     Appointment,
@@ -136,7 +136,10 @@ def parceiro_clinica_landing():
             target = next((c for c in clinicas if c.id == preferred_id), clinicas[0])
             return redirect(url_for('clinic_detail', clinica_id=target.id) + '#clinica')
         return redirect(url_for('minha_clinica'))
-    return render_template('clinica/parceiro_landing.html')
+    return render_template(
+        'clinica/parceiro_landing.html',
+        pricing=_public_pricing_config(),
+    )
 
 
 @bp.route("/acesso-laudo/<string:token>", methods=["GET"])
@@ -197,7 +200,32 @@ def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
         form = ClinicForm()
+        if request.method == 'GET' and current_user.veterinario:
+            form.sou_veterinario.data = True
+            form.crmv.data = current_user.veterinario.crmv
+            form.crmv_estado.data = current_user.veterinario.crmv_estado or ''
         if form.validate_on_submit():
+            crmv = (form.crmv.data or '').strip().upper()
+            crmv_estado = (form.crmv_estado.data or '').strip().upper()
+            if form.sou_veterinario.data and not current_user.veterinario:
+                existing_vet = (
+                    Veterinario.query
+                    .filter(
+                        func.upper(Veterinario.crmv) == crmv,
+                        func.upper(Veterinario.crmv_estado) == crmv_estado,
+                    )
+                    .first()
+                )
+                if existing_vet:
+                    form.crmv.errors.append(
+                        'Este CRMV já está ligado a outra conta. Entre com ela ou fale com o suporte.'
+                    )
+                    return render_template(
+                        'clinica/create_clinic.html',
+                        form=form,
+                        pricing=_public_pricing_config(),
+                    )
+
             clinica = Clinica(
                 nome=form.nome.data,
                 cnpj=form.cnpj.data,
@@ -223,9 +251,16 @@ def minha_clinica():
                     clinica.photo_offset_x = form.photo_offset_x.data
                     clinica.photo_offset_y = form.photo_offset_y.data
             db.session.add(clinica)
-            db.session.commit()
+            db.session.flush()
             if current_user.veterinario:
                 current_user.veterinario.clinica_id = clinica.id
+            elif form.sou_veterinario.data:
+                vet_profile = grant_veterinarian_role(
+                    current_user,
+                    crmv=crmv,
+                    clinica=clinica,
+                )
+                vet_profile.crmv_estado = crmv_estado
             current_user.clinica_id = clinica.id
             db.session.commit()
             from services.notifications import notify_admins
@@ -234,13 +269,24 @@ def minha_clinica():
                 kind='clinica_pendente',
                 url=url_for('admin_parcerias', _external=True),
             )
+            if current_user.veterinario:
+                flash(
+                    'Clínica criada e acesso profissional ativado. A aprovação serve apenas para publicar '
+                    'seu perfil; você já pode testar as ferramentas agora.',
+                    'success',
+                )
+                return redirect(url_for('veterinarian_membership'))
             flash(
-                'Cadastro enviado! Sua clínica está em análise — você será avisado assim que for aprovada. '
-                'Enquanto isso, já pode completar horários, equipe e demais informações.',
+                'Clínica criada! A aprovação serve apenas para publicar seu perfil. '
+                'Você já pode configurar equipe, horários e demais informações.',
                 'success',
             )
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
-        return render_template('clinica/create_clinic.html', form=form)
+        return render_template(
+            'clinica/create_clinic.html',
+            form=form,
+            pricing=_public_pricing_config(),
+        )
 
     preferred_clinic_id = None
     if getattr(current_user, 'veterinario', None) and current_user.veterinario.clinica_id:

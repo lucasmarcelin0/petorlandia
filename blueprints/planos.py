@@ -64,13 +64,17 @@ def _grooming_clinic_access(clinica_id):
 
 
 @bp.route("/plano-saude", methods=["GET", "POST"])
-@login_required
 def plano_saude_overview():
     from models import HealthPlan, HealthSubscription, Clinica
     from forms import HealthPlanForm
 
     is_admin = _is_admin()
-    minha_clinica = Clinica.query.filter_by(owner_id=current_user.id).first()
+    user_id = current_user.id if current_user.is_authenticated else None
+    minha_clinica = (
+        Clinica.query.filter_by(owner_id=user_id).first()
+        if user_id is not None
+        else None
+    )
 
     # --- gestão: planos de saúde (admin global ou dono de clínica) ---
     health_form = HealthPlanForm(prefix='hp')
@@ -94,13 +98,16 @@ def plano_saude_overview():
         all_health_plans = []
 
     # --- área do tutor ---
-    animais_do_usuario = (
-        Animal.query
-        .filter_by(user_id=current_user.id)
-        .filter(Animal.removido_em.is_(None))
-        .all()
-    )
-    subs = HealthSubscription.query.filter_by(user_id=current_user.id, active=True).all()
+    animais_do_usuario = []
+    subs = []
+    if user_id is not None:
+        animais_do_usuario = (
+            Animal.query
+            .filter_by(user_id=user_id)
+            .filter(Animal.removido_em.is_(None))
+            .all()
+        )
+        subs = HealthSubscription.query.filter_by(user_id=user_id, active=True).all()
     subscriptions = {s.animal_id: s for s in subs}
 
     return render_template(
@@ -566,4 +573,3 @@ def grooming_minhas_assinaturas():
         .all()
     )
     return render_template('grooming/minhas_assinaturas.html', assinaturas=assinaturas)
-

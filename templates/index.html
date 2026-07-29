@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 
 {% block page_title %}PetOrlândia — a clínica veterinária inteira em um sistema só{% endblock %}
-{% block meta_description %}Agenda, prontuário, vacinas e financeiro da sua clínica veterinária em um lugar só. A partir de R$ 60/mês, com 30 dias grátis e sem cartão de crédito.{% endblock %}
+{% block meta_description %}Agenda, prontuário, vacinas e financeiro da sua clínica veterinária em um lugar só. R$ 60/mês por veterinário, com 30 dias grátis.{% endblock %}
 
 {% block main %}
 {% if current_user.is_authenticated %}
@@ -253,8 +253,8 @@
             </p>
 
             <p class="landing-price-line">
-                <strong>R$ {{ '%.0f'|format(monthly_price) }}/mês.</strong>
-                {{ trial_days }} dias grátis, sem cartão de crédito.
+                <strong>R$ {{ '%.0f'|format(monthly_price) }}/mês por veterinário.</strong>
+                {{ trial_days }} dias grátis. Primeira cobrança só no {{ trial_days + 1 }}º dia.
             </p>
 
             <div class="landing-actions" aria-label="Ações principais">
@@ -262,16 +262,12 @@
                    class="landing-btn landing-btn--primary">
                     Começar {{ trial_days }} dias grátis
                 </a>
-                {% if whatsapp_contact_url %}
-                <a href="{{ whatsapp_contact_url }}" class="landing-btn landing-btn--secondary"
-                   target="_blank" rel="noopener">
-                    <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> Ver demonstração de 15 min
-                </a>
-                {% else %}
-                <a href="{{ url_for('precos') }}" class="landing-btn landing-btn--secondary">
-                    Ver preços e o que está incluso
-                </a>
-                {% endif %}
+                <button type="button" class="landing-btn landing-btn--secondary"
+                   data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+                   data-lead-capture data-lead-feature="demo_clinica"
+                   data-cta="home_demo">
+                    <i class="fa-solid fa-play" aria-hidden="true"></i> Ver demonstração de 15 min
+                </button>
             </div>
 
             <p class="landing-reassurance">
@@ -384,7 +380,7 @@
             <li>
                 <span class="landing-step-index">1</span>
                 <h3>Crie a conta</h3>
-                <p>Nome, e-mail e senha. Leva menos de um minuto e não pedimos cartão.</p>
+                <p>Nome, e-mail e senha. Leva menos de um minuto; nenhum valor é cobrado no cadastro.</p>
             </li>
             <li>
                 <span class="landing-step-index">2</span>
@@ -403,10 +399,10 @@
         <div class="landing-pricing-teaser">
             <div>
                 <span class="landing-section-kicker">Preço</span>
-                <h2 id="pricing-teaser-title">R$ {{ '%.0f'|format(monthly_price) }} por mês, por clínica.</h2>
+                <h2 id="pricing-teaser-title">R$ {{ '%.0f'|format(monthly_price) }} por mês, por veterinário.</h2>
                 <p>
-                    Profissionais e pacientes ilimitados. Sem taxa de instalação, sem fidelidade e sem
-                    comissão sobre o que você cobra do tutor.
+                    Pacientes ilimitados e usuários de recepção incluídos. Sem taxa de instalação,
+                    sem fidelidade e sem comissão sobre o que você cobra do tutor.
                 </p>
             </div>
             <a href="{{ url_for('precos') }}" class="landing-btn landing-btn--primary">
@@ -445,7 +441,7 @@
             <span class="landing-section-kicker">Começar agora</span>
             <h2 id="landing-cta-title">Teste com os atendimentos desta semana.</h2>
             <p>
-                {{ trial_days }} dias grátis, sem cartão de crédito. Se não encaixar na sua rotina,
+                {{ trial_days }} dias grátis, com a primeira cobrança só no {{ trial_days + 1 }}º dia. Se não encaixar na sua rotina,
                 é só parar — não cobramos nada.
             </p>
         </div>

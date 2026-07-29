@@ -19,6 +19,13 @@
     <div class="alert alert-danger">O pagamento não foi concluído. Tente novamente ou escolha outra forma de pagamento.</div>
   {% endif %}
 
+  {% if membership and membership.preapproval_id and not membership.has_payment_method() %}
+  <div class="alert alert-warning">
+    A configuração anterior do pagamento não foi concluída. Ao tentar novamente, substituímos
+    esse pedido pendente com segurança.
+  </div>
+  {% endif %}
+
   {% if membership %}
   <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
@@ -26,9 +33,13 @@
         <span class="badge bg-success-subtle text-success mb-2">Assinatura ativa</span>
         <h2 class="h5 mb-1">Tudo certo por aqui.</h2>
         <p class="text-muted mb-0">
-          Sua próxima renovação automática é em
+          Seu acesso está pago até
           <strong>{{ membership.paid_until|format_datetime_brazil('%d/%m/%Y') }}</strong>.
-          A cobrança acontece sozinha pelo Mercado Pago — você não precisa fazer nada.
+          {% if membership.has_payment_method() %}
+          A próxima renovação acontece automaticamente nessa data.
+          {% else %}
+          A renovação automática está cancelada e nenhuma nova cobrança será feita.
+          {% endif %}
         </p>
       {% elif membership.is_trial_active() %}
         <span class="badge bg-primary-subtle text-primary mb-2">Avaliação gratuita</span>
@@ -38,6 +49,13 @@
         <p class="text-muted mb-2">
           Termina em <strong>{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>.
         </p>
+        {% if membership.has_payment_method() %}
+        <p class="text-muted mb-0">
+          Seu pagamento já está configurado. <strong>A primeira cobrança só acontece em
+          {{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y') }}</strong>.
+          Você pode cancelar a renovação abaixo antes dessa data e não pagar nada.
+        </p>
+        {% else %}
         <p class="text-muted mb-0">
           Deixando o pagamento configurado agora, você não corre o risco de perder o acesso
           no meio de um atendimento por esquecimento — e
@@ -46,6 +64,7 @@
           quando a avaliação terminar. Até lá não cobramos nada, e você pode cancelar a
           qualquer momento sem pagar.
         </p>
+        {% endif %}
       {% else %}
         <span class="badge bg-warning-subtle text-warning-emphasis mb-2">Assinatura inativa</span>
         <h2 class="h5 mb-1">Suas ferramentas profissionais estão pausadas.</h2>
@@ -58,6 +77,29 @@
   </div>
   {% endif %}
 
+  {% if membership and membership.has_payment_method() %}
+  <div class="card border-0 bg-light rounded-4 mb-4">
+    <div class="card-body p-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <div>
+        <h2 class="h6 mb-1">Renovação automática ativa</h2>
+        <p class="text-muted small mb-0">
+          Ao cancelar, você mantém o acesso até o fim do teste ou do período já pago.
+        </p>
+      </div>
+      <form method="post"
+            action="{{ url_for('veterinarian_cancel_recurring', membership_id=membership.id) }}"
+            class="js-confirm"
+            data-message="Cancelar a renovação automática? Seu acesso continua até o fim do período atual.">
+        {{ cancel_recurring_form.hidden_tag() }}
+        <button type="submit" class="btn btn-outline-danger rounded-pill">
+          Cancelar renovação
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not membership or not membership.has_payment_method() %}
   <h2 class="h5 mb-3">Escolha como quer pagar</h2>
 
   <form method="post" action="{{ url_for('veterinarian_membership_checkout') }}">
@@ -96,13 +138,15 @@
     </div>
 
     <button type="submit" class="btn btn-primary btn-lg rounded-pill px-4">
-      <i class="bi bi-cash-coin me-1"></i> Ativar assinatura
+      <i class="bi bi-cash-coin me-1"></i>
+      {% if membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
     </button>
     <p class="text-muted small mt-2 mb-0">
       Pagamento pelo Mercado Pago (cartão, Pix ou boleto). A renovação é automática e você
       cancela pelo próprio Mercado Pago ou falando com a gente, sem multa.
     </p>
   </form>
+  {% endif %}
 
   {% if membership %}
   <details class="mt-4">

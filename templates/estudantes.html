@@ -1,0 +1,201 @@
+{% extends "layout.html" %}
+{% from 'components/form_macros.html' import render_field, render_checkbox, render_submit %}
+
+{% block page_title %}Espaço do estudante de Veterinária — PetOrlândia{% endblock %}
+{% block meta_description %}Um espaço gratuito para estudantes conhecerem a rotina digital veterinária, consultarem referências educacionais e acompanharem a evolução da PetOrlândia.{% endblock %}
+
+{% block main %}
+<section class="student-page" aria-labelledby="student-title">
+  {% if not current_user.is_authenticated %}
+  <div class="student-hero">
+    <div class="student-hero__copy">
+      <span class="student-kicker"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> Medicina Veterinária começa antes do CRMV</span>
+      <h1 id="student-title">Conheça hoje as ferramentas que farão parte da sua rotina amanhã.</h1>
+      <p>
+        Entre gratuitamente para explorar referências educacionais, entender como uma clínica se organiza
+        e acompanhar a evolução de um sistema construído por médico-veterinário.
+      </p>
+      <ul class="student-benefits">
+        <li><i class="fa-solid fa-check" aria-hidden="true"></i> Conta gratuita, sem cartão</li>
+        <li><i class="fa-solid fa-check" aria-hidden="true"></i> Conteúdo de apoio, com uso responsável</li>
+        <li><i class="fa-solid fa-check" aria-hidden="true"></i> Contato antecipado com a rotina digital da profissão</li>
+      </ul>
+    </div>
+
+    <aside class="student-login-card" aria-label="Entrar no espaço do estudante">
+      <span class="student-auth__eyebrow">Acesso gratuito</span>
+      <h2>Entrar como estudante</h2>
+      <p>Use sua conta PetOrlândia ou crie uma em menos de um minuto.</p>
+
+      {% with label='Entrar com Google', next_url=student_next %}
+        {% include 'components/google_button.html' %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form" data-no-whatsapp>
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="next" value="{{ student_next }}">
+        <input type="hidden" name="audience" value="student">
+        {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular') }}
+        {{ render_field(form.password, classes='form-control rounded-pill') }}
+        {{ render_checkbox(form.remember) }}
+        {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
+        <div class="student-login-card__links">
+          <a href="{{ url_for('reset_password_request') }}">Esqueci minha senha</a>
+          <a href="{{ url_for('register', next=student_next, audience='student') }}">Criar conta gratuita</a>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <div class="student-trust">
+    <article>
+      <i class="fa-solid fa-book-medical" aria-hidden="true"></i>
+      <h2>Referência para estudar</h2>
+      <p>Consulte informações gerais de medicamentos e organize temas para aprofundar com professores e fontes oficiais.</p>
+    </article>
+    <article>
+      <i class="fa-solid fa-laptop-medical" aria-hidden="true"></i>
+      <h2>Visão da prática digital</h2>
+      <p>Entenda como agenda, histórico, vacinas e relacionamento com tutores se conectam em uma clínica.</p>
+    </article>
+    <article>
+      <i class="fa-solid fa-seedling" aria-hidden="true"></i>
+      <h2>Cresça junto com o produto</h2>
+      <p>Conheça cedo a plataforma e ajude a orientar os próximos recursos educacionais.</p>
+    </article>
+  </div>
+
+  {% else %}
+  <header class="student-dashboard__header">
+    <div>
+      <span class="student-kicker"><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> Espaço do estudante</span>
+      <h1 id="student-title">Olá, {{ current_user.name.split()[0] }}. O que você quer explorar hoje?</h1>
+      <p>Use este espaço como apoio ao estudo. Decisões clínicas exigem avaliação individual, fontes atualizadas e supervisão profissional.</p>
+    </div>
+  </header>
+
+  <div class="student-dashboard">
+    <section class="student-library" aria-labelledby="student-library-title">
+      <div class="student-library__heading">
+        <div>
+          <span class="student-kicker">Biblioteca educacional</span>
+          <h2 id="student-library-title">Pesquisar medicamentos veterinários</h2>
+          <p>Busque por nome, princípio ativo ou classe. Os resultados são ponto de partida para estudo, não orientação de tratamento.</p>
+        </div>
+      </div>
+
+      <label for="studentMedicationSearch" class="visually-hidden">Nome, princípio ativo ou classe do medicamento</label>
+      <div class="student-search">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="studentMedicationSearch" type="search" minlength="2"
+               placeholder="Ex.: amoxicilina ou anti-inflamatório" autocomplete="off">
+        <span id="studentMedicationStatus" aria-live="polite"></span>
+      </div>
+      <div id="studentMedicationResults" class="student-results" aria-live="polite"></div>
+
+      <div class="student-disclaimer">
+        <i class="fa-solid fa-shield-heart" aria-hidden="true"></i>
+        <p><strong>Uso responsável:</strong> confirme sempre indicações, contraindicações, espécie, dose e legislação em fontes oficiais e com um médico-veterinário supervisor.</p>
+      </div>
+    </section>
+
+    <aside class="student-next-steps">
+      <h2>Continue explorando</h2>
+      <a href="{{ url_for('add_animal') }}">
+        <i class="fa-solid fa-paw" aria-hidden="true"></i>
+        <span><strong>Organize o histórico de um pet</strong><small>Veja como dados de saúde ficam reunidos.</small></span>
+      </a>
+      <a href="{{ url_for('servicos') }}">
+        <i class="fa-solid fa-stethoscope" aria-hidden="true"></i>
+        <span><strong>Conheça os serviços</strong><small>Explore a jornada de atendimento do tutor.</small></span>
+      </a>
+      <a href="{{ url_for('parceiro_clinica_landing') }}">
+        <i class="fa-solid fa-hospital" aria-hidden="true"></i>
+        <span><strong>Veja a plataforma para clínicas</strong><small>Entenda as ferramentas profissionais.</small></span>
+      </a>
+      <button type="button"
+              data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+              data-lead-capture data-lead-feature="comunidade_estudantes"
+              data-lead-title="Quero novidades para estudantes"
+              data-cta="student_interest">
+        <i class="fa-solid fa-bell" aria-hidden="true"></i>
+        <span><strong>Receber novidades</strong><small>Avise quais recursos você gostaria de usar.</small></span>
+      </button>
+    </aside>
+  </div>
+  {% endif %}
+</section>
+
+{% if current_user.is_authenticated %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('studentMedicationSearch');
+  const status = document.getElementById('studentMedicationStatus');
+  const results = document.getElementById('studentMedicationResults');
+  if (!input || !status || !results) return;
+
+  let timer;
+  let controller;
+
+  const addText = (element, value) => {
+    if (!value) return;
+    const span = document.createElement('span');
+    span.textContent = value;
+    element.appendChild(span);
+  };
+
+  const render = (items) => {
+    results.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'student-results__empty';
+      empty.textContent = 'Nenhum resultado encontrado. Tente outro nome ou princípio ativo.';
+      results.appendChild(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const article = document.createElement('article');
+      const title = document.createElement('h3');
+      const meta = document.createElement('div');
+      title.textContent = item.nome_exibicao_busca || item.nome || 'Medicamento';
+      meta.className = 'student-result__meta';
+      addText(meta, item.principio_ativo ? `Princípio ativo: ${item.principio_ativo}` : '');
+      addText(meta, item.classificacao || '');
+      addText(meta, item.via_administracao ? `Via: ${item.via_administracao}` : '');
+      article.append(title, meta);
+      results.appendChild(article);
+    });
+  };
+
+  input.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    const query = input.value.trim();
+    if (controller) controller.abort();
+    if (query.length < 2) {
+      status.textContent = '';
+      results.replaceChildren();
+      return;
+    }
+    timer = window.setTimeout(async () => {
+      controller = new AbortController();
+      status.textContent = 'Buscando…';
+      try {
+        const response = await fetch(`{{ url_for('buscar_medicamentos') }}?q=${encodeURIComponent(query)}&limit=8`, {
+          signal: controller.signal,
+          headers: {Accept: 'application/json'}
+        });
+        if (!response.ok) throw new Error('search_failed');
+        const items = await response.json();
+        status.textContent = `${items.length} resultado${items.length === 1 ? '' : 's'}`;
+        render(items);
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        status.textContent = 'Não foi possível buscar agora.';
+        results.replaceChildren();
+      }
+    }, 280);
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

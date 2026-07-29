@@ -1,0 +1,45 @@
+<div class="modal fade" id="leadCaptureModal" tabindex="-1" aria-labelledby="leadCaptureTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content lead-capture">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <span class="lead-capture__eyebrow">Conversa rápida, sem compromisso</span>
+          <h2 class="modal-title h4 mt-1" id="leadCaptureTitle">Ver uma demonstração</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <p class="text-muted" id="leadCaptureDescription">
+          Deixe seu contato. A gente combina um horário e mostra o fluxo da PetOrlândia aplicado à sua rotina.
+        </p>
+        <form id="leadCaptureForm" data-endpoint="{{ url_for('waitlist_signup') }}" novalidate data-no-whatsapp>
+          <input type="hidden" name="feature" value="demo_clinica">
+          <div class="mb-3">
+            <label for="leadCaptureContact" class="form-label fw-semibold">E-mail ou WhatsApp</label>
+            <input
+              type="text"
+              class="form-control form-control-lg"
+              id="leadCaptureContact"
+              name="contact"
+              placeholder="voce@clinica.com.br ou (DDD) 99999-9999"
+              value="{{ current_user.email if current_user.is_authenticated else '' }}"
+              autocomplete="email"
+              aria-required="true"
+              required>
+          </div>
+          <div class="mb-3">
+            <label for="leadCaptureCity" class="form-label">Cidade <span class="text-muted">(opcional)</span></label>
+            <input type="text" class="form-control" id="leadCaptureCity" name="city" placeholder="Sua cidade">
+          </div>
+          <div class="lead-capture__feedback alert d-none" role="status" aria-live="polite"></div>
+          <button type="submit" class="btn btn-primary btn-lg rounded-pill w-100">
+            Quero ver a demonstração
+          </button>
+          <p class="small text-muted text-center mt-3 mb-0">
+            Sem spam. Usaremos o contato somente para responder ao seu pedido.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

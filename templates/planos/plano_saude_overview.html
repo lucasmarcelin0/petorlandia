@@ -1,4 +1,6 @@
 {% extends "layout.html" %}
+{% block page_title %}Plano de saúde pet em Orlândia — PetOrlândia{% endblock %}
+{% block meta_description %}Entre na lista para conhecer primeiro as coberturas e valores do futuro plano de saúde pet da PetOrlândia.{% endblock %}
 {% block main %}
 
 {% set ativo = site_flags.plano_saude_em_breve %}
@@ -8,6 +10,7 @@
 o preço antes de todo mundo.' %}
 {% set waitlist_feature = 'plano_saude' %}
 {% include 'partials/_em_breve_overlay.html' %}
+{% if not ativo %}
 <div class="container mt-4">
 
   <!-- ================================================================
@@ -204,4 +207,5 @@ o preço antes de todo mundo.' %}
   if (el) { new bootstrap.Collapse(el, { toggle: false }).show(); }
   {% endif %}
 </script>
+{% endif %}
 {% endblock %}

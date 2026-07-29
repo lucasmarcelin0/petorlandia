@@ -1,86 +1,127 @@
 {% extends "layout.html" %}
+
+{% block page_title %}Sistema para clínica veterinária — PetOrlândia{% endblock %}
+{% block meta_description %}Agenda, prontuário, vacinas, exames e financeiro em um só sistema. Teste grátis por {{ pricing.trial_dias_clinica }} dias.{% endblock %}
+
 {% block main %}
-<div class="container py-5" style="max-width: 680px;">
-
-  <div class="text-center mb-5">
-    <span class="fs-1"><i class="fa-solid fa-hospital-user text-primary" aria-hidden="true"></i></span>
-    <h1 class="h2 fw-bold mt-3">Gostaria de organizar seus exames e prontuários da mesma forma?</h1>
-    <p class="text-muted lead">
-      Sua clínica também pode oferecer uma experiência mais clara aos pacientes, mantendo sua marca,
-      seus veterinários e sua relação com o tutor no centro da jornada.
-    </p>
-  </div>
-
-  <!-- Passos -->
-  <div class="row g-4 mb-5" id="fluxo">
-    <div class="col-md-4 text-center">
-      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-           style="width:56px;height:56px;">
-        <span class="fw-bold text-primary fs-5">1</span>
-      </div>
-      <h6 class="fw-semibold">Organize os exames</h6>
-      <p class="text-muted small">Pedidos, resultados, laudos e documentos reunidos com leitura simples.</p>
-    </div>
-    <div class="col-md-4 text-center">
-      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-           style="width:56px;height:56px;">
-        <span class="fw-bold text-primary fs-5">2</span>
-      </div>
-      <h6 class="fw-semibold">Valorize sua clínica</h6>
-      <p class="text-muted small">O tutor recebe o exame com o nome da clínica e do veterinário em destaque.</p>
-    </div>
-    <div class="col-md-4 text-center">
-      <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-           style="width:56px;height:56px;">
-        <span class="fw-bold text-primary fs-5">3</span>
-      </div>
-      <h6 class="fw-semibold">Mantenha seu fluxo</h6>
-      <p class="text-muted small">A tecnologia entra como apoio, sem substituir o sistema ou a rotina da equipe.</p>
-    </div>
-  </div>
-
-  <!-- CTA -->
-  <div class="d-grid gap-2 mb-2">
-    <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}"
-       class="btn btn-primary btn-lg">
-      <i class="fa-solid fa-hospital me-2"></i>Cadastrar minha clínica
-    </a>
-    <a href="{{ url_for('login_view') }}?next={{ url_for('minha_clinica') }}"
-       class="btn btn-outline-secondary">
-      Já tenho conta — entrar
-    </a>
-  </div>
-  <p class="text-center text-muted small mb-4">
-    O cadastro passa por uma aprovação rápida da nossa equipe — você é avisado por e-mail assim que a clínica estiver ativa.
-  </p>
-
-  <p class="text-center text-muted small">
-    <i class="fa-solid fa-lock me-1"></i>PetOrlândia atua como tecnologia habilitadora: a experiência continua pertencendo à clínica.
-  </p>
-
-  <!-- QR Code da própria página -->
-  <div class="text-center mt-5 pt-4 border-top">
-    <p class="text-muted small mb-3">Compartilhe este link com a equipe da clínica</p>
-    <div id="qrcode" class="d-inline-block mb-2"></div>
+<section class="clinic-landing">
+  <header class="clinic-landing__hero">
     <div>
-      <code class="small text-muted" id="page-url"></code>
+      <span class="landing-eyebrow"><i class="fa-solid fa-location-dot"></i> Feito em Orlândia-SP, perto de quem atende</span>
+      <h1>Menos tempo procurando informação. Mais tempo cuidando.</h1>
+      <p class="clinic-landing__lead">
+        Centralize agenda, prontuário, vacinas, exames, documentos e financeiro para a equipe
+        encontrar o histórico certo durante o atendimento — no computador ou no celular.
+      </p>
+      <div class="clinic-landing__actions">
+        <a href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+           class="landing-btn landing-btn--primary" data-cta="clinic_start_trial">
+          Começar {{ pricing.trial_dias_clinica }} dias grátis
+        </a>
+        <button type="button" class="landing-btn landing-btn--secondary"
+           data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+           data-lead-capture data-lead-feature="demo_clinica"
+           data-cta="clinic_demo">
+          <i class="fa-solid fa-play"></i> Ver demonstração
+        </button>
+      </div>
+      <p class="clinic-landing__reassurance">
+        Nenhuma cobrança no cadastro · Primeira cobrança só depois do teste · Cancele quando quiser
+      </p>
     </div>
-  </div>
 
-</div>
+    <aside class="clinic-landing__summary" aria-label="Resumo do sistema">
+      <div class="clinic-landing__summary-head">
+        <span>Hoje na clínica</span>
+        <strong>Tudo em dia</strong>
+      </div>
+      <div class="clinic-landing__metric">
+        <i class="fa-solid fa-calendar-check"></i>
+        <div><strong>Agenda compartilhada</strong><span>Equipe alinhada em tempo real</span></div>
+      </div>
+      <div class="clinic-landing__metric">
+        <i class="fa-solid fa-file-waveform"></i>
+        <div><strong>Histórico do paciente</strong><span>Consultas, vacinas e exames juntos</span></div>
+      </div>
+      <div class="clinic-landing__metric">
+        <i class="fa-solid fa-chart-line"></i>
+        <div><strong>Financeiro visível</strong><span>Orçamentos e recebimentos organizados</span></div>
+      </div>
+    </aside>
+  </header>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"
-        integrity="sha512-FNK4h8E1IHNB7MG8bCv+MNmhk4GYFrn8l/EHFp8YPlIB9KxQ3K5kXjP4EV8TUO1DkPNIHuOxcmFnlFCqN+qg=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script>
-  const url = window.location.origin + '{{ url_for("parceiro_clinica_landing") }}';
-  document.getElementById('page-url').textContent = url;
-  new QRious({
-    element: document.getElementById('qrcode'),
-    value: url,
-    size: 160,
-    backgroundAlpha: 1,
-    foreground: '#1a1a2e',
-  });
-</script>
+  <section class="clinic-landing__section" aria-labelledby="clinic-outcomes-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Na prática</span>
+      <h2 id="clinic-outcomes-title">A rotina fica mais simples para toda a equipe.</h2>
+    </div>
+    <div class="clinic-landing__outcomes">
+      <article>
+        <i class="fa-solid fa-user-clock"></i>
+        <h3>Recepção sem gargalo</h3>
+        <p>Agenda, cadastro do tutor e situação do atendimento ficam visíveis sem depender de recados soltos.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-stethoscope"></i>
+        <h3>Consulta com contexto</h3>
+        <p>O veterinário abre o histórico, registra a evolução e gera documentos no mesmo fluxo.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-heart-circle-check"></i>
+        <h3>Tutor mais seguro</h3>
+        <p>Carteira de vacinas, exames liberados e orientações ficam fáceis de acompanhar.</p>
+      </article>
+      <article>
+        <i class="fa-solid fa-sack-dollar"></i>
+        <h3>Gestão sem planilha paralela</h3>
+        <p>Orçamentos, recebimentos, pendências e relatórios acompanham o que aconteceu no atendimento.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="clinic-landing__section clinic-landing__start" aria-labelledby="clinic-start-title">
+    <div>
+      <span class="landing-section-kicker">Comece sem projeto de implantação</span>
+      <h2 id="clinic-start-title">Sua primeira agenda pode estar pronta hoje.</h2>
+      <ol>
+        <li><strong>Crie a conta</strong><span>Nome, e-mail e senha em menos de um minuto.</span></li>
+        <li><strong>Ative a clínica</strong><span>Nome da clínica e CRMV; o restante você completa depois.</span></li>
+        <li><strong>Traga os clientes</strong><span>Ajudamos a importar tutores e pets sem custo.</span></li>
+      </ol>
+    </div>
+    <div class="clinic-landing__price">
+      <span>Plano profissional</span>
+      {% if pricing.exibir_preco_no_convite_clinica %}
+      <strong>{{ pricing.preco_formatado }}<small>/mês</small></strong>
+      <p>por veterinário. Pacientes ilimitados e usuários de recepção incluídos.</p>
+      {% endif %}
+      <ul>
+        <li>{{ pricing.trial_dias_clinica }} dias de acesso completo</li>
+        <li>Sem taxa de instalação</li>
+        <li>Sem fidelidade ou comissão sobre consultas</li>
+      </ul>
+      <a href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+         class="landing-btn landing-btn--primary" data-cta="clinic_price_trial">
+        Testar agora
+      </a>
+      <a href="{{ url_for('login_view', next=url_for('minha_clinica')) }}" class="clinic-landing__login">
+        Já tenho conta
+      </a>
+    </div>
+  </section>
+
+  <section class="clinic-landing__closing" aria-labelledby="clinic-closing-title">
+    <div>
+      <span class="landing-section-kicker">Quer ver com seus próprios casos?</span>
+      <h2 id="clinic-closing-title">Mostramos o fluxo em 15 minutos.</h2>
+      <p>Conte como sua clínica trabalha hoje e focamos a demonstração no que mais toma tempo da equipe.</p>
+    </div>
+    <button type="button" class="landing-btn landing-btn--primary"
+       data-bs-toggle="modal" data-bs-target="#leadCaptureModal"
+       data-lead-capture data-lead-feature="demo_clinica"
+       data-cta="clinic_closing_demo">
+      Agendar demonstração
+    </button>
+  </section>
+</section>
 {% endblock %}

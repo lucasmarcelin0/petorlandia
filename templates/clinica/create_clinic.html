@@ -1,62 +1,122 @@
 {% extends "layout.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
+
+{% block page_title %}Ativar minha clínica — PetOrlândia{% endblock %}
+{% block meta_description %}Crie o espaço da sua clínica e comece a testar agenda, prontuário, vacinas e financeiro agora.{% endblock %}
+
 {% block main %}
-<div class="container mt-4">
-  <h2>Criar Clínica</h2>
-  <p class="text-muted">
-    Preencha os dados abaixo. O cadastro passa por uma aprovação rápida da nossa equipe —
-    você será avisado por e-mail assim que a clínica estiver ativa.
-  </p>
-  <form method="post" enctype="multipart/form-data">
-    {{ form.hidden_tag() }}
-    <div class="mb-3">
-      {{ form.nome.label }}
-      {{ form.nome(class="form-control") }}
+<section class="clinic-activation py-4 py-lg-5">
+  <div class="clinic-activation__intro">
+    <span class="landing-eyebrow"><i class="fa-solid fa-wand-magic-sparkles"></i> Leva cerca de 2 minutos</span>
+    <h1>Vamos colocar sua clínica para funcionar.</h1>
+    <p>
+      Para começar, precisamos apenas do nome da clínica e do seu registro profissional.
+      Endereço, logo, equipe e configurações podem ser completados depois.
+    </p>
+    <div class="clinic-activation__benefits" aria-label="Resumo da oferta">
+      <span><i class="fa-solid fa-check"></i> Acesso imediato</span>
+      <span><i class="fa-solid fa-check"></i> {{ pricing.trial_dias_clinica }} dias grátis</span>
+      <span><i class="fa-solid fa-check"></i> Sem fidelidade</span>
     </div>
-    <div class="mb-3">
-      {{ form.cnpj.label }}
-      {{ form.cnpj(class="form-control", **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}
-    </div>
-    <div class="mb-3">
-      {{ form.endereco.label }}
-      {{ form.endereco(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ form.telefone.label }}
-      {{ form.telefone(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ form.email.label }}
-      {{ form.email(class="form-control") }}
-    </div>
-    <div class="row g-3 mb-3">
-      <div class="col-md-6">
-        {{ form.modo_entrega.label }}
-        {{ form.modo_entrega(class="form-select") }}
+  </div>
+
+  <div class="clinic-activation__card">
+    <div class="clinic-activation__step">Etapa 1 de 2 · dados essenciais</div>
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.nome.label(class="form-label fw-semibold") }}
+        {{ form.nome(class="form-control form-control-lg", placeholder="Ex.: Clínica Veterinária São Francisco") }}
+        {% for error in form.nome.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
       </div>
-      <div class="col-md-6">
-        {{ form.valor_frete.label }}
-        {{ form.valor_frete(class="form-control", placeholder="0,00") }}
+
+      <div class="clinic-professional-toggle mb-3">
+        <div class="form-check">
+          {{ form.sou_veterinario(class="form-check-input", **{'aria-controls': 'professionalFields'}) }}
+          {{ form.sou_veterinario.label(class="form-check-label fw-semibold") }}
+        </div>
+        <p class="small text-muted mb-0">Marque para iniciar sua avaliação profissional agora.</p>
       </div>
-      <div class="col-md-6">
-        {{ form.pedido_minimo_entrega.label }}
-        {{ form.pedido_minimo_entrega(class="form-control", placeholder="Opcional") }}
+
+      <div id="professionalFields" class="row g-3 mb-3">
+        <div class="col-sm-8">
+          {{ form.crmv.label(class="form-label fw-semibold") }}
+          {{ form.crmv(class="form-control", placeholder="Ex.: 12345", inputmode="numeric") }}
+          {% for error in form.crmv.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-sm-4">
+          {{ form.crmv_estado.label(class="form-label fw-semibold") }}
+          {{ form.crmv_estado(class="form-select") }}
+          {% for error in form.crmv_estado.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
       </div>
-      <div class="col-md-3">
-        {{ form.prazo_entrega_min.label }}
-        {{ form.prazo_entrega_min(class="form-control", placeholder="30") }}
+
+      <details class="clinic-activation__optional mb-4">
+        <summary>Adicionar dados opcionais agora</summary>
+        <p class="small text-muted mt-2 mb-3">Você também poderá preencher tudo isso dentro da clínica.</p>
+
+        <div class="row g-3">
+          <div class="col-sm-6">
+            {{ form.telefone.label(class="form-label") }}
+            {{ form.telefone(class="form-control", placeholder="(DDD) 99999-9999") }}
+          </div>
+          <div class="col-sm-6">
+            {{ form.email.label(class="form-label") }}
+            {{ form.email(class="form-control", placeholder="contato@clinica.com.br") }}
+            {% for error in form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-sm-6">
+            {{ form.cnpj.label(class="form-label") }}
+            {{ form.cnpj(class="form-control", **{'data-cnpj-mask': 'true', 'placeholder': '00.000.000/0000-00'}) }}
+            {% for error in form.cnpj.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-sm-6">
+            {{ form.endereco.label(class="form-label") }}
+            {{ form.endereco(class="form-control", placeholder="Rua, número e bairro") }}
+          </div>
+          <div class="col-12">
+            {{ form.logotipo.label(class="form-label") }}
+            {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'clinic_logo', 'user') }}
+          </div>
+        </div>
+      </details>
+
+      {# Configurações de entrega são preservadas no formulário com seus defaults,
+         mas aparecem apenas mais tarde no painel da clínica, quando fizerem sentido. #}
+      <div class="d-none" aria-hidden="true">
+        {{ form.modo_entrega() }}
+        {{ form.valor_frete() }}
+        {{ form.pedido_minimo_entrega() }}
+        {{ form.prazo_entrega_min() }}
+        {{ form.prazo_entrega_max() }}
       </div>
-      <div class="col-md-3">
-        {{ form.prazo_entrega_max.label }}
-        {{ form.prazo_entrega_max(class="form-control", placeholder="60") }}
-      </div>
-    </div>
-    <div class="mb-3">
-      {{ form.logotipo.label }}
-      {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'clinic_logo', 'user') }}
-    </div>
-    {{ form.submit(class="btn btn-primary") }}
-  </form>
-</div>
+
+      {{ form.submit(class="btn btn-primary btn-lg rounded-pill w-100", value="Criar clínica e continuar") }}
+      <p class="small text-muted text-center mt-3 mb-0">
+        A publicação no catálogo passa por análise, mas isso não impede seu teste.
+        {% if pricing.exibir_preco_no_convite_clinica %}
+        Depois da avaliação, o plano custa {{ pricing.preco_formatado }}/mês por veterinário.
+        {% endif %}
+      </p>
+    </form>
+  </div>
+</section>
+
 <script src="{{ url_for('static', filename='js/cnpj_mask.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const checkbox = document.getElementById('{{ form.sou_veterinario.id }}');
+    const fields = document.getElementById('professionalFields');
+    if (!checkbox || !fields) return;
+    const sync = () => {
+      fields.hidden = !checkbox.checked;
+      fields.querySelectorAll('input, select').forEach((field) => {
+        field.disabled = !checkbox.checked;
+      });
+    };
+    checkbox.addEventListener('change', sync);
+    sync();
+  });
+</script>
 {% endblock %}

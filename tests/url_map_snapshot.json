@@ -6250,6 +6250,11 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "site_routes.student_hub",
+  "rule": "/estudantes",
+  "methods": "GET"
+ },
+ {
   "endpoint": "site_routes.support",
   "rule": "/support",
   "methods": "GET"
@@ -6262,6 +6267,11 @@
  {
   "endpoint": "site_routes.update_vet_profile",
   "rule": "/veterinario/<int:veterinario_id>/profile",
+  "methods": "POST"
+ },
+ {
+  "endpoint": "site_routes.veterinarian_cancel_recurring",
+  "rule": "/veterinario/assinatura/<int:membership_id>/cancelar-renovacao",
   "methods": "POST"
  },
  {
@@ -6447,6 +6457,11 @@
  {
   "endpoint": "storepaymentaccount.index_view",
   "rule": "/painel/storepaymentaccount/",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "student_hub",
+  "rule": "/estudantes",
   "methods": "GET"
  },
  {
@@ -7043,6 +7058,11 @@
   "endpoint": "veterinarian_activity_report",
   "rule": "/veterinario/<int:veterinario_id>/relatorio-atividades",
   "methods": "GET"
+ },
+ {
+  "endpoint": "veterinarian_cancel_recurring",
+  "rule": "/veterinario/assinatura/<int:membership_id>/cancelar-renovacao",
+  "methods": "POST"
  },
  {
   "endpoint": "veterinarian_cancel_trial",

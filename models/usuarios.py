@@ -12,6 +12,7 @@ from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
 import json
+import math
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_CEILING
 import unicodedata
@@ -611,6 +612,11 @@ class VeterinarianMembership(db.Model):
     trial_ends_at = db.Column(db.DateTime(timezone=True), nullable=False)
     paid_until = db.Column(db.DateTime(timezone=True), nullable=True)
     last_payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
+    #: Assinatura (preapproval) criada no Mercado Pago. O ID pode existir ainda
+    #: com autorização pendente; ``payment_method_set_at`` registra quando o
+    #: provedor confirma que a renovação ficou ativa.
+    preapproval_id = db.Column(db.String(64), nullable=True)
+    payment_method_set_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     veterinario = db.relationship(
         'Veterinario',
@@ -657,6 +663,15 @@ class VeterinarianMembership(db.Model):
             return False
         return self._now() <= paid_until
 
+    def has_payment_method(self) -> bool:
+        """True quando o Mercado Pago confirmou a autorização da assinatura.
+
+        Só ter ``preapproval_id`` não basta: esse ID também existe enquanto a
+        pessoa ainda está na tela de autorização e pode abandonar o fluxo.
+        """
+
+        return bool(self.preapproval_id and self.payment_method_set_at)
+
     def is_active(self) -> bool:
         return self.is_trial_active() or self.has_valid_payment()
 
@@ -676,7 +691,7 @@ class VeterinarianMembership(db.Model):
         if not self.trial_ends_at:
             return 0
         delta = self.trial_ends_at - self._now()
-        return max(delta.days, 0)
+        return max(math.ceil(delta.total_seconds() / 86400), 0)
 
     @property
     def status_label(self) -> str:

@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from extensions import csrf, db
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
-from forms import AppointmentRequestForm, AppointmentRequestResponseForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
+from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
 from models import (
     Animal,
@@ -154,10 +154,34 @@ def veterinarian_membership():
     membership = None
     if has_profile:
         membership = ensure_veterinarian_membership(current_user.veterinario)
+        if membership.preapproval_id and not membership.has_payment_method():
+            try:
+                preapproval_response = (
+                    mp_sdk().preapproval().get(membership.preapproval_id)
+                )
+                preapproval_status = (
+                    (preapproval_response.get('response') or {}).get('status')
+                    if isinstance(preapproval_response, dict)
+                    else None
+                )
+                if preapproval_status == 'authorized':
+                    membership.payment_method_set_at = utcnow()
+                    db.session.commit()
+                elif preapproval_status == 'cancelled':
+                    membership.preapproval_id = None
+                    membership.payment_method_set_at = None
+                    db.session.commit()
+            except Exception:  # noqa: BLE001
+                current_app.logger.warning(
+                    'Não foi possível sincronizar a assinatura profissional %s',
+                    membership.preapproval_id,
+                    exc_info=True,
+                )
 
     status = request.args.get('status')
 
     checkout_form = VeterinarianMembershipCheckoutForm()
+    cancel_recurring_form = VeterinarianMembershipCancelRecurringForm()
     price = float(_get_veterinarian_membership_price())
     annual_price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', price * 10))
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
@@ -166,6 +190,7 @@ def veterinarian_membership():
         'veterinarios/membership.html',
         membership=membership,
         checkout_form=checkout_form,
+        cancel_recurring_form=cancel_recurring_form,
         price=price,
         annual_price=annual_price,
         annual_monthly_price=annual_price / 12 if annual_price else 0.0,
@@ -197,6 +222,22 @@ def veterinarian_membership_checkout():
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     if membership:
         membership.ensure_trial_dates(trial_days)
+        if membership.has_payment_method():
+            flash(
+                'Sua renovação automática já está configurada. Cancele a atual antes de criar outra.',
+                'info',
+            )
+            return redirect(url_for('veterinarian_membership'))
+        if membership.preapproval_id and not _cancel_membership_preapproval(membership):
+            db.session.rollback()
+            flash(
+                'Há uma configuração de pagamento pendente no Mercado Pago. '
+                'Tente novamente em instantes ou fale com o suporte.',
+                'danger',
+            )
+            return redirect(url_for('veterinarian_membership'))
+        if membership.preapproval_id is None:
+            db.session.commit()
 
     # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
     # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
@@ -274,9 +315,101 @@ def veterinarian_membership_checkout():
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
+    # Guarda a assinatura criada: é por ela que sabemos, depois, se existe
+    # forma de pagamento cadastrada — o que muda o aviso de fim de avaliação
+    # entre "vamos cobrar" e "seu acesso vai pausar".
+    preapproval_id = (resp.get('response') or {}).get('id')
+    if membership and preapproval_id:
+        membership.preapproval_id = str(preapproval_id)[:64]
+        # A criação só gera o link de autorização. A forma de pagamento passa a
+        # existir quando o Mercado Pago devolver status "authorized".
+        membership.payment_method_set_at = None
+        db.session.add(membership)
+
     db.session.commit()
 
     return redirect(init_point)
+
+
+def _cancel_membership_preapproval(membership) -> bool:
+    """Cancela no provedor antes de remover a referência local.
+
+    Manter a referência quando o Mercado Pago falha é intencional: assim a tela
+    não promete que a cobrança parou quando ainda não temos essa confirmação.
+    """
+
+    preapproval_id = getattr(membership, 'preapproval_id', None)
+    if not preapproval_id:
+        return True
+    try:
+        response = mp_sdk().preapproval().update(
+            preapproval_id,
+            {'status': 'cancelled'},
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception(
+            'Falha ao cancelar assinatura profissional %s',
+            preapproval_id,
+        )
+        return False
+
+    response_status = response.get('status') if isinstance(response, dict) else 200
+    try:
+        response_status = int(response_status or 200)
+    except (TypeError, ValueError):
+        response_status = 500
+    if not 200 <= response_status < 300:
+        current_app.logger.error(
+            'Mercado Pago recusou cancelamento da assinatura %s: %s',
+            preapproval_id,
+            response,
+        )
+        return False
+
+    membership.preapproval_id = None
+    membership.payment_method_set_at = None
+    db.session.add(membership)
+    return True
+
+
+@bp.route('/veterinario/assinatura/<int:membership_id>/cancelar-renovacao', methods=['POST'])
+@login_required
+def veterinarian_cancel_recurring(membership_id):
+    from models import VeterinarianMembership
+
+    membership = VeterinarianMembership.query.get_or_404(membership_id)
+    form = VeterinarianMembershipCancelRecurringForm()
+    owns_membership = (
+        has_veterinarian_profile(current_user)
+        and membership.veterinario_id == current_user.veterinario.id
+    )
+    is_admin = (current_user.role or '').lower() == 'admin'
+    if not (owns_membership or is_admin):
+        abort(403)
+    if not form.validate_on_submit():
+        flash('Sua sessão expirou. Recarregue a página e tente novamente.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
+
+    if not membership.has_payment_method():
+        flash('A renovação automática já estava cancelada.', 'info')
+        return redirect(url_for('veterinarian_membership'))
+    if not _cancel_membership_preapproval(membership):
+        db.session.rollback()
+        flash(
+            'Não conseguimos confirmar o cancelamento no Mercado Pago. '
+            'Nenhuma alteração foi feita; tente novamente ou fale com o suporte.',
+            'danger',
+        )
+        return redirect(url_for('veterinarian_membership'))
+
+    db.session.commit()
+    track_event('membership_renewal_cancelled')
+    flash(
+        'Renovação cancelada. Nenhuma nova cobrança será feita; seu acesso continua '
+        'até o fim do período gratuito ou já pago.',
+        'success',
+    )
+    return redirect(url_for('veterinarian_membership'))
 
 
 @bp.route('/veterinario/assinatura/<int:membership_id>/cancelar_avaliacao', methods=['POST'])
@@ -300,7 +433,15 @@ def veterinarian_cancel_trial(membership_id):
     if not (is_admin or owns_membership):
         abort(403)
 
-    if not membership.is_trial_active():
+    if membership.has_payment_method() and not _cancel_membership_preapproval(membership):
+        db.session.rollback()
+        flash(
+            'Não conseguimos cancelar a cobrança agendada no Mercado Pago. '
+            'A avaliação continua ativa e nenhuma alteração foi feita.',
+            'danger',
+        )
+    elif not membership.is_trial_active():
+        db.session.commit()
         flash('O período de avaliação gratuita já havia sido encerrado.', 'info')
     else:
         membership.trial_ends_at = utcnow() - timedelta(seconds=1)
@@ -311,7 +452,7 @@ def veterinarian_cancel_trial(membership_id):
     if is_admin and membership.veterinario and membership.veterinario.user:
         return redirect(url_for('conversa_admin', user_id=membership.veterinario.user.id))
 
-    return redirect(url_for('conversa_admin'))
+    return redirect(url_for('veterinarian_membership'))
 
 
 @bp.route('/veterinario/assinatura/<int:membership_id>/nova_avaliacao', methods=['POST'])
@@ -516,6 +657,8 @@ def onboarding():
 WAITLIST_FEATURES = {
     'loja': 'Loja PetOrlândia',
     'plano_saude': 'Plano de Saúde Pet',
+    'demo_clinica': 'Demonstração para clínica',
+    'comunidade_estudantes': 'Comunidade para estudantes',
 }
 
 
@@ -562,15 +705,24 @@ def waitlist_signup():
 
     track_event('waitlist_joined', channel=feature)
 
+    success_message = (
+        'Pedido recebido! Vamos falar com você para combinar a demonstração.'
+        if feature == 'demo_clinica'
+        else 'Interesse registrado! Avisamos você sobre as próximas ferramentas para estudantes.'
+        if feature == 'comunidade_estudantes'
+        else 'Pronto! Avisamos você assim que abrir.'
+    )
     return jsonify({
         'success': True,
-        'message': 'Pronto! Avisamos você assim que abrir.',
+        'message': success_message,
     })
 
 
 #: Prefixos de evento que o endpoint de CTA aceita. Manter em sincronia com os
 #: atributos data-cta dos templates.
-CTA_EVENT_PREFIXES = ('cta_', 'home_', 'tutor_', 'onboarding_', 'login_')
+CTA_EVENT_PREFIXES = (
+    'cta_', 'home_', 'tutor_', 'student_', 'onboarding_', 'login_', 'pricing_', 'clinic_', 'store_',
+)
 
 
 @bp.route('/eventos/cta', methods=['POST'])
@@ -611,6 +763,21 @@ def para_tutores():
     return render_template(
         'para_tutores.html',
         cidade_padrao='Orlândia',
+    )
+
+
+@bp.route('/estudantes')
+def student_hub():
+    """Free acquisition and learning hub for veterinary students."""
+
+    track_event(
+        'student_hub_viewed',
+        channel='authenticated' if current_user.is_authenticated else 'visitor',
+    )
+    return render_template(
+        'estudantes.html',
+        form=LoginForm(),
+        student_next=url_for('student_hub'),
     )
 
 
@@ -699,10 +866,13 @@ def sitemap_xml():
         '/',
         '/precos',
         '/para-tutores',
+        '/estudantes',
         '/sobre',
         '/parceiros/clinica',
         '/parceiros/loja',
+        '/parceiros/loja/produtos',
         '/loja',
+        '/plano-saude',
         '/servicos',
         '/privacy',
         '/terms',
@@ -2100,4 +2270,3 @@ def servicos_exames():
         cities=cities,
         vet_service_notes=_vet_public_service_notes,
     )
-

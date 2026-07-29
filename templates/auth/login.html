@@ -1,10 +1,19 @@
 {% extends "layout.html" %}
 {% from 'components/form_macros.html' import render_field, render_checkbox, render_submit %}
 
+{% block page_title %}{% if audience == 'student' %}Entrar como estudante — PetOrlândia{% else %}Entrar — PetOrlândia{% endif %}{% endblock %}
+{% block meta_description %}{% if audience == 'student' %}Entre gratuitamente no espaço para estudantes de Medicina Veterinária da PetOrlândia.{% else %}Entre na sua conta PetOrlândia.{% endif %}{% endblock %}
+
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
     <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 450px;">
+        {% if audience == 'student' %}
+        <span class="student-auth__eyebrow">Espaço do estudante</span>
+        <h1 class="mb-2 text-center h3">Entrar como estudante</h1>
+        <p class="text-center text-muted small mb-4">Acesso gratuito a recursos educacionais e à rotina digital veterinária.</p>
+        {% else %}
         <h1 class="mb-3 text-center h3">Entrar na PetOrlândia</h1>
+        {% endif %}
         {% if oauth_login_flow %}
         <div class="alert alert-info rounded-4 small" role="alert">
             Entre com sua conta de veterinário para conectar o PetOrlândia ao ChatGPT e autorizar cadastros direto no sistema.
@@ -18,6 +27,7 @@
         <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form" data-no-whatsapp>
             {{ form.hidden_tag() }}
             <input type="hidden" name="next" value="{{ next_url }}">
+            {% if audience %}<input type="hidden" name="audience" value="{{ audience }}">{% endif %}
             {{ render_field(form.login, classes='form-control rounded-pill', placeholder='Seu e-mail ou celular') }}
             {{ render_field(form.password, classes='form-control rounded-pill') }}
             {{ render_checkbox(form.remember) }}
@@ -26,6 +36,12 @@
                 <a href="{{ url_for('first_access', next=next_url) }}" class="text-decoration-none fw-semibold d-block mb-2">Primeiro acesso</a>
                 <a href="{{ url_for('reset_password_request') }}" class="text-decoration-none">Esqueceu sua senha?</a>
             </div>
+            {% if audience == 'student' %}
+            <p class="text-center text-muted small mt-4 mb-0">
+                Ainda não tem conta?
+                <a href="{{ url_for('register', next=next_url, audience='student') }}" class="fw-semibold text-decoration-none">Criar conta gratuita</a>
+            </p>
+            {% endif %}
         </form>
     </div>
 </div>

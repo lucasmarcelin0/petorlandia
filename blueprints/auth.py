@@ -1,6 +1,6 @@
 """Views do domínio auth_routes (migrado do app.py)."""
 from flask import Blueprint
-import os, uuid
+import hashlib, os, uuid
 from datetime import datetime
 from extensions import csrf, db, limiter, mail
 from services.product_analytics import track_event
@@ -31,6 +31,25 @@ from app import (  # noqa: E402
 )
 
 bp = Blueprint("auth_routes", __name__)
+
+
+def _auth_audience():
+    """Return a known acquisition audience without trusting arbitrary input."""
+
+    audience = (request.values.get("audience") or "").strip().lower()
+    return audience if audience in {"student"} else None
+
+
+def _login_rate_limit_key():
+    """Limita tentativas por rede e identificador, sem guardar o e-mail no cache."""
+
+    identifier = (
+        request.form.get('login')
+        or request.form.get('email')
+        or ''
+    ).strip().lower()
+    identifier_hash = hashlib.sha256(identifier.encode('utf-8')).hexdigest()[:20]
+    return f"{request.remote_addr or 'unknown'}:{identifier_hash}"
 
 
 def get_blueprint():
@@ -224,6 +243,14 @@ def first_access_password():
 def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+    audience = _auth_audience()
+    requested_next = request.values.get('next')
+    next_url = (
+        _sanitize_login_next_url(requested_next)
+        if requested_next
+        else url_for('student_hub') if audience == 'student'
+        else url_for('onboarding')
+    )
 
     # Programa de indicação: guarda o código vindo de ?ref= para creditar após o cadastro.
     ref_code = (request.args.get('ref') or '').strip()
@@ -240,13 +267,13 @@ def register():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}, 'message': 'Email já está em uso.'}), 400
             flash('Email já está em uso.', 'danger')
-            return render_template('auth/register.html', form=form, endereco=None)
+            return render_template('auth/register.html', form=form, endereco=None, next_url=next_url, audience=audience)
 
         if normalized_phone and find_users_by_phone(normalized_phone):
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'phone': ['Celular já está em uso.']}, 'message': 'Celular já está em uso.'}), 400
             flash('Celular já está em uso.', 'danger')
-            return render_template('auth/register.html', form=form, endereco=None)
+            return render_template('auth/register.html', form=form, endereco=None, next_url=next_url, audience=audience)
 
         # Address is progressive: only validate it when the user starts filling
         # the section. A tutor can create an account before choosing delivery.
@@ -270,7 +297,7 @@ def register():
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'endereco': [message]}, 'message': message}), 400
             flash(message, 'warning')
-            return render_template('auth/register.html', form=form, endereco=None)
+            return render_template('auth/register.html', form=form, endereco=None, next_url=next_url, audience=audience)
 
         # Cria o endereço
         endereco = Endereco(
@@ -335,7 +362,7 @@ def register():
                 if is_json_request:
                     return jsonify({'success': False, 'errors': {'form': ['Erro ao criar conta. Tente novamente.']}, 'message': 'Erro ao criar conta.'}), 500
                 flash('Erro ao criar conta. Tente novamente.', 'danger')
-            return render_template('auth/register.html', form=form, endereco=None)
+            return render_template('auth/register.html', form=form, endereco=None, next_url=next_url, audience=audience)
 
         # Programa de indicação: credita quem indicou (não bloqueia o cadastro em caso de erro).
         try:
@@ -352,14 +379,18 @@ def register():
 
         # Faz login automático do usuário recém-criado
         login_user(user)
-        track_event('signup_completed', role=getattr(user, 'role', None))
+        track_event(
+            'signup_completed',
+            role=getattr(user, 'role', None),
+            channel=audience,
+        )
 
         # Cai no onboarding, não no sistema vazio: é ali que a pessoa dá o
         # primeiro passo em vez de olhar uma tela sem nada dela.
         if is_json_request:
-            return jsonify({'success': True, 'redirect': url_for('onboarding')})
+            return jsonify({'success': True, 'redirect': next_url})
         flash('Conta criada com sucesso!', 'success')
-        return redirect(url_for('onboarding'))
+        return redirect(next_url)
 
     if request.method == 'POST' and is_json_request:
         errors = dict(form.errors) if form.errors else {}
@@ -372,14 +403,24 @@ def register():
             message = 'Não foi possível criar a conta. Recarregue a página e tente novamente.'
         return jsonify({'success': False, 'errors': errors, 'message': message}), 400
 
-    return render_template('auth/register.html', form=form, endereco=None)
+    return render_template(
+        'auth/register.html',
+        form=form,
+        endereco=None,
+        next_url=next_url,
+        audience=audience,
+    )
 
 
 @bp.route("/login", methods=['GET', 'POST'])
-@limiter.limit("10 per minute", methods=["POST"])
+@limiter.limit("10 per minute", methods=["POST"], key_func=_login_rate_limit_key)
 def login_view():
     form = LoginForm()
-    next_url = request.values.get('next') or url_for('index')
+    audience = _auth_audience()
+    next_url = (
+        request.values.get('next')
+        or (url_for('student_hub') if audience == 'student' else url_for('index'))
+    )
     next_url = _sanitize_login_next_url(next_url)
     oauth_login_flow = urlparse(next_url).path == '/oauth/authorize'
     if request.method == 'POST' and not form.login.data and request.form.get('email'):
@@ -397,11 +438,16 @@ def login_view():
                 form=form,
                 next_url=next_url,
                 oauth_login_flow=oauth_login_flow,
+                audience=audience,
             )
 
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
-            track_event('login_succeeded', role=getattr(user, 'role', None))
+            track_event(
+                'login_succeeded',
+                role=getattr(user, 'role', None),
+                channel=audience,
+            )
             if form.remember.data:
                 session.permanent = True
             if is_json_request:
@@ -427,6 +473,7 @@ def login_view():
         form=form,
         next_url=next_url,
         oauth_login_flow=oauth_login_flow,
+        audience=audience,
     )
 
 
@@ -528,11 +575,24 @@ def google_callback():
     session.permanent = True
 
     if created:
-        track_event('signup_completed', role=getattr(user, 'role', None), channel='google')
+        channel = (
+            'student_google'
+            if urlparse(_sanitize_login_next_url(next_url)).path == url_for('student_hub')
+            else 'google'
+        )
+        track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
         flash('Conta criada com o Google. Bem-vindo!', 'success')
-        return redirect(url_for('onboarding'))
+        sanitized_next = _sanitize_login_next_url(next_url)
+        if urlparse(sanitized_next).path == url_for('index'):
+            sanitized_next = url_for('onboarding')
+        return redirect(sanitized_next)
 
-    track_event('login_succeeded', role=getattr(user, 'role', None), channel='google')
+    channel = (
+        'student_google'
+        if urlparse(_sanitize_login_next_url(next_url)).path == url_for('student_hub')
+        else 'google'
+    )
+    track_event('login_succeeded', role=getattr(user, 'role', None), channel=channel)
     flash('Login realizado com sucesso!', 'success')
     return redirect(_sanitize_login_next_url(next_url))
 
@@ -692,4 +752,3 @@ def delete_account():
         return redirect(url_for('index'))
     flash('Operação inválida.', 'danger')
     return redirect(url_for('profile'))
-

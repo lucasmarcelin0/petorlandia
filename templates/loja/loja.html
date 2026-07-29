@@ -1,4 +1,6 @@
 {% extends "layout.html" %}
+{% block page_title %}Loja pet em Orlândia — PetOrlândia{% endblock %}
+{% block meta_description %}Entre na lista para saber quando a loja PetOrlândia abrir com parceiros locais e entrega na região.{% endblock %}
 {% block main %}
 
 {% set ativo = site_flags.loja_em_breve %}
@@ -9,6 +11,7 @@ rápida em Orlândia.' %}
 {% set waitlist_feature = 'loja' %}
 {% include 'partials/_em_breve_overlay.html' %}
 
+{% if not ativo %}
 <!-- Cabeçalho -->
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
@@ -308,5 +311,6 @@ rápida em Orlândia.' %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='loja_dynamic.js') }}"></script>
 {% endblock %}
+{% endif %}
 
 {% endblock %}

@@ -122,6 +122,10 @@ class VeterinarianMembershipCancelTrialForm(FlaskForm):
     submit = SubmitField('Cancelar avaliação gratuita')
 
 
+class VeterinarianMembershipCancelRecurringForm(FlaskForm):
+    submit = SubmitField('Cancelar renovação automática')
+
+
 class VeterinarianMembershipRequestNewTrialForm(FlaskForm):
     submit = SubmitField('Iniciar nova avaliação gratuita')
 
@@ -278,4 +282,3 @@ class ProfessionalServiceForm(FlaskForm):
     clinic_after_hours_price = DecimalField('Repasse clínica - fora do comercial (R$)', places=2, validators=[Optional(), NumberRange(min=0)])
     active = BooleanField('Publicado', default=True)
     submit = SubmitField('Salvar serviço')
-
