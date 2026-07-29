@@ -5243,7 +5243,7 @@ button.onboarding-cta {
 }
 
 @media (min-width: 992px) and (max-width: 1399.98px) {
-  .public-navbar-nav > .nav-item > .nav-link > i {
+  .app-navbar-nav > .nav-item > .nav-link > i {
     display: none;
   }
 }
