@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -89,6 +90,24 @@ def test_other_pages_remain_blocked_from_iframes(app):
     assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
 
 
+def test_image_preview_restores_zoom_and_pan_controls():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function isImageUpload(upload)" in script
+    assert 'data-preview-zoom="out"' in script
+    assert 'data-preview-zoom="in"' in script
+    assert 'data-preview-zoom="actual"' in script
+    assert 'data-preview-zoom="fit"' in script
+    assert "function bindUploadPreviewControls()" in script
+    assert "viewport.scrollLeft" in script
+    assert "viewport.scrollTop" in script
+    assert ".upload-preview-viewport" in styles
+    assert ".preview-zoom-controls" in styles
+    assert "cursor: grabbing;" in styles
+
+
 def test_product_docx_contains_official_anexo_iv_sections():
     state = deepcopy(SEED_STATE)
     product = state["products"][0]
@@ -137,6 +156,11 @@ def test_product_docx_contains_official_anexo_iv_sections():
     ):
         assert expected in text
 
+    assert "PREFEITURA MUNICIPAL DE ORLÂNDIA" in text
+    assert "1. IDENTIFICAÇÃO DO ESTABELECIMENTO" in text
+    assert "5. PROCESSO PRODUTIVO E CONTROLES" in text
+    assert document.styles["Normal"].font.size.pt == 12
+
 
 def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     project_root = Path(__file__).resolve().parents[1]
@@ -153,3 +177,102 @@ def test_anexo_i_print_layout_uses_two_isolated_a4_pages():
     assert "lucasferreira@orlandia.sp.gov.br" in script
     assert "(31) 99950-5748" in script
     assert "let persistQueue = Promise.resolve();" in script
+
+
+def test_annexes_ii_to_vii_use_editable_official_a4_pages():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    expected_pages = {
+        "II": 5,
+        "III": 2,
+        "IV": 3,
+        "V": 2,
+        "VI": 2,
+        "VII": 2,
+    }
+    for annex, pages in expected_pages.items():
+        assert script.count(f'officialDocumentPage("{annex}"') == pages
+
+    assert "function officialTextarea(" in script
+    assert 'data-official-array-path="' in script
+    assert 'data-path="${path}"' in script
+    assert "PREFEITURA MUNICIPAL DE ORL&Acirc;NDIA" in script
+    assert "lucasferreira@orlandia.sp.gov.br" in script
+    assert "@page official-document" in styles
+    assert ".official-document-page + .official-document-page" in styles
+    assert ".official-other-option > span" in styles
+
+
+def test_print_forms_expand_on_screen_and_create_safe_colored_pdf_continuations():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'data-action="print-digital"' in script
+    assert "function autoSizeOfficialTextarea" in script
+    assert "function prepareLongFormFields" in script
+    assert "official-continuation-page" in script
+    assert "O conteúdo integral deste campo segue na página de continuação." in script
+    assert "printDocument(\"digital\")" in script
+    assert "resize: vertical;" in styles
+    assert ".digital-pdf .official-service-masthead" in styles
+    assert "body.digital-pdf .official-service-masthead img" in styles
+    assert ".official-continuation-text" in styles
+
+
+def test_printable_forms_use_legible_type_instead_of_shrinking_filled_content():
+    project_root = Path(__file__).resolve().parents[1]
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "font: 500 10pt/1.25 Arial, Helvetica, sans-serif;" in styles
+    assert ".official-document-page .official-fill-input" in styles
+    assert "font-size: 9.5pt;" in styles
+    assert re.search(r"\.official-continuation-text\s*\{[^}]*font-size:\s*10pt;", styles, re.DOTALL)
+
+
+def test_screen_editing_uses_a_distinct_comfortable_layout_from_printing():
+    project_root = Path(__file__).resolve().parents[1]
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "Tela de preenchimento: conforto visual e hierarquia" in styles
+    assert "@media screen" in styles
+    assert "min-height: 0;" in styles
+    assert "border-radius: 16px;" in styles
+    assert "background: linear-gradient(145deg, #ffffff 0%, #f7fbfa 100%);" in styles
+    assert "@media print" in styles
+
+
+def test_official_document_cards_present_a_progressive_three_step_workflow():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'class="annex-flow" aria-label="Etapas do Anexo ${annex.number}"' in script
+    assert script.count('class="annex-flow-step') >= 3
+    assert 'class="btn annex-upload-button"' in script
+    assert '<details class="annex-details">' in script
+    assert "Base legal e orientação de envio" in script
+    assert "Histórico de arquivos" in script
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in styles
+    assert ".annex-current-file" in styles
+    assert ".annex-card-details-grid" in styles
+
+
+def test_remaining_registry_documents_follow_the_same_visual_workflow():
+    project_root = Path(__file__).resolve().parents[1]
+    script = (project_root / "static" / "sim_portal" / "app.js").read_text(encoding="utf-8")
+    styles = (project_root / "static" / "sim_portal" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function registryDocumentCard" in script
+    assert 'class="document-card registry-document' in script
+    assert 'class="registry-flow" aria-label="Etapas de ${doc.name}"' in script
+    assert "Separe o documento correto" in script
+    assert "Orientações e base legal" in script
+    assert 'class="span-12 panel registry-documents-panel"' in script
+    assert 'class="span-12 panel document-support-panel"' in script
+    assert ".document-card.registry-document" in styles
+    assert ".registry-flow .annex-flow-step" in styles
+    assert ".registry-card-head" in styles
+    assert ".document-support-panel" in styles

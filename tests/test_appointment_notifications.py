@@ -69,7 +69,9 @@ def test_pending_page_allows_accept(client, monkeypatch):
     resp = client.get('/appointments')
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert 'Aceitar' in html
+    # A ação de aceite passou a se chamar "Confirmar" (mesmo vocabulário do
+    # status "A confirmar" usado no calendário e nas listas).
+    assert 'Confirmar' in html
     assert 'Tempo restante' in html
     resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'accepted'})
     assert resp.status_code == 302
@@ -77,7 +79,7 @@ def test_pending_page_allows_accept(client, monkeypatch):
         assert Appointment.query.get(appt_id).status == 'accepted'
     resp = client.get('/appointments')
     html = resp.get_data(as_text=True)
-    assert 'Aceitar' not in html
+    assert 'Tempo restante' not in html
     assert 'Rex' in html
 
 

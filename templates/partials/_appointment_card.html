@@ -8,8 +8,9 @@
 {% set animal_photo = appt.animal.image if appt.animal and appt.animal.image else none %}
 {% set tutor_photo = tutor.profile_photo if tutor and tutor.profile_photo else none %}
 {% set vet_photo = vet_user.profile_photo if vet_user and vet_user.profile_photo else none %}
-{% set status_labels = {'scheduled': 'A fazer', 'completed': 'Realizada', 'canceled': 'Cancelada', 'accepted': 'Aceita'} %}
-{% set status_label = status_labels.get(appt.status, 'Atualizado') %}
+{# Rótulo vem de services.appointment_status via o modelo — mesma fonte do
+   calendário e das listas da agenda. #}
+{% set status_label = appt.status_label %}
 {% set card_classes = 'appointment-card appointment-row ' + (appt.status or '') %}
 {% set can_start_consulta = current_user.worker in ['veterinario', 'colaborador'] %}
 {% set nfse_doc = nfse_documents_by_appointment.get(appt.id) if nfse_documents_by_appointment is defined else None %}
@@ -133,9 +134,9 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="completed">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como realizada">
-                    <i class="fa-solid fa-check text-success"></i>
-                    Realizada
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como finalizada">
+                    <i class="fa-solid fa-clipboard-check text-success"></i>
+                    Finalizada
                   </button>
                 </form>
               </li>
@@ -153,9 +154,19 @@
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="scheduled">
-                  <button class="dropdown-item d-flex align-items-center gap-2" title="Marcar como a fazer">
-                    <i class="fa-regular fa-clock text-info"></i>
-                    A fazer
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Voltar para a confirmar">
+                    <i class="fa-solid fa-hourglass-half text-info"></i>
+                    A confirmar
+                  </button>
+                </form>
+              </li>
+              <li>
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="status" value="no_show">
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Registrar falta do paciente">
+                    <i class="fa-solid fa-user-slash text-danger"></i>
+                    Não compareceu
                   </button>
                 </form>
               </li>

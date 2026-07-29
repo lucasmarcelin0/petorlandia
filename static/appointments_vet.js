@@ -25,11 +25,15 @@ const TYPE_LABELS = {
   vacina: 'Vacina'
 };
 
+// Espelha services/appointment_status.py. Só é usado como fallback: o rótulo
+// preferido chega em `data-status-label`, renderizado pelo servidor.
 const STATUS_LABELS = {
-  scheduled: 'A fazer',
-  completed: 'Realizada',
-  canceled: 'Cancelada',
-  accepted: 'Aceita'
+  scheduled: 'A confirmar',
+  accepted: 'Confirmada',
+  in_progress: 'Em atendimento',
+  completed: 'Finalizada',
+  no_show: 'Não compareceu',
+  canceled: 'Cancelada'
 };
 
 function showToastMessage(message, category = 'info') {
@@ -2221,7 +2225,9 @@ function bindAppointmentItems(root) {
     }
     item.dataset.vetScheduleBound = 'true';
     item.addEventListener('click', (event) => {
-      if (event.target.closest('.btn')) {
+      // Cliques em ações da linha (botão, item de menu, link, formulário) não
+      // devem abrir o modal de detalhes por cima da ação escolhida.
+      if (event.target.closest('.btn, .dropdown-item, .dropdown-menu, a, form')) {
         return;
       }
       if (event.target.closest(SCHEDULE_SELECTORS.wrapper)) {
@@ -2522,6 +2528,8 @@ function bindCalendarSlotHandler(root) {
   root.dataset.calendarSlotHandlerBound = 'true';
 }
 
+// O histórico virou um collapse do Bootstrap para participar do grupo
+// exclusivo (ver bindExclusivePanels). Aqui só mantemos o rótulo em sincronia.
 function bindPastToggle(root) {
   const toggleButton = document.getElementById('toggle-past');
   const pastList = document.getElementById('past-list');
@@ -2529,12 +2537,49 @@ function bindPastToggle(root) {
     return;
   }
   toggleButton.dataset.vetScheduleBound = 'true';
-  toggleButton.addEventListener('click', () => {
-    pastList.classList.toggle('d-none');
-    const isHidden = pastList.classList.contains('d-none');
-    toggleButton.innerHTML = isHidden
-      ? '<i class="fas fa-chevron-down me-1"></i>Mostrar'
-      : '<i class="fas fa-chevron-up me-1"></i>Ocultar';
+
+  const syncLabel = () => {
+    const expanded = pastList.classList.contains('show');
+    toggleButton.innerHTML = expanded
+      ? '<i class="fas fa-chevron-up me-1"></i>Ocultar'
+      : '<i class="fas fa-chevron-down me-1"></i>Mostrar';
+    toggleButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  };
+
+  pastList.addEventListener('shown.bs.collapse', syncLabel);
+  pastList.addEventListener('hidden.bs.collapse', syncLabel);
+  syncLabel();
+}
+
+// Painéis de disclosure da agenda: cada um abre e fecha no clique, e abrir um
+// fecha os demais. Sem isso dava para empilhar o painel de agendamento e o
+// histórico abertos ao mesmo tempo, enterrando a agenda.
+function bindExclusivePanels(root) {
+  if (typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+    return;
+  }
+  const panels = Array.from(document.querySelectorAll('[data-agenda-panel]'));
+  if (panels.length < 2) {
+    return;
+  }
+  panels.forEach((panel) => {
+    if (panel.dataset.exclusiveBound === 'true') {
+      return;
+    }
+    panel.dataset.exclusiveBound = 'true';
+    panel.addEventListener('show.bs.collapse', (event) => {
+      // Ignora eventos borbulhados de collapses aninhados (ex.: a grade de
+      // disponibilidade dentro do painel de agendamento).
+      if (event.target !== panel) {
+        return;
+      }
+      panels.forEach((other) => {
+        if (other === panel || !other.classList.contains('show')) {
+          return;
+        }
+        bootstrap.Collapse.getOrCreateInstance(other, { toggle: false }).hide();
+      });
+    });
   });
 }
 
@@ -2571,11 +2616,21 @@ export function initVetSchedulePage(options = {}) {
   bindExamRequesterDefaultButton(root);
   bindExamRequesterSave(root);
   bindPastToggle(root);
+  bindExclusivePanels(root);
   bindScheduleCollapse(root);
   bindScheduleModalButton(root);
   bindCalendarSlotHandler(root);
   initScheduleOverview(root);
   animateCards(root);
+
+  // Depois de uma atualização parcial da agenda, o DOM trocado perde os
+  // listeners diretos. Estes bindings são idempotentes (guardam flag no
+  // elemento), então basta reexecutá-los sobre o conteúdo novo.
+  document.addEventListener('agenda:updated', () => {
+    bindAppointmentItems(root);
+    bindPastToggle(root);
+    bindExclusivePanels(root);
+  });
 
   const dateInput = document.getElementById('appointment-date');
   if (dateInput && dateInput.value) {

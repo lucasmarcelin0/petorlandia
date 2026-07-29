@@ -15,6 +15,11 @@ from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from extensions import db
 from repositories import ClinicRepository
+from services.appointment_status import (
+    kind_meta as appointment_kind_meta,
+    normalize_kind as normalize_appointment_kind,
+    status_meta as appointment_status_meta,
+)
 from time_utils import BR_TZ, normalize_to_utc, utcnow
 
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
@@ -834,12 +839,26 @@ def appointment_to_event(appointment):
     vet_user = getattr(vet, 'user', None)
 
     vet_specialty_list = getattr(vet, 'specialty_list', None)
+    status = getattr(appointment, 'status', None)
+    meta = appointment_status_meta(status)
+    display_kind = normalize_appointment_kind(
+        getattr(appointment, 'kind', None),
+        has_consulta=bool(getattr(appointment, 'consulta_id', None)),
+    )
     extra_props = {
         'kind': getattr(appointment, 'kind', None),
+        'displayKind': display_kind,
+        'kindLabel': appointment_kind_meta(display_kind)['label'],
         'clinicId': getattr(appointment, 'clinica_id', None),
         'veterinarioId': getattr(appointment, 'veterinario_id', None),
         'animalId': getattr(appointment, 'animal_id', None),
-        'status': getattr(appointment, 'status', None),
+        'status': status,
+        'statusLabel': meta['label'],
+        'statusTone': meta['tone'],
+        'statusIcon': meta['icon'],
+        'durationMinutes': get_appointment_duration_minutes(
+            getattr(appointment, 'kind', None)
+        ),
         'tutorId': getattr(appointment, 'tutor_id', None),
         'tutorName': getattr(tutor, 'name', None),
         'tutorPhoto': _calendar_media_url(getattr(tutor, 'profile_photo', None)),
@@ -855,13 +874,26 @@ def appointment_to_event(appointment):
 
     consulta = getattr(appointment, 'consulta', None)
     if consulta:
+        # O atendimento e o agendamento são o MESMO compromisso: o evento fica
+        # no horário marcado e os horários reais viajam como metadados, em vez
+        # de virarem um segundo bloco no calendário.
+        started_at = to_timezone_aware(getattr(consulta, 'created_at', None))
+        finished_at = to_timezone_aware(getattr(consulta, 'finalizada_em', None))
         extra_props.update(
             {
                 'consultaId': getattr(consulta, 'id', None),
                 'consultaStatus': getattr(consulta, 'status', None),
                 'consultaRetornoDeId': getattr(consulta, 'retorno_de_id', None),
+                'startedAt': started_at.isoformat() if started_at else None,
+                'finishedAt': finished_at.isoformat() if finished_at else None,
+                'delayMinutes': getattr(appointment, 'delay_minutes', 0),
+                'actualDurationMinutes': getattr(
+                    appointment, 'actual_duration_minutes', None
+                ),
             }
         )
+
+    class_names = ['calendar-event-appointment', f"calendar-event-status-{meta['tone']}"]
 
     return _build_calendar_event(
         event_id=f"appointment-{appointment.id}",
@@ -872,7 +904,7 @@ def appointment_to_event(appointment):
         editable=True,
         duration_editable=True,
         record_id=appointment.id,
-        class_names=['calendar-event-appointment'],
+        class_names=class_names,
         extra_extended_props=extra_props,
     )
 
@@ -1001,6 +1033,8 @@ def consulta_to_event(consulta):
         'veterinarioId': getattr(vet_profile, 'id', None),
         'clinicaNome': getattr(clinic, 'nome', None) if clinic else None,
         'kind': 'consulta',
+        # Permite deduplicar contra o evento do agendamento correspondente.
+        'appointmentId': getattr(appointment, 'id', None) if appointment else None,
     }
 
     if tutor is None and animal and getattr(animal, 'owner', None):

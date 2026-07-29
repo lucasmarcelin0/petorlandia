@@ -1,0 +1,422 @@
+/* ============================================================
+ * Agenda — sistema visual compartilhado (status, linhas, resumo)
+ *
+ * Tokens únicos para status e tipo de atendimento. Antes cada seção do
+ * template definia sua própria cor, então o mesmo status aparecia de três
+ * jeitos diferentes na mesma página.
+ * ============================================================ */
+.appointments-workspace {
+  --agenda-tone-warning: #b45309;
+  --agenda-tone-warning-bg: #fef3c7;
+  --agenda-tone-info: #0369a1;
+  --agenda-tone-info-bg: #e0f2fe;
+  --agenda-tone-primary: #4338ca;
+  --agenda-tone-primary-bg: #e0e7ff;
+  --agenda-tone-success: #15803d;
+  --agenda-tone-success-bg: #dcfce7;
+  --agenda-tone-danger: #b91c1c;
+  --agenda-tone-danger-bg: #fee2e2;
+  --agenda-tone-muted: #475569;
+  --agenda-tone-muted-bg: #eef2f7;
+  --agenda-tone-purple: #6d28d9;
+  --agenda-tone-purple-bg: #ede9fe;
+}
+
+/* Sempre ícone + texto: a cor nunca é o único portador da informação. */
+.agenda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  background: var(--agenda-tone-muted-bg);
+  color: var(--agenda-tone-muted);
+}
+
+.agenda-badge i {
+  font-size: 0.72em;
+}
+
+.agenda-badge--warning { background: var(--agenda-tone-warning-bg); color: var(--agenda-tone-warning); }
+.agenda-badge--info    { background: var(--agenda-tone-info-bg);    color: var(--agenda-tone-info); }
+.agenda-badge--primary { background: var(--agenda-tone-primary-bg); color: var(--agenda-tone-primary); }
+.agenda-badge--success { background: var(--agenda-tone-success-bg); color: var(--agenda-tone-success); }
+.agenda-badge--danger  { background: var(--agenda-tone-danger-bg);  color: var(--agenda-tone-danger); }
+.agenda-badge--purple  { background: var(--agenda-tone-purple-bg);  color: var(--agenda-tone-purple); }
+.agenda-badge--muted   { background: var(--agenda-tone-muted-bg);   color: var(--agenda-tone-muted); }
+
+/* Variante discreta: metadados que não devem competir com o status. */
+.agenda-badge--soft {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: 0.85;
+}
+
+/* Painel lateral de novo agendamento: largura confortável no desktop,
+   tela cheia no celular. */
+/* Atualização parcial: um leve esmaecer sinaliza que a agenda está sendo
+   recarregada, sem piscar a tela nem mover nada de lugar. */
+#agenda-content {
+  transition: opacity 0.15s ease;
+}
+
+.agenda-content--loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agenda-content {
+    transition: none;
+  }
+}
+
+/* Painel de novo agendamento: abre no lugar, empurrando o conteúdo para
+   baixo. Uma borda de destaque deixa claro que é um bloco temporário. */
+.agenda-new-panel > .card {
+  border-left: 4px solid var(--agenda-tone-success, #15803d);
+}
+
+/* Ícone da aba Exames — antes era um roxo hard-coded inline no template. */
+.agenda-icon-exames {
+  background-color: var(--agenda-tone-purple, #6d28d9);
+  color: #fff;
+}
+
+.agenda-count {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+/* ---------- Linha de atendimento ---------- */
+.agenda-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid transparent;
+}
+
+.agenda-row--warning { border-left-color: var(--agenda-tone-warning); }
+.agenda-row--info    { border-left-color: var(--agenda-tone-info); }
+.agenda-row--primary { border-left-color: var(--agenda-tone-primary); }
+.agenda-row--success { border-left-color: var(--agenda-tone-success); }
+.agenda-row--danger  { border-left-color: var(--agenda-tone-danger); }
+.agenda-row--muted   { border-left-color: rgba(15, 23, 42, 0.18); }
+
+.agenda-row__time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  line-height: 1.2;
+}
+
+.agenda-row__time-start {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-row__time-duration {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* Horário real do atendimento — o dado que faltava quando a consulta
+   começava depois da hora e parecia um segundo compromisso. */
+.agenda-row__time-real {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--agenda-tone-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-row__body {
+  min-width: 0;
+}
+
+.agenda-row__date {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.agenda-row__patient {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.agenda-row__animal {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.agenda-row__animal-meta,
+.agenda-row__tutor {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.agenda-row__tutor {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+}
+
+.agenda-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.agenda-row__note {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: #475569;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.agenda-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.agenda-row__form {
+  margin: 0;
+}
+
+.agenda-row__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ---------- Resumo do período ---------- */
+.agenda-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 38px -34px rgba(15, 23, 42, 0.55);
+}
+
+.agenda-summary__stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 5.5rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.85rem;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.agenda-summary__value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-summary__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.agenda-summary__stat--alert { background: var(--agenda-tone-danger-bg); }
+.agenda-summary__stat--alert .agenda-summary__value { color: var(--agenda-tone-danger); }
+.agenda-summary__stat--live { background: var(--agenda-tone-primary-bg); }
+.agenda-summary__stat--live .agenda-summary__value { color: var(--agenda-tone-primary); }
+
+.agenda-summary__next {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0.35rem 0.9rem;
+  border-radius: 0.85rem;
+  background: var(--agenda-tone-success-bg);
+  color: var(--agenda-tone-success);
+  font-size: 0.82rem;
+}
+
+.agenda-summary__next strong {
+  font-size: 0.95rem;
+}
+
+/* ---------- Barra de filtros ---------- */
+.agenda-filterbar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 30px -26px rgba(15, 23, 42, 0.6);
+}
+
+.agenda-filterbar__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+}
+
+.agenda-filterbar__range {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.agenda-filterbar__range .btn {
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.agenda-filterbar__spacer {
+  margin-left: auto;
+}
+
+/* ---------- Linha do "agora" ---------- */
+.agenda-now-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 1rem;
+  color: var(--agenda-tone-danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agenda-now-line::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.agenda-now-line__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* ---------- Colunas por profissional ---------- */
+.agenda-columns {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.agenda-columns__col {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.agenda-columns__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(15, 23, 42, 0.04);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.agenda-columns__body .agenda-row {
+  grid-template-columns: 4rem minmax(0, 1fr);
+  padding: 0.6rem 0.7rem;
+}
+
+.agenda-columns__body .agenda-row__actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 767.98px) {
+  .agenda-row {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    row-gap: 0.5rem;
+  }
+
+  .agenda-row__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  /* Só o ícone cabe confortavelmente; o rótulo volta a partir de md. */
+  .agenda-row__primary-label {
+    display: none;
+  }
+
+  .agenda-summary {
+    gap: 0.4rem;
+    padding: 0.6rem;
+  }
+
+  .agenda-summary__stat {
+    flex: 1 1 auto;
+    min-width: 4.5rem;
+  }
+
+  .agenda-summary__next {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .agenda-filterbar {
+    position: static;
+  }
+}

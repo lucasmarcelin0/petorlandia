@@ -776,6 +776,19 @@
   gap: 1.5rem;
 }
 
+/* Faixa lateral com a cor do status — mesmos tokens de agenda.css, para que
+   um status tenha sempre a mesma cor no calendário, na lista e no card. */
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone] {
+  border-left-width: 4px;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="warning"] { border-left-color: #b45309; }
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="info"]    { border-left-color: #0369a1; }
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="primary"] { border-left-color: #4338ca; }
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="success"] { border-left-color: #15803d; }
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="danger"]  { border-left-color: #b91c1c; }
+#{{ component_id }} .tutor-calendar__appointment-card[data-status-tone="muted"]   { border-left-color: #94a3b8; }
+
 #{{ component_id }} .tutor-calendar__appointment-card--exam {
   background: linear-gradient(180deg, rgba(237, 233, 254, 0.85) 0%, #ffffff 100%);
 }
@@ -1501,11 +1514,15 @@ document.addEventListener('DOMContentLoaded', function() {
     vaccine: 'Vacina',
     grooming: 'Banho e Tosa',
   };
+  // Espelha services/appointment_status.py — o servidor também manda
+  // `statusLabel` em cada evento, usado com prioridade quando presente.
   const statusLabels = {
-    scheduled: 'A fazer',
-    completed: 'Realizada',
+    scheduled: 'A confirmar',
+    accepted: 'Confirmada',
+    in_progress: 'Em atendimento',
+    completed: 'Finalizada',
+    no_show: 'Não compareceu',
     canceled: 'Cancelada',
-    accepted: 'Aceita',
   };
   const knownStatusKeys = Object.keys(statusLabels);
   const consultaStatusLabels = {
@@ -1516,9 +1533,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const statusActionConfig = [
     {
       status: 'completed',
-      label: 'Realizada',
+      label: 'Finalizada',
       buttonClass: 'btn btn-sm btn-outline-success',
-      icon: 'fa-solid fa-check me-1',
+      icon: 'fa-solid fa-clipboard-check me-1',
     },
     {
       status: 'canceled',
@@ -1528,9 +1545,15 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     {
       status: 'scheduled',
-      label: 'A fazer',
+      label: 'A confirmar',
       buttonClass: 'btn btn-sm btn-outline-secondary',
-      icon: 'fa-solid fa-clock me-1',
+      icon: 'fa-solid fa-hourglass-half me-1',
+    },
+    {
+      status: 'no_show',
+      label: 'Não compareceu',
+      buttonClass: 'btn btn-sm btn-outline-danger',
+      icon: 'fa-solid fa-user-slash me-1',
     },
   ];
 
@@ -1988,26 +2011,29 @@ document.addEventListener('DOMContentLoaded', function() {
     return fillUrlWithId(urlTemplates.printConsulta, consultaId);
   }
 
+  // Detalhe secundário mostrado abaixo do status. Como agendamento e consulta
+  // são o mesmo compromisso, o texto descreve um único atendimento — antes o
+  // par "aceita" + "finalizada" sugeria dois eventos distintos.
   function deriveAppointmentStatusDetail(statusKey, consultaStatus) {
     const status = statusKey ? String(statusKey) : '';
     const consulta = consultaStatus ? String(consultaStatus) : '';
-    if (consulta === 'finalizada') {
-      if (status === 'accepted') {
-        return { label: 'Consulta finalizada e aceita', badgeClass: 'bg-success' };
-      }
-      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
+    if (consulta === 'finalizada' || status === 'completed') {
+      return { label: 'Atendimento concluído', badgeClass: 'bg-success' };
+    }
+    if (status === 'in_progress' || consulta === 'in_progress') {
+      return { label: 'Atendimento em andamento', badgeClass: 'bg-primary' };
     }
     if (status === 'accepted') {
-      return { label: 'Consulta aceita e não finalizada', badgeClass: 'bg-secondary' };
+      return { label: 'Confirmada, aguardando atendimento', badgeClass: 'bg-info text-dark' };
     }
-    if (status === 'completed') {
-      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
+    if (status === 'no_show') {
+      return { label: 'Paciente não compareceu', badgeClass: 'bg-danger' };
     }
     if (status === 'canceled') {
       return { label: 'Consulta cancelada', badgeClass: 'bg-danger' };
     }
     if (status === 'scheduled') {
-      return { label: 'Consulta agendada', badgeClass: 'bg-info text-dark' };
+      return { label: 'Aguardando confirmação', badgeClass: 'bg-warning text-dark' };
     }
     return null;
   }
@@ -3202,7 +3228,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const baseType = getEventBaseType(eventData) || 'appointment';
     const statusKey = resolveStatusKey(ext.status || eventData.status, baseType);
     const statusClass = isKnownStatus(statusKey) ? statusKey : 'scheduled';
-    const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey) || '—';
+    // O rótulo do servidor vence: é a mesma fonte usada nas listas e cards.
+    const statusLabel = ext.statusLabel || statusLabels[statusKey] || humanizeLabel(statusKey) || '—';
     const typeLabel = typeLabels[typeKey] || typeLabels[baseType] || 'Evento';
     const kindKey = getEventKindKey(eventData);
     let kindLabel = ext.kind || eventData.rawKind || eventData.kind || '';
@@ -3233,6 +3260,9 @@ document.addEventListener('DOMContentLoaded', function() {
     card.dataset.appointmentId = String(recordId);
     card.dataset.type = typeKey;
     card.dataset.baseType = baseType;
+    if (ext.statusTone) {
+      card.dataset.statusTone = ext.statusTone;
+    }
     if (dateKey) {
       card.dataset.day = dateKey;
       card.dataset.dayLabel = displayLabel || dateKey;

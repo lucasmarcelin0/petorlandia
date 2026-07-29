@@ -2030,6 +2030,30 @@ def api_clinic_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
+def _extend_with_unlinked_consultas(events, consultas):
+    """Acrescenta apenas as consultas que não têm agendamento em ``events``.
+
+    Uma consulta ligada a um agendamento é o MESMO compromisso: emiti-la como
+    evento próprio fazia o atendimento aparecer duas vezes no calendário — uma
+    no horário marcado e outra no horário em que a consulta foi finalizada.
+    """
+
+    linked_appointment_ids = {
+        (event.get('extendedProps') or {}).get('recordId')
+        for event in events
+        if isinstance(event, dict)
+    }
+    linked_appointment_ids.discard(None)
+
+    for consulta in unique_items_by_id(consultas):
+        appointment_id = getattr(getattr(consulta, 'appointment', None), 'id', None)
+        if appointment_id is not None and appointment_id in linked_appointment_ids:
+            continue
+        event = consulta_to_event(consulta)
+        if event:
+            events.append(event)
+
+
 @bp.route("/api/my_appointments", methods=["GET"])
 @login_required
 def api_my_appointments():
@@ -2231,20 +2255,34 @@ def api_my_appointments():
         context['tutor_id'] = current_user.id
 
     query = _apply_calendar_datetime_window(query, Appointment.scheduled_at, calendar_window)
+    # ``consulta`` alimenta os horários reais (início/fim) do evento.
+    query = query.options(joinedload(Appointment.consulta))
     appts = query.order_by(Appointment.scheduled_at).all()
     events = appointments_to_events(appts)
 
     existing_event_ids = set()
+    # Agendamentos já emitidos. Uma consulta ligada a um deles é o MESMO
+    # compromisso — sem esta chave o atendimento das 11h aparecia duas vezes:
+    # uma no horário marcado (Appointment) e outra no horário real (Consulta).
+    linked_appointment_ids = set()
     for event in events:
-        event_id = event.get('id') if isinstance(event, dict) else None
+        if not isinstance(event, dict):
+            continue
+        event_id = event.get('id')
         if event_id:
             existing_event_ids.add(event_id)
+        record_id = (event.get('extendedProps') or {}).get('recordId')
+        if record_id is not None:
+            linked_appointment_ids.add(record_id)
 
     def _append_event(event):
         if not event or not isinstance(event, dict):
             return
         event_id = event.get('id')
         if event_id and event_id in existing_event_ids:
+            return
+        appointment_id = (event.get('extendedProps') or {}).get('appointmentId')
+        if appointment_id is not None and appointment_id in linked_appointment_ids:
             return
         events.append(event)
         if event_id:
@@ -2296,6 +2334,8 @@ def api_my_appointments():
                 joinedload(Consulta.animal).joinedload(Animal.owner),
                 joinedload(Consulta.veterinario),
                 joinedload(Consulta.clinica),
+                # Necessário para deduplicar contra o evento do agendamento.
+                joinedload(Consulta.appointment),
             )
             .filter(Consulta.status == 'finalizada')
         )
@@ -2671,6 +2711,8 @@ def api_clinic_appointments(clinica_id):
             joinedload(Consulta.animal).joinedload(Animal.owner),
             joinedload(Consulta.veterinario),
             joinedload(Consulta.clinica),
+            # Necessário para deduplicar contra o evento do agendamento.
+            joinedload(Consulta.appointment),
         )
         .filter(
             Consulta.status == 'finalizada',
@@ -2699,10 +2741,7 @@ def api_clinic_appointments(clinica_id):
             for consulta in consultas
             if getattr(consulta, 'created_by', None) in allowed_user_ids
         ]
-    for consulta in unique_items_by_id(consultas):
-        event = consulta_to_event(consulta)
-        if event:
-            events.append(event)
+    _extend_with_unlinked_consultas(events, consultas)
 
     return jsonify(events)
 
@@ -2812,6 +2851,8 @@ def api_vet_appointments(veterinario_id):
             joinedload(Consulta.animal).joinedload(Animal.owner),
             joinedload(Consulta.veterinario),
             joinedload(Consulta.clinica),
+            # Necessário para deduplicar contra o evento do agendamento.
+            joinedload(Consulta.appointment),
         )
         .filter(*consulta_filters)
         .order_by(Consulta.finalizada_em, Consulta.created_at)
@@ -2822,10 +2863,7 @@ def api_vet_appointments(veterinario_id):
         calendar_window,
     )
     consultas = consulta_query.all()
-    for consulta in unique_items_by_id(consultas):
-        event = consulta_to_event(consulta)
-        if event:
-            events.append(event)
+    _extend_with_unlinked_consultas(events, consultas)
 
     exam_filters = [
         ExamAppointment.specialist_id == veterinario_id,

@@ -390,9 +390,21 @@
   font-size: 0.85rem;
 }
 
+/* Cores alinhadas aos tokens de agenda.css: um status tem sempre a mesma cor,
+   esteja ele no card, na lista da agenda ou no calendário. */
 .status-badge.status-scheduled {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.status-badge.status-accepted {
   background-color: #e0f2fe;
   color: #0369a1;
+}
+
+.status-badge.status-in_progress {
+  background-color: #e0e7ff;
+  color: #4338ca;
 }
 
 .status-badge.status-completed {
@@ -400,14 +412,14 @@
   color: #15803d;
 }
 
-.status-badge.status-canceled {
+.status-badge.status-no_show {
   background-color: #fee2e2;
   color: #b91c1c;
 }
 
-.status-badge.status-accepted {
-  background-color: #ede9fe;
-  color: #7c3aed;
+.status-badge.status-canceled {
+  background-color: #eef2f7;
+  color: #475569;
 }
 
 @media (max-width: 768px) {
