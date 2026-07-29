@@ -41,7 +41,8 @@ def test_registration_can_start_without_address(app):
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert response.headers['Location'].endswith('/')
+    # Cadastro cai no onboarding, não no sistema vazio.
+    assert response.headers['Location'].endswith('/comecar')
 
 
 def test_login_rate_limit_is_enforced_when_enabled(app):

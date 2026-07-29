@@ -1,0 +1,106 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Vamos começar — PetOrlândia{% endblock %}
+
+{% block main %}
+<div class="container onboarding-page">
+
+  {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
+  <header class="onboarding-hero">
+    <span class="onboarding-kicker">Bem-vindo</span>
+    <h1>Tudo pronto{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}. Por onde você quer começar?</h1>
+    <p>
+      Escolha o caminho que faz sentido pra você. Leva um minuto e o sistema já
+      passa a ser útil hoje — sem precisar configurar nada antes.
+    </p>
+  </header>
+
+  <div class="onboarding-grid">
+
+    <article class="onboarding-card onboarding-card--primary">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-hospital"></i>
+      </div>
+      <h2>Tenho uma clínica veterinária</h2>
+      <p>
+        Cadastre a clínica e ative agenda, prontuário, vacinas e financeiro.
+        São {{ trial_days }} dias grátis, sem cartão.
+      </p>
+      <a href="{{ url_for('minha_clinica') }}" class="onboarding-cta"
+         data-cta="onboarding_clinica">
+        {% if tem_clinica %}Abrir minha clínica{% else %}Cadastrar minha clínica{% endif %}
+      </a>
+      {% if tem_clinica %}
+      <span class="onboarding-done"><i class="fa-solid fa-circle-check me-1"></i>Clínica cadastrada</span>
+      {% endif %}
+    </article>
+
+    <article class="onboarding-card">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-paw"></i>
+      </div>
+      <h2>Quero cuidar do meu pet</h2>
+      <p>
+        Cadastre seu animal para acompanhar vacinas, consultas e histórico em
+        um só lugar — e receber lembrete quando algo vencer.
+      </p>
+      <a href="{{ url_for('add_animal') }}" class="onboarding-cta onboarding-cta--outline"
+         data-cta="onboarding_pet">
+        {% if tem_pet %}Cadastrar outro pet{% else %}Cadastrar meu pet{% endif %}
+      </a>
+      {% if tem_pet %}
+      <span class="onboarding-done"><i class="fa-solid fa-circle-check me-1"></i>Você já tem um pet cadastrado</span>
+      {% endif %}
+    </article>
+
+    <article class="onboarding-card">
+      <div class="onboarding-card__icon" aria-hidden="true">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+      <h2>Quero agendar um serviço</h2>
+      <p>
+        Vacinas, consultas, exames e banho &amp; tosa com profissionais da sua
+        cidade — inclusive as campanhas gratuitas da prefeitura.
+      </p>
+      <a href="{{ url_for('servicos') }}" class="onboarding-cta onboarding-cta--outline"
+         data-cta="onboarding_servicos">
+        Ver serviços disponíveis
+      </a>
+    </article>
+
+  </div>
+
+  {% if e_veterinario %}
+  <section class="onboarding-note">
+    <h2>Seus {{ trial_days }} dias de avaliação já começaram</h2>
+    <p>
+      Você tem acesso completo às ferramentas profissionais. Avisamos por e-mail
+      antes de a avaliação terminar — não cobramos nada sem você decidir.
+      <a href="{{ url_for('veterinarian_membership') }}">Ver minha assinatura</a>
+    </p>
+  </section>
+  {% endif %}
+
+  <section class="onboarding-help">
+    <h2>Prefere que a gente configure junto?</h2>
+    <p>
+      Em 30 minutos por vídeo chamada a gente importa sua lista de clientes e
+      deixa a agenda pronta. Sem custo.
+    </p>
+    <div class="onboarding-help__actions">
+      {% if whatsapp_contact_url %}
+      <a href="{{ whatsapp_contact_url }}" class="onboarding-cta" target="_blank" rel="noopener"
+         data-cta="onboarding_whatsapp">
+        <i class="fa-brands fa-whatsapp me-1"></i> Falar no WhatsApp
+      </a>
+      {% else %}
+      <a href="{{ url_for('support') }}" class="onboarding-cta" data-cta="onboarding_suporte">
+        Falar com o suporte
+      </a>
+      {% endif %}
+      <a href="{{ url_for('index') }}" class="onboarding-skip">Explorar por conta própria</a>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

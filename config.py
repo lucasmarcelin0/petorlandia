@@ -187,6 +187,18 @@ class Config:
         os.environ.get("EXAM_CONFIRM_DEFAULT_HOURS", "2")
     )
 
+    # Alerta de erro 500. Sem destinatário explícito, cai nos admins do banco.
+    ERROR_ALERTS_ENABLED = _env_bool("ERROR_ALERTS_ENABLED", True)
+    ERROR_ALERT_EMAILS = _env_optional("ERROR_ALERT_EMAILS")
+    ERROR_ALERT_COOLDOWN_MINUTES = int(
+        os.environ.get("ERROR_ALERT_COOLDOWN_MINUTES", "30")
+    )
+
+    # Login com Google. Sem as duas credenciais o botão simplesmente não
+    # aparece e o fluxo fica desligado — nada quebra no ambiente local.
+    GOOGLE_OAUTH_CLIENT_ID = _env_optional("GOOGLE_OAUTH_CLIENT_ID")
+    GOOGLE_OAUTH_CLIENT_SECRET = _env_optional("GOOGLE_OAUTH_CLIENT_SECRET")
+
     VETERINARIAN_TRIAL_DAYS = int(os.environ.get("VETERINARIAN_TRIAL_DAYS", "30"))
     VETERINARIAN_MEMBERSHIP_PRICE = float(
         os.environ.get("VETERINARIAN_MEMBERSHIP_PRICE", "60.00")

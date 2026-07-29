@@ -4,7 +4,7 @@ import os, uuid
 from datetime import datetime
 from extensions import csrf, db, limiter, mail
 from services.product_analytics import track_event
-from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message as MailMessage
 from forms import ChangePasswordForm, DeleteAccountForm, EditProfileForm, FirstAccessPasswordForm, FirstAccessPhoneForm, LoginForm, RegistrationForm, ResetPasswordForm, ResetPasswordRequestForm
@@ -354,10 +354,12 @@ def register():
         login_user(user)
         track_event('signup_completed', role=getattr(user, 'role', None))
 
+        # Cai no onboarding, não no sistema vazio: é ali que a pessoa dá o
+        # primeiro passo em vez de olhar uma tela sem nada dela.
         if is_json_request:
-            return jsonify({'success': True, 'redirect': url_for('index')})
-        flash('Usuário registrado com sucesso!', 'success')
-        return redirect(url_for('index'))
+            return jsonify({'success': True, 'redirect': url_for('onboarding')})
+        flash('Conta criada com sucesso!', 'success')
+        return redirect(url_for('onboarding'))
 
     if request.method == 'POST' and is_json_request:
         errors = dict(form.errors) if form.errors else {}
@@ -426,6 +428,106 @@ def login_view():
         next_url=next_url,
         oauth_login_flow=oauth_login_flow,
     )
+
+
+@bp.route('/auth/google')
+def google_login():
+    """Inicia o login com Google."""
+    from services import google_login as google
+
+    if not google.is_enabled():
+        flash('Login com Google não está disponível no momento.', 'warning')
+        return redirect(url_for('login_view'))
+
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    state = google.new_state()
+    session[google.STATE_SESSION_KEY] = state
+    session[google.NEXT_SESSION_KEY] = _sanitize_login_next_url(
+        request.args.get('next') or url_for('index')
+    )
+
+    track_event('login_google_started')
+    return redirect(
+        google.build_authorization_url(
+            redirect_uri=url_for('google_callback', _external=True),
+            state=state,
+        )
+    )
+
+
+@bp.route('/auth/google/callback')
+def google_callback():
+    """Recebe o retorno do Google, valida e entra na conta."""
+    from services import google_login as google
+
+    if not google.is_enabled():
+        abort(404)
+
+    next_url = session.pop(google.NEXT_SESSION_KEY, None) or url_for('index')
+    expected_state = session.pop(google.STATE_SESSION_KEY, None)
+    received_state = request.args.get('state')
+
+    # O state amarra o callback à sessão que começou o fluxo. Sem essa
+    # conferência, um terceiro poderia induzir login numa conta que não é a
+    # do usuário (CSRF de login).
+    if not expected_state or expected_state != received_state:
+        flash('A sessão de login expirou. Tente novamente.', 'warning')
+        return redirect(url_for('login_view'))
+
+    if request.args.get('error'):
+        flash('Login com Google cancelado.', 'info')
+        return redirect(url_for('login_view'))
+
+    code = request.args.get('code')
+    if not code:
+        flash('O Google não devolveu o código de autenticação.', 'danger')
+        return redirect(url_for('login_view'))
+
+    try:
+        raw_token = google.exchange_code(
+            code, redirect_uri=url_for('google_callback', _external=True)
+        )
+        claims = google.verify_id_token(raw_token)
+    except google.GoogleLoginError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('login_view'))
+
+    email = normalize_email(claims.get('email'))
+    user = User.query.filter(func.lower(User.email) == email).first()
+    created = False
+
+    if user is None:
+        user = User(
+            name=(claims.get('name') or '').strip() or email.split('@')[0],
+            email=email,
+            profile_photo=claims.get('picture') or None,
+        )
+        # Conta sem senha utilizável: quem entrou pelo Google continua entrando
+        # pelo Google, ou define uma senha depois em "esqueci minha senha".
+        user.set_password(uuid.uuid4().hex)
+        try:
+            db.session.add(user)
+            db.session.commit()
+            created = True
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            current_app.logger.exception('Falha ao criar conta via Google')
+            flash('Não conseguimos criar sua conta agora. Tente novamente.', 'danger')
+            return redirect(url_for('login_view'))
+
+    login_user(user, remember=True)
+    session.permanent = True
+
+    if created:
+        track_event('signup_completed', role=getattr(user, 'role', None), channel='google')
+        flash('Conta criada com o Google. Bem-vindo!', 'success')
+        return redirect(url_for('onboarding'))
+
+    track_event('login_succeeded', role=getattr(user, 'role', None), channel='google')
+    flash('Login realizado com sucesso!', 'success')
+    return redirect(_sanitize_login_next_url(next_url))
 
 
 @bp.route("/logout", methods=['GET'])

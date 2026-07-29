@@ -1,0 +1,157 @@
+{% extends "layout.html" %}
+
+{% block page_title %}PetOrlândia para tutores — a saúde do seu pet organizada{% endblock %}
+{% block meta_description %}Carteira de vacinas, histórico e agendamento de consultas do seu pet em um só lugar. Grátis para tutores, com lembrete quando uma dose vence.{% endblock %}
+
+{% block main %}
+<section class="landing-page" aria-labelledby="tutores-title">
+
+  <div class="landing-hero">
+    <div class="landing-hero__content">
+      <span class="landing-badge">
+        <i class="fa-solid fa-heart" aria-hidden="true"></i>
+        Para quem cuida
+      </span>
+
+      <h1 id="tutores-title">
+        Você lembra quando foi a última vacina do seu pet?
+      </h1>
+
+      <p class="landing-lead">
+        A carteira de vacinas, o histórico de consultas e os exames do seu animal
+        ficam guardados em um lugar só — e a gente avisa você quando uma dose
+        está chegando ou já venceu.
+      </p>
+
+      <p class="landing-price-line">
+        <strong>Grátis para tutores.</strong> Sem mensalidade, sem cartão.
+      </p>
+
+      <div class="landing-actions" aria-label="Ações principais">
+        <a href="{{ url_for('register') }}" class="landing-btn landing-btn--primary"
+           data-cta="tutor_criar_conta">
+          Criar conta grátis
+        </a>
+        <a href="{{ url_for('servicos') }}" class="landing-btn landing-btn--secondary"
+           data-cta="tutor_ver_servicos">
+          Ver serviços na minha cidade
+        </a>
+      </div>
+
+      <p class="landing-reassurance">
+        Seus dados são seus · Você apaga quando quiser · Sem propaganda
+      </p>
+    </div>
+
+    <aside class="landing-hero__panel" aria-label="O que você acompanha">
+      <div class="landing-summary-card">
+        <h2>O que fica organizado</h2>
+        <ul class="landing-summary-list">
+          <li>
+            <i class="fa-solid fa-syringe" aria-hidden="true"></i>
+            <span>Carteira de vacinas com aviso de dose atrasada.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-notes-medical" aria-hidden="true"></i>
+            <span>Consultas, exames e receitas de cada animal.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+            <span>Agendamento com veterinários da sua região.</span>
+          </li>
+          <li>
+            <i class="fa-solid fa-landmark" aria-hidden="true"></i>
+            <span>Campanhas gratuitas da prefeitura, sem fila no telefone.</span>
+          </li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <section class="landing-section" aria-labelledby="tutor-problemas-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Situações que acontecem</span>
+      <h2 id="tutor-problemas-title">Três coisas que deixam de ser problema.</h2>
+    </div>
+
+    <div class="landing-feature-grid">
+      <article class="landing-feature-card">
+        <div class="landing-feature-icon" aria-hidden="true">
+          <i class="fa-solid fa-file-circle-question"></i>
+        </div>
+        <h3>“Perdi a carteirinha de vacina”</h3>
+        <p>
+          O registro fica na ficha do animal. Quando o veterinário perguntar o que
+          já foi aplicado, você abre no celular ali mesmo.
+        </p>
+      </article>
+
+      <article class="landing-feature-card">
+        <div class="landing-feature-icon" aria-hidden="true">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <h3>“Esqueci o reforço da vacina”</h3>
+        <p>
+          Você recebe aviso quando a próxima dose se aproxima e quando ela atrasa.
+          Sem precisar anotar em lugar nenhum.
+        </p>
+      </article>
+
+      <article class="landing-feature-card">
+        <div class="landing-feature-icon" aria-hidden="true">
+          <i class="fa-solid fa-phone-slash"></i>
+        </div>
+        <h3>“Liguei três vezes e não consegui marcar”</h3>
+        <p>
+          Consulta, vacina e exame com profissionais da sua cidade — inclusive as
+          campanhas gratuitas da prefeitura — direto pelo site.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-section" aria-labelledby="tutor-passos-title">
+    <div class="landing-section-heading">
+      <span class="landing-section-kicker">Como funciona</span>
+      <h2 id="tutor-passos-title">Do cadastro ao primeiro lembrete.</h2>
+    </div>
+
+    <ol class="landing-steps">
+      <li>
+        <span class="landing-step-index">1</span>
+        <h3>Crie sua conta</h3>
+        <p>Nome, e-mail e senha — ou entre direto com o Google.</p>
+      </li>
+      <li>
+        <span class="landing-step-index">2</span>
+        <h3>Cadastre seu pet</h3>
+        <p>Nome, espécie, raça e uma foto. As vacinas você vai lançando conforme aplica.</p>
+      </li>
+      <li>
+        <span class="landing-step-index">3</span>
+        <h3>Deixe o sistema avisar</h3>
+        <p>A partir daí você recebe os lembretes e encontra a ficha completa quando precisar.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="landing-cta-banner" aria-labelledby="tutor-cta-title">
+    <div>
+      <span class="landing-section-kicker">Começar</span>
+      <h2 id="tutor-cta-title">Leva um minuto e é de graça.</h2>
+      <p>Cadastre seu pet hoje e nunca mais procure a carteirinha.</p>
+    </div>
+
+    <div class="landing-actions landing-actions--compact" aria-label="Ações finais">
+      <a href="{{ url_for('register') }}" class="landing-btn landing-btn--primary"
+         data-cta="tutor_criar_conta_rodape">
+        Criar conta grátis
+      </a>
+      <a href="{{ url_for('login_view') }}" class="landing-btn landing-btn--secondary landing-btn--light">
+        Já tenho conta
+      </a>
+    </div>
+  </section>
+
+</section>
+{% endblock %}

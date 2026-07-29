@@ -4176,3 +4176,276 @@ body {
     width: 100%;
   }
 }
+
+/* ============================================================
+   Onboarding pos-cadastro (/comecar)
+   Primeira tela apos criar conta: o objetivo e a pessoa sair
+   com o primeiro passo dado, nao encarar um sistema vazio.
+   ============================================================ */
+.onboarding-page {
+  max-width: 1040px;
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+.onboarding-hero {
+  max-width: 44rem;
+  margin-bottom: 2.5rem;
+}
+
+.onboarding-kicker {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1f7a52;
+  margin-bottom: 0.5rem;
+}
+
+.onboarding-hero h1 {
+  font-size: clamp(1.7rem, 3.6vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+  text-wrap: balance;
+  margin: 0 0 0.7rem;
+}
+
+.onboarding-hero p {
+  color: #4b5563;
+  margin: 0;
+}
+
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 1.25rem;
+}
+
+.onboarding-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 20px;
+  padding: 1.6rem 1.5rem;
+}
+
+.onboarding-card--primary {
+  border-color: rgba(31, 122, 82, 0.4);
+  box-shadow: 0 22px 48px -34px rgba(31, 122, 82, 0.6);
+}
+
+.onboarding-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(31, 122, 82, 0.1);
+  color: #1f7a52;
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.onboarding-card h2 {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.onboarding-card p {
+  color: #4b5563;
+  font-size: 0.94rem;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.onboarding-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.9rem;
+  padding: 0.6rem 1.2rem;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #1f7a52 0%, #2e9c72 100%);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+
+.onboarding-cta:hover,
+.onboarding-cta:focus-visible {
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.onboarding-cta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.22rem rgba(31, 122, 82, 0.3);
+}
+
+.onboarding-cta--outline {
+  background: #fff;
+  color: #1f7a52;
+  border-color: rgba(31, 122, 82, 0.45);
+}
+
+.onboarding-cta--outline:hover,
+.onboarding-cta--outline:focus-visible {
+  color: #14603f;
+}
+
+.onboarding-done {
+  font-size: 0.83rem;
+  color: #3c7538;
+  font-weight: 600;
+}
+
+.onboarding-note,
+.onboarding-help {
+  margin-top: 2.25rem;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 20px;
+  padding: 1.6rem 1.5rem;
+}
+
+.onboarding-note h2,
+.onboarding-help h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.onboarding-note p,
+.onboarding-help p {
+  color: #4b5563;
+  margin: 0;
+  max-width: 60ch;
+}
+
+.onboarding-help__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.onboarding-skip {
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-cta {
+    transition: none;
+  }
+  .onboarding-cta:hover,
+  .onboarding-cta:focus-visible {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Botao "Entrar com Google" e divisor das telas de auth
+   ============================================================ */
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #3c4043;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.google-btn:hover,
+.google-btn:focus-visible {
+  background: #f7f8f8;
+  color: #3c4043;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.24);
+}
+
+.google-btn:focus-visible {
+  outline: 2px solid #4285f4;
+  outline-offset: 2px;
+}
+
+.google-btn__logo {
+  flex: none;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.1rem 0;
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .google-btn {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   Prova social: numeros reais de uso na landing
+   ============================================================ */
+.landing-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.75rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  padding: 1.4rem 1.5rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 18px;
+}
+
+.landing-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  text-align: center;
+}
+
+.landing-stat__value {
+  font-size: clamp(1.6rem, 3.6vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #1f7a52;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-stat__label {
+  font-size: 0.88rem;
+  color: #4b5563;
+}

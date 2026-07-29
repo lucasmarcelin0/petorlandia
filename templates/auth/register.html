@@ -14,6 +14,10 @@
             Endereço, foto e dados da clínica você completa depois, quando precisar.
         </p>
 
+        {% with label='Criar conta com Google' %}
+          {% include 'components/google_button.html' %}
+        {% endwith %}
+
         <form method="POST" action="{{ url_for('register') }}" enctype="multipart/form-data" class="js-auth-form"
             data-no-whatsapp data-loading-timeout="off" data-loading-text="Criando sua conta...">
             {{ form.hidden_tag() }}

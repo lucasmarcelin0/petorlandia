@@ -55,7 +55,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
   <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='styles.css', v='20260702wa') }}" rel="stylesheet">
+  {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
+     folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
+  <link href="{{ url_for('static', filename='styles.css', v='20260729aq') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
@@ -1412,6 +1414,7 @@
   <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
   <script src="{{ url_for('static', filename='js/search_filters.js') }}"></script>
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/cta_tracking.js', v='20260729') }}" defer></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
   <script>

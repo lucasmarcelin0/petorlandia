@@ -391,6 +391,10 @@ def inject_public_contact():
         ),
         support_contact_email=current_app.config.get('SUPPORT_EMAIL'),
         trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
+        google_login_enabled=bool(
+            (current_app.config.get('GOOGLE_OAUTH_CLIENT_ID') or '').strip()
+            and (current_app.config.get('GOOGLE_OAUTH_CLIENT_SECRET') or '').strip()
+        ),
     )
 
 

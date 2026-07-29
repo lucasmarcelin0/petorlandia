@@ -1230,6 +1230,16 @@
   "methods": "GET,POST"
  },
  {
+  "endpoint": "auth_routes.google_callback",
+  "rule": "/auth/google/callback",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "auth_routes.google_login",
+  "rule": "/auth/google",
+  "methods": "GET"
+ },
+ {
   "endpoint": "auth_routes.login_view",
   "rule": "/login",
   "methods": "GET,POST"
@@ -2865,6 +2875,11 @@
   "methods": "POST"
  },
  {
+  "endpoint": "cta_event",
+  "rule": "/eventos/cta",
+  "methods": "POST"
+ },
+ {
   "endpoint": "dashboard",
   "rule": "/sfa/",
   "methods": "GET"
@@ -3513,6 +3528,16 @@
   "endpoint": "gerar_teste_dados",
   "rule": "/sfa/teste-dados/gerar",
   "methods": "GET,POST"
+ },
+ {
+  "endpoint": "google_callback",
+  "rule": "/auth/google/callback",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "google_login",
+  "rule": "/auth/google",
+  "methods": "GET"
  },
  {
   "endpoint": "grooming_assinar",
@@ -4395,6 +4420,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "onboarding",
+  "rule": "/comecar",
+  "methods": "GET"
+ },
+ {
   "endpoint": "openai_apps_challenge",
   "rule": "/.well-known/openai-apps-challenge",
   "methods": "GET"
@@ -4812,6 +4842,11 @@
  {
   "endpoint": "painel_dashboard",
   "rule": "/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "para_tutores",
+  "rule": "/para-tutores",
   "methods": "GET"
  },
  {
@@ -6045,6 +6080,11 @@
   "methods": "GET"
  },
  {
+  "endpoint": "site_routes.cta_event",
+  "rule": "/eventos/cta",
+  "methods": "POST"
+ },
+ {
   "endpoint": "site_routes.index",
   "rule": "/",
   "methods": "GET"
@@ -6052,6 +6092,11 @@
  {
   "endpoint": "site_routes.minhas_solicitacoes",
   "rule": "/minhas-solicitacoes",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.onboarding",
+  "rule": "/comecar",
   "methods": "GET"
  },
  {
@@ -6067,6 +6112,11 @@
  {
   "endpoint": "site_routes.painel_dashboard",
   "rule": "/painel",
+  "methods": "GET"
+ },
+ {
+  "endpoint": "site_routes.para_tutores",
+  "rule": "/para-tutores",
   "methods": "GET"
  },
  {

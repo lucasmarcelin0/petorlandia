@@ -319,6 +319,19 @@
         </p>
     </section>
 
+    {# Números reais do banco. A seção some inteira enquanto nenhuma métrica
+       atinge um patamar que some credibilidade — número pequeno tira, não põe. #}
+    {% if stats %}
+    <section class="landing-stats" aria-label="Números de uso">
+        {% for stat in stats %}
+        <div class="landing-stat">
+            <span class="landing-stat__value">{{ '{:,}'.format(stat.value)|replace(',', '.') }}</span>
+            <span class="landing-stat__label">{{ stat.label }}</span>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
     <section id="recursos" class="landing-section" aria-labelledby="features-title">
         <div class="landing-section-heading">
             <span class="landing-section-kicker">O que muda no dia a dia</span>
@@ -410,8 +423,9 @@
         <div class="landing-audience-grid">
             <article class="landing-audience-card">
                 <h3>Sou tutor</h3>
-                <p>Cadastre seu pet, acompanhe vacinas e encontre serviços na sua cidade.</p>
-                <a class="landing-btn landing-btn--secondary" href="{{ url_for('register') }}">Criar conta</a>
+                <p>Cadastre seu pet, acompanhe vacinas e encontre serviços na sua cidade. Grátis.</p>
+                <a class="landing-btn landing-btn--secondary" href="{{ url_for('para_tutores') }}"
+                   data-cta="home_para_tutores">Ver como funciona</a>
             </article>
             <article class="landing-audience-card">
                 <h3>Vendo produtos pet</h3>

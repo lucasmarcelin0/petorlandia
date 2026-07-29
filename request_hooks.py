@@ -164,6 +164,20 @@ def handle_unhandled_exception(err):
         "unhandled_error",
         extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
     )
+
+    # A sessão pode estar suja depois da exceção; desfaz antes de qualquer
+    # outra coisa para o alerta não esbarrar nela.
+    db.session.rollback()
+
+    from services.error_alerts import alert_unhandled_error
+
+    alert_unhandled_error(
+        err,
+        path=request.path,
+        request_id=getattr(g, "request_id", None),
+        method=request.method,
+    )
+
     wants_json = (
         request.accept_mimetypes["application/json"]
         >= request.accept_mimetypes["text/html"]
@@ -175,7 +189,6 @@ def handle_unhandled_exception(err):
             "request_id": getattr(g, "request_id", None),
         }
         return jsonify(payload), 500
-    db.session.rollback()
     return render_template("errors/500.html"), 500
 
 

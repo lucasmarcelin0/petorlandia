@@ -358,7 +358,8 @@ def test_account_registration_login_and_password_reset_do_not_dead_end(client, a
         headers={"Accept": "application/json"},
     )
     assert response.status_code == 200
-    assert response.get_json()["redirect"] == "/"
+    # Cadastro cai no onboarding, não no sistema vazio.
+    assert response.get_json()["redirect"] == "/comecar"
 
     with app.app_context():
         user = User.query.filter_by(email=registration_data["email"]).first()

@@ -1,8 +1,8 @@
 """Views do domínio site_routes (migrado do app.py)."""
 from flask import Blueprint
-import os, requests
+import os, re, requests
 from datetime import date, datetime, timedelta
-from extensions import db
+from extensions import csrf, db
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
@@ -384,11 +384,14 @@ def _landing_screenshot() -> str | None:
 @bp.route('/')
 def index():
     if not current_user.is_authenticated:
+        from services.public_stats import public_stats
+
         return render_template(
             'index.html',
             landing_screenshot=_landing_screenshot(),
             trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
             monthly_price=float(_get_veterinarian_membership_price()),
+            stats=public_stats(),
         )
 
     meus_pets = (
@@ -466,6 +469,36 @@ def precos():
     )
 
 
+@bp.route('/comecar')
+@login_required
+def onboarding():
+    """Primeira tela depois do cadastro.
+
+    Um sistema vazio no primeiro acesso é a principal causa de trial que morre
+    no dia 1: a pessoa entra, não vê nada seu, e não volta. Aqui ela escolhe o
+    caminho e sai com o primeiro passo dado.
+    """
+
+    tem_pet = bool(
+        Animal.query
+        .filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .first()
+    )
+    tem_clinica = bool(getattr(current_user, 'clinicas', None))
+    e_veterinario = has_veterinarian_profile(current_user)
+
+    track_event('onboarding_viewed', role=getattr(current_user, 'role', None))
+
+    return render_template(
+        'onboarding.html',
+        tem_pet=tem_pet,
+        tem_clinica=tem_clinica,
+        e_veterinario=e_veterinario,
+        trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
+    )
+
+
 #: Funcionalidades que aceitam inscrição na lista de espera.
 WAITLIST_FEATURES = {
     'loja': 'Loja PetOrlândia',
@@ -520,6 +553,52 @@ def waitlist_signup():
         'success': True,
         'message': 'Pronto! Avisamos você assim que abrir.',
     })
+
+
+#: Prefixos de evento que o endpoint de CTA aceita. Manter em sincronia com os
+#: atributos data-cta dos templates.
+CTA_EVENT_PREFIXES = ('cta_', 'home_', 'tutor_', 'onboarding_', 'login_')
+
+
+@bp.route('/eventos/cta', methods=['POST'])
+@csrf.exempt
+def cta_event():
+    """Recebe o clique de CTA enviado por sendBeacon.
+
+    Isento de CSRF de propósito: sendBeacon não carrega cabeçalhos custom e o
+    endpoint só grava uma linha de log — não altera dado nem lê nada da conta.
+    """
+
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+
+    # Formato + prefixo conhecido. Só o formato deixaria qualquer visitante
+    # encher o log com nomes inventados; os prefixos limitam o vocabulário ao
+    # que os nossos próprios templates emitem.
+    if not re.fullmatch(r'[a-z0-9_]{3,60}', name):
+        return ('', 204)
+    if not name.startswith(CTA_EVENT_PREFIXES):
+        return ('', 204)
+
+    track_event(name, source='cta')
+    return ('', 204)
+
+
+@bp.route('/para-tutores')
+def para_tutores():
+    """Landing do tutor.
+
+    A home fala com clínica, que é a linha que já cobra. Tutor tem interesses
+    opostos — quer cuidar do pet, não faturar — então ganha página própria em
+    vez de disputar espaço no mesmo texto.
+    """
+
+    track_event('tutor_landing_viewed')
+
+    return render_template(
+        'para_tutores.html',
+        cidade_padrao='Orlândia',
+    )
 
 
 @bp.route('/sobre')
@@ -606,6 +685,7 @@ def sitemap_xml():
     paths = (
         '/',
         '/precos',
+        '/para-tutores',
         '/sobre',
         '/parceiros/clinica',
         '/parceiros/loja',
