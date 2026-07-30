@@ -95,7 +95,8 @@ def test_cadastro_de_estudante_volta_para_hub_gratuito(app, client):
     assert 'href="/estudantes"' in html
     assert "Estudar" in html
     assert "Uso responsável" in html
-    assert "/estudantes/pratica" in html
+    assert "/estudantes/area-profissional" in html
+    assert "Área profissional" in html
 
 
 def test_estudante_acompanha_fluxo_completo_em_ambiente_ficticio(app, client):
@@ -122,6 +123,10 @@ def test_estudante_acompanha_fluxo_completo_em_ambiente_ficticio(app, client):
     assert "Sem doses ou prescrições" in html
     assert "Acolhimento" in html
     assert "Alta e continuidade" in html
+
+    area = client.get("/estudantes/area-profissional")
+    assert area.status_code == 200
+    assert "Área profissional" in area.get_data(as_text=True)
 
     stage = client.get("/estudantes/pratica/etapa/raciocinio")
     assert stage.status_code == 200

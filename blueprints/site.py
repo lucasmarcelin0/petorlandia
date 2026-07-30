@@ -1102,9 +1102,14 @@ def _student_practice_stage(stage_key: str | None) -> tuple[dict, int]:
 
 
 @bp.route('/estudantes/pratica')
+@bp.route('/estudantes/area-profissional', endpoint='student_professional_area')
 @login_required
 def student_practice():
-    """Simulador educacional: fluxo completo, fictício e sem escrita clínica."""
+    """Área profissional demonstrativa, fictícia e sem escrita clínica.
+
+    O alias explícito deixa claro que o estudante está conhecendo o fluxo
+    profissional, sem conceder acesso às rotas operacionais de veterinários.
+    """
 
     stage, stage_index = _student_practice_stage(request.args.get('etapa'))
     track_event('student_practice_viewed', stage=stage['key'])
