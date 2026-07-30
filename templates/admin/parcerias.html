@@ -91,7 +91,7 @@
             <form method="post" action="{{ url_for('admin_rejeitar_clinica', clinica_id=clinica.id) }}"
                   onsubmit="return confirm('Rejeitar a clínica {{ clinica.nome }}?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-outline-danger btn-sm">Rejeitar</button>
+              <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap">Rejeitar</button>
             </form>
           </div>
         </div>
@@ -148,14 +148,16 @@
           <td>{{ c.cidade or '—' }}</td>
           <td class="small text-muted">{{ (c.mensagem or '')[:80] }}</td>
           <td>
-            <div class="d-flex gap-2">
+            {# text-nowrap: a coluna é estreita e "Aprovar"/"Rejeitar" quebravam
+               no meio da palavra ("Apro var"). #}
+            <div class="d-flex gap-2 flex-nowrap">
               <form method="post" action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='aprovar') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-success btn-sm">Aprovar</button>
+                <button type="submit" class="btn btn-success btn-sm text-nowrap">Aprovar</button>
               </form>
               <form method="post" action="{{ url_for('petsitter_routes.petsitter_admin_candidatura', candidatura_id=c.id, acao='rejeitar') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Rejeitar</button>
+                <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap">Rejeitar</button>
               </form>
             </div>
           </td>
