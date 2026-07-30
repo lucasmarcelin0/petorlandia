@@ -881,7 +881,11 @@
 
         buscarEnderecoPorCoordenadas(latitude, longitude)
           .then(data => {
-            preencherEndereco(addressCard, data, { preferCepLookup: true });
+            // A geocodificação reversa já trouxe o endereço. Consultar o CEP
+            // novamente deslocaria o ponto exato para o centro aproximado da
+            // rua ou do CEP.
+            preencherEndereco(addressCard, data, { preferCepLookup: false });
+            applyCoordinates(latitude, longitude);
             setStatus('Endereço atualizado com base na sua localização.');
           })
           .catch(error => {
@@ -949,7 +953,11 @@
 
     buscarEnderecoPorCoordenadas(coords.lat, coords.lon)
       .then(data => {
-        preencherEndereco(addressCard, data, { preferCepLookup: true });
+        // Preserve o ponto escolhido pelo usuário. Uma nova consulta pelo CEP
+        // faria geocodificação direta e poderia mover o marcador para uma
+        // coordenada aproximada do endereço.
+        preencherEndereco(addressCard, data, { preferCepLookup: false });
+        coordinateManager?.setCoordinates(coords.lat, coords.lon);
         setStatus('Endereço atualizado com base no ponto selecionado no mapa.');
       })
       .catch(error => {
