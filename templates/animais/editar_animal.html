@@ -91,6 +91,7 @@
 
 <form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST"
       onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-outline-danger btn-sm">🗑️ Deletar animal</button>
 </form>
 

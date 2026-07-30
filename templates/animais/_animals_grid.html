@@ -134,6 +134,7 @@
               <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
                     class="btn btn-outline-secondary btn-sm rounded-pill delete-animal-form"
                     data-animal-id="{{ animal.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" title="Excluir">❌</button>
               </form>
               {% endif %}

@@ -170,7 +170,7 @@ def handle_csrf_error(err):
     # Uma falha de CSRF pode acontecer após muito tempo com o formulário
     # aberto ou durante uma troca de sessão. Para HTML, devolvemos a pessoa ao
     # próprio formulário em vez de expor uma página técnica "400 Bad Request".
-    redirect_target = request.path
+    redirect_target = None
     if request.referrer:
         parsed_referrer = urlsplit(request.referrer)
         if (
@@ -180,6 +180,15 @@ def handle_csrf_error(err):
             redirect_target = urlunsplit(
                 ("", "", parsed_referrer.path or request.path, parsed_referrer.query, "")
             )
+
+    if redirect_target is None:
+        # Sem referrer utilizável, cair em request.path só funciona se a rota
+        # atender GET. Em rotas POST-only (ex.: /animal/<id>/deletar) o 303
+        # levava a um GET que devolvia "405 Method Not Allowed" — troca uma
+        # página técnica por outra, escondendo o aviso de sessão atualizada.
+        rule_methods = getattr(request.url_rule, "methods", None) or set()
+        redirect_target = request.path if "GET" in rule_methods else "/"
+
     return redirect(redirect_target, code=303)
 
 

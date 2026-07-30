@@ -229,11 +229,13 @@
             {% if current_user.worker == 'veterinario' %}
               <div class="d-flex flex-wrap gap-2">
                 <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-outline-success">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Reverter Falecimento
                   </button>
                 </form>
                 <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Tem certeza que deseja excluir este animal permanentemente?">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-outline-danger btn-sm" type="submit">
                     <i class="bi bi-trash3 me-1"></i>Deletar definitivamente
                   </button>
