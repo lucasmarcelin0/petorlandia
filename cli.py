@@ -13,6 +13,7 @@ from flask.cli import with_appcontext
 from extensions import db
 from models.agenda import VetSchedule
 from models.clinica import Clinica
+from models.consulta import BlocoPrescricao
 from models.loja import Payment
 from models.racao import CasaDeRacao
 from models.usuarios import User, Veterinario
@@ -61,6 +62,12 @@ def cleanup_test_users(apply, user_ids, store_owner_id):
     CasaDeRacao.query.filter(CasaDeRacao.registered_by_id.in_(target_ids)).update(
         {CasaDeRacao.registered_by_id: None}, synchronize_session=False
     )
+    BlocoPrescricao.query.filter(BlocoPrescricao.saved_by_id.in_(target_ids)).update(
+        {BlocoPrescricao.saved_by_id: None}, synchronize_session=False
+    )
+    BlocoPrescricao.query.filter(
+        BlocoPrescricao.assinatura_enviada_por_id.in_(target_ids)
+    ).update({BlocoPrescricao.assinatura_enviada_por_id: None}, synchronize_session=False)
 
     veterinarian_ids = [
         vet_id for (vet_id,) in db.session.query(Veterinario.id)
