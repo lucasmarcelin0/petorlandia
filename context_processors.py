@@ -425,6 +425,18 @@ def inject_site_flags():
     return dict(site_flags=flags)
 
 
+def inject_ga_events():
+    """Expõe a fila de eventos do GA4 para o layout.
+
+    Injeta a função, não a lista: assim a fila só é consumida quando o
+    ``layout.html`` realmente renderiza. Um fragmento HTML devolvido por AJAX
+    não pode drenar eventos que ninguém vai disparar.
+    """
+    from services.product_analytics import pop_ga_events
+
+    return dict(ga_pending_events=pop_ga_events)
+
+
 def inject_default_pickup_address():
     """Exposes DEFAULT_PICKUP_ADDRESS config to templates."""
     return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
@@ -445,6 +457,7 @@ _PROCESSORS = (
     inject_whatsapp_helpers,
     inject_public_contact,
     inject_site_flags,
+    inject_ga_events,
     inject_default_pickup_address,
 )
 

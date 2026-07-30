@@ -46,6 +46,33 @@ def _tracking_context() -> tuple[str, str, dict]:
     return anonymous_id, session_id, attribution
 
 
+# O GA4 só enxerga o que o navegador dispara, e cadastro/login terminam em
+# redirect — não há HTML na resposta para carregar o gtag. A fila abaixo guarda
+# o evento na sessão e o layout o emite no próximo render, já na página de
+# destino.
+_GA_QUEUE_KEY = "ga_event_queue"
+_GA_QUEUE_LIMIT = 5
+
+
+def queue_ga_event(name: str, **params) -> None:
+    """Enfileira um evento do GA4 para o próximo HTML renderizado."""
+    safe_params = {
+        key: str(value)[:100]
+        for key, value in params.items()
+        if value is not None
+    }
+    queue = list(session.get(_GA_QUEUE_KEY) or [])
+    queue.append({"name": str(name)[:40], "params": safe_params})
+    # Um limite evita que uma sessão sem render (só APIs) acumule eventos
+    # antigos e os despeje todos de uma vez muito depois do que aconteceu.
+    session[_GA_QUEUE_KEY] = queue[-_GA_QUEUE_LIMIT:]
+
+
+def pop_ga_events() -> list[dict]:
+    """Devolve e limpa a fila. Só o layout chama, uma vez por página."""
+    return session.pop(_GA_QUEUE_KEY, None) or []
+
+
 def track_event(name: str, *, source: str | None = None, **properties) -> None:
     safe_properties = {
         key: value

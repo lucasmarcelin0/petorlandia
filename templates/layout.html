@@ -88,7 +88,20 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', '{{ config.GA_MEASUREMENT_ID }}', { 'anonymize_ip': true });
+    {%- if current_user.is_authenticated %}
+    {# O papel precisa vir antes do config para valer já no primeiro evento. #}
+    gtag('set', 'user_properties', { 'user_role': {{ (current_user.role or 'indefinido')|tojson }} });
+    {%- endif %}
+    {# user_id costura a mesma pessoa entre celular e computador. Vai só o id
+       interno: o GA proíbe qualquer dado que identifique alguém (e-mail,
+       telefone, nome). #}
+    gtag('config', {{ config.GA_MEASUREMENT_ID|tojson }}, {
+      'anonymize_ip': true{% if current_user.is_authenticated %},
+      'user_id': {{ current_user.id|string|tojson }}{% endif %}
+    });
+    {%- for evento in ga_pending_events() %}
+    gtag('event', {{ evento.name|tojson }}, {{ evento.params|tojson }});
+    {%- endfor %}
   </script>
   {% endif %}
 </head>
