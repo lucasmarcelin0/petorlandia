@@ -771,6 +771,36 @@
     // Escolher um horário no calendário abre o painel de novo agendamento.
     // O painel abre no lugar (logo abaixo das abas) e rola até ele, em vez de
     // sobrepor a agenda.
+    (function () {
+      var tabs = document.getElementById('vetScheduleSectionTabs');
+      var panel = document.getElementById('newAppointmentPanel');
+      if (!tabs) return;
+      tabs.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-bs-target]');
+        if (!button || !tabs.contains(button)) return;
+        var target = document.querySelector(button.getAttribute('data-bs-target'));
+        if (!target) return;
+        if (panel && window.bootstrap && bootstrap.Collapse) {
+          bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false }).hide();
+        } else if (panel) {
+          panel.classList.remove('show');
+        }
+        window.setTimeout(function () {
+          tabs.querySelectorAll('[data-bs-target]').forEach(function (tab) {
+            var active = tab === button;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          document.querySelectorAll('#vetScheduleSectionContent > .tab-pane').forEach(function (pane) {
+            var active = pane === target;
+            pane.classList.toggle('active', active);
+            pane.classList.toggle('show', active);
+            pane.hidden = !active;
+          });
+        }, 0);
+      });
+    })();
+
     document.addEventListener('calendarSlotChosen', function () {
       var panel = document.getElementById('newAppointmentPanel');
       if (!panel || !window.bootstrap || !bootstrap.Collapse) return;

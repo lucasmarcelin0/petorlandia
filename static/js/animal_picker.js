@@ -177,6 +177,14 @@ function montarPicker(form) {
         evento.preventDefault();
         escolher(indice);
       });
+      item.addEventListener('click', (evento) => {
+        evento.preventDefault();
+        escolher(indice);
+      });
+      item.addEventListener('touchstart', (evento) => {
+        evento.preventDefault();
+        escolher(indice);
+      }, { passive: false });
       lista.appendChild(item);
     });
     lista.hidden = false;
