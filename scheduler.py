@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
+import functools
+import gc
 import os
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -26,6 +29,35 @@ DEFAULT_HOUR = 4
 DEFAULT_MINUTE = 30
 DEFAULT_MONTHS = 6
 DEFAULT_PMO_SYNC_MINUTES = 10
+
+
+def _release_job_memory() -> None:
+    """Devolve ao sistema memória retida por jobs pesados e bibliotecas C."""
+
+    gc.collect()
+    if os.name != "posix":
+        return
+    try:
+        # CPython/glibc pode manter arenas grandes após o sincronismo do PMO.
+        # malloc_trim reduz o RSS do dyno sem alterar dados ou estado dos jobs.
+        libc = ctypes.CDLL(None)
+        malloc_trim = getattr(libc, "malloc_trim", None)
+        if malloc_trim is not None:
+            malloc_trim(0)
+    except (AttributeError, OSError):
+        # A otimização é opcional em plataformas sem glibc.
+        pass
+
+
+def _memory_bounded_job(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _release_job_memory()
+
+    return wrapped
 
 
 def _parse_clinic_ids(raw: str | None) -> list[int]:
@@ -65,6 +97,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "sim", "on"}
 
 
+@_memory_bounded_job
 def _run_backfill() -> None:
     with app.app_context():
         months = _env_int('ACCOUNTING_BACKFILL_MONTHS', DEFAULT_MONTHS, 1)
@@ -92,6 +125,7 @@ def _run_backfill() -> None:
             )
 
 
+@_memory_bounded_job
 def _run_pmo_sync() -> None:
     with app.app_context():
         if not _env_bool("PMO_SYNC_ENABLED", True):
@@ -105,6 +139,7 @@ def _run_pmo_sync() -> None:
         current_app.logger.info("[Scheduler] Sincronizacao PMO concluida: %s", result)
 
 
+@_memory_bounded_job
 def _run_pmo_doses_compile() -> None:
     with app.app_context():
         if not _env_bool("PMO_DOSES_COMPILE_ENABLED", True):
@@ -177,7 +212,7 @@ def main() -> None:
     ]
     for job_id, func, hour, minute in daily_jobs:
         scheduler.add_job(
-            func,
+            _memory_bounded_job(func),
             CronTrigger(hour=hour, minute=minute, timezone=br_tz),
             id=job_id,
             replace_existing=True,
