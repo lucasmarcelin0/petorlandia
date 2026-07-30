@@ -558,6 +558,67 @@ class ProtocoloClinico(db.Model):
         return round((aceitas / mostradas) * 100, 1)
 
 
+class PropostaProtocoloClinico(db.Model):
+    """Texto livre enviado por veterinários antes da curadoria do protocolo."""
+
+    __tablename__ = 'proposta_protocolo_clinico'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    consulta_id = db.Column(
+        db.Integer,
+        db.ForeignKey('consulta.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    titulo = db.Column(db.String(160), nullable=False)
+    categoria = db.Column(db.String(30), nullable=False, default='doenca', index=True)
+    especie = db.Column(db.String(40), nullable=True, index=True)
+    conteudo_livre = db.Column(db.Text, nullable=False)
+    referencias = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default='pending_review', index=True)
+    reviewed_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    review_notes = db.Column(db.Text, nullable=True)
+    protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('protocolo_clinico.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+        nullable=False,
+    )
+
+    clinica = db.relationship(
+        'Clinica',
+        backref=db.backref('propostas_protocolos_clinicos', cascade='all, delete-orphan'),
+    )
+    consulta = db.relationship('Consulta')
+    autor = db.relationship('User', foreign_keys=[created_by])
+    revisor = db.relationship('User', foreign_keys=[reviewed_by])
+    protocolo = db.relationship('ProtocoloClinico')
+
+
 class ProtocoloClinicoExame(db.Model):
     __tablename__ = 'protocolo_clinico_exame'
 
@@ -731,4 +792,3 @@ class Vacina(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True,
     )
-

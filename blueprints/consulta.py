@@ -36,6 +36,7 @@ from models import (
     OrcamentoItem,
     Prescricao,
     ProtocoloClinico,
+    PropostaProtocoloClinico,
     ServicoClinica,
 )
 from services import coverage_badge, coverage_label
@@ -92,6 +93,22 @@ from app import (  # noqa: E402
 
 bp = Blueprint("consulta_routes", __name__)
 
+PROTOCOL_PROPOSAL_CATEGORIES = {
+    'doenca': 'Doença ou diagnóstico',
+    'sintoma': 'Sintoma ou sinal clínico',
+    'conduta': 'Conduta clínica',
+    'exame': 'Exames',
+    'medicamento': 'Medicamentos',
+    'outro': 'Outro tema',
+}
+PROTOCOL_PROPOSAL_SPECIES = {'', 'cao', 'gato', 'outra'}
+PROTOCOL_PROPOSAL_STATUS_LABELS = {
+    'pending_review': 'Aguardando revisão',
+    'in_review': 'Em revisão',
+    'converted': 'Transformada em protocolo',
+    'archived': 'Arquivada',
+}
+
 
 def get_blueprint():
     return bp
@@ -131,6 +148,29 @@ def mp_sdk(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.mp_sdk.
     import app as app_module
     return app_module.mp_sdk(*args, **kwargs)
+
+
+def _serialize_protocol_proposal(proposal):
+    return {
+        'id': proposal.id,
+        'titulo': proposal.titulo,
+        'categoria': proposal.categoria,
+        'categoria_label': PROTOCOL_PROPOSAL_CATEGORIES.get(
+            proposal.categoria,
+            PROTOCOL_PROPOSAL_CATEGORIES['outro'],
+        ),
+        'especie': proposal.especie or '',
+        'conteudo_livre': proposal.conteudo_livre,
+        'referencias': proposal.referencias or '',
+        'status': proposal.status,
+        'status_label': PROTOCOL_PROPOSAL_STATUS_LABELS.get(
+            proposal.status,
+            proposal.status,
+        ),
+        'autor': getattr(proposal.autor, 'name', None) or 'Usuário removido',
+        'created_at': proposal.created_at.isoformat() if proposal.created_at else None,
+        'protocolo_id': proposal.protocolo_id,
+    }
 
 
 def upload_to_s3(*args, **kwargs):
@@ -419,6 +459,121 @@ def criar_protocolo_clinico_inline(consulta_id):
         'message': 'Novo protocolo criado com sucesso.',
         'protocol': _serialize_clinical_protocol(protocolo),
         'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
+    })
+
+
+@bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/propostas', methods=['GET'])
+@login_required
+def listar_propostas_protocolo_clinico(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({
+            'success': False,
+            'message': 'Apenas veterinários podem consultar propostas de protocolos.',
+        }), 403
+
+    proposals = (
+        PropostaProtocoloClinico.query
+        .filter_by(clinica_id=consulta.clinica_id)
+        .order_by(PropostaProtocoloClinico.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return jsonify({
+        'success': True,
+        'proposals': [_serialize_protocol_proposal(item) for item in proposals],
+    })
+
+
+@bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/propostas', methods=['POST'])
+@login_required
+def criar_proposta_protocolo_clinico(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({
+            'success': False,
+            'message': 'Apenas veterinários podem sugerir protocolos clínicos.',
+        }), 403
+
+    payload = request.get_json(silent=True) or {}
+    titulo = str(payload.get('titulo') or '').strip()
+    categoria = str(payload.get('categoria') or 'doenca').strip().lower()
+    especie = str(payload.get('especie') or '').strip().lower()
+    conteudo_livre = str(payload.get('conteudo_livre') or '').strip()
+    referencias = str(payload.get('referencias') or '').strip()
+
+    if len(titulo) < 3:
+        return jsonify({
+            'success': False,
+            'message': 'Informe um título com pelo menos 3 caracteres.',
+        }), 400
+    if len(titulo) > 160:
+        return jsonify({
+            'success': False,
+            'message': 'O título deve ter no máximo 160 caracteres.',
+        }), 400
+    if categoria not in PROTOCOL_PROPOSAL_CATEGORIES:
+        return jsonify({
+            'success': False,
+            'message': 'Selecione uma categoria válida para a proposta.',
+        }), 400
+    if especie not in PROTOCOL_PROPOSAL_SPECIES:
+        return jsonify({
+            'success': False,
+            'message': 'Selecione uma espécie válida para a proposta.',
+        }), 400
+    if len(conteudo_livre) < 30:
+        return jsonify({
+            'success': False,
+            'message': 'Descreva a sugestão com pelo menos 30 caracteres.',
+        }), 400
+    if len(conteudo_livre) > 12000:
+        return jsonify({
+            'success': False,
+            'message': 'A sugestão deve ter no máximo 12.000 caracteres.',
+        }), 400
+    if len(referencias) > 4000:
+        return jsonify({
+            'success': False,
+            'message': 'As referências devem ter no máximo 4.000 caracteres.',
+        }), 400
+
+    proposal = PropostaProtocoloClinico(
+        clinica_id=consulta.clinica_id,
+        consulta_id=consulta.id,
+        created_by=current_user.id,
+        titulo=titulo,
+        categoria=categoria,
+        especie=especie or None,
+        conteudo_livre=conteudo_livre,
+        referencias=referencias or None,
+        status='pending_review',
+    )
+    db.session.add(proposal)
+    db.session.flush()
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='created',
+        titulo_item=proposal.titulo,
+        justificativa=proposal.conteudo_livre[:500],
+        payload={
+            'proposal_id': proposal.id,
+            'categoria': proposal.categoria,
+            'especie': proposal.especie,
+        },
+    )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão enviada para revisão. Ela ainda não interfere nas recomendações clínicas.',
+        'proposal': _serialize_protocol_proposal(proposal),
     })
 
 
@@ -3219,4 +3374,3 @@ def atualizar_bloco_orcamento(bloco_id):
 
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
-

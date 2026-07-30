@@ -6,6 +6,7 @@
   data-plan-url="{{ url_for('calcular_plano_sugestao_clinica', consulta_id=consulta.id) }}"
   data-feedback-url="{{ url_for('registrar_feedback_sugestao_clinica', consulta_id=consulta.id) }}"
   data-create-url="{{ url_for('criar_protocolo_clinico_inline', consulta_id=consulta.id) }}"
+  data-proposal-url="{{ url_for('criar_proposta_protocolo_clinico', consulta_id=consulta.id) }}"
   data-protocol-detail-url-template="{{ url_for('obter_protocolo_clinico_inline', consulta_id=consulta.id, protocol_id=0) }}"
   data-protocol-update-url-template="{{ url_for('atualizar_protocolo_clinico_inline', consulta_id=consulta.id, protocol_id=0) }}"
 >
@@ -79,6 +80,57 @@
       border-color: #1f6f54;
       color: #ffffff;
       box-shadow: 0 12px 24px rgba(31, 111, 84, 0.18);
+    }
+    #clinical-suggestions-panel .clinical-proposal-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+      padding: 18px;
+      border: 1px solid #cfe6d7;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #f2fbf6 0%, #ffffff 100%);
+    }
+    #clinical-suggestions-panel .clinical-proposal-intro h6 {
+      margin: 0 0 6px;
+      color: #165c45;
+    }
+    #clinical-suggestions-panel .clinical-proposal-textarea {
+      min-height: 210px;
+      resize: vertical;
+    }
+    #clinical-suggestions-panel #clinical-proposal-form input,
+    #clinical-suggestions-panel #clinical-proposal-form select,
+    #clinical-suggestions-panel #clinical-proposal-form textarea {
+      width: 100%;
+    }
+    #clinical-suggestions-panel .clinical-proposal-card {
+      padding: 14px 16px;
+      border: 1px solid #e1e8ec;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+    #clinical-suggestions-panel .clinical-proposal-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+      color: #60717b;
+      font-size: .82rem;
+    }
+    #clinical-suggestions-panel .clinical-proposal-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: .28rem .55rem;
+      background: #fff7e8;
+      color: #8a5d12;
+      font-weight: 700;
+    }
+    @media (max-width: 767.98px) {
+      #clinical-suggestions-panel .clinical-proposal-intro {
+        grid-template-columns: 1fr;
+      }
     }
     #clinical-suggestions-panel .clinical-panel-body {
       padding: 0 22px 22px;
@@ -518,8 +570,11 @@
           <button type="button" class="clinical-btn active" data-clinical-mode="suggestions">
             Sugestões clínicas
           </button>
+          <button type="button" class="clinical-btn clinical-btn-secondary" data-clinical-mode="proposal">
+            Sugerir protocolo
+          </button>
           <button type="button" class="clinical-btn clinical-btn-secondary" data-clinical-mode="protocol">
-            Novo protocolo
+            Estruturar protocolo
           </button>
         </div>
 
@@ -545,6 +600,89 @@
             Pesquise pela suspeita diagnóstica para ver protocolos compatíveis.
           </div>
           <div id="clinical-suggestions-results" class="clinical-results"></div>
+        </div>
+
+        <div class="clinical-pane-mode d-none" data-clinical-pane="proposal">
+          <div class="clinical-proposal-intro mb-3">
+            <div>
+              <h6>Conte sua ideia livremente</h6>
+              <p class="clinical-form-section-copy mb-0">
+                Escreva como você explicaria o protocolo a outro veterinário. Pode incluir sintomas,
+                hipóteses, exames, medicamentos, doses, alertas e retornos.
+              </p>
+            </div>
+            <span class="clinical-proposal-badge">
+              <i class="bi bi-hourglass-split me-1"></i>Revisão obrigatória
+            </span>
+          </div>
+
+          <form id="clinical-proposal-form" class="clinical-form" novalidate>
+            <div class="clinical-form-grid">
+              <div>
+                <label class="clinical-field-label" for="proposal-title">Título ou tema</label>
+                <input id="proposal-title" name="titulo" type="text" maxlength="160"
+                  placeholder="Ex: abordagem inicial para cão com prurido">
+              </div>
+              <div>
+                <label class="clinical-field-label" for="proposal-category">Organizar principalmente por</label>
+                <select id="proposal-category" name="categoria">
+                  <option value="doenca">Doença ou diagnóstico</option>
+                  <option value="sintoma">Sintoma ou sinal clínico</option>
+                  <option value="conduta">Conduta clínica</option>
+                  <option value="exame">Exames</option>
+                  <option value="medicamento">Medicamentos</option>
+                  <option value="outro">Outro tema</option>
+                </select>
+              </div>
+              <div>
+                <label class="clinical-field-label" for="proposal-species">Espécie</label>
+                <select id="proposal-species" name="especie">
+                  <option value="">Todas</option>
+                  <option value="cao">Cão</option>
+                  <option value="gato">Gato</option>
+                  <option value="outra">Outra</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="clinical-form-section">
+              <label class="clinical-field-label" for="proposal-content">Sugestão em texto livre</label>
+              <textarea id="proposal-content" name="conteudo_livre" class="clinical-proposal-textarea"
+                maxlength="12000"
+                placeholder="Exemplo: Em cães com prurido intenso e lesões recentes, começo avaliando ectoparasitas... Exames que costumo solicitar... Se houver indicação, considero... Alertas importantes..."></textarea>
+              <p class="clinical-soft-note mb-0 mt-2">
+                Não informe nome do tutor, telefone, CPF ou outros dados pessoais. A proposta não será
+                usada em atendimentos antes da curadoria.
+              </p>
+            </div>
+
+            <div class="clinical-form-section">
+              <label class="clinical-field-label" for="proposal-references">Referências ou observações (opcional)</label>
+              <textarea id="proposal-references" name="referencias" maxlength="4000"
+                placeholder="Diretriz, artigo, livro, link ou observação que ajude na revisão."></textarea>
+            </div>
+
+            <div class="clinical-form-actions">
+              <p class="clinical-soft-note">
+                A sugestão ficará vinculada somente a esta clínica e com status “Aguardando revisão”.
+              </p>
+              <button type="submit" class="clinical-btn active" id="submit-clinical-proposal">
+                <i class="bi bi-send me-1"></i>Enviar para revisão
+              </button>
+            </div>
+          </form>
+
+          <div class="clinical-form-section mt-3">
+            <div class="clinical-form-section-title">
+              <div>
+                <h6>Sugestões recentes da clínica</h6>
+                <p class="clinical-form-section-copy mb-0">Fila compartilhada apenas com a equipe veterinária desta clínica.</p>
+              </div>
+              <button type="button" class="clinical-link-btn" id="reload-clinical-proposals">Atualizar</button>
+            </div>
+            <div id="clinical-proposals-status" class="clinical-status">Abra esta aba para carregar as propostas.</div>
+            <div id="clinical-proposals-list" class="clinical-results mt-2"></div>
+          </div>
         </div>
 
         <div class="clinical-pane-mode d-none" data-clinical-pane="protocol">
@@ -768,11 +906,17 @@
     const protocolIdField = document.getElementById('protocol-id');
     const protocolFormTitle = document.getElementById('clinical-protocol-form-title');
     const protocolFormCopy = document.getElementById('clinical-protocol-form-copy');
+    const proposalForm = document.getElementById('clinical-proposal-form');
+    const proposalSubmitButton = document.getElementById('submit-clinical-proposal');
+    const proposalReloadButton = document.getElementById('reload-clinical-proposals');
+    const proposalStatusEl = document.getElementById('clinical-proposals-status');
+    const proposalListEl = document.getElementById('clinical-proposals-list');
 
     let currentMode = 'suggestions';
     let currentProtocolLevel = 'v1';
     let editingProtocolId = null;
     let currentProtocolFormMode = 'create';
+    let proposalsLoaded = false;
     const calculatedClinicalPlans = new Map();
 
     const suspicionField = document.getElementById('suspeita-clinica');
@@ -835,11 +979,14 @@
       modeButtons.forEach(button => {
         const isActive = button.dataset.clinicalMode === mode;
         button.classList.toggle('active', isActive);
-        button.classList.toggle('clinical-btn-secondary', !isActive && button.dataset.clinicalMode === 'protocol');
+        button.classList.toggle('clinical-btn-secondary', !isActive);
       });
       paneEls.forEach(pane => {
         pane.classList.toggle('d-none', pane.dataset.clinicalPane !== mode);
       });
+      if (mode === 'proposal' && !proposalsLoaded) {
+        loadProtocolProposals();
+      }
     }
 
     function setProtocolLevel(level) {
@@ -883,7 +1030,7 @@
       if (protocolModeButton) {
         protocolModeButton.textContent = editing
           ? 'Editar protocolo'
-          : (cloning ? 'Salvar protocolo' : 'Novo protocolo');
+          : (cloning ? 'Salvar protocolo' : 'Estruturar protocolo');
       }
     }
 
@@ -1271,6 +1418,124 @@
         throw new Error(data.message || 'Não foi possível concluir a operação.');
       }
       return data;
+    }
+
+    function setProposalStatus(message, tone = 'neutral') {
+      if (!proposalStatusEl) return;
+      const colors = {
+        neutral: '#60717b',
+        success: '#1f6f54',
+        warning: '#8b6216',
+        danger: '#9f3434',
+        info: '#255d7d',
+      };
+      proposalStatusEl.textContent = message;
+      proposalStatusEl.style.color = colors[tone] || colors.neutral;
+    }
+
+    function formatProposalDate(value) {
+      if (!value) return '';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '';
+      return new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(parsed);
+    }
+
+    function renderProtocolProposal(proposal) {
+      const speciesLabels = {
+        cao: 'Cão',
+        gato: 'Gato',
+        outra: 'Outra espécie',
+        '': 'Todas as espécies',
+      };
+      const content = escapeHtml(proposal.conteudo_livre || '').replace(/\n/g, '<br>');
+      const references = escapeHtml(proposal.referencias || '').replace(/\n/g, '<br>');
+      return `
+        <article class="clinical-proposal-card">
+          <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
+            <div>
+              <div class="fw-semibold">${escapeHtml(proposal.titulo || 'Sugestão sem título')}</div>
+              <div class="clinical-proposal-meta">
+                <span>${escapeHtml(proposal.categoria_label || 'Outro tema')}</span>
+                <span>•</span>
+                <span>${escapeHtml(speciesLabels[proposal.especie || ''] || proposal.especie)}</span>
+                <span>•</span>
+                <span>por ${escapeHtml(proposal.autor || 'Usuário removido')}</span>
+                ${proposal.created_at ? `<span>•</span><span>${escapeHtml(formatProposalDate(proposal.created_at))}</span>` : ''}
+              </div>
+            </div>
+            <span class="clinical-proposal-badge">${escapeHtml(proposal.status_label || 'Aguardando revisão')}</span>
+          </div>
+          <div class="small mt-3" style="white-space:normal;">${content}</div>
+          ${references ? `
+            <details class="mt-3">
+              <summary class="small fw-semibold" style="cursor:pointer;">Referências e observações</summary>
+              <div class="small text-muted mt-2">${references}</div>
+            </details>
+          ` : ''}
+        </article>
+      `;
+    }
+
+    async function loadProtocolProposals() {
+      if (!panel.dataset.proposalUrl || !proposalListEl) return;
+      if (proposalReloadButton) proposalReloadButton.disabled = true;
+      setProposalStatus('Carregando sugestões da clínica...', 'info');
+      try {
+        const response = await fetch(panel.dataset.proposalUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-CSRFToken': csrfToken
+          }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || 'Não foi possível carregar as sugestões.');
+        }
+        const proposals = Array.isArray(data.proposals) ? data.proposals : [];
+        proposalsLoaded = true;
+        proposalListEl.innerHTML = proposals.length
+          ? proposals.map(renderProtocolProposal).join('')
+          : '<div class="clinical-card-block">Ainda não há sugestões enviadas por esta clínica.</div>';
+        setProposalStatus(
+          proposals.length
+            ? `${proposals.length} sugestão(ões) disponível(is) para revisão.`
+            : 'A fila está vazia.',
+          proposals.length ? 'success' : 'neutral'
+        );
+      } catch (error) {
+        setProposalStatus(error.message || 'Erro ao carregar sugestões.', 'danger');
+      } finally {
+        if (proposalReloadButton) proposalReloadButton.disabled = false;
+      }
+    }
+
+    async function submitProtocolProposal(event) {
+      event.preventDefault();
+      if (!proposalForm || !proposalSubmitButton) return;
+      const payload = {
+        titulo: document.getElementById('proposal-title')?.value || '',
+        categoria: document.getElementById('proposal-category')?.value || 'doenca',
+        especie: document.getElementById('proposal-species')?.value || '',
+        conteudo_livre: document.getElementById('proposal-content')?.value || '',
+        referencias: document.getElementById('proposal-references')?.value || '',
+      };
+      proposalSubmitButton.disabled = true;
+      setProposalStatus('Enviando sugestão para revisão...', 'info');
+      try {
+        const data = await postJson(panel.dataset.proposalUrl, payload);
+        proposalForm.reset();
+        proposalsLoaded = false;
+        await loadProtocolProposals();
+        setProposalStatus(data.message || 'Sugestão enviada para revisão.', 'success');
+      } catch (error) {
+        setProposalStatus(error.message || 'Erro ao enviar a sugestão.', 'danger');
+      } finally {
+        proposalSubmitButton.disabled = false;
+      }
     }
 
     async function loadSuggestions() {
@@ -1778,6 +2043,8 @@
     });
 
     loadButton?.addEventListener('click', loadSuggestions);
+    proposalForm?.addEventListener('submit', submitProtocolProposal);
+    proposalReloadButton?.addEventListener('click', loadProtocolProposals);
     protocolForm?.addEventListener('submit', submitProtocolForm);
     resetProtocolButton?.addEventListener('click', function () {
       resetProtocolFormState();
