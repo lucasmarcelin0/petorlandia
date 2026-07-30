@@ -18,6 +18,12 @@ from decimal import Decimal, ROUND_CEILING
 import unicodedata
 import enum
 import uuid
+PLACEHOLDER_EMAIL_DOMAIN = 'nao-informado.petorlandia.invalid'
+def build_placeholder_email():
+    return f'tutor-sem-email-{uuid.uuid4().hex}@{PLACEHOLDER_EMAIL_DOMAIN}'
+
+def is_placeholder_email(value):
+    return isinstance(value, str) and value.lower().endswith(f'@{PLACEHOLDER_EMAIL_DOMAIN}')
 from sqlalchemy import Enum, event, func, case, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
@@ -99,6 +105,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    email_is_placeholder = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='adotante', nullable=True)
 

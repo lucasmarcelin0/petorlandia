@@ -40,6 +40,7 @@ from models import (
     VacinaModelo,
     Veterinario,
 )
+from models.usuarios import build_placeholder_email
 from services.animal_search import search_animals
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased, joinedload, selectinload
@@ -1272,7 +1273,7 @@ def buscar_tutores():
         detalhes = [
             valor
             for valor in [
-                tutor.email,
+                None if getattr(tutor, 'email_is_placeholder', False) else tutor.email,
                 tutor.phone,
                 f"CPF: {tutor.cpf}" if tutor.cpf else '',
                 f"RG: {tutor.rg}" if tutor.rg else '',
@@ -1285,7 +1286,8 @@ def buscar_tutores():
             {
                 'id': tutor.id,
                 'name': tutor.name,
-                'email': tutor.email,
+                'email': None if getattr(tutor, 'email_is_placeholder', False) else tutor.email,
+                'email_is_placeholder': bool(getattr(tutor, 'email_is_placeholder', False)),
                 'cpf': tutor.cpf,
                 'rg': tutor.rg,
                 'phone': tutor.phone,
@@ -1355,15 +1357,18 @@ def tutores():
     if request.method == 'POST':
         wants_json = 'application/json' in request.headers.get('Accept', '')
         name = request.form.get('tutor_name') or request.form.get('name')
-        email = request.form.get('tutor_email') or request.form.get('email')
+        email = (request.form.get('tutor_email') or request.form.get('email') or '').strip()
+        email_is_placeholder = not email
 
-        if not name or not email:
+        if not name:
             message = 'Nome e e‑mail são obrigatórios.'
             if wants_json:
                 return jsonify(success=False, message=message, category='warning')
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
+        if email_is_placeholder:
+            email = build_placeholder_email()
         if User.query.filter_by(email=email).first():
             message = 'Já existe um tutor com esse e‑mail.'
             if wants_json:
@@ -1373,7 +1378,8 @@ def tutores():
 
         novo = User(
             name=name.strip(),
-            email=email.strip(),
+            email=email,
+            email_is_placeholder=email_is_placeholder,
             role='adotante',  # padrão inicial
             clinica_id=current_user_clinic_id(),
             added_by=current_user,
@@ -1487,7 +1493,8 @@ def tutores():
                     'id': novo.id,
                     'name': novo.name or f'Tutor #{novo.id}',
                     'display_name': novo.name or f'Tutor #{novo.id}',
-                    'email': novo.email,
+                    'email': None if novo.email_is_placeholder else novo.email,
+                    'email_is_placeholder': bool(novo.email_is_placeholder),
                     'phone': novo.phone,
                     'cpf': novo.cpf,
                     'profile_photo': novo.profile_photo,

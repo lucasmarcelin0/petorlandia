@@ -3,12 +3,13 @@ from flask import Blueprint
 import hashlib, os, uuid
 from datetime import datetime
 from extensions import csrf, db, limiter, mail
-from services.product_analytics import track_event
+from services.product_analytics import queue_ga_event, track_event
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message as MailMessage
 from forms import ChangePasswordForm, DeleteAccountForm, EditProfileForm, FirstAccessPasswordForm, FirstAccessPhoneForm, LoginForm, RegistrationForm, ResetPasswordForm, ResetPasswordRequestForm
 from models import Endereco, Transaction, User
+from models.usuarios import is_placeholder_email
 from sqlalchemy import func
 from template_filters import normalize_email, normalize_phone
 from time_utils import BR_TZ
@@ -69,7 +70,7 @@ def reset_password_request():
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user:
+        if user and not getattr(user, 'email_is_placeholder', False) and not is_placeholder_email(user.email):
             token = s.dumps(user.email, salt='password-reset-salt')
             base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
             link = f"{base_url}{url_for('reset_password', token=token)}"
@@ -393,6 +394,7 @@ def register():
             role=getattr(user, 'role', None),
             channel=audience,
         )
+        queue_ga_event('sign_up', method='email')
 
         # Cai no onboarding, não no sistema vazio: é ali que a pessoa dá o
         # primeiro passo em vez de olhar uma tela sem nada dela.
@@ -462,6 +464,7 @@ def login_view():
                 role=getattr(user, 'role', None),
                 channel=audience,
             )
+            queue_ga_event('login', method='email')
             if form.remember.data:
                 session.permanent = True
             if is_json_request:
@@ -620,6 +623,7 @@ def google_callback():
 
         channel = 'student_google' if is_student_flow else 'google'
         track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
+        queue_ga_event('sign_up', method='google')
         flash('Conta criada com o Google. Bem-vindo!', 'success')
         if urlparse(sanitized_next).path == url_for('index'):
             sanitized_next = url_for('onboarding')
@@ -627,6 +631,7 @@ def google_callback():
 
     channel = 'student_google' if is_student_flow else 'google'
     track_event('login_succeeded', role=getattr(user, 'role', None), channel=channel)
+    queue_ga_event('login', method='google')
     flash('Login realizado com sucesso!', 'success')
     return redirect(sanitized_next)
 

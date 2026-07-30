@@ -57,8 +57,10 @@
           </div>
           <p class="text-muted mb-3">Dados completos, contatos e histórico de animais deste tutor.</p>
           <div class="d-flex flex-wrap gap-2 mb-3 tutor-chips">
-            {% if tutor.email %}
+            {% if tutor.email and not tutor.email_is_placeholder %}
               <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email }}</span>
+            {% else %}
+              <span class="chip text-muted"><i class="fas fa-envelope-open"></i> Sem e-mail informado</span>
             {% endif %}
             {% if tutor.phone %}
               <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone }}</span>
@@ -127,7 +129,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label">E‑mail</label>
-              <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
+              <input name="email" type="email" class="form-control" value="{{ '' if tutor.email_is_placeholder else (tutor.email or '') }}">
             </div>
             <div class="col-md-4">
               <label class="form-label">Telefone</label>
