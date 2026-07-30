@@ -74,8 +74,8 @@ def test_shampoo_recebe_protocolo_de_banho():
         _Item("Shampoo de clorexidina - 0,20%, frasco (500mL)"), {}
     )
     assert texto == _INSTRUCAO_SHAMPOO
-    assert "1 banho por semana" in texto
-    assert "10 minutos" in texto
+    assert "1 (um) banho por semana" in texto
+    assert "10 (dez) minutos" in texto
     assert "gota" not in texto, "shampoo não pode voltar a ser dosado em gotas"
 
 

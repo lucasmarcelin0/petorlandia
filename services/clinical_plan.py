@@ -527,10 +527,14 @@ def _presentation_delivers_unit(ap: dict[str, Any], expected_unit: str) -> bool:
 
 #: Instruções padronizadas por forma tópica. Estas formas não têm "dose" no
 #: sentido numérico: quantificá-las produz texto sem sentido clínico.
+#:
+#: Todo número que o tutor precisa seguir vai por extenso entre parênteses —
+#: preferência do veterinário, para não restar dúvida na leitura da receita.
 _INSTRUCAO_SHAMPOO = (
-    "Realizar 1 banho por semana. Aplicar o shampoo sobre a pelagem umedecida, "
-    "massagear e deixar agir por 10 minutos. Enxaguar e repetir o procedimento, "
-    "deixando agir por mais 10 minutos antes do enxágue final."
+    f"Realizar {_com_extenso(1)} banho por semana. Aplicar o shampoo sobre a "
+    f"pelagem umedecida, massagear e deixar agir por {_com_extenso(10)} minutos. "
+    f"Enxaguar e repetir o procedimento, deixando agir por mais "
+    f"{_com_extenso(10)} minutos antes do enxágue final."
 )
 
 
