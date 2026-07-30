@@ -168,6 +168,41 @@ def test_ajax_route_accepts_x_csrftoken_header(csrf_client, method, path, payloa
     ), f"header X-CSRFToken deixou de ser aceito em {method.upper()} {path}"
 
 
+def test_chat_message_is_actually_persisted_with_header(csrf_client):
+    """O pior caso do bug, provado ponta a ponta.
+
+    Antes, o JS do chat dava await no fetch sem token, ignorava a resposta e
+    limpava o campo: a mensagem sumia da tela sem nunca ter sido gravada. Aqui
+    exigimos gravação de verdade, não só "não foi barrado por CSRF".
+    """
+    from models import Message
+
+    client, animal_id = csrf_client
+    page = client.get("/login")
+    token = re.search(
+        r'name="csrf-token" content="([^"]+)"', page.get_data(as_text=True)
+    ).group(1)
+    user_id = int(db.session.query(User.id).filter_by(email="ajax@example.com").scalar())
+
+    antes = Message.query.filter_by(animal_id=animal_id).count()
+    response = client.post(
+        f"/chat/{animal_id}",
+        headers={
+            "Content-Type": "application/json",
+            "Referer": "https://localhost/x",
+            "X-CSRFToken": token,
+        },
+        data=json.dumps(
+            {"sender_id": user_id, "receiver_id": user_id, "content": "mensagem de teste"}
+        ),
+    )
+
+    assert response.status_code in (200, 201), response.get_data(as_text=True)[:200]
+    assert Message.query.filter_by(animal_id=animal_id).count() == antes + 1
+    gravada = Message.query.filter_by(animal_id=animal_id).order_by(Message.id.desc()).first()
+    assert gravada.content == "mensagem de teste"
+
+
 # --- comportamento real do wrapper, via Node --------------------------------
 
 def test_wrapper_behaviour_suite_passes():
