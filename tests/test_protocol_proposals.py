@@ -112,7 +112,7 @@ def test_free_text_protocol_proposal_stays_pending_and_does_not_publish(
         assert audit.payload['proposal_id'] == proposal.id
 
 
-def test_protocol_proposal_requires_meaningful_free_text(
+def test_protocol_proposal_accepts_short_meaningful_free_text(
     app,
     client,
     monkeypatch,
@@ -129,8 +129,30 @@ def test_protocol_proposal_requires_meaningful_free_text(
         },
     )
 
+    assert response.status_code == 200
+    with app.app_context():
+        assert PropostaProtocoloClinico.query.one().conteudo_livre == 'Avaliar.'
+
+
+def test_protocol_proposal_rejects_blank_free_text(
+    app,
+    client,
+    monkeypatch,
+):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    _login(monkeypatch, _fake_vet(user_id, vet_id, clinic_id))
+
+    response = client.post(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas',
+        json={
+            'titulo': 'Prurido',
+            'categoria': 'sintoma',
+            'conteudo_livre': '   ',
+        },
+    )
+
     assert response.status_code == 400
-    assert 'pelo menos 30 caracteres' in response.get_json()['message']
+    assert 'pelo menos 5 caracteres' in response.get_json()['message']
     with app.app_context():
         assert PropostaProtocoloClinico.query.count() == 0
 

@@ -648,12 +648,15 @@
             <div class="clinical-form-section">
               <label class="clinical-field-label" for="proposal-content">Sugestão em texto livre</label>
               <textarea id="proposal-content" name="conteudo_livre" class="clinical-proposal-textarea"
-                maxlength="12000"
+                minlength="5" maxlength="12000"
                 placeholder="Exemplo: Em cães com prurido intenso e lesões recentes, começo avaliando ectoparasitas... Exames que costumo solicitar... Se houver indicação, considero... Alertas importantes..."></textarea>
-              <p class="clinical-soft-note mb-0 mt-2">
-                Não informe nome do tutor, telefone, CPF ou outros dados pessoais. A proposta não será
-                usada em atendimentos antes da curadoria.
-              </p>
+              <div class="d-flex flex-wrap justify-content-between gap-2 mt-2">
+                <p class="clinical-soft-note mb-0">
+                  Não informe nome do tutor, telefone, CPF ou outros dados pessoais. A proposta não será
+                  usada em atendimentos antes da curadoria.
+                </p>
+                <span class="clinical-soft-note" id="proposal-character-count">0 caracteres</span>
+              </div>
             </div>
 
             <div class="clinical-form-section">
@@ -911,6 +914,8 @@
     const proposalReloadButton = document.getElementById('reload-clinical-proposals');
     const proposalStatusEl = document.getElementById('clinical-proposals-status');
     const proposalListEl = document.getElementById('clinical-proposals-list');
+    const proposalContentField = document.getElementById('proposal-content');
+    const proposalCharacterCount = document.getElementById('proposal-character-count');
 
     let currentMode = 'suggestions';
     let currentProtocolLevel = 'v1';
@@ -1433,6 +1438,12 @@
       proposalStatusEl.style.color = colors[tone] || colors.neutral;
     }
 
+    function updateProposalCharacterCount() {
+      if (!proposalCharacterCount) return;
+      const length = String(proposalContentField?.value || '').trim().length;
+      proposalCharacterCount.textContent = `${length} ${length === 1 ? 'caractere' : 'caracteres'}`;
+    }
+
     function formatProposalDate(value) {
       if (!value) return '';
       const parsed = new Date(value);
@@ -1528,6 +1539,7 @@
       try {
         const data = await postJson(panel.dataset.proposalUrl, payload);
         proposalForm.reset();
+        updateProposalCharacterCount();
         proposalsLoaded = false;
         await loadProtocolProposals();
         setProposalStatus(data.message || 'Sugestão enviada para revisão.', 'success');
@@ -2044,6 +2056,7 @@
 
     loadButton?.addEventListener('click', loadSuggestions);
     proposalForm?.addEventListener('submit', submitProtocolProposal);
+    proposalContentField?.addEventListener('input', updateProposalCharacterCount);
     proposalReloadButton?.addEventListener('click', loadProtocolProposals);
     protocolForm?.addEventListener('submit', submitProtocolForm);
     resetProtocolButton?.addEventListener('click', function () {

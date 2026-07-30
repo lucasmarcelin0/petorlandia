@@ -524,10 +524,10 @@ def criar_proposta_protocolo_clinico(consulta_id):
             'success': False,
             'message': 'Selecione uma espécie válida para a proposta.',
         }), 400
-    if len(conteudo_livre) < 30:
+    if len(conteudo_livre) < 5:
         return jsonify({
             'success': False,
-            'message': 'Descreva a sugestão com pelo menos 30 caracteres.',
+            'message': 'Descreva a sugestão com pelo menos 5 caracteres.',
         }), 400
     if len(conteudo_livre) > 12000:
         return jsonify({
