@@ -2032,6 +2032,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* Persistir aba ativa quando muda */
+    // Fallback acessível quando o bundle Bootstrap não terminou de carregar.
+    // Mantém a agenda utilizável mesmo se a inicialização automática falhar.
+    sectionTabsEl.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-bs-target]');
+      if (!btn || !sectionTabsEl.contains(btn)) return;
+      const targetId = btn.getAttribute('data-bs-target');
+      const target = targetId ? document.querySelector(targetId) : null;
+      if (!target) return;
+      window.setTimeout(() => {
+        const active = sectionTabsEl.querySelector('.nav-link.active');
+        if (active !== btn) {
+          sectionTabsEl.querySelectorAll('.nav-link').forEach((item) => {
+            item.classList.toggle('active', item === btn);
+            item.setAttribute('aria-selected', item === btn ? 'true' : 'false');
+          });
+        }
+        document.querySelectorAll('#appointmentsSectionContent > .tab-pane').forEach((pane) => {
+          const isTarget = pane === target;
+          pane.classList.toggle('active', isTarget);
+          pane.classList.toggle('show', isTarget);
+          pane.hidden = !isTarget;
+        });
+      }, 0);
+    });
+
     sectionTabsEl.addEventListener('shown.bs.tab', (event) => {
       const target = event.target && event.target.getAttribute('data-bs-target');
       if (!target) {
@@ -2045,6 +2070,18 @@ document.addEventListener('DOMContentLoaded', () => {
         /* ignore */
       }
     });
+
+    // Garante estado inicial consistente mesmo sem Bootstrap.
+    const initialButton = sectionTabsEl.querySelector('.nav-link.active') || sectionTabsEl.querySelector('[data-bs-target]');
+    if (initialButton) {
+      const initialTarget = document.querySelector(initialButton.getAttribute('data-bs-target'));
+      document.querySelectorAll('#appointmentsSectionContent > .tab-pane').forEach((pane) => {
+        const isTarget = pane === initialTarget;
+        pane.classList.toggle('active', isTarget);
+        pane.classList.toggle('show', isTarget);
+        pane.hidden = !isTarget;
+      });
+    }
   })();
 });
 </script>
