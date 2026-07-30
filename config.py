@@ -156,6 +156,14 @@ class Config:
         or "lukemarki3@gmail.com"
     )
     SUPPORT_PHONE = _env_optional("SUPPORT_PHONE") or "31 99950-5748"
+    # Prova social pública exige validação humana: `status=ativa` representa
+    # aprovação técnica e inclui cadastros de teste. Apenas clínicas listadas
+    # aqui entram no número "usando o sistema".
+    PUBLIC_STATS_CLINIC_IDS = tuple(
+        int(raw_id.strip())
+        for raw_id in os.environ.get("PUBLIC_STATS_CLINIC_IDS", "").split(",")
+        if raw_id.strip().isdigit()
+    )
     MAIL_DEFAULT_SENDER = (
         (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
         if _mail_sender_email

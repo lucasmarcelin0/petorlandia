@@ -3,7 +3,7 @@ from flask import Blueprint
 import os, re, requests
 from datetime import date, datetime, timedelta, timezone
 from extensions import csrf, db, limiter
-from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
+from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile

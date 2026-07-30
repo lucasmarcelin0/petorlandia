@@ -155,10 +155,23 @@ def inject_admin_action_notifications():
                 .limit(5)
                 .all()
             )
+            # O cache sobrevive ao teardown da request, mas instâncias ORM não:
+            # na navegação seguinte elas ficam detached e qualquer template que
+            # acesse note.url/title pode derrubar a página inteira. Guarde
+            # somente valores simples e independentes da sessão SQLAlchemy.
+            recent_payload = [
+                {
+                    'url': note.url,
+                    'title': note.title,
+                    'event_type': note.event_type,
+                    'created_at': note.created_at,
+                }
+                for note in recent
+            ]
             payload = dict(
                 admin_action_count=open_count,
                 admin_action_unread_count=unread_count,
-                admin_action_recent=recent,
+                admin_action_recent=recent_payload,
             )
             _set_cached_context(current_user.id, 'admin_action_notifications', payload)
             return payload

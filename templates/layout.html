@@ -61,7 +61,10 @@
 
   <!-- Bootstrap 5 -->
   <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js', v='5.3') }}" defer></script>
+  {# Diversos templates ainda inicializam modais em scripts inline durante o
+     parsing. Bootstrap precisa estar disponível antes deles; defer fazia
+     botões falharem silenciosamente em telas operacionais. #}
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js', v='5.3') }}"></script>
 
   <!-- Font Awesome 6 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -72,10 +75,11 @@
   <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
-  <link href="{{ url_for('static', filename='styles.css', v='20260729growth2') }}" rel="stylesheet">
-  {% if current_user.is_authenticated %}
+  <link href="{{ url_for('static', filename='styles.css', v='20260729hotfix1') }}" rel="stylesheet">
+  {# clinic.css ainda contém a base visual compartilhada (body, footer,
+     alertas e responsividade). Mantê-la global evita que páginas públicas
+     percam essas regras até a separação definitiva em base-shell.css. #}
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
-  {% endif %}
 
   {% if config.GA_MEASUREMENT_ID %}
   <!-- Google Analytics 4 -->
@@ -89,7 +93,10 @@
   {% endif %}
 </head>
 
-{% set flash_messages = get_flashed_messages(with_categories=true)|unique|list %}
+{# Mensagens podem ser listas (por exemplo, erros de validação). O filtro
+   `unique` exige valores hashable e fazia qualquer redirect assim terminar em
+   erro 500. Duplicatas são muito menos graves do que impedir o atendimento. #}
+{% set flash_messages = get_flashed_messages(with_categories=true) %}
 
 <!-- Bootstrap Tooltip e Popover -->
 <script>
@@ -226,7 +233,11 @@
   {% for category, message in flash_messages %}
   <div class="alert-container">
     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-      {{ message }}
+      {% if message is sequence and message is not string %}
+        {{ message|join(' ') }}
+      {% else %}
+        {{ message }}
+      {% endif %}
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   </div>

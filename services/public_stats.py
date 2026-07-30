@@ -30,7 +30,7 @@ class Stat:
 THRESHOLDS = {
     'pets': 50,
     'vacinas': 100,
-    'clinicas': 3,
+    'clinicas': 1,
 }
 
 
@@ -63,9 +63,33 @@ def _collect() -> list[Stat]:
         current_app.logger.warning('Falha ao contar vacinas para a prova social', exc_info=True)
 
     try:
-        clinicas = _count(Clinica, Clinica.status == 'ativa')
+        # `status=ativa` significa cadastro aprovado, não uso real. A lista é
+        # deliberadamente explícita para cadastros de teste nunca virarem
+        # prova social por acidente.
+        clinic_ids = current_app.config.get('PUBLIC_STATS_CLINIC_IDS', ())
+        if isinstance(clinic_ids, str):
+            clinic_ids = tuple(
+                int(raw_id.strip())
+                for raw_id in clinic_ids.split(',')
+                if raw_id.strip().isdigit()
+            )
+        clinic_ids = tuple(clinic_ids or ())
+        clinicas = (
+            _count(
+                Clinica,
+                Clinica.status == 'ativa',
+                Clinica.id.in_(clinic_ids),
+            )
+            if clinic_ids
+            else 0
+        )
         if clinicas >= THRESHOLDS['clinicas']:
-            stats.append(Stat(clinicas, 'clínicas usando o sistema'))
+            label = (
+                'clínica usando o sistema'
+                if clinicas == 1
+                else 'clínicas usando o sistema'
+            )
+            stats.append(Stat(clinicas, label))
     except Exception:  # noqa: BLE001
         current_app.logger.warning('Falha ao contar clínicas para a prova social', exc_info=True)
 
