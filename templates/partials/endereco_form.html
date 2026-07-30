@@ -219,6 +219,8 @@
 
     if (!leafletPromise) {
       leafletPromise = new Promise((resolve, reject) => {
+        const leafletCssUrl = "{{ url_for('static', filename='leaflet/leaflet.css') }}";
+        const leafletJsUrl = "{{ url_for('static', filename='leaflet/leaflet.js') }}";
         const existingScript = document.querySelector('script[data-leaflet]');
         if (existingScript) {
           existingScript.addEventListener('load', () => resolve(window.L));
@@ -228,11 +230,11 @@
 
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.href = leafletCssUrl;
         document.head.appendChild(link);
 
         const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.src = leafletJsUrl;
         script.defer = true;
         script.setAttribute('data-leaflet', 'true');
         script.onload = () => resolve(window.L);
