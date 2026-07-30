@@ -11737,13 +11737,13 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
-def _normalize_role_scope(scope_value, *, allow_global):
-    """Normalize list/dashboard scope defensively by role capabilities."""
+def _normalize_role_scope(scope_value, *, allow_full_scope):
+    """Normalize list scope without granting access beyond the caller's clinics."""
 
     normalized = (scope_value or '').strip().lower()
     if normalized not in {'all', 'mine'}:
-        return 'all' if allow_global else 'mine'
-    if normalized == 'all' and not allow_global:
+        return 'all' if allow_full_scope else 'mine'
+    if normalized == 'all' and not allow_full_scope:
         return 'mine'
     return normalized
 
@@ -11764,9 +11764,17 @@ def _get_recent_animais(
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or (getattr(current_user, 'id', None))
     clinic_ids = _normalize_clinic_ids(clinic_id)
+    can_view_clinic_scope = bool(
+        clinic_ids
+        and viewer
+        and has_professional_access(viewer)
+    )
+    resolved_scope = _normalize_role_scope(
+        scope,
+        allow_full_scope=is_admin or can_view_clinic_scope,
+    )
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
@@ -11926,9 +11934,17 @@ def _get_recent_tutores(
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or getattr(current_user, 'id', None)
     clinic_ids = _normalize_clinic_ids(clinic_id)
+    can_view_clinic_scope = bool(
+        clinic_ids
+        and viewer
+        and has_professional_access(viewer)
+    )
+    resolved_scope = _normalize_role_scope(
+        scope,
+        allow_full_scope=is_admin or can_view_clinic_scope,
+    )
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
