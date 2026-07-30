@@ -530,13 +530,13 @@ def _presentation_delivers_unit(ap: dict[str, Any], expected_unit: str) -> bool:
 _INSTRUCAO_SHAMPOO = (
     "Realizar 1 banho por semana. Aplicar o shampoo sobre a pelagem umedecida, "
     "massagear e deixar agir por 10 minutos. Enxaguar e repetir o procedimento, "
-    "deixando agir por mais 10 minutos antes do enxague final."
+    "deixando agir por mais 10 minutos antes do enxágue final."
 )
 
 
 def _instrucao_pomada(intervalo_horas: int = 12, dias: int = 10) -> str:
     return (
-        "Aplicar uma camada fina sobre a area afetada de "
+        "Aplicar uma camada fina sobre a área afetada de "
         f"{_com_extenso(intervalo_horas)} em {_com_extenso(intervalo_horas)} horas "
         f"por {_com_extenso(dias)} dias."
     )

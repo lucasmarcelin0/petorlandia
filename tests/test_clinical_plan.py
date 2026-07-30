@@ -374,7 +374,7 @@ def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
                 id=1,
                 medicamento=medicamento,
                 nome_medicamento="Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g + Sulfato de Neomicina 2,5mg/g Generico C",
-                dosagem_texto="Aplicar uma camada fina sobre a area afetada",
+                dosagem_texto="Aplicar uma camada fina sobre a área afetada",
                 frequencia_texto="2 vezes ao dia",
                 duracao_texto="10 dias",
                 indicacao="Uso topico dermatologico",
@@ -408,7 +408,7 @@ def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
         # A instrução já é auto-suficiente, então frequência e duração saem
         # vazias para não duplicarem "12/12h" no texto do tutor.
         instrucao_pomada = (
-            "Aplicar uma camada fina sobre a area afetada de "
+            "Aplicar uma camada fina sobre a área afetada de "
             "12 (doze) em 12 (doze) horas por 10 (dez) dias."
         )
         assert med["calculation"]["dose_pratica"] == instrucao_pomada

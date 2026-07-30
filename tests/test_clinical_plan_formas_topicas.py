@@ -82,7 +82,7 @@ def test_shampoo_recebe_protocolo_de_banho():
 def test_pomada_recebe_camada_fina_com_numeros_por_extenso():
     texto = _forma_topica_padronizada(_Item("Cetoconazol generico"), {"forma": "pomada"})
     assert texto == _instrucao_pomada()
-    assert "camada fina sobre a area afetada" in texto
+    assert "camada fina sobre a área afetada" in texto
     assert "de 12 (doze) em 12 (doze) horas" in texto
     assert "por 10 (dez) dias" in texto
 
@@ -195,7 +195,7 @@ def test_pomada_sem_dose_estruturada_fica_pronta(app):
     with flask_app.app_context():
         consulta, protocolo = _cenario(
             "Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g Generico C",
-            "Aplicar uma camada fina sobre a area afetada",
+            "Aplicar uma camada fina sobre a área afetada",
         )
         plan = build_clinical_plan(consulta, protocolo, session=db.session)
         med = plan["medications"][0]
