@@ -11,10 +11,11 @@ import click
 from flask.cli import with_appcontext
 
 from extensions import db
+from models.agenda import VetSchedule
 from models.clinica import Clinica
 from models.loja import Payment
 from models.racao import CasaDeRacao
-from models.usuarios import User
+from models.usuarios import User, Veterinario
 from services.finance import run_transactions_history_backfill
 
 
@@ -22,7 +23,7 @@ from services.finance import run_transactions_history_backfill
 # importacoes VetSmart nem os cadastros da campanha/Controle de Vetores.
 KNOWN_TEST_USER_IDS = (
     242, 465, 466, 568, 760, 892, 894, 999, 1521, 1522, 1621, 1627,
-    1633, 2080, 2839, 2905, 2971, 3004, 3070, 3071, 3072, 3073, 3499,
+    1633, 2839, 2905, 2971, 3004, 3070, 3071, 3072, 3073, 3499,
     3664, 3832, 3863, 3895, 3896, 3897, 3961, 3962, 3968, 3969, 3970,
 )
 
@@ -60,6 +61,17 @@ def cleanup_test_users(apply, user_ids, store_owner_id):
     CasaDeRacao.query.filter(CasaDeRacao.registered_by_id.in_(target_ids)).update(
         {CasaDeRacao.registered_by_id: None}, synchronize_session=False
     )
+
+    veterinarian_ids = [
+        vet_id for (vet_id,) in db.session.query(Veterinario.id)
+        .filter(Veterinario.user_id.in_(target_ids)).all()
+    ]
+    if veterinarian_ids:
+        # A coluna e obrigatoria e o relacionamento legado nao possui
+        # delete-orphan; apagar antes evita o ORM tentar desvincula-la.
+        VetSchedule.query.filter(VetSchedule.veterinario_id.in_(veterinarian_ids)).delete(
+            synchronize_session=False
+        )
 
     for user in users:
         # Espelha a exclusao de conta da aplicacao para relacoes que nao usam
