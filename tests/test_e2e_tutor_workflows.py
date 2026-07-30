@@ -9,6 +9,7 @@ import os
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
 from app import app as flask_app, db
+from helpers import ensure_veterinarian_membership
 from models import (
     User, Animal, Consulta, Prescricao, BlocoPrescricao,
     Vacina, Clinica, Veterinario, VeterinarianMembership,
@@ -89,13 +90,17 @@ def veterinarian_with_clinic(app):
         clinic.owner_id = vet_user.id
         vet_user.clinica_id = clinic.id
         
+        # A ficha pública do veterinário só abre para quem está publicado e
+        # com assinatura ativa; sem isso o tutor recebe 404.
         vet_profile = Veterinario(
             user_id=vet_user.id,
             crmv="CRMV-SP 12345",
-            clinica_id=clinic.id
+            clinica_id=clinic.id,
+            public_visible=True,
         )
-        
+
         db.session.add(vet_profile)
+        ensure_veterinarian_membership(vet_profile)
         db.session.commit()
         
         return {
