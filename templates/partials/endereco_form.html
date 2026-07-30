@@ -283,6 +283,9 @@
       }
 
       mapContainer.classList.remove('d-none');
+      // Leaflet calcula o tamanho no momento da inicialização. Como o mapa
+      // começa oculto, aguardar o próximo frame evita o painel branco.
+      mapContainer.style.minHeight = '280px';
 
       loadLeafletAssets()
         .then(L => {
@@ -292,6 +295,8 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               maxZoom: 19,
               attribution: '&copy; OpenStreetMap contributors'
+            }).on('tileerror', () => {
+              setStatus('O mapa não pôde carregar as imagens agora. As coordenadas continuam salvas.', true);
             }).addTo(mapInstance);
 
             mapInstance.on('click', event => {
@@ -318,6 +323,7 @@
             mapInstance.removeLayer(mapMarker);
             mapMarker = null;
           }
+          requestAnimationFrame(() => mapInstance.invalidateSize());
         })
         .catch(() => {
           setStatus('Não foi possível carregar o mapa para ajustar a localização.', true);
@@ -648,7 +654,7 @@
     const cidadeField = addressCard?.querySelector('#cidade');
     const estadoField = addressCard?.querySelector('#estado');
 
-    const cep = cepField?.value?.replace(/\D/g, '') || '';
+      const cep = cepField?.value?.replace(/\D/g, '') || '';
     const rua = (ruaField?.value || '').trim();
     const numero = (numeroField?.value || '').trim();
     const complemento = (complementoField?.value || '').trim();
@@ -656,7 +662,7 @@
     const cidade = (cidadeField?.value || '').trim();
     const estado = (estadoField?.value || '').trim();
 
-    return { cep, rua, numero, complemento, bairro, cidade, estado };
+      return { cep, rua, numero, complemento, bairro, cidade, estado };
   }
 
   function buscarEnderecoPorCoordenadas(latitude, longitude) {
@@ -700,6 +706,11 @@
       }
 
       const payload = coletarDadosDoEndereco(addressCard);
+
+      if (payload.cep && (payload.cep.length !== 8 || payload.cep === '00000000')) {
+        reject(new Error('Informe um CEP válido para calcular a localização.'));
+        return;
+      }
 
       const hasData = Object.entries(payload).some(([key, value]) => {
         if (key === 'numero' || key === 'complemento') return false;
