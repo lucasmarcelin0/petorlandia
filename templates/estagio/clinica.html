@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Estágio supervisionado — {{ clinic.nome }}{% endblock %}
+
+{% block main %}
+<main class="container py-4" aria-labelledby="internship-title">
+  <div class="alert alert-warning border-0 shadow-sm" role="status">
+    <strong>Modo estágio supervisionado.</strong>
+    Você está acessando dados reais autorizados pela clínica. Você não possui CRMV próprio,
+    não assina documentos e não pode emitir receitas em seu nome.
+  </div>
+
+  <header class="mb-4">
+    <span class="badge text-bg-info">Estudante / estagiário</span>
+    <h1 id="internship-title" class="h3 mt-2">{{ clinic.nome }}</h1>
+    <p class="text-muted mb-0">
+      Acesso somente aos casos autorizados. Dados financeiros e configurações administrativas ficam ocultos.
+    </p>
+  </header>
+
+  <section class="card border-0 shadow-sm mb-4" aria-labelledby="supervisor-title">
+    <div class="card-body">
+      <h2 id="supervisor-title" class="h5">Responsável pela supervisão</h2>
+      {% if supervisor and supervisor.veterinario and supervisor.veterinario.pode_assinar %}
+      <p class="mb-0"><strong>{{ supervisor.name }}</strong> · CRMV {{ supervisor.veterinario.crmv_exibicao }}</p>
+      {% else %}
+      <p class="text-danger mb-0">Supervisor ainda não configurado. Não é possível emitir ou imprimir documentos.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section aria-labelledby="cases-title">
+    <h2 id="cases-title" class="h5 mb-3">Casos atribuídos</h2>
+    {% if cases %}
+    <div class="row g-3">
+      {% for case in cases %}
+      <article class="col-md-6">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h3 class="h6">{{ case.animal.name }}</h3>
+            <p class="small text-muted mb-3">Paciente autorizado para acompanhamento supervisionado.</p>
+            <span class="badge text-bg-light">Somente leitura</span>
+            {% if staff.can_draft_clinical_notes %}
+            <span class="badge text-bg-light">Rascunhos permitidos</span>
+            {% endif %}
+            <p class="small mt-3 mb-0">Solicite ao supervisor a revisão de qualquer anotação ou documento.</p>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card border-0 bg-light"><div class="card-body text-muted">Nenhum caso foi atribuído ainda.</div></div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

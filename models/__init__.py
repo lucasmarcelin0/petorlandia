@@ -1,6 +1,7 @@
 """Pacote de modelos com reexportações para compatibilidade."""
 
 from .base import *  # noqa: F401,F403
+from .clinica import ClinicInternshipCase, ClinicStaff  # noqa: F401
 from .base import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite, StorePaymentAccount, SiteFlag  # noqa: F401
 from .agenda import AgendaEvento, Appointment, ExamAppointment, PlantaoModelo, PlantonistaEscala, VetSchedule
 from .loja import (
@@ -127,6 +128,8 @@ __all__ = [
     "OrthancStudy",
     "ClinicInventory",
     "ClinicInventoryMovement",
+    "ClinicInternshipCase",
+    "ClinicStaff",
     "ProtocoloClinico",
     "ProtocoloClinicoExame",
     "ProtocoloClinicoMedicamento",

@@ -2,6 +2,7 @@
 {% set first_name = (current_user.name or '').split(' ')[0] if current_user.is_authenticated else '' %}
 {% set total_pending = (pending_exam_count|default(0)) + (pending_appointment_count|default(0)) %}
 {% set unread_total = unread_messages|default(0) %}
+{% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}
 
 <nav class="navbar navbar-expand-lg fixed-top navbar-light">
   <div class="container-fluid">
@@ -159,6 +160,13 @@
             {% endif %}
           </ul>
         </li>
+        {% if internship_roles %}
+        <li class="nav-item">
+          <a class="nav-link nav-link--primary" href="{{ url_for('student_internship_clinic', clinica_id=internship_roles[0].clinic_id) }}">
+            <i class="fas fa-user-graduate me-1 text-info"></i> Estágio supervisionado
+          </a>
+        </li>
+        {% endif %}
         {% elif current_user.worker == 'colaborador' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">

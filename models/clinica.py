@@ -313,6 +313,15 @@ class ClinicStaff(db.Model):
     can_manage_schedule = db.Column(db.Boolean, default=False)
     can_manage_inventory = db.Column(db.Boolean, default=False)
     can_view_full_calendar = db.Column(db.Boolean, default=True, nullable=False)
+    # Permissões específicas do modo estágio. O padrão é restritivo: o vínculo
+    # só ganha acesso a casos atribuídos e nunca pode assinar documentos.
+    is_intern = db.Column(db.Boolean, default=False, nullable=False)
+    internship_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    internship_ends_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    internship_supervisor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    can_view_all_patients = db.Column(db.Boolean, default=False, nullable=False)
+    can_draft_clinical_notes = db.Column(db.Boolean, default=True, nullable=False)
+    can_print_signed_documents = db.Column(db.Boolean, default=False, nullable=False)
 
     clinic = db.relationship(
         'Clinica',
@@ -322,7 +331,34 @@ class ClinicStaff(db.Model):
         'User',
         backref=db.backref('clinic_roles', cascade='all, delete-orphan'),
         passive_deletes=True,
+        foreign_keys=[user_id],
     )
+    internship_supervisor = db.relationship('User', foreign_keys=[internship_supervisor_id])
+
+    @property
+    def internship_active(self):
+        if not self.is_intern:
+            return False
+        now = utcnow()
+        return not self.internship_ends_at or self.internship_ends_at >= now
+
+
+class ClinicInternshipCase(db.Model):
+    """Vínculo explícito entre estagiário e paciente real autorizado."""
+
+    __tablename__ = 'clinic_internship_case'
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    intern_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='CASCADE'), nullable=False, index=True)
+    assigned_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    assigned_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    clinic = db.relationship('Clinica')
+    intern = db.relationship('User', foreign_keys=[intern_user_id])
+    animal = db.relationship('Animal')
+    assigned_by = db.relationship('User', foreign_keys=[assigned_by_id])
 
 
 class VetClinicInvite(db.Model):
@@ -454,4 +490,3 @@ class ClinicNotification(db.Model):
         'Clinica',
         backref=db.backref('clinic_notifications', cascade='all, delete-orphan', lazy=True),
     )
-

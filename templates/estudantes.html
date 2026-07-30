@@ -89,6 +89,24 @@
   </a>
 
   <div class="student-dashboard">
+    {% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list %}
+    {% if internship_roles %}
+    <section class="student-library mb-4" aria-labelledby="internship-clinics-title">
+      <div class="student-library__heading">
+        <div>
+          <span class="student-kicker">Acesso autorizado</span>
+          <h2 id="internship-clinics-title">Seus estágios</h2>
+          <p>Entre na clínica somente para acompanhar os casos que o responsável atribuiu a você.</p>
+        </div>
+      </div>
+      {% for role in internship_roles if role.internship_active %}
+      <a class="btn btn-outline-primary rounded-pill me-2 mb-2" href="{{ url_for('student_internship_clinic', clinica_id=role.clinic_id) }}">
+        {{ role.clinic.nome }} <i class="fa-solid fa-arrow-right ms-1" aria-hidden="true"></i>
+      </a>
+      {% endfor %}
+    </section>
+    {% endif %}
+
     <section class="student-library" aria-labelledby="student-library-title">
       <div class="student-library__heading">
         <div>

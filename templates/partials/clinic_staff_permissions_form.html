@@ -19,4 +19,10 @@
   {{ form.can_manage_inventory(class="form-check-input") }}
   {{ form.can_manage_inventory.label(class="form-check-label") }}
 </div>
+<hr>
+<p class="small text-muted mb-2">Modo estágio supervisionado</p>
+<div class="form-check">{{ form.is_intern(class="form-check-input") }} {{ form.is_intern.label(class="form-check-label") }}</div>
+<div class="form-check">{{ form.can_view_all_patients(class="form-check-input") }} {{ form.can_view_all_patients.label(class="form-check-label") }}</div>
+<div class="form-check">{{ form.can_draft_clinical_notes(class="form-check-input") }} {{ form.can_draft_clinical_notes.label(class="form-check-label") }}</div>
+<div class="form-check">{{ form.can_print_signed_documents(class="form-check-input") }} {{ form.can_print_signed_documents.label(class="form-check-label") }}</div>
 {{ form.submit(class="btn btn-primary mt-3") }}

@@ -1,6 +1,7 @@
 """Views do domínio site_routes (migrado do app.py)."""
 from flask import Blueprint
 import os, re, requests
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta, timezone
 from extensions import csrf, db, limiter
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
@@ -22,6 +23,8 @@ from models import (
     Vacina,
     VacinaModelo,
     Veterinario,
+    ClinicInternshipCase,
+    ClinicStaff,
 )
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
@@ -1132,6 +1135,34 @@ def student_practice_stage(stage_key):
         stages=STUDENT_PRACTICE_STAGES,
         stage=stage,
         stage_index=stage_index,
+    )
+
+
+@bp.route('/estagio/clinica/<int:clinica_id>')
+@login_required
+def student_internship_clinic(clinica_id):
+    """Read-only real-clinic view for an active, explicitly authorized intern."""
+    from models import Clinica
+
+    clinic = Clinica.query.get_or_404(clinica_id)
+    staff = ClinicStaff.query.filter_by(
+        clinic_id=clinic.id, user_id=current_user.id, is_intern=True
+    ).first_or_404()
+    if not staff.internship_active:
+        abort(403)
+    if staff.can_view_all_patients:
+        cases = [SimpleNamespace(animal=animal) for animal in Animal.query.filter_by(clinica_id=clinic.id).filter(Animal.removido_em.is_(None)).order_by(Animal.name).all()]
+    else:
+        cases = ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=current_user.id, revoked_at=None
+        ).order_by(ClinicInternshipCase.assigned_at.desc()).all()
+    track_event('student_internship_clinic_viewed', clinic_id=clinic.id)
+    return render_template(
+        'estagio/clinica.html',
+        clinic=clinic,
+        staff=staff,
+        cases=cases,
+        supervisor=getattr(staff, 'internship_supervisor', None),
     )
 
 

@@ -21,6 +21,7 @@ from models import (
     ClinicHours,
     ClinicInventoryItem,
     ClinicInventoryMovement,
+    ClinicInternshipCase,
     ClinicStaff,
     Clinica,
     Consulta,
@@ -598,7 +599,14 @@ def clinic_detail(clinica_id):
             if staff:
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
+                is_intern = getattr(user, 'worker', None) == 'estudante'
+                staff = ClinicStaff(
+                    clinic_id=clinica.id,
+                    user_id=user.id,
+                    is_intern=is_intern,
+                    internship_started_at=utcnow() if is_intern else None,
+                    internship_supervisor_id=current_user.id if is_intern and has_veterinarian_profile(current_user) else None,
+                )
                 db.session.add(staff)
                 user.clinica_id = clinica.id
                 if getattr(user, 'veterinario', None):
@@ -802,6 +810,9 @@ def clinic_detail(clinica_id):
                 abort(403)
             form.populate_obj(s)
             s.user_id = s.user.id
+            if s.is_intern and not s.internship_supervisor_id and has_veterinarian_profile(current_user):
+                s.internship_supervisor_id = current_user.id
+                s.internship_started_at = s.internship_started_at or utcnow()
             db.session.add(s)
             # Atualiza visão de agenda do colaborador
             new_view = form.appointments_view.data or None
@@ -2332,7 +2343,14 @@ def clinic_staff(clinica_id):
                     return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
+                is_intern = getattr(user, 'worker', None) == 'estudante'
+                staff = ClinicStaff(
+                    clinic_id=clinic.id,
+                    user_id=user.id,
+                    is_intern=is_intern,
+                    internship_started_at=utcnow() if is_intern else None,
+                    internship_supervisor_id=current_user.id if is_intern and has_veterinarian_profile(current_user) else None,
+                )
                 db.session.add(staff)
                 user.clinica_id = clinic.id
                 if has_veterinarian_profile(user):
@@ -2406,6 +2424,9 @@ def clinic_staff_permissions(clinica_id, user_id):
     if form.validate_on_submit():
         form.populate_obj(staff)
         staff.user_id = user_id
+        if staff.is_intern and not staff.internship_supervisor_id and has_veterinarian_profile(current_user):
+            staff.internship_supervisor_id = current_user.id
+            staff.internship_started_at = staff.internship_started_at or utcnow()
         db.session.add(staff)
         user.clinica_id = clinic.id
         db.session.add(user)
@@ -2419,6 +2440,49 @@ def clinic_staff_permissions(clinica_id, user_id):
         html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
         return jsonify(success=True, html=html)
     return render_template('clinica/clinic_staff_permissions.html', form=form, clinic=clinic)
+
+
+@bp.route('/clinica/<int:clinica_id>/estagio/<int:user_id>/casos', methods=['GET', 'POST'])
+@login_required
+def clinic_internship_cases(clinica_id, user_id):
+    """Owner-controlled assignment of real patients to an intern."""
+    clinic = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinic.owner_id):
+        abort(403)
+    student = User.query.get_or_404(user_id)
+    staff = ClinicStaff.query.filter_by(
+        clinic_id=clinic.id, user_id=student.id, is_intern=True
+    ).first_or_404()
+    animals = Animal.query.filter_by(clinica_id=clinic.id).filter(Animal.removido_em.is_(None)).order_by(Animal.name).all()
+    if request.method == 'POST':
+        selected_ids = {int(value) for value in request.form.getlist('animal_ids') if value.isdigit()}
+        current = ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=student.id, revoked_at=None
+        ).all()
+        for case in current:
+            if case.animal_id not in selected_ids:
+                case.revoked_at = utcnow()
+        existing = {case.animal_id for case in current}
+        for animal in animals:
+            if animal.id in selected_ids and animal.id not in existing:
+                db.session.add(ClinicInternshipCase(
+                    clinic_id=clinic.id,
+                    intern_user_id=student.id,
+                    animal_id=animal.id,
+                    assigned_by_id=current_user.id,
+                ))
+        db.session.commit()
+        flash('Casos do estágio atualizados.', 'success')
+        return redirect(url_for('clinic_staff', clinica_id=clinic.id))
+    assigned = {
+        case.animal_id for case in ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=student.id, revoked_at=None
+        ).all()
+    }
+    return render_template(
+        'clinica/clinic_internship_cases.html',
+        clinic=clinic, student=student, staff=staff, animals=animals, assigned=assigned,
+    )
 
 
 @bp.route("/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove", methods=["POST"])
