@@ -471,6 +471,21 @@ def test_chatgpt_cached_oidc_scope_is_expanded_to_clinical_consent_and_token(app
 
 def test_chatgpt_dynamic_client_connector_redirect_reaches_clinical_consent(app, client):
     redirect_uri = 'https://chatgpt.com/connector/oauth/petorlandia-callback-123'
+    # O login vem antes de qualquer request: com sessão server-side, um
+    # `session_transaction` aplicado depois que o cliente já trocou cookies
+    # grava numa sessão que a request seguinte não lê, e o usuário chega
+    # anônimo ao /oauth/authorize.
+    with app.app_context():
+        user = User(name='Dr. Connector', email='chatgpt-connector@example.com', role='veterinario', worker='veterinario')
+        user.set_password('secret123')
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-CONNECTOR'))
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+
     registration = client.post(
         '/oauth/register',
         json={
@@ -486,16 +501,6 @@ def test_chatgpt_dynamic_client_connector_redirect_reaches_clinical_consent(app,
     assert registration.status_code == 201
     client_id = registration.get_json()['client_id']
 
-    with app.app_context():
-        user = User(name='Dr. Connector', email='chatgpt-connector@example.com', role='veterinario', worker='veterinario')
-        user.set_password('secret123')
-        db.session.add(user)
-        db.session.flush()
-        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-CONNECTOR'))
-        db.session.commit()
-        user_id = user.id
-
-    _login(client, user_id)
     consent_response = client.get(
         '/oauth/authorize',
         query_string={
@@ -519,6 +524,16 @@ def test_chatgpt_dynamic_client_connector_redirect_reaches_clinical_consent(app,
 
 def test_chatgpt_dynamic_client_gives_tutor_own_record_scopes_without_vet_scopes(app, client):
     redirect_uri = 'https://chatgpt.com/connector/oauth/petorlandia-tutor-callback'
+    # Login antes do primeiro request — ver comentário no teste acima.
+    with app.app_context():
+        user = User(name='Tutor Connector', email='tutor-connector@example.com', role='adotante')
+        user.set_password('secret123')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+
     registration = client.post(
         '/oauth/register',
         json={
@@ -533,14 +548,6 @@ def test_chatgpt_dynamic_client_gives_tutor_own_record_scopes_without_vet_scopes
     )
     client_id = registration.get_json()['client_id']
 
-    with app.app_context():
-        user = User(name='Tutor Connector', email='tutor-connector@example.com', role='adotante')
-        user.set_password('secret123')
-        db.session.add(user)
-        db.session.commit()
-        user_id = user.id
-
-    _login(client, user_id)
     consent_response = client.get(
         '/oauth/authorize',
         query_string={

@@ -159,10 +159,12 @@ def test_checkout_uses_connected_store_token_and_marketplace_fee(app, client, mo
 
         assert resp.status_code == 302, resp.get_data(as_text=True)
         assert captured["token"] == "seller-token"
-        # Comprador paga o preço público (110); lojista recebe 100; plataforma 10.
+        # A taxa é 10% do preço final, não 10% em cima do repasse: o preço
+        # público é repasse / 0,90 (100 / 0,90 = 111,11) e a plataforma fica
+        # com 11,11, deixando exatamente 100 para o lojista.
         product_item = next(i for i in captured["payload"]["items"] if i["id"] == str(product.id))
-        assert product_item["unit_price"] == 110.0
-        assert captured["payload"]["marketplace_fee"] == 10.0
+        assert product_item["unit_price"] == 111.11
+        assert captured["payload"]["marketplace_fee"] == 11.11
 
 
 def test_checkout_reprices_stale_cart_items(app, client, monkeypatch):
@@ -230,9 +232,9 @@ def test_checkout_reprices_stale_cart_items(app, client, monkeypatch):
 
         assert resp.status_code == 302, resp.get_data(as_text=True)
         product_item = next(i for i in captured["payload"]["items"] if i["id"] == str(product.id))
-        assert product_item["unit_price"] == 110.0
-        assert captured["payload"]["marketplace_fee"] == 10.0
-        assert float(stale_item.unit_price) == 110.0
+        assert product_item["unit_price"] == 111.11
+        assert captured["payload"]["marketplace_fee"] == 11.11
+        assert float(stale_item.unit_price) == 111.11
 
 
 def test_renew_due_store_accounts_refreshes_expiring_token(app, monkeypatch):

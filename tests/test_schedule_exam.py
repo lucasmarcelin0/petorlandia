@@ -8,7 +8,7 @@ import flask_login.utils as login_utils
 from app import app as flask_app, db, BR_TZ
 from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento, Message
 from datetime import datetime, time, date, timezone
-from helpers import get_available_times
+from helpers import ensure_veterinarian_membership, get_available_times
 
 
 @pytest.fixture
@@ -36,12 +36,15 @@ def setup_data():
     tutor.set_password('x')
     vet_user = User(name='Vet', email='v@test', worker='veterinario')
     vet_user.set_password('x')
-    vet = Veterinario(user=vet_user, crmv='123', clinica=clinic)
+    vet = Veterinario(user=vet_user, crmv='123', clinica=clinic, public_visible=True)
     spec = Specialty(nome='Raio-X')
     vet.specialties.append(spec)
     schedule = VetSchedule(veterinario=vet, dia_semana='Segunda', hora_inicio=time(9,0), hora_fim=time(17,0))
     animal = Animal(name='Rex', owner=tutor, clinica=clinic)
     db.session.add_all([clinic, tutor, vet_user, vet, spec, schedule, animal])
+    # Só veterinário com assinatura ativa é ofertado publicamente; sem isso o
+    # agendamento feito por um tutor de fora da clínica responde 404.
+    ensure_veterinarian_membership(vet)
     db.session.commit()
     return tutor.id, vet_user.id, animal.id, vet.id
 

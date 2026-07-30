@@ -133,11 +133,13 @@ class TestAuthentication:
     
     def test_protected_routes_require_login(self, client):
         """All protected routes should redirect to login."""
+        # /loja saiu da lista de propósito: o catálogo virou vitrine pública
+        # (ver test_routes.py::test_loja_catalog_is_public). O que continua
+        # protegido é o carrinho, que expõe dados da pessoa.
         protected_routes = [
             '/profile',
             '/add-animal',
             '/meus-animais',
-            '/loja',
             '/appointments',
             '/carrinho'
         ]

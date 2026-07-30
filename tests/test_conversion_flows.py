@@ -124,7 +124,7 @@ def test_estudante_acompanha_fluxo_completo_em_ambiente_ficticio(app, client):
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Modo de prática segura" in html
+    assert "Área profissional · modo estudante" in html
     assert "Paciente fictício" in html
     assert "Somente leitura" in html
     assert "Sem doses ou prescrições" in html

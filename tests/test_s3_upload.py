@@ -2,11 +2,23 @@ import os
 import shutil
 import sys
 from io import BytesIO
+
+import pytest
 from werkzeug.datastructures import FileStorage
 from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _app_context():
+    """``upload_to_s3`` lê ``current_app.config``; sem contexto de aplicação o
+    helper cai no ``except`` e devolve ``None`` antes de chegar ao S3.
+    """
+    with app.app.app_context():
+        app.app.config["TESTING"] = True
+        yield
 
 
 def test_upload_to_s3_uses_content_type(monkeypatch):

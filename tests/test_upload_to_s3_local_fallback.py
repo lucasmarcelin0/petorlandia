@@ -1,11 +1,24 @@
 import os
 import sys
 from io import BytesIO
+
+import pytest
 from PIL import Image
 from werkzeug.datastructures import FileStorage
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _app_context():
+    """``upload_to_s3`` lê ``current_app.config`` (limite de tamanho e permissão
+    do fallback local). Sem contexto de aplicação o helper cai no ``except`` e
+    devolve ``None``, e o teste falha por um motivo que não é o que ele mede.
+    """
+    with app.app.app_context():
+        app.app.config["TESTING"] = True
+        yield
 
 
 def test_upload_to_s3_falls_back_to_local(tmp_path, monkeypatch):
