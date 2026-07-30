@@ -110,3 +110,97 @@ def test_numero_por_extenso(valor, esperado):
 
 def test_numero_desconhecido_nao_quebra():
     assert _com_extenso(137) == "137"
+
+
+# --- integração: os dois casos que travaram em produção ---------------------
+#
+# Depois da primeira correção o painel piorou: o shampoo virou "Dose calculada
+# sem apresentacao pratica" e a pomada continuou em "Sem dose estruturada".
+# Eram dois caminhos diferentes de saída antecipada, ambos irrelevantes para
+# formas tópicas. Estes testes exercem build_clinical_plan de ponta a ponta.
+
+import os
+
+os.environ.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory:")
+
+from app import app as flask_app, db  # noqa: E402
+from models import (  # noqa: E402
+    Animal, Clinica, Consulta, Medicamento, ProtocoloClinico,
+    ProtocoloClinicoMedicamento, User, Veterinario,
+)
+from models.base import ApresentacaoMedicamento, Species  # noqa: E402
+from services.clinical_plan import READY, build_clinical_plan  # noqa: E402
+
+
+def _cenario(nome_medicamento, dosagem_texto, *, com_apresentacao_incompativel=False):
+    """Monta consulta + protocolo com um único medicamento tópico."""
+    db.drop_all()
+    db.create_all()
+    clinic = Clinica(id=1, nome="Clinica Dermato")
+    tutor = User(id=1, name="Tutor", email="tutor-topico@test")
+    tutor.set_password("x")
+    vet_user = User(id=2, name="Vet", email="vet-topico@test", worker="veterinario")
+    vet_user.set_password("x")
+    vet = Veterinario(id=1, user_id=vet_user.id, crmv="123", clinica_id=clinic.id)
+    species = Species(id=1, name="Cachorro")
+    animal = Animal(id=1, name="Nina", user_id=tutor.id, clinica_id=clinic.id,
+                    species=species, peso=7.2)
+    consulta = Consulta(id=1, animal=animal, created_by=vet_user.id,
+                        clinica_id=clinic.id, status="in_progress")
+    med = Medicamento(id=50, nome=nome_medicamento, classificacao="Dermatologico",
+                      via_administracao="Topica", created_by=vet_user.id)
+    db.session.add_all([clinic, tutor, vet_user, vet, species, animal, consulta, med])
+    db.session.flush()
+    if com_apresentacao_incompativel:
+        # Exatamente o dado que gerava "8 gotas - 50 g pomada": apresentação em
+        # pomada pendurada num produto que é frasco de shampoo.
+        db.session.add(ApresentacaoMedicamento(
+            id=1, medicamento=med, forma="Pomada", concentracao="50 g",
+            concentracao_valor=50, concentracao_unidade="g",
+            volume_valor=50, volume_unidade="g",
+            nome_comercial="Furanil Pomada", fabricante="Vetnil",
+        ))
+    protocolo = ProtocoloClinico(id=1, nome="Protocolo Inicial para Dermatites",
+                                 suspeita_principal="dermatite",
+                                 clinica_id=clinic.id, created_by=vet_user.id)
+    db.session.add(protocolo)
+    db.session.flush()
+    db.session.add(ProtocoloClinicoMedicamento(
+        protocolo_id=protocolo.id, nome_medicamento=nome_medicamento,
+        medicamento=med, dosagem_texto=dosagem_texto, prioridade=1,
+    ))
+    db.session.commit()
+    return consulta, protocolo
+
+
+def test_shampoo_sem_apresentacao_compativel_fica_pronto(app):
+    """Antes: "Dose calculada sem apresentacao pratica" + "7,5 gota(s)"."""
+    with flask_app.app_context():
+        consulta, protocolo = _cenario(
+            "Shampoo de clorexidina - 0,20%, frasco (500mL)",
+            "Aplicar sobre a pelagem",
+            com_apresentacao_incompativel=True,
+        )
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+        med = plan["medications"][0]
+
+        assert med["status"] == READY, med.get("status_label")
+        assert med["calculation"]["dose_pratica"] == _INSTRUCAO_SHAMPOO
+        assert "gota" not in med["calculation"]["posologia_pratica"]
+        assert med["draft_prescription"]["dosagem"] == _INSTRUCAO_SHAMPOO
+
+
+def test_pomada_sem_dose_estruturada_fica_pronta(app):
+    """Antes: saía cedo em "Sem dose estruturada" e nunca via a instrução."""
+    with flask_app.app_context():
+        consulta, protocolo = _cenario(
+            "Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g Generico C",
+            "Aplicar uma camada fina sobre a area afetada",
+        )
+        plan = build_clinical_plan(consulta, protocolo, session=db.session)
+        med = plan["medications"][0]
+
+        assert med["status"] == READY, med.get("status_label")
+        assert med["calculation"]["dose_pratica"] == _instrucao_pomada()
+        assert "12 (doze)" in med["calculation"]["posologia_pratica"]
+        assert med["draft_prescription"]["dosagem"] == _instrucao_pomada()

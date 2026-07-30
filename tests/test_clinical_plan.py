@@ -415,7 +415,12 @@ def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
         assert med["calculation"]["frequencia"] == ""
         assert med["calculation"]["duracao"] == ""
         assert med["calculation"]["posologia_pratica"] == instrucao_pomada
-        assert med["calculation"]["apresentacao_pratica"]["presentation"]["forma"] == "Pomada"
+        # Formas tópicas não carregam mais apresentação "prática": o seletor de
+        # apresentação era a origem de "8 gotas — 50 g pomada - Furanil®" (dose
+        # em gotas colada num produto diferente). O nome do item já traz a
+        # apresentação, e a instrução não depende dela.
+        assert med["calculation"]["apresentacao_pratica"] is None
+        assert med["calculation"]["apresentacao_opcoes"] == []
         assert med["draft_prescription"]["dosagem"] == instrucao_pomada
         assert med["draft_prescription"]["frequencia"] == ""
         assert med["draft_prescription"]["duracao"] == ""
