@@ -1414,6 +1414,7 @@ def tutores():
         cidade = request.form.get('cidade')
         estado = request.form.get('estado')
 
+        has_address = any((value or '').strip() for value in (cep, rua, numero, complemento, bairro, cidade, estado))
         required_address_labels = {
             'rua': 'Rua',
             'cidade': 'Cidade',
@@ -1425,27 +1426,25 @@ def tutores():
             if not (request.form.get(key) or '').strip()
         ]
 
-        if required_missing:
+        if has_address and required_missing:
             message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(required_missing) + '.'
             if wants_json:
                 return jsonify(success=False, message=message, category='warning'), 400
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
-        endereco = Endereco(
-            cep=cep,
-            rua=rua,
-            numero=numero,
-            complemento=complemento,
-            bairro=bairro,
-            cidade=cidade,
-            estado=estado
-        )
-        if not _update_coordinates_from_request(endereco):
-            _geocode_endereco(endereco)
-        db.session.add(endereco)
-        db.session.flush()
-        novo.endereco_id = endereco.id
+        if has_address:
+            endereco = Endereco(
+                cep=cep, rua=rua, numero=numero, complemento=complemento,
+                bairro=bairro, cidade=cidade, estado=estado,
+            )
+            cep_digits = ''.join(char for char in (cep or '') if char.isdigit())
+            has_complete_cep = len(cep_digits) == 8 and cep_digits != '00000000'
+            if not _update_coordinates_from_request(endereco) and has_complete_cep:
+                _geocode_endereco(endereco)
+            db.session.add(endereco)
+            db.session.flush()
+            novo.endereco_id = endereco.id
 
         # Foto
         if 'image' in request.files and request.files['image'].filename:

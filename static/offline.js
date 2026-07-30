@@ -309,6 +309,12 @@
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
 
+    if (form.dataset.syncPending === 'true') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+
     const submitButton = getSubmitButton(form);
     const feedback = window.FormFeedback;
 
@@ -327,6 +333,7 @@
     }
 
     ev.preventDefault();
+    form.dataset.syncPending = 'true';
     const performSync = async () => {
       const data = new FormData(form);
       const fetchTimeout = resolveFetchTimeout(form);
@@ -395,7 +402,10 @@
         showFormMessage(form, fallback, 'danger');
       }
 
-      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
+      if (!isSuccess) {
+        return { success: false, message: mainMessage, level: category, offlineQueued: false };
+      }
+      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: true}, cancelable: true});
       if (offlineQueued) {
         evt.preventDefault();
       }
@@ -426,6 +436,8 @@
       console.error('Erro ao enviar formulário:', error);
       showToast(errorMessage, 'danger');
       setFeedbackIdle(submitButton);
+    } finally {
+      delete form.dataset.syncPending;
     }
   });
 
