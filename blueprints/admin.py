@@ -41,6 +41,7 @@ from models import (
     CasaDeRacao,
     Clinica,
     PartnerInvite,
+    PropostaProtocoloClinico,
     ProductEvent,
     User,
     Veterinario,
@@ -217,6 +218,85 @@ def admin_notification_resolve(notification_id):
         db.session.commit()
         _invalidate_admin_action_cache(current_user.id)
     return redirect(request.referrer or url_for('admin_notifications'))
+
+
+@bp.route("/admin/propostas-protocolos", methods=["GET"])
+@login_required
+def admin_protocol_proposals():
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+
+    status = (request.args.get('status') or 'pending_review').strip().lower()
+    allowed_statuses = {'pending_review', 'in_review', 'converted', 'archived', 'all'}
+    if status not in allowed_statuses:
+        status = 'pending_review'
+
+    query = PropostaProtocoloClinico.query
+    if status != 'all':
+        query = query.filter(PropostaProtocoloClinico.status == status)
+    proposals = (
+        query
+        .order_by(PropostaProtocoloClinico.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    counts = dict(
+        db.session.query(
+            PropostaProtocoloClinico.status,
+            func.count(PropostaProtocoloClinico.id),
+        )
+        .group_by(PropostaProtocoloClinico.status)
+        .all()
+    )
+    return render_template(
+        'admin/protocol_proposals.html',
+        proposals=proposals,
+        counts=counts,
+        status=status,
+    )
+
+
+@bp.route("/admin/propostas-protocolos/<int:proposal_id>/iniciar-revisao", methods=["POST"])
+@login_required
+def admin_start_protocol_proposal_review(proposal_id):
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+
+    proposal = PropostaProtocoloClinico.query.get_or_404(proposal_id)
+    if proposal.status == 'pending_review':
+        proposal.status = 'in_review'
+        proposal.reviewed_by = current_user.id
+        proposal.reviewed_at = now_in_brazil()
+        affected_admin_ids = [
+            row[0]
+            for row in db.session.query(AdminActionNotification.recipient_user_id)
+            .filter(
+                AdminActionNotification.entity_type == 'protocol_proposal',
+                AdminActionNotification.entity_id == proposal.id,
+                AdminActionNotification.status.in_(['unread', 'read']),
+            )
+            .distinct()
+            .all()
+        ]
+        AdminActionNotification.query.filter(
+            AdminActionNotification.entity_type == 'protocol_proposal',
+            AdminActionNotification.entity_id == proposal.id,
+            AdminActionNotification.status.in_(['unread', 'read']),
+        ).update({
+            AdminActionNotification.status: 'resolved',
+            AdminActionNotification.read_at: now_in_brazil(),
+            AdminActionNotification.resolved_at: now_in_brazil(),
+            AdminActionNotification.resolved_by_id: current_user.id,
+        }, synchronize_session=False)
+        db.session.commit()
+        for admin_id in affected_admin_ids:
+            _invalidate_admin_action_cache(admin_id)
+        flash('Sugestão marcada como em revisão.', 'success')
+    elif proposal.status == 'in_review':
+        flash('Esta sugestão já está em revisão.', 'info')
+    else:
+        flash('Esta sugestão não está mais aguardando revisão.', 'warning')
+    return redirect(url_for('admin_protocol_proposals', status='in_review', _anchor=f'proposal-{proposal.id}'))
 
 
 @bp.route("/admin/users/<int:user_id>/promover_veterinario", methods=["POST"])
@@ -591,4 +671,3 @@ def admin_criar_convite():
     else:
         flash('Convite criado. Envie o link pelo WhatsApp ou copie e compartilhe.', 'success')
     return redirect(url_for('admin_parcerias'))
-

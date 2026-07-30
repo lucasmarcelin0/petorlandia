@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from extensions import db
 from models import (
+    AdminActionNotification,
     Animal,
     AuditoriaSugestaoClinica,
     Clinica,
@@ -194,6 +195,203 @@ def test_protocol_proposal_queue_is_scoped_to_consultation_clinic(
     assert [item['titulo'] for item in proposals] == ['Proposta visível']
 
 
+def test_author_can_edit_pending_protocol_proposal(app, client, monkeypatch):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    with app.app_context():
+        proposal = PropostaProtocoloClinico(
+            clinica_id=clinic_id,
+            consulta_id=consultation_id,
+            created_by=user_id,
+            titulo='Proposta original',
+            categoria='doenca',
+            conteudo_livre='Conduta original.',
+        )
+        db.session.add(proposal)
+        db.session.commit()
+        proposal_id = proposal.id
+
+    _login(monkeypatch, _fake_vet(user_id, vet_id, clinic_id))
+    response = client.put(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas/{proposal_id}',
+        json={
+            'titulo': 'Proposta revisada pelo autor',
+            'categoria': 'conduta',
+            'especie': 'cao',
+            'conteudo_livre': 'Conduta revisada.',
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()['proposal']['can_manage'] is True
+    with app.app_context():
+        proposal = PropostaProtocoloClinico.query.get(proposal_id)
+        assert proposal.titulo == 'Proposta revisada pelo autor'
+        assert AuditoriaSugestaoClinica.query.filter_by(
+            tipo_item='protocol_proposal',
+            acao='updated',
+        ).count() == 1
+
+
+def test_other_veterinarian_cannot_edit_or_archive_proposal(app, client, monkeypatch):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    with app.app_context():
+        other_user = User(name='Outra veterinária', email='outra-vet@test', worker='veterinario')
+        other_user.set_password('x')
+        db.session.add(other_user)
+        db.session.flush()
+        other_vet = Veterinario(user_id=other_user.id, crmv='54321', clinica_id=clinic_id)
+        db.session.add(other_vet)
+        db.session.flush()
+        proposal = PropostaProtocoloClinico(
+            clinica_id=clinic_id,
+            consulta_id=consultation_id,
+            created_by=user_id,
+            titulo='Proposta protegida',
+            categoria='doenca',
+            conteudo_livre='Conteúdo protegido.',
+        )
+        db.session.add(proposal)
+        db.session.commit()
+        proposal_id = proposal.id
+        other_user_id = other_user.id
+        other_vet_id = other_vet.id
+
+    _login(monkeypatch, _fake_vet(other_user_id, other_vet_id, clinic_id))
+    update_response = client.put(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas/{proposal_id}',
+        json={
+            'titulo': 'Tentativa indevida',
+            'categoria': 'doenca',
+            'conteudo_livre': 'Tentativa.',
+        },
+    )
+    delete_response = client.delete(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas/{proposal_id}',
+    )
+
+    assert update_response.status_code == 403
+    assert delete_response.status_code == 403
+
+
+def test_author_archives_proposal_and_resolves_admin_alert(app, client, monkeypatch):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    with app.app_context():
+        admin = User(name='Admin', email='admin-proposta@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.flush()
+        proposal = PropostaProtocoloClinico(
+            clinica_id=clinic_id,
+            consulta_id=consultation_id,
+            created_by=user_id,
+            titulo='Proposta removível',
+            categoria='doenca',
+            conteudo_livre='Conteúdo removível.',
+        )
+        db.session.add(proposal)
+        db.session.flush()
+        note = AdminActionNotification(
+            recipient_user_id=admin.id,
+            event_type='clinical_protocol_proposal',
+            entity_type='protocol_proposal',
+            entity_id=proposal.id,
+            title='Nova sugestão',
+            priority='normal',
+            status='unread',
+            idempotency_key=f'clinical_protocol_proposal:protocol_proposal:{proposal.id}',
+        )
+        db.session.add(note)
+        db.session.commit()
+        proposal_id = proposal.id
+
+    _login(monkeypatch, _fake_vet(user_id, vet_id, clinic_id))
+    response = client.delete(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas/{proposal_id}',
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        assert PropostaProtocoloClinico.query.get(proposal_id).status == 'archived'
+        assert AdminActionNotification.query.one().status == 'resolved'
+
+
+def test_new_proposal_notifies_admin_with_review_link(app, client, monkeypatch):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    with app.app_context():
+        admin = User(name='Admin', email='admin-alerta@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+
+    _login(monkeypatch, _fake_vet(user_id, vet_id, clinic_id))
+    response = client.post(
+        f'/consulta/{consultation_id}/sugestoes_clinicas/propostas',
+        json={
+            'titulo': 'Sugestão para o admin',
+            'categoria': 'sintoma',
+            'conteudo_livre': 'Avaliar esta proposta.',
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        note = AdminActionNotification.query.one()
+        assert note.event_type == 'clinical_protocol_proposal'
+        assert note.entity_type == 'protocol_proposal'
+        assert '/admin/propostas-protocolos#proposal-' in note.url
+
+
+def test_admin_can_open_queue_and_start_review(app, client, monkeypatch):
+    consultation_id, clinic_id, user_id, vet_id = _seed_consultation(app)
+    with app.app_context():
+        admin = User(name='Admin revisor', email='admin-revisor@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.flush()
+        proposal = PropostaProtocoloClinico(
+            clinica_id=clinic_id,
+            consulta_id=consultation_id,
+            created_by=user_id,
+            titulo='Proposta para revisar',
+            categoria='conduta',
+            conteudo_livre='Revisar a conduta sugerida.',
+        )
+        db.session.add(proposal)
+        db.session.flush()
+        note = AdminActionNotification(
+            recipient_user_id=admin.id,
+            event_type='clinical_protocol_proposal',
+            entity_type='protocol_proposal',
+            entity_id=proposal.id,
+            title='Nova sugestão',
+            priority='normal',
+            status='unread',
+            idempotency_key=f'clinical_protocol_proposal:protocol_proposal:{proposal.id}',
+        )
+        db.session.add(note)
+        db.session.commit()
+        proposal_id = proposal.id
+        admin_id = admin.id
+
+    with app.app_context():
+        admin = db.session.get(User, admin_id)
+        _login(monkeypatch, admin)
+        queue_response = client.get('/admin/propostas-protocolos')
+        review_response = client.post(
+            f'/admin/propostas-protocolos/{proposal_id}/iniciar-revisao',
+            data={},
+        )
+
+    assert queue_response.status_code == 200
+    assert 'Proposta para revisar' in queue_response.get_data(as_text=True)
+    assert review_response.status_code == 302
+    with app.app_context():
+        proposal = db.session.get(PropostaProtocoloClinico, proposal_id)
+        assert proposal.status == 'in_review'
+        assert proposal.reviewed_by == admin_id
+        assert AdminActionNotification.query.one().status == 'resolved'
+
+
 def test_clinical_panel_renders_free_text_proposal_experience(app):
     with app.test_request_context('/consulta/1'):
         html = render_template(
@@ -206,4 +404,6 @@ def test_clinical_panel_renders_free_text_proposal_experience(app):
     assert 'Conte sua ideia livremente' in html
     assert 'Enviar para revisão' in html
     assert 'data-proposal-url="/consulta/1/sugestoes_clinicas/propostas"' in html
+    assert 'data-proposal-item-url-template="/consulta/1/sugestoes_clinicas/propostas/0"' in html
+    assert 'cancel-clinical-proposal-edit' in html
     assert 'A proposta não será' in html
