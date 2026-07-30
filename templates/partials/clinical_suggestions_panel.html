@@ -7,6 +7,7 @@
   data-feedback-url="{{ url_for('registrar_feedback_sugestao_clinica', consulta_id=consulta.id) }}"
   data-create-url="{{ url_for('criar_protocolo_clinico_inline', consulta_id=consulta.id) }}"
   data-proposal-url="{{ url_for('criar_proposta_protocolo_clinico', consulta_id=consulta.id) }}"
+  data-proposal-item-url-template="{{ url_for('atualizar_proposta_protocolo_clinico', consulta_id=consulta.id, proposal_id=0) }}"
   data-protocol-detail-url-template="{{ url_for('obter_protocolo_clinico_inline', consulta_id=consulta.id, protocol_id=0) }}"
   data-protocol-update-url-template="{{ url_for('atualizar_protocolo_clinico_inline', consulta_id=consulta.id, protocol_id=0) }}"
 >
@@ -617,6 +618,7 @@
           </div>
 
           <form id="clinical-proposal-form" class="clinical-form" novalidate>
+            <input id="proposal-id" name="proposal_id" type="hidden" value="">
             <div class="clinical-form-grid">
               <div>
                 <label class="clinical-field-label" for="proposal-title">Título ou tema</label>
@@ -669,9 +671,14 @@
               <p class="clinical-soft-note">
                 A sugestão ficará vinculada somente a esta clínica e com status “Aguardando revisão”.
               </p>
-              <button type="submit" class="clinical-btn active" id="submit-clinical-proposal">
-                <i class="bi bi-send me-1"></i>Enviar para revisão
-              </button>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="clinical-btn clinical-btn-secondary d-none" id="cancel-clinical-proposal-edit">
+                  Cancelar edição
+                </button>
+                <button type="submit" class="clinical-btn active" id="submit-clinical-proposal">
+                  <i class="bi bi-send me-1"></i><span>Enviar para revisão</span>
+                </button>
+              </div>
             </div>
           </form>
 
@@ -916,12 +923,15 @@
     const proposalListEl = document.getElementById('clinical-proposals-list');
     const proposalContentField = document.getElementById('proposal-content');
     const proposalCharacterCount = document.getElementById('proposal-character-count');
+    const proposalIdField = document.getElementById('proposal-id');
+    const proposalCancelEditButton = document.getElementById('cancel-clinical-proposal-edit');
 
     let currentMode = 'suggestions';
     let currentProtocolLevel = 'v1';
     let editingProtocolId = null;
     let currentProtocolFormMode = 'create';
     let proposalsLoaded = false;
+    const protocolProposals = new Map();
     const calculatedClinicalPlans = new Map();
 
     const suspicionField = document.getElementById('suspeita-clinica');
@@ -1454,6 +1464,19 @@
       }).format(parsed);
     }
 
+    function proposalItemUrl(proposalId) {
+      return String(panel.dataset.proposalItemUrlTemplate || '').replace(/\/0$/, `/${proposalId}`);
+    }
+
+    function resetProposalForm() {
+      proposalForm?.reset();
+      if (proposalIdField) proposalIdField.value = '';
+      proposalCancelEditButton?.classList.add('d-none');
+      const submitLabel = proposalSubmitButton?.querySelector('span');
+      if (submitLabel) submitLabel.textContent = 'Enviar para revisão';
+      updateProposalCharacterCount();
+    }
+
     function renderProtocolProposal(proposal) {
       const speciesLabels = {
         cao: 'Cão',
@@ -1486,6 +1509,16 @@
               <div class="small text-muted mt-2">${references}</div>
             </details>
           ` : ''}
+          ${proposal.can_manage ? `
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button type="button" class="clinical-link-btn js-edit-proposal" data-proposal-id="${proposal.id}">
+                <i class="bi bi-pencil me-1"></i>Editar
+              </button>
+              <button type="button" class="clinical-link-btn text-danger js-delete-proposal" data-proposal-id="${proposal.id}">
+                <i class="bi bi-archive me-1"></i>Excluir
+              </button>
+            </div>
+          ` : ''}
         </article>
       `;
     }
@@ -1507,6 +1540,8 @@
           throw new Error(data.message || 'Não foi possível carregar as sugestões.');
         }
         const proposals = Array.isArray(data.proposals) ? data.proposals : [];
+        protocolProposals.clear();
+        proposals.forEach(item => protocolProposals.set(String(item.id), item));
         proposalsLoaded = true;
         proposalListEl.innerHTML = proposals.length
           ? proposals.map(renderProtocolProposal).join('')
@@ -1534,19 +1569,87 @@
         conteudo_livre: document.getElementById('proposal-content')?.value || '',
         referencias: document.getElementById('proposal-references')?.value || '',
       };
+      const editingProposalId = String(proposalIdField?.value || '');
       proposalSubmitButton.disabled = true;
-      setProposalStatus('Enviando sugestão para revisão...', 'info');
+      setProposalStatus(
+        editingProposalId ? 'Atualizando sugestão...' : 'Enviando sugestão para revisão...',
+        'info'
+      );
       try {
-        const data = await postJson(panel.dataset.proposalUrl, payload);
-        proposalForm.reset();
-        updateProposalCharacterCount();
+        let data;
+        if (editingProposalId) {
+          const response = await fetch(proposalItemUrl(editingProposalId), {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+          });
+          data = await response.json().catch(() => ({}));
+          if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Não foi possível atualizar a sugestão.');
+          }
+        } else {
+          data = await postJson(panel.dataset.proposalUrl, payload);
+        }
+        resetProposalForm();
         proposalsLoaded = false;
         await loadProtocolProposals();
-        setProposalStatus(data.message || 'Sugestão enviada para revisão.', 'success');
+        setProposalStatus(data.message || 'Sugestão salva.', 'success');
       } catch (error) {
         setProposalStatus(error.message || 'Erro ao enviar a sugestão.', 'danger');
       } finally {
         proposalSubmitButton.disabled = false;
+      }
+    }
+
+    function editProtocolProposal(proposalId) {
+      const proposal = protocolProposals.get(String(proposalId));
+      if (!proposal || !proposal.can_manage) return;
+      document.getElementById('proposal-title').value = proposal.titulo || '';
+      document.getElementById('proposal-category').value = proposal.categoria || 'doenca';
+      document.getElementById('proposal-species').value = proposal.especie || '';
+      document.getElementById('proposal-content').value = proposal.conteudo_livre || '';
+      document.getElementById('proposal-references').value = proposal.referencias || '';
+      if (proposalIdField) proposalIdField.value = proposal.id;
+      proposalCancelEditButton?.classList.remove('d-none');
+      const submitLabel = proposalSubmitButton?.querySelector('span');
+      if (submitLabel) submitLabel.textContent = 'Salvar alterações';
+      updateProposalCharacterCount();
+      proposalForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setProposalStatus('Editando sua sugestão. Salve para manter as alterações.', 'info');
+    }
+
+    async function archiveProtocolProposal(proposalId, button) {
+      const proposal = protocolProposals.get(String(proposalId));
+      if (!proposal || !proposal.can_manage) return;
+      if (!window.confirm(`Excluir a sugestão "${proposal.titulo}" da fila? O histórico de auditoria será preservado.`)) {
+        return;
+      }
+      button.disabled = true;
+      setProposalStatus('Retirando sugestão da fila...', 'info');
+      try {
+        const response = await fetch(proposalItemUrl(proposalId), {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            'X-CSRFToken': csrfToken
+          }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || 'Não foi possível excluir a sugestão.');
+        }
+        if (String(proposalIdField?.value || '') === String(proposalId)) resetProposalForm();
+        proposalsLoaded = false;
+        await loadProtocolProposals();
+        setProposalStatus(data.message || 'Sugestão retirada da fila.', 'success');
+      } catch (error) {
+        setProposalStatus(error.message || 'Erro ao excluir a sugestão.', 'danger');
+      } finally {
+        button.disabled = false;
       }
     }
 
@@ -2044,6 +2147,18 @@
       if (editProtocolButton) {
         event.preventDefault();
         handleEditProtocol(editProtocolButton);
+        return;
+      }
+      const editProposalButton = event.target.closest('.js-edit-proposal');
+      if (editProposalButton) {
+        event.preventDefault();
+        editProtocolProposal(editProposalButton.dataset.proposalId);
+        return;
+      }
+      const deleteProposalButton = event.target.closest('.js-delete-proposal');
+      if (deleteProposalButton) {
+        event.preventDefault();
+        archiveProtocolProposal(deleteProposalButton.dataset.proposalId, deleteProposalButton);
       }
     });
 
@@ -2058,6 +2173,10 @@
     proposalForm?.addEventListener('submit', submitProtocolProposal);
     proposalContentField?.addEventListener('input', updateProposalCharacterCount);
     proposalReloadButton?.addEventListener('click', loadProtocolProposals);
+    proposalCancelEditButton?.addEventListener('click', function () {
+      resetProposalForm();
+      setProposalStatus('Edição cancelada.', 'neutral');
+    });
     protocolForm?.addEventListener('submit', submitProtocolForm);
     resetProtocolButton?.addEventListener('click', function () {
       resetProtocolFormState();

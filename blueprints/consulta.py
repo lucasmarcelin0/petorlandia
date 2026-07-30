@@ -12,6 +12,7 @@ from flask_login import current_user, login_required
 from forms import AnimalForm, AppointmentForm, EditProfileForm
 from helpers import group_appointments_by_day
 from models import (
+    AdminActionNotification,
     AdministracaoRegistro,
     Animal,
     Appointment,
@@ -150,7 +151,7 @@ def mp_sdk(*args, **kwargs):
     return app_module.mp_sdk(*args, **kwargs)
 
 
-def _serialize_protocol_proposal(proposal):
+def _serialize_protocol_proposal(proposal, actor_user_id=None):
     return {
         'id': proposal.id,
         'titulo': proposal.titulo,
@@ -169,7 +170,44 @@ def _serialize_protocol_proposal(proposal):
         ),
         'autor': getattr(proposal.autor, 'name', None) or 'Usuário removido',
         'created_at': proposal.created_at.isoformat() if proposal.created_at else None,
+        'updated_at': proposal.updated_at.isoformat() if proposal.updated_at else None,
         'protocolo_id': proposal.protocolo_id,
+        'can_manage': bool(
+            actor_user_id
+            and proposal.created_by == actor_user_id
+            and proposal.status == 'pending_review'
+        ),
+    }
+
+
+def _protocol_proposal_payload(payload):
+    titulo = str(payload.get('titulo') or '').strip()
+    categoria = str(payload.get('categoria') or 'doenca').strip().lower()
+    especie = str(payload.get('especie') or '').strip().lower()
+    conteudo_livre = str(payload.get('conteudo_livre') or '').strip()
+    referencias = str(payload.get('referencias') or '').strip()
+
+    if len(titulo) < 3:
+        raise ValueError('Informe um título com pelo menos 3 caracteres.')
+    if len(titulo) > 160:
+        raise ValueError('O título deve ter no máximo 160 caracteres.')
+    if categoria not in PROTOCOL_PROPOSAL_CATEGORIES:
+        raise ValueError('Selecione uma categoria válida para a proposta.')
+    if especie not in PROTOCOL_PROPOSAL_SPECIES:
+        raise ValueError('Selecione uma espécie válida para a proposta.')
+    if len(conteudo_livre) < 5:
+        raise ValueError('Descreva a sugestão com pelo menos 5 caracteres.')
+    if len(conteudo_livre) > 12000:
+        raise ValueError('A sugestão deve ter no máximo 12.000 caracteres.')
+    if len(referencias) > 4000:
+        raise ValueError('As referências devem ter no máximo 4.000 caracteres.')
+
+    return {
+        'titulo': titulo,
+        'categoria': categoria,
+        'especie': especie or None,
+        'conteudo_livre': conteudo_livre,
+        'referencias': referencias or None,
     }
 
 
@@ -475,14 +513,20 @@ def listar_propostas_protocolo_clinico(consulta_id):
 
     proposals = (
         PropostaProtocoloClinico.query
-        .filter_by(clinica_id=consulta.clinica_id)
+        .filter(
+            PropostaProtocoloClinico.clinica_id == consulta.clinica_id,
+            PropostaProtocoloClinico.status != 'archived',
+        )
         .order_by(PropostaProtocoloClinico.created_at.desc())
         .limit(50)
         .all()
     )
     return jsonify({
         'success': True,
-        'proposals': [_serialize_protocol_proposal(item) for item in proposals],
+        'proposals': [
+            _serialize_protocol_proposal(item, actor_user_id=current_user.id)
+            for item in proposals
+        ],
     })
 
 
@@ -497,59 +541,17 @@ def criar_proposta_protocolo_clinico(consulta_id):
             'message': 'Apenas veterinários podem sugerir protocolos clínicos.',
         }), 403
 
-    payload = request.get_json(silent=True) or {}
-    titulo = str(payload.get('titulo') or '').strip()
-    categoria = str(payload.get('categoria') or 'doenca').strip().lower()
-    especie = str(payload.get('especie') or '').strip().lower()
-    conteudo_livre = str(payload.get('conteudo_livre') or '').strip()
-    referencias = str(payload.get('referencias') or '').strip()
-
-    if len(titulo) < 3:
-        return jsonify({
-            'success': False,
-            'message': 'Informe um título com pelo menos 3 caracteres.',
-        }), 400
-    if len(titulo) > 160:
-        return jsonify({
-            'success': False,
-            'message': 'O título deve ter no máximo 160 caracteres.',
-        }), 400
-    if categoria not in PROTOCOL_PROPOSAL_CATEGORIES:
-        return jsonify({
-            'success': False,
-            'message': 'Selecione uma categoria válida para a proposta.',
-        }), 400
-    if especie not in PROTOCOL_PROPOSAL_SPECIES:
-        return jsonify({
-            'success': False,
-            'message': 'Selecione uma espécie válida para a proposta.',
-        }), 400
-    if len(conteudo_livre) < 5:
-        return jsonify({
-            'success': False,
-            'message': 'Descreva a sugestão com pelo menos 5 caracteres.',
-        }), 400
-    if len(conteudo_livre) > 12000:
-        return jsonify({
-            'success': False,
-            'message': 'A sugestão deve ter no máximo 12.000 caracteres.',
-        }), 400
-    if len(referencias) > 4000:
-        return jsonify({
-            'success': False,
-            'message': 'As referências devem ter no máximo 4.000 caracteres.',
-        }), 400
+    try:
+        values = _protocol_proposal_payload(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
 
     proposal = PropostaProtocoloClinico(
         clinica_id=consulta.clinica_id,
         consulta_id=consulta.id,
         created_by=current_user.id,
-        titulo=titulo,
-        categoria=categoria,
-        especie=especie or None,
-        conteudo_livre=conteudo_livre,
-        referencias=referencias or None,
         status='pending_review',
+        **values,
     )
     db.session.add(proposal)
     db.session.flush()
@@ -568,12 +570,142 @@ def criar_proposta_protocolo_clinico(consulta_id):
             'especie': proposal.especie,
         },
     )
+    from services.notifications import queue_admin_action_notification
+
+    queue_admin_action_notification(
+        title=f'Nova sugestão clínica: {proposal.titulo}',
+        body=(
+            f'Clínica: {getattr(proposal.clinica, "nome", None) or proposal.clinica_id}\n'
+            f'Autor: {getattr(current_user, "name", None) or current_user.id}\n'
+            f'Categoria: {PROTOCOL_PROPOSAL_CATEGORIES.get(proposal.categoria, "Outro tema")}'
+        ),
+        event_type='clinical_protocol_proposal',
+        url=url_for('admin_protocol_proposals', _anchor=f'proposal-{proposal.id}'),
+        priority='normal',
+        entity_type='protocol_proposal',
+        entity_id=proposal.id,
+    )
     db.session.commit()
 
     return jsonify({
         'success': True,
         'message': 'Sugestão enviada para revisão. Ela ainda não interfere nas recomendações clínicas.',
-        'proposal': _serialize_protocol_proposal(proposal),
+        'proposal': _serialize_protocol_proposal(proposal, actor_user_id=current_user.id),
+    })
+
+
+@bp.route(
+    '/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>',
+    methods=['PUT'],
+)
+@login_required
+def atualizar_proposta_protocolo_clinico(consulta_id, proposal_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem editar sugestões.'}), 403
+
+    proposal = PropostaProtocoloClinico.query.filter_by(
+        id=proposal_id,
+        clinica_id=consulta.clinica_id,
+    ).first_or_404()
+    if proposal.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Somente o autor pode editar esta sugestão.'}), 403
+    if proposal.status != 'pending_review':
+        return jsonify({
+            'success': False,
+            'message': 'Esta sugestão já entrou em revisão e não pode mais ser editada.',
+        }), 409
+
+    try:
+        values = _protocol_proposal_payload(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    for field, value in values.items():
+        setattr(proposal, field, value)
+    from models import AdminActionNotification
+
+    AdminActionNotification.query.filter(
+        AdminActionNotification.entity_type == 'protocol_proposal',
+        AdminActionNotification.entity_id == proposal.id,
+        AdminActionNotification.status.in_(['unread', 'read']),
+    ).update({
+        AdminActionNotification.title: f'Nova sugestão clínica: {proposal.titulo}',
+        AdminActionNotification.body: (
+            f'Clínica: {getattr(proposal.clinica, "nome", None) or proposal.clinica_id}\n'
+            f'Autor: {getattr(current_user, "name", None) or current_user.id}\n'
+            f'Categoria: {PROTOCOL_PROPOSAL_CATEGORIES.get(proposal.categoria, "Outro tema")}'
+        ),
+    }, synchronize_session=False)
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='updated',
+        titulo_item=proposal.titulo,
+        justificativa=proposal.conteudo_livre[:500],
+        payload={'proposal_id': proposal.id},
+    )
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão atualizada. Ela continua aguardando revisão.',
+        'proposal': _serialize_protocol_proposal(proposal, actor_user_id=current_user.id),
+    })
+
+
+@bp.route(
+    '/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>',
+    methods=['DELETE'],
+)
+@login_required
+def arquivar_proposta_protocolo_clinico(consulta_id, proposal_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem retirar sugestões.'}), 403
+
+    proposal = PropostaProtocoloClinico.query.filter_by(
+        id=proposal_id,
+        clinica_id=consulta.clinica_id,
+    ).first_or_404()
+    if proposal.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Somente o autor pode retirar esta sugestão.'}), 403
+    if proposal.status != 'pending_review':
+        return jsonify({
+            'success': False,
+            'message': 'Esta sugestão já entrou em revisão e não pode mais ser retirada.',
+        }), 409
+
+    proposal.status = 'archived'
+    proposal.review_notes = 'Arquivada pelo autor antes da revisão.'
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='archived',
+        titulo_item=proposal.titulo,
+        justificativa='Arquivada pelo autor antes da revisão.',
+        payload={'proposal_id': proposal.id},
+    )
+
+    now = now_in_brazil()
+    AdminActionNotification.query.filter(
+        AdminActionNotification.entity_type == 'protocol_proposal',
+        AdminActionNotification.entity_id == proposal.id,
+        AdminActionNotification.status.in_(['unread', 'read']),
+    ).update({
+        AdminActionNotification.status: 'resolved',
+        AdminActionNotification.resolved_at: now,
+        AdminActionNotification.resolved_by_id: current_user.id,
+    }, synchronize_session=False)
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão retirada da fila. O registro foi preservado para auditoria.',
     })
 
 
