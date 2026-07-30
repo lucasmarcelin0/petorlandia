@@ -38,6 +38,11 @@
             <i class="fa-solid fa-pen-to-square"></i>
             Editar dados
           </button>
+          <a href="{{ url_for('clinica_routes.export_clinic_data', clinica_id=clinica.id) }}"
+             class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2">
+            <i class="fa-solid fa-file-export"></i>
+            Exportar dados
+          </a>
         {% endif %}
       </div>
     </div>

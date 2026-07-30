@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Funil do produto — PetOrlândia{% endblock %}
+{% block meta_description %}Painel interno de aquisição e ativação da PetOrlândia.{% endblock %}
+
+{% block main %}
+<section class="py-4" aria-labelledby="analytics-title">
+  <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-4">
+    <div>
+      <span class="text-uppercase text-muted small fw-semibold">Últimos 30 dias</span>
+      <h1 id="analytics-title" class="h3 mb-1">Funil do produto</h1>
+      <p class="text-muted mb-0">Eventos próprios, sem conteúdo clínico ou texto digitado pelo usuário.</p>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for name, count in funnel %}
+    <div class="col-6 col-lg">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <strong class="fs-3 d-block">{{ count }}</strong>
+          <span class="small text-muted">{{ name }}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">Visitantes por origem</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <caption class="visually-hidden">Visitantes únicos por origem de campanha</caption>
+              <thead><tr><th>Origem</th><th class="text-end">Visitantes</th></tr></thead>
+              <tbody>
+                {% for source, count in sources %}
+                <tr><td>{{ source }}</td><td class="text-end">{{ count }}</td></tr>
+                {% else %}
+                <tr><td colspan="2" class="text-muted">Ainda sem dados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h2 class="h5">Eventos recentes</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <caption class="visually-hidden">Cinquenta eventos mais recentes do produto</caption>
+              <thead><tr><th>Evento</th><th>Página</th><th>Origem</th><th>Quando</th></tr></thead>
+              <tbody>
+                {% for event in recent %}
+                <tr>
+                  <td><code>{{ event.event_name }}</code></td>
+                  <td>{{ event.source_path or '—' }}</td>
+                  <td>{{ event.utm_source or 'direto' }}</td>
+                  <td>{{ event.created_at|format_datetime_brazil('%d/%m %H:%M') }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted">Ainda sem dados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -244,6 +244,11 @@ def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
     audience = _auth_audience()
+    requested_plan = (request.args.get('plan') or '').strip().lower()
+    if requested_plan in {'mensal', 'anual'}:
+        # Mantém a intenção escolhida na página de preços até o checkout, mesmo
+        # quando o visitante passa por cadastro, Google OAuth e onboarding.
+        session['preferred_membership_plan'] = requested_plan
     requested_next = request.values.get('next')
     next_url = (
         _sanitize_login_next_url(requested_next)
@@ -590,6 +595,29 @@ def google_callback():
     session.permanent = True
 
     if created:
+        # O código de indicação vive na sessão, portanto também atravessa o
+        # OAuth. Sem este bloco, cadastros por Google eram atribuídos como
+        # orgânicos mesmo quando vieram de um link de indicação.
+        try:
+            referral_code_value = session.pop('referral_code', None)
+            if referral_code_value:
+                from models import ReferralCode, ReferralSignup
+                referral = ReferralCode.query.filter_by(code=referral_code_value).first()
+                if referral and referral.user_id != user.id:
+                    exists = ReferralSignup.query.filter_by(
+                        code_id=referral.id,
+                        referred_user_id=user.id,
+                    ).first()
+                    if not exists:
+                        db.session.add(ReferralSignup(
+                            code_id=referral.id,
+                            referred_user_id=user.id,
+                        ))
+                        db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Falha ao registrar indicação no cadastro Google')
+
         channel = 'student_google' if is_student_flow else 'google'
         track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
         flash('Conta criada com o Google. Bem-vindo!', 'success')

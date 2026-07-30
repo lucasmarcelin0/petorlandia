@@ -2,6 +2,37 @@
 
 {% block page_title %}PetOrlândia — toda a jornada veterinária em um só lugar{% endblock %}
 {% block meta_description %}Tutores, clínicas, veterinários e estudantes conectados à mesma jornada de cuidado: serviços, histórico, agenda e aprendizado em uma única plataforma.{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": url_for("index", _external=True) ~ "#organization",
+        "name": "PetOrlândia",
+        "url": url_for("index", _external=True),
+        "email": support_contact_email,
+        "founder": {"@type": "Person", "name": "Lucas Marcelino Campos Ferreira"}
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "PetOrlândia",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": self.meta_description()|trim,
+        "offers": {
+          "@type": "Offer",
+          "price": monthly_price,
+          "priceCurrency": "BRL",
+          "description": trial_days ~ " dias de avaliação para clínicas"
+        },
+        "provider": {"@id": url_for("index", _external=True) ~ "#organization"}
+      }
+    ]
+  } | tojson }}
+</script>
+{% endblock %}
 
 {% block main %}
 <main class="unified-home" aria-labelledby="unified-home-title">
@@ -17,17 +48,18 @@
         O veterinário atende com o histórico certo. E o estudante aprende o fluxo em um ambiente seguro.
       </p>
       <div class="unified-hero__actions">
-        <a href="#perfis" class="unified-btn unified-btn--primary">
-          Encontrar minha entrada <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+        <a href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+           class="unified-btn unified-btn--primary" data-cta="home_clinic_trial">
+          Testar na minha clínica <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
         </a>
-        <a href="{{ url_for('servicos') }}" class="unified-btn unified-btn--secondary">
-          Ver serviços por cidade
+        <a href="#perfis" class="unified-btn unified-btn--secondary">
+          Sou tutor, veterinário ou estudante
         </a>
       </div>
       <ul class="unified-hero__trust" aria-label="Compromissos da plataforma">
+        <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i> {{ trial_days }} dias grátis para clínicas</li>
         <li><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Dados protegidos</li>
         <li><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> Funciona no celular</li>
-        <li><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Atendimento local</li>
       </ul>
     </div>
 
@@ -126,6 +158,16 @@
         A PetOrlândia conecta campanhas públicas, serviços locais e rotina clínica.
         O produto cresce a partir do que tutores e equipes realmente precisam fazer.
       </p>
+      {% if stats %}
+      <div class="landing-stats" aria-label="Números reais de uso">
+        {% for stat in stats %}
+        <div class="landing-stat">
+          <strong class="landing-stat__value">{{ stat.value }}</strong>
+          <span class="landing-stat__label">{{ stat.label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
     <div class="unified-proof__facts">
       <span><i class="fa-solid fa-syringe" aria-hidden="true"></i> Campanhas municipais</span>

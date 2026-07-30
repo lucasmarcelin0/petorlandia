@@ -73,6 +73,8 @@
                 <i class="fas fa-file-medical me-2 text-info"></i> Laudos</a></li>
             <li><a class="dropdown-item" href="{{ url_for('servicos') }}">
                 <i class="fas fa-paw me-2 text-danger"></i> Serviços</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin_routes.product_analytics_dashboard') }}">
+                <i class="fas fa-chart-line me-2 text-success"></i> Funil do produto</a></li>
           </ul>
         </li>
 
@@ -240,8 +242,8 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('index') }}#perfis">
-            <i class="fas fa-users me-1 text-success"></i> Para quem é
+          <a class="nav-link" href="{{ url_for('parceiro_clinica_landing') }}">
+            <i class="fas fa-hospital me-1 text-success"></i> Para clínicas
           </a>
         </li>
         <li class="nav-item">
@@ -250,13 +252,20 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('precos') }}">
+            <i class="fas fa-tag me-1 text-success"></i> Preços
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link" href="{{ url_for('login_view') }}">
             <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link nav-link--cta fw-semibold text-success" href="{{ url_for('index') }}#perfis">
-            <i class="fas fa-arrow-right me-1"></i> Começar
+          <a class="nav-link nav-link--cta fw-semibold text-success"
+             href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+             data-cta="cta_nav_trial">
+            <i class="fas fa-arrow-right me-1"></i> Testar grátis
           </a>
         </li>
         {% endif %}

@@ -30,6 +30,21 @@
   <meta name="twitter:title" content="{{ self.page_title()|trim }}">
   <meta name="twitter:description" content="{{ self.meta_description()|trim }}">
   <meta name="twitter:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
+  {% block structured_data %}
+  <script type="application/ld+json">
+    {{ {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "PetOrlândia",
+      "url": url_for("index", _external=True),
+      "logo": url_for("static", filename="img/og-petorlandia.png", _external=True),
+      "founder": {"@type": "Person", "name": "Lucas Marcelino Campos Ferreira"},
+      "email": support_contact_email,
+      "areaServed": "Brasil",
+      "sameAs": []
+    } | tojson }}
+  </script>
+  {% endblock %}
 
   {% block head %}
   {% endblock %}
@@ -46,7 +61,7 @@
 
   <!-- Bootstrap 5 -->
   <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js', v='5.3') }}" defer></script>
 
   <!-- Font Awesome 6 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -57,8 +72,10 @@
   <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
-  <link href="{{ url_for('static', filename='styles.css', v='20260729unified') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css', v='20260729growth2') }}" rel="stylesheet">
+  {% if current_user.is_authenticated %}
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
+  {% endif %}
 
   {% if config.GA_MEASUREMENT_ID %}
   <!-- Google Analytics 4 -->
@@ -72,7 +89,7 @@
   {% endif %}
 </head>
 
-{% set flash_messages = get_flashed_messages(with_categories=true) %}
+{% set flash_messages = get_flashed_messages(with_categories=true)|unique|list %}
 
 <!-- Bootstrap Tooltip e Popover -->
 <script>
@@ -368,17 +385,6 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const flashMessages = {{ flash_messages| tojson
-    }};
-    flashMessages.forEach(([category, message], idx) => {
-      setTimeout(() => {
-        const toastEl = document.getElementById('actionToast');
-        toastEl.querySelector('.toast-body').textContent = formatUserMessage(message, 'Ação concluída.');
-        applyToastTone(toastEl, category || 'success');
-        new bootstrap.Toast(toastEl).show();
-      }, idx * 1000);
-    });
-
     const confirmModalEl = document.getElementById('confirmModal');
     const confirmModal = new bootstrap.Modal(confirmModalEl);
     const confirmBtn = document.getElementById('confirmModalOk');
@@ -405,26 +411,22 @@
         });
   </script>
 
-  {% if MERCADOPAGO_PUBLIC_KEY %}
-  <script src="https://sdk.mercadopago.com/js/v2"></script>
-  <script>
-    const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", { locale: 'pt-BR' });
-  </script>
-  {% endif %}
+  {% if current_user.is_authenticated %}
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('{{ url_for('service_worker') }}');
     }
   </script>
-  <script src="{{ url_for('static', filename='offline.js') }}"></script>
-  {% if current_user.is_authenticated %}
+  <script src="{{ url_for('static', filename='offline.js', v='20260729') }}" defer></script>
   <script src="{{ url_for('static', filename='push.js', v='20260709') }}" defer></script>
   {% endif %}
   <script src="{{ url_for('static', filename='js/form_feedback.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/lead_capture.js', v='20260729b') }}" defer></script>
+  {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='photo_cropper.js') }}"></script>
   <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>
   <script src="{{ url_for('static', filename='js/record_panels.js', v='20260701b') }}"></script>
+  {% endif %}
 
   <script>
     const normalizeFetchResult = (result) => ({
@@ -1409,12 +1411,16 @@
       };
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
-  <script src="{{ url_for('static', filename='masks.js') }}"></script>
-  <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
+  {% if current_user.is_authenticated %}
+  <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js" defer></script>
+  <script src="{{ url_for('static', filename='masks.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='avatar_helper.js') }}" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+  {% if current_user.is_authenticated %}
   <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/search_filters.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/search_filters.js') }}" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
   <script src="{{ url_for('static', filename='js/cta_tracking.js', v='20260729') }}" defer></script>
   <!-- Page specific scripts -->

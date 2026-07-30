@@ -288,6 +288,7 @@ from extensions import (
     babel,
     csrf,
     limiter,
+    compress,
     configure_logging,
 )
 from flask_login import login_user, logout_user, current_user, login_required
@@ -312,6 +313,7 @@ session_ext.init_app(app)
 babel.init_app(app)
 csrf.init_app(app)
 limiter.init_app(app)
+compress.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 configure_logging(app)
 
@@ -1908,12 +1910,28 @@ def _vet_public_service_notes(vet, selected_city=None):
 def _is_public_veterinarian(vet):
     profile_type = _normalize_public_text(getattr(vet, 'public_profile_type', None) or 'profissional')
     membership = getattr(vet, 'membership', None)
+    user = getattr(vet, 'user', None)
+    name_key = _normalize_public_text(getattr(user, 'name', None))
+    email_key = _normalize_public_text(getattr(user, 'email', None))
+    crmv_digits = ''.join(ch for ch in str(getattr(vet, 'crmv', '') or '') if ch.isdigit())
+    placeholder_tokens = {
+        'teste', 'test', 'testeteesste', 'demo', 'exemplo', 'sample',
+    }
+    has_placeholder_identity = (
+        not name_key
+        or any(token in name_key.split() for token in placeholder_tokens)
+        or any(token in email_key for token in ('@teste.', '@test.', '@example.', '@exemplo.'))
+        or not crmv_digits
+        or int(crmv_digits or '0') == 0
+    )
     return (
         bool(getattr(vet, 'public_visible', True))
         and profile_type == 'profissional'
         # Estagiário nunca é ofertado publicamente como veterinário.
         and bool(getattr(vet, 'pode_assinar', True))
         and bool(membership and membership.is_active())
+        # Um cadastro incompleto ou de teste nunca pode virar prova pública.
+        and not has_placeholder_identity
     )
 
 
@@ -1974,7 +1992,10 @@ def _professional_service_query(*, audience=None, service_type=None, city=None, 
             query = query.filter(ProfessionalService.service_type.in_(list(service_type)))
         else:
             query = query.filter(ProfessionalService.service_type == service_type)
-    services = query.all()
+    services = [
+        service for service in query.all()
+        if _is_public_veterinarian(service.veterinario)
+    ]
     if audience:
         services = [service for service in services if _service_visible_for_audience(service, audience)]
     if city:
@@ -2867,6 +2888,8 @@ def _registrar_ultimo_login(sender, user, **extra):
 
 
 login.login_view = "login_view"
+login.login_message = "Entre na sua conta ou crie uma conta gratuita para continuar."
+login.login_message_category = "info"
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 def _ensure_registration_flow_schema() -> None:
@@ -9160,28 +9183,22 @@ def _onboarding_seller_percent():
 
 
 def _onboarding_payout_from_final(price):
-    """Repasse estimado a partir de um preço de vitrine desejado (÷ 1,10).
-
-    O preço de vitrine real será ``_onboarding_final_from_payout`` do valor
-    retornado (pode arredondar para cima até o múltiplo de R$ 5).
-    """
+    """Repasse a partir do preço final e do take rate configurado."""
     if price is None:
         return None
-    return (Decimal(price) / Decimal('1.10')).quantize(Decimal('0.01'))
+    fee_percent, _seller_percent = _onboarding_seller_percent()
+    seller_share = (Decimal('100') - fee_percent) / Decimal('100')
+    return (Decimal(price) * seller_share).quantize(Decimal('0.01'))
 
 
 def _onboarding_final_from_payout(payout):
-    """Preço de vitrine: repasse + 10%, arredondado ao próximo múltiplo de R$5.
-
-    Mesma regra de ``Product.preco_publico`` — o lojista recebe o valor
-    integral que definiu; a taxa fica embutida no preço exibido.
-    """
+    """Preço de vitrine calculado pela regra única de marketplace."""
     if payout is None:
         return None
     amount = Decimal(payout)
     if amount <= 0:
         return None
-    return public_price_from_professional_price(amount)
+    return Product.public_price_from_base(amount)
 
 
 def _onboarding_prefill_email(user_email):
@@ -12110,6 +12127,23 @@ def _reprice_order_items(order):
         if item.unit_price is None or _money_decimal(item.unit_price) != current:
             item.unit_price = current
             changed = True
+        seller_amount = _money_decimal(product.price)
+        platform_fee = max(Decimal("0.00"), current - seller_amount)
+        seller_type = 'casa_de_racao' if product.casa_de_racao_id else 'clinica' if product.clinica_id else None
+        seller_id = product.casa_de_racao_id or product.clinica_id
+        if (
+            item.seller_unit_amount is None
+            or _money_decimal(item.seller_unit_amount) != seller_amount
+            or item.platform_fee_amount is None
+            or _money_decimal(item.platform_fee_amount) != platform_fee
+            or item.seller_type != seller_type
+            or item.seller_id != seller_id
+        ):
+            item.seller_unit_amount = seller_amount
+            item.platform_fee_amount = platform_fee
+            item.seller_type = seller_type
+            item.seller_id = seller_id
+            changed = True
     if changed:
         db.session.commit()
     return changed
@@ -12137,7 +12171,11 @@ def _order_vendor_shipping(order):
         unit_price = _money_decimal(item.unit_price if item.unit_price is not None else (product.preco_publico if product else 0))
         line_total = unit_price * int(item.quantity or 0)
         products_total += line_total
-        seller_unit = _money_decimal(product.price if product else 0)
+        seller_unit = _money_decimal(
+            item.seller_unit_amount
+            if item.seller_unit_amount is not None
+            else (product.price if product else 0)
+        )
         seller_products_total += seller_unit * int(item.quantity or 0)
         casa_id = product.casa_de_racao_id if product and product.casa_de_racao_id else None
         clinica_id = product.clinica_id if product and product.clinica_id else None

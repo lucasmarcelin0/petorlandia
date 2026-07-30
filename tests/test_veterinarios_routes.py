@@ -41,8 +41,13 @@ def client():
 
 def test_veterinarios_listing_and_detail(client):
     with flask_app.app_context():
-        user = User(name="Vet", email="vet@test", password_hash="x", worker="veterinario")
-        vet = Veterinario(user=user, crmv="123")
+        user = User(
+            name="Dra. Marina Lima",
+            email="marina.lima@clinica.local",
+            password_hash="x",
+            worker="veterinario",
+        )
+        vet = Veterinario(user=user, crmv="12345", public_visible=True)
         schedule = VetSchedule(veterinario=vet, dia_semana="Segunda", hora_inicio=time(9, 0), hora_fim=time(17, 0))
         db.session.add_all([user, vet, schedule])
         db.session.commit()
@@ -50,7 +55,7 @@ def test_veterinarios_listing_and_detail(client):
 
     resp = client.get("/veterinarios")
     assert resp.status_code == 200
-    assert b"Vet" in resp.data
+    assert "Dra. Marina Lima" in resp.get_data(as_text=True)
 
     resp = client.get(f"/veterinario/{vet_id}")
     assert resp.status_code == 200
@@ -73,8 +78,8 @@ def test_veterinarios_city_listing_only_shows_active_memberships(client):
             password_hash="x",
             worker="veterinario",
         )
-        active_vet = Veterinario(user=active_user, crmv="111")
-        expired_vet = Veterinario(user=expired_user, crmv="222")
+        active_vet = Veterinario(user=active_user, crmv="111", public_visible=True)
+        expired_vet = Veterinario(user=expired_user, crmv="222", public_visible=True)
         db.session.add_all([active_user, expired_user, active_vet, expired_vet])
         db.session.flush()
         db.session.add_all(

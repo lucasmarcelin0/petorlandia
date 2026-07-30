@@ -444,7 +444,9 @@ class Veterinario(db.Model):
     )
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
     public_profile_type = db.Column(db.String(20), nullable=False, default='profissional')
-    public_visible = db.Column(db.Boolean, nullable=False, default=True)
+    # Publicação é uma decisão explícita do administrador. Um cadastro novo
+    # nunca deve virar prova pública apenas por ter preenchido um CRMV.
+    public_visible = db.Column(db.Boolean, nullable=False, default=False)
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
     supervisor = db.relationship(

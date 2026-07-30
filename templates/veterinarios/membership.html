@@ -109,7 +109,7 @@
       <div class="col-md-6">
         <label class="membership-plan h-100" for="plano-mensal">
           <input class="form-check-input" type="radio" name="plano" id="plano-mensal"
-                 value="mensal" checked>
+                 value="mensal"{% if checkout_form.plano.data != 'anual' %} checked{% endif %}>
           <span class="membership-plan__body">
             <span class="membership-plan__name">Mensal</span>
             <span class="membership-plan__price">R$ {{ '%.0f'|format(price) }}<small>/mês</small></span>
@@ -120,7 +120,8 @@
 
       <div class="col-md-6">
         <label class="membership-plan h-100" for="plano-anual">
-          <input class="form-check-input" type="radio" name="plano" id="plano-anual" value="anual">
+          <input class="form-check-input" type="radio" name="plano" id="plano-anual"
+                 value="anual"{% if checkout_form.plano.data == 'anual' %} checked{% endif %}>
           <span class="membership-plan__body">
             <span class="membership-plan__name">
               Anual
@@ -142,8 +143,8 @@
       {% if membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
     </button>
     <p class="text-muted small mt-2 mb-0">
-      Pagamento pelo Mercado Pago (cartão, Pix ou boleto). A renovação é automática e você
-      cancela pelo próprio Mercado Pago ou falando com a gente, sem multa.
+       Assinatura recorrente por cartão, processada com segurança pelo Mercado Pago.
+       A renovação é automática e pode ser cancelada sem multa.
     </p>
   </form>
   {% endif %}

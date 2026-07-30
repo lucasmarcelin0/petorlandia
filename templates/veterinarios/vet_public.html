@@ -1,4 +1,23 @@
 {% extends "layout.html" %}
+{% block page_title %}{{ veterinario.user.name }} — médico-veterinário na PetOrlândia{% endblock %}
+{% block meta_description %}Conheça o perfil profissional, cidades atendidas e serviços de {{ veterinario.user.name }} na PetOrlândia.{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": veterinario.user.name,
+    "jobTitle": "Médico-veterinário",
+    "url": request.base_url,
+    "image": veterinario.user.profile_photo,
+    "hasCredential": {
+      "@type": "EducationalOccupationalCredential",
+      "credentialCategory": "CRMV",
+      "recognizedBy": {"@type": "Organization", "name": "Conselho Regional de Medicina Veterinária"}
+    }
+  } | tojson }}
+</script>
+{% endblock %}
 
 {% block main %}
 <div class="container my-4" style="max-width: 720px;">

@@ -1,11 +1,14 @@
 """Views do domínio clinica_routes (migrado do app.py)."""
 from flask import Blueprint
+import io
+import json
 import uuid
+import zipfile
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from extensions import db, mail
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
 from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
@@ -29,6 +32,7 @@ from models import (
     Product,
     StorePaymentAccount,
     User,
+    Vacina,
     VetClinicInvite,
     VetSchedule,
     Veterinario,
@@ -103,6 +107,105 @@ def ensure_clinic_access(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.ensure_clinic_access.
     import app as app_module
     return app_module.ensure_clinic_access(*args, **kwargs)
+
+
+def _export_json_value(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return str(value)
+
+
+def _export_model_rows(rows):
+    result = []
+    for row in rows:
+        result.append({
+            column.name: _export_json_value(getattr(row, column.name))
+            for column in row.__table__.columns
+        })
+    return result
+
+
+@bp.route('/clinica/<int:clinica_id>/exportar-dados')
+@login_required
+def export_clinic_data(clinica_id):
+    """Exportação portável da operação clínica, restrita ao dono/admin."""
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+
+    animals = Animal.query.filter_by(clinica_id=clinica.id).all()
+    animal_ids = [animal.id for animal in animals]
+    appointments = Appointment.query.filter_by(clinica_id=clinica.id).all()
+    consultas = Consulta.query.filter_by(clinica_id=clinica.id).all()
+    orcamentos = Orcamento.query.filter_by(clinica_id=clinica.id).all()
+    orcamento_ids = [orcamento.id for orcamento in orcamentos]
+    vacinas = (
+        Vacina.query.filter(Vacina.animal_id.in_(animal_ids)).all()
+        if animal_ids
+        else []
+    )
+    orcamento_itens = (
+        OrcamentoItem.query.filter(OrcamentoItem.orcamento_id.in_(orcamento_ids)).all()
+        if orcamento_ids
+        else []
+    )
+    tutor_ids = sorted({
+        animal.user_id for animal in animals if getattr(animal, 'user_id', None)
+    })
+    tutores = User.query.filter(User.id.in_(tutor_ids)).all() if tutor_ids else []
+
+    files = {
+        'clinica.json': [{
+            'id': clinica.id,
+            'nome': clinica.nome,
+            'status': clinica.status,
+            'cnpj': clinica.cnpj,
+            'endereco': clinica.endereco,
+            'telefone': clinica.telefone,
+            'email': clinica.email,
+            'created_at': _export_json_value(clinica.created_at),
+        }],
+        'tutores.json': [{
+            'id': user.id,
+            'nome': user.name,
+            'email': user.email,
+            'telefone': user.phone,
+            'cpf': user.cpf,
+        } for user in tutores],
+        'pacientes.json': _export_model_rows(animals),
+        'agendamentos.json': _export_model_rows(appointments),
+        'consultas.json': _export_model_rows(consultas),
+        'vacinas.json': _export_model_rows(vacinas),
+        'orcamentos.json': _export_model_rows(orcamentos),
+        'orcamento_itens.json': _export_model_rows(orcamento_itens),
+    }
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr(
+            'LEIA-ME.txt',
+            'Exportação PetOrlândia em JSON UTF-8. '
+            'Cada arquivo representa uma parte da operação da clínica. '
+            'Guarde este arquivo em local seguro: ele contém dados pessoais e clínicos.',
+        )
+        for filename, payload in files.items():
+            bundle.writestr(
+                filename,
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            )
+    archive.seek(0)
+    return send_file(
+        archive,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'petorlandia-clinica-{clinica.id}-dados.zip',
+        max_age=0,
+    )
 
 
 def is_veterinarian(*args, **kwargs):

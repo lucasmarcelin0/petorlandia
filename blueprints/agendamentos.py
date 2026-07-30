@@ -109,7 +109,7 @@ def is_veterinarian(*args, **kwargs):
 
 @bp.route("/veterinarios", methods=["GET"])
 def veterinarios():
-    vets = _public_veterinarians_query().all()
+    vets = [vet for vet in _public_veterinarians_query().all() if _is_public_veterinarian(vet)]
 
     def vet_city(v):
         return _vet_public_city(v)

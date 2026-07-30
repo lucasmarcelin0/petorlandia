@@ -41,6 +41,7 @@ from models import (
     CasaDeRacao,
     Clinica,
     PartnerInvite,
+    ProductEvent,
     User,
     Veterinario,
 )
@@ -75,6 +76,55 @@ def _partner_invite_whatsapp_url(invite, link):
     numero = only_digits(invite.telefone or '')
     base = f'https://wa.me/55{numero}' if len(numero) in (10, 11) else 'https://wa.me/'
     return f'{base}?text={quote_plus(texto)}'
+
+
+@bp.route("/admin/analytics-produto", methods=["GET"])
+@login_required
+def product_analytics_dashboard():
+    if not _is_admin():
+        abort(403)
+
+    since = now_in_brazil() - timedelta(days=30)
+    funnel_names = (
+        'landing_viewed',
+        'cta_criar_conta',
+        'signup_completed',
+        'onboarding_viewed',
+        'onboarding_progress_viewed',
+        'pricing_viewed',
+    )
+    rows = (
+        db.session.query(ProductEvent.event_name, func.count(ProductEvent.id))
+        .filter(ProductEvent.created_at >= since)
+        .filter(ProductEvent.event_name.in_(funnel_names))
+        .group_by(ProductEvent.event_name)
+        .all()
+    )
+    counts = dict(rows)
+    sources = (
+        db.session.query(
+            func.coalesce(ProductEvent.utm_source, 'direto'),
+            func.count(func.distinct(ProductEvent.anonymous_id)),
+        )
+        .filter(ProductEvent.created_at >= since)
+        .group_by(func.coalesce(ProductEvent.utm_source, 'direto'))
+        .order_by(func.count(func.distinct(ProductEvent.anonymous_id)).desc())
+        .limit(12)
+        .all()
+    )
+    recent = (
+        ProductEvent.query
+        .order_by(ProductEvent.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return render_template(
+        'admin/product_analytics.html',
+        funnel=[(name, counts.get(name, 0)) for name in funnel_names],
+        sources=sources,
+        recent=recent,
+        since=since,
+    )
 
 
 @bp.route("/admin/notificacoes", methods=["GET"])

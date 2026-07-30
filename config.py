@@ -123,6 +123,17 @@ class Config:
     _STATIC_CACHE_DEFAULT = "3600" if _env_bool("FLASK_DEBUG", False) else "604800"
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", _STATIC_CACHE_DEFAULT))
     SEND_FILE_VERSIONED_MAX_AGE = int(os.environ.get("SEND_FILE_VERSIONED_MAX_AGE", "31536000"))
+    COMPRESS_MIMETYPES = (
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "application/json",
+        "application/xml",
+        "image/svg+xml",
+    )
+    COMPRESS_MIN_SIZE = int(os.environ.get("COMPRESS_MIN_SIZE", "1024"))
+    COMPRESS_LEVEL = int(os.environ.get("COMPRESS_LEVEL", "6"))
 
     # Performance: disable template auto-reload unless in debug mode
     TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
@@ -135,8 +146,16 @@ class Config:
     MAIL_USERNAME = _env_optional("MAIL_USERNAME")
     MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
     _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")
-    SUPPORT_EMAIL = _env_optional("SUPPORT_EMAIL") or _mail_sender_email
-    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE")
+    # Canais públicos de suporte. Os padrões abaixo foram autorizados pelo
+    # fundador e evitam que a página pública exiba placeholders quando uma
+    # variável de ambiente for esquecida. Em produção ainda preferimos definir
+    # explicitamente SUPPORT_EMAIL/SUPPORT_PHONE.
+    SUPPORT_EMAIL = (
+        _env_optional("SUPPORT_EMAIL")
+        or _mail_sender_email
+        or "lukemarki3@gmail.com"
+    )
+    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE") or "31 99950-5748"
     MAIL_DEFAULT_SENDER = (
         (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
         if _mail_sender_email
@@ -165,7 +184,7 @@ class Config:
     MERCADOPAGO_OAUTH_REDIRECT_URI = _env_optional("MERCADOPAGO_OAUTH_REDIRECT_URI")
     MERCADOPAGO_OAUTH_USE_PKCE = _env_bool("MERCADOPAGO_OAUTH_USE_PKCE", True)
     MERCADOPAGO_MARKETPLACE_FEE_PERCENT = float(
-        os.environ.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT", "0")
+        os.environ.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT", "10")
     )
 
     # Integração DICOM (Orthanc → PetOrlândia). Sem o token o webhook fica desativado.

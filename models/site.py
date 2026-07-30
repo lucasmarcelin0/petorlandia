@@ -111,3 +111,37 @@ class WaitlistLead(db.Model):
 
     def __repr__(self) -> str:  # pragma: no cover - conveniência de debug
         return f'<WaitlistLead {self.feature} {self.contact}>'
+
+
+class ProductEvent(db.Model):
+    """Evento persistente e sem conteúdo clínico para medir o funil do produto."""
+
+    __tablename__ = 'product_event'
+
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+    )
+    event_name = db.Column(db.String(80), nullable=False, index=True)
+    anonymous_id = db.Column(db.String(64), nullable=False, index=True)
+    session_id = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    source_path = db.Column(db.String(300), nullable=True)
+    referrer_host = db.Column(db.String(180), nullable=True)
+    utm_source = db.Column(db.String(120), nullable=True, index=True)
+    utm_medium = db.Column(db.String(120), nullable=True)
+    utm_campaign = db.Column(db.String(160), nullable=True)
+    properties = db.Column(db.JSON, nullable=False, default=dict)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+        index=True,
+    )
+
+    user = db.relationship('User')

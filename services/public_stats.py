@@ -63,7 +63,7 @@ def _collect() -> list[Stat]:
         current_app.logger.warning('Falha ao contar vacinas para a prova social', exc_info=True)
 
     try:
-        clinicas = _count(Clinica)
+        clinicas = _count(Clinica, Clinica.status == 'ativa')
         if clinicas >= THRESHOLDS['clinicas']:
             stats.append(Stat(clinicas, 'clínicas usando o sistema'))
     except Exception:  # noqa: BLE001

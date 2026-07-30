@@ -2,6 +2,7 @@
 
 {% block page_title %}{% if audience == 'student' %}Criar conta de estudante — PetOrlândia{% else %}Criar conta grátis — PetOrlândia{% endif %}{% endblock %}
 {% block meta_description %}{% if audience == 'student' %}Crie gratuitamente seu acesso ao espaço para estudantes de Medicina Veterinária.{% else %}Crie sua conta na PetOrlândia em menos de um minuto. 30 dias grátis para clínicas, e grátis para sempre para tutores.{% endif %}{% endblock %}
+{% block head %}<meta name="robots" content="noindex,follow">{% endblock %}
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
@@ -60,17 +61,21 @@
 
             <div class="mb-3">
                 <label for="password" class="form-label">Senha</label>
-                <div class="input-group">
-                    {{ form.password(class="form-control rounded-pill", id="password", placeholder="Crie uma senha") }}
-                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password', this)"
-                        aria-label="Mostrar ou ocultar senha" title="Mostrar ou ocultar senha">
+                <div class="input-group auth-password-group">
+                    {{ form.password(class="form-control", id="password", placeholder="Crie uma senha", autocomplete="new-password") }}
+                    <button class="btn btn-outline-secondary auth-password-toggle" type="button"
+                        data-password-toggle aria-controls="password" aria-pressed="false"
+                        aria-label="Mostrar senha" title="Mostrar senha">
                         <i class="fa fa-eye"></i>
                     </button>
                 </div>
                 <div class="form-text">Pelo menos 6 caracteres.</div>
                 <div class="progress mt-2" style="height: 5px;">
-                    <div id="password-strength" class="progress-bar" role="progressbar" style="width: 0;"></div>
+                    <div id="password-strength" class="progress-bar" role="progressbar"
+                         aria-label="Força da senha" aria-valuemin="0" aria-valuemax="100"
+                         aria-valuenow="0" style="width: 0;"></div>
                 </div>
+                <span id="password-strength-text" class="visually-hidden" aria-live="polite">Força da senha: ainda não informada.</span>
                 {% for error in form.password.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
@@ -100,19 +105,6 @@
 </div>
 
 <script>
-    function togglePassword(id, btn) {
-        const input = document.getElementById(id);
-        if (!input) return;
-        const icon = btn.querySelector('i');
-        if (input.type === 'password') {
-            input.type = 'text';
-            if (icon) icon.classList.replace('fa-eye', 'fa-eye-slash');
-        } else {
-            input.type = 'password';
-            if (icon) icon.classList.replace('fa-eye-slash', 'fa-eye');
-        }
-    }
-
     function evaluateStrength(pwd) {
         let score = 0;
         if (pwd.length >= 6) score += 1;
@@ -125,14 +117,36 @@
     document.addEventListener('DOMContentLoaded', () => {
         const pwdInput = document.getElementById('password');
         const bar = document.getElementById('password-strength');
+        const strengthText = document.getElementById('password-strength-text');
+        const toggle = document.querySelector('[data-password-toggle]');
+        if (pwdInput && toggle) {
+            toggle.addEventListener('click', () => {
+                const showing = pwdInput.type === 'text';
+                pwdInput.type = showing ? 'password' : 'text';
+                toggle.setAttribute('aria-pressed', showing ? 'false' : 'true');
+                toggle.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
+                toggle.title = showing ? 'Mostrar senha' : 'Ocultar senha';
+                const icon = toggle.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye', showing);
+                    icon.classList.toggle('fa-eye-slash', !showing);
+                }
+                pwdInput.focus();
+            });
+        }
         if (pwdInput && bar) {
             pwdInput.addEventListener('input', () => {
                 const width = evaluateStrength(pwdInput.value);
                 bar.style.width = width + '%';
+                bar.setAttribute('aria-valuenow', String(width));
                 bar.classList.remove('bg-success', 'bg-warning', 'bg-danger');
                 if (width > 75) bar.classList.add('bg-success');
                 else if (width > 40) bar.classList.add('bg-warning');
                 else bar.classList.add('bg-danger');
+                if (strengthText) {
+                    const label = width > 75 ? 'forte' : width > 40 ? 'média' : width > 0 ? 'fraca' : 'ainda não informada';
+                    strengthText.textContent = 'Força da senha: ' + label + '.';
+                }
             });
         }
     });

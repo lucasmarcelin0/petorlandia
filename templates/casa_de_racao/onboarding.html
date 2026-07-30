@@ -175,7 +175,7 @@
                 <div class="col-12">
                   <div class="small text-muted rounded-3 border bg-light px-3 py-2">
                     Voce recebe <strong>o valor integral</strong> que definir.
-                    O preco no app ja inclui a taxa da plataforma (10%, arredondado ao multiplo de R$ 5).
+                    O preço no app inclui a taxa da plataforma ({{ '%.0f'|format(fee_percent) }}% do valor final), sem arredondamento oculto.
                   </div>
                 </div>
                 <div class="col-sm-7">
@@ -251,11 +251,12 @@
       return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // Preco de vitrine = repasse + 10%, arredondado PARA CIMA ao proximo
-    // multiplo de R$ 5 (mesma regra do backend: Product.preco_publico).
+    const marketplaceRate = {{ (fee_percent / 100)|tojson }};
+
+    // O repasse corresponde à parcela do lojista no preço final.
     function publicFromPayout(payout) {
       if (payout === null || payout <= 0) return null;
-      return Math.ceil((payout * 1.10) / 5) * 5;
+      return Math.round((payout / (1 - marketplaceRate)) * 100) / 100;
     }
 
     document.querySelectorAll('[data-product-card]').forEach(function (card) {
@@ -275,9 +276,8 @@
           payoutInput.value = '';
           return null;
         }
-        const payout = price / 1.10;
+        const payout = Math.round((price * (1 - marketplaceRate)) * 100) / 100;
         payoutInput.value = formatMoney(payout);
-        // O preco real de vitrine pode arredondar para cima do valor digitado.
         return { price: publicFromPayout(payout), payout: payout };
       }
 

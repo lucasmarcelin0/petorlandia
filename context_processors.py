@@ -412,11 +412,6 @@ def inject_site_flags():
     return dict(site_flags=flags)
 
 
-def inject_mp_public_key():
-    """Disponibiliza a chave pública do Mercado Pago para os templates."""
-    return dict(MERCADOPAGO_PUBLIC_KEY=current_app.config.get("MERCADOPAGO_PUBLIC_KEY"))
-
-
 def inject_default_pickup_address():
     """Exposes DEFAULT_PICKUP_ADDRESS config to templates."""
     return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
@@ -437,7 +432,6 @@ _PROCESSORS = (
     inject_whatsapp_helpers,
     inject_public_contact,
     inject_site_flags,
-    inject_mp_public_key,
     inject_default_pickup_address,
 )
 

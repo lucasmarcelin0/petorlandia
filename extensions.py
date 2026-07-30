@@ -13,6 +13,7 @@ from flask_babel import Babel
 from flask_wtf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_compress import Compress
 from sqlalchemy import event, inspect
 
 # Cache for datetime column names per model class (performance optimization)
@@ -53,6 +54,7 @@ limiter = Limiter(
     default_limits=[],
     storage_uri="memory://",
 )
+compress = Compress()
 
 
 class RequestContextFilter(logging.Filter):

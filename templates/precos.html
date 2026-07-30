@@ -10,9 +10,9 @@
     <span class="precos-kicker">Preço</span>
     <h1>Um plano. Sem taxa de instalação, sem fidelidade.</h1>
     <p class="precos-lead">
-      Você usa {{ trial_days }} dias sem pagar nada. A forma de pagamento fica cadastrada no início
-      para o acesso não cair sozinho no meio de um atendimento — e a primeira cobrança só acontece
-      no {{ trial_days + 1 }}º dia. Cancelou antes disso, não paga nada e leva seus dados embora.
+      Você usa {{ trial_days }} dias sem pagar nada e sem cadastrar cartão. Quando perceber valor,
+      pode configurar a renovação: a primeira cobrança só acontece no fim da avaliação. Se não
+      configurar, as ferramentas profissionais pausam — nenhum dado é apagado.
     </p>
   </header>
 
@@ -26,11 +26,12 @@
       </p>
       <p class="precos-amount-note">por veterinário — pacientes ilimitados e recepção incluída</p>
 
-      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
+      <a href="{{ url_for('register', next=url_for('minha_clinica'), plan='mensal') }}"
+         class="precos-cta" data-cta="pricing_monthly_selected">
         Começar {{ trial_days }} dias grátis
       </a>
       <p class="precos-cta-note">
-        Primeira cobrança só no {{ trial_days + 1 }}º dia. Cancele antes e não paga nada.
+        Sem cartão para começar. Você decide durante a avaliação.
       </p>
 
       <ul class="precos-list">
@@ -54,7 +55,8 @@
         R$ {{ '%.0f'|format(annual_price) }} cobrados uma vez por ano
       </p>
 
-      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta precos-cta--outline">
+      <a href="{{ url_for('register', next=url_for('minha_clinica'), plan='anual') }}"
+         class="precos-cta precos-cta--outline" data-cta="pricing_annual_selected">
         Começar {{ trial_days }} dias grátis
       </a>
       <p class="precos-cta-note">
@@ -99,7 +101,7 @@
       <summary>Os dados dos meus pacientes são meus?</summary>
       <p>
         São. O prontuário, o histórico e a lista de clientes pertencem à clínica. A qualquer momento
-        você pode exportar tudo, e se decidir sair leva os dados com você.
+        o responsável pode baixar uma exportação da clínica, e se decidir sair leva os dados com você.
       </p>
     </details>
 
@@ -138,26 +140,24 @@
     <details class="precos-faq-item">
       <summary>O que acontece quando os {{ trial_days }} dias acabam?</summary>
       <p>
-        No {{ trial_days + 1 }}º dia cobramos <strong>R$ {{ '%.0f'|format(monthly_price) }}</strong>
-        na forma de pagamento que você cadastrou, e o sistema continua funcionando sem interrupção.
-        Avisamos por e-mail antes disso — no 25º, no 29º e no último dia — para você não ser
-        pego de surpresa.
+        Se você configurar o pagamento durante o teste, a primeira cobrança acontece ao fim
+        da avaliação e o sistema continua sem interrupção. Avisamos por e-mail quando faltarem
+        cinco dias, um dia e no último dia.
       </p>
       <p>
-        Se cancelar em qualquer momento dentro dos {{ trial_days }} dias, a cobrança não acontece
-        e você não paga nada.
+        Sem pagamento configurado, as ferramentas profissionais pausam ao fim do teste. Agenda,
+        prontuários e histórico ficam guardados para quando você decidir voltar.
       </p>
     </details>
 
     <details class="precos-faq-item">
-      <summary>Por que preciso cadastrar o pagamento se o teste é grátis?</summary>
+      <summary>Preciso cadastrar cartão para testar?</summary>
       <p>
-        Para o acesso não cair sozinho no {{ trial_days + 1 }}º dia. Sem o pagamento configurado,
-        a clínica perderia agenda e prontuário no meio do expediente só porque ninguém lembrou de
-        assinar — e é justamente aí que o sistema já virou parte da rotina.
+        Não. Você pode usar a avaliação primeiro e configurar o pagamento quando decidir continuar.
+        Se fizer isso durante o teste, a renovação fica automática para evitar interrupção.
       </p>
       <p>
-        Nenhum valor é cobrado durante o teste. O cartão fica guardado no Mercado Pago, não conosco.
+        Nenhum valor é cobrado durante o teste. Os dados do cartão ficam no Mercado Pago, não conosco.
       </p>
     </details>
   </section>
@@ -168,7 +168,7 @@
       São 15 minutos por vídeo chamada, mostrando o sistema com um caso parecido com o da sua clínica.
     </p>
     <div class="precos-closing-actions">
-      <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}" class="precos-cta">
+      <a href="{{ url_for('register', next=url_for('minha_clinica')) }}" class="precos-cta">
         Começar {{ trial_days }} dias grátis
       </a>
       <button type="button" class="precos-cta precos-cta--outline"

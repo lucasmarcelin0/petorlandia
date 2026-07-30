@@ -1418,13 +1418,38 @@ def adicionar_carrinho(product_id):
     item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
     if item:
         item.quantity += qty
+        item.unit_price = product.preco_publico or Decimal("0")
+        item.seller_unit_amount = product.price or Decimal("0")
+        item.platform_fee_amount = max(
+            Decimal("0"),
+            Decimal(str(item.unit_price or 0)) - Decimal(str(item.seller_unit_amount or 0)),
+        )
+        item.seller_type = (
+            'casa_de_racao' if product.casa_de_racao_id
+            else 'clinica' if product.clinica_id
+            else None
+        )
+        item.seller_id = product.casa_de_racao_id or product.clinica_id
     else:
+        public_price = product.preco_publico or Decimal("0")
+        seller_amount = product.price or Decimal("0")
         item = OrderItem(
             order_id=order.id,
             product_id=product.id,
             item_name=product.name,
             # Preço público (taxa embutida) — é o que o comprador paga.
-            unit_price=product.preco_publico or Decimal("0"),
+            unit_price=public_price,
+            seller_unit_amount=seller_amount,
+            platform_fee_amount=max(
+                Decimal("0"),
+                Decimal(str(public_price)) - Decimal(str(seller_amount)),
+            ),
+            seller_type=(
+                'casa_de_racao' if product.casa_de_racao_id
+                else 'clinica' if product.clinica_id
+                else None
+            ),
+            seller_id=product.casa_de_racao_id or product.clinica_id,
             quantity=qty,
         )
         db.session.add(item)
@@ -1677,6 +1702,23 @@ def checkout():
         return respond_error("Seu carrinho está vazio.", "warning")
     # Nunca cobrar preço defasado: reprecifica com o preço público vigente.
     _reprice_order_items(order)
+    seller_keys = {
+        (item.product.clinica_id, item.product.casa_de_racao_id)
+        for item in order.items
+        if item.product and (item.product.clinica_id or item.product.casa_de_racao_id)
+    }
+    if len(seller_keys) > 1:
+        return respond_error(
+            "Finalize os produtos de cada loja em pedidos separados. "
+            "Assim cada vendedor recebe diretamente e o repasse fica protegido.",
+            "warning",
+        )
+    if seller_keys and not _connected_mercadopago_account_for_order(order):
+        return respond_error(
+            "Esta loja ainda não concluiu a configuração de recebimento. "
+            "Nenhuma cobrança foi feita; tente novamente mais tarde.",
+            "warning",
+        )
 
     address_text = None
     if form.address_id.data is not None and form.address_id.data >= 0:

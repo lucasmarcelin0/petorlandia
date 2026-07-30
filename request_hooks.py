@@ -50,7 +50,8 @@ def _set_request_id_header(response):
             "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
-            "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com; "
+            "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com "
+            "https://www.google-analytics.com https://region1.google-analytics.com; "
             "form-action 'self' https://chatgpt.com https://chat.openai.com",
         )
         if request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
@@ -62,6 +63,11 @@ def _set_request_id_header(response):
         else:
             max_age = int(current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 3600))
             response.headers["Cache-Control"] = f"public, max-age={max_age}"
+    elif response.status_code >= 400:
+        response.headers["Cache-Control"] = "no-store"
+    elif current_user.is_authenticated:
+        # Páginas autenticadas podem conter dados pessoais e clínicos.
+        response.headers["Cache-Control"] = "private, no-store"
     return response
 
 

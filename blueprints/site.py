@@ -181,6 +181,9 @@ def veterinarian_membership():
     status = request.args.get('status')
 
     checkout_form = VeterinarianMembershipCheckoutForm()
+    preferred_plan = session.get('preferred_membership_plan', 'mensal')
+    if request.method == 'GET' and preferred_plan in {'mensal', 'anual'}:
+        checkout_form.plano.data = preferred_plan
     cancel_recurring_form = VeterinarianMembershipCancelRecurringForm()
     price = float(_get_veterinarian_membership_price())
     annual_price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', price * 10))
@@ -327,6 +330,7 @@ def veterinarian_membership_checkout():
         db.session.add(membership)
 
     db.session.commit()
+    session.pop('preferred_membership_plan', None)
 
     return redirect(init_point)
 
@@ -585,7 +589,7 @@ def _public_profile_data(profile_key: str) -> dict:
             'secondary_url': url_for('parceiro_clinica_landing'),
             'price': f'R$ {monthly_price:.0f}/mês por veterinário',
             'reassurance': (
-                f'Primeira cobrança só no {trial_days + 1}º dia. Sem fidelidade.'
+                f'{trial_days} dias sem cartão. Você decide se quer continuar.'
             ),
         },
         'veterinario': {
@@ -641,6 +645,7 @@ def index():
     if not current_user.is_authenticated:
         from services.public_stats import public_stats
 
+        track_event('landing_viewed', channel='public')
         selected_profile = (request.args.get('perfil') or 'tutor').strip().lower()
         if selected_profile not in PUBLIC_PROFILE_KEYS:
             selected_profile = 'tutor'
@@ -760,6 +765,59 @@ def onboarding():
     )
     tem_clinica = bool(getattr(current_user, 'clinicas', None))
     e_veterinario = has_veterinarian_profile(current_user)
+    activation_steps = []
+    if tem_clinica:
+        clinic_ids = [clinic.id for clinic in current_user.clinicas]
+        has_patient = bool(
+            Animal.query
+            .filter(Animal.clinica_id.in_(clinic_ids))
+            .filter(Animal.removido_em.is_(None))
+            .first()
+        )
+        has_appointment = bool(
+            Appointment.query
+            .filter(Appointment.clinica_id.in_(clinic_ids))
+            .first()
+        )
+        membership = (
+            ensure_veterinarian_membership(current_user.veterinario)
+            if e_veterinario
+            else None
+        )
+        has_payment = bool(membership and membership.has_payment_method())
+        activation_steps = [
+            {
+                'label': 'Clínica cadastrada',
+                'done': True,
+                'url': url_for('minha_clinica'),
+                'cta': 'Abrir clínica',
+            },
+            {
+                'label': 'Primeiro paciente cadastrado',
+                'done': has_patient,
+                'url': url_for('novo_animal'),
+                'cta': 'Cadastrar paciente',
+            },
+            {
+                'label': 'Primeiro agendamento criado',
+                'done': has_appointment,
+                'url': url_for('appointments'),
+                'cta': 'Criar agendamento',
+            },
+            {
+                'label': 'Renovação configurada',
+                'done': has_payment,
+                'url': url_for('veterinarian_membership'),
+                'cta': 'Ver assinatura',
+                'optional': True,
+            },
+        ]
+        completed = sum(1 for step in activation_steps if step['done'])
+        track_event(
+            'onboarding_progress_viewed',
+            stage=f'{completed}/{len(activation_steps)}',
+            success=completed == len(activation_steps),
+        )
 
     track_event('onboarding_viewed', role=getattr(current_user, 'role', None))
 
@@ -768,6 +826,7 @@ def onboarding():
         tem_pet=tem_pet,
         tem_clinica=tem_clinica,
         e_veterinario=e_veterinario,
+        activation_steps=activation_steps,
         trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
     )
 
@@ -864,7 +923,12 @@ def cta_event():
     if not name.startswith(CTA_EVENT_PREFIXES):
         return ('', 204)
 
-    track_event(name, source='cta')
+    track_event(
+        name,
+        source='cta',
+        source_path=(payload.get('path') or request.path)[:300],
+        link_text=(payload.get('text') or '')[:60],
+    )
     return ('', 204)
 
 
@@ -1676,7 +1740,7 @@ def servicos():
     from admin import _is_admin
 
     audience = _current_professional_service_audience()
-    vets = _public_veterinarians_query().all()
+    vets = [vet for vet in _public_veterinarians_query().all() if _is_public_veterinarian(vet)]
     professional_services_all = _professional_service_query(active_only=True)
     vet_cities = {
         city
