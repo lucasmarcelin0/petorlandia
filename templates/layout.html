@@ -80,6 +80,9 @@
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
   <link href="{{ url_for('static', filename='styles.css', v='20260729hotfix1') }}" rel="stylesheet">
+  {% if not current_user.is_authenticated %}
+  <link href="{{ url_for('static', filename='css/public_nav_auth.css', v='20260730') }}" rel="stylesheet">
+  {% endif %}
   {# clinic.css ainda contém a base visual compartilhada (body, footer,
      alertas e responsividade). Mantê-la global evita que páginas públicas
      percam essas regras até a separação definitiva em base-shell.css. #}

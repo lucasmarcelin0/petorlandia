@@ -264,15 +264,18 @@
             <i class="fas fa-tag me-1 text-success"></i> Preços
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('login_view') }}">
-            <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
+        <li class="nav-item public-auth-item">
+          <a class="nav-link nav-link--auth nav-link--login fw-semibold"
+             href="{{ url_for('login_view') }}"
+             aria-label="Entrar em uma conta existente">
+            <i class="fas fa-sign-in-alt me-1"></i> Entrar
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link nav-link--cta fw-semibold text-success"
+        <li class="nav-item public-auth-item">
+          <a class="nav-link nav-link--auth nav-link--trial fw-semibold"
              href="{{ url_for('register', next=url_for('minha_clinica')) }}"
-             data-cta="cta_nav_trial">
+             data-cta="cta_nav_trial"
+             aria-label="Criar uma conta e testar grátis">
             <i class="fas fa-arrow-right me-1"></i> Testar grátis
           </a>
         </li>
