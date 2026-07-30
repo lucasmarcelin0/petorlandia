@@ -40,6 +40,39 @@
   </div>
   <div class="address-card__coordinates" data-coordinates-display>Coordenadas não definidas.</div>
   <div class="address-card__map d-none" data-map-preview></div>
+  <style>
+    .address-map-marker {
+      background: transparent;
+      border: 0;
+    }
+
+    .address-map-marker__pin {
+      align-items: center;
+      background: #0d6efd;
+      border: 3px solid #fff;
+      border-radius: 50% 50% 50% 0;
+      box-shadow: 0 3px 9px rgba(15, 23, 42, 0.35);
+      box-sizing: border-box;
+      display: flex;
+      height: 30px;
+      justify-content: center;
+      margin: 6px;
+      transform: rotate(-45deg);
+      width: 30px;
+    }
+
+    .address-map-marker__dot {
+      background: #fff;
+      border-radius: 50%;
+      height: 9px;
+      width: 9px;
+    }
+
+    .address-map-marker.leaflet-marker-draggable:active .address-map-marker__pin {
+      background: #0a58ca;
+      box-shadow: 0 5px 12px rgba(15, 23, 42, 0.45);
+    }
+  </style>
 
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
@@ -311,7 +344,17 @@
 
           if (hasCoords) {
             if (!mapMarker) {
-              mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
+              const markerIcon = L.divIcon({
+                className: 'address-map-marker',
+                html: '<span class="address-map-marker__pin"><span class="address-map-marker__dot"></span></span>',
+                iconSize: [42, 42],
+                iconAnchor: [21, 42],
+                tooltipAnchor: [0, -38]
+              });
+              mapMarker = L.marker(
+                [coords.lat, coords.lon],
+                { draggable: true, icon: markerIcon }
+              ).addTo(mapInstance);
               mapMarker.bindTooltip('Arraste para ajustar a localização', { direction: 'top' });
               mapMarker.on('dragend', event => {
                 const position = event.target.getLatLng();
