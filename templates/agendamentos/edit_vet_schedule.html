@@ -140,10 +140,28 @@
               <div class="row g-3">
                 <div class="col-md-6">
                   {{ appointment_form.animal_id.label(class="form-label fw-semibold") }}
-                  {{ appointment_form.animal_id(class="form-select", **{'data-appointment-animal-select': 'true'}) }}
+                  {# Não deixe o primeiro pet da lista ser selecionado pelo navegador.
+                     O atendimento só pode ser criado após uma escolha explícita. #}
+                  <select
+                    id="{{ appointment_form.animal_id.id }}"
+                    name="{{ appointment_form.animal_id.name }}"
+                    class="form-select{% if appointment_form.animal_id.errors %} is-invalid{% endif %}"
+                    data-appointment-animal-select="true"
+                    required
+                  >
+                    <option value="" disabled {% if not appointment_form.animal_id.data %}selected{% endif %}>Selecione o animal</option>
+                    {% for animal in appointment_form.animal_data or [] %}
+                      <option value="{{ animal.id }}" {% if appointment_form.animal_id.data == animal.id %}selected{% endif %}>
+                        {{ animal.name }}{% if animal.tutor_name %} — {{ animal.tutor_name }}{% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
                   {# Alimenta o seletor com busca por animal/tutor e miniaturas.
                      O <select> acima segue sendo o campo enviado no POST. #}
                   <script type="application/json" data-appointment-animal-data>{{ (appointment_form.animal_data or [])|tojson }}</script>
+                  {% for error in appointment_form.animal_id.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                  {% endfor %}
                 </div>
                 <div class="col-md-6">
                   {{ appointment_form.veterinario_id.label(class="form-label fw-semibold") }}
@@ -153,8 +171,17 @@
 
               <div class="row g-3 mt-2">
                 <div class="col-md-6">
-                  {{ appointment_form.date.label(class="form-label fw-semibold") }}
-                  {{ appointment_form.date(class="form-control", type="date", id="appointment-date") }}
+                  {#
+                    Contrato de datas da agenda:
+                    - o navegador mostra este campo no padrão local pt-BR (dd/mm/aaaa);
+                    - por ser um <input type="date">, o valor enviado ao JavaScript e
+                      ao servidor é SEMPRE ISO (aaaa-mm-dd), conforme o padrão HTML.
+                    Nunca converta esse valor para dd/mm/aaaa antes de chamar a API:
+                    isso troca dia e mês em datas ambíguas (por exemplo, 03/08).
+                  #}
+                  {{ appointment_form.date.label('Data (dd/mm/aaaa)', class="form-label fw-semibold") }}
+                  {{ appointment_form.date(class="form-control", type="date", id="appointment-date", lang="pt-BR") }}
+                  <div class="form-text">Escolha o dia desejado; os horários abaixo serão atualizados para essa data.</div>
                 </div>
                 <div class="col-md-6">
                   {{ appointment_form.time.label(class="form-label fw-semibold") }}

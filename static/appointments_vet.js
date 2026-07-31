@@ -208,6 +208,45 @@ function formatDateToBrazil(value) {
   return `${day}/${month}/${year}`;
 }
 
+/*
+ * Contrato de datas da agenda:
+ * - valores de <input type="date"> e das APIs usam ISO: aaaa-mm-dd;
+ * - textos apresentados ao usuário usam pt-BR: dd/mm/aaaa.
+ *
+ * Não use `new Date('aaaa-mm-dd')` nem `toISOString()` para converter uma
+ * data de agenda. Essas APIs podem reinterpretar meia-noite em UTC e deslocar
+ * o dia conforme o fuso horário. Datas sem horário são montadas localmente.
+ */
+function parseIsoDateLocal(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((value || '').trim());
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  // Date normaliza valores inválidos (por exemplo, 2026-02-31); rejeite-os
+  // para que uma data inválida nunca seja silenciosamente deslocada.
+  return parsed.getFullYear() === Number(year)
+    && parsed.getMonth() === Number(month) - 1
+    && parsed.getDate() === Number(day)
+    ? parsed
+    : null;
+}
+
+function formatIsoDateLocal(value) {
+  const date = value instanceof Date ? value : parseIsoDateLocal(value);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function updateTextContent(element, value, fallback = '—') {
   if (!element) {
     return;
@@ -1102,7 +1141,13 @@ export async function updateAppointmentTimes(options = {}) {
     return [];
   }
 
+  // Limpa os horários da data anterior antes da busca. Sem isso, trocar de
+  // 03/08 para 08/03 deixava opções antigas no select e permitia agendar no
+  // dia errado.
+  const requestVersion = Number(timeSelect.dataset.availableTimesRequestVersion || '0') + 1;
+  timeSelect.dataset.availableTimesRequestVersion = String(requestVersion);
   ensurePlaceholderOption(timeSelect, placeholder);
+  timeSelect.disabled = true;
 
   if (!dateInput || !vetId || !dateInput.value) {
     return [];
@@ -1113,6 +1158,12 @@ export async function updateAppointmentTimes(options = {}) {
     searchParams: options.searchParams,
     fetchOptions: options.fetchOptions
   });
+
+  // Uma resposta de uma data anterior pode chegar depois da escolha mais
+  // recente. Nesse caso ela não pode repovoar o campo atual.
+  if (timeSelect.dataset.availableTimesRequestVersion !== String(requestVersion)) {
+    return [];
+  }
 
   if (!Array.isArray(times) || times.length === 0) {
     return [];
@@ -1126,6 +1177,7 @@ export async function updateAppointmentTimes(options = {}) {
     fragment.appendChild(option);
   });
   timeSelect.appendChild(fragment);
+  timeSelect.disabled = false;
   return times;
 }
 
@@ -1272,7 +1324,9 @@ function initScheduleOverview(root) {
     currentStart: '',
     days: [],
     selectedSlotKey: '',
-    todayIso: new Date().toISOString().split('T')[0]
+    // Data civil local, nunca UTC: a agenda brasileira não pode avançar ou
+    // retroceder um dia ao redor da meia-noite.
+    todayIso: formatIsoDateLocal(new Date())
   };
 
   function resolveInitialVetId() {
@@ -1381,26 +1435,16 @@ function initScheduleOverview(root) {
     });
   });
 
-  function formatIso(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-      return '';
-    }
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
   function getWeekStart(value) {
-    const base = value ? new Date(`${value}T00:00:00`) : new Date();
-    if (Number.isNaN(base.getTime())) {
+    const base = value ? parseIsoDateLocal(value) : new Date();
+    if (!(base instanceof Date) || Number.isNaN(base.getTime())) {
       return state.todayIso;
     }
     const day = base.getDay();
     const diff = day === 0 ? -6 : 1 - day;
     const monday = new Date(base);
     monday.setDate(base.getDate() + diff);
-    return formatIso(monday);
+    return formatIsoDateLocal(monday);
   }
 
   function updateToggleButtonLabel() {
@@ -1512,13 +1556,30 @@ function initScheduleOverview(root) {
         };
       }
     }
+    // A mensagem deve explicar a data que a pessoa escolheu, não procurar o
+    // "próximo" horário em outro mês/semana. Isso evita uma agenda dizendo
+    // março enquanto o campo Data está em agosto.
+    const selectedDate = dateField?.value || '';
+    const selectedDay = days.find((day) => day && day.date === selectedDate);
+    const selectedSlots = filterSlotsByPeriod(selectedDay?.available || []);
+    const displayDate = parseIsoDateLocal(selectedDate);
+    if (selectedDay && displayDate && selectedSlots.length) {
+      nextSlot = {
+        date: selectedDate,
+        time: selectedSlots[0],
+        dateObj: displayDate
+      };
+    } else {
+      nextSlot = null;
+    }
     if (nextSlot) {
-      const formattedDate = longFormatter.format(new Date(`${nextSlot.date}T00:00:00`));
-      summaryBadge.textContent = `Próximo horário livre: ${formattedDate} às ${nextSlot.time}`;
+      const formattedDate = longFormatter.format(displayDate);
+      summaryBadge.textContent = `${selectedSlots.length} horário(s) disponível(is) em ${formattedDate}.`;
       summaryBadge.classList.remove('text-bg-light');
       summaryBadge.classList.add('text-bg-success');
     } else {
-      summaryBadge.textContent = 'Sem horários livres nesta semana.';
+      const formattedDate = displayDate ? longFormatter.format(displayDate) : 'a data selecionada';
+      summaryBadge.textContent = `Sem horários livres em ${formattedDate}.`;
       summaryBadge.classList.remove('text-bg-light');
       summaryBadge.classList.add('text-bg-warning');
     }
@@ -1532,8 +1593,8 @@ function initScheduleOverview(root) {
       weekLabel.textContent = 'Agenda indisponível para este período.';
       return;
     }
-    const first = shortFormatter.format(new Date(`${days[0].date}T00:00:00`));
-    const last = shortFormatter.format(new Date(`${days[days.length - 1].date}T00:00:00`));
+    const first = shortFormatter.format(parseIsoDateLocal(days[0].date));
+    const last = shortFormatter.format(parseIsoDateLocal(days[days.length - 1].date));
     weekLabel.textContent = `Semana de ${first} a ${last}`;
   }
 
@@ -1614,12 +1675,12 @@ function initScheduleOverview(root) {
 
       const title = document.createElement('h6');
       title.className = 'card-title fw-bold text-capitalize mb-1';
-      title.textContent = shortFormatter.format(new Date(`${day.date}T00:00:00`));
+      title.textContent = shortFormatter.format(parseIsoDateLocal(day.date));
       body.appendChild(title);
 
       const subtitle = document.createElement('p');
       subtitle.className = 'text-muted small text-capitalize mb-3';
-      subtitle.textContent = longFormatter.format(new Date(`${day.date}T00:00:00`));
+      subtitle.textContent = longFormatter.format(parseIsoDateLocal(day.date));
       body.appendChild(subtitle);
 
       const statsRow = document.createElement('div');
@@ -1694,6 +1755,7 @@ function initScheduleOverview(root) {
       return;
     }
     dateField.value = date;
+    state.currentStart = getWeekStart(date);
     const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
     const hasTimes = Array.isArray(times) && times.length > 0;
     if (timeSelect.disabled && (hasTimes || time)) {
@@ -1764,12 +1826,12 @@ function initScheduleOverview(root) {
   }
 
   function changeWeek(deltaDays) {
-    const startDate = new Date(`${state.currentStart || state.todayIso}T00:00:00`);
-    if (Number.isNaN(startDate.getTime())) {
+    const startDate = parseIsoDateLocal(state.currentStart || state.todayIso);
+    if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
       state.currentStart = state.todayIso;
     } else {
       startDate.setDate(startDate.getDate() + deltaDays);
-      state.currentStart = formatIso(startDate);
+      state.currentStart = formatIsoDateLocal(startDate);
     }
     loadSchedule({ showLoading: collapseEl ? collapseEl.classList.contains('show') : true });
   }

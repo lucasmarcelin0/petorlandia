@@ -322,10 +322,11 @@ class AppointmentForm(FlaskForm):
         selected_tutor_id = None
         if restrict_tutors:
             selected_tutor_id = self._restricted_tutor_id
-        elif animals:
-            selected_tutor_id = getattr(animals[0], 'user_id', None)
         else:
-            selected_tutor_id = self.tutor_id.data
+            # A primeira opção da consulta não é uma escolha do usuário.
+            # Manter "Todos os tutores" evita pré-selecionar o primeiro animal
+            # e deixar um cartão de outro tutor preso na busca atual.
+            selected_tutor_id = self.tutor_id.data or 0
 
         self.populate_animals(
             animals,
@@ -402,4 +403,3 @@ class AppointmentForm(FlaskForm):
         veterinario = query.filter(Veterinario.id == field.data).first()
         if not veterinario:
             raise ValidationError('Selecione um veterinário válido para esta clínica.')
-
