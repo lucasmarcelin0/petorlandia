@@ -28,6 +28,7 @@ from models import (
 )
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
+from services.payments import normalize_preapproval_reason
 from sqlalchemy.orm import joinedload, selectinload
 from time_utils import normalize_to_utc, now_in_brazil, utcnow
 
@@ -170,7 +171,7 @@ def veterinarian_membership():
                 if preapproval_status == 'authorized':
                     membership.payment_method_set_at = utcnow()
                     db.session.commit()
-                elif preapproval_status == 'cancelled':
+                elif preapproval_status in {'cancelled', 'canceled'}:
                     membership.preapproval_id = None
                     membership.payment_method_set_at = None
                     db.session.commit()
@@ -265,8 +266,11 @@ def veterinarian_membership_checkout():
     if membership and membership.id is None:
         db.session.flush()
 
-    reason_suffix = current_user.name.strip() if (current_user.name or '').strip() else current_user.email
-    reason = f'Assinatura Profissional PetOrlândia ({ciclo_label}) - {reason_suffix}'
+    # ``external_reference`` and ``payer_email`` already identify this account.
+    # Keep ``reason`` free of PII and short: Mercado Pago rejects > 60 chars.
+    reason = normalize_preapproval_reason(
+        f'Assinatura PetOrlandia ({ciclo_label})'
+    )
 
     auto_recurring = {
         'frequency': frequency,
@@ -349,9 +353,11 @@ def _cancel_membership_preapproval(membership) -> bool:
     if not preapproval_id:
         return True
     try:
+        # The Subscriptions API requires the American spelling ``canceled``;
+        # ``cancelled`` belongs to the Payments API and is rejected here.
         response = mp_sdk().preapproval().update(
             preapproval_id,
-            {'status': 'cancelled'},
+            {'status': 'canceled'},
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception(

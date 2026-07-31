@@ -9,6 +9,21 @@ from extensions import db
 from time_utils import utcnow
 
 
+# Mercado Pago rejects ``preapproval.reason`` values above 60 characters with
+# HTTP 400. Keep this provider limit centralized: removing the cap breaks
+# recurring checkout as soon as a label contains a long customer/plan name.
+MERCADOPAGO_PREAPPROVAL_REASON_MAX_LENGTH = 60
+
+
+def normalize_preapproval_reason(value: object) -> str:
+    """Normalize a subscription label to Mercado Pago's explicit limit."""
+
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized:
+        normalized = "Assinatura PetOrlandia"
+    return normalized[:MERCADOPAGO_PREAPPROVAL_REASON_MAX_LENGTH].rstrip()
+
+
 @dataclass(frozen=True)
 class PaymentItemDTO:
     item_id: str
