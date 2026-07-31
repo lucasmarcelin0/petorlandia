@@ -2961,7 +2961,13 @@ def api_specialist_available_times(veterinario_id):
     date_str = request.args.get('date')
     if not date_str:
         return jsonify([])
-    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    # API contract: dates are ISO (YYYY-MM-DD). The UI displays dates in
+    # Brazilian format (DD/MM/YYYY), but must never submit that display text:
+    # values such as 03/08 are ambiguous and can swap day/month silently.
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Data inválida. Use o formato YYYY-MM-DD.'}), 400
     kind = request.args.get('kind', 'consulta')
     include_booked = request.args.get('include_booked', '').lower() in ('1', 'true', 'yes', 'on')
     times = get_available_times(
@@ -2977,7 +2983,10 @@ def api_specialist_available_times(veterinario_id):
 def api_specialist_weekly_schedule(veterinario_id):
     start_str = request.args.get('start')
     days = int(request.args.get('days', 7))
-    start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else date.today()
+    # See the date contract in api_specialist_available_times above.
+    try:
+        start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else date.today()
+    except ValueError:
+        return jsonify({'error': 'Data inválida. Use o formato YYYY-MM-DD.'}), 400
     data = get_weekly_schedule(veterinario_id, start_date, days)
     return jsonify(data)
-

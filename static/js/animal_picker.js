@@ -86,6 +86,8 @@ function montarPicker(form) {
 
   const selecionado = document.createElement('div');
   selecionado.className = 'animal-picker__selected';
+  selecionado.setAttribute('aria-live', 'polite');
+  selecionado.title = 'Clique para trocar o animal selecionado';
   selecionado.hidden = true;
 
   container.append(campo, lista, selecionado);
@@ -112,6 +114,9 @@ function montarPicker(form) {
     }
     selecionado.hidden = false;
     selecionado.textContent = '';
+    const rotulo = document.createElement('span');
+    rotulo.className = 'animal-picker__selected-label';
+    rotulo.textContent = 'Animal selecionado';
     const linha = document.createElement('div');
     linha.className = 'animal-picker__row';
     linha.append(
@@ -128,7 +133,7 @@ function montarPicker(form) {
       .filter(Boolean).join(' · ');
     texto.append(titulo, sub);
     linha.appendChild(texto);
-    selecionado.appendChild(linha);
+    selecionado.append(rotulo, linha);
   }
 
   function desenharLista(termo) {
@@ -208,6 +213,7 @@ function montarPicker(form) {
     select.value = String(registro.id);
     select.dispatchEvent(new Event('change', { bubbles: true }));
     campo.value = '';
+    campo.placeholder = 'Buscar outro animal ou tutor...';
     fechar();
     desenharSelecionado();
   }
@@ -221,6 +227,10 @@ function montarPicker(form) {
 
   campo.addEventListener('input', () => desenharLista(campo.value));
   campo.addEventListener('focus', () => desenharLista(campo.value));
+  selecionado.addEventListener('click', () => {
+    campo.focus();
+    desenharLista(campo.value);
+  });
   campo.addEventListener('blur', () => window.setTimeout(fechar, 120));
   campo.addEventListener('keydown', (evento) => {
     if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
