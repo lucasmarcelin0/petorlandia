@@ -136,6 +136,7 @@
       paginationContainerSelector: typeConfig.paginationContainerSelector,
       paginationScopeSelector: typeConfig.paginationScopeSelector,
       applyButtonSelector: typeConfig.applyButtonSelector || null,
+      statusFilterSelector: typeConfig.statusFilterSelector || null,
     };
 
     const filterInput = panel.querySelector(config.filterSelector);
@@ -156,7 +157,7 @@
       statusFilters: collectStatusFilters(statusFilterInputs),
     };
 
-    const persisted = restorePreferences(config, state, filterInput, sortSelect, statusFilterInputs);
+    const persisted = restorePreferences(config, state, sortSelect, statusFilterInputs);
 
     panel.dataset.listingInitialized = 'true';
     panelStates.set(panel, { config, state, filterInput, sortSelect, cardsContainer, statusFilterInputs });
@@ -165,10 +166,11 @@
 
     if (filterInput) {
       filterInput.addEventListener('input', () => {
-        const { state: panelState, config: panelConfig } = panelStates.get(panel) || {};
+        const { state: panelState } = panelStates.get(panel) || {};
         if (!panelState) return;
         panelState.search = filterInput.value.trim();
-        persistPreference(panelConfig.storagePrefix, 'Filter', filterInput.value);
+        // Busca não vai para o localStorage: é dado de tutor e vale só para
+        // esta navegação.
         setErrorState(panel, false);
         scheduleFetch(panel, 1);
       });
@@ -277,21 +279,49 @@
 
   // ── Preferências ──────────────────────────────────────────────────────────
 
-  function restorePreferences(config, state, filterInput, sortSelect, statusFilterInputs) {
+  // As preferências vivem no navegador, que é compartilhado entre pessoas. A
+  // chave carrega o id de quem está logado para que a próxima sessão não herde
+  // nada da anterior — inclusive numa clínica onde o mesmo aparelho circula
+  // entre a recepção e o consultório.
+  function storageScope() {
+    const scope = document.body && document.body.dataset
+      ? document.body.dataset.storageScope
+      : null;
+    return scope || 'anon';
+  }
+
+  function storageKey(prefix, suffix) {
+    return `${prefix}:${storageScope()}:${suffix}`;
+  }
+
+  // Chaves antigas eram globais do navegador e guardavam até o texto buscado
+  // (nome, CPF, telefone de tutor). Some com elas na primeira visita.
+  const LEGACY_SUFFIXES = ['Filter', 'Sort', 'StatusFilters'];
+
+  function purgeLegacyKeys(prefix) {
+    if (!prefix) return;
+    try {
+      LEGACY_SUFFIXES.forEach((suffix) => {
+        window.localStorage.removeItem(`${prefix}${suffix}`);
+      });
+    } catch (error) {
+      /* storage indisponível: nada a limpar */
+    }
+  }
+
+  function restorePreferences(config, state, sortSelect, statusFilterInputs) {
     let shouldFetch = false;
     if (!config.storagePrefix) return { shouldFetch };
 
+    purgeLegacyKeys(config.storagePrefix);
+
     try {
-      if (filterInput && !state.search) {
-        const storedFilter = window.localStorage.getItem(`${config.storagePrefix}Filter`);
-        if (storedFilter) {
-          filterInput.value = storedFilter;
-          state.search = storedFilter.trim();
-          shouldFetch = shouldFetch || Boolean(state.search);
-        }
-      }
+      // O termo de busca deliberadamente NÃO é restaurado. Ele carrega dado de
+      // tutor e, pior, o servidor já renderizou a lista sem esse filtro: repor
+      // o texto aqui fazia a página exibir registros que sumiam logo depois,
+      // quando o refetch com o termo chegava.
       if (sortSelect) {
-        const storedSort = window.localStorage.getItem(`${config.storagePrefix}Sort`);
+        const storedSort = window.localStorage.getItem(storageKey(config.storagePrefix, 'Sort'));
         if (storedSort && Array.from(sortSelect.options).some((opt) => opt.value === storedSort)) {
           if (state.sort !== storedSort) {
             sortSelect.value = storedSort;
@@ -301,7 +331,7 @@
         }
       }
       if (statusFilterInputs && statusFilterInputs.length) {
-        const storedStatuses = window.localStorage.getItem(`${config.storagePrefix}StatusFilters`);
+        const storedStatuses = window.localStorage.getItem(storageKey(config.storagePrefix, 'StatusFilters'));
         if (storedStatuses !== null) {
           let parsed;
           try {
@@ -328,7 +358,7 @@
   function persistPreference(prefix, suffix, value) {
     if (!prefix) return;
     try {
-      window.localStorage.setItem(`${prefix}${suffix}`, value);
+      window.localStorage.setItem(storageKey(prefix, suffix), value);
     } catch (error) {
       console.warn('Unable to persist listing panel preference.', error);
     }
