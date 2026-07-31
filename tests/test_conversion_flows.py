@@ -180,6 +180,48 @@ def test_ativacao_da_clinica_cria_veterinario_e_avaliacao(app, client, monkeypat
         assert vet.membership.is_trial_active()
 
 
+def test_checkout_veterinario_limita_reason_do_mercado_pago(app, client, monkeypatch):
+    import app as app_module
+
+    user = _user()
+    user.name = "Dra. " + ("Nome Profissional Muito Longo " * 5)
+    vet = Veterinario(user=user, crmv="12345", crmv_estado="SP")
+    db.session.add(vet)
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    captured = {}
+
+    class FakePreapproval:
+        def create(self, payload):
+            captured.update(payload)
+            return {
+                "status": 201,
+                "response": {
+                    "id": "pre-vet-1",
+                    "init_point": "https://mp.example/assinatura",
+                },
+            }
+
+    class FakeSDK:
+        def preapproval(self):
+            return FakePreapproval()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda: FakeSDK())
+
+    response = client.post(
+        "/veterinario/assinatura/checkout",
+        data={"plano": "mensal"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://mp.example/assinatura"
+    assert 1 <= len(captured["reason"]) <= 60
+    assert captured["reason"] == "Assinatura PetOrlandia (mensal)"
+    assert user.name not in captured["reason"]
+
+
 def test_demo_funciona_sem_whatsapp_configurado(app, client):
     response = client.post(
         "/lista-de-espera",
@@ -206,7 +248,7 @@ def test_cancelamento_confirma_no_provedor_antes_de_parar_renovacao(
     class FakePreapproval:
         def update(self, preapproval_id, payload):
             calls.append((preapproval_id, payload))
-            return {"status": 200, "response": {"status": "cancelled"}}
+            return {"status": 200, "response": {"status": "canceled"}}
 
     class FakeSdk:
         def preapproval(self):
@@ -237,7 +279,7 @@ def test_cancelamento_confirma_no_provedor_antes_de_parar_renovacao(
         assert refreshed.preapproval_id is None
         assert refreshed.payment_method_set_at is None
         assert refreshed.has_valid_payment()
-        assert calls == [("pre-123", {"status": "cancelled"})]
+        assert calls == [("pre-123", {"status": "canceled"})]
 
 
 def test_falha_no_provedor_nao_finge_que_renovacao_foi_cancelada(
