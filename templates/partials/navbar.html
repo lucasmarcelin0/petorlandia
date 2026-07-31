@@ -4,12 +4,30 @@
 {% set unread_total = unread_messages|default(0) %}
 {% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}
 
-<nav class="navbar navbar-expand-lg fixed-top navbar-light">
+<nav class="navbar navbar-expand-lg fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
   <div class="container-fluid">
     <a href="{{ url_for('painel_admin.index') if is_admin else url_for('index') }}" class="navbar-brand">
       <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
       <span>PetOrlândia</span>
     </a>
+
+    {% if not current_user.is_authenticated %}
+    {# As mesmas ações de acesso do desktop ficam sempre visíveis no celular,
+       fora do menu recolhido, para não depender de abrir a sanfona. #}
+    <div class="public-auth-quick d-lg-none">
+      <a class="public-auth-quick__link public-auth-quick__login"
+         href="{{ url_for('login_view') }}"
+         aria-label="Entrar em uma conta existente">
+        Entrar
+      </a>
+      <a class="public-auth-quick__link public-auth-quick__trial"
+         href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+         data-cta="cta_nav_trial_mobile"
+         aria-label="Criar uma conta e testar grátis">
+        Testar grátis
+      </a>
+    </div>
+    {% endif %}
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
       aria-label="Abrir menu de navegação" aria-controls="navbarNav" aria-expanded="false">
