@@ -246,7 +246,10 @@
   });
 </script>
 
-<body>
+{# Identifica de quem é a sessão para o JS separar preferências salvas no
+   navegador. Sem isso, um dispositivo compartilhado entrega as preferências
+   (e o termo de busca) de uma pessoa para a próxima que entrar. #}
+<body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}">
   {% include 'partials/navbar.html' %}
 
   {% if flash_messages %}
@@ -455,7 +458,9 @@
   <script src="{{ url_for('static', filename='js/lead_capture.js', v='20260729b') }}" defer></script>
   {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='photo_cropper.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>
+  {# Versionado: a limpeza das chaves antigas do localStorage só acontece se o
+     navegador buscar o arquivo novo. Suba o valor a cada mudança aqui. #}
+  <script src="{{ url_for('static', filename='js/listing_panels.js', v='20260731a') }}"></script>
   <script src="{{ url_for('static', filename='js/record_panels.js', v='20260701b') }}"></script>
   {% endif %}
 
