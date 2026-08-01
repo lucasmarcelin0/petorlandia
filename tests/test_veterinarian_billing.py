@@ -310,3 +310,70 @@ def test_reconciliacao_recupera_webhook_perdido_sem_duplicar_acesso(app):
     assert second["charges_seen"] == 1
     assert membership.paid_until == paid_until
     assert VeterinarianMembershipCharge.query.count() == 1
+
+
+def test_reconciliacao_importa_assinatura_legada_e_suas_cobrancas(app):
+    membership = _membership("legacy-reconcile@example.com")
+    membership.preapproval_id = "pre-legacy"
+    db.session.commit()
+
+    class FakeClient:
+        def get_preapproval(self, preapproval_id):
+            assert preapproval_id == "pre-legacy"
+            return {
+                "id": preapproval_id,
+                "status": "authorized",
+                "auto_recurring": {
+                    "frequency": 12,
+                    "frequency_type": "months",
+                    "transaction_amount": 600,
+                    "currency_id": "BRL",
+                },
+            }
+
+        def search_authorized_payments(self, preapproval_id):
+            return [
+                {
+                    "id": "invoice-legacy",
+                    "preapproval_id": preapproval_id,
+                    "transaction_amount": 600,
+                    "currency_id": "BRL",
+                    "payment": {"id": "pay-legacy", "status": "approved"},
+                }
+            ]
+
+    result = reconcile_membership_billing(FakeClient())
+
+    assert result == {
+        "checked": 1,
+        "subscriptions_updated": 1,
+        "charges_seen": 1,
+        "failures": 0,
+        "missing": 0,
+    }
+    subscription = VeterinarianMembershipSubscription.query.one()
+    charge = VeterinarianMembershipCharge.query.one()
+    assert subscription.plan_code == "anual"
+    assert subscription.external_reference.endswith("-legacy-anual")
+    assert charge.subscription_id == subscription.id
+    assert charge.cycle_days == 365
+    assert charge.access_applied_at is not None
+
+
+def test_reconciliacao_limpa_preapproval_legado_que_nao_existe_mais(app):
+    membership = _membership("legacy-missing@example.com")
+    membership.preapproval_id = "pre-missing"
+    db.session.commit()
+
+    class FakeClient:
+        def get_preapproval(self, preapproval_id):
+            raise LookupError(preapproval_id)
+
+        def search_authorized_payments(self, preapproval_id):
+            raise AssertionError("não deve buscar cobranças de assinatura ausente")
+
+    result = reconcile_membership_billing(FakeClient())
+
+    assert result["checked"] == 1
+    assert result["missing"] == 1
+    assert membership.preapproval_id is None
