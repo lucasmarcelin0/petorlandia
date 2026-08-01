@@ -1,0 +1,80 @@
+{% extends 'admin/model/list.html' %}
+
+{% block model_menu_bar %}
+  {# master.html is a custom admin shell and does not expose Flask-Admin's head block. #}
+  <style>
+    .product-management-hero {
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      border-radius: 16px;
+      color: #fff;
+      background: linear-gradient(125deg, #224abe, #4e73df 55%, #1cc88a);
+      box-shadow: 0 12px 30px rgba(34, 74, 190, .18);
+    }
+    .product-management-hero h1 { font-size: 1.45rem; font-weight: 700; margin: 0 0 .35rem; }
+    .product-management-hero p { max-width: 760px; margin: 0; color: rgba(255,255,255,.9); }
+    .product-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+    .product-stat {
+      display: flex; align-items: center; gap: .75rem; min-height: 82px;
+      padding: .9rem 1rem; background: #fff; border: 1px solid #e7eaf1;
+      border-radius: 14px; box-shadow: 0 4px 14px rgba(35, 48, 80, .05);
+    }
+    .product-stat__icon { display:grid; place-items:center; width:42px; height:42px; flex:0 0 42px; border-radius:12px; background:#eef2ff; color:#4e73df; }
+    .product-stat--subscription .product-stat__icon { background:#e8fff6; color:#11875d; }
+    .product-stat--single .product-stat__icon { background:#edf6ff; color:#1769aa; }
+    .product-stat--active .product-stat__icon { background:#ecfdf3; color:#16834f; }
+    .product-stat strong { display:block; font-size:1.35rem; line-height:1.1; color:#202538; }
+    .product-stat span { color:#697083; font-size:.78rem; }
+    .sale-mode-legend { display:flex; align-items:center; gap:.65rem; flex-wrap:wrap; padding:.75rem 1rem; margin-bottom:1rem; border:1px solid #e7eaf1; border-radius:12px; background:#fff; color:#5a5c69; font-size:.82rem; }
+    .sale-mode { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:190px; }
+    .sale-mode__badge, .product-status, .stock-indicator { display:inline-flex; align-items:center; gap:6px; border-radius:999px; font-size:.75rem; font-weight:700; padding:6px 10px; white-space:nowrap; }
+    .sale-mode--single .sale-mode__badge { color:#1769aa; background:#eaf5ff; border:1px solid #bbddf8; }
+    .sale-mode--subscription .sale-mode__badge { color:#08764f; background:#e7fbf3; border:1px solid #a9e8cf; }
+    .sale-mode strong { color:#08764f; font-size:.82rem; }
+    .sale-mode small, .product-price-stack small, .product-admin-name span { color:#73798a; font-size:.7rem; }
+    .product-admin-image { width:58px!important; height:58px; max-height:58px!important; object-fit:cover; border-radius:12px!important; border:1px solid #e3e7ef; }
+    .product-image-placeholder { display:grid; place-items:center; width:58px; height:58px; border-radius:12px; background:#f0f2f7; color:#a4aaba; }
+    .product-admin-name { display:flex; flex-direction:column; min-width:180px; }
+    .product-admin-name a { color:#26345d; font-weight:700; text-decoration:none; }
+    .product-admin-name a:hover { color:#4e73df; text-decoration:underline; }
+    .product-seller { display:inline-flex; align-items:center; gap:7px; color:#4f566b; min-width:130px; }
+    .product-price-stack { display:flex; flex-direction:column; min-width:125px; }
+    .product-price-stack strong { color:#202538; }
+    .stock-indicator--success { color:#08764f; background:#e7fbf3; }
+    .stock-indicator--warning { color:#8c6000; background:#fff5d6; }
+    .stock-indicator--danger { color:#b42318; background:#feeceb; }
+    .product-status--success { color:#08764f; background:#e7fbf3; }
+    .product-status--secondary { color:#626879; background:#eef0f4; }
+    .product-status--warning { color:#8c6000; background:#fff5d6; }
+    .content table.model-list tbody tr:has(.sale-mode--subscription) { background:linear-gradient(90deg, rgba(28,200,138,.045), transparent 38%); }
+    .content table.model-list th.col-subscription_enabled { min-width:220px; }
+    @media (max-width: 1100px) { .product-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width: 620px) {
+      .product-management-hero { padding:1rem; }
+      .product-stat-grid { grid-template-columns:1fr 1fr; gap:.5rem; }
+      .product-stat { min-height:70px; padding:.7rem; }
+      .product-stat__icon { display:none; }
+      .product-stat strong { font-size:1.15rem; }
+      .sale-mode-legend { align-items:flex-start; }
+    }
+  </style>
+  <section class="product-management-hero" aria-labelledby="product-management-title">
+    <h1 id="product-management-title"><i class="fa-solid fa-boxes-stacked me-2"></i>Manejo de produtos</h1>
+    <p>Veja de relance como cada item é vendido. “Compra + assinatura” sempre mantém a compra avulsa disponível e acrescenta a opção de cobrança recorrente.</p>
+  </section>
+
+  <div class="product-stat-grid" aria-label="Resumo dos produtos">
+    <div class="product-stat"><span class="product-stat__icon"><i class="fa-solid fa-boxes-stacked"></i></span><div><strong>{{ product_stats.total }}</strong><span>produtos cadastrados</span></div></div>
+    <div class="product-stat product-stat--active"><span class="product-stat__icon"><i class="fa-solid fa-eye"></i></span><div><strong>{{ product_stats.active }}</strong><span>visíveis na loja</span></div></div>
+    <div class="product-stat product-stat--single"><span class="product-stat__icon"><i class="fa-solid fa-bag-shopping"></i></span><div><strong>{{ product_stats.single }}</strong><span>somente compra única</span></div></div>
+    <div class="product-stat product-stat--subscription"><span class="product-stat__icon"><i class="fa-solid fa-arrows-rotate"></i></span><div><strong>{{ product_stats.subscription }}</strong><span>com assinatura habilitada</span></div></div>
+  </div>
+
+  <div class="sale-mode-legend">
+    <strong>Leitura rápida:</strong>
+    <span class="sale-mode sale-mode--single"><span class="sale-mode__badge"><i class="fa-solid fa-bag-shopping"></i> Compra única</span></span>
+    <span class="sale-mode sale-mode--subscription"><span class="sale-mode__badge"><i class="fa-solid fa-arrows-rotate"></i> Compra + assinatura</span></span>
+    <span>Use <strong>Filtros</strong> para visualizar somente uma modalidade.</span>
+  </div>
+  {{ super() }}
+{% endblock %}
