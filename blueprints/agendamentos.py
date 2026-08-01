@@ -74,6 +74,7 @@ from app import (
     _public_city_key,
     _public_veterinarians_query,
     _render_vet_public_profile,
+    _resolve_record_panel,
     _user_is_clinic_professional,
     _vet_all_public_cities,
     _vet_matches_public_city,
@@ -1433,6 +1434,22 @@ def appointments():
             sort_option=tutor_sort,
         )
 
+        # Cada aba (animais/tutores) alterna entre listagem e cadastro no
+        # mesmo padrao de /tutores e /novo_animal; como as duas convivem na
+        # mesma pagina, cada uma usa seu proprio parametro de URL.
+        vet_animal_panel = _resolve_record_panel(
+            request.args,
+            listing_params=('scope', 'animal_search', 'animal_sort', 'page'),
+            default='list',
+            param='animal_panel',
+        )
+        vet_tutor_panel = _resolve_record_panel(
+            request.args,
+            listing_params=('tutor_scope', 'tutor_search', 'tutor_sort', 'tutor_page'),
+            default='list',
+            param='tutor_panel',
+        )
+
         species_list = list_species()
         breed_list = list_breeds()
 
@@ -1489,6 +1506,8 @@ def appointments():
             vet_animais_scope=vet_animais_scope,
             vet_animal_search=pet_search,
             vet_animal_sort=pet_sort,
+            vet_animal_panel=vet_animal_panel,
+            vet_tutor_panel=vet_tutor_panel,
             vet_tutores_adicionados=vet_tutores_adicionados,
             vet_tutores_pagination=vet_tutores_pagination,
             vet_tutores_scope=vet_tutores_scope,
