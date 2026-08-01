@@ -52,11 +52,19 @@ def _set_request_id_header(response):
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
             "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com "
             "https://www.google-analytics.com https://region1.google-analytics.com; "
-            "form-action 'self' https://chatgpt.com https://chat.openai.com",
+            "form-action 'self' https://chatgpt.com https://chat.openai.com "
+            "https://www.mercadopago.com.br",
         )
         if request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-    if request.endpoint == "static":
+    if request.path == "/service-worker.js":
+        # Um worker antigo continua controlando todas as páginas autenticadas;
+        # nunca permita que autenticação ou defaults de estáticos reintroduzam
+        # cache prolongado nessa resposta.
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif request.endpoint == "static":
         if request.args.get("v"):
             max_age = int(current_app.config.get("SEND_FILE_VERSIONED_MAX_AGE", 31536000))
             response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"

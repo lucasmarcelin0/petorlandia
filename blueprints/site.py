@@ -1370,7 +1370,18 @@ def sitemap_xml():
 
 @bp.route('/service-worker.js')
 def service_worker():
-    return send_from_directory(current_app.static_folder, 'service-worker.js')
+    response = send_from_directory(
+        current_app.static_folder,
+        'service-worker.js',
+        max_age=0,
+    )
+    # O navegador precisa revalidar o worker em cada visita. Cache longo aqui
+    # mantém versões antigas controlando a página mesmo depois de um deploy.
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 
 @bp.route('/veterinario/servicos', methods=['GET', 'POST'])

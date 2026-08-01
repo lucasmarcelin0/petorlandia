@@ -448,7 +448,7 @@
   {% if current_user.is_authenticated %}
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('{{ url_for('service_worker') }}');
+      navigator.serviceWorker.register('{{ url_for('service_worker', v='20260801a') }}');
     }
   </script>
   <script src="{{ url_for('static', filename='offline.js', v='20260729') }}" defer></script>
