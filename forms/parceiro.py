@@ -192,6 +192,9 @@ class CasaDeRacaoProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     )
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    subscription_enabled = BooleanField('Oferecer assinatura recorrente')
+    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Publicar na loja')
 
 
@@ -207,5 +210,8 @@ class CasaDeRacaoProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     )
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    subscription_enabled = BooleanField('Oferecer assinatura recorrente')
+    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Salvar alterações')
 

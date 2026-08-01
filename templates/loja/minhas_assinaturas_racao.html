@@ -5,8 +5,8 @@
 
   {% if not assinaturas %}
   <div class="alert alert-light border">
-    Você ainda não tem assinaturas. Na <a href="{{ url_for('loja') }}">loja</a>, procure o botão
-    <span class="badge bg-success">Assinar</span> nos produtos para receber automaticamente.
+    Você ainda não tem assinaturas. Na <a href="{{ url_for('loja') }}">loja</a>, os produtos elegíveis mostram uma opção separada chamada
+    <span class="badge bg-success">Assinatura recorrente</span>.
   </div>
   {% endif %}
 
@@ -19,14 +19,19 @@
           {% if sub.animal %}<span class="text-muted">· para {{ sub.animal.name }}</span>{% endif %}
         </div>
         <div class="small text-muted">
-          {{ sub.frequencia_label }} · {{ sub.preco_ciclo | currency_br }} por ciclo
+          {{ sub.frequencia_label }} · {{ sub.preco_ciclo | currency_br }} por cobrança
+          {% if sub.frete_ciclo %} (frete incluído: {{ sub.frete_ciclo | currency_br }}){% endif %}
           {% if sub.ciclos_pagos %} · {{ sub.ciclos_pagos }} ciclo(s) pago(s){% endif %}
         </div>
         <div class="small mt-1">
           {% if sub.status == 'active' %}
             <span class="badge bg-success">Ativa</span>
-          {% elif sub.status == 'pending' %}
+          {% elif sub.status in ['pending', 'creating'] %}
             <span class="badge bg-warning text-dark">Aguardando 1º pagamento</span>
+          {% elif sub.status == 'failed' %}
+            <span class="badge bg-danger">Configuração não concluída</span>
+          {% elif sub.status == 'cancel_pending' %}
+            <span class="badge bg-warning text-dark">Cancelamento pendente</span>
           {% else %}
             <span class="badge bg-secondary">Cancelada</span>
           {% endif %}
@@ -35,13 +40,18 @@
           {% endif %}
         </div>
       </div>
-      {% if sub.status != 'cancelled' %}
+      <div class="d-flex gap-2 flex-wrap">
+      {% if sub.status in ['pending', 'creating'] and sub.init_point %}
+      <a href="{{ sub.init_point }}" class="btn btn-sm btn-success">Continuar no Mercado Pago</a>
+      {% endif %}
+      {% if sub.status in ['active', 'pending', 'creating', 'cancel_pending'] %}
       <form method="POST" action="{{ url_for('racao_assinatura_cancelar', sub_id=sub.id) }}"
-            onsubmit="return confirm('Cancelar esta assinatura? Nenhuma nova cobrança será feita.');">
+            onsubmit="return confirm('Solicitar o cancelamento desta assinatura? Confirmaremos com o Mercado Pago antes de encerrar as cobranças.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+        <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar assinatura</button>
       </form>
       {% endif %}
+      </div>
     </div>
   </div>
   {% endfor %}

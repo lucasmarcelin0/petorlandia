@@ -2,7 +2,17 @@
 import flask_login.utils as login_utils
 
 from extensions import db
-from models import Animal, AnimalHealthRecord, PushSubscription, RacaoAssinatura, User, Vacina
+from models import (
+    Animal,
+    AnimalHealthRecord,
+    DeliveryRequest,
+    Order,
+    PushSubscription,
+    RacaoAssinatura,
+    RacaoAssinaturaCiclo,
+    User,
+    Vacina,
+)
 
 
 def _login(monkeypatch, user):
@@ -194,7 +204,13 @@ def test_carteirinha_uses_latest_clinical_vaccine_group_for_next_dose(app, clien
 def _make_product(price=50.0):
     from models import Product
 
-    prod = Product(name="Ração Premium 15kg", price=price, stock=10, status="active")
+    prod = Product(
+        name="Ração Premium 15kg",
+        price=price,
+        stock=10,
+        status="active",
+        subscription_enabled=True,
+    )
     db.session.add(prod)
     db.session.commit()
     return prod
@@ -207,6 +223,53 @@ def test_assinatura_pagina_form(app, client, monkeypatch):
     resp = client.get(f"/produto/{prod.id}/assinar")
     assert resp.status_code == 200
     assert "Assinar".encode() in resp.data
+
+
+def test_produto_separa_compra_unica_de_assinatura(app, client, monkeypatch):
+    user = _make_user()
+    prod = _make_product()
+    _login(monkeypatch, user)
+
+    resp = client.get(f"/produto/{prod.id}")
+    html = resp.data.decode("utf-8")
+    assert resp.status_code == 200
+    assert "Compra única" in html
+    assert "Assinatura recorrente" in html
+    assert "cobranças automáticas" in html
+
+    prod.subscription_enabled = False
+    db.session.commit()
+    resp = client.get(f"/produto/{prod.id}")
+    html = resp.data.decode("utf-8")
+    assert "Compra única" in html
+    assert "Configurar assinatura" not in html
+    assert client.get(f"/produto/{prod.id}/assinar").status_code == 404
+
+
+def test_assinatura_exige_endereco_e_consentimento(app, client, monkeypatch):
+    user = _make_user()
+    prod = _make_product()
+    _login(monkeypatch, user)
+
+    resp = client.post(
+        f"/produto/{prod.id}/assinar",
+        data={"frequencia_dias": "30", "quantidade": "1"},
+        follow_redirects=True,
+    )
+    assert "Informe o endereço completo" in resp.data.decode("utf-8")
+    assert RacaoAssinatura.query.count() == 0
+
+    resp = client.post(
+        f"/produto/{prod.id}/assinar",
+        data={
+            "frequencia_dias": "30",
+            "quantidade": "1",
+            "endereco_entrega": "Rua Teste, 10",
+        },
+        follow_redirects=True,
+    )
+    assert "autoriza a cobrança recorrente" in resp.data.decode("utf-8")
+    assert RacaoAssinatura.query.count() == 0
 
 
 def test_assinatura_cria_e_redireciona_mp(app, client, monkeypatch):
@@ -233,7 +296,12 @@ def test_assinatura_cria_e_redireciona_mp(app, client, monkeypatch):
 
     resp = client.post(
         f"/produto/{prod.id}/assinar",
-        data={"frequencia_dias": "30", "quantidade": "1"},
+        data={
+            "frequencia_dias": "30",
+            "quantidade": "1",
+            "endereco_entrega": "Rua Teste, 10, Centro",
+            "subscription_consent": "yes",
+        },
     )
     assert resp.status_code == 302
     assert resp.headers["Location"] == "https://mp.example/init"
@@ -242,6 +310,46 @@ def test_assinatura_cria_e_redireciona_mp(app, client, monkeypatch):
     assert sub is not None
     assert sub.status == "pending"
     assert sub.mp_preapproval_id == "pre-123"
+    assert sub.consent_at is not None
+    assert sub.init_point == "https://mp.example/init"
+
+
+def test_assinatura_pendente_reutiliza_checkout_sem_duplicar(app, client, monkeypatch):
+    import app as app_module
+
+    user = _make_user()
+    prod = _make_product()
+    existing = RacaoAssinatura(
+        user_id=user.id,
+        product_id=prod.id,
+        quantidade=1,
+        frequencia_dias=30,
+        preco_ciclo=55,
+        status="pending",
+        init_point="https://mp.example/existing",
+        endereco_entrega="Rua Teste, 10",
+    )
+    db.session.add(existing)
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    monkeypatch.setattr(
+        app_module,
+        "mp_sdk",
+        lambda: (_ for _ in ()).throw(AssertionError("não deve criar outro checkout")),
+    )
+    resp = client.post(
+        f"/produto/{prod.id}/assinar",
+        data={
+            "frequencia_dias": "30",
+            "quantidade": "1",
+            "endereco_entrega": "Rua Teste, 10",
+            "subscription_consent": "yes",
+        },
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "https://mp.example/existing"
+    assert RacaoAssinatura.query.count() == 1
 
 
 def test_assinatura_ciclo_ativa_e_conta(app, monkeypatch):
@@ -252,19 +360,30 @@ def test_assinatura_ciclo_ativa_e_conta(app, monkeypatch):
     sub = RacaoAssinatura(
         user_id=user.id, product_id=prod.id, quantidade=1,
         frequencia_dias=30, preco_ciclo=55, status="pending",
+        endereco_entrega="Rua Teste, 10",
     )
     db.session.add(sub)
     db.session.commit()
 
-    _process_racao_assinatura_ciclo(sub, mp_id="pre-9")
+    _process_racao_assinatura_ciclo(sub, mp_id="pay-9")
     db.session.commit()
     assert sub.status == "active"
     assert sub.ciclos_pagos == 1
     assert sub.activated_at is not None
 
-    _process_racao_assinatura_ciclo(sub)
+    _process_racao_assinatura_ciclo(sub, mp_id="pay-9")
+    db.session.commit()
+    assert sub.ciclos_pagos == 1
+    assert RacaoAssinaturaCiclo.query.count() == 1
+    assert Order.query.count() == 1
+    assert DeliveryRequest.query.count() == 1
+    assert prod.stock == 9
+
+    _process_racao_assinatura_ciclo(sub, mp_id="pay-10")
     db.session.commit()
     assert sub.ciclos_pagos == 2
+    assert Order.query.count() == 2
+    assert prod.stock == 8
 
 
 def test_assinatura_cancelar(app, client, monkeypatch):
@@ -275,7 +394,7 @@ def test_assinatura_cancelar(app, client, monkeypatch):
     sub = RacaoAssinatura(
         user_id=user.id, product_id=prod.id, quantidade=1,
         frequencia_dias=30, preco_ciclo=55, status="active",
-        mp_preapproval_id="pre-1",
+        mp_preapproval_id="pre-1", endereco_entrega="Rua Teste, 10",
     )
     db.session.add(sub)
     db.session.commit()
@@ -296,8 +415,42 @@ def test_assinatura_cancelar(app, client, monkeypatch):
 
     resp = client.post(f"/assinatura-racao/{sub.id}/cancelar")
     assert resp.status_code == 302
-    assert sub.status == "cancelled"
-    assert cancelled == {"pre-1": {"status": "cancelled"}}
+    assert sub.status == "canceled"
+    assert cancelled == {"pre-1": {"status": "canceled"}}
+
+
+def test_cancelamento_falhou_mantem_assinatura_ativa(app, client, monkeypatch):
+    import app as app_module
+
+    user = _make_user()
+    prod = _make_product()
+    sub = RacaoAssinatura(
+        user_id=user.id,
+        product_id=prod.id,
+        quantidade=1,
+        frequencia_dias=30,
+        preco_ciclo=55,
+        status="active",
+        mp_preapproval_id="pre-fail",
+        endereco_entrega="Rua Teste, 10",
+    )
+    db.session.add(sub)
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    class FakePreapproval:
+        def update(self, pid, data):
+            return {"status": 500, "response": {"message": "provider unavailable"}}
+
+    class FakeSDK:
+        def preapproval(self):
+            return FakePreapproval()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda: FakeSDK())
+    resp = client.post(f"/assinatura-racao/{sub.id}/cancelar", follow_redirects=True)
+    assert sub.status == "active"
+    assert "continua ativa" in resp.data.decode("utf-8")
+    assert "provider unavailable" in sub.last_error
 
 
 def test_minhas_assinaturas_lista(app, client, monkeypatch):
@@ -306,6 +459,7 @@ def test_minhas_assinaturas_lista(app, client, monkeypatch):
     db.session.add(RacaoAssinatura(
         user_id=user.id, product_id=prod.id, quantidade=2,
         frequencia_dias=30, preco_ciclo=110, status="active",
+        endereco_entrega="Rua Teste, 10",
     ))
     db.session.commit()
     _login(monkeypatch, user)

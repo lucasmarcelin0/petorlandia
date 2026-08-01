@@ -63,6 +63,8 @@
               <div class="form-text">Categoria Mercado Pago (opcional).</div>
             </div>
 
+            {% with subscription_form=form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
             <div class="mb-3">
               {{ form.image_upload.label(class="form-label fw-semibold") }}
               {{ form.image_upload(class="form-control") }}
@@ -108,6 +110,7 @@
               </div>
 
               <p class="text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}</p>
+              {% if p.subscription_enabled %}<span class="badge rounded-pill text-bg-primary mb-2"><i class="fa-solid fa-arrows-rotate me-1"></i>Compra única + assinatura</span>{% else %}<span class="badge rounded-pill text-bg-light border mb-2">Somente compra única</span>{% endif %}
               <p class="small text-muted mb-2">
                 <i class="fa-solid fa-boxes-stacked me-1"></i>Estoque: {{ p.stock }}
               </p>

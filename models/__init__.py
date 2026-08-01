@@ -161,4 +161,5 @@ __all__ = [
     "CarteirinhaImportacao",
     "PushSubscription",
     "RacaoAssinatura",
+    "RacaoAssinaturaCiclo",
 ]

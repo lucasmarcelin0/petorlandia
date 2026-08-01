@@ -155,6 +155,9 @@ class ProductUpdateForm(_ProductCategoryChoicesMixin, FlaskForm):
     aliquota_icms = DecimalField('Alíquota ICMS', validators=[Optional()])
     aliquota_pis = DecimalField('Alíquota PIS', validators=[Optional()])
     aliquota_cofins = DecimalField('Alíquota COFINS', validators=[Optional()])
+    subscription_enabled = BooleanField('Oferecer assinatura recorrente')
+    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     image_upload = FileField('Imagem', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Salvar')
 
@@ -177,6 +180,9 @@ class ClinicProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     unit = StringField('Unidade (ex: unidade, kg, caixa)', validators=[Optional(), Length(max=50)])
     # ID do ClinicInventoryItem existente (0 = criar novo)
     inventory_item_id = SelectField('Vincular ao estoque existente', coerce=int, validators=[Optional()])
+    subscription_enabled = BooleanField('Oferecer assinatura recorrente')
+    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Publicar na loja')
 
 
@@ -188,5 +194,7 @@ class ClinicProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     image_upload = FileField('Nova imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
+    subscription_enabled = BooleanField('Oferecer assinatura recorrente')
+    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Salvar alterações')
-

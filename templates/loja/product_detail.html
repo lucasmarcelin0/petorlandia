@@ -1,35 +1,69 @@
 {% extends "layout.html" %}
 {% block main %}
+<style>
+  .purchase-choice { border: 2px solid #e8edf4; border-radius: 1rem; transition: border-color .2s, box-shadow .2s; }
+  .purchase-choice--single { border-color: #2563eb; }
+  .purchase-choice--subscription { border-color: #198754; background: linear-gradient(145deg, #fff, #f2fff8); }
+  .choice-label { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 800; }
+  .price-main { font-size: 1.75rem; line-height: 1; font-weight: 800; }
+</style>
 <div class="container py-4">
-  <div class="row">
-    <div class="col-md-6">
+  <nav aria-label="Navegação estrutural" class="mb-3">
+    <a href="{{ url_for('loja') }}" class="text-decoration-none small"><i class="fa-solid fa-arrow-left me-1"></i>Voltar à loja</a>
+  </nav>
+  <div class="row g-4">
+    <div class="col-lg-5">
       {% if product.image_url %}
-      <img src="{{ product.image_url }}" class="img-fluid mb-3" alt="{{ product.name }}" loading="lazy" width="600" height="600">
+      <img src="{{ product.image_url }}" class="img-fluid rounded-4 border w-100 mb-3" alt="{{ product.name }}" loading="lazy" width="600" height="600" style="object-fit:cover;">
       {% endif %}
       {% for photo in product.extra_photos %}
- 
-        <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Foto extra">
- 
+      <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Outra foto de {{ product.name }}">
       {% endfor %}
     </div>
-    <div class="col-md-6">
-      <h2>{{ product.name }}</h2>
-      <p>{{ product.description }}</p>
-      <p class="h4 text-success">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</p>
-      <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form" data-skip-global-handler="true">
-        {{ form.hidden_tag() }}
-        {{ form.quantity(class="form-control w-auto", min="1") }}
-        <button type="submit" class="btn btn-primary">Adicionar ao Carrinho</button>
-      </form>
-      <div class="mt-2">
-        <a href="{{ url_for('racao_assinar', product_id=product.id) }}" class="btn btn-success">
-          <i class="fa-solid fa-rotate me-1"></i> Assinar e receber sempre
-        </a>
-        <div class="text-muted small mt-1">Entrega recorrente, sem precisar lembrar de pedir. Cancele quando quiser.</div>
+    <div class="col-lg-7">
+      {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
+      <h1 class="h2 mb-2">{{ product.name }}</h1>
+      <p class="text-muted mb-4">{{ product.description }}</p>
+
+      <h2 class="h5 mb-3">Como você quer receber?</h2>
+      <div class="row g-3">
+        <div class="col-md-6{% if not product.subscription_enabled %} col-lg-8{% endif %}">
+          <section class="purchase-choice purchase-choice--single h-100 p-3" aria-labelledby="single-title">
+            <div class="choice-label text-primary mb-2"><i class="fa-solid fa-bag-shopping me-1"></i>Compra única</div>
+            <h3 id="single-title" class="h5 mb-1">Comprar somente desta vez</h3>
+            <div class="price-main my-3">{{ product.public_price_min | currency_br }}</div>
+            {% if product.public_price_max != product.public_price_min %}<div class="small text-muted mb-2">até {{ product.public_price_max | currency_br }}, conforme a apresentação</div>{% endif %}
+            <p class="small text-muted">Um único pedido e um único pagamento. Não haverá cobranças automáticas.</p>
+            <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form" data-skip-global-handler="true">
+              {{ form.hidden_tag() }}
+              {{ form.quantity(class="form-control", min="1", max="10", aria_label="Quantidade", style="max-width:78px") }}
+              <button type="submit" class="btn btn-primary flex-grow-1">Adicionar ao carrinho</button>
+            </form>
+          </section>
+        </div>
+
+        {% if product.subscription_enabled %}
+        <div class="col-md-6">
+          <section class="purchase-choice purchase-choice--subscription h-100 p-3" aria-labelledby="subscription-title">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="choice-label text-success"><i class="fa-solid fa-arrows-rotate me-1"></i>Assinatura recorrente</div>
+              {% if product.subscription_discount %}<span class="badge bg-success">Economize {{ product.subscription_discount|float|round(0)|int }}%</span>{% endif %}
+            </div>
+            <h3 id="subscription-title" class="h5 mb-1">Receber automaticamente</h3>
+            <div class="price-main text-success my-3">{{ product.subscription_price_min | currency_br }} <span class="fs-6 fw-normal">por ciclo</span></div>
+            <p class="small mb-2"><strong>Cobrança automática recorrente.</strong> Você escolhe a frequência antes de autorizar.</p>
+            <p class="small text-muted">Frete de {{ product.subscription_shipping_fee | currency_br }} por entrega. Sem fidelidade e com cancelamento digital.</p>
+            <a href="{{ url_for('racao_assinar', product_id=product.id) }}" class="btn btn-success w-100">
+              Configurar assinatura <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+          </section>
+        </div>
+        {% endif %}
       </div>
-      <div class="mt-3">
-        <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary me-2">Continuar comprando</a>
-        <a href="{{ url_for('ver_carrinho') }}" class="btn btn-outline-primary">Ir ao carrinho</a>
+
+      <div class="alert alert-light border mt-3 small mb-0">
+        <i class="fa-solid fa-shield-halved text-primary me-1"></i>
+        Antes de pagar, você verá novamente o tipo de compra, o valor total, o frete e, em caso de assinatura, a frequência das próximas cobranças.
       </div>
     </div>
   </div>
@@ -37,7 +71,6 @@
   {% if is_admin %}
   <hr>
   {% include "products_edit.html" %}
-
   <hr>
   <h4>Adicionar Foto</h4>
   <form method="post" enctype="multipart/form-data">

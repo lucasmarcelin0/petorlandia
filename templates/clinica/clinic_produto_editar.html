@@ -45,6 +45,8 @@
           {{ form.mp_category_id(class="form-control", placeholder="Ex: food, health, pet_supplies") }}
         </div>
 
+        {% with subscription_form=form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
         <div class="mb-3">
           {{ form.image_upload.label(class="form-label fw-semibold") }}
           {% if product.image_url %}
