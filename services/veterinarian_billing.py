@@ -114,6 +114,23 @@ def membership_plan_from_reference(value: object) -> str:
     return "anual" if "anual" in parts else "mensal"
 
 
+def membership_plan_from_preapproval_payload(payload: dict) -> str:
+    reference_plan = membership_plan_from_reference(
+        payload.get("external_reference")
+    )
+    recurring = payload.get("auto_recurring") or {}
+    try:
+        frequency = int(recurring.get("frequency") or 1)
+    except (TypeError, ValueError):
+        frequency = 1
+    frequency_type = str(recurring.get("frequency_type") or "").lower()
+    if reference_plan == "anual" or (
+        frequency_type == "months" and frequency >= 12
+    ):
+        return "anual"
+    return "mensal"
+
+
 def membership_cycle_days(value: object) -> int:
     return 365 if membership_plan_from_reference(value) == "anual" else 30
 
@@ -214,16 +231,17 @@ def sync_preapproval_payload(payload: dict):
         return None
 
     auto_recurring = payload.get("auto_recurring") or {}
+    plan_code = membership_plan_from_preapproval_payload(payload)
     if not subscription:
         external_reference = external_reference or (
             f"vet-membership-{membership.id}-legacy-"
-            f"{membership_plan_from_reference(external_reference)}"
+            f"{plan_code}"
         )
         subscription = VeterinarianMembershipSubscription(
             membership_id=membership.id,
             provider_preapproval_id=provider_id[:64] if provider_id else None,
             external_reference=external_reference,
-            plan_code=membership_plan_from_reference(external_reference),
+            plan_code=plan_code,
             amount=_decimal(auto_recurring.get("transaction_amount")),
             currency=str(auto_recurring.get("currency_id") or "BRL")[:3],
             status="pending",
@@ -303,6 +321,14 @@ def sync_membership_payment_payload(payload: dict, *, invoice_id: object = None)
         membership_id = membership_id_from_reference(external_reference)
         if membership_id:
             membership = db.session.get(VeterinarianMembership, membership_id)
+    if not membership:
+        provider_id = str(
+            payload.get("preapproval_id") or payload.get("subscription_id") or ""
+        ).strip()
+        if provider_id:
+            membership = VeterinarianMembership.query.filter_by(
+                preapproval_id=provider_id
+            ).first()
     if not membership:
         return None
 
@@ -386,7 +412,29 @@ def sync_authorized_payment_payload(payload: dict):
 
 
 def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
-    subscriptions = (
+    max_records = max(1, int(limit))
+    linked_provider_ids = (
+        db.session.query(
+            VeterinarianMembershipSubscription.provider_preapproval_id
+        )
+        .filter(
+            VeterinarianMembershipSubscription.provider_preapproval_id.isnot(None)
+        )
+    )
+    legacy_memberships = (
+        VeterinarianMembership.query
+        .filter(VeterinarianMembership.preapproval_id.isnot(None))
+        .filter(VeterinarianMembership.preapproval_id.notin_(linked_provider_ids))
+        .order_by(VeterinarianMembership.id.asc())
+        .limit(max_records)
+        .all()
+    )
+    legacy_provider_ids = {
+        membership.preapproval_id for membership in legacy_memberships
+    }
+
+    remaining = max_records - len(legacy_memberships)
+    subscriptions_query = (
         VeterinarianMembershipSubscription.query
         .filter(VeterinarianMembershipSubscription.provider_preapproval_id.isnot(None))
         .filter(
@@ -395,9 +443,14 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
             )
         )
         .order_by(VeterinarianMembershipSubscription.updated_at.asc())
-        .limit(max(1, int(limit)))
-        .all()
     )
+    if legacy_provider_ids:
+        subscriptions_query = subscriptions_query.filter(
+            VeterinarianMembershipSubscription.provider_preapproval_id.notin_(
+                legacy_provider_ids
+            )
+        )
+    subscriptions = subscriptions_query.limit(remaining).all() if remaining else []
     result = {
         "checked": 0,
         "subscriptions_updated": 0,
@@ -405,6 +458,31 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
         "failures": 0,
         "missing": 0,
     }
+    for membership in legacy_memberships:
+        result["checked"] += 1
+        provider_id = membership.preapproval_id
+        try:
+            payload = client.get_preapproval(provider_id)
+            synced = sync_preapproval_payload(payload)
+            if synced:
+                result["subscriptions_updated"] += 1
+            for invoice in client.search_authorized_payments(provider_id):
+                if sync_authorized_payment_payload(invoice):
+                    result["charges_seen"] += 1
+            db.session.commit()
+        except LookupError:
+            db.session.rollback()
+            current = db.session.get(VeterinarianMembership, membership.id)
+            if current and current.preapproval_id == provider_id:
+                current.preapproval_id = None
+                current.payment_method_set_at = None
+                db.session.add(current)
+                db.session.commit()
+            result["missing"] += 1
+        except Exception:  # noqa: BLE001 - retry legacy records next run
+            db.session.rollback()
+            result["failures"] += 1
+
     for subscription in subscriptions:
         result["checked"] += 1
         provider_id = subscription.provider_preapproval_id
