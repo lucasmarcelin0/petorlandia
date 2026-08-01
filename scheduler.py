@@ -15,6 +15,7 @@ from app import (
     app,
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
+    _run_veterinarian_billing_reconciliation_job,
     enviar_lembretes_fim_trial,
     enviar_lembretes_recebimento,
     enviar_lembretes_tratamento,
@@ -198,6 +199,17 @@ def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    billing_interval = _env_int(
+        "VETERINARIAN_BILLING_RECONCILIATION_MINUTES", 30, 5, 1440
+    )
+    scheduler.add_job(
+        _memory_bounded_job(_run_veterinarian_billing_reconciliation_job),
+        IntervalTrigger(minutes=billing_interval),
+        id="mercadopago-membership-reconciliation",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     # Jobs diários que antes rodavam no dyno web (BackgroundScheduler no
     # app.py). Centralizados aqui: uma única execução, independente do nº de
     # workers web. Cada job gerencia o próprio app_context.
@@ -223,10 +235,11 @@ def main() -> None:
     with app.app_context():
         current_app.logger.info(
             'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
-            'Controle de doses em %s.',
+            'Controle de doses em %s. Reconciliação de assinaturas a cada %s minuto(s).',
             trigger,
             pmo_interval,
             doses_trigger,
+            billing_interval,
         )
     try:
         scheduler.start()

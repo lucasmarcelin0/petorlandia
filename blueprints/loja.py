@@ -69,6 +69,13 @@ from models import (
 from security.crypto import MissingMasterKeyError
 from services.payment_state import advance_payment_status
 from services.product_analytics import track_event
+from services.veterinarian_billing import (
+    MercadoPagoBillingError,
+    MercadoPagoSubscriptionClient,
+    sync_authorized_payment_payload,
+    sync_membership_payment_payload,
+    sync_preapproval_payload,
+)
 from template_filters import digits_only, format_datetime_brazil
 from time_utils import now_in_brazil, utcnow
 
@@ -1937,16 +1944,50 @@ def notificacoes_mercado_pago():
 
     # Check notification type
     notification_type = request.args.get("type") or request.args.get("topic")
-    if notification_type != "payment":
-        current_app.logger.info("Ignoring non-payment notification: %s", notification_type)
-        return jsonify(status="ignored"), 200
-
-    # Extract mp_id
     data = request.get_json(silent=True) or {}
     mp_id = (data.get("data", {}).get("id") or  # v1
              data.get("resource", "").split("/")[-1])  # v2
 
     if not mp_id:
+        return jsonify(status="ignored"), 200
+
+    if notification_type in {"subscription_preapproval", "subscription_authorized_payment"}:
+        try:
+            provider = MercadoPagoSubscriptionClient(
+                current_app.config.get("MERCADOPAGO_ACCESS_TOKEN", "")
+            )
+            if notification_type == "subscription_preapproval":
+                billing_record = sync_preapproval_payload(
+                    provider.get_preapproval(str(mp_id))
+                )
+            else:
+                billing_record = sync_authorized_payment_payload(
+                    provider.get_authorized_payment(str(mp_id))
+                )
+            if not billing_record:
+                db.session.rollback()
+                return jsonify(status="ignored"), 200
+            db.session.commit()
+            current_app.logger.info(
+                "Mercado Pago membership webhook synchronized type=%s resource_id=%s",
+                notification_type,
+                mp_id,
+            )
+            return jsonify(status="ok"), 200
+        except LookupError:
+            db.session.rollback()
+            return jsonify(status="not_found"), 404
+        except (MercadoPagoBillingError, SQLAlchemyError):
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao processar webhook de assinatura Mercado Pago type=%s id=%s",
+                notification_type,
+                mp_id,
+            )
+            return jsonify(error="billing sync failed"), 500
+
+    if notification_type != "payment":
+        current_app.logger.info("Ignoring non-payment notification: %s", notification_type)
         return jsonify(status="ignored"), 200
 
     # Query payment
@@ -1966,6 +2007,34 @@ def notificacoes_mercado_pago():
     extref = info.get("external_reference")
     if not extref:
         return jsonify(status="ignored"), 200
+
+    if extref.startswith("vet-membership-"):
+        try:
+            charge = sync_membership_payment_payload(info)
+            if not charge:
+                db.session.rollback()
+                current_app.logger.warning(
+                    "Veterinarian membership not found for payment %s reference %s",
+                    mp_id,
+                    extref,
+                )
+                return jsonify(error="membership not found"), 404
+            db.session.commit()
+            current_app.logger.info(
+                "Mercado Pago membership charge synchronized payment_id=%s charge_id=%s status=%s applied=%s",
+                mp_id,
+                charge.id,
+                charge.status,
+                bool(charge.access_applied_at),
+            )
+            return jsonify(status="ok"), 200
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao persistir cobrança de assinatura payment_id=%s",
+                mp_id,
+            )
+            return jsonify(error="billing persistence failed"), 500
 
     # Update database
     status_map = {

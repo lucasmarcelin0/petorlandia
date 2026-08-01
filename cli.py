@@ -18,6 +18,10 @@ from models.loja import Payment
 from models.racao import CasaDeRacao
 from models.usuarios import User, Veterinario
 from services.finance import run_transactions_history_backfill
+from services.veterinarian_billing import (
+    MercadoPagoSubscriptionClient,
+    reconcile_membership_billing,
+)
 
 
 # Contas confirmadas como dados de teste no ambiente de producao. Nao inclui
@@ -162,6 +166,29 @@ def classify_transactions_history(months, clinic_ids, reference_month, verbose):
     )
 
 
+@click.command('reconcile-veterinarian-billing')
+@click.option('--limit', type=click.IntRange(min=1, max=2000), default=250, show_default=True)
+@with_appcontext
+def reconcile_veterinarian_billing(limit):
+    """Reconcile Mercado Pago subscriptions and recurring invoices now."""
+
+    from flask import current_app
+
+    client = MercadoPagoSubscriptionClient(
+        current_app.config.get("MERCADOPAGO_ACCESS_TOKEN", "")
+    )
+    result = reconcile_membership_billing(client, limit=limit)
+    click.echo(
+        "checked={checked} subscriptions_updated={subscriptions_updated} "
+        "charges_seen={charges_seen} missing={missing} failures={failures}".format(
+            **result
+        )
+    )
+    if result["failures"]:
+        raise click.ClickException("A reconciliação terminou com falhas")
+
+
 def register_cli_commands(app):
     app.cli.add_command(classify_transactions_history)
     app.cli.add_command(cleanup_test_users)
+    app.cli.add_command(reconcile_veterinarian_billing)

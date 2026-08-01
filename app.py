@@ -217,10 +217,13 @@ app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
 _resolved_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
 if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_uri):
     engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
-    engine_opts.setdefault("pool_size", 5)
-    engine_opts.setdefault("max_overflow", 10)
+    engine_opts.setdefault("pool_size", int(os.getenv("DB_POOL_SIZE", "5")))
+    engine_opts.setdefault("max_overflow", int(os.getenv("DB_MAX_OVERFLOW", "2")))
+    engine_opts.setdefault("pool_timeout", int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "5")))
     connect_args = dict(engine_opts.get("connect_args", {}))
-    connect_args.setdefault("connect_timeout", 10)
+    connect_args.setdefault(
+        "connect_timeout", int(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "4"))
+    )
     engine_opts["connect_args"] = connect_args
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 elif _resolved_uri and _resolved_uri.startswith("sqlite"):
@@ -305,11 +308,35 @@ db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
 mail.init_app(app)
 login.init_app(app)
+if str(app.config.get("SESSION_TYPE", "")).lower() == "redis":
+    from redis import Redis
+
+    redis_url = app.config.get("REDIS_URL")
+    if not redis_url:
+        raise RuntimeError("SESSION_TYPE=redis exige REDIS_URL")
+    app.config["SESSION_REDIS"] = Redis.from_url(
+        redis_url,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        health_check_interval=30,
+    )
 if str(app.config.get("SESSION_TYPE", "")).lower() == "sqlalchemy":
     # Compartilha a conexão principal em vez de criar uma segunda instância
     # SQLAlchemy. Isso torna sessões persistentes entre dynos e deploys.
     app.config["SESSION_SQLALCHEMY"] = db
 session_ext.init_app(app)
+
+# Static files bypass Flask's session and database machinery. This prevents a
+# transient database timeout from blocking CSS/JS needed by the checkout.
+if os.getenv("DYNO") or os.getenv("SERVE_STATIC_WITH_WHITENOISE") == "1":
+    from whitenoise import WhiteNoise
+
+    app.wsgi_app = WhiteNoise(
+        app.wsgi_app,
+        root=str(PROJECT_ROOT / "static"),
+        prefix="static/",
+        max_age=3600,
+    )
 babel.init_app(app)
 csrf.init_app(app)
 limiter.init_app(app)
@@ -8666,6 +8693,44 @@ def _run_mercadopago_oauth_renewal_job() -> None:
                 result.checked,
                 result.renewed,
                 result.failed,
+            )
+
+
+def _run_veterinarian_billing_reconciliation_job() -> None:
+    """Reconcile membership state and invoices missed by webhooks."""
+
+    with app.app_context():
+        if not current_app.config.get(
+            "VETERINARIAN_BILLING_RECONCILIATION_ENABLED", True
+        ):
+            return
+        from services.veterinarian_billing import (
+            MercadoPagoSubscriptionClient,
+            reconcile_membership_billing,
+        )
+
+        try:
+            client = MercadoPagoSubscriptionClient(
+                current_app.config.get("MERCADOPAGO_ACCESS_TOKEN", "")
+            )
+            result = reconcile_membership_billing(
+                client,
+                limit=int(
+                    current_app.config.get(
+                        "VETERINARIAN_BILLING_RECONCILIATION_LIMIT", 250
+                    )
+                ),
+            )
+            log = (
+                current_app.logger.warning
+                if result["failures"]
+                else current_app.logger.info
+            )
+            log("Mercado Pago membership reconciliation: %s", result)
+        except Exception:  # noqa: BLE001 - scheduler must remain alive
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha na reconciliação de assinaturas profissionais do Mercado Pago"
             )
 
 

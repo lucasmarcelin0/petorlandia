@@ -33,7 +33,7 @@ from models import (
     Clinica,
     Orcamento,
 )
-from flask import abort, render_template_string, url_for
+from flask import abort, g, render_template_string, url_for
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import quote, parse_qs, urlparse
@@ -55,7 +55,8 @@ def app():
     flask_app.config.update(
         TESTING=True,
         WTF_CSRF_ENABLED=False,
-        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:"
+        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+        SESSION_COOKIE_SECURE=False,
     )
     with flask_app.app_context():
         db.create_all()
@@ -67,6 +68,10 @@ def login(client, user_id):
         sess.clear()
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
+    # This module keeps one application context open for the whole test. A
+    # previous request can therefore leave Flask-Login's anonymous user cached
+    # on ``g``, unlike production where each request gets a fresh context.
+    g.pop('_login_user', None)
 
 def test_login_page(app):
     client = app.test_client()
