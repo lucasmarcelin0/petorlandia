@@ -1772,6 +1772,9 @@ def clinic_loja_produtos(clinica_id):
             image_url=image_url,
             category=(form.category.data or None),
             mp_category_id=(form.mp_category_id.data or 'others').strip(),
+            subscription_enabled=bool(form.subscription_enabled.data),
+            subscription_discount_percent=form.subscription_discount_percent.data or Decimal('0'),
+            subscription_shipping_fee=form.subscription_shipping_fee.data or Decimal('0'),
             status='active',
         )
         db.session.add(product)
@@ -1801,6 +1804,9 @@ def clinic_produto_editar(clinica_id, product_id):
         product.price = float(form.price.data)
         product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        product.subscription_enabled = bool(form.subscription_enabled.data)
+        product.subscription_discount_percent = form.subscription_discount_percent.data or Decimal('0')
+        product.subscription_shipping_fee = form.subscription_shipping_fee.data or Decimal('0')
         if form.image_upload.data:
             file = form.image_upload.data
             url = upload_to_s3(file, secure_filename(file.filename), folder='products')

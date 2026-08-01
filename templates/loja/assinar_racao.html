@@ -1,51 +1,65 @@
 {% extends 'layout.html' %}
 {% block main %}
-<div class="container my-4" style="max-width: 640px;">
-  <h2 class="mb-1"><i class="fa-solid fa-rotate me-2 text-success"></i>Assinar {{ product.name }}</h2>
-  <p class="text-muted">Receba automaticamente, sem precisar lembrar de pedir. Cancele quando quiser.</p>
+<style>
+  .subscription-shell { max-width: 760px; }
+  .recurring-banner { border: 2px solid #198754; background: #effcf5; border-radius: 1rem; }
+  .summary-box { background: #f7f9fc; border-radius: .85rem; }
+  .sticky-action { position: sticky; bottom: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid #e5e7eb; }
+</style>
+<div class="container subscription-shell my-4">
+  <a href="{{ url_for('produto_detail', product_id=product.id) }}" class="text-decoration-none small"><i class="fa-solid fa-arrow-left me-1"></i>Voltar e escolher compra única</a>
 
-  <div class="card shadow-sm">
-    <div class="card-body">
-      <div class="d-flex gap-3 align-items-center mb-3">
-        {% if product.image_url %}
-        <img src="{{ product.image_url }}" alt="{{ product.name }}" style="width:72px;height:72px;object-fit:cover;border-radius:12px;">
-        {% endif %}
-        <div>
-          <div class="fw-semibold">{{ product.name }}</div>
-          {% if not variantes %}
-          <div class="text-success fw-bold">{{ product.preco_publico | currency_br }} <span class="text-muted fw-normal small">por ciclo</span></div>
-          {% endif %}
-        </div>
+  <div class="recurring-banner p-3 mt-3 mb-4" role="status">
+    <div class="d-flex gap-3">
+      <i class="fa-solid fa-arrows-rotate text-success fs-3 mt-1"></i>
+      <div>
+        <span class="badge bg-success mb-2">ASSINATURA RECORRENTE</span>
+        <h1 class="h3 mb-1">Assinar {{ product.name }}</h1>
+        <p class="mb-0"><strong>Esta não é uma compra única.</strong> O Mercado Pago fará cobranças automáticas na frequência escolhida até você cancelar.</p>
       </div>
+    </div>
+  </div>
 
-      <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <form method="POST" id="subscription-form" data-shipping="{{ product.subscription_shipping_fee or 0 }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card shadow-sm border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">1. Produto e frequência</h2>
+        <div class="d-flex gap-3 align-items-center mb-3">
+          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.name }}" style="width:72px;height:72px;object-fit:cover;border-radius:12px;">{% endif %}
+          <div>
+            <div class="fw-semibold">{{ product.name }}</div>
+            <div class="small text-muted">Vendido por {{ product.casa_de_racao.nome if product.casa_de_racao else product.clinica.nome if product.clinica else 'PetOrlândia' }}</div>
+            {% if product.casa_de_racao and product.casa_de_racao.cnpj %}<div class="small text-muted">CNPJ {{ product.casa_de_racao.cnpj }}</div>{% elif product.clinica and product.clinica.cnpj %}<div class="small text-muted">CNPJ {{ product.clinica.cnpj }}</div>{% endif %}
+            {% if product.subscription_discount %}<span class="badge text-bg-success">{{ product.subscription_discount|float|round(0)|int }}% de desconto na assinatura</span>{% endif %}
+          </div>
+        </div>
 
         {% if variantes %}
         <div class="mb-3">
-          <label class="form-label">Apresentação</label>
-          <select name="variant_id" class="form-select">
+          <label class="form-label fw-semibold" for="variant_id">Apresentação</label>
+          <select name="variant_id" id="variant_id" class="form-select" required>
             {% for v in variantes %}
-            <option value="{{ v.id }}">{{ v.name }} — {{ v.preco_publico | currency_br }}</option>
+            <option value="{{ v.id }}" data-price="{{ product.subscription_price_from_public(v.preco_publico) }}">{{ v.display_name }} — {{ product.subscription_price_from_public(v.preco_publico) | currency_br }} por ciclo</option>
             {% endfor %}
           </select>
         </div>
+        {% else %}
+        <input type="hidden" id="single-price" data-price="{{ product.subscription_price_min }}">
         {% endif %}
 
         <div class="row g-3">
-          <div class="col-6">
-            <label class="form-label">Quantidade por entrega</label>
-            <select name="quantidade" class="form-select">
-              {% for q in range(1, 6) %}
-              <option value="{{ q }}">{{ q }}</option>
-              {% endfor %}
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="quantidade">Quantidade por entrega</label>
+            <select name="quantidade" id="quantidade" class="form-select">
+              {% for q in range(1, 11) %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
             </select>
           </div>
-          <div class="col-6">
-            <label class="form-label">Frequência</label>
-            <select name="frequencia_dias" class="form-select">
-              <option value="30" selected>Mensal</option>
-              <option value="15">Quinzenal</option>
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold" for="frequencia_dias">Frequência das cobranças</label>
+            <select name="frequencia_dias" id="frequencia_dias" class="form-select">
+              <option value="15">A cada 15 dias</option>
+              <option value="30" selected>Todo mês</option>
               <option value="60">A cada 2 meses</option>
               <option value="90">A cada 3 meses</option>
             </select>
@@ -54,36 +68,61 @@
 
         {% if animais %}
         <div class="mt-3">
-          <label class="form-label">Para qual pet? <span class="text-muted small">(opcional)</span></label>
-          <select name="animal_id" class="form-select">
-            <option value="">—</option>
-            {% for a in animais %}
-            <option value="{{ a.id }}">{{ a.name }}</option>
-            {% endfor %}
-          </select>
+          <label class="form-label fw-semibold" for="animal_id">Pet <span class="text-muted fw-normal">(opcional)</span></label>
+          <select name="animal_id" id="animal_id" class="form-select"><option value="">Nenhum pet específico</option>{% for a in animais %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
         </div>
         {% endif %}
-
-        <div class="mt-3">
-          <label class="form-label">Endereço de entrega <span class="text-muted small">(opcional)</span></label>
-          <input type="text" name="endereco_entrega" class="form-control" maxlength="255"
-                 placeholder="Rua, número, bairro — ou deixe em branco para combinar com a loja">
-        </div>
-
-        <div class="alert alert-light border mt-4 small">
-          <i class="fa-solid fa-circle-info me-1 text-primary"></i>
-          O pagamento é recorrente via <strong>Mercado Pago</strong>. Você pode cancelar a
-          qualquer momento em <em>Minhas assinaturas</em> — sem multa, sem fidelidade.
-        </div>
-
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-success">
-            <i class="fa-solid fa-rotate me-1"></i> Assinar com Mercado Pago
-          </button>
-          <a href="{{ url_for('produto_detail', product_id=product.id) }}" class="btn btn-outline-secondary">Voltar</a>
-        </div>
-      </form>
+      </div>
     </div>
-  </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">2. Entrega</h2>
+        <label class="form-label fw-semibold" for="endereco_entrega">Endereço completo de cada entrega</label>
+        <input type="text" name="endereco_entrega" id="endereco_entrega" class="form-control" maxlength="255" required autocomplete="street-address" placeholder="Rua, número, complemento, bairro e cidade">
+        <div class="form-text">Necessário para que cada pedido recorrente possa ser preparado e entregue.</div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-3">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">3. Revise antes de autorizar</h2>
+        <div class="summary-box p-3 mb-3" aria-live="polite">
+          <div class="d-flex justify-content-between"><span>Produtos por ciclo</span><strong id="summary-subtotal">—</strong></div>
+          <div class="d-flex justify-content-between mt-2"><span>Frete por entrega</span><strong id="summary-shipping">{{ product.subscription_shipping_fee | currency_br }}</strong></div>
+          <hr>
+          <div class="d-flex justify-content-between fs-5"><strong>Total de cada cobrança</strong><strong class="text-success" id="summary-total">—</strong></div>
+          <div class="small text-muted mt-2"><strong>Primeira cobrança:</strong> ao autorizar no Mercado Pago. <strong>Próximas:</strong> <span id="summary-frequency">todo mês</span>, no mesmo valor, salvo mudança comunicada e aceita.</div>
+        </div>
+
+        <div class="alert alert-warning small">
+          <strong>Cancelamento e arrependimento:</strong> você pode cancelar digitalmente em “Minhas assinaturas”, sem multa. Em compras online, preservamos também o direito de arrependimento previsto no CDC. Se um ciclo já tiver sido cobrado ou enviado, fale com o <a href="{{ url_for('support') }}">suporte</a>.
+        </div>
+        <details class="border rounded-3 p-3 mb-3 small">
+          <summary class="fw-semibold">Condições essenciais da assinatura</summary>
+          <ul class="mb-0 mt-2 ps-3">
+            <li>O valor exibido inclui os produtos e o frete de cada ciclo; a primeira cobrança ocorre ao autorizar no Mercado Pago.</li>
+            <li>As cobranças seguintes ocorrem automaticamente na frequência escolhida, até o cancelamento.</li>
+            <li>Não há fidelidade nem multa. O cancelamento fica disponível digitalmente em “Minhas assinaturas”.</li>
+            <li>Preço, produto ou frequência não serão alterados nesta assinatura sem informação prévia e nova concordância.</li>
+            <li>Em falta de estoque após uma cobrança, a loja deverá oferecer cumprimento, alternativa aceita por você ou reembolso — nunca uma substituição silenciosa.</li>
+          </ul>
+        </details>
+        <div class="form-check border rounded-3 p-3 ps-5">
+          <input class="form-check-input" type="checkbox" value="yes" name="subscription_consent" id="subscription_consent" required>
+          <label class="form-check-label" for="subscription_consent">
+            <strong>Li e entendi que estou contratando uma assinatura.</strong> Autorizo cobranças automáticas recorrentes do total mostrado acima, na frequência escolhida, até que eu cancele.
+          </label>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Ao continuar, você também declara ciência dos <a href="{{ url_for('terms') }}">Termos de Uso</a> e da <a href="{{ url_for('privacy') }}">Política de Privacidade</a>. O pagamento é processado com segurança pelo Mercado Pago.</p>
+      </div>
+    </div>
+
+    <div class="sticky-action py-3 d-flex flex-column flex-sm-row gap-2">
+      <button type="submit" class="btn btn-success btn-lg flex-grow-1"><i class="fa-solid fa-lock me-1"></i>Autorizar assinatura no Mercado Pago</button>
+      <a href="{{ url_for('produto_detail', product_id=product.id) }}" class="btn btn-outline-primary btn-lg">Prefiro comprar uma vez</a>
+    </div>
+  </form>
 </div>
+<script src="{{ url_for('static', filename='js/subscription_checkout.js') }}" defer></script>
 {% endblock %}

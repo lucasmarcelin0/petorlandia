@@ -1351,6 +1351,9 @@ def produto_detail(product_id):
             product.aliquota_icms = update_form.aliquota_icms.data
             product.aliquota_pis = update_form.aliquota_pis.data
             product.aliquota_cofins = update_form.aliquota_cofins.data
+            product.subscription_enabled = bool(update_form.subscription_enabled.data)
+            product.subscription_discount_percent = update_form.subscription_discount_percent.data or Decimal('0')
+            product.subscription_shipping_fee = update_form.subscription_shipping_fee.data or Decimal('0')
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -2542,18 +2545,111 @@ RACAO_ASSINATURA_FREQUENCIAS = {
 
 
 def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
-    """Registra um ciclo pago da assinatura e notifica tutor e lojista."""
+    """Materializa exatamente um pedido para cada pagamento recorrente."""
+    from models import RacaoAssinaturaCiclo
+
+    provider_payment_id = str(mp_id or '').strip()
+    if not provider_payment_id:
+        current_app.logger.error(
+            'Ciclo da assinatura %s sem payment id; ignorado por segurança',
+            racao_sub.id,
+        )
+        return None
+    existing = RacaoAssinaturaCiclo.query.filter_by(
+        provider_payment_id=provider_payment_id,
+    ).first()
+    if existing:
+        return existing
+
     primeira_vez = racao_sub.status != 'active'
     if primeira_vez:
         racao_sub.status = 'active'
         racao_sub.activated_at = utcnow()
-    if mp_id and not racao_sub.mp_preapproval_id:
-        racao_sub.mp_preapproval_id = str(mp_id)
     racao_sub.ciclos_pagos = (racao_sub.ciclos_pagos or 0) + 1
     racao_sub.ultimo_ciclo_em = utcnow()
 
     produto = racao_sub.product
     nome_produto = racao_sub.variant.name if racao_sub.variant else (produto.name if produto else 'Assinatura')
+    quantidade = racao_sub.quantidade or 1
+    unit_price = Decimal(str(racao_sub.preco_unitario or 0))
+    if unit_price <= 0:
+        subtotal = Decimal(str(racao_sub.preco_ciclo or 0)) - Decimal(str(racao_sub.frete_ciclo or 0))
+        unit_price = (subtotal / Decimal(quantidade)).quantize(Decimal('0.01'))
+
+    order = Order(user_id=racao_sub.user_id, shipping_address=racao_sub.endereco_entrega)
+    db.session.add(order)
+    db.session.flush()
+
+    base_price = Decimal(str(
+        racao_sub.variant.price if racao_sub.variant else (produto.price if produto else 0)
+    ))
+    discount = produto.subscription_discount if produto else Decimal('0')
+    seller_unit = (base_price * (Decimal('1') - discount / Decimal('100'))).quantize(Decimal('0.01'))
+    db.session.add(OrderItem(
+        order_id=order.id,
+        product_id=racao_sub.product_id,
+        variant_id=racao_sub.variant_id,
+        item_name=nome_produto,
+        quantity=quantidade,
+        unit_price=unit_price,
+        seller_unit_amount=seller_unit,
+        platform_fee_amount=max(Decimal('0'), unit_price - seller_unit),
+        seller_type=('casa_de_racao' if produto and produto.casa_de_racao_id else 'clinica' if produto and produto.clinica_id else None),
+        seller_id=(produto.casa_de_racao_id if produto and produto.casa_de_racao_id else produto.clinica_id if produto else None),
+    ))
+
+    casa = produto.casa_de_racao if produto else None
+    clinica = produto.clinica if produto else None
+    tipo_entrega = 'propria' if (
+        (casa and casa.modo_entrega == 'propria') or
+        (clinica and clinica.modo_entrega == 'propria')
+    ) else 'plataforma'
+    db.session.add(DeliveryRequest(
+        order_id=order.id,
+        requested_by_id=racao_sub.user_id,
+        dedupe_key=f'racao-subscription:{racao_sub.id}:payment:{provider_payment_id}',
+        status='pendente',
+        clinica_id=produto.clinica_id if produto else None,
+        casa_de_racao_id=produto.casa_de_racao_id if produto else None,
+        tipo_entrega=tipo_entrega,
+        frete_valor=racao_sub.frete_ciclo or Decimal('0'),
+    ))
+
+    stock_attention = False
+    if racao_sub.variant:
+        before = racao_sub.variant.stock or 0
+        stock_attention = before < quantidade
+        racao_sub.variant.stock = max(0, before - quantidade)
+    if produto and produto.clinic_inventory_item_id:
+        inv = ClinicInventoryItem.query.get(produto.clinic_inventory_item_id)
+        if inv:
+            before = inv.quantity or 0
+            stock_attention = stock_attention or before < quantidade
+            inv.quantity = max(0, before - quantidade)
+            produto.stock = inv.quantity
+            db.session.add(ClinicInventoryMovement(
+                clinica_id=inv.clinica_id,
+                item=inv,
+                quantity_change=-min(before, quantidade),
+                quantity_before=before,
+                quantity_after=inv.quantity,
+                tipo='saida',
+                motivo=f'Assinatura — Pedido #{order.id}',
+            ))
+    elif produto:
+        before = produto.stock or 0
+        stock_attention = stock_attention or before < quantidade
+        produto.stock = max(0, before - quantidade)
+
+    cycle = RacaoAssinaturaCiclo(
+        assinatura_id=racao_sub.id,
+        provider_payment_id=provider_payment_id,
+        order_id=order.id,
+        valor=racao_sub.preco_ciclo,
+        status='stock_attention' if stock_attention else 'paid',
+        processed_at=utcnow(),
+    )
+    db.session.add(cycle)
 
     # Tutor: confirmação do ciclo
     try:
@@ -2569,7 +2665,6 @@ def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
         current_app.logger.debug('push tutor assinatura falhou', exc_info=True)
 
     # Lojista: preparar entrega
-    casa = produto.casa_de_racao if produto else None
     if casa and casa.owner_id:
         endereco = racao_sub.endereco_entrega or 'endereço cadastrado do cliente'
         cliente = racao_sub.user.name if racao_sub.user else 'cliente'
@@ -2594,6 +2689,12 @@ def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
                 ))
             except Exception:  # noqa: BLE001
                 current_app.logger.warning('Falha ao avisar lojista por e-mail (assinatura %s)', racao_sub.id)
+    if stock_attention:
+        avisar_admin_nova_solicitacao(
+            f'Estoque insuficiente na assinatura #{racao_sub.id}',
+            f'O pedido #{order.id} foi cobrado e precisa de reposição urgente: {quantidade}x {nome_produto}.',
+        )
+    return cycle
 
 
 @bp.route('/produto/<int:product_id>/assinar', methods=['GET', 'POST'])
@@ -2603,7 +2704,7 @@ def racao_assinar(product_id):
     from models import Animal, ProductVariant, RacaoAssinatura
 
     product = Product.query.get_or_404(product_id)
-    if product.status != 'active':
+    if product.status != 'active' or not product.subscription_enabled:
         abort(404)
 
     variantes = [v for v in (product.variants or []) if v.status == 'active']
@@ -2617,22 +2718,65 @@ def racao_assinar(product_id):
     if request.method == 'POST':
         freq = request.form.get('frequencia_dias', type=int) or 30
         if freq not in RACAO_ASSINATURA_FREQUENCIAS:
-            freq = 30
+            flash('Escolha uma frequência válida para a assinatura.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
         quantidade = max(1, min(request.form.get('quantidade', type=int) or 1, 10))
         variant = None
         variant_id = request.form.get('variant_id', type=int)
-        if variant_id:
-            variant = ProductVariant.query.filter_by(id=variant_id, product_id=product.id).first()
+        if variantes:
+            variant = ProductVariant.query.filter_by(
+                id=variant_id,
+                product_id=product.id,
+                status='active',
+            ).first()
+            if not variant:
+                flash('Escolha uma apresentação válida.', 'danger')
+                return redirect(url_for('racao_assinar', product_id=product.id))
         animal_id = request.form.get('animal_id', type=int) or None
         if animal_id and not any(a.id == animal_id for a in animais):
             animal_id = None
-        endereco = (request.form.get('endereco_entrega') or '').strip()[:255] or None
+        endereco = (request.form.get('endereco_entrega') or '').strip()[:255]
+        if not endereco:
+            flash('Informe o endereço completo de cada entrega.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
+        if request.form.get('subscription_consent') != 'yes':
+            flash('Confirme que entendeu e autoriza a cobrança recorrente.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
 
         preco_unit = variant.preco_publico if variant else product.preco_publico
-        preco_ciclo = float(preco_unit or 0) * quantidade
+        preco_unit = product.subscription_price_from_public(preco_unit)
+        frete_ciclo = Decimal(str(product.subscription_shipping_fee or 0)).quantize(Decimal('0.01'))
+        preco_ciclo = (preco_unit * quantidade + frete_ciclo).quantize(Decimal('0.01'))
         if preco_ciclo <= 0:
             flash('Produto sem preço válido para assinatura.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
+
+        variant_filter = (
+            RacaoAssinatura.variant_id.is_(None)
+            if variant is None else RacaoAssinatura.variant_id == variant.id
+        )
+        animal_filter = (
+            RacaoAssinatura.animal_id.is_(None)
+            if animal_id is None else RacaoAssinatura.animal_id == animal_id
+        )
+        duplicate = RacaoAssinatura.query.filter(
+            RacaoAssinatura.user_id == current_user.id,
+            RacaoAssinatura.product_id == product.id,
+            variant_filter,
+            animal_filter,
+            RacaoAssinatura.quantidade == quantidade,
+            RacaoAssinatura.frequencia_dias == freq,
+            RacaoAssinatura.status.in_(['creating', 'pending', 'active', 'cancel_pending']),
+        ).order_by(RacaoAssinatura.created_at.desc()).first()
+        if duplicate:
+            if duplicate.status == 'active':
+                flash('Você já possui esta assinatura ativa. Gerencie-a abaixo.', 'info')
+                return redirect(url_for('racao_minhas_assinaturas'))
+            if duplicate.init_point:
+                flash('Retomamos a configuração de pagamento que já estava em andamento.', 'info')
+                return redirect(duplicate.init_point)
+            duplicate.status = 'failed'
+            duplicate.last_error = 'Configuração anterior sem URL de checkout; substituída com segurança.'
 
         sub = RacaoAssinatura(
             user_id=current_user.id,
@@ -2641,9 +2785,15 @@ def racao_assinar(product_id):
             animal_id=animal_id,
             quantidade=quantidade,
             frequencia_dias=freq,
+            preco_unitario=preco_unit,
+            frete_ciclo=frete_ciclo,
             preco_ciclo=preco_ciclo,
             endereco_entrega=endereco,
-            status='pending',
+            status='creating',
+            consent_at=utcnow(),
+            consent_ip=(request.access_route[0] if request.access_route else request.remote_addr),
+            consent_user_agent=(request.user_agent.string or '')[:255],
+            terms_version='store-subscription-2026-08-01',
         )
         db.session.add(sub)
         db.session.commit()
@@ -2657,32 +2807,43 @@ def racao_assinar(product_id):
             'auto_recurring': {
                 'frequency': frequency,
                 'frequency_type': frequency_type,
-                'transaction_amount': preco_ciclo,
+                'transaction_amount': float(preco_ciclo),
                 'currency_id': 'BRL',
             },
             'external_reference': f'racao-assinatura-{sub.id}',
         }
         try:
             resp = mp_sdk().preapproval().create(preapproval_data)
-        except Exception:
+        except Exception as exc:
             current_app.logger.exception('Erro ao criar preapproval de assinatura de ração')
+            sub.status = 'failed'
+            sub.last_error = str(exc)[:500]
+            db.session.commit()
             flash('Falha ao conectar com o Mercado Pago. Tente novamente.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
 
         if resp.get('status') not in {200, 201}:
             current_app.logger.warning('Preapproval de ração rejeitado: %s', resp)
+            sub.status = 'failed'
+            sub.last_error = str(resp.get('response') or resp)[:500]
+            db.session.commit()
             flash('Erro ao iniciar a assinatura. Tente novamente.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
 
         body = resp.get('response', {}) or {}
         mp_id = body.get('id')
         init_point = body.get('init_point') or body.get('sandbox_init_point')
-        if mp_id:
-            sub.mp_preapproval_id = str(mp_id)
+        if not init_point or not mp_id:
+            sub.status = 'failed'
+            sub.last_error = 'Mercado Pago não retornou a identificação e a URL do checkout.'
             db.session.commit()
-        if not init_point:
             flash('Erro ao iniciar a assinatura.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
+        sub.mp_preapproval_id = str(mp_id) if mp_id else None
+        sub.init_point = init_point
+        sub.status = 'pending'
+        sub.last_error = None
+        db.session.commit()
         return redirect(init_point)
 
     return render_template(
@@ -2716,13 +2877,28 @@ def racao_assinatura_cancelar(sub_id):
     sub = RacaoAssinatura.query.get_or_404(sub_id)
     if sub.user_id != current_user.id and not _is_admin():
         abort(403)
+    if sub.status in {'canceled', 'cancelled'}:
+        flash('Esta assinatura já está cancelada.', 'info')
+        return redirect(url_for('racao_minhas_assinaturas'))
     if sub.mp_preapproval_id:
         try:
-            mp_sdk().preapproval().update(sub.mp_preapproval_id, {'status': 'cancelled'})
-        except Exception:
+            response = mp_sdk().preapproval().update(sub.mp_preapproval_id, {'status': 'canceled'})
+            body = response.get('response', {}) or {}
+            if response.get('status') not in {200, 201} or body.get('status') not in {None, 'canceled'}:
+                raise RuntimeError(str(body or response))
+        except Exception as exc:
             current_app.logger.exception('Falha ao cancelar preapproval %s', sub.mp_preapproval_id)
-    sub.status = 'cancelled'
+            sub.last_error = f'Falha ao cancelar no Mercado Pago: {exc}'[:500]
+            db.session.commit()
+            flash(
+                'Não foi possível confirmar o cancelamento no Mercado Pago. '
+                'A assinatura continua ativa; tente novamente ou fale com o suporte.',
+                'danger',
+            )
+            return redirect(url_for('racao_minhas_assinaturas'))
+    sub.status = 'canceled'
     sub.cancelled_at = utcnow()
+    sub.last_error = None
     db.session.commit()
     flash('Assinatura cancelada. Nenhuma nova cobrança será feita.', 'info')
     return redirect(url_for('racao_minhas_assinaturas'))

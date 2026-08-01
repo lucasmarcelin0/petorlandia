@@ -460,6 +460,8 @@
                   {{ product_form.mp_category_id(class="form-control", placeholder="Ex: food, pet_supplies") }}
                   <div class="form-text">Categoria Mercado Pago (opcional).</div>
                 </div>
+                {% with subscription_form=product_form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
                 <div class="mb-3">
                   {{ product_form.image_upload.label(class="form-label fw-semibold") }}
                   {{ product_form.image_upload(class="form-control") }}

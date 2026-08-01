@@ -31,6 +31,7 @@
       {{ update_form.image_upload(class="form-control") }}
     </div>
   </div>
+  {% with subscription_form=update_form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
   <h5 class="mt-4">Dados fiscais</h5>
   <div class="row">
     <div class="col-md-3 mb-3">

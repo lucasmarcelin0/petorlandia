@@ -239,6 +239,11 @@ class Product(db.Model):
     casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
     # 'active' = visível na loja, 'inactive' = oculto pelo dono, 'pending' = aguardando aprovação
     status = db.Column(db.String(20), default='active', nullable=False)
+    # A recorrencia e uma oferta separada da compra avulsa e precisa ser
+    # ativada conscientemente pelo vendedor.
+    subscription_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    subscription_discount_percent = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    subscription_shipping_fee = db.Column(db.Numeric(10, 2), nullable=False, default=0)
 
     clinica = db.relationship('Clinica', backref=db.backref('produtos_loja', lazy='dynamic'))
     inventory_item = db.relationship('ClinicInventoryItem', backref=db.backref('produto_loja', uselist=False))
@@ -333,6 +338,25 @@ class Product(db.Model):
         if prices:
             return max(prices)
         return self.preco_publico
+
+    @property
+    def subscription_discount(self):
+        value = Decimal(str(self.subscription_discount_percent or 0))
+        return max(Decimal("0"), min(value, Decimal("50")))
+
+    def subscription_price_from_public(self, value):
+        """Return the recurring price after the seller-configured discount."""
+        public = Decimal(str(value or 0))
+        multiplier = Decimal("1") - (self.subscription_discount / Decimal("100"))
+        return (public * multiplier).quantize(Decimal("0.01"))
+
+    @property
+    def subscription_price_min(self):
+        return self.subscription_price_from_public(self.public_price_min)
+
+    @property
+    def subscription_price_max(self):
+        return self.subscription_price_from_public(self.public_price_max)
 
     @property
     def variant_count_label(self):
