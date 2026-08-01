@@ -10402,8 +10402,8 @@ def _render_vet_public_profile(veterinario):
 
 
 
-def _resolve_record_panel(args, listing_params=(), default='create'):
-    raw_panel = (args.get('panel') or '').strip().lower()
+def _resolve_record_panel(args, listing_params=(), default='create', param='panel'):
+    raw_panel = (args.get(param) or '').strip().lower()
     create_values = {'create', 'form', 'new', 'novo', 'cadastro'}
     list_values = {'list', 'listing', 'records', 'cadastrados', 'listagem'}
 
