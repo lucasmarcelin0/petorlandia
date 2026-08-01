@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 from dateutil.parser import isoparse
+from flask import current_app, has_app_context
 
 from extensions import db
 from models import (
@@ -466,10 +467,12 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
             synced = sync_preapproval_payload(payload)
             if synced:
                 result["subscriptions_updated"] += 1
-            for invoice in client.search_authorized_payments(provider_id):
-                if sync_authorized_payment_payload(invoice):
-                    result["charges_seen"] += 1
             db.session.commit()
+            if synced and synced.status in {"authorized", "paused"}:
+                for invoice in client.search_authorized_payments(provider_id):
+                    if sync_authorized_payment_payload(invoice):
+                        result["charges_seen"] += 1
+                db.session.commit()
         except LookupError:
             db.session.rollback()
             current = db.session.get(VeterinarianMembership, membership.id)
@@ -479,8 +482,20 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
                 db.session.add(current)
                 db.session.commit()
             result["missing"] += 1
-        except Exception:  # noqa: BLE001 - retry legacy records next run
+        except Exception as exc:  # noqa: BLE001 - retry legacy records next run
             db.session.rollback()
+            current = VeterinarianMembershipSubscription.query.filter_by(
+                provider_preapproval_id=provider_id
+            ).first()
+            if current:
+                current.last_error = str(exc)[:500]
+                current.last_synced_at = utcnow()
+                db.session.add(current)
+                db.session.commit()
+            if has_app_context():
+                current_app.logger.exception(
+                    "Falha ao reconciliar assinatura legada do Mercado Pago"
+                )
             result["failures"] += 1
 
     for subscription in subscriptions:
@@ -491,10 +506,12 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
             synced = sync_preapproval_payload(payload)
             if synced:
                 result["subscriptions_updated"] += 1
-            for invoice in client.search_authorized_payments(provider_id):
-                if sync_authorized_payment_payload(invoice):
-                    result["charges_seen"] += 1
             db.session.commit()
+            if synced and synced.status in {"authorized", "paused"}:
+                for invoice in client.search_authorized_payments(provider_id):
+                    if sync_authorized_payment_payload(invoice):
+                        result["charges_seen"] += 1
+                db.session.commit()
         except LookupError:
             db.session.rollback()
             current = db.session.get(
@@ -520,5 +537,9 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
                 current.last_synced_at = utcnow()
                 db.session.add(current)
                 db.session.commit()
+            if has_app_context():
+                current_app.logger.exception(
+                    "Falha ao reconciliar assinatura do Mercado Pago"
+                )
             result["failures"] += 1
     return result
