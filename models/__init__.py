@@ -27,6 +27,10 @@ from .usuarios import (
     VeterinarianMembership,
     VeterinarianSettings,
 )
+from .membership_billing import (  # noqa: F401
+    VeterinarianMembershipCharge,
+    VeterinarianMembershipSubscription,
+)
 from .oauth import (
     OAuthAccessToken,
     OAuthAuthorizationCode,
@@ -107,6 +111,8 @@ __all__ = [
     "VeterinarioAtendeCidade",
     "ProfessionalService",
     "VeterinarianMembership",
+    "VeterinarianMembershipCharge",
+    "VeterinarianMembershipSubscription",
     "VeterinarianSettings",
     "OAuthAccessToken",
     "OAuthAuthorizationCode",

@@ -5,7 +5,14 @@ from datetime import timedelta
 import flask_login.utils as login_utils
 
 from extensions import db
-from models import Clinica, User, Veterinario, VeterinarianMembership, WaitlistLead
+from models import (
+    Clinica,
+    User,
+    Veterinario,
+    VeterinarianMembership,
+    VeterinarianMembershipSubscription,
+    WaitlistLead,
+)
 from time_utils import utcnow
 
 
@@ -220,6 +227,96 @@ def test_checkout_veterinario_limita_reason_do_mercado_pago(app, client, monkeyp
     assert 1 <= len(captured["reason"]) <= 60
     assert captured["reason"] == "Assinatura PetOrlandia (mensal)"
     assert user.name not in captured["reason"]
+    attempt = VeterinarianMembershipSubscription.query.one()
+    assert captured["external_reference"] == attempt.external_reference
+    assert attempt.provider_preapproval_id == "pre-vet-1"
+    assert attempt.status == "pending"
+
+
+def test_checkout_veterinario_reabre_preapproval_pendente_sem_cancelar(
+    app, client, monkeypatch
+):
+    import app as app_module
+
+    user = _user("retomar@example.com")
+    vet = Veterinario(user=user, crmv="54321", crmv_estado="SP")
+    db.session.add(vet)
+    db.session.commit()
+    membership = VeterinarianMembership.query.filter_by(veterinario_id=vet.id).one()
+    membership.preapproval_id = "pre-pending"
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    calls = []
+
+    class FakePreapproval:
+        def get(self, preapproval_id):
+            calls.append(("get", preapproval_id))
+            return {
+                "status": 200,
+                "response": {
+                    "id": preapproval_id,
+                    "status": "pending",
+                    "external_reference": f"vet-membership-{membership.id}-legacy-mensal",
+                    "init_point": "https://mp.example/continuar",
+                    "auto_recurring": {
+                        "transaction_amount": 60,
+                        "currency_id": "BRL",
+                    },
+                },
+            }
+
+        def update(self, preapproval_id, payload):
+            raise AssertionError("preapproval pending não deve ser cancelado")
+
+        def create(self, payload):
+            raise AssertionError("não deve criar assinatura duplicada")
+
+    class FakeSDK:
+        def preapproval(self):
+            return FakePreapproval()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda: FakeSDK())
+
+    response = client.post(
+        "/veterinario/assinatura/checkout",
+        data={"plano": "mensal"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://mp.example/continuar"
+    assert calls == [("get", "pre-pending")]
+    assert VeterinarianMembershipSubscription.query.count() == 1
+
+
+def test_checkout_admin_sem_perfil_nao_cria_assinatura_orfa(
+    app, client, monkeypatch
+):
+    import app as app_module
+
+    admin = _user("admin-sem-vet@example.com")
+    admin.role = "admin"
+    db.session.commit()
+    _login(monkeypatch, admin)
+
+    monkeypatch.setattr(
+        app_module,
+        "mp_sdk",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("Mercado Pago não deve ser chamado sem membership")
+        ),
+    )
+
+    response = client.post(
+        "/veterinario/assinatura/checkout",
+        data={"plano": "mensal"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/veterinario/assinatura")
+    assert VeterinarianMembershipSubscription.query.count() == 0
 
 
 def test_demo_funciona_sem_whatsapp_configurado(app, client):

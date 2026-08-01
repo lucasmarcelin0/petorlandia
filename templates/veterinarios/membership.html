@@ -21,8 +21,8 @@
 
   {% if membership and membership.preapproval_id and not membership.has_payment_method() %}
   <div class="alert alert-warning">
-    A configuração anterior do pagamento não foi concluída. Ao tentar novamente, substituímos
-    esse pedido pendente com segurança.
+    A configuração anterior do pagamento não foi concluída. Ao continuar, você volta
+    ao mesmo checkout seguro do Mercado Pago, sem criar assinaturas duplicadas.
   </div>
   {% endif %}
 
@@ -140,7 +140,9 @@
 
     <button type="submit" class="btn btn-primary btn-lg rounded-pill px-4">
       <i class="bi bi-cash-coin me-1"></i>
-      {% if membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
+      {% if membership and membership.preapproval_id and not membership.has_payment_method() %}
+        Continuar no Mercado Pago
+      {% elif membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
     </button>
     <p class="text-muted small mt-2 mb-0">
        Assinatura recorrente por cartão, processada com segurança pelo Mercado Pago.

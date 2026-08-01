@@ -29,6 +29,16 @@ from models import (
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
 from services.payments import normalize_preapproval_reason
+from services.veterinarian_billing import (
+    MercadoPagoBillingError,
+    attach_created_preapproval,
+    create_subscription_attempt,
+    current_subscription_for_membership,
+    mark_subscription_attempt_failed,
+    normalize_preapproval_status,
+    provider_response_payload,
+    sync_preapproval_payload,
+)
 from sqlalchemy.orm import joinedload, selectinload
 from time_utils import normalize_to_utc, now_in_brazil, utcnow
 
@@ -160,22 +170,21 @@ def veterinarian_membership():
         membership = ensure_veterinarian_membership(current_user.veterinario)
         if membership.preapproval_id and not membership.has_payment_method():
             try:
-                preapproval_response = (
-                    mp_sdk().preapproval().get(membership.preapproval_id)
-                )
-                preapproval_status = (
-                    (preapproval_response.get('response') or {}).get('status')
-                    if isinstance(preapproval_response, dict)
-                    else None
-                )
-                if preapproval_status == 'authorized':
-                    membership.payment_method_set_at = utcnow()
-                    db.session.commit()
-                elif preapproval_status in {'cancelled', 'canceled'}:
+                preapproval_response = mp_sdk().preapproval().get(membership.preapproval_id)
+                response_status = int(preapproval_response.get('status') or 0)
+                if response_status == 404:
                     membership.preapproval_id = None
                     membership.payment_method_set_at = None
                     db.session.commit()
+                elif 200 <= response_status < 300:
+                    sync_preapproval_payload(provider_response_payload(preapproval_response))
+                    db.session.commit()
+                else:
+                    raise MercadoPagoBillingError(
+                        f"consulta de assinatura retornou HTTP {response_status}"
+                    )
             except Exception:  # noqa: BLE001
+                db.session.rollback()
                 current_app.logger.warning(
                     'Não foi possível sincronizar a assinatura profissional %s',
                     membership.preapproval_id,
@@ -226,6 +235,12 @@ def veterinarian_membership_checkout():
     membership = None
     if has_profile:
         membership = ensure_veterinarian_membership(current_user.veterinario)
+    if membership is None:
+        flash(
+            'Complete o cadastro profissional antes de configurar uma assinatura.',
+            'warning',
+        )
+        return redirect(url_for('veterinarian_membership'))
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     if membership:
         membership.ensure_trial_dates(trial_days)
@@ -235,16 +250,65 @@ def veterinarian_membership_checkout():
                 'info',
             )
             return redirect(url_for('veterinarian_membership'))
-        if membership.preapproval_id and not _cancel_membership_preapproval(membership):
-            db.session.rollback()
-            flash(
-                'Há uma configuração de pagamento pendente no Mercado Pago. '
-                'Tente novamente em instantes ou fale com o suporte.',
-                'danger',
-            )
-            return redirect(url_for('veterinarian_membership'))
-        if membership.preapproval_id is None:
-            db.session.commit()
+        if membership.preapproval_id:
+            try:
+                preapproval_response = mp_sdk().preapproval().get(membership.preapproval_id)
+                response_status = int(preapproval_response.get('status') or 0)
+                if response_status == 404:
+                    membership.preapproval_id = None
+                    membership.payment_method_set_at = None
+                    db.session.commit()
+                elif not 200 <= response_status < 300:
+                    raise MercadoPagoBillingError(
+                        f"consulta de assinatura retornou HTTP {response_status}"
+                    )
+                else:
+                    payload = provider_response_payload(preapproval_response)
+                    subscription = sync_preapproval_payload(payload)
+                    db.session.commit()
+                    provider_status = normalize_preapproval_status(payload.get('status'))
+                    if provider_status == 'pending':
+                        init_point = (
+                            payload.get('init_point')
+                            or payload.get('sandbox_init_point')
+                            or (subscription.init_point if subscription else None)
+                        )
+                        if init_point:
+                            flash(
+                                'Continuando a configuração de pagamento que já estava em andamento.',
+                                'info',
+                            )
+                            return redirect(init_point)
+                        flash(
+                            'O Mercado Pago ainda está processando essa configuração. '
+                            'Tente novamente em instantes.',
+                            'warning',
+                        )
+                        return redirect(url_for('veterinarian_membership'))
+                    if provider_status == 'authorized':
+                        flash('Sua renovação automática já está configurada.', 'info')
+                        return redirect(url_for('veterinarian_membership'))
+                    if provider_status != 'canceled':
+                        flash(
+                            'A assinatura existente precisa ser regularizada antes de iniciar outra.',
+                            'warning',
+                        )
+                        return redirect(url_for('veterinarian_membership'))
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                current_app.logger.exception(
+                    'Falha ao consultar assinatura profissional pendente %s',
+                    membership.preapproval_id,
+                )
+                flash(
+                    'Não foi possível consultar o Mercado Pago. '
+                    'Nenhuma nova assinatura foi criada; tente novamente em instantes.',
+                    'danger',
+                )
+                return redirect(url_for('veterinarian_membership'))
+
+        db.session.add(membership)
+        db.session.commit()
 
     # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
     # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
@@ -297,22 +361,36 @@ def veterinarian_membership_checkout():
         'auto_recurring': auto_recurring,
     }
 
+    attempt = None
     if membership and membership.id:
-        # O sufixo do ciclo permite ao webhook estender o acesso pelo período
-        # certo (30 dias no mensal, 365 no anual).
-        preapproval_data['external_reference'] = f'vet-membership-{membership.id}-{plano}'
+        attempt = create_subscription_attempt(
+            membership=membership,
+            plan_code=plano,
+            amount=price,
+        )
+        db.session.commit()
+        preapproval_data['external_reference'] = attempt.external_reference
 
     try:
         resp = mp_sdk().preapproval().create(preapproval_data)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         current_app.logger.exception('Erro de conexão com Mercado Pago para assinatura de veterinário')
         db.session.rollback()
+        if attempt:
+            mark_subscription_attempt_failed(attempt, exc)
+            db.session.commit()
         flash('Não foi possível iniciar o pagamento. Tente novamente em instantes.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
     if resp.get('status') not in {200, 201}:
         current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
         db.session.rollback()
+        if attempt:
+            mark_subscription_attempt_failed(
+                attempt,
+                (resp.get('response') or {}).get('message') or f"HTTP {resp.get('status')}",
+            )
+            db.session.commit()
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
@@ -322,19 +400,23 @@ def veterinarian_membership_checkout():
     )
 
     if not init_point:
+        if attempt:
+            mark_subscription_attempt_failed(attempt, 'Mercado Pago não retornou init_point')
+            db.session.commit()
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
     # Guarda a assinatura criada: é por ela que sabemos, depois, se existe
     # forma de pagamento cadastrada — o que muda o aviso de fim de avaliação
     # entre "vamos cobrar" e "seu acesso vai pausar".
-    preapproval_id = (resp.get('response') or {}).get('id')
-    if membership and preapproval_id:
-        membership.preapproval_id = str(preapproval_id)[:64]
-        # A criação só gera o link de autorização. A forma de pagamento passa a
-        # existir quando o Mercado Pago devolver status "authorized".
-        membership.payment_method_set_at = None
-        db.session.add(membership)
+    if attempt:
+        try:
+            attach_created_preapproval(attempt, provider_response_payload(resp))
+        except MercadoPagoBillingError as exc:
+            mark_subscription_attempt_failed(attempt, exc)
+            db.session.commit()
+            flash('Erro ao iniciar pagamento.', 'danger')
+            return redirect(url_for('veterinarian_membership'))
 
     db.session.commit()
     session.pop('preferred_membership_plan', None)
@@ -379,6 +461,12 @@ def _cancel_membership_preapproval(membership) -> bool:
         )
         return False
 
+    subscription = current_subscription_for_membership(membership)
+    if subscription:
+        subscription.status = 'canceled'
+        subscription.provider_status = 'canceled'
+        subscription.last_synced_at = utcnow()
+        db.session.add(subscription)
     membership.preapproval_id = None
     membership.payment_method_set_at = None
     db.session.add(membership)

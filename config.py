@@ -64,11 +64,14 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
-    SESSION_TYPE = os.environ.get("SESSION_TYPE", "filesystem")
+    REDIS_URL = _env_optional("REDIS_URL")
+    SESSION_TYPE = os.environ.get("SESSION_TYPE") or (
+        "redis" if REDIS_URL else "filesystem"
+    )
     SESSION_PERMANENT = True
-    # No Heroku, SESSION_TYPE=sqlalchemy evita que logins sejam perdidos a
-    # cada deploy. A instância SQLAlchemy é injetada em app.py depois do
-    # db.init_app(), quando a extensão já pode usar o banco configurado.
+    # Redis é preferível no Heroku para não consumir conexões PostgreSQL em
+    # toda requisição. SESSION_TYPE=sqlalchemy continua suportado durante a
+    # transição; a instância é injetada em app.py após db.init_app().
     SESSION_SQLALCHEMY_TABLE = os.environ.get(
         "SESSION_SQLALCHEMY_TABLE", "web_sessions"
     )
@@ -82,6 +85,7 @@ class Config:
     SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+    SESSION_KEY_PREFIX = os.environ.get("SESSION_KEY_PREFIX", "petorlandia:session:")
     WTF_CSRF_TIME_LIMIT = int(os.environ.get("WTF_CSRF_TIME_LIMIT", "3600"))
     FORCE_HTTPS = _env_bool("FORCE_HTTPS", True)
     SECURITY_HEADERS_ENABLED = _env_bool("SECURITY_HEADERS_ENABLED", True)
@@ -202,6 +206,12 @@ class Config:
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
     MERCADOPAGO_NOTIFICATION_URL = os.environ.get("MERCADOPAGO_NOTIFICATION_URL")
+    VETERINARIAN_BILLING_RECONCILIATION_ENABLED = _env_bool(
+        "VETERINARIAN_BILLING_RECONCILIATION_ENABLED", True
+    )
+    VETERINARIAN_BILLING_RECONCILIATION_LIMIT = int(
+        os.environ.get("VETERINARIAN_BILLING_RECONCILIATION_LIMIT", "250")
+    )
 
     # URLs gerados com ``url_for(..., _external=True)`` agora usam HTTPS por padrão,
     # garantindo que endpoints como o webhook do Mercado Pago sejam aceitos.
