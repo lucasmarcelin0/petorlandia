@@ -1,5 +1,5 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v8';
+const CACHE_NAME = 'petorlandia-cache-v9';
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
@@ -31,6 +31,15 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Nunca intercepte mutações ou envios de formulário. Além de não serem
+  // cacheáveis, um POST local pode responder com redirect para outro domínio
+  // (por exemplo, o checkout do Mercado Pago). Se o worker fizer esse fetch,
+  // o redirect passa a obedecer ao connect-src do próprio worker e a
+  // navegação externa é bloqueada. Deixe o navegador conduzir esses requests.
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   // Requisições cross-origin (CDNs, S3, Google Fonts) — não interceptar.
   // O fetch() dentro do service worker é limitado pelo CSP do próprio worker
   // (connect-src 'self'), o que bloquearia esses recursos; deixamos o
