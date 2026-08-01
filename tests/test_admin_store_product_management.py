@@ -37,6 +37,9 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
             '_action': 'add_product', 'name': 'Racao Administrada',
             'description': 'Criada pelo administrador', 'price': '49.90',
             'stock': '8', 'category': '', 'mp_category_id': 'pet_supplies',
+            'subscription_enabled': 'y',
+            'subscription_discount_percent': '10',
+            'subscription_shipping_fee': '7.50',
         },
     )
     assert created.status_code == 302
@@ -50,6 +53,9 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
             'name': 'Racao Revisada', 'description': 'Editada pelo administrador',
             'price': '59.90', 'stock': '12', 'category': '',
             'mp_category_id': 'pet_supplies',
+            'subscription_enabled': 'y',
+            'subscription_discount_percent': '5',
+            'subscription_shipping_fee': '6.00',
         },
     )
     assert edited.status_code == 302
@@ -58,6 +64,75 @@ def test_admin_manages_products_of_foreign_pending_store(app, client):
         product = db.session.get(Product, product_id)
         assert product.name == 'Racao Revisada'
         assert product.status == 'inactive'
+        assert product.subscription_enabled is True
+        assert float(product.subscription_discount_percent) == 5
+        assert float(product.subscription_shipping_fee) == 6
+
+
+def test_admin_product_list_highlights_sale_modes(app, client):
+    with app.app_context():
+        admin_id, _, _, store_id = _setup_foreign_pending_store()
+        db.session.add_all([
+            Product(
+                casa_de_racao_id=store_id,
+                name='Produto compra avulsa',
+                price=45,
+                stock=12,
+                status='active',
+                subscription_enabled=False,
+            ),
+            Product(
+                casa_de_racao_id=store_id,
+                name='Produto recorrente',
+                price=45,
+                stock=3,
+                status='active',
+                subscription_enabled=True,
+                subscription_discount_percent=10,
+                subscription_shipping_fee=7.5,
+            ),
+        ])
+        db.session.commit()
+
+    _login(client, admin_id)
+    response = client.get('/painel/product/')
+    html = response.data.decode('utf-8')
+
+    assert response.status_code == 200
+    assert 'Manejo de produtos' in html
+    assert 'somente compra única' in html
+    assert 'com assinatura habilitada' in html
+    assert 'Compra única' in html
+    assert 'Compra + assinatura' in html
+    assert 'R$ 45,00 por ciclo' in html
+    assert 'Frete R$ 7,50 · 10% de desconto' in html
+    assert '.product-stat-grid { display: grid;' in html
+    assert 'Modalidade de venda' in html
+
+
+def test_admin_product_form_exposes_subscription_configuration(app, client):
+    with app.app_context():
+        admin_id, _, _, store_id = _setup_foreign_pending_store()
+        product = Product(
+            casa_de_racao_id=store_id,
+            name='Produto configurável',
+            price=30,
+            stock=5,
+            status='active',
+        )
+        db.session.add(product)
+        db.session.commit()
+        product_id = product.id
+
+    _login(client, admin_id)
+    response = client.get(f'/painel/product/edit/?id={product_id}')
+    html = response.data.decode('utf-8')
+
+    assert response.status_code == 200
+    assert 'Permitir assinatura recorrente' in html
+    assert 'Desconto para assinatura (%)' in html
+    assert 'Frete por ciclo (R$)' in html
+    assert 'A compra única continuará disponível' in html
 
 
 def test_pending_store_owner_cannot_publish_before_approval(app, client):
