@@ -377,3 +377,34 @@ def test_reconciliacao_limpa_preapproval_legado_que_nao_existe_mais(app):
     assert result["checked"] == 1
     assert result["missing"] == 1
     assert membership.preapproval_id is None
+
+
+def test_reconciliacao_nao_busca_fatura_para_assinatura_legada_pendente(app):
+    membership = _membership("legacy-pending@example.com")
+    membership.preapproval_id = "pre-pending-legacy"
+    db.session.commit()
+
+    class FakeClient:
+        def get_preapproval(self, preapproval_id):
+            return {
+                "id": preapproval_id,
+                "status": "pending",
+                "external_reference": f"vet-membership-{membership.id}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": 60,
+                    "currency_id": "BRL",
+                },
+            }
+
+        def search_authorized_payments(self, preapproval_id):
+            raise AssertionError("assinatura pendente ainda não possui faturas")
+
+    result = reconcile_membership_billing(FakeClient())
+
+    assert result["checked"] == 1
+    assert result["subscriptions_updated"] == 1
+    assert result["charges_seen"] == 0
+    assert result["failures"] == 0
+    assert VeterinarianMembershipSubscription.query.one().status == "pending"
