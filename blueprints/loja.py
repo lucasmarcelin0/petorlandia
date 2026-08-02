@@ -1546,8 +1546,12 @@ def comprar_prescricao(bloco_id):
 
     Os produtos são resolvidos no servidor a partir do bloco — a página não
     envia ids. Assim o botão não pode ser usado para inserir no carrinho um
-    item que não foi prescrito, e a regra de segurança (só a apresentação que
-    confere e com estoque) vale de verdade, não só na tela.
+    item que não foi prescrito, e a regra vale de verdade, não só na tela.
+
+    Item a item, vale qualquer produto sugerido que tenha estoque: quem clica
+    está vendo o aviso de apresentação ao lado do botão. Em lote, só entram os
+    de apresentação compatível — um botão que adiciona vários de uma vez não
+    pode incluir em silêncio uma concentração diferente da prescrita.
     """
     from models import BlocoPrescricao
     from services.prescription_store import (
@@ -1559,13 +1563,21 @@ def comprar_prescricao(bloco_id):
     if not _pode_ver_prescricao(bloco):
         abort(403)
 
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
     linhas = build_prescription_offers(bloco.prescricoes)
+
+    def responder_erro(mensagem, info=False):
+        """``info`` marca o que não é falha — "já está no carrinho", por ex."""
+        if wants_json:
+            return jsonify(success=False, info=info, message=mensagem), 400
+        flash(mensagem, 'info' if info else 'warning')
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
 
     escolhido = request.form.get('product_id', type=int)
     if escolhido:
-        # Item avulso: só vale um produto que esta receita realmente sugeriu e
-        # que tem estoque. Fora disso o botão viraria um "adicione qualquer
-        # coisa ao carrinho" com cara de prescrição.
         disponiveis = {
             match.product.id: match.product
             for linha in linhas
@@ -1574,20 +1586,29 @@ def comprar_prescricao(bloco_id):
         }
         produto = disponiveis.get(escolhido)
         if produto is None:
-            flash('Este medicamento não está disponível na loja agora.', 'warning')
-            return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+            return responder_erro('Este medicamento não está disponível na loja agora.')
         produtos = [produto]
+        order = _ensure_current_order()
     else:
         produtos = bulk_buyable_products(linhas)
+        if not produtos:
+            return responder_erro(
+                'Nenhum medicamento desta receita está disponível na loja no momento.'
+            )
+        order = _ensure_current_order()
+        # "Adicionar todos" garante presença, não soma outra unidade: quem já
+        # tinha clicado item a item não pode acabar com duas caixas do mesmo
+        # medicamento sem perceber.
+        ja_no_carrinho = {
+            item.product_id for item in order.items if item.product_id
+        }
+        produtos = [p for p in produtos if p.id not in ja_no_carrinho]
+        if not produtos:
+            return responder_erro(
+                'Os medicamentos disponíveis desta receita já estão no seu carrinho.',
+                info=True,
+            )
 
-    if not produtos:
-        flash(
-            'Nenhum medicamento desta receita está disponível na loja no momento.',
-            'warning',
-        )
-        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
-
-    order = _ensure_current_order()
     for produto in produtos:
         _upsert_cart_item(order, produto, 1)
     db.session.commit()
@@ -1601,10 +1622,24 @@ def comprar_prescricao(bloco_id):
         items=len(produtos),
     )
     plural = 's' if len(produtos) > 1 else ''
-    flash(
-        f'{len(produtos)} medicamento{plural} da receita adicionado{plural} ao carrinho.',
-        'success',
+    mensagem = (
+        f'{len(produtos)} medicamento{plural} da receita '
+        f'adicionado{plural} ao carrinho.'
     )
+
+    if wants_json:
+        # O tutor continua na receita: a resposta traz o que o rodapé precisa
+        # para se atualizar sem recarregar a página.
+        return jsonify(
+            success=True,
+            message=mensagem,
+            added=[produto.id for produto in produtos],
+            cart_quantity=sum(int(item.quantity or 0) for item in order.items),
+            cart_total_formatted=f'R$ {_order_checkout_total(order):.2f}'.replace('.', ','),
+            cart_url=url_for('ver_carrinho'),
+        )
+
+    flash(mensagem, 'success')
     return redirect(url_for('ver_carrinho'))
 
 
