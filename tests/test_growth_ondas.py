@@ -537,9 +537,14 @@ def test_carrinho_abandonado_lembra_uma_vez_so(app, monkeypatch):
 
         app_module.enviar_lembretes_carrinho_abandonado()
         assert len(enviados) == 1
+        evento = ProductEvent.query.filter_by(event_name='checkout_abandoned').one()
+        assert evento.user_id == user.id
+        assert evento.properties['amount'] == 100.0
+        assert evento.properties['items'] == 1
 
         app_module.enviar_lembretes_carrinho_abandonado()
         assert len(enviados) == 1
+        assert ProductEvent.query.filter_by(event_name='checkout_abandoned').count() == 1
 
 
 def test_carrinho_recente_nao_recebe_lembrete(app, monkeypatch):
@@ -614,3 +619,125 @@ def test_home_anuncia_preco_no_titulo(app, client):
     body = client.get('/').data.decode()
     assert 'por veterinário' in body
     assert 'R$' in body
+
+
+# --------------------------------------- continuidade: receita e vitrine real
+
+
+def test_menu_publico_exibe_loja_quando_existe_catalogo_real(app, client):
+    with app.app_context():
+        _abrir_loja()
+        _product(name='Shampoo veterinário', price=31.11)
+
+    body = client.get('/').data.decode()
+    assert 'href="/loja"' in body
+    assert 'fa-shopping-bag' in body
+
+
+def test_vitrine_mostra_apenas_categorias_com_produto(app, client):
+    with app.app_context():
+        _abrir_loja()
+        product = _product(name='Shampoo veterinário', price=31.11)
+        product.category = 'higiene'
+        db.session.commit()
+
+    body = client.get('/loja').data.decode()
+    assert 'data-category="higiene"' in body
+    assert 'data-category="racao"' not in body
+
+
+def test_loja_aberta_tem_copy_e_metadados_honestos(app, client):
+    with app.app_context():
+        _abrir_loja()
+        _product(name='Shampoo veterinário', price=31.11)
+
+    body = client.get('/loja').data.decode()
+    assert 'Nosso catálogo local está começando' in body
+    assert 'Compre produtos pet de vendedores locais' in body
+    assert 'Entre na lista para saber quando' not in body
+
+
+def test_card_distingue_compra_unica_de_assinatura(app, client):
+    with app.app_context():
+        _abrir_loja()
+        single = _product(name='Shampoo avulso', price=31.11)
+        recurring = _product(name='Ração recorrente', price=120)
+        recurring.subscription_enabled = True
+        recurring.subscription_discount_percent = 10
+        db.session.commit()
+
+    body = client.get('/loja').data.decode()
+    assert 'Compra única' in body
+    assert 'Compra + assinatura' in body
+    assert 'por ciclo' in body
+
+
+def test_produto_publico_tem_seo_especifico_e_dados_estruturados(app, client):
+    with app.app_context():
+        product = _product(name='Shampoo Clorexidina', price=31.11)
+        product_id = product.id
+
+    body = client.get(f'/produto/{product_id}').data.decode()
+    assert '<title>Shampoo Clorexidina — compra única | PetOrlândia</title>' in body
+    assert '"@type": "Product"' in body
+    assert '"priceCurrency": "BRL"' in body
+    assert 'https://schema.org/InStock' in body
+    assert 'Entrar para comprar' in body
+    assert 'O produto continua aqui depois do acesso.' in body
+
+
+def test_carrinho_vai_direto_ao_pagamento_sem_tela_intermediaria(app, client):
+    with app.app_context():
+        user = _user(name='Compradora Direta')
+        product = _product(name='Produto direto', price=42)
+        order = Order(user_id=user.id)
+        db.session.add(order)
+        db.session.flush()
+        db.session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            quantity=1,
+            unit_price=42,
+        ))
+        db.session.commit()
+        user_id, order_id = user.id, order.id
+
+    _login(client, user_id)
+    with client.session_transaction() as session:
+        session['current_order'] = order_id
+    body = client.get('/carrinho').data.decode()
+    assert 'id="checkoutCartForm" action="/checkout"' in body
+    assert 'action="/checkout/confirm"' not in body
+    assert 'Ir para o pagamento seguro' in body
+
+
+def test_painel_admin_transforma_eventos_de_receita_em_metricas(app, client):
+    with app.app_context():
+        admin = _user(name='Admin Growth', role='admin')
+        db.session.add_all([
+            ProductEvent(
+                event_name='checkout_started', anonymous_id='a1', session_id='s1',
+                source_path='/checkout', properties={'amount': 150},
+            ),
+            ProductEvent(
+                event_name='purchase_completed', anonymous_id='a1', session_id='s1',
+                source_path='/notificacoes', properties={'amount': 150},
+            ),
+            ProductEvent(
+                event_name='payment_failed', anonymous_id='a2', session_id='s2',
+                source_path='/notificacoes', properties={'amount': 80},
+            ),
+        ])
+        db.session.commit()
+        admin_id = admin.id
+
+    _login(client, admin_id)
+    response = client.get('/admin/analytics-produto?days=7')
+    body = response.data.decode()
+    assert response.status_code == 200
+    assert 'Receita aprovada' in body
+    assert 'R$ 150,00' in body
+    assert 'R$ 80,00' in body
+    assert 'Compras aprovadas' in body
+    assert '100.0%' in body

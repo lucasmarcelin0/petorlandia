@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
-{% block page_title %}Loja pet em Orlândia — PetOrlândia{% endblock %}
-{% block meta_description %}Entre na lista para saber quando a loja PetOrlândia abrir com parceiros locais e entrega na região.{% endblock %}
+{% block page_title %}{% if site_flags.loja_em_breve %}Loja pet em Orlândia — PetOrlândia{% else %}Produtos pet com entrega local — PetOrlândia{% endif %}{% endblock %}
+{% block meta_description %}{% if site_flags.loja_em_breve %}Entre na lista para saber quando a loja PetOrlândia abrir com parceiros locais e entrega na região.{% else %}Compre produtos pet de vendedores locais com preço, modalidade de compra e entrega informados antes do pagamento.{% endif %}{% endblock %}
 {% block main %}
 
 {% set ativo = site_flags.loja_em_breve %}
@@ -19,8 +19,17 @@ rápida em Orlândia.' %}
       <i class="fa-solid fa-shop me-2"></i> Loja PetOrlândia
     </h1>
     <p class="text-muted mx-auto" style="max-width: 780px;">
-      Os melhores produtos para o seu pet com entrega rápida e atendimento especializado!
+      {% if catalog_total <= 4 %}
+        Nosso catálogo local está começando: {{ catalog_total }} produto{{ 's' if catalog_total != 1 else '' }} disponível{{ 'is' if catalog_total != 1 else '' }} agora, com preço e forma de compra claros.
+      {% else %}
+        Produtos de parceiros locais, com preço, vendedor e entrega informados antes do pagamento.
+      {% endif %}
     </p>
+    <div class="d-flex flex-wrap justify-content-center gap-2 small text-muted" aria-label="Compromissos da loja">
+      <span><i class="fa-solid fa-store text-primary me-1"></i>Vendedor identificado</span>
+      <span><i class="fa-solid fa-tag text-success me-1"></i>Preço final transparente</span>
+      <span><i class="fa-solid fa-lock text-secondary me-1"></i>Pagamento pelo Mercado Pago</span>
+    </div>
 
     <!-- Ações principais -->
     <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mt-3">

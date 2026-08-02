@@ -8780,6 +8780,7 @@ def enviar_lembretes_carrinho_abandonado() -> None:
         agora = utcnow()
         limite = agora - timedelta(hours=ABANDONED_CART_HOURS)
         enviados = 0
+        abandoned_events = []
 
         candidatos = (
             Order.query
@@ -8831,9 +8832,27 @@ def enviar_lembretes_carrinho_abandonado() -> None:
                 kind='cart_abandoned',
             )
             order.abandoned_reminder_at = agora
+            abandoned_events.append({
+                'user_id': order.user_id,
+                'amount': float(sum(
+                    Decimal(str(item.unit_price or 0)) * int(item.quantity or 0)
+                    for item in order.items
+                )),
+                'items': sum(int(item.quantity or 0) for item in order.items),
+            })
             enviados += 1
 
         db.session.commit()
+        # Mede o abandono depois de salvar o estado primário. A telemetria usa
+        # commit próprio e jamais pode decidir se o lembrete foi ou não enviado.
+        from services.product_analytics import track_event
+
+        for payload in abandoned_events:
+            track_event(
+                'checkout_abandoned',
+                source_path='/carrinho',
+                **payload,
+            )
         current_app.logger.info(
             '[Loja] Lembretes de carrinho abandonado enviados: %s', enviados
         )
@@ -12621,33 +12640,62 @@ def _build_loja_query(
     return query
 
 
-def _get_vendedores_ativos():
+def _get_vendedores_ativos(include_demo: bool = False):
     """Retorna lista de dicts {key, nome, logo_url} de todos os vendedores com produtos ativos."""
     from models import Clinica as ClinicaModel
     vendedores = []
-    clinicas = (
+    clinicas_query = (
         ClinicaModel.query
         .join(Product, Product.clinica_id == ClinicaModel.id)
         .filter(Product.status == 'active')
-        .distinct()
-        .order_by(ClinicaModel.nome)
-        .all()
     )
+    if not include_demo:
+        clinicas_query = clinicas_query.filter(Product.is_demo.is_(False))
+    clinicas = clinicas_query.distinct().order_by(ClinicaModel.nome).all()
     for c in clinicas:
         vendedores.append({'key': f'c_{c.id}', 'nome': c.nome, 'logo_url': c.logo_url})
 
-    casas = (
+    casas_query = (
         CasaDeRacao.query
         .join(Product, Product.casa_de_racao_id == CasaDeRacao.id)
         .filter(Product.status == 'active', CasaDeRacao.status == 'ativa')
-        .distinct()
-        .order_by(CasaDeRacao.nome)
-        .all()
     )
+    if not include_demo:
+        casas_query = casas_query.filter(Product.is_demo.is_(False))
+    casas = casas_query.distinct().order_by(CasaDeRacao.nome).all()
     for r in casas:
         vendedores.append({'key': f'r_{r.id}', 'nome': r.nome, 'logo_url': r.logo_url})
 
     return vendedores
+
+
+def _get_catalog_categories(vendedor: str = '', include_demo: bool = False):
+    """Categorias que têm ao menos um produto visível na vitrine atual.
+
+    Exibir seis chips vazios em um catálogo pequeno comunica falta de oferta.
+    O cadastro continua oferecendo todas as categorias; a vitrine mostra só as
+    que levam a algum produto real.
+    """
+    query = _build_loja_query(
+        '',
+        'all',
+        vendedor=vendedor,
+        include_demo=include_demo,
+    )
+    rows = (
+        query
+        .order_by(None)
+        .with_entities(Product.category)
+        .filter(Product.category.isnot(None), Product.category != '')
+        .distinct()
+        .all()
+    )
+    visible = {row[0] for row in rows}
+    return [
+        category
+        for category in get_active_product_categories()
+        if category.slug in visible
+    ]
 
 
 

@@ -89,26 +89,71 @@
   <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
-  <!-- Google Analytics 4 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GA_MEASUREMENT_ID }}"></script>
+  <!-- Analytics opcionais: nenhum recurso do Google é carregado antes da
+       escolha. A recusa preserva integralmente as funções do produto. -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    {%- if current_user.is_authenticated %}
-    {# O papel precisa vir antes do config para valer já no primeiro evento. #}
-    gtag('set', 'user_properties', { 'user_role': {{ (current_user.role or 'indefinido')|tojson }} });
-    {%- endif %}
-    {# user_id costura a mesma pessoa entre celular e computador. Vai só o id
-       interno: o GA proíbe qualquer dado que identifique alguém (e-mail,
-       telefone, nome). #}
-    gtag('config', {{ config.GA_MEASUREMENT_ID|tojson }}, {
-      'anonymize_ip': true{% if current_user.is_authenticated %},
-      'user_id': {{ current_user.id|string|tojson }}{% endif %}
-    });
-    {%- for evento in ga_pending_events() %}
-    gtag('event', {{ evento.name|tojson }}, {{ evento.params|tojson }});
-    {%- endfor %}
+    window.PetorlandiaAnalytics = (function () {
+      const storageKey = 'petorlandia.analytics_consent.v1';
+      const measurementId = {{ config.GA_MEASUREMENT_ID|tojson }};
+      let started = false;
+
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ window.dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+
+      function readChoice() {
+        try { return window.localStorage.getItem(storageKey); }
+        catch (error) { return null; }
+      }
+
+      function start() {
+        if (started || readChoice() !== 'granted') return;
+        started = true;
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId);
+        document.head.appendChild(script);
+
+        gtag('js', new Date());
+        {%- if current_user.is_authenticated %}
+        gtag('set', 'user_properties', { 'user_role': {{ (current_user.role or 'indefinido')|tojson }} });
+        {%- endif %}
+        gtag('config', measurementId, {
+          'anonymize_ip': true{% if current_user.is_authenticated %},
+          'user_id': {{ current_user.id|string|tojson }}{% endif %}
+        });
+        {%- for evento in ga_pending_events() %}
+        gtag('event', {{ evento.name|tojson }}, {{ evento.params|tojson }});
+        {%- endfor %}
+      }
+
+      function setChoice(value) {
+        try { window.localStorage.setItem(storageKey, value); }
+        catch (error) {}
+        const banner = document.getElementById('analytics-consent');
+        if (banner) banner.hidden = true;
+        if (value === 'granted') start();
+      }
+
+      function openPreferences() {
+        const banner = document.getElementById('analytics-consent');
+        if (banner) banner.hidden = false;
+      }
+
+      if (readChoice() === 'granted') start();
+      document.addEventListener('DOMContentLoaded', function () {
+        const banner = document.getElementById('analytics-consent');
+        if (banner && !readChoice()) banner.hidden = false;
+        document.querySelector('[data-analytics-accept]')?.addEventListener('click', function () { setChoice('granted'); });
+        document.querySelector('[data-analytics-reject]')?.addEventListener('click', function () { setChoice('denied'); });
+        document.querySelector('[data-analytics-preferences]')?.addEventListener('click', function (event) {
+          event.preventDefault();
+          openPreferences();
+        });
+      });
+
+      return {openPreferences: openPreferences};
+    })();
   </script>
   {% endif %}
 </head>
@@ -284,6 +329,10 @@
     <a href="{{ url_for('terms') }}" class="text-decoration-none">Termos</a>
     <span class="mx-1">|</span>
     <a href="{{ url_for('support') }}" class="text-decoration-none">Suporte</a>
+    {% if config.GA_MEASUREMENT_ID %}
+    <span class="mx-1">|</span>
+    <a href="#preferencias-analytics" class="text-decoration-none" data-analytics-preferences>Cookies</a>
+    {% endif %}
     <span class="mx-1">|</span>
     <a href="{{ url_for('petsitter_routes.carreiras') }}" class="text-decoration-none">Carreiras</a>
     {% if current_user.is_authenticated %}
@@ -296,6 +345,24 @@
       <span class="visually-hidden">Abrir o easter egg</span>
     </a>
   </footer>
+  {% if config.GA_MEASUREMENT_ID %}
+  <aside id="analytics-consent" hidden class="position-fixed bottom-0 start-0 end-0 p-3" style="z-index:1085;" aria-labelledby="analytics-consent-title">
+    <div class="card border-primary shadow-lg mx-auto" style="max-width:760px;">
+      <div class="card-body d-flex flex-column flex-md-row align-items-md-center gap-3">
+        <div class="flex-grow-1">
+          <h2 id="analytics-consent-title" class="h6 mb-1">Analytics opcionais</h2>
+          <p class="small text-muted mb-0">
+            Usamos Google Analytics para entender o funil e melhorar o produto. Ele só será carregado se você aceitar; recusar não limita nenhuma função. Veja a <a href="{{ url_for('privacy') }}">Política de Privacidade</a>.
+          </p>
+        </div>
+        <div class="d-grid d-sm-flex gap-2 flex-shrink-0">
+          <button type="button" class="btn btn-outline-primary" data-analytics-reject>Recusar</button>
+          <button type="button" class="btn btn-outline-primary" data-analytics-accept>Aceitar analytics</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  {% endif %}
   {% include 'partials/_lead_capture.html' %}
   <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">

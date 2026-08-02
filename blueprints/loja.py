@@ -95,6 +95,7 @@ from app import (
     _delivery_sections_payload,
     _export_data_share_logs_csv,
     _export_data_share_logs_pdf,
+    _get_catalog_categories,
     _get_or_create_delivery_research_contact,
     _get_vendedores_ativos,
     _mp_auto_return_enabled,
@@ -1260,8 +1261,9 @@ def loja():
 
     # O admin enxerga também os produtos de demonstração — é quem mantém o
     # cadastro e precisa alcançá-los. O público vê só catálogo real.
+    include_demo = _is_admin()
     query = _build_loja_query(
-        search_term, filtro, vendedor, categoria, include_demo=_is_admin()
+        search_term, filtro, vendedor, categoria, include_demo=include_demo
     )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
@@ -1276,7 +1278,16 @@ def loja():
         if current_user.is_authenticated
         else None
     )
-    vendedores = _get_vendedores_ativos()
+    vendedores = _get_vendedores_ativos(include_demo=include_demo)
+    categories = _get_catalog_categories(
+        vendedor=vendedor,
+        include_demo=include_demo,
+    )
+    catalog_total = (
+        _build_loja_query('', 'all', include_demo=include_demo)
+        .order_by(None)
+        .count()
+    )
 
     return render_template(
         "loja/loja.html",
@@ -1290,8 +1301,9 @@ def loja():
         minha_clinica=minha_clinica,
         vendedores=vendedores,
         selected_vendedor=vendedor,
-        categories=get_active_product_categories(),
+        categories=categories,
         selected_category=categoria,
+        catalog_total=catalog_total,
     )
 
 

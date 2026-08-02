@@ -34,7 +34,19 @@
         {% endif %}
 
         <div class="mt-auto">
+          {% if product.subscription_enabled %}
+          <div class="mb-1">
+            <span class="badge rounded-pill text-bg-success"><i class="fa-solid fa-arrows-rotate me-1"></i>Compra + assinatura</span>
+          </div>
+          {% else %}
+          <div class="mb-1">
+            <span class="badge rounded-pill text-bg-light border"><i class="fa-solid fa-bag-shopping me-1"></i>Compra única</span>
+          </div>
+          {% endif %}
           <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</span>
+          {% if product.subscription_enabled %}
+          <div class="small text-success fw-semibold mb-1">ou assinatura desde {{ product.subscription_price_min | currency_br }} por ciclo</div>
+          {% endif %}
 
           {% if product.clinica %}
           <div class="product-seller-row mb-1">
