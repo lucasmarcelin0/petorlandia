@@ -98,6 +98,40 @@ def test_concentracao_diferente_e_marcada(app):
         assert nomes['Prednisona 20mg 10 comprimidos'].same_strength is False
 
 
+def test_outra_concentracao_some_quando_a_prescrita_esta_a_venda(app):
+    """Dois cartões sob o mesmo item só geram dúvida sobre qual é o certo."""
+    with app.app_context():
+        _produto('Prednisona 5mg', 16.42, 3)
+        _produto('Prednisona 20mg 10 comprimidos', 20.18, 2)
+
+        linhas = build_prescription_offers([_FakePrescricao('Prednisona — 5 mg comprimido')])
+        nomes = [m.product.name for m in linhas[0].matches]
+
+        assert nomes == ['Prednisona 5mg']
+        assert linhas[0].alternative_reason is None
+
+
+def test_outra_concentracao_aparece_com_motivo_quando_falta_estoque(app):
+    with app.app_context():
+        _produto('Prednisona 5mg', 16.42, 0)
+        _produto('Prednisona 20mg 10 comprimidos', 20.18, 2)
+
+        linha = build_prescription_offers([_FakePrescricao('Prednisona — 5 mg comprimido')])[0]
+
+        assert len(linha.matches) == 2
+        assert 'sem estoque' in linha.alternative_reason
+
+
+def test_sem_apresentacao_exata_o_motivo_diz_isso(app):
+    with app.app_context():
+        _produto('Prednisona 20mg 10 comprimidos', 20.18, 2)
+
+        linha = build_prescription_offers([_FakePrescricao('Prednisona — 5 mg comprimido')])[0]
+
+        assert linha.compatible is None
+        assert 'Não temos a apresentação exata' in linha.alternative_reason
+
+
 def test_palavra_generica_sozinha_nao_gera_sugestao(app):
     """"Sulfato" isolado não pode arrastar um produto para a receita."""
     with app.app_context():
@@ -201,6 +235,26 @@ def test_adicionar_todos_coloca_so_o_que_confere(app, client):
         assert [item.item_name for item in itens] == ['Shampoo Clorexidina']
 
 
+def test_adicionar_todos_nao_duplica_o_que_ja_esta_no_carrinho(app, client):
+    """Garante presença, não soma outra caixa do mesmo medicamento."""
+    with app.app_context():
+        _abrir_loja()
+        shampoo = _produto('Shampoo Clorexidina', 28.0, 4)
+        bloco, tutor = _receita_completa()
+        bloco_id, tutor_id, shampoo_id = bloco.id, tutor.id, shampoo.id
+
+    _login(client, tutor_id)
+    client.post(f'/bloco_prescricao/{bloco_id}/comprar', data={'product_id': shampoo_id})
+    resposta = client.post(
+        f'/bloco_prescricao/{bloco_id}/comprar',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+
+    assert resposta.get_json()['info'] is True
+    with app.app_context():
+        assert OrderItem.query.one().quantity == 1
+
+
 def test_nao_da_para_forjar_um_produto_fora_da_receita(app, client):
     with app.app_context():
         _abrir_loja()
@@ -217,6 +271,78 @@ def test_nao_da_para_forjar_um_produto_fora_da_receita(app, client):
 
     with app.app_context():
         assert OrderItem.query.count() == 0
+
+
+def test_adicionar_responde_em_json_para_o_tutor_ficar_na_receita(app, client):
+    with app.app_context():
+        _abrir_loja()
+        shampoo = _produto('Shampoo Clorexidina', 28.0, 4)
+        bloco, tutor = _receita_completa()
+        bloco_id, tutor_id, shampoo_id = bloco.id, tutor.id, shampoo.id
+
+    _login(client, tutor_id)
+    response = client.post(
+        f'/bloco_prescricao/{bloco_id}/comprar',
+        data={'product_id': shampoo_id},
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+
+    assert response.status_code == 200
+    dados = response.get_json()
+    assert dados['success'] is True
+    assert dados['added'] == [shampoo_id]
+    assert dados['cart_quantity'] == 1
+    assert dados['cart_url'].endswith('/carrinho')
+
+
+def test_item_em_outra_concentracao_pode_ser_adicionado_um_a_um(app, client):
+    """Quem clica está vendo o aviso ao lado do botão; o lote é que não pode."""
+    with app.app_context():
+        _abrir_loja()
+        _produto('Prednisona 5mg', 16.42, 0)
+        vinte = _produto('Prednisona 20mg 10 comprimidos', 20.18, 2)
+        bloco, tutor = _receita_completa()
+        bloco_id, tutor_id, vinte_id = bloco.id, tutor.id, vinte.id
+
+    _login(client, tutor_id)
+    client.post(
+        f'/bloco_prescricao/{bloco_id}/comprar',
+        data={'product_id': vinte_id},
+    )
+
+    with app.app_context():
+        assert OrderItem.query.one().item_name == 'Prednisona 20mg 10 comprimidos'
+
+
+def test_produto_sem_estoque_nao_entra_nem_um_a_um(app, client):
+    with app.app_context():
+        _abrir_loja()
+        esgotado = _produto('Prednisona 5mg', 16.42, 0)
+        bloco, tutor = _receita_completa()
+        bloco_id, tutor_id, esgotado_id = bloco.id, tutor.id, esgotado.id
+
+    _login(client, tutor_id)
+    client.post(
+        f'/bloco_prescricao/{bloco_id}/comprar',
+        data={'product_id': esgotado_id},
+    )
+
+    with app.app_context():
+        assert OrderItem.query.count() == 0
+
+
+def test_receita_mostra_a_foto_do_produto(app, client):
+    with app.app_context():
+        _abrir_loja()
+        shampoo = _produto('Shampoo Clorexidina', 28.0, 4)
+        shampoo.image_url = 'https://exemplo.test/shampoo.png'
+        db.session.commit()
+        bloco, tutor = _receita_completa()
+        bloco_id, tutor_id = bloco.id, tutor.id
+
+    _login(client, tutor_id)
+    body = client.get(f'/bloco_prescricao/{bloco_id}/imprimir').data.decode()
+    assert 'https://exemplo.test/shampoo.png' in body
 
 
 def test_item_avulso_entra_no_carrinho(app, client):

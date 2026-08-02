@@ -85,6 +85,33 @@ class PrescriptionLine:
     def best(self) -> ProductMatch | None:
         return self.matches[0] if self.matches else None
 
+    @property
+    def compatible(self) -> ProductMatch | None:
+        """O produto na mesma apresentação da receita, se houver."""
+        return next((m for m in self.matches if m.same_strength), None)
+
+    @property
+    def alternatives(self) -> list[ProductMatch]:
+        """Produtos do mesmo princípio ativo em outra apresentação."""
+        return [m for m in self.matches if not m.same_strength]
+
+    @property
+    def alternative_reason(self) -> str | None:
+        """Por que uma outra apresentação está sendo mostrada.
+
+        Sem esta frase o tutor vê dois cartões sob o mesmo item e um aviso
+        amarelo, sem entender de onde veio o segundo — foi exatamente o que
+        aconteceu com a Prednisona.
+        """
+        if not self.alternatives:
+            return None
+        compativel = self.compatible
+        if compativel is None:
+            return 'Não temos a apresentação exata da receita. Outra concentração disponível:'
+        if not compativel.in_stock:
+            return 'A apresentação da receita está sem estoque. Outra concentração disponível:'
+        return None
+
 
 def build_prescription_offers(prescricoes, limit_per_item: int = 2) -> list[PrescriptionLine]:
     """Para cada item prescrito, os produtos da loja que servem.
@@ -127,10 +154,24 @@ def build_prescription_offers(prescricoes, limit_per_item: int = 2) -> list[Pres
         )
         linhas.append(PrescriptionLine(
             prescricao=prescricao,
-            matches=candidatos[:limit_per_item],
+            matches=_apply_visibility(candidatos)[:limit_per_item],
         ))
 
     return linhas
+
+
+def _apply_visibility(candidatos: list[ProductMatch]) -> list[ProductMatch]:
+    """Esconde outras concentrações quando a prescrita está pronta para comprar.
+
+    Mostrar "Prednisona 20mg" ao lado de uma "Prednisona 5mg" comprável só
+    gera dúvida sobre qual é a certa. A alternativa volta a fazer sentido
+    quando a apresentação prescrita não existe ou está sem estoque — e aí a
+    tela explica o motivo.
+    """
+    compativel_disponivel = any(m.same_strength and m.in_stock for m in candidatos)
+    if not compativel_disponivel:
+        return candidatos
+    return [m for m in candidatos if m.same_strength]
 
 
 def bulk_buyable_products(linhas) -> list:

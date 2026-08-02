@@ -1,20 +1,29 @@
 {# Compra dos medicamentos da receita, direto na tela da prescrição.
 
    Regras que governam este bloco, nesta ordem:
-   1. Nunca sai no papel — a receita impressa é documento clínico (.no-print).
+   1. Nunca sai no papel — a receita impressa é documento clínico.
    2. Cada produto aparece SOB o item prescrito, como oferta correspondente,
       nunca no lugar dele.
-   3. Apresentação diferente da prescrita não ganha botão de compra. Trocar
-      5 mg por 20 mg é dano, não conveniência.
+   3. Outra concentração só aparece quando a prescrita não está comprável, e
+      sempre com a frase que explica por quê.
    4. Item sem oferta aparece dito com todas as letras, para o tutor não achar
-      que a receita foi atendida por inteiro. #}
+      que a receita foi atendida por inteiro.
+   5. Adicionar não tira o tutor da receita: o rodapé acumula e leva ao
+      carrinho quando ele terminar.
+
+   Não usa a classe ``no-print``: o print.css estiliza TODO ``a``/``button``
+   dentro dela como botão da barra de ferramentas (altura fixa, fundo azul,
+   ``white-space: nowrap``), o que estourava a largura no celular. O bloco
+   esconde a si mesmo na impressão, na regra @media print abaixo. #}
 {% set com_oferta = ofertas_receita | selectattr('has_offer') | list %}
 {% if ofertas_receita %}
-{# Não usa a classe ``no-print`` de propósito: o print.css estiliza TODO
-   ``a``/``button`` dentro dela como botão da barra de ferramentas (altura
-   fixa, fundo azul, ``white-space: nowrap``), o que estourava a largura no
-   celular. O bloco esconde a si mesmo na impressão, logo abaixo. #}
-<section class="receita-loja" aria-labelledby="receita-loja-titulo">
+<section class="receita-loja" aria-labelledby="receita-loja-titulo"
+         data-receita-loja
+         data-url="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}"
+         data-carrinho="{{ url_for('ver_carrinho') }}"
+         {# A receita impressa é documento próprio e não estende o layout, logo
+            não existe a meta-tag de CSRF que o resto do site usa. #}
+         data-csrf="{{ csrf_token() }}">
   <header class="receita-loja__head">
     <div>
       <h2 id="receita-loja-titulo" class="receita-loja__title">
@@ -27,7 +36,7 @@
           {{ 'do' if ofertas_receita|length == 1 else 'dos' }}
           {{ ofertas_receita|length }}
           {{ 'prescrito' if ofertas_receita|length == 1 else 'prescritos' }},
-          com entrega. Confira a apresentação antes de comprar.
+          com entrega.
         {% else %}
           Nenhum item desta receita está disponível na loja no momento.
         {% endif %}
@@ -35,13 +44,12 @@
     </div>
 
     {% if compra_em_lote %}
-    <form method="post" action="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="receita-loja__cta" data-cta="receita_comprar_tudo">
-        Adicionar {{ compra_em_lote|length }}
-        {{ 'item' if compra_em_lote|length == 1 else 'itens' }} ao carrinho
-      </button>
-    </form>
+    <button type="button" class="receita-loja__cta"
+            data-receita-lote
+            data-cta="receita_comprar_tudo">
+      Adicionar {{ compra_em_lote|length }}
+      {{ 'item' if compra_em_lote|length == 1 else 'itens' }} ao carrinho
+    </button>
     {% endif %}
   </header>
 
@@ -59,9 +67,28 @@
       </p>
       {% else %}
       <div class="receita-loja__ofertas">
+        {% set ns = namespace(motivo_exibido=false) %}
         {% for match in linha.matches %}
         {% set produto = match.product %}
+
+        {# A frase do motivo entra uma única vez, logo antes do primeiro
+           produto em outra concentração. #}
+        {% if not match.same_strength and not ns.motivo_exibido and linha.alternative_reason %}
+        <p class="receita-loja__motivo">{{ linha.alternative_reason }}</p>
+        {% set ns.motivo_exibido = true %}
+        {% endif %}
+
         <div class="receita-oferta{% if not match.same_strength %} receita-oferta--atencao{% endif %}">
+          <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+             class="receita-oferta__foto" target="_blank" rel="noopener"
+             aria-label="Ver {{ produto.name }} na loja">
+            {% if produto.image_url %}
+            <img src="{{ produto.image_url }}" alt="{{ produto.name }}" loading="lazy">
+            {% else %}
+            <span class="receita-oferta__foto-vazia" aria-hidden="true">Sem foto</span>
+            {% endif %}
+          </a>
+
           <div class="receita-oferta__info">
             <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
                class="receita-oferta__nome" target="_blank" rel="noopener">{{ produto.name }}</a>
@@ -90,14 +117,12 @@
 
           <div class="receita-oferta__acao">
             <span class="receita-oferta__preco">{{ produto.public_price_min | currency_br }}</span>
-            {% if match.in_stock and match.same_strength %}
-            <form method="post" action="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="product_id" value="{{ produto.id }}">
-              <button type="submit" class="receita-oferta__btn" data-cta="receita_comprar_item">
-                Adicionar
-              </button>
-            </form>
+            {% if match.in_stock %}
+            <button type="button" class="receita-oferta__btn"
+                    data-receita-item="{{ produto.id }}"
+                    data-cta="receita_comprar_item">
+              Adicionar
+            </button>
             {% else %}
             <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
                class="receita-oferta__btn receita-oferta__btn--ghost"
@@ -112,11 +137,24 @@
     {% endfor %}
   </ol>
 
+  {# Rodapé que só aparece depois do primeiro item adicionado: o tutor decide
+     quando parar de escolher e ir pagar. #}
+  <div class="receita-carrinho" data-receita-rodape hidden>
+    <div class="receita-carrinho__resumo">
+      <strong data-receita-contagem>0 itens no carrinho</strong>
+      <span data-receita-total></span>
+    </div>
+    <a href="{{ url_for('ver_carrinho') }}" class="receita-carrinho__btn"
+       data-cta="receita_ir_carrinho">Ir para o carrinho</a>
+  </div>
+
   <p class="receita-loja__nota">
     A loja lista produtos com o mesmo princípio ativo do que foi prescrito.
     A prescrição do veterinário prevalece: em caso de dúvida sobre marca,
     concentração ou forma de uso, fale com quem atendeu o seu pet.
   </p>
+
+  <p class="receita-loja__erro" data-receita-erro hidden role="alert"></p>
 </section>
 
 <style>
@@ -174,12 +212,9 @@
 
   .receita-loja__cta:hover,
   .receita-loja__cta:focus-visible { background: #0f5132; }
+  .receita-loja__cta[disabled] { opacity: .6; cursor: default; }
 
-  .receita-loja__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
+  .receita-loja__list { list-style: none; margin: 0; padding: 0; }
 
   .receita-loja__item {
     padding: 16px 0;
@@ -219,6 +254,13 @@
     color: #77838d;
   }
 
+  .receita-loja__motivo {
+    margin: 4px 0 0;
+    font-size: .8rem;
+    font-weight: 600;
+    color: #8a5a00;
+  }
+
   .receita-loja__ofertas {
     margin: 10px 0 0 32px;
     display: flex;
@@ -231,7 +273,6 @@
     flex-wrap: wrap;
     gap: 12px;
     align-items: center;
-    justify-content: space-between;
     background: #fff;
     border: 1px solid #dfe6ec;
     border-radius: 10px;
@@ -243,7 +284,38 @@
     background: #fffdf6;
   }
 
-  .receita-oferta__info { min-width: 0; flex: 1 1 240px; }
+  .receita-oferta--adicionado {
+    border-color: #9fd3b6;
+    background: #f4fbf7;
+  }
+
+  .receita-oferta__foto {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    border: 1px solid #e6ecf1;
+    background: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .receita-oferta__foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .receita-oferta__foto-vazia {
+    font-size: .6rem;
+    color: #9aa5ae;
+    text-align: center;
+  }
+
+  .receita-oferta__info { min-width: 0; flex: 1 1 200px; }
 
   .receita-oferta__nome {
     display: block;
@@ -289,6 +361,7 @@
     align-items: center;
     gap: 12px;
     flex: none;
+    margin-left: auto;
   }
 
   .receita-oferta__preco {
@@ -327,6 +400,48 @@
     color: #0b5ed7;
   }
 
+  .receita-oferta__btn--feito,
+  .receita-oferta__btn--feito:hover {
+    background: #146c43;
+    color: #fff;
+  }
+
+  .receita-carrinho {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #e8f4ec;
+    border: 1px solid #b9dcc7;
+  }
+
+  .receita-carrinho__resumo {
+    display: flex;
+    flex-direction: column;
+    font-size: .88rem;
+    color: #14212b;
+  }
+
+  .receita-carrinho__resumo span { color: #4a5a52; font-size: .82rem; }
+
+  .receita-carrinho__btn {
+    border-radius: 999px;
+    background: #146c43;
+    color: #fff;
+    font-weight: 700;
+    font-size: .88rem;
+    padding: 10px 20px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .receita-carrinho__btn:hover,
+  .receita-carrinho__btn:focus-visible { background: #0f5132; color: #fff; }
+
   .receita-loja__nota {
     margin: 14px 0 0;
     padding-top: 12px;
@@ -336,12 +451,116 @@
     max-width: 72ch;
   }
 
+  .receita-loja__erro {
+    margin: 10px 0 0;
+    font-size: .84rem;
+    color: #a8322a;
+    font-weight: 600;
+  }
+
+  /* "Já está no carrinho" não é falha: não pode aparecer em vermelho. */
+  .receita-loja__erro--info { color: #55636e; font-weight: 500; }
+
   @media (max-width: 560px) {
     .receita-loja { padding: 16px; }
     .receita-loja__ofertas,
     .receita-loja__vazio { margin-left: 0; }
-    .receita-oferta__acao { width: 100%; justify-content: space-between; }
-    .receita-loja__cta { width: 100%; }
+    .receita-oferta__acao { width: 100%; justify-content: space-between; margin-left: 0; }
+    .receita-loja__cta,
+    .receita-carrinho__btn { width: 100%; text-align: center; }
   }
 </style>
+
+<script>
+  (function () {
+    var raiz = document.querySelector('[data-receita-loja]');
+    if (!raiz) return;
+
+    var url = raiz.dataset.url;
+    var rodape = raiz.querySelector('[data-receita-rodape]');
+    var contagem = raiz.querySelector('[data-receita-contagem]');
+    var total = raiz.querySelector('[data-receita-total]');
+    var erro = raiz.querySelector('[data-receita-erro]');
+    var token = raiz.dataset.csrf;
+
+    function mostrarAviso(mensagem, apenasInformativo) {
+      erro.textContent = mensagem;
+      erro.classList.toggle('receita-loja__erro--info', !!apenasInformativo);
+      erro.hidden = false;
+    }
+
+    function atualizarRodape(dados) {
+      erro.hidden = true;
+      var qtd = dados.cart_quantity || 0;
+      contagem.textContent = qtd + (qtd === 1 ? ' item no carrinho' : ' itens no carrinho');
+      total.textContent = dados.cart_total_formatted || '';
+      rodape.hidden = false;
+    }
+
+    function marcarAdicionados(ids) {
+      (ids || []).forEach(function (id) {
+        var botao = raiz.querySelector('[data-receita-item="' + id + '"]');
+        if (!botao) return;
+        botao.textContent = 'Adicionado';
+        botao.classList.add('receita-oferta__btn--feito');
+        botao.closest('.receita-oferta').classList.add('receita-oferta--adicionado');
+      });
+    }
+
+    function adicionar(botao, productId) {
+      var rotuloOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = 'Adicionando...';
+
+      var corpo = new FormData();
+      if (token) corpo.append('csrf_token', token);
+      if (productId) corpo.append('product_id', productId);
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+        body: corpo
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, dados: d }; }); })
+        .then(function (resposta) {
+          if (!resposta.ok || !resposta.dados.success) {
+            var falha = new Error(resposta.dados.message || 'Não foi possível adicionar agora.');
+            falha.apenasInformativo = !!resposta.dados.info;
+            throw falha;
+          }
+          atualizarRodape(resposta.dados);
+          marcarAdicionados(resposta.dados.added);
+          if (!productId) {
+            botao.textContent = 'Itens adicionados';
+            botao.disabled = true;
+          } else {
+            botao.disabled = false;
+          }
+        })
+        .catch(function (e) {
+          botao.disabled = false;
+          botao.textContent = rotuloOriginal;
+          mostrarAviso(
+            e.message || 'Não foi possível adicionar agora. Tente de novo.',
+            e.apenasInformativo
+          );
+        });
+    }
+
+    raiz.addEventListener('click', function (evento) {
+      var item = evento.target.closest('[data-receita-item]');
+      if (item) {
+        evento.preventDefault();
+        adicionar(item, item.dataset.receitaItem);
+        return;
+      }
+      var lote = evento.target.closest('[data-receita-lote]');
+      if (lote) {
+        evento.preventDefault();
+        adicionar(lote, null);
+      }
+    });
+  })();
+</script>
 {% endif %}
