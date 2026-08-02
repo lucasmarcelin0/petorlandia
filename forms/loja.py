@@ -22,6 +22,7 @@ from wtforms import (
     HiddenField,
     EmailField,
 )
+from forms.fields import BRDecimalField
 from wtforms.validators import (
     DataRequired,
     Email,
@@ -142,7 +143,7 @@ class _ProductCategoryChoicesMixin:
 class ProductUpdateForm(_ProductCategoryChoicesMixin, FlaskForm):
     name = StringField('Nome', validators=[DataRequired()])
     description = TextAreaField('Descrição')
-    price = DecimalField('Preço', validators=[DataRequired()])
+    price = BRDecimalField('Preço', validators=[DataRequired()])
     stock = IntegerField('Estoque', validators=[DataRequired()])
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria MP', validators=[Optional(), Length(max=50)])
@@ -152,12 +153,12 @@ class ProductUpdateForm(_ProductCategoryChoicesMixin, FlaskForm):
     csosn = StringField('CSOSN', validators=[Optional(), Length(max=5)])
     origem = StringField('Origem', validators=[Optional(), Length(max=2)])
     unidade = StringField('Unidade', validators=[Optional(), Length(max=10)])
-    aliquota_icms = DecimalField('Alíquota ICMS', validators=[Optional()])
-    aliquota_pis = DecimalField('Alíquota PIS', validators=[Optional()])
-    aliquota_cofins = DecimalField('Alíquota COFINS', validators=[Optional()])
+    aliquota_icms = BRDecimalField('Alíquota ICMS', validators=[Optional()])
+    aliquota_pis = BRDecimalField('Alíquota PIS', validators=[Optional()])
+    aliquota_cofins = BRDecimalField('Alíquota COFINS', validators=[Optional()])
     subscription_enabled = BooleanField('Oferecer assinatura recorrente')
-    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
-    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
+    subscription_discount_percent = BRDecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = BRDecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     image_upload = FileField('Imagem', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Salvar')
 
@@ -171,7 +172,7 @@ class ClinicProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário usado pelo dono da clínica para publicar um produto na loja."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
-    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    price = BRDecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     image_upload = FileField('Imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
@@ -181,8 +182,8 @@ class ClinicProductForm(_ProductCategoryChoicesMixin, FlaskForm):
     # ID do ClinicInventoryItem existente (0 = criar novo)
     inventory_item_id = SelectField('Vincular ao estoque existente', coerce=int, validators=[Optional()])
     subscription_enabled = BooleanField('Oferecer assinatura recorrente')
-    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
-    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
+    subscription_discount_percent = BRDecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = BRDecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Publicar na loja')
 
 
@@ -190,11 +191,11 @@ class ClinicProductEditForm(_ProductCategoryChoicesMixin, FlaskForm):
     """Formulário de edição de produto da clínica."""
     name = StringField('Nome do produto', validators=[DataRequired(), Length(max=120)])
     description = TextAreaField('Descrição', validators=[Optional()])
-    price = DecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
+    price = BRDecimalField('Preço (R$)', places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     image_upload = FileField('Nova imagem', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     category = SelectField('Categoria na loja', choices=PRODUCT_CATEGORY_CHOICES, validators=[Optional()])
     mp_category_id = StringField('Categoria', validators=[Optional(), Length(max=50)])
     subscription_enabled = BooleanField('Oferecer assinatura recorrente')
-    subscription_discount_percent = DecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
-    subscription_shipping_fee = DecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
+    subscription_discount_percent = BRDecimalField('Desconto da assinatura (%)', places=2, validators=[Optional(), NumberRange(min=0, max=50)], default=0)
+    subscription_shipping_fee = BRDecimalField('Frete por entrega recorrente (R$)', places=2, validators=[Optional(), NumberRange(min=0)], default=0)
     submit = SubmitField('Salvar alterações')

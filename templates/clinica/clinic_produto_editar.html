@@ -22,7 +22,8 @@
 
         <div class="mb-3">
           {{ form.description.label(class="form-label fw-semibold") }}
-          {{ form.description(class="form-control", rows=4) }}
+          {{ form.description(class="form-control product-description-input", rows=14, data_autogrow="true", placeholder="Fórmula, indicações, modo de usar, precauções…") }}
+          <div class="form-text">As quebras de linha que você usar aqui aparecem iguais na página do produto.</div>
         </div>
 
         <div class="mb-3">

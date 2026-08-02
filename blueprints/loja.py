@@ -1397,8 +1397,30 @@ def produto_detail(product_id):
                 if image_url:
                     product.image_url = image_url
             db.session.commit()
-            flash('Produto atualizado.', 'success')
+            if product.subscription_enabled:
+                flash(
+                    'Produto atualizado. A assinatura recorrente já aparece '
+                    'na página do produto.',
+                    'success',
+                )
+            else:
+                flash('Produto atualizado.', 'success')
             return redirect(url_for('produto_detail', product_id=product.id))
+
+        # Sem este aviso, um Salvar recusado pela validação apenas re-renderiza
+        # a página: a pessoa sai achando que gravou, e a alteração some.
+        if update_form.submit.data and update_form.errors:
+            rotulos = ', '.join(
+                getattr(update_form, campo).label.text
+                for campo in update_form.errors
+                if hasattr(update_form, campo)
+            )
+            flash(
+                f'O produto não foi salvo. Revise: {rotulos}.'
+                if rotulos
+                else 'O produto não foi salvo. Revise os campos destacados.',
+                'warning',
+            )
 
         if photo_form.validate_on_submit() and photo_form.submit.data:
             file = photo_form.image.data
