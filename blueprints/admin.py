@@ -626,6 +626,7 @@ def admin_toggle_site_flag():
 def admin_home_editor():
     if not _is_admin():
         abort(403)
+    from models.base import SiteFlag
     flags = [
         ('home_section_work_areas', 'Áreas de trabalho', 'Bloco com os módulos profissionais e operacionais.'),
         ('home_section_shortcuts', 'Atalhos principais', 'Agendar serviço, Loja, Plano de Saúde e Animais.'),
