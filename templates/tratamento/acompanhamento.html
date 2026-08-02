@@ -1,249 +1,90 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container py-3" style="max-width: 720px;">
+<style>
+  .treatment-shell{max-width:1060px}.treatment-hero{background:linear-gradient(135deg,#0f766e,#16a34a);color:#fff;border-radius:28px;overflow:hidden;position:relative}.treatment-hero:after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.1);right:-80px;top:-110px}.pet-avatar{width:76px;height:76px;border-radius:24px;object-fit:cover;background:#fff;border:3px solid rgba(255,255,255,.65)}
+  .progress-orb{--p:0;width:132px;height:132px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#fef08a calc(var(--p)*1%),rgba(255,255,255,.2) 0);position:relative;transition:background 700ms ease}.progress-orb:before{content:"";position:absolute;inset:10px;border-radius:50%;background:#087f5b}.progress-orb__value{position:relative;text-align:center;font-weight:800;font-size:1.65rem;line-height:1}.progress-orb__value small{font-size:.68rem;display:block;margin-top:.35rem;font-weight:600;opacity:.85}
+  .metric-card{border:0;border-radius:20px;background:#fff;box-shadow:0 8px 28px rgba(15,23,42,.08);height:100%;transition:transform .2s}.metric-card:hover{transform:translateY(-3px)}.metric-icon{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:1.2rem}.care-card{border:1px solid #e7edf4;border-radius:20px;background:#fff;transition:transform .2s,box-shadow .2s}.care-card:hover{box-shadow:0 10px 30px rgba(15,23,42,.09)}.care-progress{height:10px;border-radius:999px;overflow:hidden;background:#e9eef5}.care-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#10b981,#22c55e);transition:width .7s cubic-bezier(.2,.8,.2,1)}
+  .dose-row{transition:opacity .3s,transform .3s,max-height .35s,padding .35s,margin .35s;max-height:150px}.dose-row.is-complete{opacity:0;transform:translateX(18px);max-height:0;padding-top:0!important;padding-bottom:0!important;margin:0;overflow:hidden}.section-card{border:0;border-radius:22px;box-shadow:0 8px 28px rgba(15,23,42,.07)}.photo-tile{aspect-ratio:1/1;border-radius:18px;overflow:hidden;position:relative;background:#edf2f7}.photo-tile img{width:100%;height:100%;object-fit:cover;transition:transform .35s}.photo-tile:hover img{transform:scale(1.05)}.photo-caption{position:absolute;inset:auto 0 0;padding:2rem .7rem .6rem;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:.75rem}.timeline{border-left:2px solid #dbe7e3;margin-left:.55rem;padding-left:1.25rem}.timeline-item{position:relative;padding-bottom:1rem}.timeline-item:before{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:#10b981;left:-1.68rem;top:.3rem;box-shadow:0 0 0 4px #d1fae5}.timeline-item.is-skipped:before{background:#94a3b8;box-shadow:0 0 0 4px #e2e8f0}.achievement{border-radius:16px;background:#fff7d6;border:1px solid #fde68a}.treatment-toast{position:fixed;right:1rem;bottom:1rem;z-index:1080;transform:translateY(130%);opacity:0;transition:.3s;background:#064e3b;color:#fff;padding:.85rem 1.1rem;border-radius:16px;box-shadow:0 12px 35px rgba(0,0,0,.22)}.treatment-toast.show{transform:none;opacity:1}.is-loading{pointer-events:none;opacity:.65}.celebration-dot{position:fixed;z-index:1090;width:9px;height:9px;border-radius:3px;animation:celebrate 1s ease-out forwards}@keyframes celebrate{to{transform:translate(var(--x),var(--y)) rotate(540deg);opacity:0}}@media(max-width:575px){.treatment-hero{border-radius:20px}.progress-orb{width:106px;height:106px}.pet-avatar{width:62px;height:62px}.treatment-actions .btn{width:100%}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.care-card,.metric-card,.dose-row,.care-progress>span,.treatment-toast{transition:none!important}.celebration-dot{display:none}}
+</style>
 
-  {# ---------- Cabeçalho ---------- #}
-  <div class="d-flex justify-content-between align-items-start mb-1">
-    <div>
-      <h4 class="mb-0">🩺 Tratamento de {{ animal.name }}</h4>
-      <small class="text-muted">
-        Receita #{{ bloco.id }}
-        {% if acompanhamento.data_inicio %} · iniciado em {{ acompanhamento.data_inicio|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
-      </small>
-    </div>
-    {% if acompanhamento.status == 'ativo' %}
-      <span class="badge bg-success">Ativo</span>
-    {% elif acompanhamento.status == 'concluido' %}
-      <span class="badge bg-secondary">Concluído</span>
-    {% else %}
-      <span class="badge bg-danger">Interrompido</span>
-    {% endif %}
-  </div>
-  <div class="mb-3">
-    <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="small">Ver receita completa</a>
-  </div>
-
-  {% if progresso.previstas %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-body py-2">
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Progresso do tratamento</span>
-          <span><strong>{{ progresso.feitas }}</strong>/{{ progresso.previstas }} doses</span>
+<div class="container treatment-shell py-3 py-lg-4" id="treatment-app" data-treatment-id="{{ acompanhamento.id }}">
+  <section class="treatment-hero p-4 p-lg-5 mb-4">
+    <div class="row align-items-center g-4 position-relative" style="z-index:1">
+      <div class="col-md">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          {% if animal.image %}<img src="{{ animal.image }}" alt="Foto de {{ animal.name }}" class="pet-avatar">{% else %}<div class="pet-avatar d-grid place-items-center text-success fs-2"><i class="fa-solid fa-paw"></i></div>{% endif %}
+          <div><div class="small text-white-50 text-uppercase fw-semibold">Jornada de recuperação</div><h1 class="h2 mb-1">Tratamento de {{ animal.name }}</h1><div class="small text-white-50">Receita #{{ bloco.id }}{% if acompanhamento.data_inicio %} · iniciado em {{ acompanhamento.data_inicio|format_datetime_brazil('%d/%m/%Y') }}{% endif %}</div></div>
         </div>
-        <div class="progress" style="height: 10px;">
-          <div class="progress-bar bg-success" role="progressbar" style="width: {{ progresso.percentual or 0 }}%;"></div>
+        <p class="mb-2 fw-semibold" id="motivation-message">{{ mensagem_progresso }}</p>
+        <div class="d-flex flex-wrap gap-2 treatment-actions">
+          <a href="#hoje" class="btn btn-light btn-sm rounded-pill px-3"><i class="fa-solid fa-check me-1"></i>Cuidados de hoje</a>
+          <a href="#fotos" class="btn btn-outline-light btn-sm rounded-pill px-3"><i class="fa-solid fa-camera me-1"></i>Registrar evolução</a>
+          <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="btn btn-outline-light btn-sm rounded-pill px-3">Ver receita</a>
         </div>
-        {% if progresso.atrasadas %}
-          <small class="text-danger">{{ progresso.atrasadas }} dose(s) atrasada(s)</small>
-        {% endif %}
+      </div>
+      <div class="col-md-auto d-flex justify-content-center">
+        <div class="progress-orb" id="overall-orb" style="--p:{{ progresso.percentual or 0 }}"><div class="progress-orb__value"><span id="overall-percent">{{ progresso.percentual or 0 }}</span>%<small>concluído</small></div></div>
       </div>
     </div>
+  </section>
+
+  <section class="row g-3 mb-4" aria-label="Resumo do tratamento">
+    <div class="col-6 col-lg-3"><div class="metric-card p-3"><div class="metric-icon bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-list-check"></i></div><div class="h3 mb-0">{{ total_cuidados }}</div><div class="small text-muted">cuidados no plano</div></div></div>
+    <div class="col-6 col-lg-3"><div class="metric-card p-3"><div class="metric-icon bg-success-subtle text-success mb-2"><i class="fa-solid fa-check-double"></i></div><div class="h3 mb-0" id="total-done">{{ total_aplicacoes }}</div><div class="small text-muted">aplicações registradas</div></div></div>
+    <div class="col-6 col-lg-3"><div class="metric-card p-3"><div class="metric-icon bg-warning-subtle text-warning mb-2"><i class="fa-solid fa-fire"></i></div><div class="h3 mb-0">{{ sequencia }}</div><div class="small text-muted">dia{{ 's' if sequencia != 1 else '' }} de sequência</div></div></div>
+    <div class="col-6 col-lg-3"><div class="metric-card p-3"><div class="metric-icon bg-info-subtle text-info mb-2"><i class="fa-solid fa-images"></i></div><div class="h3 mb-0" id="photo-count">{{ fotos|length }}</div><div class="small text-muted">foto{{ 's' if fotos|length != 1 else '' }} da evolução</div></div></div>
+  </section>
+
+  {% if sequencia >= 3 or progresso.percentual >= 50 or fotos|length >= 3 %}
+  <div class="achievement p-3 mb-4 d-flex align-items-center gap-3"><div class="fs-2">🏅</div><div><strong>Conquista desbloqueada!</strong><div class="small text-muted">{% if progresso.percentual >= 75 %}Guardião dedicado: mais de 75% do tratamento concluído.{% elif sequencia >= 3 %}Rotina de ouro: {{ sequencia }} dias seguidos cuidando.{% else %}Diário de evolução: acompanhamento em fotos ativo.{% endif %}</div></div></div>
   {% endif %}
 
-  {# ---------- Doses atrasadas ---------- #}
-  {% if doses_atrasadas %}
-    <div class="card border-danger shadow-sm mb-3">
-      <div class="card-header bg-danger text-white py-2">⏰ Doses atrasadas</div>
-      <ul class="list-group list-group-flush">
-        {% for d in doses_atrasadas %}
-          <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-              <strong>{{ d.item.prescricao.medicamento }}</strong><br>
-              <small class="text-muted">prevista {{ d.prevista|format_datetime_brazil('%d/%m %H:%M') }}</small>
-            </div>
-            <div class="d-flex gap-1">
-              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="feita">
-                <button class="btn btn-success btn-sm">✔ Dei</button>
-              </form>
-              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="pulada">
-                <button class="btn btn-outline-secondary btn-sm">Pular</button>
-              </form>
-            </div>
-          </li>
-        {% endfor %}
-      </ul>
+  <div class="row g-4">
+    <div class="col-lg-7">
+      {% if doses_atrasadas %}
+      <section class="section-card card border-start border-danger border-4 mb-4"><div class="card-body"><h2 class="h5 text-danger"><i class="fa-solid fa-clock-rotate-left me-2"></i>{{ doses_atrasadas|length }} cuidado{{ 's' if doses_atrasadas|length != 1 else '' }} pedindo atenção</h2>
+        {% for d in doses_atrasadas %}<div class="dose-row border-top py-3 d-flex justify-content-between align-items-center gap-3" data-registro="{{ d.registro.id }}"><div><strong>{{ d.item.prescricao.medicamento }}</strong><div class="small text-muted">Previsto para {{ d.prevista|format_datetime_brazil('%d/%m às %H:%M') }}</div></div><div class="d-flex gap-1"><form class="js-treatment-form" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="feita"><button class="btn btn-success btn-sm rounded-pill">Dei agora</button></form><form class="js-treatment-form" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="pulada"><button class="btn btn-outline-secondary btn-sm rounded-pill">Pular</button></form></div></div>{% endfor %}
+      </div></section>{% endif %}
+
+      <section class="section-card card mb-4" id="hoje"><div class="card-body"><div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h5 mb-0"><i class="fa-solid fa-sun text-warning me-2"></i>Missões de hoje</h2><span class="badge text-bg-light border">{{ doses_hoje|length }} pendente{{ 's' if doses_hoje|length != 1 else '' }}</span></div>
+        <div id="today-list">{% for d in doses_hoje %}<div class="dose-row border-top py-3 d-flex justify-content-between align-items-center gap-3" data-registro="{{ d.registro.id }}"><div><strong>{{ d.item.prescricao.medicamento }}</strong><div class="small text-muted">{{ d.prevista|format_datetime_brazil('%H:%M') }}{% if d.item.prescricao.dosagem %} · {{ d.item.prescricao.dosagem }}{% endif %}</div></div><div class="d-flex gap-1"><form class="js-treatment-form" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="feita"><button class="btn btn-success btn-sm rounded-pill"><i class="fa-solid fa-check me-1"></i>Concluir</button></form><form class="js-treatment-form" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="pulada"><button class="btn btn-outline-secondary btn-sm rounded-pill">Pular</button></form></div></div>{% else %}<div class="text-center py-4" id="today-empty"><div class="fs-1 mb-2">🎉</div><strong>Tudo em dia por aqui!</strong><div class="small text-muted">Aproveite esse momento com {{ animal.name }}.</div></div>{% endfor %}</div>
+      </div></section>
+
+      <section class="section-card card mb-4"><div class="card-body"><h2 class="h5 mb-3"><i class="fa-solid fa-heart-pulse text-danger me-2"></i>Plano de cuidados</h2>
+        {% for i in itens %}<article class="care-card p-3 mb-3" data-item="{{ i.item.id }}"><div class="d-flex justify-content-between align-items-start gap-2"><div><h3 class="h6 mb-1">{{ i.prescricao.medicamento }}</h3><div class="small text-muted">{{ [i.prescricao.dosagem, i.prescricao.frequencia, i.prescricao.duracao]|select|join(' · ') }}</div></div><span class="badge rounded-pill {% if i.item.modo == 'agendado' %}bg-info-subtle text-info{% else %}bg-primary-subtle text-primary{% endif %}">{% if i.item.modo == 'agendado' %}Agendado{% else %}Registro livre{% endif %}</span></div>
+          {% if i.item.modo == 'agendado' and i.previstas %}<div class="d-flex justify-content-between small mt-3"><span><strong class="js-item-done">{{ i.feitas }}</strong>/{{ i.previstas }} doses</span><strong class="text-success js-item-percent">{{ i.percentual or 0 }}%</strong></div><div class="care-progress mt-1"><span class="js-item-bar" style="width:{{ i.percentual or 0 }}%"></span></div>{% if i.proxima %}<div class="small text-muted mt-2"><i class="fa-regular fa-clock me-1"></i>Próxima: {{ i.proxima|format_datetime_brazil('%d/%m às %H:%M') }}</div>{% endif %}
+          {% else %}<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3"><small class="text-muted js-last-application">{% if i.ultima_aplicacao %}Último registro: {{ i.ultima_aplicacao|format_datetime_brazil('%d/%m às %H:%M') }}{% else %}Nenhuma aplicação registrada ainda.{% endif %}</small><form class="js-treatment-form" action="{{ url_for('registrar_aplicacao_tratamento', item_id=i.item.id) }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary btn-sm rounded-pill"><i class="fa-solid fa-plus me-1"></i>Registrar agora</button></form></div>{% endif %}
+        </article>{% endfor %}
+        {% if bloco.instrucoes_gerais %}<div class="alert alert-light border mb-0"><strong>Orientações do veterinário:</strong> {{ bloco.instrucoes_gerais }}</div>{% endif %}
+      </div></section>
     </div>
-  {% endif %}
 
-  {# ---------- Doses de hoje ---------- #}
-  <div class="card shadow-sm mb-3">
-    <div class="card-header py-2">📅 Hoje</div>
-    {% if doses_hoje %}
-      <ul class="list-group list-group-flush">
-        {% for d in doses_hoje %}
-          <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-              <strong>{{ d.item.prescricao.medicamento }}</strong><br>
-              <small class="text-muted">{{ d.prevista|format_datetime_brazil('%H:%M') }}{% if d.item.prescricao.dosagem %} · {{ d.item.prescricao.dosagem }}{% endif %}</small>
-            </div>
-            <div class="d-flex gap-1">
-              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="feita">
-                <button class="btn btn-success btn-sm">✔ Dei</button>
-              </form>
-              <form method="POST" action="{{ url_for('marcar_administracao_tratamento', registro_id=d.registro.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="pulada">
-                <button class="btn btn-outline-secondary btn-sm">Pular</button>
-              </form>
-            </div>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="card-body py-3 text-muted">
-        Nenhuma dose agendada pendente para hoje 🎉
-      </div>
-    {% endif %}
-  </div>
+    <div class="col-lg-5">
+      <section class="section-card card mb-4" id="compras"><div class="card-body"><div class="d-flex justify-content-between align-items-center"><h2 class="h5 mb-0"><i class="fa-solid fa-bag-shopping text-primary me-2"></i>Kit de recuperação</h2><span class="small text-muted">{{ compras_concluidas }}/{{ total_cuidados }}</span></div>{% for i in itens %}<form class="js-treatment-form border-top py-3 d-flex justify-content-between align-items-center gap-2" action="{{ url_for('marcar_item_tratamento_comprado', item_id=i.item.id) }}" method="post" data-purchase><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><span class="small">{{ i.prescricao.medicamento }}</span><button class="btn btn-sm rounded-pill {% if i.item.comprado_em %}btn-success{% else %}btn-outline-primary{% endif %}">{% if i.item.comprado_em %}<i class="fa-solid fa-check me-1"></i>Comprado{% else %}Marcar comprado{% endif %}</button></form>{% endfor %}</div></section>
 
-  {# ---------- Compras ---------- #}
-  <div class="card shadow-sm mb-3" id="compras">
-    <div class="card-header py-2">🛒 Já comprei</div>
-    <ul class="list-group list-group-flush">
-      {% for i in itens %}
-        <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
-          <div>
-            {{ i.prescricao.medicamento }}
-            {% if i.item.comprado_em %}
-              <br><small class="text-success">Comprado em {{ i.item.comprado_em|format_datetime_brazil('%d/%m/%Y') }}</small>
-            {% endif %}
-          </div>
-          <form method="POST" action="{{ url_for('marcar_item_tratamento_comprado', item_id=i.item.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {% if i.item.comprado_em %}
-              <button class="btn btn-success btn-sm">✔ Comprado</button>
-            {% else %}
-              <button class="btn btn-outline-primary btn-sm">Marcar como comprado</button>
-            {% endif %}
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
-  </div>
+      <section class="section-card card mb-4" id="fotos"><div class="card-body"><h2 class="h5"><i class="fa-solid fa-camera-retro text-info me-2"></i>Diário em fotos</h2><p class="small text-muted">Registre a evolução visual. Isso ajuda você e o veterinário a perceberem mudanças.</p><form id="photo-form" class="js-treatment-form" method="post" action="{{ url_for('enviar_foto_tratamento', tratamento_id=acompanhamento.id) }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="file" name="foto" accept="image/*" capture="environment" class="form-control form-control-sm mb-2" required><input type="text" name="observacao" class="form-control form-control-sm mb-2" placeholder="O que mudou hoje? (opcional)"><button class="btn btn-info text-white w-100 rounded-pill"><i class="fa-solid fa-cloud-arrow-up me-1"></i>Adicionar à evolução</button></form><div class="row g-2 mt-2" id="photo-grid">{% for foto in fotos %}<div class="col-6"><a href="{{ foto.url }}" target="_blank" rel="noopener" class="photo-tile d-block"><img src="{{ foto.url }}" alt="Evolução do tratamento" loading="lazy"><span class="photo-caption">{{ foto.enviada_em|format_datetime_brazil('%d/%m') if foto.enviada_em }}{% if foto.observacao %} · {{ foto.observacao }}{% endif %}</span></a></div>{% endfor %}</div></div></section>
 
-  {# ---------- Itens do tratamento ---------- #}
-  <div class="card shadow-sm mb-3">
-    <div class="card-header py-2">💊 Medicações e cuidados</div>
-    <div class="card-body p-2">
-      {% for i in itens %}
-        <div class="border rounded p-2 mb-2">
-          <div class="d-flex justify-content-between align-items-start flex-wrap gap-1">
-            <div>
-              <strong>{{ i.prescricao.medicamento }}</strong>
-              <div class="small text-muted">
-                {% if i.prescricao.dosagem %}{{ i.prescricao.dosagem }}{% endif %}
-                {% if i.prescricao.frequencia %} · {{ i.prescricao.frequencia }}{% endif %}
-                {% if i.prescricao.duracao %} · {{ i.prescricao.duracao }}{% endif %}
-                {% if i.prescricao.observacoes %} · {{ i.prescricao.observacoes }}{% endif %}
-              </div>
-            </div>
-            {% if i.item.modo == 'agendado' %}
-              <span class="badge bg-info text-dark">agenda automática</span>
-            {% else %}
-              <span class="badge bg-light text-dark border">registro livre</span>
-            {% endif %}
-          </div>
-
-          {% if i.item.modo == 'agendado' %}
-            {% if i.previstas %}
-              <div class="progress my-2" style="height: 8px;">
-                <div class="progress-bar bg-success" style="width: {{ i.percentual or 0 }}%;"></div>
-              </div>
-              <div class="small text-muted d-flex justify-content-between flex-wrap">
-                <span>{{ i.feitas }}/{{ i.previstas }} doses</span>
-                {% if i.proxima %}<span>próxima: {{ i.proxima|format_datetime_brazil('%d/%m %H:%M') }}</span>{% endif %}
-              </div>
-            {% endif %}
-          {% else %}
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
-              <small class="text-muted">
-                {% if i.ultima_aplicacao %}
-                  Última aplicação: {{ i.ultima_aplicacao|format_datetime_brazil('%d/%m %H:%M') }}
-                {% else %}
-                  Nenhuma aplicação registrada ainda.
-                {% endif %}
-              </small>
-              <form method="POST" action="{{ url_for('registrar_aplicacao_tratamento', item_id=i.item.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-primary btn-sm">✔ Apliquei agora</button>
-              </form>
-            </div>
-          {% endif %}
-        </div>
-      {% endfor %}
-      {% if bloco.instrucoes_gerais %}
-        <div class="alert alert-light border small mb-0">
-          <strong>Orientações do veterinário:</strong> {{ bloco.instrucoes_gerais }}
-        </div>
-      {% endif %}
+      <section class="section-card card mb-4"><div class="card-body"><h2 class="h5 mb-3"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i>Histórico de cuidados</h2><div class="timeline" id="care-history">{% for evento in historico %}<div class="timeline-item {% if evento.registro.status == 'pulada' %}is-skipped{% endif %}"><strong class="small">{{ evento.item.prescricao.medicamento }}</strong><div class="small text-muted">{% if evento.registro.status == 'feita' %}Cuidado realizado{% else %}Dose pulada{% endif %}{% if evento.momento %} · {{ evento.momento|format_datetime_brazil('%d/%m às %H:%M') }}{% endif %}</div>{% if evento.registro.observacao %}<div class="small">“{{ evento.registro.observacao }}”</div>{% endif %}</div>{% else %}<p class="small text-muted mb-0" id="history-empty">O histórico começa com o primeiro cuidado registrado.</p>{% endfor %}</div></div></section>
     </div>
   </div>
 
-  {# ---------- Fotos ---------- #}
-  <div class="card shadow-sm mb-3" id="fotos">
-    <div class="card-header py-2">📷 Evolução em fotos</div>
-    <div class="card-body">
-      <form method="POST" action="{{ url_for('enviar_foto_tratamento', tratamento_id=acompanhamento.id) }}" enctype="multipart/form-data" class="mb-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="input-group input-group-sm mb-2">
-          <input type="file" name="foto" accept="image/*" capture="environment" class="form-control" required>
-          <button class="btn btn-primary">Enviar</button>
-        </div>
-        <input type="text" name="observacao" class="form-control form-control-sm" placeholder="Observação (opcional)">
-        <small class="text-muted">Envie uma foto por dia da região tratada — isso ajuda o veterinário a avaliar a evolução.</small>
-      </form>
-      {% if fotos %}
-        <div class="row g-2">
-          {% for foto in fotos %}
-            <div class="col-6 col-md-4">
-              <a href="{{ foto.url }}" target="_blank" rel="noopener">
-                <img src="{{ foto.url }}" class="img-fluid rounded" alt="Foto do tratamento" loading="lazy">
-              </a>
-              <small class="text-muted d-block">
-                {{ foto.enviada_em|format_datetime_brazil('%d/%m %H:%M') if foto.enviada_em }}
-                {% if foto.observacao %} · {{ foto.observacao }}{% endif %}
-              </small>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="text-muted small mb-0">Nenhuma foto enviada ainda.</p>
-      {% endif %}
-    </div>
-  </div>
-
-  {# ---------- Ações do veterinário ---------- #}
-  {% if is_vet_viewer %}
-    <div class="card shadow-sm mb-3 border-primary">
-      <div class="card-header py-2">👩‍⚕️ Área do veterinário</div>
-      <div class="card-body d-flex flex-wrap gap-2">
-        {% if tutor_whatsapp_url %}
-          <a href="{{ tutor_whatsapp_url }}" target="_blank" rel="noopener" class="btn btn-success btn-sm">
-            📱 Enviar link ao tutor
-          </a>
-        {% endif %}
-        {% if acompanhamento.status == 'ativo' %}
-          <form method="POST" action="{{ url_for('alterar_status_tratamento', tratamento_id=acompanhamento.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="status" value="concluido">
-            <button class="btn btn-outline-secondary btn-sm">Concluir tratamento</button>
-          </form>
-        {% else %}
-          <form method="POST" action="{{ url_for('alterar_status_tratamento', tratamento_id=acompanhamento.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="status" value="ativo">
-            <button class="btn btn-outline-success btn-sm">Reativar tratamento</button>
-          </form>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-
+  {% if is_vet_viewer %}<section class="section-card card border-primary mb-4"><div class="card-body"><h2 class="h5">Área do veterinário</h2><div class="d-flex flex-wrap gap-2">{% if tutor_whatsapp_url %}<a href="{{ tutor_whatsapp_url }}" target="_blank" rel="noopener" class="btn btn-success btn-sm rounded-pill"><i class="fa-brands fa-whatsapp me-1"></i>Enviar ao tutor</a>{% endif %}<form class="js-treatment-form" method="post" action="{{ url_for('alterar_status_tratamento', tratamento_id=acompanhamento.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ 'concluido' if acompanhamento.status == 'ativo' else 'ativo' }}"><button class="btn btn-outline-primary btn-sm rounded-pill">{{ 'Concluir tratamento' if acompanhamento.status == 'ativo' else 'Reativar tratamento' }}</button></form></div></div></section>{% endif %}
 </div>
+<div class="treatment-toast" id="treatment-toast" role="status" aria-live="polite"></div>
+
+<script>
+(()=>{const app=document.getElementById('treatment-app'),toast=document.getElementById('treatment-toast');let toastTimer;
+function notify(message){toast.textContent=message;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2800)}
+function celebrate(){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;for(let i=0;i<22;i++){const dot=document.createElement('i');dot.className='celebration-dot';dot.style.left=(50+Math.random()*10-5)+'vw';dot.style.top='48vh';dot.style.background=['#22c55e','#facc15','#38bdf8','#fb7185'][i%4];dot.style.setProperty('--x',(Math.random()*420-210)+'px');dot.style.setProperty('--y',(Math.random()*-380-40)+'px');document.body.appendChild(dot);setTimeout(()=>dot.remove(),1100)}}
+function updateProgress(p){if(!p)return;const pct=p.percentual||0;document.getElementById('overall-percent').textContent=pct;document.getElementById('overall-orb').style.setProperty('--p',pct);if(pct===100)celebrate()}
+document.addEventListener('submit',async event=>{const form=event.target.closest('.js-treatment-form');if(!form)return;event.preventDefault();const button=form.querySelector('button');button?.classList.add('is-loading');try{const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível atualizar.');
+ if(data.progresso)updateProgress(data.progresso);
+ if(data.registro_id&&data.status){const row=document.querySelector('[data-registro="'+data.registro_id+'"]');row?.classList.add('is-complete');const card=document.querySelector('[data-item="'+data.item_id+'"]');if(card&&data.item_percentual!=null){card.querySelector('.js-item-done').textContent=data.item_feitas;card.querySelector('.js-item-percent').textContent=data.item_percentual+'%';card.querySelector('.js-item-bar').style.width=data.item_percentual+'%'}notify(data.status==='feita'?'Cuidado concluído! Muito bem! 🌟':'Registro atualizado.');if(data.status==='feita'){const total=document.getElementById('total-done');total.textContent=Number(total.textContent)+1;celebrate()}}
+ else if(data.comprado!==undefined){button.className='btn btn-sm rounded-pill '+(data.comprado?'btn-success':'btn-outline-primary');button.innerHTML=data.comprado?'<i class="fa-solid fa-check me-1"></i>Comprado':'Marcar comprado';notify(data.comprado?'Item pronto para o tratamento!':'Item marcado como não comprado.');}
+ else if(data.foto){const grid=document.getElementById('photo-grid'),col=document.createElement('div');col.className='col-6';col.innerHTML='<a href="'+data.foto.url+'" target="_blank" rel="noopener" class="photo-tile d-block"><img src="'+data.foto.url+'" alt="Evolução do tratamento"><span class="photo-caption">Agora</span></a>';grid.prepend(col);document.getElementById('photo-count').textContent=Number(document.getElementById('photo-count').textContent)+1;form.reset();notify(data.mensagem);celebrate();}
+ else if(data.realizada_em){const card=document.querySelector('[data-item="'+data.item_id+'"]');if(card)card.querySelector('.js-last-application').textContent='Registrado agora';document.getElementById('total-done').textContent=Number(document.getElementById('total-done').textContent)+1;notify(data.mensagem);celebrate();}
+ else notify('Atualizado com sucesso.');
+ }catch(error){notify(error.message||'Não foi possível atualizar. Tente novamente.')}finally{button?.classList.remove('is-loading')}});
+})();
+</script>
 {% endblock %}
