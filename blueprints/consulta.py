@@ -2340,6 +2340,44 @@ def acompanhamento_tratamento(tratamento_id):
         reverse=True,
     )
 
+    historico = []
+    dias_com_cuidado = set()
+    for item in acompanhamento.itens:
+        for registro in item.registros:
+            if registro.status not in ('feita', 'pulada'):
+                continue
+            momento = registro.realizada_em or registro.prevista_para
+            momento = coerce_to_brazil_tz(momento) if momento else None
+            if registro.status == 'feita' and momento:
+                dias_com_cuidado.add(momento.date())
+            historico.append({
+                'item': item,
+                'registro': registro,
+                'momento': momento,
+            })
+    historico.sort(key=lambda evento: evento['momento'] or agora, reverse=True)
+
+    sequencia = 0
+    cursor = hoje if hoje in dias_com_cuidado else hoje - timedelta(days=1)
+    while cursor in dias_com_cuidado:
+        sequencia += 1
+        cursor -= timedelta(days=1)
+
+    total_cuidados = len(itens_view)
+    compras_concluidas = sum(1 for i in itens_view if i['item'].comprado_em)
+    total_aplicacoes = sum(i['feitas'] for i in itens_view)
+    percentual_geral = resumo_progresso(acompanhamento).get('percentual') or 0
+    if percentual_geral >= 100:
+        mensagem_progresso = 'Missão cumprida! Você completou todas as doses previstas.'
+    elif percentual_geral >= 75:
+        mensagem_progresso = 'Reta final! Seu cuidado consistente está fazendo diferença.'
+    elif percentual_geral >= 40:
+        mensagem_progresso = 'Ótimo ritmo! Cada cuidado registrado aproxima da recuperação.'
+    elif total_aplicacoes:
+        mensagem_progresso = 'Bom começo! Continue registrando para acompanhar a evolução.'
+    else:
+        mensagem_progresso = 'Vamos começar? O primeiro cuidado já conta muito.'
+
     tutor = animal.owner if animal else None
     is_vet_viewer = is_veterinarian(current_user)
     tutor_whatsapp_url = None
@@ -2363,6 +2401,12 @@ def acompanhamento_tratamento(tratamento_id):
         doses_atrasadas=doses_atrasadas,
         fotos=fotos,
         progresso=resumo_progresso(acompanhamento),
+        total_cuidados=total_cuidados,
+        compras_concluidas=compras_concluidas,
+        total_aplicacoes=total_aplicacoes,
+        sequencia=sequencia,
+        historico=historico[:30],
+        mensagem_progresso=mensagem_progresso,
         is_owner=is_owner,
         is_vet_viewer=is_vet_viewer,
         tutor_whatsapp_url=tutor_whatsapp_url,
@@ -2382,6 +2426,8 @@ def marcar_item_tratamento_comprado(item_id):
         item.comprado_em = now_in_brazil()
         item.comprado_por_id = current_user.id
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(ok=True, item_id=item.id, comprado=bool(item.comprado_em))
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#compras')
 
 
@@ -2411,6 +2457,20 @@ def marcar_administracao_tratamento(registro_id):
     if observacao:
         registro.observacao = observacao
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from services.tratamento import resumo_progresso
+        previstas = sum(1 for r in item.registros if r.prevista_para is not None)
+        feitas = sum(1 for r in item.registros if r.status == 'feita' and r.prevista_para is not None)
+        return jsonify(
+            ok=True,
+            registro_id=registro.id,
+            status=registro.status,
+            item_id=item.id,
+            item_feitas=feitas,
+            item_previstas=previstas,
+            item_percentual=round(100 * feitas / previstas) if previstas else None,
+            progresso=resumo_progresso(acompanhamento),
+        )
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
 
@@ -2420,14 +2480,23 @@ def registrar_aplicacao_tratamento(item_id):
     item = ItemTratamento.query.get_or_404(item_id)
     acompanhamento, _ = _tratamento_acompanhamento_or_404(item.acompanhamento_id)
     observacao = (request.form.get('observacao') or '').strip() or None
-    db.session.add(AdministracaoRegistro(
+    registro = AdministracaoRegistro(
         item_id=item.id,
         status='feita',
         realizada_em=now_in_brazil(),
         realizada_por_id=current_user.id,
         observacao=observacao,
-    ))
+    )
+    db.session.add(registro)
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(
+            ok=True,
+            item_id=item.id,
+            registro_id=registro.id,
+            realizada_em=registro.realizada_em.isoformat() if registro.realizada_em else None,
+            mensagem='Cuidado registrado! Você está fazendo a diferença.',
+        )
     flash('Aplicação registrada!', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
@@ -2448,13 +2517,24 @@ def enviar_foto_tratamento(tratamento_id):
         flash('Não foi possível enviar a foto. Tente novamente.', 'danger')
         return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
 
-    db.session.add(FotoTratamento(
+    foto = FotoTratamento(
         acompanhamento_id=acompanhamento.id,
         url=url,
         observacao=(request.form.get('observacao') or '').strip() or None,
         enviada_por_id=current_user.id,
-    ))
+    )
+    db.session.add(foto)
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(
+            ok=True,
+            foto={
+                'url': foto.url,
+                'observacao': foto.observacao,
+                'enviada_em': foto.enviada_em.isoformat() if foto.enviada_em else None,
+            },
+            mensagem='Foto adicionada à evolução!',
+        )
     flash('Foto enviada! Ela ajuda o veterinário a avaliar a evolução.', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
 
@@ -2471,6 +2551,8 @@ def alterar_status_tratamento(tratamento_id):
         abort(400)
     acompanhamento.status = novo_status
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(ok=True, status=acompanhamento.status)
     flash('Status do tratamento atualizado.', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
