@@ -723,7 +723,16 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
             file.stream.seek(0)
             image = Image.open(file.stream)
             image = ImageOps.exif_transpose(image)  # baixa o EXIF: pixels já saem na orientação certa
-            image = image.convert("RGB")
+            # JPEG does not support alpha. A direct RGBA-to-RGB conversion
+            # turns transparent product backgrounds black, so flatten them on
+            # the neutral white background used by the catalog.
+            if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+                foreground = image.convert("RGBA")
+                background = Image.new("RGBA", foreground.size, "white")
+                background.alpha_composite(foreground)
+                image = background.convert("RGB")
+            else:
+                image = image.convert("RGB")
             image.thumbnail((1280, 1280))
             buffer = BytesIO()
             image.save(buffer, format="JPEG", optimize=True, quality=85)

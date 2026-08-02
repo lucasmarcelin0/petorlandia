@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <div class="container mt-4" style="max-width: 600px;">
 
@@ -57,11 +58,7 @@
           {{ form.image_upload.label(class="form-label fw-semibold") }}
           {% if product.image_url %}
           <div class="mb-2">
-            {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" alt="{{ product.name }}" class="rounded-3 border" style="height:80px;object-fit:cover;">
-            {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" alt="{{ product.name }}" class="rounded-3 border" style="height:80px;object-fit:cover;">
-            {% endif %}
+            {{ product_media(product, 'editor') }}
             <div class="form-text">Imagem atual. Envie uma nova para substituir.</div>
           </div>
           {% endif %}

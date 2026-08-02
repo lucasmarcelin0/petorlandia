@@ -1376,7 +1376,8 @@ class ProductAdmin(MyModelView):
         if obj and obj.image_url:
             form.image_upload.description = Markup(
                 f'<img src="{escape(_admin_image_src(obj.image_url))}" alt="Imagem atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'style="width:150px;height:150px;object-fit:contain;padding:10px;'
+                f'background:#fff;border:1px solid #e3e7ef;border-radius:12px;margin-top:10px;">'
             )
 
     def on_model_delete(self, model):

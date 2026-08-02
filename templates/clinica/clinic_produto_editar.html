@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <div class="container mt-4" style="max-width: 640px;">
 
@@ -52,11 +53,7 @@
           {{ form.image_upload.label(class="form-label fw-semibold") }}
           {% if product.image_url %}
           <div class="mb-2">
-            {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" class="img-thumbnail" style="max-height:120px;" alt="{{ product.name }}">
-            {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" class="img-thumbnail" style="max-height:120px;" alt="{{ product.name }}">
-            {% endif %}
+            {{ product_media(product, 'editor') }}
           </div>
           {% endif %}
           {{ form.image_upload(class="form-control") }}

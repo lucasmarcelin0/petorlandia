@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media, media_image %}
 {% block page_title %}{{ product.name }} — {{ 'compra ou assinatura' if product.subscription_enabled else 'compra única' }} | PetOrlândia{% endblock %}
 {% block meta_description %}{{ ((product.description or ('Compre ' ~ product.name ~ ' com vendedor e preço informados antes do pagamento.')) | striptags | truncate(155, true, '')) }}{% endblock %}
 {% block structured_data %}
@@ -55,12 +56,12 @@
   </nav>
   <div class="row g-4">
     <div class="col-lg-5">
-      {% if product.image_url %}
-      <img src="{{ product.image_url }}" class="img-fluid rounded-4 border w-100 mb-3" alt="{{ product.name }}" loading="lazy" width="600" height="600" style="object-fit:cover;">
-      {% endif %}
+      {{ product_media(product, 'hero', 'mb-3', true) }}
+      {% if product.extra_photos %}<div class="d-flex flex-wrap gap-2 mb-3" aria-label="Outras fotos de {{ product.name }}">{% endif %}
       {% for photo in product.extra_photos %}
-      <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Outra foto de {{ product.name }}">
+      {{ media_image(photo.image_url, 'Outra foto de ' ~ product.name, 'gallery') }}
       {% endfor %}
+      {% if product.extra_photos %}</div>{% endif %}
     </div>
     <div class="col-lg-7">
       {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
