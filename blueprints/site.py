@@ -27,6 +27,7 @@ from models import (
     Veterinario,
     ClinicInternshipCase,
     ClinicStaff,
+    SiteFlag,
 )
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
@@ -807,6 +808,13 @@ def index():
         doses_atrasadas=doses_atrasadas,
         proximas_vacinas=proximas_vacinas,
         proximos_agendamentos=proximos_agendamentos,
+        home_shortcuts={
+            'service': SiteFlag.get('home_shortcut_service', True),
+            'store': SiteFlag.get('home_shortcut_store', True),
+            'health_plan': SiteFlag.get('home_shortcut_health_plan', True),
+            'animals': SiteFlag.get('home_shortcut_animals', True),
+        },
+        is_admin=_is_admin(),
     )
 
 

@@ -18,26 +18,37 @@
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center dashboard-personal-area" data-dashboard-area="personal-shortcuts">
         <h1 class="h3 mb-1">Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
         <h2 class="h6 text-muted mb-2">O que você deseja fazer hoje?</h2>
+        {% if is_admin %}
+        <div class="alert alert-light border d-flex flex-wrap align-items-center justify-content-center gap-2 py-2 small mb-3">
+            <i class="fa-solid fa-sliders text-primary"></i><strong>Atalhos visíveis para usuários:</strong>
+            <span>use o ícone de olho para mostrar ou ocultar cada botão.</span>
+        </div>
+        {% endif %}
         <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
-            <a href="{{ url_for('servicos') }}" class="btn btn-outline-danger rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Agende vacinas, banho & tosa, consultas, exames e mais.">
-                🐾 Agendar um serviço
-            </a>
-
-            <a href="{{ url_for('loja') }}" class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                data-bs-toggle="tooltip" title="Abre a loja para comprar produtos e agendar entregas.">
-                🛍️ Loja Pet
-            </a>
-
-            <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
-                ❤️ Plano de Saúde Pet
-            </a>
-
-            <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
-                📋 Ver todos os animais
-            </a>
+            {% set shortcut_items = [
+                ('service', 'home_shortcut_service', '🐾 Agendar um serviço', 'servicos', 'btn-outline-danger', 'Agende vacinas, banho & tosa, consultas, exames e mais.'),
+                ('store', 'home_shortcut_store', '🛍️ Loja Pet', 'loja', 'loja-pet-filled', 'Abre a loja para comprar produtos e agendar entregas.'),
+                ('health_plan', 'home_shortcut_health_plan', '❤️ Plano de Saúde Pet', 'plano_saude_overview', 'Mostra detalhes e contratação do plano de saúde.'),
+                ('animals', 'home_shortcut_animals', '📋 Ver todos os animais', 'list_animals', 'Mostra a lista completa para visualizar e filtrar pets.')
+            ] %}
+            {% for key, flag_key, label, endpoint, button_class, tooltip in shortcut_items %}
+            {% if home_shortcuts[key] or is_admin %}
+            <div class="d-flex align-items-center gap-1">
+                {% if home_shortcuts[key] %}
+                <a href="{{ url_for(endpoint) }}" class="btn {{ button_class }} rounded-pill shadow-sm px-4 py-2" data-bs-toggle="tooltip" title="{{ tooltip }}">{{ label }}</a>
+                {% else %}
+                <span class="btn btn-outline-secondary rounded-pill px-4 py-2 disabled" aria-disabled="true">{{ label }} (oculto)</span>
+                {% endif %}
+                {% if is_admin %}
+                <form method="post" action="{{ url_for('admin_toggle_site_flag') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="key" value="{{ flag_key }}">
+                    <button type="submit" class="btn btn-sm {% if home_shortcuts[key] %}btn-outline-warning{% else %}btn-success{% endif %} rounded-circle" title="{% if home_shortcuts[key] %}Ocultar{% else %}Mostrar{% endif %} este botão para usuários" aria-label="{% if home_shortcuts[key] %}Ocultar{% else %}Mostrar{% endif %} {{ label }}"><i class="fa-solid {% if home_shortcuts[key] %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
         </div>
     </div>
 
