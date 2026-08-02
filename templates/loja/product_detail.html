@@ -85,7 +85,6 @@
       {% set seller = product.casa_de_racao if product.casa_de_racao else product.clinica if product.clinica else none %}
       <p class="small text-muted mb-3">
         <i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ seller.nome if seller else 'PetOrlândia' }}</strong>
-        {% if seller and seller.cnpj %}<span class="ms-1">· CNPJ {{ seller.cnpj }}</span>{% endif %}
       </p>
       {% if product.description %}
       {# ``pre-line`` preserva as quebras que o vendedor digitou sem abrir mão
