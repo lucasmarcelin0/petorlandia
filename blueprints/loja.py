@@ -1470,6 +1470,20 @@ def produto_detail(product_id):
     )
 
 
+@bp.route("/produto/<int:product_id>/toggle-status", methods=["POST"])
+@login_required
+def produto_toggle_status(product_id):
+    """Alterna a visibilidade de um produto para administradores."""
+    if not _is_admin():
+        abort(403)
+    product = Product.query.get_or_404(product_id)
+    product.status = 'inactive' if product.status == 'active' else 'active'
+    db.session.commit()
+    state = 'ativado' if product.status == 'active' else 'inativado'
+    flash(f'Produto {state} na loja.', 'success')
+    return redirect(url_for('produto_detail', product_id=product.id))
+
+
 @bp.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):

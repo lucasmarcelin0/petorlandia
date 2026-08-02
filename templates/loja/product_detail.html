@@ -66,6 +66,22 @@
     <div class="col-lg-7">
       {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
       <h1 class="h2 mb-2">{{ product.name }}</h1>
+      {% if is_admin %}
+      <div class="alert {% if product.status == 'active' %}alert-success{% else %}alert-secondary{% endif %} d-flex align-items-center justify-content-between gap-3 py-2 mb-3">
+        <span class="small">
+          <i class="fa-solid {% if product.status == 'active' %}fa-circle-check{% else %}fa-eye-slash{% endif %} me-1"></i>
+          Produto <strong>{% if product.status == 'active' %}ativo{% else %}inativo{% endif %}</strong> na loja.
+        </span>
+        <form method="post" action="{{ url_for('produto_toggle_status', product_id=product.id) }}" class="flex-shrink-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm {% if product.status == 'active' %}btn-outline-warning{% else %}btn-success{% endif %}"
+                  aria-label="{% if product.status == 'active' %}Inativar{% else %}Ativar{% endif %} produto">
+            <i class="fa-solid {% if product.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %} me-1"></i>
+            {% if product.status == 'active' %}Inativar{% else %}Ativar{% endif %}
+          </button>
+        </form>
+      </div>
+      {% endif %}
       {% set seller = product.casa_de_racao if product.casa_de_racao else product.clinica if product.clinica else none %}
       <p class="small text-muted mb-3">
         <i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ seller.nome if seller else 'PetOrlândia' }}</strong>
