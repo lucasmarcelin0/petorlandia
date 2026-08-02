@@ -31,7 +31,6 @@
           <div>
             <div class="fw-semibold">{{ product.name }}</div>
             <div class="small text-muted">Vendido por {{ product.casa_de_racao.nome if product.casa_de_racao else product.clinica.nome if product.clinica else 'PetOrlândia' }}</div>
-            {% if product.casa_de_racao and product.casa_de_racao.cnpj %}<div class="small text-muted">CNPJ {{ product.casa_de_racao.cnpj }}</div>{% elif product.clinica and product.clinica.cnpj %}<div class="small text-muted">CNPJ {{ product.clinica.cnpj }}</div>{% endif %}
             {% if product.subscription_discount %}<span class="badge text-bg-success">{{ product.subscription_discount|float|round(0)|int }}% de desconto na assinatura</span>{% endif %}
           </div>
         </div>

@@ -29,6 +29,14 @@
           <div class="small text-success fw-semibold mb-1">ou assinatura desde {{ product.subscription_price_min | currency_br }} por ciclo</div>
           {% endif %}
 
+          {% if product.clinica %}
+          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ product.clinica.nome }}</strong></div>
+          {% elif product.casa_de_racao %}
+          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ product.casa_de_racao.nome }}</strong></div>
+          {% else %}
+          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>PetOrlândia</strong></div>
+          {% endif %}
+
           <div class="text-muted small mb-2"><i class="fa-solid fa-truck-fast me-1"></i>entrega rápida</div>
 
           {% if current_user.is_authenticated %}
