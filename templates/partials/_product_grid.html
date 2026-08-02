@@ -1,22 +1,12 @@
+{% from 'components/product_media.html' import product_media %}
 {% if products %}
 <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4">
   {% for product in products %}
   <div class="col">
     <article class="card product-card h-100 d-flex flex-column">
-      <!-- Imagem -->
       <a href="{{ url_for('produto_detail', product_id=product.id) }}"
-         class="ratio ratio-4x3 d-block">
-        {% if product.image_url %}
-          {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" class="product-image" alt="{{ product.name }}">
-          {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" class="product-image" alt="{{ product.name }}">
-          {% endif %}
-        {% else %}
-          <div class="d-flex align-items-center justify-content-center h-100 text-muted">
-            <i class="fa-regular fa-image fs-2"></i>
-          </div>
-        {% endif %}
+         class="product-media-link" aria-label="Ver detalhes de {{ product.name }}">
+        {{ product_media(product, 'card') }}
       </a>
 
       <!-- Info -->

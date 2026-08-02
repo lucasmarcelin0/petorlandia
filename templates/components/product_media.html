@@ -1,0 +1,28 @@
+{# Canonical product-image presentation for local, legacy and remote URLs. #}
+{% macro media_image(image_url, alt_text, variant='card', class_name='', eager=false) -%}
+  {% set source = none %}
+  {% if image_url %}
+    {% if image_url.startswith('http://') or image_url.startswith('https://') or image_url.startswith('/') %}
+      {% set source = image_url %}
+    {% elif image_url.startswith('static/') %}
+      {% set source = '/' ~ image_url %}
+    {% else %}
+      {% set source = url_for('static', filename=image_url) %}
+    {% endif %}
+  {% endif %}
+  <figure class="product-media product-media--{{ variant }}{% if not source %} product-media--empty{% endif %}{% if class_name %} {{ class_name }}{% endif %}">
+    {% if source %}
+    <img class="product-media__image" src="{{ source }}" alt="{{ alt_text }}"
+         width="800" height="800" loading="{{ 'eager' if eager else 'lazy' }}"
+         decoding="async" {% if eager %}fetchpriority="high"{% endif %}
+         onerror="this.hidden=true;this.parentElement.classList.add('product-media--error')">
+    {% endif %}
+    <span class="product-media__fallback" aria-hidden="true">
+      <i class="fa-regular fa-image"></i><span>Imagem indisponível</span>
+    </span>
+  </figure>
+{%- endmacro %}
+
+{% macro product_media(product, variant='card', class_name='', eager=false) -%}
+  {{ media_image(product.image_url, product.name, variant, class_name, eager) }}
+{%- endmacro %}

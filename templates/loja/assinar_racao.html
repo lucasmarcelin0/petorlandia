@@ -1,4 +1,5 @@
 {% extends 'layout.html' %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <style>
   .subscription-shell { max-width: 760px; }
@@ -26,7 +27,7 @@
       <div class="card-body p-4">
         <h2 class="h5 mb-3">1. Produto e frequência</h2>
         <div class="d-flex gap-3 align-items-center mb-3">
-          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.name }}" style="width:72px;height:72px;object-fit:cover;border-radius:12px;">{% endif %}
+          {{ product_media(product, 'thumb') }}
           <div>
             <div class="fw-semibold">{{ product.name }}</div>
             <div class="small text-muted">Vendido por {{ product.casa_de_racao.nome if product.casa_de_racao else product.clinica.nome if product.clinica else 'PetOrlândia' }}</div>
