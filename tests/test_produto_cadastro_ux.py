@@ -48,10 +48,52 @@ def _payload(**overrides) -> dict:
         'upd-mp_category_id': 'others',
         'upd-subscription_discount_percent': '10.00',
         'upd-subscription_shipping_fee': '0.00',
-        'upd-submit': 'Salvar',
+        # Vazio de propósito: é assim que o navegador envia um
+        # <button name="upd-submit"> sem atributo ``value``.
+        'upd-submit': '',
     }
     data.update(overrides)
     return data
+
+
+# ------------------------------------------------------ o Salvar precisa gravar
+
+
+def test_estoque_salvo_persiste_apos_recarregar(app, client):
+    """O bug relatado: salvar 2, recarregar e ver 0 de novo.
+
+    Causa: o botão ``<button name="upd-submit">`` não tinha ``value``, então o
+    navegador enviava string vazia e o ``SubmitField`` do WTForms a lia como
+    False. O formulário validava e a gravação era pulada — sem erro nenhum.
+    """
+    with app.app_context():
+        admin = _admin()
+        product = _product()
+        product.stock = 0
+        db.session.commit()
+        admin_id, product_id = admin.id, product.id
+
+    _login(client, admin_id)
+    client.post(f'/produto/{product_id}', data=_payload(**{'upd-stock': '2'}))
+
+    with app.app_context():
+        assert db.session.get(Product, product_id).stock == 2
+
+    body = client.get(f'/produto/{product_id}').data.decode()
+    assert 'id="upd-stock"' in body and 'value="2"' in body
+
+
+def test_botao_de_salvar_carrega_value(app, client):
+    """Blindagem: o template não pode voltar a perder o ``value``."""
+    with app.app_context():
+        admin = _admin()
+        product = _product()
+        admin_id, product_id = admin.id, product.id
+
+    _login(client, admin_id)
+    body = client.get(f'/produto/{product_id}').data.decode()
+    assert 'name="upd-submit" value="1"' in body
+    assert 'name="photo-submit" value="1"' in body
 
 
 # ------------------------------------------------- formato brasileiro de número
