@@ -1382,8 +1382,16 @@ def produto_detail(product_id):
     photo_form = ProductPhotoForm(prefix='photo')
     form = AddToCartForm()
 
+    # Qual formulário foi enviado é decidido pela PRESENÇA da chave, não pelo
+    # valor dela. ``SubmitField`` herda de ``BooleanField`` e lê string vazia
+    # como False — e um <button name="x"> sem ``value`` envia exatamente isso.
+    # Amarrar a gravação a esse booleano fazia o Salvar passar pela validação
+    # e não gravar nada, em silêncio.
+    enviou_edicao = 'upd-submit' in request.form
+    enviou_foto = 'photo-submit' in request.form
+
     if _is_admin():
-        if update_form.validate_on_submit() and update_form.submit.data:
+        if enviou_edicao and update_form.validate_on_submit():
             product.name = update_form.name.data
             product.description = update_form.description.data
             product.price = float(update_form.price.data or 0)
@@ -1421,7 +1429,7 @@ def produto_detail(product_id):
 
         # Sem este aviso, um Salvar recusado pela validação apenas re-renderiza
         # a página: a pessoa sai achando que gravou, e a alteração some.
-        if update_form.submit.data and update_form.errors:
+        if enviou_edicao and update_form.errors:
             rotulos = ', '.join(
                 getattr(update_form, campo).label.text
                 for campo in update_form.errors
@@ -1434,7 +1442,7 @@ def produto_detail(product_id):
                 'warning',
             )
 
-        if photo_form.validate_on_submit() and photo_form.submit.data:
+        if enviou_foto and photo_form.validate_on_submit():
             file = photo_form.image.data
             filename = secure_filename(file.filename)
             image_url = upload_to_s3(file, filename, folder='products')

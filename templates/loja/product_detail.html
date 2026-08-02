@@ -161,7 +161,9 @@
   <form method="post" enctype="multipart/form-data">
     {{ photo_form.hidden_tag() }}
     {{ photo_form.image(class="form-control mb-2") }}
-    <button type="submit" class="btn btn-primary" name="photo-submit">{{ photo_form.submit.label.text }}</button>
+    {# Ver o comentário em products_edit.html: sem ``value`` o botão envia
+       string vazia e o SubmitField a lê como False. #}
+    <button type="submit" class="btn btn-primary" name="photo-submit" value="1">{{ photo_form.submit.label.text }}</button>
   </form>
   {% endif %}
 </div>

@@ -104,7 +104,10 @@
       {{ field_errors(update_form.aliquota_cofins) }}
     </div>
   </div>
-  <button type="submit" class="btn btn-success" name="upd-submit">{{ update_form.submit.label.text }}</button>
+  {# O ``value`` não é decorativo: um <button name="x"> sem value envia
+     ``x=""``, e o SubmitField do WTForms lê string vazia como False. Sem ele,
+     o Salvar validava e não gravava nada — sem erro, sem aviso. #}
+  <button type="submit" class="btn btn-success" name="upd-submit" value="1">{{ update_form.submit.label.text }}</button>
 </form>
 
 <script>
