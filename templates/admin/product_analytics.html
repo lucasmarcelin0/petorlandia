@@ -1,32 +1,99 @@
 {% extends "layout.html" %}
 
 {% block page_title %}Funil do produto — PetOrlândia{% endblock %}
-{% block meta_description %}Painel interno de aquisição e ativação da PetOrlândia.{% endblock %}
+{% block meta_description %}Painel interno de aquisição, conversão e receita da PetOrlândia.{% endblock %}
 
 {% block main %}
 <section class="py-4" aria-labelledby="analytics-title">
   <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-4">
     <div>
-      <span class="text-uppercase text-muted small fw-semibold">Últimos 30 dias</span>
+      <span class="text-uppercase text-muted small fw-semibold">Aquisição, ativação e receita</span>
       <h1 id="analytics-title" class="h3 mb-1">Funil do produto</h1>
-      <p class="text-muted mb-0">Eventos próprios, sem conteúdo clínico ou texto digitado pelo usuário.</p>
+      <p class="text-muted mb-0">Do primeiro acesso ao dinheiro aprovado, sem conteúdo clínico ou texto digitado pelo usuário.</p>
+    </div>
+    <div class="btn-group" role="group" aria-label="Período do painel">
+      {% for days in (7, 30, 90) %}
+      <a href="{{ url_for('admin_routes.product_analytics_dashboard', days=days) }}"
+         class="btn btn-sm {{ 'btn-primary' if period_days == days else 'btn-outline-primary' }}">
+        {{ days }} dias
+      </a>
+      {% endfor %}
     </div>
   </div>
 
   <div class="row g-3 mb-4">
-    {% for name, count in funnel %}
-    <div class="col-6 col-lg">
+    <div class="col-6 col-xl">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <strong class="fs-3 d-block">{{ count }}</strong>
-          <span class="small text-muted">{{ name }}</span>
+          <span class="small text-muted d-block">Receita aprovada</span>
+          <strong class="fs-3 d-block text-success">{{ revenue_summary.approved_amount | currency_br }}</strong>
+          <span class="small text-muted">{{ counts.get('purchase_completed', 0) }} compra(s)</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="small text-muted d-block">Valor em pagamentos falhos</span>
+          <strong class="fs-3 d-block text-danger">{{ revenue_summary.failed_amount | currency_br }}</strong>
+          <span class="small text-muted">{{ counts.get('payment_failed', 0) }} falha(s)</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="small text-muted d-block">Assinaturas iniciadas</span>
+          <strong class="fs-3 d-block">{{ revenue_summary.subscriptions_started }}</strong>
+          <span class="small text-muted">clínica e produtos recorrentes</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="small text-muted d-block">Carrinhos recuperáveis</span>
+          <strong class="fs-3 d-block text-warning">{{ revenue_summary.abandoned }}</strong>
+          <span class="small text-muted">lembretes enviados</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="small text-muted d-block">Serviços solicitados</span>
+          <strong class="fs-3 d-block text-primary">{{ revenue_summary.services_requested }}</strong>
+          <span class="small text-muted">intenção comercial local</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    {% for title, funnel in [('Aquisição de clínicas', acquisition_funnel), ('Conversão da loja', commerce_funnel)] %}
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">{{ title }}</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th>Etapa</th><th class="text-end">Volume</th><th class="text-end">Conversão</th></tr></thead>
+              <tbody>
+                {% for label, count, conversion in funnel %}
+                <tr>
+                  <td>{{ label }}</td>
+                  <td class="text-end fw-semibold">{{ count }}</td>
+                  <td class="text-end">{{ (conversion ~ '%') if conversion is not none else 'base' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
     {% endfor %}
-  </div>
 
-  <div class="row g-4">
     <div class="col-lg-4">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
@@ -55,17 +122,18 @@
           <div class="table-responsive">
             <table class="table table-sm align-middle">
               <caption class="visually-hidden">Cinquenta eventos mais recentes do produto</caption>
-              <thead><tr><th>Evento</th><th>Página</th><th>Origem</th><th>Quando</th></tr></thead>
+              <thead><tr><th>Evento</th><th>Página</th><th>Origem</th><th>Valor</th><th>Quando</th></tr></thead>
               <tbody>
                 {% for event in recent %}
                 <tr>
                   <td><code>{{ event.event_name }}</code></td>
                   <td>{{ event.source_path or '—' }}</td>
                   <td>{{ event.utm_source or 'direto' }}</td>
+                  <td>{% if event.properties and event.properties.get('amount') is not none %}{{ event.properties.get('amount') | currency_br }}{% else %}—{% endif %}</td>
                   <td>{{ event.created_at|format_datetime_brazil('%d/%m %H:%M') }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="text-muted">Ainda sem dados.</td></tr>
+                <tr><td colspan="5" class="text-muted">Ainda sem dados.</td></tr>
                 {% endfor %}
               </tbody>
             </table>

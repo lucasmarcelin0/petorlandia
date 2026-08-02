@@ -1,4 +1,24 @@
 {% extends "layout.html" %}
+{% block page_title %}{{ product.name }} — {{ 'compra ou assinatura' if product.subscription_enabled else 'compra única' }} | PetOrlândia{% endblock %}
+{% block meta_description %}{{ ((product.description or ('Compre ' ~ product.name ~ ' com vendedor e preço informados antes do pagamento.')) | striptags | truncate(155, true, '')) }}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.name,
+    "description": (product.description or product.name),
+    "sku": (product.id|string),
+    "offers": {
+      "@type": "Offer",
+      "url": url_for('produto_detail', product_id=product.id, _external=true),
+      "priceCurrency": "BRL",
+      "price": (product.public_price_min|float),
+      "availability": ("https://schema.org/InStock" if (product.stock or 0) > 0 else "https://schema.org/OutOfStock")
+    }
+  } | tojson }}
+</script>
+{% endblock %}
 {% block main %}
 <style>
   .purchase-choice { border: 2px solid #e8edf4; border-radius: 1rem; transition: border-color .2s, box-shadow .2s; }
@@ -45,6 +65,11 @@
     <div class="col-lg-7">
       {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
       <h1 class="h2 mb-2">{{ product.name }}</h1>
+      {% set seller = product.casa_de_racao if product.casa_de_racao else product.clinica if product.clinica else none %}
+      <p class="small text-muted mb-3">
+        <i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ seller.nome if seller else 'PetOrlândia' }}</strong>
+        {% if seller and seller.cnpj %}<span class="ms-1">· CNPJ {{ seller.cnpj }}</span>{% endif %}
+      </p>
       {% if product.description %}
       {# ``pre-line`` preserva as quebras que o vendedor digitou sem abrir mão
          do escape: fórmula, indicações e modo de usar param de virar um
@@ -68,11 +93,19 @@
             <div class="price-main my-3">{{ product.public_price_min | currency_br }}</div>
             {% if product.public_price_max != product.public_price_min %}<div class="small text-muted mb-2">até {{ product.public_price_max | currency_br }}, conforme a apresentação</div>{% endif %}
             <p class="small text-muted">Um único pedido e um único pagamento. Não haverá cobranças automáticas.</p>
+            {% if current_user.is_authenticated %}
             <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form" data-skip-global-handler="true">
               {{ form.hidden_tag() }}
               {{ form.quantity(class="form-control", min="1", max="10", aria_label="Quantidade", style="max-width:78px") }}
               <button type="submit" class="btn btn-primary flex-grow-1">Adicionar ao carrinho</button>
             </form>
+            {% else %}
+            <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
+               class="btn btn-primary w-100" data-cta="product_detail_login_to_buy">
+              Entrar para comprar
+            </a>
+            <div class="small text-muted mt-2">O produto continua aqui depois do acesso.</div>
+            {% endif %}
           </section>
         </div>
 
@@ -87,8 +120,8 @@
             <div class="price-main text-success my-3">{{ product.subscription_price_min | currency_br }} <span class="fs-6 fw-normal">por ciclo</span></div>
             <p class="small mb-2"><strong>Cobrança automática recorrente.</strong> Você escolhe a frequência antes de autorizar.</p>
             <p class="small text-muted">Frete de {{ product.subscription_shipping_fee | currency_br }} por entrega. Sem fidelidade e com cancelamento digital.</p>
-            <a href="{{ url_for('racao_assinar', product_id=product.id) }}" class="btn btn-success w-100">
-              Configurar assinatura <i class="fa-solid fa-arrow-right ms-1"></i>
+            <a href="{{ url_for('racao_assinar', product_id=product.id) if current_user.is_authenticated else url_for('login_view', next=url_for('racao_assinar', product_id=product.id)) }}" class="btn btn-success w-100">
+              {{ 'Configurar assinatura' if current_user.is_authenticated else 'Entrar para assinar' }} <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
           </section>
         </div>

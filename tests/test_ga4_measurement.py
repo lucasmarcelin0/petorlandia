@@ -33,7 +33,10 @@ def test_visitante_anonimo_recebe_a_tag_sem_user_id(app, client):
 
     html = client.get("/").get_data(as_text=True)
 
-    assert "googletagmanager.com/gtag/js?id=G-TESTE123" in html
+    assert "googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId)" in html
+    assert 'data-analytics-accept' in html
+    assert 'data-analytics-reject' in html
+    assert "readChoice() !== 'granted'" in html
     assert "'anonymize_ip': true" in html
     # Sem login não há quem costurar: mandar user_id vazio sujaria o relatório.
     assert "user_id" not in html
@@ -49,6 +52,26 @@ def test_usuario_logado_envia_user_id_e_papel(app, client):
 
     assert f"'user_id': \"{user.id}\"" in html
     assert "'user_role': \"adotante\"" in html
+
+
+def test_ga4_nao_carrega_recurso_externo_antes_do_consentimento(app, client):
+    app.config["GA_MEASUREMENT_ID"] = "G-TESTE123"
+
+    html = client.get("/").get_data(as_text=True)
+
+    assert '<script async src="https://www.googletagmanager.com/' not in html
+    assert "localStorage.setItem(storageKey, value)" in html
+    assert "setChoice('denied')" in html
+    assert 'recusar não limita nenhuma função' in html
+
+
+def test_politica_explicita_analytics_opcionais(app, client):
+    html = client.get('/privacy').get_data(as_text=True)
+    texto = ' '.join(html.split())
+
+    assert 'Cookies e analytics' in texto
+    assert 'só é carregado depois de uma escolha afirmativa' in texto
+    assert 'Não enviamos ao Google nome, e-mail, telefone nem conteúdo clínico' in texto
 
 
 def test_user_id_nunca_carrega_email_ou_nome(app, client):

@@ -85,23 +85,104 @@ def product_analytics_dashboard():
     if not _is_admin():
         abort(403)
 
-    since = now_in_brazil() - timedelta(days=30)
-    funnel_names = (
+    period_days = request.args.get('days', 30, type=int)
+    if period_days not in {7, 30, 90}:
+        period_days = 30
+    since = now_in_brazil() - timedelta(days=period_days)
+
+    event_names = (
         'landing_viewed',
-        'cta_criar_conta',
         'signup_completed',
         'onboarding_viewed',
         'onboarding_progress_viewed',
         'pricing_viewed',
+        'catalog_viewed',
+        'add_to_cart',
+        'checkout_started',
+        'checkout_abandoned',
+        'purchase_completed',
+        'payment_failed',
+        'subscription_started',
+        'trial_converted',
+        'service_requested',
     )
     rows = (
         db.session.query(ProductEvent.event_name, func.count(ProductEvent.id))
         .filter(ProductEvent.created_at >= since)
-        .filter(ProductEvent.event_name.in_(funnel_names))
+        .filter(ProductEvent.event_name.in_(event_names))
         .group_by(ProductEvent.event_name)
         .all()
     )
     counts = dict(rows)
+
+    def rate(outcome, base):
+        denominator = counts.get(base, 0)
+        if not denominator:
+            return None
+        return round(counts.get(outcome, 0) * 100 / denominator, 1)
+
+    acquisition_funnel = (
+        ('Visitas à página inicial', counts.get('landing_viewed', 0), None),
+        (
+            'Cadastros concluídos',
+            counts.get('signup_completed', 0),
+            rate('signup_completed', 'landing_viewed'),
+        ),
+        (
+            'Onboardings iniciados',
+            counts.get('onboarding_viewed', 0),
+            rate('onboarding_viewed', 'signup_completed'),
+        ),
+        (
+            'Trials convertidos',
+            counts.get('trial_converted', 0),
+            rate('trial_converted', 'signup_completed'),
+        ),
+    )
+    commerce_funnel = (
+        ('Visitas à loja', counts.get('catalog_viewed', 0), None),
+        (
+            'Adições ao carrinho',
+            counts.get('add_to_cart', 0),
+            rate('add_to_cart', 'catalog_viewed'),
+        ),
+        (
+            'Checkouts iniciados',
+            counts.get('checkout_started', 0),
+            rate('checkout_started', 'add_to_cart'),
+        ),
+        (
+            'Compras aprovadas',
+            counts.get('purchase_completed', 0),
+            rate('purchase_completed', 'checkout_started'),
+        ),
+    )
+
+    revenue_events = (
+        ProductEvent.query
+        .filter(ProductEvent.created_at >= since)
+        .filter(ProductEvent.event_name.in_(('purchase_completed', 'payment_failed')))
+        .all()
+    )
+
+    def amount_for(event_name):
+        total = 0.0
+        for event in revenue_events:
+            if event.event_name != event_name:
+                continue
+            try:
+                total += float((event.properties or {}).get('amount') or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    revenue_summary = {
+        'approved_amount': amount_for('purchase_completed'),
+        'failed_amount': amount_for('payment_failed'),
+        'abandoned': counts.get('checkout_abandoned', 0),
+        'subscriptions_started': counts.get('subscription_started', 0),
+        'services_requested': counts.get('service_requested', 0),
+    }
     sources = (
         db.session.query(
             func.coalesce(ProductEvent.utm_source, 'direto'),
@@ -121,10 +202,14 @@ def product_analytics_dashboard():
     )
     return render_template(
         'admin/product_analytics.html',
-        funnel=[(name, counts.get(name, 0)) for name in funnel_names],
+        acquisition_funnel=acquisition_funnel,
+        commerce_funnel=commerce_funnel,
+        revenue_summary=revenue_summary,
+        counts=counts,
         sources=sources,
         recent=recent,
         since=since,
+        period_days=period_days,
     )
 
 
