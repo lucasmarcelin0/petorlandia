@@ -68,6 +68,16 @@ def _admin_image_upload_field(label):
         },
     )
 
+
+def _admin_image_src(value):
+    """Turn legacy relative upload paths into stable URLs inside /painel/."""
+    image_path = str(value or '').strip()
+    if not image_path or image_path.startswith(('http://', 'https://', 'data:', '/')):
+        return image_path
+    if image_path.startswith('static/'):
+        image_path = image_path[len('static/'):]
+    return url_for('static', filename=image_path)
+
 def _is_admin():
     """Return True if the current user has the admin role."""
     return current_user.is_authenticated and current_user.role == "admin"
@@ -656,7 +666,7 @@ class UserAdminView(MyModelView):
             f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'profile_photo': lambda v, c, m, p: Markup(
-            f'<img src="{m.profile_photo}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100">'
         ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
@@ -696,7 +706,7 @@ class UserAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.profile_photo:
             form.profile_photo_upload.description = Markup(
-                f'<img src="{obj.profile_photo}" alt="Foto atual" '
+                f'<img src="{escape(_admin_image_src(obj.profile_photo))}" alt="Foto atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -877,7 +887,7 @@ class ClinicaAdmin(MyModelView):
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(
-            f'<img src="{m.logotipo}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.logotipo))}" width="100">'
         ) if m.logotipo else ''
     }
 
@@ -894,7 +904,7 @@ class ClinicaAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
-                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -1099,14 +1109,14 @@ class AnimalAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image}" alt="Imagem atual" '
+                f'<img src="{escape(_admin_image_src(obj.image))}" alt="Imagem atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
 
     column_formatters = {
         'image': lambda v, c, m, p: Markup(
-            f'<img src="{m.image}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.image))}" width="100">'
         ) if m.image else '',
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
@@ -1180,7 +1190,7 @@ def _product_admin_image(view, context, model, name):
             '<i class="fa-solid fa-image"></i></span>'
         )
     return Markup(
-        f'<img class="product-admin-image" src="{escape(model.image_url)}" '
+        f'<img class="product-admin-image" src="{escape(_admin_image_src(model.image_url))}" '
         f'alt="Foto de {escape(model.name)}" loading="lazy">'
     )
 
@@ -1365,7 +1375,7 @@ class ProductAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image_url:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image_url}" alt="Imagem atual" '
+                f'<img src="{escape(_admin_image_src(obj.image_url))}" alt="Imagem atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -1476,7 +1486,7 @@ class CasaDeRacaoAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
-                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
