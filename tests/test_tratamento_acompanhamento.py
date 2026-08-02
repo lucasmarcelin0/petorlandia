@@ -254,6 +254,30 @@ def test_tutor_acessa_pagina_e_marca_acoes(app):
         db.drop_all()
 
 
+def test_tratamento_sem_doses_previstas_exibe_progresso_zero(app):
+    """Cuidados livres não podem causar comparação de ``None`` no template."""
+    bloco_id, _ = _setup_bloco(app)
+    tratamento_id = _ativar(app, bloco_id)
+
+    with app.app_context():
+        acompanhamento = db.session.get(TratamentoAcompanhamento, tratamento_id)
+        for item in acompanhamento.itens:
+            AdministracaoRegistro.query.filter_by(item_id=item.id).delete()
+            item.modo = 'livre'
+        db.session.commit()
+
+    client = app.test_client()
+    with client:
+        _login(client, 'tutor@example.com', 'pw2')
+        response = client.get(f'/tratamento/{tratamento_id}')
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="overall-percent">0</span>%' in html
+    with app.app_context():
+        db.drop_all()
+
+
 def test_acoes_ajax_retornam_progresso_sem_redirecionar(app):
     bloco_id, _ = _setup_bloco(app)
     with app.app_context():
