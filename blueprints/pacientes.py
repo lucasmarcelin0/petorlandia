@@ -2,6 +2,7 @@
 import qrcode
 from flask import Blueprint
 import os, re, secrets, unicodedata, uuid
+from urllib.parse import quote
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -42,6 +43,8 @@ from models import (
 )
 from models.usuarios import build_placeholder_email
 from services.animal_search import search_animals
+from services.pet_growth import build_pet_opportunities
+from services.product_analytics import track_event
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased, joinedload, selectinload
 from time_utils import BR_TZ, utcnow
@@ -917,12 +920,24 @@ def ficha_animal(animal_id):
 
     events_url = url_for('ficha_animal', animal_id=animal.id, section='events')
     history_url = url_for('ficha_animal', animal_id=animal.id, section='history')
+    pet_opportunities = []
+    health_card_whatsapp_url = None
+    if animal.user_id == current_user.id:
+        pet_opportunities = build_pet_opportunities(animal)
+        if animal.public_token:
+            card_url = url_for(
+                'carteirinha_publica', token=animal.public_token, _external=True
+            )
+            message = f'Carteirinha digital de {animal.name}: {card_url}'
+            health_card_whatsapp_url = f'https://wa.me/?text={quote(message)}'
     return render_template(
         'animais/ficha_animal.html',
         animal=animal,
         tutor=tutor,
         events_url=events_url,
         history_url=history_url,
+        pet_opportunities=pet_opportunities,
+        health_card_whatsapp_url=health_card_whatsapp_url,
     )
 
 
@@ -3126,6 +3141,7 @@ def carteirinha_ativar(animal_id):
     if not animal.public_token:
         animal.public_token = secrets.token_urlsafe(20)[:32]
         db.session.commit()
+        track_event('health_card_activated', feature='health_card')
     flash('Carteirinha digital ativada! Compartilhe o link com quem cuida do seu pet.', 'success')
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -3139,6 +3155,7 @@ def carteirinha_desativar(animal_id):
     if animal.public_token:
         animal.public_token = None
         db.session.commit()
+        track_event('health_card_deactivated', feature='health_card')
     flash('Carteirinha digital desativada. O link antigo deixou de funcionar.', 'info')
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -3234,6 +3251,8 @@ def carteirinha_publica(token):
     if animal.owner and animal.owner.name:
         tutor_nome = animal.owner.name.split()[0]
 
+    track_event('health_card_viewed', feature='health_card', channel='public')
+
     return render_template(
         'animais/carteirinha_publica.html',
         animal=animal,
@@ -3244,6 +3263,7 @@ def carteirinha_publica(token):
         ultima_vermifugacao=ultima_vermifugacao,
         tutor_nome=tutor_nome,
         hoje=date.today(),
+        signup_url=url_for('register', audience='tutor'),
     )
 
 

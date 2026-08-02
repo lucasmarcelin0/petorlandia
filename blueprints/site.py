@@ -957,6 +957,7 @@ def waitlist_signup():
 #: atributos data-cta dos templates.
 CTA_EVENT_PREFIXES = (
     'cta_', 'home_', 'tutor_', 'student_', 'onboarding_', 'login_', 'pricing_', 'clinic_', 'store_',
+    'health_', 'recommendation_', 'value_',
 )
 
 

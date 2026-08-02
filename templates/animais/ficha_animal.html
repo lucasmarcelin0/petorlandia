@@ -60,6 +60,11 @@
   </div>
 
 
+  {% if animal.user_id == current_user.id %}
+    {% include 'partials/_pet_opportunities.html' %}
+  {% endif %}
+
+
 
     <!-- TABS -->
     <ul class="nav nav-tabs" id="animalTabs" role="tablist">
@@ -129,9 +134,16 @@
               <i class="bi bi-box-arrow-up-right me-1"></i> Abrir carteirinha
             </a>
             <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-cta="health_card_copy"
                     onclick="navigator.clipboard.writeText('{{ url_for('carteirinha_publica', token=animal.public_token, _external=True) }}').then(() => this.innerText='Link copiado!')">
               Copiar link
             </button>
+            {% if health_card_whatsapp_url %}
+            <a href="{{ health_card_whatsapp_url }}" target="_blank" rel="noopener"
+               class="btn btn-sm btn-outline-success" data-cta="health_card_share_whatsapp">
+              <i class="bi bi-whatsapp me-1"></i>WhatsApp
+            </a>
+            {% endif %}
             <form method="POST" action="{{ url_for('carteirinha_desativar', animal_id=animal.id) }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-sm btn-outline-danger">Desativar</button>
@@ -146,6 +158,9 @@
           </form>
           {% endif %}
         </div>
+        {% if animal.public_token %}
+        <p class="small text-muted mt-3 mb-0"><i class="bi bi-eye me-1"></i>Quem tiver o link poderá ver dados básicos, vacinas e vermifugações. Telefone, endereço e anotações clínicas não aparecem. Desative o link a qualquer momento.</p>
+        {% endif %}
       </div>
     </div>
     {% endif %}

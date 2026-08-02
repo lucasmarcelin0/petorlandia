@@ -295,6 +295,7 @@ def inject_veterinarian_membership_context():
             is_active_veterinarian=False,
             has_veterinarian_profile_flag=False,
             current_veterinarian_membership=None,
+            is_veterinarian_continuity_mode=False,
         )
 
     has_profile = has_veterinarian_profile(current_user)
@@ -307,6 +308,9 @@ def inject_veterinarian_membership_context():
         has_veterinarian_profile_flag=has_profile,
         has_professional_access=has_professional_access(current_user),
         current_veterinarian_membership=membership,
+        is_veterinarian_continuity_mode=bool(
+            has_profile and membership and not membership.is_active()
+        ),
     )
 
 

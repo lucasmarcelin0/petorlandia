@@ -1,0 +1,22 @@
+{% if pet_opportunities %}
+<section class="card border-0 shadow-sm mb-4" aria-labelledby="pet-next-title">
+  <div class="card-body p-4">
+    <div class="d-flex align-items-start gap-3 mb-3">
+      <span class="rounded-circle bg-primary-subtle text-primary p-2"><i class="bi bi-stars"></i></span>
+      <div><h3 id="pet-next-title" class="h5 mb-1">Próximos cuidados de {{ animal.name }}</h3><p class="text-muted small mb-0">Sugestões explicáveis a partir dos registros — você decide o que faz sentido.</p></div>
+    </div>
+    <div class="row g-3">
+      {% for opportunity in pet_opportunities %}
+      <div class="col-md-{{ 12 if pet_opportunities|length == 1 else 6 }} col-lg-4">
+        <article class="h-100 border rounded-3 p-3">
+          <i class="bi {{ opportunity.icon }} text-{{ opportunity.tone }} fs-4" aria-hidden="true"></i>
+          <h4 class="h6 mt-2">{{ opportunity.title }}</h4>
+          <p class="small text-muted">{{ opportunity.description }}</p>
+          <a href="{{ opportunity.url }}" class="btn btn-sm btn-outline-{{ opportunity.tone }}" data-cta="{{ opportunity.event }}">{{ opportunity.cta }}</a>
+        </article>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}

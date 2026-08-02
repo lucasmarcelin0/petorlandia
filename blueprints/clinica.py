@@ -41,6 +41,8 @@ from models import (
 from repositories import AppointmentRepository
 from services.fiscal.nfse_service import create_nfse_draft_from_orcamento
 from services.mercadopago_oauth import MercadoPagoOAuthError, build_authorization_start
+from services.clinic_value import ALLOWED_PERIODS, build_clinic_value_report
+from services.product_analytics import track_event
 from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload, selectinload
 from template_filters import normalize_phone
@@ -509,6 +511,39 @@ def clinic_mercadopago_direct_save(clinica_id):
     db.session.commit()
     flash('Credenciais do Mercado Pago salvas. A clínica já pode receber pagamentos.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
+
+
+@bp.route("/clinica/<int:clinica_id>/valor")
+@login_required
+def clinic_value(clinica_id):
+    """Show value recorded in PetOrlândia without claiming causal ROI."""
+
+    if _is_admin():
+        clinica = Clinica.query.get_or_404(clinica_id)
+    else:
+        clinica = (
+            clinicas_do_usuario()
+            .filter(Clinica.id == clinica_id)
+            .first_or_404()
+        )
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+
+    period_days = request.args.get("periodo", 30, type=int)
+    if period_days not in ALLOWED_PERIODS:
+        period_days = 30
+    report = build_clinic_value_report(clinica.id, period_days)
+    track_event(
+        "clinic_value_viewed",
+        feature="clinic_value",
+        stage=str(period_days),
+    )
+    return render_template(
+        "clinica/clinic_value.html",
+        clinica=clinica,
+        report=report,
+        allowed_periods=ALLOWED_PERIODS,
+    )
 
 
 @bp.route("/clinica/<int:clinica_id>", methods=["GET", "POST"])

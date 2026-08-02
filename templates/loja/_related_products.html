@@ -1,0 +1,21 @@
+{% if related_products %}
+<section class="mt-5" aria-labelledby="related-products-title">
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <div><h2 id="related-products-title" class="h5 mb-1">{{ related_title|default('Também pode ser útil') }}</h2><p class="text-muted small mb-0">Sugestões do catálogo disponível; compare livremente antes de decidir.</p></div>
+    <a href="{{ url_for('loja') }}" class="small text-decoration-none">Ver toda a loja</a>
+  </div>
+  <div class="row g-3">
+    {% for item in related_products %}
+    <div class="col-6 col-lg-3"><article class="card h-100 border rounded-3 overflow-hidden">
+      {% if item.image_url %}<img src="{{ item.image_url }}" class="card-img-top" alt="{{ item.name }}" loading="lazy" style="aspect-ratio: 4/3; object-fit:cover;">{% endif %}
+      <div class="card-body d-flex flex-column p-3">
+        <div class="mb-2"><span class="badge {{ 'text-bg-success' if item.subscription_enabled else 'text-bg-primary' }}">{{ 'Compra ou assinatura' if item.subscription_enabled else 'Compra única' }}</span></div>
+        <h3 class="h6">{{ item.name }}</h3>
+        <div class="fw-bold mt-auto">a partir de {{ item.public_price_min|currency_br }}</div>
+        <a href="{{ url_for('produto_detail', product_id=item.id) }}" class="btn btn-sm btn-outline-primary mt-3" data-cta="store_related_product">Ver opções</a>
+      </div>
+    </article></div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
