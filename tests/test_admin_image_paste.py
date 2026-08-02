@@ -52,6 +52,22 @@ def test_every_admin_image_field_uses_the_shared_paste_contract(app):
         assert field.kwargs['validators']
 
 
+def test_admin_image_urls_are_stable_for_legacy_relative_paths(app):
+    with app.test_request_context('/'):
+        assert admin_module._admin_image_src('uploads/products/racao.png') == (
+            '/static/uploads/products/racao.png'
+        )
+        assert admin_module._admin_image_src('static/uploads/products/racao.png') == (
+            '/static/uploads/products/racao.png'
+        )
+        assert admin_module._admin_image_src('/static/uploads/products/racao.png') == (
+            '/static/uploads/products/racao.png'
+        )
+        assert admin_module._admin_image_src('https://cdn.test/racao.png') == (
+            'https://cdn.test/racao.png'
+        )
+
+
 def test_admin_create_pages_load_the_global_image_paste_experience(app, client):
     with app.app_context():
         admin_id, _ = _create_admin_and_store()
