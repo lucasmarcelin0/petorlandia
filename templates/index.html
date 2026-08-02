@@ -31,7 +31,13 @@
                 ('health_plan', 'home_shortcut_health_plan', '❤️ Plano de Saúde Pet', 'plano_saude_overview', 'Mostra detalhes e contratação do plano de saúde.'),
                 ('animals', 'home_shortcut_animals', '📋 Ver todos os animais', 'list_animals', 'Mostra a lista completa para visualizar e filtrar pets.')
             ] %}
-            {% for key, flag_key, label, endpoint, button_class, tooltip in shortcut_items %}
+            {% for item in shortcut_items %}
+            {% set key = item[0] %}
+            {% set flag_key = item[1] %}
+            {% set label = item[2] %}
+            {% set endpoint = item[3] %}
+            {% set button_class = item[4] %}
+            {% set tooltip = item[5] %}
             {% if home_shortcuts[key] or is_admin %}
             <div class="d-flex align-items-center gap-1">
                 {% if home_shortcuts[key] %}

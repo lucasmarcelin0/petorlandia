@@ -24,50 +24,9 @@
         {% endif %}
 
         <div class="mt-auto">
-          {% if product.subscription_enabled %}
-          <div class="mb-1">
-            <span class="badge rounded-pill text-bg-success"><i class="fa-solid fa-arrows-rotate me-1"></i>Compra + assinatura</span>
-          </div>
-          {% else %}
-          <div class="mb-1">
-            <span class="badge rounded-pill text-bg-light border"><i class="fa-solid fa-bag-shopping me-1"></i>Compra única</span>
-          </div>
-          {% endif %}
           <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</span>
           {% if product.subscription_enabled %}
           <div class="small text-success fw-semibold mb-1">ou assinatura desde {{ product.subscription_price_min | currency_br }} por ciclo</div>
-          {% endif %}
-
-          {% if product.clinica %}
-          <div class="product-seller-row mb-1">
-            <a href="{{ url_for('loja', vendedor='c_' ~ product.clinica.id) }}"
-               class="badge rounded-pill text-decoration-none product-seller-badge product-seller-badge--clinic"
-               title="{{ product.clinica.nome }}"
-               style="background:#e8f0fe;color:#3d5bd6;font-weight:600;font-size:.78rem;">
-              {% if product.clinica.logo_url %}
-              <img src="{{ product.clinica.logo_url }}" alt=""
-                   class="rounded-circle product-seller-icon" style="width:14px;height:14px;object-fit:cover;">
-              {% else %}
-              <i class="fa-solid fa-clinic-medical product-seller-icon"></i>
-              {% endif %}
-              <span class="product-seller-name" style="display:inline-block;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">{{ product.clinica.nome }}</span>
-            </a>
-          </div>
-          {% elif product.casa_de_racao %}
-          <div class="product-seller-row mb-1">
-            <a href="{{ url_for('loja', vendedor='r_' ~ product.casa_de_racao.id) }}"
-               class="badge rounded-pill text-decoration-none product-seller-badge product-seller-badge--store"
-               title="{{ product.casa_de_racao.nome }}"
-               style="background:#e8f5e9;color:#2e7d32;font-weight:600;font-size:.78rem;">
-              {% if product.casa_de_racao.logo_url %}
-              <img src="{{ product.casa_de_racao.logo_url }}" alt=""
-                   class="rounded-circle product-seller-icon" style="width:14px;height:14px;object-fit:cover;">
-              {% else %}
-              <i class="fa-solid fa-seedling product-seller-icon"></i>
-              {% endif %}
-              <span class="product-seller-name" style="display:inline-block;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">{{ product.casa_de_racao.nome }}</span>
-            </a>
-          </div>
           {% endif %}
 
           <div class="text-muted small mb-2"><i class="fa-solid fa-truck-fast me-1"></i>entrega rápida</div>
