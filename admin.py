@@ -1275,7 +1275,7 @@ def _product_admin_seller(view, context, model, name):
     elif model.clinica:
         icon, seller = 'fa-house-medical', model.clinica.nome
     else:
-        icon, seller = 'fa-circle-exclamation', 'Sem vendedor'
+        icon, seller = 'fa-shield-paw', 'PetOrlândia (plataforma)'
     return Markup(
         f'<span class="product-seller"><i class="fa-solid {icon}"></i>{escape(seller)}</span>'
     )
@@ -1315,8 +1315,8 @@ class ProductAdmin(MyModelView):
         'stock': 'Estoque',
         'status': 'Status',
         'seller': 'Vendedor',
-        'casa_de_racao': 'Casa de ração',
-        'clinica': 'Clínica',
+        'casa_de_racao': 'Casa de ração parceira',
+        'clinica': 'Clínica parceira',
         'category': 'Categoria',
         'subscription_enabled': 'Modalidade de venda',
         'subscription_discount_percent': 'Desconto para assinatura (%)',
@@ -1325,8 +1325,16 @@ class ProductAdmin(MyModelView):
     column_descriptions = {
         'subscription_enabled': 'Indica se o cliente pode comprar uma vez ou também contratar cobrança recorrente.',
         'price': 'Preço público exibido ao cliente e valor-base informado pelo vendedor.',
+        'clinica': 'Deixe em branco quando o produto for vendido pela própria PetOrlândia. Selecione apenas para uma clínica parceira.',
+        'casa_de_racao': 'Deixe em branco quando o produto for vendido pela própria PetOrlândia. Selecione apenas para uma casa de ração parceira.',
     }
     form_args = {
+        'clinica': {
+            'description': 'Produto da PetOrlândia: deixe em branco. Selecione apenas quando uma clínica parceira for a vendedora e receber o pagamento.',
+        },
+        'casa_de_racao': {
+            'description': 'Produto da PetOrlândia: deixe em branco. Selecione apenas quando uma casa de ração parceira for a vendedora e receber o pagamento.',
+        },
         'subscription_enabled': {
             'label': 'Permitir assinatura recorrente',
             'description': 'Ative somente se o vendedor conseguir repor e entregar este produto em todos os ciclos. A compra única continuará disponível.',
@@ -1364,6 +1372,11 @@ class ProductAdmin(MyModelView):
         return super().render(template, **kwargs)
 
     def on_model_change(self, form, model, is_created):
+        if model.clinica_id and model.casa_de_racao_id:
+            raise ValueError(
+                'Escolha somente um vendedor parceiro: clínica ou casa de ração. '
+                'Para produtos da PetOrlândia, deixe os dois campos em branco.'
+            )
         if form.image_upload.data:
             file = form.image_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"

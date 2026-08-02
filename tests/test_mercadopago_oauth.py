@@ -167,6 +167,144 @@ def test_checkout_uses_connected_store_token_and_marketplace_fee(app, client, mo
         assert captured["payload"]["marketplace_fee"] == 11.11
 
 
+def test_checkout_platform_product_uses_platform_payment_flow(app, client, monkeypatch):
+    """Produto sem parceiro pertence à PetOrlândia e não exige OAuth de loja."""
+    app.config.update(
+        MERCADOPAGO_ACCESS_TOKEN="platform-token",
+        WTF_CSRF_ENABLED=False,
+    )
+    captured = {}
+
+    class FakePreference:
+        def create(self, payload):
+            captured["payload"] = payload
+            return {
+                "status": 201,
+                "response": {"id": "pref-platform", "init_point": "https://pay.test/platform"},
+            }
+
+    class FakeSdk:
+        def preference(self):
+            return FakePreference()
+
+    with app.app_context():
+        addr = Endereco(cep="11111-000", rua="Rua Tutor", cidade="Cidade", estado="SP")
+        buyer = User(name="Comprador Plataforma", email="plataforma@example.com")
+        buyer.set_password("x")
+        buyer.endereco = addr
+        product = Product(
+            name="Produto PetOrlândia",
+            price=50,
+            stock=5,
+            status="active",
+            clinica_id=None,
+            casa_de_racao_id=None,
+        )
+        db.session.add_all([addr, buyer, product])
+        db.session.flush()
+        order = Order(user_id=buyer.id)
+        db.session.add(order)
+        db.session.flush()
+        db.session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            quantity=1,
+            unit_price=product.preco_publico,
+        ))
+        db.session.commit()
+
+        _login(monkeypatch, buyer)
+        runtime_app = sys.modules["petorlandia_app"]
+        monkeypatch.setattr(runtime_app, "_get_current_order", lambda: order)
+
+        def fake_mp_sdk(token=None):
+            captured["explicit_token"] = token
+            return FakeSdk()
+
+        monkeypatch.setattr(runtime_app, "mp_sdk", fake_mp_sdk)
+        monkeypatch.setattr(
+            runtime_app,
+            "_mercadopago_notification_url",
+            lambda: "https://example.test/notificacoes",
+        )
+
+        class TestCheckoutForm(runtime_app.CheckoutForm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.address_id.choices = [(0, "addr")]
+
+        monkeypatch.setattr(runtime_app, "CheckoutForm", TestCheckoutForm)
+
+        resp = client.post("/checkout", data={"address_id": 0}, headers={"Accept": "text/html"})
+
+        assert resp.status_code == 302, resp.get_data(as_text=True)
+        assert resp.headers["Location"] == "https://pay.test/platform"
+        assert captured["explicit_token"] is None
+        assert "marketplace_fee" not in captured["payload"]
+
+
+def test_checkout_disconnected_partner_remains_blocked(app, client, monkeypatch):
+    """A correção da conta própria não pode liberar cobrança de parceiro sem OAuth."""
+    app.config.update(
+        MERCADOPAGO_ACCESS_TOKEN="platform-token",
+        WTF_CSRF_ENABLED=False,
+    )
+
+    with app.app_context():
+        addr = Endereco(cep="11111-000", rua="Rua Tutor", cidade="Cidade", estado="SP")
+        buyer = User(name="Comprador Parceiro", email="parceiro@example.com")
+        buyer.set_password("x")
+        buyer.endereco = addr
+        _owner, casa = _create_owner_and_store()
+        product = Product(
+            name="Produto de parceiro",
+            price=50,
+            stock=5,
+            status="active",
+            casa_de_racao_id=casa.id,
+        )
+        db.session.add_all([addr, buyer, product])
+        db.session.flush()
+        order = Order(user_id=buyer.id)
+        db.session.add(order)
+        db.session.flush()
+        db.session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            quantity=1,
+            unit_price=product.preco_publico,
+        ))
+        db.session.commit()
+
+        _login(monkeypatch, buyer)
+        runtime_app = sys.modules["petorlandia_app"]
+        monkeypatch.setattr(runtime_app, "_get_current_order", lambda: order)
+        monkeypatch.setattr(
+            runtime_app,
+            "mp_sdk",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("não deve criar checkout para parceiro desconectado")
+            ),
+        )
+
+        class TestCheckoutForm(runtime_app.CheckoutForm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.address_id.choices = [(0, "addr")]
+
+        monkeypatch.setattr(runtime_app, "CheckoutForm", TestCheckoutForm)
+
+        resp = client.post("/checkout", data={"address_id": 0}, headers={"Accept": "text/html"})
+
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/carrinho")
+        with client.session_transaction() as session_data:
+            messages = [message for _category, message in session_data.get("_flashes", [])]
+        assert any("configuração de recebimento" in message for message in messages)
+
+
 def test_checkout_reprices_stale_cart_items(app, client, monkeypatch):
     """Carrinhos abertos antes de mudança de preço são reprecificados no checkout."""
     monkeypatch.setenv("FISCAL_MASTER_KEY", "test-master-key")
