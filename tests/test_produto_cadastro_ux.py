@@ -8,7 +8,7 @@ o vendedor não conseguia saber se o que ele fez chegou ao banco.
 from decimal import Decimal
 
 from extensions import db
-from models import Product, User
+from models import OrderItem, Product, User
 
 
 def _login(client, user_id: int) -> None:
@@ -94,6 +94,34 @@ def test_botao_de_salvar_carrega_value(app, client):
     body = client.get(f'/produto/{product_id}').data.decode()
     assert 'name="upd-submit" value="1"' in body
     assert 'name="photo-submit" value="1"' in body
+
+
+def test_adicionar_produto_via_ajax_retorna_item_do_carrinho(app, client):
+    """A loja atualiza o carrinho sem recarregar e não pode responder 500."""
+    with app.app_context():
+        admin = _admin()
+        product = _product()
+        admin_id, product_id = admin.id, product.id
+
+    _login(client, admin_id)
+    response = client.post(
+        f'/carrinho/adicionar/{product_id}',
+        data={'quantity': '1'},
+        headers={
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['item_quantity'] == 1
+    assert payload['order_quantity'] == 1
+    with app.app_context():
+        item = db.session.get(OrderItem, payload['item_id'])
+        assert item is not None
+        assert item.product_id == product_id
 
 
 # ------------------------------------------------- formato brasileiro de número
