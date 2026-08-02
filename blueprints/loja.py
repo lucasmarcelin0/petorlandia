@@ -1700,7 +1700,7 @@ def adicionar_carrinho(product_id):
         qty = form.quantity.data or 1
 
     order = _ensure_current_order()
-    _upsert_cart_item(order, product, qty)
+    item = _upsert_cart_item(order, product, qty)
     db.session.commit()
     track_event(
         'add_to_cart',
