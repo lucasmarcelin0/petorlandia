@@ -244,6 +244,10 @@ class ReferralSignup(db.Model):
         index=True,
     )
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    #: Quando o indicador foi creditado com o mês grátis. Só acontece se e
+    #: quando o indicado paga a primeira mensalidade — indicação que não vira
+    #: cliente não gera custo.
+    rewarded_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     code = db.relationship(
         "ReferralCode", backref=db.backref("signups", lazy="selectin")

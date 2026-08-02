@@ -324,6 +324,9 @@
                 <i class="fas fa-box me-2 text-warning"></i> Minhas compras</a></li>
             <li><a class="dropdown-item" href="{{ url_for('racao_minhas_assinaturas') }}">
                 <i class="fas fa-rotate me-2 text-success"></i> Minhas assinaturas</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('petsitter_routes.indicacao') }}"
+                   data-cta="nav_indicacao">
+                <i class="fas fa-gift me-2 text-danger"></i> Indique e ganhe</a></li>
             {% if current_user.role == 'parceiro' %}
             <li><a class="dropdown-item" href="{{ url_for('parceiro_dashboard') }}">
                 <i class="fa-solid fa-handshake me-2 text-primary"></i> Área do parceiro</a></li>

@@ -75,18 +75,37 @@ def test_public_shell_keeps_shared_css_and_bootstrap_available_synchronously(
 
 def test_public_clinic_stat_counts_only_founder_validated_clinics(app):
     with app.app_context():
-        real = Clinica(nome='Clínica real', status='ativa')
+        # O piso da métrica é 5: são precisas cinco clínicas validadas para o
+        # número aparecer. A sexta, não validada, não pode entrar na conta.
+        reais = [
+            Clinica(nome=f'Clínica real {i}', status='ativa')
+            for i in range(5)
+        ]
         test = Clinica(nome='Clínica de teste', status='ativa')
-        db.session.add_all([real, test])
+        db.session.add_all([*reais, test])
+        db.session.commit()
+
+        app.config['PUBLIC_STATS_CLINIC_IDS'] = tuple(c.id for c in reais)
+        reset_cache()
+        clinic_stats = [stat for stat in public_stats() if 'clínica' in stat.label]
+
+    assert len(clinic_stats) == 1
+    assert clinic_stats[0].value == 5
+    assert clinic_stats[0].label == 'clínicas usando o sistema'
+
+
+def test_public_clinic_stat_hidden_while_below_threshold(app):
+    """Uma clínica só não é prova social — o número some até somar credibilidade."""
+    with app.app_context():
+        real = Clinica(nome='Clínica pioneira', status='ativa')
+        db.session.add(real)
         db.session.commit()
 
         app.config['PUBLIC_STATS_CLINIC_IDS'] = (real.id,)
         reset_cache()
         clinic_stats = [stat for stat in public_stats() if 'clínica' in stat.label]
 
-    assert len(clinic_stats) == 1
-    assert clinic_stats[0].value == 1
-    assert clinic_stats[0].label == 'clínica usando o sistema'
+    assert clinic_stats == []
 
 
 def test_public_clinic_stat_fails_closed_without_validated_ids(app):

@@ -626,6 +626,12 @@ class VeterinarianMembership(db.Model):
     #: provedor confirma que a renovação ficou ativa.
     preapproval_id = db.Column(db.String(64), nullable=True)
     payment_method_set_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Primeira cobrança efetivamente paga — a conversão da avaliação. Fica
+    #: separada de ``conversion_processed_at`` porque o efeito colateral da
+    #: conversão (evento de funil e crédito de indicação) precisa acontecer
+    #: fora da transação que gravou a cobrança, e exatamente uma vez.
+    converted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    conversion_processed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     veterinario = db.relationship(
         'Veterinario',
@@ -782,6 +788,7 @@ def _create_veterinarian_membership(mapper, connection, target):
         return
 
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+    trial_days += _referral_trial_bonus_days(connection, target.user_id)
     now = utcnow()
     membership_row = connection.execute(
         VeterinarianMembership.__table__.select().where(
@@ -796,6 +803,29 @@ def _create_veterinarian_membership(mapper, connection, target):
                 trial_ends_at=now + timedelta(days=trial_days),
             )
         )
+
+
+def _referral_trial_bonus_days(connection, user_id) -> int:
+    """Dias extras de avaliação para quem entrou por um link de indicação.
+
+    A avaliação nasce aqui, então é aqui que o bônus precisa ser somado. A
+    consulta usa a mesma ``connection`` do insert: estamos dentro de um hook
+    ``after_insert`` e a sessão ORM não pode emitir consultas próprias.
+    """
+    if not user_id:
+        return 0
+    try:
+        from models.petsitter import ReferralSignup
+        from services.membership_conversion import REFERRED_TRIAL_BONUS_DAYS
+
+        row = connection.execute(
+            ReferralSignup.__table__.select().where(
+                ReferralSignup.referred_user_id == user_id
+            )
+        ).first()
+        return REFERRED_TRIAL_BONUS_DAYS if row is not None else 0
+    except Exception:  # noqa: BLE001 — bônus nunca impede criar a assinatura
+        return 0
 
 
 event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)

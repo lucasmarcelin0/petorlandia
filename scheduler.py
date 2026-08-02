@@ -16,9 +16,11 @@ from app import (
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
     _run_veterinarian_billing_reconciliation_job,
+    enviar_lembretes_carrinho_abandonado,
     enviar_lembretes_fim_trial,
     enviar_lembretes_recebimento,
     enviar_lembretes_tratamento,
+    enviar_winback_pos_trial,
     verificar_datas_proximas,
 )
 from scripts.sync_pmo_full_status import run_pmo_full_sync
@@ -219,6 +221,10 @@ def main() -> None:
         ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
         ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
         ('lembretes-fim-trial', enviar_lembretes_fim_trial, 11, 0),
+        # Recuperação de receita: quem terminou a avaliação sem assinar e quem
+        # montou carrinho e não pagou.
+        ('winback-pos-trial', enviar_winback_pos_trial, 11, 30),
+        ('carrinho-abandonado', enviar_lembretes_carrinho_abandonado, 15, 0),
         ('snapshot-financeiro', _run_financial_snapshot_job, 2, 30),
         ('mercadopago-oauth-renewal', _run_mercadopago_oauth_renewal_job, 3, 15),
     ]

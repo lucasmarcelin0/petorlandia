@@ -412,16 +412,49 @@ def inject_public_contact():
 
 
 def inject_site_flags():
-    """Injeta feature flags do banco no contexto de todos os templates."""
+    """Injeta feature flags do banco no contexto de todos os templates.
+
+    A flag manual só consegue *esconder* uma oferta, nunca revelar uma vitrine
+    vazia: mesmo publicada pelo admin, a loja continua em "em breve" enquanto
+    não houver um produto real cadastrado, e volta a abrir sozinha no instante
+    em que houver (ver services/offer_availability.py). O mesmo vale para o
+    plano de saúde e para banho e tosa.
+
+    O admin é exceção — precisa alcançar a tela para cadastrar a primeira
+    oferta, e continua com o toggle manual à disposição.
+    """
     from models.base import SiteFlag
+    from services.offer_availability import (
+        grooming_is_public,
+        health_plan_is_public,
+        store_is_public,
+    )
+
+    is_admin = (
+        getattr(current_user, 'is_authenticated', False)
+        and isinstance(getattr(current_user, 'role', None), str)
+        and current_user.role.lower() == 'admin'
+    )
+
     try:
-        flags = {
-            'loja_em_breve': SiteFlag.get('loja_em_breve', default=True),
-            'plano_saude_em_breve': SiteFlag.get('plano_saude_em_breve', default=True),
-        }
+        loja_manual = SiteFlag.get('loja_em_breve', default=True)
+        saude_manual = SiteFlag.get('plano_saude_em_breve', default=True)
+        sem_catalogo = not store_is_public()
+        sem_plano_saude = not health_plan_is_public()
+        sem_banho_tosa = not grooming_is_public()
     except Exception:
         db.session.rollback()
-        flags = {'loja_em_breve': True, 'plano_saude_em_breve': True}
+        loja_manual = saude_manual = True
+        sem_catalogo = sem_plano_saude = sem_banho_tosa = True
+
+    flags = {
+        'loja_em_breve': loja_manual or (sem_catalogo and not is_admin),
+        'plano_saude_em_breve': saude_manual or (sem_plano_saude and not is_admin),
+        'banho_tosa_em_breve': sem_banho_tosa and not is_admin,
+        # Cru, sem a exceção de admin: quem decide o que vai para o sitemap e
+        # para o público não pode enxergar diferente por estar logado.
+        'loja_publica': not (loja_manual or sem_catalogo),
+    }
     return dict(site_flags=flags)
 
 
@@ -442,6 +475,18 @@ def inject_default_pickup_address():
     return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
 
 
+def inject_activation_progress():
+    """Faixa de ativação: acompanha a clínica até ela completar os passos."""
+    from services.activation import activation_progress
+
+    try:
+        progress = activation_progress(current_user)
+    except Exception:  # noqa: BLE001 — nunca derrubar o layout por um lembrete
+        db.session.rollback()
+        progress = None
+    return dict(activation_progress=progress)
+
+
 _PROCESSORS = (
     inject_unread_count,
     inject_admin_action_notifications,
@@ -459,6 +504,7 @@ _PROCESSORS = (
     inject_site_flags,
     inject_ga_events,
     inject_default_pickup_address,
+    inject_activation_progress,
 )
 
 

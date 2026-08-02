@@ -1,0 +1,92 @@
+{# Faixa de ativação: acompanha o app enquanto a clínica não terminou os
+   primeiros passos, e some sozinha quando termina. #}
+{% set progresso = activation_progress %}
+{% if progresso %}
+<div class="activation-bar" role="status">
+  <div class="activation-bar__inner">
+    <div class="activation-bar__meter" aria-hidden="true">
+      <div class="activation-bar__fill" style="width: {{ progresso.percent }}%"></div>
+    </div>
+    <span class="activation-bar__count">
+      {{ progresso.done }} de {{ progresso.total }}
+    </span>
+    <span class="activation-bar__next">
+      Próximo: {{ progresso.next_label }}
+    </span>
+    <a href="{{ progresso.next_url }}" class="activation-bar__cta" data-cta="activation_bar_next">
+      {{ progresso.next_cta }} <i class="fa-solid fa-arrow-right ms-1" aria-hidden="true"></i>
+    </a>
+  </div>
+</div>
+
+<style>
+  .activation-bar {
+    background: #0d3b4f;
+    color: #eaf4f7;
+    font-size: .875rem;
+  }
+
+  .activation-bar__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: .5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+
+  .activation-bar__meter {
+    width: 84px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .18);
+    overflow: hidden;
+    flex: none;
+  }
+
+  .activation-bar__fill {
+    height: 100%;
+    background: #4cc38a;
+    border-radius: 999px;
+    transition: width .3s ease;
+  }
+
+  .activation-bar__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    flex: none;
+  }
+
+  .activation-bar__next {
+    opacity: .85;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .activation-bar__cta {
+    color: #0d3b4f;
+    background: #eaf4f7;
+    border-radius: 999px;
+    padding: .2rem .8rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex: none;
+  }
+
+  .activation-bar__cta:hover,
+  .activation-bar__cta:focus-visible {
+    background: #fff;
+    color: #0d3b4f;
+  }
+
+  @media (max-width: 575.98px) {
+    .activation-bar__next { flex-basis: 100%; order: 3; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .activation-bar__fill { transition: none; }
+  }
+</style>
+{% endif %}

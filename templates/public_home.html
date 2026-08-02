@@ -42,10 +42,12 @@
         <i class="fa-solid fa-link" aria-hidden="true"></i>
         Uma plataforma. Toda a rede de cuidado.
       </span>
-      <h1 id="unified-home-title">Toda a jornada veterinária, conectada em um só lugar.</h1>
+      <h1 id="unified-home-title">
+        Agenda, prontuário e vacinas da sua clínica por R$ {{ '%.0f'|format(monthly_price) }} por veterinário.
+      </h1>
       <p>
-        O tutor encontra atendimento e acompanha o pet. A clínica organiza a operação.
-        O veterinário atende com o histórico certo. E o estudante aprende o fluxo em um ambiente seguro.
+        {{ trial_days }} dias grátis, sem cadastrar cartão. E porque o histórico do pet acompanha
+        o tutor — não a clínica — cada atendimento continua de onde o anterior parou.
       </p>
       <div class="unified-hero__actions">
         <a href="{{ url_for('register', next=url_for('minha_clinica')) }}"

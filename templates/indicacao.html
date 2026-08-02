@@ -1,11 +1,55 @@
 {% extends "layout.html" %}
 
+{% block page_title %}Indique a PetOrlândia e ganhe um mês{% endblock %}
+
 {% block main %}
-<div class="container text-center" style="max-width: 560px;">
-  <h1 class="h3 fw-bold text-primary mb-2"><i class="fa-solid fa-gift me-2"></i> Indique e ajude a rede crescer</h1>
-  <p class="text-muted">
-    Compartilhe seu link: quem criar conta por ele entra na sua lista de indicações.
-  </p>
+<div class="container" style="max-width: 620px;">
+
+  <div class="text-center mb-4">
+    <h1 class="h3 fw-bold text-primary mb-2">
+      <i class="fa-solid fa-gift me-2"></i> Indique e ganhe um mês
+    </h1>
+    <p class="text-muted mb-0">
+      Quando alguém que você indicou assinar a PetOrlândia, sua próxima
+      mensalidade é por nossa conta.
+    </p>
+  </div>
+
+  <!-- Como funciona: as duas pontas do acordo, sem letra miúda -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">
+              <i class="fa-solid fa-user-plus"></i>
+            </span>
+            <h2 class="h6 fw-semibold mb-0">Quem você indica</h2>
+          </div>
+          <p class="mb-0 small text-muted">
+            Ganha <strong>{{ bonus_days }} dias extras</strong> de avaliação gratuita,
+            somados aos que já são padrão. Sem cartão para começar.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">
+              <i class="fa-solid fa-calendar-check"></i>
+            </span>
+            <h2 class="h6 fw-semibold mb-0">Você</h2>
+          </div>
+          <p class="mb-0 small text-muted">
+            Ganha <strong>{{ reward_days }} dias grátis</strong> na sua assinatura quando
+            essa pessoa pagar a primeira mensalidade. Sem limite de indicações.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="card border-0 shadow-sm rounded-4 p-4 mb-3">
     <label class="form-label fw-semibold" for="link-indicacao">Seu link de indicação</label>
@@ -18,14 +62,27 @@
     </div>
     <p class="text-muted small mt-2 mb-3">Código: <strong>{{ referral.code }}</strong></p>
 
-    <a href="{{ share_whatsapp }}" target="_blank" rel="noopener" class="btn btn-success btn-lg">
+    <a href="{{ share_whatsapp }}" target="_blank" rel="noopener" class="btn btn-success btn-lg"
+       data-cta="referral_share_whatsapp">
       <i class="fa-brands fa-whatsapp me-2"></i> Compartilhar no WhatsApp
     </a>
   </div>
 
-  <p class="text-muted">
-    <i class="fa-solid fa-users me-1 text-primary"></i>
-    Você já indicou <strong>{{ total_indicados }}</strong> pessoa{{ 's' if total_indicados != 1 }}.
+  <div class="d-flex flex-wrap justify-content-center gap-4 text-center">
+    <div>
+      <div class="h4 fw-bold mb-0 text-primary">{{ total_indicados }}</div>
+      <div class="small text-muted">indicação{{ 'ões' if total_indicados != 1 else '' }} feita{{ 's' if total_indicados != 1 else '' }}</div>
+    </div>
+    <div>
+      <div class="h4 fw-bold mb-0 text-success">{{ total_recompensados }}</div>
+      <div class="small text-muted">mês{{ 'es' if total_recompensados != 1 else '' }} grátis conquistado{{ 's' if total_recompensados != 1 else '' }}</div>
+    </div>
+  </div>
+
+  <p class="text-muted small text-center mt-4 mb-0">
+    O crédito entra automaticamente na sua assinatura assim que o pagamento da
+    pessoa indicada é confirmado. Você recebe um aviso quando isso acontecer.
   </p>
+
 </div>
 {% endblock %}

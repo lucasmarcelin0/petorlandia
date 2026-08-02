@@ -30,7 +30,10 @@ class Stat:
 THRESHOLDS = {
     'pets': 50,
     'vacinas': 100,
-    'clinicas': 1,
+    # "1 clínica usando o sistema" responde sozinha a pergunta "alguém confia
+    # nisso?" — e responde não. Abaixo do piso a métrica some, que é
+    # exatamente o comportamento que este módulo promete.
+    'clinicas': 5,
 }
 
 

@@ -398,20 +398,30 @@ def carreiras():
 def indicacao():
     from models import ReferralCode
 
+    from services.membership_conversion import (
+        REFERRAL_REWARD_DAYS,
+        REFERRED_TRIAL_BONUS_DAYS,
+    )
+
     referral = ReferralCode.get_or_create(current_user.id)
     db.session.commit()
 
     link = url_for("register", ref=referral.code, _external=True)
     texto = (
-        "Eu uso a PetOrlândia para cuidar do meu pet: consultas, loja, petsitter e mais, "
-        f"tudo em um lugar. Crie sua conta pelo meu link: {link}"
+        "Eu uso a PetOrlândia e indico: agenda, prontuário e vacinas da clínica em um "
+        f"sistema só. Pelo meu link você ganha {REFERRED_TRIAL_BONUS_DAYS} dias extras "
+        f"de avaliação: {link}"
     )
+    signups = list(referral.signups)
     return render_template(
         "indicacao.html",
         referral=referral,
         link=link,
         share_whatsapp=_whatsapp_share_url(texto),
-        total_indicados=len(referral.signups),
+        total_indicados=len(signups),
+        total_recompensados=sum(1 for s in signups if s.rewarded_at),
+        reward_days=REFERRAL_REWARD_DAYS,
+        bonus_days=REFERRED_TRIAL_BONUS_DAYS,
     )
 
 

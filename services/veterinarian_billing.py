@@ -369,11 +369,16 @@ def sync_membership_payment_payload(payload: dict, *, invoice_id: object = None)
     )
 
     if provider_status in {"approved", "authorized"} and not charge.access_applied_at:
+        from services.membership_conversion import mark_converted
+
         now = utcnow()
         paid_until = VeterinarianMembership._as_timezone_aware(membership.paid_until)
         starts_at = paid_until if paid_until and paid_until > now else now
         membership.paid_until = starts_at + timedelta(days=charge.cycle_days)
         membership.ensure_trial_dates()
+        # Só grava o marcador: o evento de funil e o crédito da indicação
+        # exigem commit e rodam depois, fora desta transação.
+        mark_converted(membership)
         charge.access_applied_at = now
         charge.paid_at = charge.paid_at or now
     elif provider_status in _FAILED_PAYMENT_STATUSES:
@@ -542,4 +547,17 @@ def reconcile_membership_billing(client, *, limit: int = 250) -> dict:
                     "Falha ao reconciliar assinatura do Mercado Pago"
                 )
             result["failures"] += 1
+
+    # Conversões detectadas nesta passagem viram evento de funil e crédito de
+    # indicação — depois dos commits, exatamente uma vez cada.
+    from services.membership_conversion import process_pending_conversions
+
+    try:
+        result["conversions"] = process_pending_conversions()
+    except Exception:  # noqa: BLE001 — reconciliação não pode falhar por isso
+        db.session.rollback()
+        if has_app_context():
+            current_app.logger.exception("Falha ao processar conversões de avaliação")
+        result["conversions"] = 0
+
     return result

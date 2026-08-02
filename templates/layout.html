@@ -252,6 +252,8 @@
 <body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}">
   {% include 'partials/navbar.html' %}
 
+  {% include 'partials/_activation_bar.html' %}
+
   {% if flash_messages %}
   {% for category, message in flash_messages %}
   <div class="alert-container">

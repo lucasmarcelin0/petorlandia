@@ -1552,11 +1552,15 @@ def test_cart_add_missing_product_json(monkeypatch, app):
         assert resp.get_json() == {'success': False, 'error': 'product not found'}
 
 
-def test_product_detail_requires_login(app):
+def test_product_detail_is_public_for_visitors(app):
+    """A ficha do produto é pública: quem ainda decide não precisa de conta.
+
+    Sem produto cadastrado a resposta é 404 — o que importa é que não há mais
+    redirecionamento para o login antes de mostrar preço e descrição.
+    """
     client = app.test_client()
     response = client.get('/produto/1')
-    assert response.status_code == 302
-    assert '/login' in response.headers['Location']
+    assert response.status_code == 404
 
 
 def test_product_detail_page(monkeypatch, app):
