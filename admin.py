@@ -4,6 +4,7 @@ from flask_admin.menu import MenuLink
 from flask import redirect, url_for, flash, current_app, request
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileAllowed
 from wtforms import (
     SelectField,
     DateField,
@@ -46,6 +47,26 @@ USER_WORKER_CHOICES = [
     ('admin_clinica', 'Administrador de clínica'),
     ('master', 'Master'),
 ]
+
+ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
+ADMIN_IMAGE_ACCEPT = ','.join(f'image/{extension}' for extension in ADMIN_IMAGE_EXTENSIONS)
+
+
+def _admin_image_upload_field(label):
+    return FileField(
+        label,
+        validators=[
+            FileAllowed(
+                ADMIN_IMAGE_EXTENSIONS,
+                'Envie uma imagem JPG, PNG, GIF, WebP ou BMP.',
+            )
+        ],
+        render_kw={
+            'accept': ADMIN_IMAGE_ACCEPT,
+            'data-image-paste': 'true',
+            'data-max-bytes': str(20 * 1024 * 1024),
+        },
+    )
 
 def _is_admin():
     """Return True if the current user has the admin role."""
@@ -605,7 +626,7 @@ class PickupLocationView(ModelView):
 
 class UserAdminView(MyModelView):
     form_extra_fields = {
-        'profile_photo_upload': FileField('Foto de perfil'),
+        'profile_photo_upload': _admin_image_upload_field('Foto de perfil'),
         'new_password': PasswordField(
             'Nova senha',
             description='Preencha apenas para redefinir a senha do usuário '
@@ -839,7 +860,7 @@ class VeterinarianSettingsView(BaseView):
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': FileField('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo')
     }
 
     form_ajax_refs = {
@@ -1026,7 +1047,7 @@ from flask import url_for
 
 class AnimalAdminView(MyModelView):
     form_extra_fields = {
-        'image_upload': FileField('Imagem'),
+        'image_upload': _admin_image_upload_field('Imagem'),
         'modo': SelectField(
             'Modo',
             choices=[
@@ -1253,7 +1274,7 @@ def _product_admin_seller(view, context, model, name):
 class ProductAdmin(MyModelView):
     list_template = 'admin/product_list.html'
     form_extra_fields = {
-        'image_upload': FileField('Imagem')
+        'image_upload': _admin_image_upload_field('Imagem')
     }
 
     form_columns = [
@@ -1356,7 +1377,7 @@ class ProductAdmin(MyModelView):
 
 class CasaDeRacaoAdminView(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': FileField('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo')
     }
 
     column_list = (
