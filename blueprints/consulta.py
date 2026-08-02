@@ -2179,12 +2179,28 @@ def imprimir_bloco_prescricao(bloco_id):
                 _external=True,
             )
 
+    # Cruzamento receita × loja: é aqui que o tutor está com a maior intenção
+    # de compra do site. Só aparece quando a loja tem catálogo real.
+    from services.offer_availability import store_is_live
+    from services.prescription_store import (
+        build_prescription_offers,
+        bulk_buyable_products,
+    )
+
+    ofertas_receita = []
+    compra_em_lote = []
+    if store_is_live():
+        ofertas_receita = build_prescription_offers(bloco.prescricoes)
+        compra_em_lote = bulk_buyable_products(ofertas_receita)
+
     return render_template(
         'orcamentos/imprimir_bloco.html',
         bloco=bloco,
         consulta=consulta,
         animal=animal,
         tutor=tutor,
+        ofertas_receita=ofertas_receita,
+        compra_em_lote=compra_em_lote,
         clinica=clinica,
         veterinario=veterinario,
         salvo_por=salvo_por,

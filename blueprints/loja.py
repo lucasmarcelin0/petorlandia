@@ -1484,6 +1484,145 @@ def produto_toggle_status(product_id):
     return redirect(url_for('produto_detail', product_id=product.id))
 
 
+def _ensure_current_order():
+    """Carrinho aberto do usuário, criando um se ainda não houver."""
+    order = _get_current_order()
+    if not order:
+        order = Order(user_id=current_user.id)
+        db.session.add(order)
+        db.session.commit()
+        session["current_order"] = order.id
+    return order
+
+
+def _upsert_cart_item(order, product, qty: int):
+    """Soma ``qty`` de ``product`` ao carrinho, congelando os valores do split.
+
+    Um só lugar calcula preço público, repasse ao lojista e taxa da
+    plataforma. Duplicar essa conta em cada porta de entrada do carrinho é
+    como as divergências de repasse nascem.
+    """
+    public_price = product.preco_publico or Decimal("0")
+    seller_amount = product.price or Decimal("0")
+    platform_fee = max(
+        Decimal("0"),
+        Decimal(str(public_price)) - Decimal(str(seller_amount)),
+    )
+    seller_type = (
+        'casa_de_racao' if product.casa_de_racao_id
+        else 'clinica' if product.clinica_id
+        else None
+    )
+
+    item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
+    if item:
+        item.quantity += qty
+        item.unit_price = public_price
+        item.seller_unit_amount = seller_amount
+        item.platform_fee_amount = platform_fee
+        item.seller_type = seller_type
+        item.seller_id = product.casa_de_racao_id or product.clinica_id
+    else:
+        item = OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            # Preço público (taxa embutida) — é o que o comprador paga.
+            unit_price=public_price,
+            seller_unit_amount=seller_amount,
+            platform_fee_amount=platform_fee,
+            seller_type=seller_type,
+            seller_id=product.casa_de_racao_id or product.clinica_id,
+            quantity=qty,
+        )
+        db.session.add(item)
+    return item
+
+
+@bp.route("/bloco_prescricao/<int:bloco_id>/comprar", methods=["POST"])
+@login_required
+def comprar_prescricao(bloco_id):
+    """Coloca no carrinho os medicamentos da receita que a loja tem hoje.
+
+    Os produtos são resolvidos no servidor a partir do bloco — a página não
+    envia ids. Assim o botão não pode ser usado para inserir no carrinho um
+    item que não foi prescrito, e a regra de segurança (só a apresentação que
+    confere e com estoque) vale de verdade, não só na tela.
+    """
+    from models import BlocoPrescricao
+    from services.prescription_store import (
+        build_prescription_offers,
+        bulk_buyable_products,
+    )
+
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    if not _pode_ver_prescricao(bloco):
+        abort(403)
+
+    linhas = build_prescription_offers(bloco.prescricoes)
+
+    escolhido = request.form.get('product_id', type=int)
+    if escolhido:
+        # Item avulso: só vale um produto que esta receita realmente sugeriu e
+        # que tem estoque. Fora disso o botão viraria um "adicione qualquer
+        # coisa ao carrinho" com cara de prescrição.
+        disponiveis = {
+            match.product.id: match.product
+            for linha in linhas
+            for match in linha.matches
+            if match.in_stock
+        }
+        produto = disponiveis.get(escolhido)
+        if produto is None:
+            flash('Este medicamento não está disponível na loja agora.', 'warning')
+            return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+        produtos = [produto]
+    else:
+        produtos = bulk_buyable_products(linhas)
+
+    if not produtos:
+        flash(
+            'Nenhum medicamento desta receita está disponível na loja no momento.',
+            'warning',
+        )
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    order = _ensure_current_order()
+    for produto in produtos:
+        _upsert_cart_item(order, produto, 1)
+    db.session.commit()
+
+    total = sum(float(p.preco_publico or 0) for p in produtos)
+    track_event(
+        'add_to_cart',
+        source_path=f'/bloco_prescricao/{bloco.id}/imprimir',
+        feature='receita',
+        amount=total,
+        items=len(produtos),
+    )
+    plural = 's' if len(produtos) > 1 else ''
+    flash(
+        f'{len(produtos)} medicamento{plural} da receita adicionado{plural} ao carrinho.',
+        'success',
+    )
+    return redirect(url_for('ver_carrinho'))
+
+
+def _pode_ver_prescricao(bloco) -> bool:
+    """Tutor do animal, equipe da clínica que emitiu ou admin."""
+    if _is_admin():
+        return True
+    animal = getattr(bloco, 'animal', None)
+    if animal is not None and animal.user_id == getattr(current_user, 'id', None):
+        return True
+    try:
+        from access_control import can_view_clinic
+
+        return bool(can_view_clinic(current_user, bloco.clinica_id))
+    except Exception:  # noqa: BLE001 — sem resposta confiável, nega
+        return False
+
+
 @bp.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
@@ -1517,53 +1656,8 @@ def adicionar_carrinho(product_id):
     else:
         qty = form.quantity.data or 1
 
-    order = _get_current_order()
-    if not order:
-        order = Order(user_id=current_user.id)
-        db.session.add(order)
-        db.session.commit()
-        session["current_order"] = order.id
-
-    # Verifica se o produto já está no carrinho para somar as quantidades
-    item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
-    if item:
-        item.quantity += qty
-        item.unit_price = product.preco_publico or Decimal("0")
-        item.seller_unit_amount = product.price or Decimal("0")
-        item.platform_fee_amount = max(
-            Decimal("0"),
-            Decimal(str(item.unit_price or 0)) - Decimal(str(item.seller_unit_amount or 0)),
-        )
-        item.seller_type = (
-            'casa_de_racao' if product.casa_de_racao_id
-            else 'clinica' if product.clinica_id
-            else None
-        )
-        item.seller_id = product.casa_de_racao_id or product.clinica_id
-    else:
-        public_price = product.preco_publico or Decimal("0")
-        seller_amount = product.price or Decimal("0")
-        item = OrderItem(
-            order_id=order.id,
-            product_id=product.id,
-            item_name=product.name,
-            # Preço público (taxa embutida) — é o que o comprador paga.
-            unit_price=public_price,
-            seller_unit_amount=seller_amount,
-            platform_fee_amount=max(
-                Decimal("0"),
-                Decimal(str(public_price)) - Decimal(str(seller_amount)),
-            ),
-            seller_type=(
-                'casa_de_racao' if product.casa_de_racao_id
-                else 'clinica' if product.clinica_id
-                else None
-            ),
-            seller_id=product.casa_de_racao_id or product.clinica_id,
-            quantity=qty,
-        )
-        db.session.add(item)
-
+    order = _ensure_current_order()
+    _upsert_cart_item(order, product, qty)
     db.session.commit()
     track_event(
         'add_to_cart',

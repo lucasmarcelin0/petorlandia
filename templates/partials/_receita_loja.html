@@ -1,0 +1,347 @@
+{# Compra dos medicamentos da receita, direto na tela da prescrição.
+
+   Regras que governam este bloco, nesta ordem:
+   1. Nunca sai no papel — a receita impressa é documento clínico (.no-print).
+   2. Cada produto aparece SOB o item prescrito, como oferta correspondente,
+      nunca no lugar dele.
+   3. Apresentação diferente da prescrita não ganha botão de compra. Trocar
+      5 mg por 20 mg é dano, não conveniência.
+   4. Item sem oferta aparece dito com todas as letras, para o tutor não achar
+      que a receita foi atendida por inteiro. #}
+{% set com_oferta = ofertas_receita | selectattr('has_offer') | list %}
+{% if ofertas_receita %}
+{# Não usa a classe ``no-print`` de propósito: o print.css estiliza TODO
+   ``a``/``button`` dentro dela como botão da barra de ferramentas (altura
+   fixa, fundo azul, ``white-space: nowrap``), o que estourava a largura no
+   celular. O bloco esconde a si mesmo na impressão, logo abaixo. #}
+<section class="receita-loja" aria-labelledby="receita-loja-titulo">
+  <header class="receita-loja__head">
+    <div>
+      <h2 id="receita-loja-titulo" class="receita-loja__title">
+        Comprar os medicamentos desta receita
+      </h2>
+      <p class="receita-loja__sub">
+        {% if com_oferta %}
+          Encontramos produtos na loja PetOrlândia para
+          {{ com_oferta|length }} {{ 'item' if com_oferta|length == 1 else 'itens' }}
+          {{ 'do' if ofertas_receita|length == 1 else 'dos' }}
+          {{ ofertas_receita|length }}
+          {{ 'prescrito' if ofertas_receita|length == 1 else 'prescritos' }},
+          com entrega. Confira a apresentação antes de comprar.
+        {% else %}
+          Nenhum item desta receita está disponível na loja no momento.
+        {% endif %}
+      </p>
+    </div>
+
+    {% if compra_em_lote %}
+    <form method="post" action="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="receita-loja__cta" data-cta="receita_comprar_tudo">
+        Adicionar {{ compra_em_lote|length }}
+        {{ 'item' if compra_em_lote|length == 1 else 'itens' }} ao carrinho
+      </button>
+    </form>
+    {% endif %}
+  </header>
+
+  <ol class="receita-loja__list">
+    {% for linha in ofertas_receita %}
+    <li class="receita-loja__item">
+      <div class="receita-loja__prescrito">
+        <span class="receita-loja__num">{{ loop.index }}</span>
+        <span>{{ linha.prescricao.medicamento }}</span>
+      </div>
+
+      {% if not linha.has_offer %}
+      <p class="receita-loja__vazio">
+        Não temos este item na loja. Compre na farmácia de sua preferência.
+      </p>
+      {% else %}
+      <div class="receita-loja__ofertas">
+        {% for match in linha.matches %}
+        {% set produto = match.product %}
+        <div class="receita-oferta{% if not match.same_strength %} receita-oferta--atencao{% endif %}">
+          <div class="receita-oferta__info">
+            <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+               class="receita-oferta__nome" target="_blank" rel="noopener">{{ produto.name }}</a>
+
+            <div class="receita-oferta__tags">
+              {% if match.same_strength %}
+              <span class="receita-tag receita-tag--ok">Apresentação compatível</span>
+              {% else %}
+              <span class="receita-tag receita-tag--atencao">
+                Apresentação diferente da prescrita
+              </span>
+              {% endif %}
+              {% if not match.in_stock %}
+              <span class="receita-tag receita-tag--neutro">Sem estoque</span>
+              {% endif %}
+            </div>
+
+            {% if not match.same_strength %}
+            <p class="receita-oferta__aviso">
+              A receita indica
+              {{ match.prescribed_strengths | join(', ') if match.prescribed_strengths else 'outra apresentação' }}.
+              Confirme com o veterinário antes de comprar.
+            </p>
+            {% endif %}
+          </div>
+
+          <div class="receita-oferta__acao">
+            <span class="receita-oferta__preco">{{ produto.public_price_min | currency_br }}</span>
+            {% if match.in_stock and match.same_strength %}
+            <form method="post" action="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="product_id" value="{{ produto.id }}">
+              <button type="submit" class="receita-oferta__btn" data-cta="receita_comprar_item">
+                Adicionar
+              </button>
+            </form>
+            {% else %}
+            <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+               class="receita-oferta__btn receita-oferta__btn--ghost"
+               target="_blank" rel="noopener">Ver produto</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+  <p class="receita-loja__nota">
+    A loja lista produtos com o mesmo princípio ativo do que foi prescrito.
+    A prescrição do veterinário prevalece: em caso de dúvida sobre marca,
+    concentração ou forma de uso, fale com quem atendeu o seu pet.
+  </p>
+</section>
+
+<style>
+  /* A receita impressa é documento clínico: a oferta comercial fica só na
+     tela. */
+  @media print {
+    .receita-loja { display: none !important; }
+  }
+
+  .receita-loja {
+    margin: 28px 0 8px;
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 20px;
+    font-family: inherit;
+  }
+
+  .receita-loja__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 1px solid #e3e9ef;
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+  }
+
+  .receita-loja__title {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #14212b;
+  }
+
+  .receita-loja__sub {
+    margin: 0;
+    font-size: .86rem;
+    color: #55636e;
+    max-width: 56ch;
+  }
+
+  .receita-loja__cta {
+    border: 0;
+    border-radius: 999px;
+    background: #146c43;
+    color: #fff;
+    font-weight: 700;
+    font-size: .88rem;
+    padding: 10px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .receita-loja__cta:hover,
+  .receita-loja__cta:focus-visible { background: #0f5132; }
+
+  .receita-loja__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .receita-loja__item {
+    padding: 16px 0;
+    border-bottom: 1px solid #e9eef3;
+  }
+
+  .receita-loja__item:last-child { border-bottom: 0; padding-bottom: 4px; }
+
+  .receita-loja__prescrito {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-weight: 600;
+    color: #14212b;
+    font-size: .92rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .receita-loja__num {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e3e9ef;
+    color: #47535e;
+    font-size: .72rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  .receita-loja__vazio {
+    margin: 8px 0 0 32px;
+    font-size: .84rem;
+    color: #77838d;
+  }
+
+  .receita-loja__ofertas {
+    margin: 10px 0 0 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .receita-oferta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    border: 1px solid #dfe6ec;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .receita-oferta--atencao {
+    border-color: #e6c98f;
+    background: #fffdf6;
+  }
+
+  .receita-oferta__info { min-width: 0; flex: 1 1 240px; }
+
+  .receita-oferta__nome {
+    display: block;
+    font-weight: 600;
+    color: #14212b;
+    text-decoration: none;
+    font-size: .9rem;
+    /* Nome de composto ("Cetoconazol + Dipropionato de betametasona + …")
+       estourava a largura no celular quando o link ficava inline. */
+    overflow-wrap: anywhere;
+  }
+
+  .receita-oferta__nome:hover { text-decoration: underline; }
+
+  .receita-oferta__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .receita-tag {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+
+  .receita-tag--ok { background: #e4f4ea; color: #146c43; }
+  .receita-tag--atencao { background: #fdf1d8; color: #8a5a00; }
+  .receita-tag--neutro { background: #eceff2; color: #5b666f; }
+
+  .receita-oferta__aviso {
+    margin: 8px 0 0;
+    font-size: .8rem;
+    color: #8a5a00;
+    max-width: 52ch;
+  }
+
+  .receita-oferta__acao {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+  }
+
+  .receita-oferta__preco {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #14212b;
+    white-space: nowrap;
+  }
+
+  .receita-oferta__btn {
+    border: 0;
+    border-radius: 999px;
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    font-size: .82rem;
+    padding: 8px 16px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .receita-oferta__btn:hover,
+  .receita-oferta__btn:focus-visible { background: #0b5ed7; color: #fff; }
+
+  .receita-oferta__btn--ghost {
+    background: transparent;
+    color: #0d6efd;
+    border: 1px solid #b6d4fe;
+  }
+
+  .receita-oferta__btn--ghost:hover,
+  .receita-oferta__btn--ghost:focus-visible {
+    background: #eaf2ff;
+    color: #0b5ed7;
+  }
+
+  .receita-loja__nota {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #e3e9ef;
+    font-size: .78rem;
+    color: #77838d;
+    max-width: 72ch;
+  }
+
+  @media (max-width: 560px) {
+    .receita-loja { padding: 16px; }
+    .receita-loja__ofertas,
+    .receita-loja__vazio { margin-left: 0; }
+    .receita-oferta__acao { width: 100%; justify-content: space-between; }
+    .receita-loja__cta { width: 100%; }
+  }
+</style>
+{% endif %}
