@@ -594,17 +594,25 @@ def admin_toggle_site_flag():
     if not _is_admin():
         return jsonify({'error': 'Acesso negado'}), 403
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or request.form
     key = (data.get('key') or '').strip()
     ALLOWED_KEYS = {
         'loja_em_breve': 'Loja PetOrlândia — Em breve',
         'plano_saude_em_breve': 'Plano de Saúde — Em breve',
+        'home_shortcut_service': 'Atalho inicial — Agendar serviço',
+        'home_shortcut_store': 'Atalho inicial — Loja Pet',
+        'home_shortcut_health_plan': 'Atalho inicial — Plano de Saúde Pet',
+        'home_shortcut_animals': 'Atalho inicial — Todos os animais',
     }
     if key not in ALLOWED_KEYS:
         return jsonify({'error': f'Flag desconhecida: {key}'}), 400
 
-    new_value = bool(data.get('value', not SiteFlag.get(key)))
+    raw_value = data.get('value')
+    new_value = (not SiteFlag.get(key, True)) if raw_value is None else str(raw_value).lower() in ('1', 'true', 'on', 'yes')
     SiteFlag.set(key, new_value, label=ALLOWED_KEYS[key])
+    if not request.is_json:
+        flash(f'Atalho {"ativado" if new_value else "inativado"} na página inicial.', 'success')
+        return redirect(url_for('index'))
     return jsonify({'key': key, 'value': new_value})
 
 
