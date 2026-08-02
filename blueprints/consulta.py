@@ -2366,7 +2366,13 @@ def acompanhamento_tratamento(tratamento_id):
     total_cuidados = len(itens_view)
     compras_concluidas = sum(1 for i in itens_view if i['item'].comprado_em)
     total_aplicacoes = sum(i['feitas'] for i in itens_view)
-    percentual_geral = resumo_progresso(acompanhamento).get('percentual') or 0
+    progresso = resumo_progresso(acompanhamento)
+    # Tratamentos compostos apenas por cuidados de registro livre não têm
+    # doses previstas. O serviço representa esse caso com ``None``; para a
+    # interface, porém, o início da jornada é sempre 0%, nunca um valor
+    # incomparável que derrube a renderização das conquistas.
+    progresso['percentual'] = progresso.get('percentual') or 0
+    percentual_geral = progresso['percentual']
     if percentual_geral >= 100:
         mensagem_progresso = 'Missão cumprida! Você completou todas as doses previstas.'
     elif percentual_geral >= 75:
@@ -2400,7 +2406,7 @@ def acompanhamento_tratamento(tratamento_id):
         doses_hoje=doses_hoje,
         doses_atrasadas=doses_atrasadas,
         fotos=fotos,
-        progresso=resumo_progresso(acompanhamento),
+        progresso=progresso,
         total_cuidados=total_cuidados,
         compras_concluidas=compras_concluidas,
         total_aplicacoes=total_aplicacoes,
