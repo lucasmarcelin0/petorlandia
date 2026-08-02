@@ -68,6 +68,32 @@
         </div>
         {% endif %}
 
+        <div class="border rounded-3 p-3 mb-4 bg-light-subtle">
+          <div class="d-flex align-items-start justify-content-between gap-3">
+            <div>
+              <div class="fw-semibold mb-1">Visibilidade na loja</div>
+              {% if product.status == 'active' %}
+              <div class="small text-success"><i class="fa-solid fa-circle-check me-1"></i>Ativo — aparece para os clientes na loja.</div>
+              {% else %}
+              <div class="small text-secondary"><i class="fa-solid fa-eye-slash me-1"></i>Inativo — fica oculto para os clientes, mas permanece no seu catálogo.</div>
+              {% endif %}
+            </div>
+            <form method="post" action="{{ url_for('clinic_produto_toggle', clinica_id=clinica.id, product_id=product.id) }}" class="flex-shrink-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_to" value="edit">
+              {% if product.status == 'active' %}
+              <button type="submit" class="btn btn-outline-warning btn-sm" aria-label="Inativar produto">
+                <i class="fa-solid fa-eye-slash me-1"></i>Inativar
+              </button>
+              {% else %}
+              <button type="submit" class="btn btn-success btn-sm" aria-label="Ativar produto">
+                <i class="fa-solid fa-eye me-1"></i>Ativar
+              </button>
+              {% endif %}
+            </form>
+          </div>
+        </div>
+
         <div class="d-grid">
           {{ form.submit(class="btn btn-primary") }}
         </div>
