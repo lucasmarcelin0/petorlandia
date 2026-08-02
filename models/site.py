@@ -83,6 +83,41 @@ class SiteFlag(db.Model):
         return row
 
 
+class SiteText(db.Model):
+    """Conteúdo curto editável pelo administrador, identificado por chave."""
+
+    __tablename__ = 'site_text'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    value = db.Column(db.String(240), nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    @classmethod
+    def get(cls, key: str, default: str = '') -> str:
+        try:
+            row = cls.query.filter_by(key=key).first()
+            return row.value if row and row.value else default
+        except Exception:
+            return default
+
+    @classmethod
+    def set(cls, key: str, value: str) -> 'SiteText':
+        row = cls.query.filter_by(key=key).first()
+        if row is None:
+            row = cls(key=key, value=value)
+            db.session.add(row)
+        else:
+            row.value = value
+        db.session.commit()
+        return row
+
+
 
 class WaitlistLead(db.Model):
     """Interesse registrado numa funcionalidade ainda não publicada.
