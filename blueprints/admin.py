@@ -603,6 +603,9 @@ def admin_toggle_site_flag():
         'home_shortcut_store': 'Atalho inicial — Loja Pet',
         'home_shortcut_health_plan': 'Atalho inicial — Plano de Saúde Pet',
         'home_shortcut_animals': 'Atalho inicial — Todos os animais',
+        'home_section_shortcuts': 'Bloco inicial — Atalhos',
+        'home_section_pets': 'Bloco inicial — Meus pets',
+        'home_section_work_areas': 'Bloco inicial — Áreas de trabalho',
     }
     if key not in ALLOWED_KEYS:
         return jsonify({'error': f'Flag desconhecida: {key}'}), 400
@@ -612,8 +615,30 @@ def admin_toggle_site_flag():
     SiteFlag.set(key, new_value, label=ALLOWED_KEYS[key])
     if not request.is_json:
         flash(f'Atalho {"ativado" if new_value else "inativado"} na página inicial.', 'success')
+        if request.form.get('return_to') == 'home_editor':
+            return redirect(url_for('admin_home_editor'))
         return redirect(url_for('index'))
     return jsonify({'key': key, 'value': new_value})
+
+
+@bp.route('/admin/home-editor', methods=['GET'])
+@login_required
+def admin_home_editor():
+    if not _is_admin():
+        abort(403)
+    flags = [
+        ('home_section_work_areas', 'Áreas de trabalho', 'Bloco com os módulos profissionais e operacionais.'),
+        ('home_section_shortcuts', 'Atalhos principais', 'Agendar serviço, Loja, Plano de Saúde e Animais.'),
+        ('home_section_pets', 'Meus pets', 'Resumo dos pets cadastrados e próximos cuidados.'),
+        ('home_shortcut_service', 'Botão: Agendar um serviço', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_store', 'Botão: Loja Pet', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_health_plan', 'Botão: Plano de Saúde Pet', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_animals', 'Botão: Ver todos os animais', 'Atalho dentro do bloco principal.'),
+    ]
+    return render_template('admin/home_editor.html', flags=[
+        {'key': key, 'label': label, 'description': description, 'enabled': SiteFlag.get(key, True)}
+        for key, label, description in flags
+    ])
 
 
 @bp.route("/admin/parcerias", methods=["GET"])

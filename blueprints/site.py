@@ -802,6 +802,11 @@ def index():
             if agendamento.animal_id not in proximos_agendamentos:
                 proximos_agendamentos[agendamento.animal_id] = agendamento
 
+    home_sections = {
+        'shortcuts': SiteFlag.get('home_section_shortcuts', True),
+        'pets': SiteFlag.get('home_section_pets', True),
+        'work_areas': SiteFlag.get('home_section_work_areas', True),
+    }
     return render_template(
         'index.html',
         meus_pets=meus_pets,
@@ -815,6 +820,7 @@ def index():
             'animals': SiteFlag.get('home_shortcut_animals', True),
         },
         is_admin=_is_admin(),
+        home_sections=home_sections,
     )
 
 
