@@ -134,7 +134,8 @@
                 <form method="post" action="{{ url_for('clinic_produto_toggle', clinica_id=clinica.id, product_id=p.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm {% if p.status == 'active' %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
-                          title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}">
+                          title="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %}"
+                          aria-label="{% if p.status == 'active' %}Desativar{% else %}Ativar{% endif %} produto">
                     <i class="fa-solid {% if p.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
                   </button>
                 </form>

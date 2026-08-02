@@ -1868,6 +1868,8 @@ def clinic_produto_toggle(clinica_id, product_id):
     db.session.commit()
     state = 'ativado' if product.status == 'active' else 'desativado'
     flash(f'Produto {state} na loja.', 'success')
+    if request.form.get('return_to') == 'edit':
+        return redirect(url_for('clinic_produto_editar', clinica_id=clinica.id, product_id=product.id))
     return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
 
 
