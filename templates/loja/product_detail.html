@@ -6,6 +6,28 @@
   .purchase-choice--subscription { border-color: #198754; background: linear-gradient(145deg, #fff, #f2fff8); }
   .choice-label { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 800; }
   .price-main { font-size: 1.75rem; line-height: 1; font-weight: 800; }
+
+  /* A descrição vem digitada em parágrafos (fórmula, indicações, modo de
+     usar). Sem isto tudo colapsava num bloco corrido de texto. */
+  .product-description {
+    white-space: pre-line;
+    line-height: 1.65;
+    color: #4b5563;
+    max-width: 68ch;
+  }
+  .product-description--collapsed {
+    max-height: 15rem;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  }
+  .product-description-toggle {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-weight: 600;
+    color: #2563eb;
+  }
 </style>
 <div class="container py-4">
   <nav aria-label="Navegação estrutural" class="mb-3">
@@ -23,7 +45,19 @@
     <div class="col-lg-7">
       {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
       <h1 class="h2 mb-2">{{ product.name }}</h1>
-      <p class="text-muted mb-4">{{ product.description }}</p>
+      {% if product.description %}
+      {# ``pre-line`` preserva as quebras que o vendedor digitou sem abrir mão
+         do escape: fórmula, indicações e modo de usar param de virar um
+         parágrafo único. Bulas longas ficam recolhidas para que o preço e o
+         botão de compra não sejam empurrados para fora da tela. #}
+      <div class="product-description" id="product-description">{{ product.description }}</div>
+      <button type="button" class="product-description-toggle mt-2 mb-4 d-none"
+              id="product-description-toggle"
+              aria-expanded="false" aria-controls="product-description">
+        Ver descrição completa
+      </button>
+      <div class="mb-4"></div>
+      {% endif %}
 
       <h2 class="h5 mb-3">Como você quer receber?</h2>
       <div class="row g-3">
@@ -80,4 +114,25 @@
   </form>
   {% endif %}
 </div>
+
+<script>
+  (function () {
+    var texto = document.getElementById('product-description');
+    var botao = document.getElementById('product-description-toggle');
+    if (!texto || !botao) return;
+
+    // Só recolhe quando há o que recolher: descrição curta continua inteira.
+    var LIMITE = 240;
+    if (texto.scrollHeight <= LIMITE) return;
+
+    texto.classList.add('product-description--collapsed');
+    botao.classList.remove('d-none');
+
+    botao.addEventListener('click', function () {
+      var recolhido = texto.classList.toggle('product-description--collapsed');
+      botao.setAttribute('aria-expanded', recolhido ? 'false' : 'true');
+      botao.textContent = recolhido ? 'Ver descrição completa' : 'Ver menos';
+    });
+  })();
+</script>
 {% endblock %}

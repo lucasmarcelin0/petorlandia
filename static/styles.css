@@ -6461,3 +6461,13 @@ main.container {
     padding: 20px 10px;
   }
 }
+
+/* ── Descrição de produto ──────────────────────────────────────────────
+   Uma bula veterinária tem fórmula, indicações, modo de usar e precauções.
+   Duas linhas de textarea escondiam de quem escreve o que já foi escrito. */
+.product-description-input {
+  min-height: 18rem;
+  line-height: 1.55;
+  font-size: .95rem;
+  resize: vertical;
+}
