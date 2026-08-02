@@ -611,6 +611,45 @@ p {
   margin: 0.35rem 0;
 }
 
+/* The admin navigation has more destinations than a standard consumer bar.
+   Keep the brand and menu in one flex row without allowing the last account
+   item to be pushed outside the viewport. At medium widths Bootstrap collapses
+   the admin menu into the existing accessible toggler. */
+.navbar--admin .container-fluid {
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.navbar--admin .navbar-brand {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.navbar--admin .navbar-collapse {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.navbar--admin .app-navbar-nav {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 0 !important;
+}
+
+.navbar--admin .app-navbar-nav .nav-link {
+  padding-inline: clamp(0.45rem, 0.65vw, 0.75rem) !important;
+  font-size: clamp(0.82rem, 0.32vw + 0.62rem, 0.95rem);
+}
+
+@media (min-width: 1400px) {
+  .navbar--admin {
+    padding-inline: 28px;
+  }
+}
+
 button:focus-visible,
 .btn:focus-visible,
 a:focus-visible,

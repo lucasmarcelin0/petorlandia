@@ -65,3 +65,22 @@ def test_delivery_area_precedes_personal_navigation(client, app):
     navbar = _navbar_markup(client.get('/'))
 
     assert navbar.index('fa-truck') < navbar.index('fa-home')
+
+
+def test_admin_nav_uses_wide_breakpoint_and_flexible_shell(client, app):
+    with app.app_context():
+        user = User(
+            name='Administrador',
+            email='admin-nav@example.test',
+            password_hash='x',
+            role='admin',
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    page = client.get('/').get_data(as_text=True)
+
+    assert 'navbar-expand-xxl navbar--admin' in page
+    assert 'clinic.css?v=20260802-admin-navbar' in page

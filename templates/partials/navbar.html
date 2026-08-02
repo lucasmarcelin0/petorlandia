@@ -4,7 +4,7 @@
 {% set unread_total = unread_messages|default(0) %}
 {% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}
 
-<nav class="navbar navbar-expand-lg fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
+<nav class="navbar {% if is_admin %}navbar-expand-xxl navbar--admin{% else %}navbar-expand-lg{% endif %} fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
   <div class="container-fluid">
     <a href="{{ url_for('painel_admin.index') if is_admin else url_for('index') }}" class="navbar-brand">
       <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
