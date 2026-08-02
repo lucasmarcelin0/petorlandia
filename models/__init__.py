@@ -2,7 +2,7 @@
 
 from .base import *  # noqa: F401,F403
 from .clinica import ClinicInternshipCase, ClinicStaff  # noqa: F401
-from .base import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite, StorePaymentAccount, SiteFlag  # noqa: F401
+from .base import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite, StorePaymentAccount, SiteFlag, SiteText  # noqa: F401
 from .agenda import AgendaEvento, Appointment, ExamAppointment, PlantaoModelo, PlantonistaEscala, VetSchedule
 from .loja import (
     DeliveryRequest,
@@ -154,6 +154,7 @@ __all__ = [
     "ReferralCode",
     "ReferralSignup",
     "SiteFlag",
+    "SiteText",
     "WaitlistLead",
     "ProductEvent",
     "AdminActionNotification",

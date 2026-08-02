@@ -17,8 +17,8 @@
 
     {% if home_sections.shortcuts %}
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center dashboard-personal-area" data-dashboard-area="personal-shortcuts">
-        <h1 class="h3 mb-1">Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
-        <h2 class="h6 text-muted mb-2">O que você deseja fazer hoje?</h2>
+        <h1 class="h3 mb-1">{{ home_texts.shortcuts_title }}{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
+        <h2 class="h6 text-muted mb-2">{{ home_texts.shortcuts_subtitle }}</h2>
         <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
             {% set shortcut_items = [
                 ('service', 'home_shortcut_service', '🐾 Agendar um serviço', 'servicos', 'btn-outline-danger', 'Agende vacinas, banho & tosa, consultas, exames e mais.'),
@@ -29,25 +29,12 @@
             {% for item in shortcut_items %}
             {% set key = item[0] %}
             {% set flag_key = item[1] %}
-            {% set label = item[2] %}
+            {% set label = home_texts['shortcut_' ~ key] %}
             {% set endpoint = item[3] %}
             {% set button_class = item[4] %}
             {% set tooltip = item[5] %}
-            {% if home_shortcuts[key] or is_admin %}
-            <div class="d-flex align-items-center gap-1">
-                {% if home_shortcuts[key] %}
-                <a href="{{ url_for(endpoint) }}" class="btn {{ button_class }} rounded-pill shadow-sm px-4 py-2" data-bs-toggle="tooltip" title="{{ tooltip }}">{{ label }}</a>
-                {% else %}
-                <span class="btn btn-outline-secondary rounded-pill px-4 py-2 disabled" aria-disabled="true">{{ label }} (oculto)</span>
-                {% endif %}
-                {% if is_admin %}
-                <form method="post" action="{{ url_for('admin_toggle_site_flag') }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="key" value="{{ flag_key }}">
-                    <button type="submit" class="btn btn-sm {% if home_shortcuts[key] %}btn-outline-warning{% else %}btn-success{% endif %} rounded-circle" title="{% if home_shortcuts[key] %}Ocultar{% else %}Mostrar{% endif %} este botão para usuários" aria-label="{% if home_shortcuts[key] %}Ocultar{% else %}Mostrar{% endif %} {{ label }}"><i class="fa-solid {% if home_shortcuts[key] %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button>
-                </form>
-                {% endif %}
-            </div>
+            {% if home_shortcuts[key] %}
+            <a href="{{ url_for(endpoint) }}" class="btn {{ button_class }} rounded-pill shadow-sm px-4 py-2" data-bs-toggle="tooltip" title="{{ tooltip }}">{{ label }}</a>
             {% endif %}
             {% endfor %}
         </div>
@@ -57,9 +44,9 @@
     {% if home_sections.pets %}
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted dashboard-personal-area" data-dashboard-area="personal-pets">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-            <h2 class="h4 mb-0">Meus pets</h2>
+            <h2 class="h4 mb-0">{{ home_texts.pets_title }}</h2>
             <a href="{{ url_for('add_animal') }}" class="btn btn-success rounded-pill shadow-sm px-4">
-                <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
+                <i class="fa-solid fa-plus me-1"></i> {{ home_texts.pets_add_button }}
             </a>
         </div>
 

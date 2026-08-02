@@ -28,6 +28,7 @@ from models import (
     ClinicInternshipCase,
     ClinicStaff,
     SiteFlag,
+    SiteText,
 )
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
@@ -807,6 +808,16 @@ def index():
         'pets': SiteFlag.get('home_section_pets', True),
         'work_areas': SiteFlag.get('home_section_work_areas', True),
     }
+    home_text_defaults = {
+        'shortcuts_title': 'Olá',
+        'shortcuts_subtitle': 'O que você deseja fazer hoje?',
+        'shortcut_service': '🐾 Agendar um serviço',
+        'shortcut_store': '🛍️ Loja Pet',
+        'shortcut_health_plan': '❤️ Plano de Saúde Pet',
+        'shortcut_animals': '📋 Ver todos os animais',
+        'pets_title': 'Meus pets',
+        'pets_add_button': 'Cadastrar pet',
+    }
     return render_template(
         'index.html',
         meus_pets=meus_pets,
@@ -821,6 +832,7 @@ def index():
         },
         is_admin=_is_admin(),
         home_sections=home_sections,
+        home_texts={key: SiteText.get(key, default) for key, default in home_text_defaults.items()},
     )
 
 

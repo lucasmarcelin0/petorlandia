@@ -1,40 +1,67 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container py-4" style="max-width: 860px;">
-  <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
+<div class="container py-4">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
     <div>
-      <div class="text-muted small mb-1"><i class="fa-solid fa-shield-halved me-1"></i> Administração</div>
+      <div class="text-muted small mb-1"><i class="fa-solid fa-shield-halved me-1"></i>Administração</div>
       <h1 class="h3 mb-1">Editar página inicial</h1>
-      <p class="text-muted mb-0">Escolha quais blocos e atalhos aparecem para os usuários. A sua visualização da home continua normal.</p>
+      <p class="text-muted mb-0">Esta é uma prévia editável. Os olhos aparecem somente aqui.</p>
     </div>
-    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>Voltar</a>
+    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>Ver início normal</a>
   </div>
-  <div class="row g-3">
-    {% for flag in flags %}
-    <div class="col-md-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body d-flex align-items-start justify-content-between gap-3">
-          <div>
-            <h2 class="h6 mb-1">{{ flag.label }}</h2>
-            <p class="small text-muted mb-2">{{ flag.description }}</p>
-            <span class="badge {% if flag.enabled %}text-bg-success{% else %}text-bg-secondary{% endif %}">
-              {% if flag.enabled %}Visível{% else %}Oculto{% endif %}
-            </span>
-          </div>
-          <form method="post" action="{{ url_for('admin_toggle_site_flag') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="key" value="{{ flag.key }}">
-            <input type="hidden" name="return_to" value="home_editor">
-            <button type="submit" class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}"
-                    aria-label="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} {{ flag.label }}"
-                    title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %}">
+
+  <section class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center">
+    <form method="post" action="{{ url_for('admin_update_home_texts') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="home_editor">
+      <div class="d-flex justify-content-center align-items-center gap-2 mb-2">
+        <input name="shortcuts_title" value="{{ texts.shortcuts_title }}" class="form-control form-control-lg text-center fw-semibold" style="max-width: 260px;">
+        <span class="h3 mb-0">, Lucas! 🐾</span>
+      </div>
+      <input name="shortcuts_subtitle" value="{{ texts.shortcuts_subtitle }}" class="form-control text-center mb-3 mx-auto" style="max-width: 440px;">
+
+      <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
+        {% set shortcuts = [
+          ('service', 'home_shortcut_service', 'shortcut_service', 'btn-outline-danger'),
+          ('store', 'home_shortcut_store', 'shortcut_store', 'loja-pet-filled'),
+          ('health_plan', 'home_shortcut_health_plan', 'shortcut_health_plan', 'btn-outline-info'),
+          ('animals', 'home_shortcut_animals', 'shortcut_animals', 'btn-outline-primary')
+        ] %}
+        {% for key, flag_key, text_key, button_class in shortcuts %}
+        {% set flag = flag_map[flag_key] %}
+        <div class="d-flex align-items-center gap-1">
+          <input name="{{ text_key }}" value="{{ texts[text_key] }}" class="form-control rounded-pill text-center" style="width: min(255px, 65vw);" aria-label="Texto do botão">
+            <button type="submit" formaction="{{ url_for('admin_toggle_site_flag') }}" formmethod="post" name="key" value="{{ flag_key }}" class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} este botão">
               <i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
             </button>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4"><button class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Salvar textos</button></div>
+    </form>
+  </section>
+
+  <section class="row g-3">
+    {% for flag in flags if flag.key.startswith('home_section_') and flag.key != 'home_section_pets' %}
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100 {% if not flag.enabled %}opacity-50{% endif %}">
+        <div class="card-body d-flex align-items-start justify-content-between gap-3">
+          <div><h2 class="h6 mb-1">{{ flag.label }}</h2><p class="small text-muted mb-0">{{ flag.description }}</p></div>
+          <form method="post" action="{{ url_for('admin_toggle_site_flag') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ flag.key }}"><input type="hidden" name="return_to" value="home_editor">
+            <button class="btn btn-sm rounded-circle {% if flag.enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag.enabled %}Ocultar{% else %}Mostrar{% endif %} bloco"><i class="fa-solid {% if flag.enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button>
           </form>
         </div>
       </div>
     </div>
     {% endfor %}
-  </div>
+  </section>
+
+  <section class="card border-0 shadow-sm rounded-4 p-4 mt-4 {% if not flag_map['home_section_pets'].enabled %}opacity-50{% endif %}">
+    <div class="d-flex align-items-center justify-content-between gap-3">
+      <div><h2 class="h4 mb-1">{{ texts.pets_title }}</h2><p class="text-muted mb-0">Prévia do bloco de pets da página inicial.</p></div>
+      <form method="post" action="{{ url_for('admin_toggle_site_flag') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="home_section_pets"><input type="hidden" name="return_to" value="home_editor"><button class="btn rounded-circle {% if flag_map['home_section_pets'].enabled %}btn-outline-warning{% else %}btn-success{% endif %}" title="{% if flag_map['home_section_pets'].enabled %}Ocultar{% else %}Mostrar{% endif %} bloco"><i class="fa-solid {% if flag_map['home_section_pets'].enabled %}fa-eye-slash{% else %}fa-eye{% endif %}"></i></button></form>
+    </div>
+  </section>
 </div>
 {% endblock %}

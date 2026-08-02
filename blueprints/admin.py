@@ -626,7 +626,7 @@ def admin_toggle_site_flag():
 def admin_home_editor():
     if not _is_admin():
         abort(403)
-    from models.base import SiteFlag
+    from models.base import SiteFlag, SiteText
     flags = [
         ('home_section_work_areas', 'Áreas de trabalho', 'Bloco com os módulos profissionais e operacionais.'),
         ('home_section_shortcuts', 'Atalhos principais', 'Agendar serviço, Loja, Plano de Saúde e Animais.'),
@@ -636,10 +636,47 @@ def admin_home_editor():
         ('home_shortcut_health_plan', 'Botão: Plano de Saúde Pet', 'Atalho dentro do bloco principal.'),
         ('home_shortcut_animals', 'Botão: Ver todos os animais', 'Atalho dentro do bloco principal.'),
     ]
-    return render_template('admin/home_editor.html', flags=[
+    text_defaults = {
+        'shortcuts_title': 'Olá',
+        'shortcuts_subtitle': 'O que você deseja fazer hoje?',
+        'shortcut_service': '🐾 Agendar um serviço',
+        'shortcut_store': '🛍️ Loja Pet',
+        'shortcut_health_plan': '❤️ Plano de Saúde Pet',
+        'shortcut_animals': '📋 Ver todos os animais',
+        'pets_title': 'Meus pets',
+        'pets_add_button': 'Cadastrar pet',
+    }
+    flag_data = [
         {'key': key, 'label': label, 'description': description, 'enabled': SiteFlag.get(key, True)}
         for key, label, description in flags
-    ])
+    ]
+    return render_template(
+        'admin/home_editor.html',
+        flags=flag_data,
+        flag_map={flag['key']: flag for flag in flag_data},
+        texts={key: SiteText.get(key, default) for key, default in text_defaults.items()},
+    )
+
+
+@bp.route('/admin/home-editor/texts', methods=['POST'])
+@login_required
+def admin_update_home_texts():
+    if not _is_admin():
+        abort(403)
+    from models.base import SiteText
+    allowed = {
+        'shortcuts_title', 'shortcuts_subtitle', 'shortcut_service', 'shortcut_store',
+        'shortcut_health_plan', 'shortcut_animals', 'pets_title', 'pets_add_button',
+    }
+    for key in allowed:
+        value = (request.form.get(key) or '').strip()
+        if not value or len(value) > 240:
+            flash('Preencha os textos com até 240 caracteres.', 'warning')
+            return redirect(url_for('admin_home_editor'))
+    for key in allowed:
+        SiteText.set(key, request.form[key].strip())
+    flash('Textos da página inicial atualizados.', 'success')
+    return redirect(url_for('admin_home_editor'))
 
 
 @bp.route("/admin/parcerias", methods=["GET"])
