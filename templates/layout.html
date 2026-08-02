@@ -339,6 +339,12 @@
     {% if current_user.is_authenticated %}
     <span class="mx-1">|</span>
     <a href="{{ url_for('petsitter_routes.indicacao') }}" class="text-decoration-none">Indique amigos</a>
+    {% if current_user.is_authenticated and current_user.role == 'admin' %}
+    <span class="mx-2 text-muted">·</span>
+    <a href="{{ url_for('admin_home_editor') }}" class="text-decoration-none" title="Editar elementos da página inicial">
+      <i class="fa-solid fa-house-pen me-1"></i>Editar início
+    </a>
+    {% endif %}
     {% endif %}
     <a href="{{ url_for('secret_game') }}" target="_blank" rel="noopener" class="ms-1 text-decoration-none text-primary"
       title="Surpresa!">

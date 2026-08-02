@@ -9,21 +9,16 @@
     {% set primeiro_nome = (current_user.name or '').split(' ')[0] %}
     {% set owns_clinic = (current_user.clinicas or [])|length > 0 %}
     {% set dashboard_work_first = is_active_veterinarian or current_user.worker in ['colaborador', 'delivery'] or current_user.role in ['admin', 'master', 'parceiro', 'vacinador'] or (owns_clinic and can_access_accounting) %}
-    {% if dashboard_work_first %}
+    {% if dashboard_work_first and home_sections.work_areas %}
     <section class="mt-5" aria-label="Áreas de trabalho">
         {% include 'components/dashboard_work_areas.html' %}
     </section>
     {% endif %}
 
+    {% if home_sections.shortcuts %}
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted text-center dashboard-personal-area" data-dashboard-area="personal-shortcuts">
         <h1 class="h3 mb-1">Olá{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}! 🐾</h1>
         <h2 class="h6 text-muted mb-2">O que você deseja fazer hoje?</h2>
-        {% if is_admin %}
-        <div class="alert alert-light border d-flex flex-wrap align-items-center justify-content-center gap-2 py-2 small mb-3">
-            <i class="fa-solid fa-sliders text-primary"></i><strong>Atalhos visíveis para usuários:</strong>
-            <span>use o ícone de olho para mostrar ou ocultar cada botão.</span>
-        </div>
-        {% endif %}
         <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
             {% set shortcut_items = [
                 ('service', 'home_shortcut_service', '🐾 Agendar um serviço', 'servicos', 'btn-outline-danger', 'Agende vacinas, banho & tosa, consultas, exames e mais.'),
@@ -57,7 +52,9 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
+    {% if home_sections.pets %}
     <div class="card shadow-sm p-4 rounded-4 mb-4 card-surface-muted dashboard-personal-area" data-dashboard-area="personal-pets">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
             <h2 class="h4 mb-0">Meus pets</h2>
@@ -153,6 +150,7 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
 
     <style>
         .pet-hero-card {
@@ -245,7 +243,7 @@
         }
     </style>
 
-    {% if not dashboard_work_first %}
+    {% if not dashboard_work_first and home_sections.work_areas %}
     {% include 'components/dashboard_work_areas.html' %}
     {% endif %}
 
