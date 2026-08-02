@@ -71,6 +71,13 @@
       </div>
     </div>
     <div class="clinic-context-card__actions">
+      {% if show_clinic_metrics %}
+        <a href="{{ url_for('clinic_value', clinica_id=clinica.id) }}"
+           class="btn btn-outline-success" data-cta="clinic_value_open">
+          <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+          Valor gerado
+        </a>
+      {% endif %}
       {% if pode_editar %}
         <a href="#clinica" class="btn btn-primary" data-clinic-open-panel="#edit-info">
           <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>

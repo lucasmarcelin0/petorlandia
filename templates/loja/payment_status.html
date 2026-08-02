@@ -110,6 +110,11 @@
         <i class="bi bi-shop me-1"></i> Voltar à loja
       </a>
     </div>
+
+    {% if status == 'Aprovado' %}
+      {% set related_title = 'Complete a rotina do seu pet' %}
+      {% include 'loja/_related_products.html' %}
+    {% endif %}
   </div>
 </div>
 {% endblock %}

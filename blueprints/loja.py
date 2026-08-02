@@ -1444,6 +1444,21 @@ def produto_detail(product_id):
                 flash('Foto adicionada.', 'success')
             return redirect(url_for('produto_detail', product_id=product.id))
 
+    related_products = (
+        Product.query.filter(
+            Product.id != product.id,
+            Product.status == 'active',
+            Product.is_demo.is_(False),
+            Product.stock > 0,
+        )
+        .order_by(
+            db.case((Product.category == product.category, 0), else_=1),
+            Product.id.desc(),
+        )
+        .limit(4)
+        .all()
+    )
+
     return render_template(
         'loja/product_detail.html',
         product=product,
@@ -1451,6 +1466,7 @@ def produto_detail(product_id):
         photo_form=photo_form,
         form=form,
         is_admin=_is_admin(),
+        related_products=related_products,
     )
 
 
@@ -2538,6 +2554,16 @@ def payment_status(payment_id):
     )
     edit_address_url = url_for('edit_order_address', order_id=payment.order_id) if order else None
 
+    related_products = []
+    if order and result in {"success", "completed", "approved"}:
+        purchased_ids = [item.product_id for item in order.items]
+        related_products = Product.query.filter(
+            Product.id.notin_(purchased_ids),
+            Product.status == 'active',
+            Product.is_demo.is_(False),
+            Product.stock > 0,
+        ).order_by(Product.id.desc()).limit(3).all()
+
     return render_template(
         "loja/payment_status.html",
         payment          = payment,
@@ -2549,6 +2575,7 @@ def payment_status(payment_id):
         delivery_estimate= delivery_estimate,
         cancel_url       = cancel_url,
         edit_address_url = edit_address_url,
+        related_products = related_products,
     )
 
 

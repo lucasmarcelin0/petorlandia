@@ -1,0 +1,8 @@
+{% if is_veterinarian_continuity_mode and request.endpoint not in ['veterinarian_membership', 'veterinarian_membership_checkout'] %}
+<div class="border-bottom bg-warning-subtle" role="status">
+  <div class="container py-2 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 small">
+    <div><strong>Modo Continuidade gratuito:</strong> seus dados permanecem guardados e as áreas de leitura disponíveis continuam acessíveis. Para criar ou editar prontuários, agenda e financeiro, reative o plano Profissional.</div>
+    <a href="{{ url_for('veterinarian_membership') }}" class="btn btn-sm btn-dark text-nowrap" data-cta="pricing_continuity_upgrade">Comparar e reativar</a>
+  </div>
+</div>
+{% endif %}

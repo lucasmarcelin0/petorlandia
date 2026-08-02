@@ -20,6 +20,7 @@
     .health-section { border-top: 1px solid #d9e2e5; padding-top: 1rem; margin-top: 1rem; }
     .health-history { border-top: 1px solid #d9e2e5; margin-top: 1rem; padding-top: 1rem; }
     .health-history summary { color: #177e89; cursor: pointer; font-size: .9rem; font-weight: 600; }
+    .care-cta { max-width: 480px; margin: 1rem auto 0; border-radius: 12px; }
   </style>
 </head>
 <body class="py-4 px-3">
@@ -155,8 +156,20 @@
   </div>
 
   <div class="text-center mt-3">
-    <button class="btn btn-sm btn-outline-primary" onclick="compartilhar()">Compartilhar carteirinha</button>
+    <button class="btn btn-sm btn-outline-primary" data-cta="health_card_shared" onclick="compartilhar()">Compartilhar carteirinha</button>
   </div>
+
+  {% if not current_user.is_authenticated %}
+  <aside class="card care-cta border-0 shadow-sm">
+    <div class="card-body text-center p-4">
+      <h2 class="h5">Organize também os cuidados do seu pet</h2>
+      <p class="small text-muted">Crie uma conta gratuita para reunir seus pets, lembretes e histórico. Nenhuma assinatura é iniciada no cadastro.</p>
+      <a href="{{ signup_url }}" class="btn btn-primary" data-cta="health_card_signup">Criar conta grátis</a>
+    </div>
+  </aside>
+  {% endif %}
+
+  <p class="text-center text-muted small mt-3 mx-auto" style="max-width:480px;">Este link não substitui avaliação veterinária. A pessoa responsável pelo pet pode revogá-lo a qualquer momento.</p>
 
   <script>
     function compartilhar() {
@@ -173,5 +186,6 @@
       }
     }
   </script>
+  <script src="{{ url_for('static', filename='js/cta_tracking.js', v='20260802') }}" defer></script>
 </body>
 </html>
