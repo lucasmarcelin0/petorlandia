@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from urllib.parse import urlparse
 
-from flask import current_app, g, request, session
+from flask import current_app, g, has_request_context, request, session
 from flask_login import current_user
 
 from extensions import db
@@ -14,6 +14,9 @@ from extensions import db
 _SAFE_PROPERTY_KEYS = {
     "city", "role", "service", "category", "channel", "success", "stage",
     "plan", "feature", "source_path", "link_text",
+    # Dimensões de receita. Nenhuma identifica pessoa: valor da transação,
+    # quantidade de itens, meio de pagamento e motivo da recusa.
+    "amount", "items", "method", "reason",
 }
 
 
@@ -73,23 +76,53 @@ def pop_ga_events() -> list[dict]:
     return session.pop(_GA_QUEUE_KEY, None) or []
 
 
-def track_event(name: str, *, source: str | None = None, **properties) -> None:
+def _actor(user_id: int | None) -> tuple[int | None, str | None]:
+    """Quem disparou o evento, tolerante a contexto sem login."""
+    if user_id is not None:
+        return user_id, None
+    if not has_request_context():
+        return None, None
+    try:
+        if not current_user.is_authenticated:
+            return None, None
+        return getattr(current_user, "id", None), getattr(current_user, "role", None)
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def track_event(
+    name: str,
+    *,
+    source: str | None = None,
+    user_id: int | None = None,
+    **properties,
+) -> None:
     safe_properties = {
         key: value
         for key, value in properties.items()
         if key in _SAFE_PROPERTY_KEYS
         and value is not None
     }
-    anonymous_id, session_id, attribution = _tracking_context()
-    source_path = str(
-        safe_properties.pop("source_path", None) or request.path
-    )[:300]
-    referrer_host = None
-    if request.referrer:
-        try:
-            referrer_host = (urlparse(request.referrer).hostname or "")[:180] or None
-        except ValueError:
-            referrer_host = None
+    # Fora de um request — jobs do scheduler, CLI — não há sessão nem
+    # cabeçalhos. O evento continua valendo (uma conversão de avaliação é
+    # justamente assíncrona), então o contexto degrada em vez de estourar.
+    declared_path = safe_properties.pop("source_path", None)
+    if has_request_context():
+        anonymous_id, session_id, attribution = _tracking_context()
+        source_path = str(declared_path or request.path)[:300]
+        referrer_host = None
+        if request.referrer:
+            try:
+                referrer_host = (urlparse(request.referrer).hostname or "")[:180] or None
+            except ValueError:
+                referrer_host = None
+    else:
+        anonymous_id = session_id = "server"
+        attribution = {}
+        source_path = str(declared_path or "server")[:300]
+        referrer_host = None
+
+    actor_id, actor_role = _actor(user_id)
 
     try:
         from models import ProductEvent
@@ -98,11 +131,7 @@ def track_event(name: str, *, source: str | None = None, **properties) -> None:
             event_name=str(name)[:80],
             anonymous_id=anonymous_id,
             session_id=session_id,
-            user_id=(
-                getattr(current_user, "id", None)
-                if current_user.is_authenticated
-                else None
-            ),
+            user_id=actor_id,
             source_path=source_path,
             referrer_host=referrer_host,
             utm_source=(source or attribution.get("utm_source") or "")[:120] or None,
@@ -120,8 +149,8 @@ def track_event(name: str, *, source: str | None = None, **properties) -> None:
         extra={
             "event_name": name,
             "event_source": source or attribution.get("utm_source"),
-            "event_user_id": getattr(current_user, "id", None) if current_user.is_authenticated else None,
-            "event_role": getattr(current_user, "role", None) if current_user.is_authenticated else None,
+            "event_user_id": actor_id,
+            "event_role": actor_role,
             "event_path": source_path,
             "event_request_id": getattr(g, "request_id", None),
             "event_properties": safe_properties,

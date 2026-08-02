@@ -131,6 +131,19 @@ def _is_admin():
     return app_module._is_admin()
 
 
+def _checkout_max_installments() -> int:
+    """Máximo de parcelas oferecido no Checkout Pro da loja.
+
+    Configurável por ambiente para o caso de o adquirente mudar as regras de
+    antecipação. O piso é 1: um valor inválido nunca deve impedir a compra.
+    """
+    try:
+        configured = int(current_app.config.get('MERCADOPAGO_MAX_INSTALLMENTS', 6))
+    except (TypeError, ValueError):
+        configured = 6
+    return max(1, min(configured, 12))
+
+
 def mp_sdk(*args, **kwargs):
     import app as app_module
 
@@ -1245,7 +1258,11 @@ def loja():
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor, categoria)
+    # O admin enxerga também os produtos de demonstração — é quem mantém o
+    # cadastro e precisa alcançá-los. O público vê só catálogo real.
+    query = _build_loja_query(
+        search_term, filtro, vendedor, categoria, include_demo=_is_admin()
+    )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -1279,8 +1296,13 @@ def loja():
 
 
 @bp.route("/loja/data", methods=["GET"])
-@login_required
 def loja_data():
+    """Fragmento do catálogo usado pela busca e pela paginação da loja.
+
+    Público pelo mesmo motivo que ``/loja`` é: sem isso, o visitante anônimo
+    via a primeira página e qualquer filtro ou próxima página o expulsava para
+    a tela de login.
+    """
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
     vendedor = request.args.get("vendedor", "").strip()
@@ -1288,7 +1310,9 @@ def loja_data():
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor, categoria)
+    query = _build_loja_query(
+        search_term, filtro, vendedor, categoria, include_demo=_is_admin()
+    )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -1325,10 +1349,22 @@ def loja_data():
 
 
 @bp.route("/produto/<int:product_id>", methods=["GET", "POST"])
-@login_required
 def produto_detail(product_id):
-    """Exibe detalhes do produto e permite edições para administradores."""
+    """Exibe detalhes do produto e permite edições para administradores.
+
+    A ficha é pública: exigir conta para ver preço e descrição empurrava para
+    um cadastro quem ainda estava decidindo, e mantinha o catálogo fora do
+    alcance da busca. A conta continua obrigatória para comprar.
+    """
     product = Product.query.options(db.joinedload(Product.extra_photos)).get_or_404(product_id)
+
+    # Produto de demonstração não é vitrine: só quem administra o catálogo
+    # chega nele por link direto.
+    if product.is_demo and not _is_admin():
+        abort(404)
+
+    if request.method == "POST" and not _is_admin():
+        abort(403)
 
     update_form = ProductUpdateForm(obj=product, prefix='upd')
     photo_form = ProductPhotoForm(prefix='photo')
@@ -1465,8 +1501,14 @@ def adicionar_carrinho(product_id):
         db.session.add(item)
 
     db.session.commit()
+    track_event(
+        'add_to_cart',
+        category=product.category,
+        amount=float(product.preco_publico or 0) * qty,
+        items=qty,
+    )
     flash("Produto adicionado ao carrinho.", "success")
-    
+
     if is_ajax:
         total_value = _order_checkout_total(order)
         total_qty = sum(i.quantity for i in order.items)
@@ -1875,7 +1917,10 @@ def checkout():
         "items": items,
         "external_reference": payment.external_reference,
         "notification_url":   _mercadopago_notification_url(),
-        "payment_methods":    {"installments": 1},
+        # Ração e medicamento caem na faixa em que o comprador brasileiro
+        # decide pela parcela. Travar em 1x tirava do funil quem compraria
+        # parcelado — e não muda o repasse ao lojista, que sai do split.
+        "payment_methods":    {"installments": _checkout_max_installments()},
         "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
         "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
         "back_urls": back_urls,
@@ -1930,6 +1975,13 @@ def checkout():
     db.session.commit()
 
     session["last_pending_payment"] = payment.id
+    # Marca a saída do site rumo ao Mercado Pago. Cruzado com
+    # purchase_completed, é o que dá a taxa de abandono do checkout.
+    track_event(
+        'checkout_started',
+        amount=float(payment.amount or 0),
+        items=sum(int(it.quantity or 0) for it in order.items),
+    )
     if prefers_json:
         return jsonify(success=True, redirect=pref["init_point"])
     return redirect(pref["init_point"])
@@ -2085,6 +2137,12 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             pass
 
+    # O funil de receita se fecha aqui: é o webhook que sabe se o pagamento
+    # entrou. O evento é montado dentro da transação mas só disparado depois
+    # dela — track_event commita, e um commit no meio do bloco publicaria
+    # estado parcial.
+    revenue_event: tuple[str, dict] | None = None
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
@@ -2095,12 +2153,30 @@ def notificacoes_mercado_pago():
                 return jsonify(error="payment not found"), 404
 
             if pay:
+                previous_status = pay.status
                 payment_status = advance_payment_status(
                     pay.status,
                     payment_status,
                     provider_status=status,
                 )
                 pay.status = payment_status
+
+                # Só a primeira transição vira evento: o Mercado Pago reenvia
+                # a mesma notificação e uma compra não pode ser contada duas
+                # vezes.
+                if previous_status != payment_status:
+                    if payment_status == PaymentStatus.COMPLETED:
+                        revenue_event = ('purchase_completed', {
+                            'amount': float(pay.amount or 0),
+                            'method': str(status or ''),
+                            'user_id': pay.user_id,
+                        })
+                    elif payment_status == PaymentStatus.FAILED:
+                        revenue_event = ('payment_failed', {
+                            'amount': float(pay.amount or 0),
+                            'reason': str(status or ''),
+                            'user_id': pay.user_id,
+                        })
                 pay.mercado_pago_id = mp_id
 
                 if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
@@ -2319,6 +2395,20 @@ def notificacoes_mercado_pago():
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
         return jsonify(error="db failure"), 500
+
+    if revenue_event:
+        event_name, payload = revenue_event
+        track_event(event_name, source_path='/notificacoes', **payload)
+
+    # Se o pagamento acima foi a primeira mensalidade de uma clínica, fecha a
+    # conversão agora em vez de esperar a próxima reconciliação.
+    from services.membership_conversion import process_pending_conversions
+
+    try:
+        process_pending_conversions()
+    except Exception:  # noqa: BLE001 — a notificação já foi aplicada
+        db.session.rollback()
+        current_app.logger.exception('Falha ao processar conversões após webhook')
 
     return jsonify(status="updated"), 200
 
@@ -2844,6 +2934,12 @@ def racao_assinar(product_id):
         sub.status = 'pending'
         sub.last_error = None
         db.session.commit()
+        track_event(
+            'subscription_started',
+            plan='racao',
+            amount=float(preco_ciclo or 0),
+            category=product.category,
+        )
         return redirect(init_point)
 
     return render_template(

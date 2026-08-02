@@ -2796,11 +2796,14 @@ def _sync_veterinarian_membership_payment(payment):
 
     membership.last_payment_id = payment.id
     if payment.status == PaymentStatus.COMPLETED:
+        from services.membership_conversion import mark_converted
+
         cycle_days = _membership_cycle_days(payment)
         now = utcnow()
         start_from = membership.paid_until if membership.paid_until and membership.paid_until > now else now
         membership.paid_until = start_from + timedelta(days=cycle_days)
         membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
+        mark_converted(membership)
     db.session.add(membership)
 
 
@@ -8675,6 +8678,167 @@ def enviar_lembretes_fim_trial() -> None:
         )
 
 
+#: Dias depois do fim da avaliação em que tentamos trazer de volta quem não
+#: converteu. Dois toques: um enquanto a decisão é recente, outro depois de a
+#: pessoa sentir falta do sistema. Além disso vira insistência.
+WINBACK_OFFSETS = (3, 10)
+
+
+def enviar_winback_pos_trial() -> None:
+    """Job diário: reabre a conversa com quem terminou a avaliação sem assinar.
+
+    É o lead mais qualificado que existe — conheceu o produto por semanas e
+    cadastrou pacientes reais. Até aqui a régua terminava no último dia do
+    teste e essa pessoa nunca mais ouvia falar da gente.
+    """
+    from models import VeterinarianMembership
+    from services.notifications import notify_user
+
+    with app.app_context():
+        base_url = _notification_base_url()
+        hoje = now_in_brazil().date()
+        enviados = 0
+
+        memberships = (
+            VeterinarianMembership.query
+            .filter(VeterinarianMembership.trial_ends_at.isnot(None))
+            .filter(VeterinarianMembership.converted_at.is_(None))
+            .all()
+        )
+
+        for membership in memberships:
+            # Quem assinou depois, ou está com pagamento configurado, não é
+            # alvo de win-back.
+            if membership.has_valid_payment() or membership.has_payment_method():
+                continue
+
+            trial_end = VeterinarianMembership._as_timezone_aware(membership.trial_ends_at)
+            if trial_end is None:
+                continue
+
+            dias_desde_fim = (hoje - coerce_to_brazil_tz(trial_end).date()).days
+            if dias_desde_fim not in WINBACK_OFFSETS:
+                continue
+
+            vet = getattr(membership, 'veterinario', None)
+            user = getattr(vet, 'user', None)
+            if user is None:
+                continue
+
+            primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+            link = f'{base_url}/veterinario/assinatura'
+            preco = _format_reais(_get_veterinarian_membership_price())
+
+            if dias_desde_fim == WINBACK_OFFSETS[0]:
+                assunto = 'Seus dados continuam aqui — PetOrlândia'
+                corpo = (
+                    f'Olá {primeiro_nome}! Sua avaliação terminou há alguns dias e as '
+                    'ferramentas profissionais estão pausadas.\n\n'
+                    'Nada foi apagado: agenda, prontuários, histórico e a carteira de '
+                    'vacinas dos seus pacientes continuam guardados exatamente como '
+                    'você deixou.\n\n'
+                    f'Para voltar a usar, é {preco} por mês por veterinário, sem '
+                    f'fidelidade:\n{link}'
+                )
+            else:
+                assunto = 'Podemos ajudar a decidir? — PetOrlândia'
+                corpo = (
+                    f'Olá {primeiro_nome}! Não quero insistir — esta é a última mensagem '
+                    'sobre a sua avaliação.\n\n'
+                    'Se faltou tempo para testar direito, a gente refaz a avaliação e '
+                    'configura o sistema junto com você, sem custo: importamos sua '
+                    'lista de clientes e deixamos a agenda pronta em uma conversa de '
+                    '30 minutos.\n\n'
+                    f'Se preferir seguir sozinho, seus dados continuam aqui:\n{link}'
+                )
+
+            notify_user(user, assunto, corpo, kind='trial_winback')
+            enviados += 1
+
+        db.session.commit()
+        current_app.logger.info(
+            '[Trial] Mensagens de retomada pós-avaliação enviadas: %s', enviados
+        )
+
+
+#: Horas de carrinho parado antes do lembrete. Curto o bastante para a compra
+#: ainda fazer sentido, longo o bastante para não atropelar quem só pausou.
+ABANDONED_CART_HOURS = 24
+
+
+def enviar_lembretes_carrinho_abandonado() -> None:
+    """Job diário: lembra quem montou um carrinho e não concluiu o pagamento.
+
+    Um único toque por carrinho. O lembrete leva de volta ao carrinho já
+    montado — não pede para começar de novo.
+    """
+    from models import Order, Payment, PaymentStatus
+    from services.notifications import notify_user
+
+    with app.app_context():
+        base_url = _notification_base_url()
+        agora = utcnow()
+        limite = agora - timedelta(hours=ABANDONED_CART_HOURS)
+        enviados = 0
+
+        candidatos = (
+            Order.query
+            .filter(Order.abandoned_reminder_at.is_(None))
+            .filter(Order.created_at.isnot(None))
+            .filter(Order.created_at <= limite)
+            .filter(Order.user_id.isnot(None))
+            .order_by(Order.created_at)
+            .limit(200)
+            .all()
+        )
+
+        for order in candidatos:
+            if not order.items:
+                continue
+
+            pago = (
+                Payment.query
+                .filter_by(order_id=order.id, status=PaymentStatus.COMPLETED)
+                .first()
+            )
+            if pago:
+                continue
+
+            user = order.user
+            if user is None:
+                order.abandoned_reminder_at = agora
+                continue
+
+            primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+            itens = ', '.join(
+                (item.item_name or (item.product.name if item.product else 'item'))
+                for item in order.items[:3]
+            )
+            restantes = max(0, len(order.items) - 3)
+            if restantes:
+                itens += f' e mais {restantes} item{"ns" if restantes > 1 else ""}'
+
+            notify_user(
+                user,
+                'Seu carrinho ainda está guardado — PetOrlândia',
+                (
+                    f'Olá {primeiro_nome}! Você deixou {itens} no carrinho e o pagamento '
+                    'não foi concluído.\n\n'
+                    'Está tudo lá, com o mesmo preço. É só abrir e finalizar:\n'
+                    f'{base_url}/carrinho\n\n'
+                    'Se desistiu, ignore esta mensagem — não vamos insistir.'
+                ),
+                kind='cart_abandoned',
+            )
+            order.abandoned_reminder_at = agora
+            enviados += 1
+
+        db.session.commit()
+        current_app.logger.info(
+            '[Loja] Lembretes de carrinho abandonado enviados: %s', enviados
+        )
+
+
 def _run_financial_snapshot_job() -> None:
     """Daily hook executed by APScheduler to refresh monthly snapshots."""
 
@@ -12397,7 +12561,13 @@ from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categoria: str = ''):
+def _build_loja_query(
+    search_term: str,
+    filtro: str,
+    vendedor: str = '',
+    categoria: str = '',
+    include_demo: bool = False,
+):
     from sqlalchemy import and_
     query = (
         Product.query
@@ -12410,6 +12580,12 @@ def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categor
             )
         )
     )
+
+    # Produto de demonstração fica fora da vitrine: quem chega pela busca não
+    # pode encontrar "Teste produto 1" sob a promessa de sortimento. O admin
+    # continua enxergando para conseguir manter o cadastro.
+    if not include_demo:
+        query = query.filter(Product.is_demo.is_(False))
 
     if search_term:
         like = f"%{search_term}%"

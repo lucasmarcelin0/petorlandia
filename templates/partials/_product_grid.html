@@ -70,6 +70,7 @@
 
           <div class="text-muted small mb-2"><i class="fa-solid fa-truck-fast me-1"></i>entrega rápida</div>
 
+          {% if current_user.is_authenticated %}
           <!-- Formulário -->
           <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}"
                 method="post" class="js-cart-form" data-skip-global-handler="true">
@@ -88,6 +89,15 @@
               </button>
             </div>
           </form>
+          {% else %}
+          {# Visitante sem conta: o botão diz a verdade e volta para o produto
+             depois do login, em vez de falhar em silêncio. #}
+          <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
+             class="add-to-cart-btn d-flex align-items-center justify-content-center text-decoration-none"
+             data-cta="product_login_to_buy">
+            <i class="fa-solid fa-cart-plus me-1"></i> Entrar para comprar
+          </a>
+          {% endif %}
         </div>
       </div>
     </article>

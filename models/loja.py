@@ -239,6 +239,11 @@ class Product(db.Model):
     casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
     # 'active' = visível na loja, 'inactive' = oculto pelo dono, 'pending' = aguardando aprovação
     status = db.Column(db.String(20), default='active', nullable=False)
+    # Produto de demonstração/teste: continua acessível ao admin, mas não conta
+    # como catálogo real e nunca aparece na vitrine pública. É o que permite
+    # abrir a loja sozinha assim que o primeiro produto de verdade for
+    # cadastrado (ver services/offer_availability.py).
+    is_demo = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     # A recorrencia e uma oferta separada da compra avulsa e precisa ser
     # ativada conscientemente pelo vendedor.
     subscription_enabled = db.Column(db.Boolean, nullable=False, default=False)
@@ -457,6 +462,9 @@ class Order(db.Model):
     received_at = db.Column(db.DateTime(timezone=True), nullable=True)
     # Último lembrete pedindo a confirmação de recebimento (evita spam diário).
     receipt_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Lembrete de carrinho abandonado. Enviado uma única vez por carrinho:
+    # recuperação de venda que vira insistência deixa de ser recuperação.
+    abandoned_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship(
         'User',

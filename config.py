@@ -203,6 +203,9 @@ class Config:
     ORTHANC_WEBHOOK_TOKEN = _env_optional("ORTHANC_WEBHOOK_TOKEN")
 
     # Opções adicionais de integração com o Mercado Pago
+    # Parcelas oferecidas no Checkout Pro da loja. O comprador brasileiro
+    # decide pela parcela nessa faixa de ticket; o repasse ao lojista não muda.
+    MERCADOPAGO_MAX_INSTALLMENTS = int(os.environ.get("MERCADOPAGO_MAX_INSTALLMENTS", "6"))
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
     MERCADOPAGO_NOTIFICATION_URL = os.environ.get("MERCADOPAGO_NOTIFICATION_URL")

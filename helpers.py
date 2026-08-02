@@ -211,6 +211,10 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
     trial_days = trial_days or _trial_days()
 
     if membership is None:
+        # Quem chegou por um link de indicação começa com avaliação estendida.
+        # O bônus é aplicado na criação porque é aqui que a avaliação nasce —
+        # o cadastro acontece antes de a pessoa virar veterinária.
+        trial_days += _referral_trial_bonus_days(veterinario)
         membership = VeterinarianMembership(
             veterinario=veterinario,
             started_at=utcnow(),
@@ -220,6 +224,28 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
     else:
         membership.ensure_trial_dates(trial_days)
     return membership
+
+
+def _referral_trial_bonus_days(veterinario) -> int:
+    """Dias extras de avaliação para quem entrou por indicação."""
+    user_id = getattr(getattr(veterinario, 'user', None), 'id', None)
+    if not user_id:
+        return 0
+    try:
+        from models import ReferralSignup
+        from services.membership_conversion import REFERRED_TRIAL_BONUS_DAYS
+
+        # ``no_autoflush``: esta consulta roda no meio da criação da assinatura.
+        # Um flush aqui empurraria objetos ainda incompletos para o banco.
+        with db.session.no_autoflush:
+            came_from_referral = (
+                ReferralSignup.query
+                .filter_by(referred_user_id=user_id)
+                .first() is not None
+            )
+        return REFERRED_TRIAL_BONUS_DAYS if came_from_referral else 0
+    except Exception:  # noqa: BLE001 — bônus nunca impede criar a assinatura
+        return 0
 
 
 def has_veterinarian_profile(user) -> bool:

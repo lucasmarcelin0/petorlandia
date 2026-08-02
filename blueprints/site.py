@@ -3,6 +3,8 @@ from flask import Blueprint
 import os, re, requests
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
+from xml.sax.saxutils import escape
 from extensions import csrf, db, limiter
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import current_user, login_required
@@ -420,6 +422,7 @@ def veterinarian_membership_checkout():
 
     db.session.commit()
     session.pop('preferred_membership_plan', None)
+    track_event('subscription_started', plan=plano, amount=float(price))
 
     return redirect(init_point)
 
@@ -862,53 +865,10 @@ def onboarding():
     )
     tem_clinica = bool(getattr(current_user, 'clinicas', None))
     e_veterinario = has_veterinarian_profile(current_user)
-    activation_steps = []
-    if tem_clinica:
-        clinic_ids = [clinic.id for clinic in current_user.clinicas]
-        has_patient = bool(
-            Animal.query
-            .filter(Animal.clinica_id.in_(clinic_ids))
-            .filter(Animal.removido_em.is_(None))
-            .first()
-        )
-        has_appointment = bool(
-            Appointment.query
-            .filter(Appointment.clinica_id.in_(clinic_ids))
-            .first()
-        )
-        membership = (
-            ensure_veterinarian_membership(current_user.veterinario)
-            if e_veterinario
-            else None
-        )
-        has_payment = bool(membership and membership.has_payment_method())
-        activation_steps = [
-            {
-                'label': 'Clínica cadastrada',
-                'done': True,
-                'url': url_for('minha_clinica'),
-                'cta': 'Abrir clínica',
-            },
-            {
-                'label': 'Primeiro paciente cadastrado',
-                'done': has_patient,
-                'url': url_for('novo_animal'),
-                'cta': 'Cadastrar paciente',
-            },
-            {
-                'label': 'Primeiro agendamento criado',
-                'done': has_appointment,
-                'url': url_for('appointments'),
-                'cta': 'Criar agendamento',
-            },
-            {
-                'label': 'Renovação configurada',
-                'done': has_payment,
-                'url': url_for('veterinarian_membership'),
-                'cta': 'Ver assinatura',
-                'optional': True,
-            },
-        ]
+    from services.activation import activation_steps as _activation_steps
+
+    activation_steps = _activation_steps(current_user)
+    if activation_steps:
         completed = sum(1 for step in activation_steps if step['done'])
         track_event(
             'onboarding_progress_viewed',
@@ -1331,34 +1291,116 @@ def robots_txt():
         "Disallow: /register\n"
         "Disallow: /painel\n"
         "Disallow: /admin\n"
+        "Disallow: /carrinho\n"
+        "Disallow: /checkout\n"
+        "Disallow: /minhas-compras\n"
         f"Sitemap: {sitemap_url}\n"
     )
     response.headers['Content-Type'] = 'text/plain; charset=utf-8'
     return response
 
 
+#: Páginas institucionais estáveis. O que é gerado por dado — cidade,
+#: profissional, produto — entra depois, e só quando existe de verdade.
+_SITEMAP_STATIC_PATHS = (
+    '/',
+    '/precos',
+    '/para-tutores',
+    '/estudantes',
+    '/sobre',
+    '/parceiros/clinica',
+    '/parceiros/loja',
+    '/parceiros/loja/produtos',
+    '/servicos',
+    '/veterinarios',
+    '/privacy',
+    '/terms',
+    '/support',
+    '/chatgpt',
+)
+
+
+def _sitemap_dynamic_paths() -> list[str]:
+    """URLs de aquisição geradas a partir da oferta que existe hoje.
+
+    "vacina a domicílio em Belo Horizonte" e "ultrassom veterinário em
+    Contagem" são buscas com intenção comercial e concorrência local baixa. As
+    páginas já existiam; faltava oferecê-las ao rastreador.
+    """
+    from services.offer_availability import health_plan_is_live, store_is_live
+
+    paths: list[str] = []
+
+    try:
+        from services.vaccine_service_paid import list_cidades as _vaccine_cities
+
+        vets = [
+            vet for vet in _public_veterinarians_query().all()
+            if _is_public_veterinarian(vet)
+        ]
+        cidades = {
+            city
+            for vet in vets
+            for city in _vet_all_public_cities(vet)
+            if city
+        }
+        cidades.update(city for city in _vaccine_cities() if city)
+
+        for cidade in sorted(cidades):
+            encoded = quote(cidade, safe='')
+            paths.append(f'/servicos?cidade={encoded}')
+            paths.append(f'/veterinarios?cidade={encoded}')
+
+        for vet in vets:
+            paths.append(f'/veterinario/{vet.id}/solicitar')
+    except Exception:  # noqa: BLE001 — sitemap degradado é melhor que 500
+        current_app.logger.warning('Falha ao montar rotas locais do sitemap', exc_info=True)
+
+    try:
+        if store_is_live():
+            from models import Product
+
+            paths.append('/loja')
+            produtos = (
+                Product.query
+                .filter(Product.status == 'active')
+                .filter(Product.is_demo.is_(False))
+                .order_by(Product.id)
+                .limit(500)
+                .all()
+            )
+            paths.extend(f'/produto/{produto.id}' for produto in produtos)
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning('Falha ao montar rotas da loja no sitemap', exc_info=True)
+
+    try:
+        if health_plan_is_live():
+            paths.append('/plano-saude')
+    except Exception:  # noqa: BLE001
+        pass
+
+    return paths
+
+
 @bp.route('/sitemap.xml')
 def sitemap_xml():
-    """Small explicit sitemap for stable, public acquisition pages."""
+    """Sitemap das páginas públicas — institucionais e geradas por dado.
+
+    Uma oferta só é anunciada ao rastreador quando existe: a loja entra
+    quando há catálogo real, o plano de saúde quando há plano cadastrado.
+    Oferecer vitrine vazia à busca queima a confiança de quem chega por ela.
+    """
     base = _oauth_issuer()
-    paths = (
-        '/',
-        '/precos',
-        '/para-tutores',
-        '/estudantes',
-        '/sobre',
-        '/parceiros/clinica',
-        '/parceiros/loja',
-        '/parceiros/loja/produtos',
-        '/loja',
-        '/plano-saude',
-        '/servicos',
-        '/privacy',
-        '/terms',
-        '/support',
-        '/chatgpt',
-    )
-    body = ''.join(f'<url><loc>{base}{path}</loc></url>' for path in paths)
+    paths = list(_SITEMAP_STATIC_PATHS) + _sitemap_dynamic_paths()
+
+    seen: set[str] = set()
+    body = ''
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        body += f'<url><loc>{escape(base + path)}</loc></url>'
+
     response = make_response(
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -2080,15 +2122,26 @@ def servicos():
             'cta': 'Ver e contratar',
         })
 
+    # Banho e tosa deixa de ser "em breve" sozinho, no instante em que a
+    # primeira parceira publicar um plano ativo — sem depender de alguém
+    # lembrar de virar uma chave.
+    from services.offer_availability import grooming_is_public
+
+    has_grooming = grooming_is_public()
+
     other_services = [
         {
             'icon': 'fa-scissors',
             'color': 'warning',
             'title': 'Banho & Tosa',
-            'description': 'Planos mensais de banho e tosa nas clínicas e casas parceiras. Em breve disponível.',
+            'description': (
+                'Planos mensais de banho e tosa nas clínicas e casas parceiras da região.'
+                if has_grooming
+                else 'Planos mensais de banho e tosa nas clínicas e casas parceiras. Em breve disponível.'
+            ),
             'url': url_for('grooming_planos_publicos'),
             'cta': 'Ver planos',
-            'soon': True,
+            'soon': not has_grooming,
         },
         {
             'icon': 'fa-dog',
@@ -2257,16 +2310,32 @@ def api_geo_cidade():
 
 
 @bp.route('/servicos/vacinas', methods=['GET', 'POST'])
-@login_required
 def servicos_vacinas():
+    """Catálogo de vacinas a domicílio, com preço visível antes do cadastro.
+
+    Este é o serviço de maior intenção de compra do site. Exigir conta — e um
+    pet já cadastrado — antes de mostrar quanto custa colocava três portões
+    entre "quero vacinar meu cachorro em casa" e a resposta. Ver o preço é
+    público; fechar o pedido continua exigindo conta e pet.
+    """
     from models import VaccineServiceRequest
     from services.vaccine_service_paid import create_vaccine_request, list_active_items, list_cidades
+
+    is_logged_in = bool(getattr(current_user, 'is_authenticated', False))
+
+    if request.method == 'POST' and not is_logged_in:
+        return redirect(url_for(
+            'login_view',
+            next=url_for('servicos_vacinas', **(
+                {'cidade': request.form.get('cidade')} if request.form.get('cidade') else {}
+            )),
+        ))
 
     cidades = list_cidades()
     # Prioridade: query param > cidade do endereço do usuário > primeira cidade disponível
     cidade_param = (request.args.get('cidade') or request.form.get('cidade') or '').strip()
     explicit_city = bool(cidade_param)
-    if not cidade_param and current_user.endereco and current_user.endereco.cidade:
+    if not cidade_param and is_logged_in and current_user.endereco and current_user.endereco.cidade:
         cidade_param = current_user.endereco.cidade.strip()
     if not cidade_param and cidades:
         cidade_param = cidades[0]
@@ -2277,6 +2346,8 @@ def servicos_vacinas():
         .filter(Animal.removido_em.is_(None))
         .order_by(Animal.name)
         .all()
+        if is_logged_in
+        else []
     )
 
     if request.method == 'POST':
@@ -2335,6 +2406,12 @@ def servicos_vacinas():
                     )
                     if first_payment_url is None:
                         first_payment_url = payment_url
+                track_event(
+                    'service_requested',
+                    service='vacina_domicilio',
+                    city=cidade_selecionada,
+                    items=len(selected_animals),
+                )
                 return redirect(first_payment_url)
             except PaymentPreferenceError as exc:
                 db.session.rollback()
@@ -2353,11 +2430,13 @@ def servicos_vacinas():
         .order_by(VaccineServiceRequest.created_at.desc())
         .limit(20)
         .all()
+        if is_logged_in
+        else []
     )
 
-    prof_phone = current_user.phone or ''
+    prof_phone = (current_user.phone or '') if is_logged_in else ''
     prof = {'street': '', 'number': '', 'complement': '', 'neighborhood': ''}
-    if current_user.endereco:
+    if is_logged_in and current_user.endereco:
         prof = {
             'street': current_user.endereco.rua or '',
             'number': current_user.endereco.numero or '',

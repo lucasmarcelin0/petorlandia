@@ -350,6 +350,9 @@ def test_reconciliacao_importa_assinatura_legada_e_suas_cobrancas(app):
         "charges_seen": 1,
         "failures": 0,
         "missing": 0,
+        # A primeira cobrança paga desta assinatura é uma conversão de
+        # avaliação — processada ao fim da reconciliação.
+        "conversions": 1,
     }
     subscription = VeterinarianMembershipSubscription.query.one()
     charge = VeterinarianMembershipCharge.query.one()
