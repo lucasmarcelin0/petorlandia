@@ -86,7 +86,7 @@
   {# clinic.css ainda contém a base visual compartilhada (body, footer,
      alertas e responsividade). Mantê-la global evita que páginas públicas
      percam essas regras até a separação definitiva em base-shell.css. #}
-  <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/clinic.css', v='20260802-admin-navbar') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
   <!-- Analytics opcionais: nenhum recurso do Google é carregado antes da
