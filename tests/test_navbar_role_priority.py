@@ -85,7 +85,7 @@ def test_admin_nav_uses_wide_breakpoint_and_flexible_shell(client, app):
     page = client.get('/').get_data(as_text=True)
 
     assert 'navbar-expand-xxl navbar--admin' in page
-    assert 'clinic.css?v=20260802-mobile-navbar' in page
+    assert 'clinic.css?v=20260802-mobile-navbar2' in page
 
 
 def test_authenticated_navbar_keeps_mobile_logout_at_top_of_account_menu(client, app):
@@ -120,3 +120,5 @@ def test_mobile_navbar_css_limits_menu_to_visible_viewport():
     assert 'overscroll-behavior: contain;' in css
     assert 'calc(1rem + env(safe-area-inset-bottom))' in css
     assert '.nav-account__logout-mobile' in css
+    assert 'flex: 0 0 100%;' in css
+    assert 'width: 100%;' in css
