@@ -823,7 +823,14 @@ footer {
 }
 
 @media (max-width: 991.98px) {
-  .navbar-collapse {
+  .navbar .container-fluid {
+    flex-wrap: wrap;
+  }
+
+  .navbar-collapse,
+  .navbar--admin .navbar-collapse {
+    flex: 0 0 100%;
+    width: 100%;
     background-color: var(--light-color);
     max-height: calc(100vh - var(--topbar-height) - env(safe-area-inset-top));
     max-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
@@ -889,7 +896,13 @@ footer {
    xxl, o menu continua recolhido e precisa das mesmas garantias de altura e
    rolagem da navegação em celulares. */
 @media (min-width: 992px) and (max-width: 1399.98px) {
+  .navbar--admin .container-fluid {
+    flex-wrap: wrap;
+  }
+
   .navbar--admin .navbar-collapse {
+    flex: 0 0 100%;
+    width: 100%;
     background-color: var(--light-color);
     max-height: calc(100vh - var(--topbar-height) - env(safe-area-inset-top));
     max-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
