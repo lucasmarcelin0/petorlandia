@@ -611,6 +611,21 @@ p {
   margin: 0.35rem 0;
 }
 
+.nav-account__logout-mobile {
+  display: none;
+}
+
+.nav-logout-link {
+  color: #a52834;
+  font-weight: 600;
+}
+
+.nav-logout-link:hover,
+.nav-logout-link:focus-visible {
+  color: #842029;
+  background-color: #fbeaec;
+}
+
 /* The admin navigation has more destinations than a standard consumer bar.
    Keep the brand and menu in one flex row without allowing the last account
    item to be pushed outside the viewport. At medium widths Bootstrap collapses
@@ -807,27 +822,124 @@ footer {
   background: #3a5ccc;
 }
 
-@media (max-width: 992px) {
+@media (max-width: 991.98px) {
   .navbar-collapse {
     background-color: var(--light-color);
-    padding: 20px;
+    max-height: calc(100vh - var(--topbar-height) - env(safe-area-inset-top));
+    max-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding: 0.75rem 0.85rem calc(1rem + env(safe-area-inset-bottom));
     border-radius: 0 0 10px 10px;
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    margin-top: 10px;
+    margin-top: 0.35rem;
   }
 
   .nav-link {
-    margin-bottom: 5px;
+    margin-bottom: 0;
   }
 
   .app-navbar-nav {
     align-items: stretch;
-    gap: 0.25rem;
+    justify-content: flex-start;
+    gap: 0.1rem;
   }
 
   .app-navbar-nav .nav-link,
   .app-navbar-nav .dropdown-item {
     width: 100%;
+  }
+
+  .app-navbar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.55rem 0.7rem !important;
+  }
+
+  .app-navbar-nav .dropdown-menu {
+    margin: 0.15rem 0 0.4rem;
+    padding: 0.35rem;
+    box-shadow: inset 0 0 0 1px rgba(90, 92, 105, 0.08);
+  }
+
+  .app-navbar-nav .dropdown-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0.55rem 0.7rem;
+    border-radius: 7px;
+  }
+
+  .nav-account__logout-mobile {
+    display: list-item;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(165, 40, 52, 0.15);
+  }
+
+  .nav-account__logout-desktop {
+    display: none;
+  }
+}
+
+/* Administradores usam o breakpoint xxl por terem mais destinos. Entre lg e
+   xxl, o menu continua recolhido e precisa das mesmas garantias de altura e
+   rolagem da navegação em celulares. */
+@media (min-width: 992px) and (max-width: 1399.98px) {
+  .navbar--admin .navbar-collapse {
+    background-color: var(--light-color);
+    max-height: calc(100vh - var(--topbar-height) - env(safe-area-inset-top));
+    max-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding: 0.75rem 0.85rem calc(1rem + env(safe-area-inset-bottom));
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    margin-top: 0.35rem;
+  }
+
+  .navbar--admin .app-navbar-nav {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .navbar--admin .app-navbar-nav .nav-link,
+  .navbar--admin .app-navbar-nav .dropdown-item {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .navbar--admin .app-navbar-nav .nav-link {
+    padding: 0.55rem 0.7rem !important;
+  }
+
+  .navbar--admin .app-navbar-nav .dropdown-menu {
+    margin: 0.15rem 0 0.4rem;
+    padding: 0.35rem;
+    box-shadow: inset 0 0 0 1px rgba(90, 92, 105, 0.08);
+  }
+
+  .navbar--admin .app-navbar-nav .dropdown-item {
+    padding: 0.55rem 0.7rem;
+    border-radius: 7px;
+  }
+
+  .navbar--admin .nav-account__logout-mobile {
+    display: list-item;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(165, 40, 52, 0.15);
+  }
+
+  .navbar--admin .nav-account__logout-desktop {
+    display: none;
   }
 }
 
