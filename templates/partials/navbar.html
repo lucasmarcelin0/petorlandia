@@ -320,11 +320,16 @@
           </a>
         </li>
 
-        <li class="nav-item dropdown">
+        <li class="nav-item dropdown nav-account">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user-circle me-1 text-primary"></i> {{ first_name or 'Conta' }}
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li class="nav-account__logout-mobile">
+              <a class="dropdown-item nav-logout-link" href="{{ url_for('logout') }}">
+                <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair da conta
+              </a>
+            </li>
             <li><a class="dropdown-item" href="{{ url_for('profile') }}">
                 <i class="fas fa-user me-2 text-primary"></i> Meu perfil</a></li>
             <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}">
@@ -356,7 +361,7 @@
               </a>
             </li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+            <li class="nav-account__logout-desktop"><a class="dropdown-item nav-logout-link" href="{{ url_for('logout') }}">
                 <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
           </ul>
         </li>
