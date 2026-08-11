@@ -44,6 +44,8 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert room.status_code == 200
     room_html = room.get_data(as_text=True)
     room_script = client.get("/surpresa/sala-a-dois.js").get_data(as_text=True)
+    assert 'src="/socket.io/socket.io.js"' in room_html
+    assert "cdn.socket.io" not in room_html
     assert "Compartilhar tela sem câmera" in room_html
     assert "Entrar na sala" in room_html
     assert "Jogo da Velha" not in room_html
