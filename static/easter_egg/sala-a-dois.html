@@ -200,11 +200,11 @@
         <p>Uma sala privada para conversar e compartilhar a tela. Envie o link para sua namorada e assistam, naveguem ou descubram coisas juntos.</p>
         <div class="features" aria-label="Recursos da sala">
           <span class="feature">🎥 Vídeo a dois</span>
-          <span class="feature">🖥️ Compartilhar tela</span>
+          <span class="feature">🖥️ Compartilhar tela sem câmera</span>
           <span class="feature">🔒 Sala só para vocês</span>
         </div>
-        <button class="start-button" id="startCall" type="button">Começar nosso encontro <span>→</span></button>
-        <p class="privacy">🔒 O áudio e o vídeo são criptografados durante a chamada e não são gravados.</p>
+        <button class="start-button" id="startCall" type="button">Entrar na sala <span>→</span></button>
+        <p class="privacy">🔒 Câmera, microfone e tela só são solicitados quando você escolher ativá-los. Nada é gravado.</p>
       </div>
       <div class="lobby-art" aria-hidden="true">
         <div class="portrait portrait--one"><span>Você</span></div>
@@ -243,8 +243,9 @@
             </div>
           </div>
           <div class="controls" aria-label="Controles da chamada">
-            <button class="control" id="toggleMic" type="button" aria-pressed="false" title="Ligar ou desligar microfone">🎙️ <span>Microfone</span></button>
-            <button class="control" id="toggleCamera" type="button" aria-pressed="false" title="Ligar ou desligar câmera">📹 <span>Câmera</span></button>
+            <button class="control" id="enableMedia" type="button" title="Ativar câmera e microfone">🎙️ <span>Ativar câmera e microfone</span></button>
+            <button class="control" id="toggleMic" type="button" aria-pressed="false" title="Ligar ou desligar microfone" hidden>🎙️ <span>Microfone</span></button>
+            <button class="control" id="toggleCamera" type="button" aria-pressed="false" title="Ligar ou desligar câmera" hidden>📹 <span>Câmera</span></button>
             <button class="control" id="shareScreen" type="button" aria-pressed="false" title="Compartilhar a tela">🖥️ <span>Compartilhar tela</span></button>
             <button class="control control--hangup" id="hangUp" type="button" title="Encerrar chamada">☎ <span>Encerrar</span></button>
           </div>

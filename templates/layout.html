@@ -94,6 +94,7 @@
   <script>
     window.PetorlandiaAnalytics = (function () {
       const storageKey = 'petorlandia.analytics_consent.v1';
+      const cookieKey = 'petorlandia_analytics_consent';
       const measurementId = {{ config.GA_MEASUREMENT_ID|tojson }};
       let started = false;
 
@@ -102,8 +103,21 @@
       window.gtag = window.gtag || gtag;
 
       function readChoice() {
-        try { return window.localStorage.getItem(storageKey); }
-        catch (error) { return null; }
+        try {
+          const localChoice = window.localStorage.getItem(storageKey);
+          if (localChoice === 'granted' || localChoice === 'denied') return localChoice;
+        } catch (error) {}
+        const cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + cookieKey + '=([^;]*)'));
+        const cookieChoice = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+        return cookieChoice === 'granted' || cookieChoice === 'denied' ? cookieChoice : null;
+      }
+
+      function saveChoice(value) {
+        try { window.localStorage.setItem(storageKey, value); }
+        catch (error) {}
+        const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = cookieKey + '=' + encodeURIComponent(value)
+          + '; Max-Age=31536000; Path=/; SameSite=Lax' + secureFlag;
       }
 
       function start() {
@@ -128,8 +142,7 @@
       }
 
       function setChoice(value) {
-        try { window.localStorage.setItem(storageKey, value); }
-        catch (error) {}
+        saveChoice(value);
         const banner = document.getElementById('analytics-consent');
         if (banner) banner.hidden = true;
         if (value === 'granted') start();

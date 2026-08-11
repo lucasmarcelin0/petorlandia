@@ -14,6 +14,7 @@
   const inviteInput = $("#inviteLink");
   const roomCodeTop = $("#roomCodeTop");
   const localTile = $("#localTile");
+  const enableMediaButton = $("#enableMedia");
   const micButton = $("#toggleMic");
   const cameraButton = $("#toggleCamera");
   const shareButton = $("#shareScreen");
@@ -51,6 +52,8 @@
     localStream: null,
     cameraTrack: null,
     screenTrack: null,
+    screenStream: null,
+    screenSender: null,
     pendingCandidates: [],
     seat: null,
     participants: 0,
@@ -104,7 +107,10 @@
     });
     state.peer = peer;
 
-    state.localStream.getTracks().forEach((track) => peer.addTrack(track, state.localStream));
+    state.localStream?.getTracks().forEach((track) => peer.addTrack(track, state.localStream));
+    if (state.screenTrack && state.screenStream) {
+      state.screenSender = peer.addTrack(state.screenTrack, state.screenStream);
+    }
     peer.onicecandidate = ({ candidate }) => {
       if (candidate && state.socket?.connected) {
         state.socket.emit("webrtc_signal", { candidate: candidate.toJSON() });
@@ -137,10 +143,14 @@
 
   const sendOffer = async () => {
     const peer = ensurePeer();
-    if (peer.signalingState !== "stable") return;
+    if (!state.socket?.connected || peer.signalingState !== "stable") return;
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     state.socket.emit("webrtc_signal", { description: peer.localDescription });
+  };
+
+  const renegotiate = async () => {
+    if (state.participants >= 2) await sendOffer();
   };
 
   const flushCandidates = async () => {
@@ -162,6 +172,7 @@
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
           state.socket.emit("webrtc_signal", { description: peer.localDescription });
+          if (state.screenTrack) await renegotiate();
         } else if (description.type === "answer" && peer.signalingState === "have-local-offer") {
           await peer.setRemoteDescription(description);
           await flushCandidates();
@@ -239,9 +250,14 @@
     });
   };
 
-  const startCall = async () => {
-    startButton.disabled = true;
-    startButton.firstChild.textContent = "Abrindo câmera… ";
+  const showMediaControls = (enabled) => {
+    enableMediaButton.hidden = enabled;
+    micButton.hidden = !enabled;
+    cameraButton.hidden = !enabled;
+  };
+
+  const requestLocalMedia = async () => {
+    if (state.localStream) return state.localStream;
     try {
       if (!window.isSecureContext && !["localhost", "127.0.0.1"].includes(window.location.hostname)) {
         throw new Error("A videochamada precisa ser aberta por HTTPS para acessar câmera e microfone.");
@@ -255,13 +271,37 @@
       });
       state.cameraTrack = state.localStream.getVideoTracks()[0] || null;
       localVideo.srcObject = state.localStream;
+      showMediaControls(true);
+      if (state.peer) {
+        state.localStream.getTracks().forEach((track) => {
+          if (track.kind !== "video" || !state.screenTrack) {
+            state.peer.addTrack(track, state.localStream);
+          }
+        });
+        await renegotiate();
+      }
+      return state.localStream;
+    } catch (error) {
+      const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
+      enableMediaButton.innerHTML = "🔒 <span>Liberar câmera e microfone</span>";
+      showToast(denied
+        ? "Câmera e microfone estão bloqueados. Use o cadeado ao lado do endereço para permitir."
+        : (error.message || "Não foi possível acessar câmera e microfone."));
+      throw error;
+    }
+  };
+
+  const startRoom = () => {
+    startButton.disabled = true;
+    try {
       lobby.hidden = true;
       callRoom.hidden = false;
       connectSocket();
     } catch (error) {
+      lobby.hidden = false;
+      callRoom.hidden = true;
       startButton.disabled = false;
-      startButton.innerHTML = "Tentar novamente <span>→</span>";
-      showToast(error.message || "Autorize a câmera e o microfone para continuar.");
+      showToast(error.message || "Não foi possível entrar na sala.");
     }
   };
 
@@ -281,8 +321,15 @@
     state.screenTrack.onended = null;
     state.screenTrack.stop();
     state.screenTrack = null;
-    const sender = state.peer?.getSenders().find((item) => item.track?.kind === "video");
-    if (sender && state.cameraTrack) await sender.replaceTrack(state.cameraTrack);
+    const sender = state.screenSender || state.peer?.getSenders().find((item) => item.track?.kind === "video");
+    if (sender && state.cameraTrack) {
+      await sender.replaceTrack(state.cameraTrack);
+    } else if (sender && state.peer) {
+      state.peer.removeTrack(sender);
+      await renegotiate();
+    }
+    state.screenStream = null;
+    state.screenSender = null;
     localVideo.srcObject = state.localStream;
     localTile.classList.remove("is-sharing");
     shareButton.classList.remove("is-active");
@@ -302,10 +349,13 @@
       const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = displayStream.getVideoTracks()[0];
       const peer = ensurePeer();
-      const sender = peer.getSenders().find((item) => item.track?.kind === "video");
-      if (!sender) throw new Error("A câmera precisa estar conectada antes de compartilhar a tela.");
+      let sender = peer.getSenders().find((item) => item.track?.kind === "video");
+      const needsNegotiation = !sender;
+      if (sender) await sender.replaceTrack(screenTrack);
+      else sender = peer.addTrack(screenTrack, displayStream);
       state.screenTrack = screenTrack;
-      await sender.replaceTrack(screenTrack);
+      state.screenStream = displayStream;
+      state.screenSender = sender;
       localVideo.srcObject = displayStream;
       localTile.classList.add("is-sharing");
       shareButton.classList.add("is-active");
@@ -313,6 +363,7 @@
       shareButton.firstChild.textContent = "⏹️ ";
       screenTrack.onended = stopScreenShare;
       state.socket?.emit("screen_share_state", { active: true });
+      if (needsNegotiation) await renegotiate();
       showToast("Sua tela está sendo compartilhada");
     } catch (error) {
       if (error.name !== "NotAllowedError") showToast(error.message || "Não foi possível compartilhar a tela.");
@@ -336,12 +387,15 @@
     state.localStream = null;
     state.cameraTrack = null;
     state.screenTrack = null;
+    state.screenStream = null;
+    state.screenSender = null;
     state.socket = null;
     state.ended = false;
     showToast("Chamada encerrada");
   };
 
-  startButton.addEventListener("click", startCall);
+  startButton.addEventListener("click", startRoom);
+  enableMediaButton.addEventListener("click", () => { requestLocalMedia().catch(() => {}); });
   $("#copyInvite").addEventListener("click", copyInvite);
   micButton.addEventListener("click", () => toggleTrack("audio", micButton));
   cameraButton.addEventListener("click", () => toggleTrack("video", cameraButton));

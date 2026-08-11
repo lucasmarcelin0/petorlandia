@@ -37,6 +37,8 @@ def test_visitante_anonimo_recebe_a_tag_sem_user_id(app, client):
     assert 'data-analytics-accept' in html
     assert 'data-analytics-reject' in html
     assert "readChoice() !== 'granted'" in html
+    assert "petorlandia_analytics_consent" in html
+    assert "document.cookie = cookieKey" in html
     assert "'anonymize_ip': true" in html
     # Sem login não há quem costurar: mandar user_id vazio sujaria o relatório.
     assert "user_id" not in html

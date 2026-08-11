@@ -42,8 +42,12 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert arcade.status_code == 200
     assert b"/surpresa/sala-a-dois.html" in arcade.data
     assert room.status_code == 200
-    assert "Compartilhar tela" in room.get_data(as_text=True)
-    assert "Jogo da Velha" not in room.get_data(as_text=True)
+    room_html = room.get_data(as_text=True)
+    room_script = client.get("/surpresa/sala-a-dois.js").get_data(as_text=True)
+    assert "Compartilhar tela sem câmera" in room_html
+    assert "Entrar na sala" in room_html
+    assert "Jogo da Velha" not in room_html
+    assert "A câmera precisa estar conectada antes de compartilhar a tela" not in room_script
 
 
 def test_call_room_relays_signals_only_to_the_other_participant(app):
