@@ -292,14 +292,39 @@
     });
   };
 
-  const showMediaControls = (enabled) => {
-    enableMediaButton.hidden = enabled;
-    micButton.hidden = !enabled;
-    cameraButton.hidden = !enabled;
+  const getLocalTrack = (kind) => state.localStream?.getTracks().find((track) => track.kind === kind) || null;
+
+  const updateMediaControls = () => {
+    const hasAudio = Boolean(getLocalTrack("audio"));
+    const hasVideo = Boolean(getLocalTrack("video"));
+    micButton.hidden = !hasAudio;
+    cameraButton.hidden = !hasVideo;
+    enableMediaButton.hidden = hasAudio && hasVideo;
+    if (!enableMediaButton.hidden && !state.mediaRequestInFlight) {
+      const missing = [!hasVideo && "câmera", !hasAudio && "microfone"].filter(Boolean).join(" e ");
+      enableMediaButton.innerHTML = `🎙️ <span>Liberar ${missing}</span>`;
+    }
+  };
+
+  const describeMediaFailures = (failures) => {
+    const devices = failures.map(({ kind }) => kind === "video" ? "a câmera" : "o microfone").join(" e ");
+    const errorNames = failures.map(({ error }) => error?.name);
+    if (errorNames.every((name) => name === "NotAllowedError" || name === "PermissionDeniedError")) {
+      return `${devices} foi bloqueado. Se o cadeado do Chrome já estiver em “Permitir”, abra Configurações do Windows > Privacidade e segurança > Câmera e Microfone e habilite o acesso para aplicativos de desktop (Chrome).`;
+    }
+    if (errorNames.some((name) => name === "NotFoundError")) {
+      return `Não encontramos ${devices}. Conecte o dispositivo e confirme se ele aparece nas configurações do Windows.`;
+    }
+    if (errorNames.some((name) => name === "NotReadableError" || name === "TrackStartError")) {
+      return `${devices} está sendo usado por outro aplicativo. Feche Zoom, Meet, Teams ou outro programa que possa estar usando o dispositivo.`;
+    }
+    return `Não foi possível ativar ${devices}. Tente fechar outros aplicativos e usar “Tentar novamente”.`;
   };
 
   const requestLocalMedia = async () => {
-    if (state.localStream) return state.localStream;
+    const hasAudio = Boolean(getLocalTrack("audio"));
+    const hasVideo = Boolean(getLocalTrack("video"));
+    if (hasAudio && hasVideo) return state.localStream;
     if (state.mediaRequestInFlight) return null;
     setMediaRequestState(true);
     hideMediaHelp();
@@ -310,33 +335,46 @@
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("Este navegador não oferece acesso à câmera e ao microfone.");
       }
-      state.localStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-      state.cameraTrack = state.localStream.getVideoTracks()[0] || null;
+      const missingKinds = [
+        !hasVideo && { kind: "video", constraints: { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } } },
+        !hasAudio && { kind: "audio", constraints: { audio: { echoCancellation: true, noiseSuppression: true } } },
+      ].filter(Boolean);
+      const acquiredTracks = [];
+      const failures = [];
+      for (const request of missingKinds) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia(request.constraints);
+          acquiredTracks.push(...stream.getTracks());
+        } catch (error) {
+          failures.push({ kind: request.kind, error });
+        }
+      }
+      if (!acquiredTracks.length) throw failures[0]?.error || new Error("Não foi possível acessar câmera e microfone.");
+      if (!state.localStream) state.localStream = new MediaStream();
+      acquiredTracks.forEach((track) => state.localStream.addTrack(track));
+      state.cameraTrack = getLocalTrack("video");
       localVideo.srcObject = state.localStream;
-      showMediaControls(true);
-      hideMediaHelp();
+      updateMediaControls();
       if (state.peer) {
-        state.localStream.getTracks().forEach((track) => {
+        acquiredTracks.forEach((track) => {
           if (track.kind !== "video" || !state.screenTrack) {
             state.peer.addTrack(track, state.localStream);
           }
         });
         await renegotiate();
       }
+      if (failures.length) {
+        const message = describeMediaFailures(failures);
+        showMediaHelp(message, "Ativamos um dispositivo; falta liberar o outro");
+        showToast("Um dispositivo foi ativado; veja abaixo o que falta liberar");
+      } else {
+        hideMediaHelp();
+        showToast("Câmera e microfone ativados");
+      }
       return state.localStream;
     } catch (error) {
       const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
-      let message = error.message || "Não foi possível acessar câmera e microfone.";
-      if (denied) {
-        message = "O navegador bloqueou a câmera ou o microfone. Abra o cadeado ao lado do endereço, permita os dois e depois tente novamente.";
-      } else if (error?.name === "NotFoundError") {
-        message = "Não encontramos câmera ou microfone. Conecte um dispositivo e feche outros aplicativos que possam estar usando-o.";
-      } else if (error?.name === "NotReadableError") {
-        message = "A câmera ou o microfone já está em uso por outro aplicativo. Feche Zoom, Meet ou outro programa e tente novamente.";
-      }
+      const message = describeMediaFailures([{ kind: "video", error }, { kind: "audio", error }]);
       showMediaHelp(message, denied ? "A permissão está bloqueada no navegador" : "Não foi possível ativar os dispositivos");
       showToast(denied ? "Permissão bloqueada — veja como liberar abaixo" : message);
       throw error;
@@ -350,7 +388,7 @@
     try {
       lobby.hidden = true;
       callRoom.hidden = false;
-      showMediaControls(false);
+      updateMediaControls();
       hideMediaHelp();
       state.spotlightChosen = false;
       setSpotlight("remote");
@@ -451,7 +489,7 @@
     state.socket = null;
     state.ended = false;
     state.spotlightChosen = false;
-    showMediaControls(false);
+    updateMediaControls();
     hideMediaHelp();
     setSpotlight("remote");
     showToast("Chamada encerrada");

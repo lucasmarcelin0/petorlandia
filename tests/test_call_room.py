@@ -57,6 +57,8 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "A câmera precisa estar conectada antes de compartilhar a tela" not in room_script
     assert "setSpotlight" in room_script
     assert "showMediaHelp" in room_script
+    assert "getUserMedia(request.constraints)" in room_script
+    assert "Ativamos um dispositivo; falta liberar o outro" in room_script
 
 
 def test_call_room_relays_signals_only_to_the_other_participant(app):
