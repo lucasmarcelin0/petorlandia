@@ -127,9 +127,9 @@
     .video-card { padding: 14px; }
     .video-stage { position: relative; min-height: 540px; height: min(68vh, 680px); overflow: hidden; border-radius: 17px; background: #0b0810; }
     video { display: block; width: 100%; height: 100%; object-fit: cover; background: #0b0810; }
-    #remoteVideo { position: absolute; inset: 0; }
+    #remoteVideo { position: absolute; z-index: 1; inset: 0; }
     #remoteVideo.is-screen { object-fit: contain; }
-    .remote-placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: radial-gradient(circle at 50% 45%, #2e1d3c, #0c0911 68%); }
+    .remote-placeholder { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: radial-gradient(circle at 50% 45%, #2e1d3c, #0c0911 68%); }
     .remote-placeholder[hidden] { display: none; }
     .waiting-heart { display: block; font-size: 3.5rem; margin-bottom: 16px; animation: heartbeat 2.4s ease-in-out infinite; }
     .remote-placeholder strong { display: block; font-family: "Playfair Display", serif; font-size: 1.45rem; }
@@ -138,6 +138,13 @@
     #localVideo { transform: scaleX(-1); }
     .local-tile.is-sharing #localVideo { transform: none; object-fit: contain; }
     .local-label { position: absolute; left: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; background: rgba(0, 0, 0, .58); font-size: .68rem; }
+    .video-stage.is-local-featured .local-tile { z-index: 1; inset: 0; width: auto; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
+    .video-stage.is-local-featured #remoteVideo { z-index: 4; inset: 14px 14px auto auto; width: min(26%, 185px); height: auto; aspect-ratio: 3 / 4; overflow: hidden; border: 2px solid rgba(255, 255, 255, .58); border-radius: 15px; box-shadow: 0 14px 34px rgba(0, 0, 0, .34); object-fit: cover; }
+    .video-stage.is-local-featured #remoteVideo.is-screen { object-fit: contain; }
+    .video-stage.is-local-featured .remote-placeholder { display: none; }
+    .spotlight-switcher { position: absolute; z-index: 6; left: 14px; bottom: 14px; display: flex; gap: 7px; padding: 6px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 7, 13, .72); backdrop-filter: blur(10px); }
+    .spotlight-button { padding: 7px 10px; border: 0; border-radius: 999px; background: transparent; color: #e9dbe8; font-size: .74rem; font-weight: 700; }
+    .spotlight-button[aria-pressed="true"] { background: #fff; color: #2b1b31; }
     .connection-badge { position: absolute; z-index: 4; left: 14px; top: 14px; padding: 7px 11px; border-radius: 999px; background: rgba(8, 7, 11, .7); border: 1px solid rgba(255, 255, 255, .12); font-size: .72rem; color: #ddcedc; }
     .connection-badge::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #f5b84a; }
     .connection-badge.is-live::before { background: var(--green); box-shadow: 0 0 0 4px rgba(97, 215, 170, .14); }
@@ -148,6 +155,12 @@
     .control.is-active { background: rgba(97, 215, 170, .17); border-color: rgba(97, 215, 170, .4); }
     .control--hangup { padding-inline: 21px; background: var(--danger); border-color: transparent; font-weight: 700; }
     .control--hangup:hover { background: #ff6679; }
+    .media-help { margin: 14px 0 0; padding: 14px 16px; border: 1px solid rgba(245, 184, 74, .52); border-radius: 14px; background: rgba(245, 184, 74, .1); color: #fff4d9; }
+    .media-help[hidden] { display: none; }
+    .media-help strong { display: block; }
+    .media-help p { margin: 6px 0 0; color: #f1dfbc; line-height: 1.45; font-size: .88rem; }
+    .media-help ol { margin: 9px 0 0 18px; padding: 0; color: #f1dfbc; font-size: .84rem; line-height: 1.55; }
+    .media-help button { margin-top: 11px; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .42); background: #fff; color: #2b1b31; font-weight: 700; }
     .toast { position: fixed; z-index: 20; left: 50%; bottom: 26px; transform: translate(-50%, 18px); padding: 10px 16px; border-radius: 999px; background: #fff; color: #251833; font-weight: 700; font-size: .82rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; box-shadow: 0 16px 40px rgba(0, 0, 0, .28); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
     @media (max-width: 900px) {
@@ -175,6 +188,9 @@
       .video-card { padding: 8px; border-radius: 18px; }
       .video-stage { min-height: 0; height: 62vh; border-radius: 12px; }
       .local-tile { width: 31%; right: 9px; top: 9px; }
+      .video-stage.is-local-featured #remoteVideo { inset: 9px 9px auto auto; width: 31%; }
+      .spotlight-switcher { left: 9px; bottom: 9px; }
+      .spotlight-button { padding: 7px 8px; }
       .connection-badge { left: 9px; top: 9px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .controls { gap: 7px; }
       .control { height: 43px; padding-inline: 12px; }
@@ -241,6 +257,10 @@
               <video id="localVideo" autoplay muted playsinline></video>
               <span class="local-label">Você</span>
             </div>
+            <div class="spotlight-switcher" role="group" aria-label="Escolher vídeo em destaque">
+              <button class="spotlight-button" id="focusRemote" type="button" aria-pressed="true">Em destaque: parceira</button>
+              <button class="spotlight-button" id="focusLocal" type="button" aria-pressed="false">Minha tela</button>
+            </div>
           </div>
           <div class="controls" aria-label="Controles da chamada">
             <button class="control" id="enableMedia" type="button" title="Ativar câmera e microfone">🎙️ <span>Ativar câmera e microfone</span></button>
@@ -249,6 +269,16 @@
             <button class="control" id="shareScreen" type="button" aria-pressed="false" title="Compartilhar a tela">🖥️ <span>Compartilhar tela</span></button>
             <button class="control control--hangup" id="hangUp" type="button" title="Encerrar chamada">☎ <span>Encerrar</span></button>
           </div>
+          <aside class="media-help" id="mediaHelp" hidden aria-live="polite">
+            <strong id="mediaHelpTitle">Precisamos liberar a câmera e o microfone</strong>
+            <p id="mediaHelpText"></p>
+            <ol>
+              <li>Clique no cadeado ao lado do endereço do site.</li>
+              <li>Em “Câmera” e “Microfone”, escolha “Permitir”.</li>
+              <li>Volte aqui e clique em “Tentar novamente”.</li>
+            </ol>
+            <button id="retryMedia" type="button">Tentar novamente</button>
+          </aside>
         </section>
 
       </div>

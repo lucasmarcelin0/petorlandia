@@ -13,11 +13,18 @@
   const connectionBadge = $("#connectionBadge");
   const inviteInput = $("#inviteLink");
   const roomCodeTop = $("#roomCodeTop");
+  const videoStage = $(".video-stage");
   const localTile = $("#localTile");
   const enableMediaButton = $("#enableMedia");
   const micButton = $("#toggleMic");
   const cameraButton = $("#toggleCamera");
   const shareButton = $("#shareScreen");
+  const focusRemoteButton = $("#focusRemote");
+  const focusLocalButton = $("#focusLocal");
+  const mediaHelp = $("#mediaHelp");
+  const mediaHelpTitle = $("#mediaHelpTitle");
+  const mediaHelpText = $("#mediaHelpText");
+  const retryMediaButton = $("#retryMedia");
   const toast = $("#toast");
 
   const sanitizeRoom = (value) => (value || "")
@@ -58,6 +65,9 @@
     seat: null,
     participants: 0,
     ended: false,
+    spotlight: "remote",
+    spotlightChosen: false,
+    mediaRequestInFlight: false,
   };
 
   const showToast = (message) => {
@@ -70,6 +80,35 @@
   const setConnectionStatus = (message, live = false) => {
     connectionBadge.textContent = message;
     connectionBadge.classList.toggle("is-live", live);
+  };
+
+  const setSpotlight = (target, chosenByUser = false) => {
+    const local = target === "local";
+    state.spotlight = local ? "local" : "remote";
+    if (chosenByUser) state.spotlightChosen = true;
+    videoStage.classList.toggle("is-local-featured", local);
+    focusLocalButton.setAttribute("aria-pressed", String(local));
+    focusRemoteButton.setAttribute("aria-pressed", String(!local));
+  };
+
+  const hideMediaHelp = () => {
+    mediaHelp.hidden = true;
+  };
+
+  const showMediaHelp = (message, title = "Precisamos liberar a câmera e o microfone") => {
+    mediaHelpTitle.textContent = title;
+    mediaHelpText.textContent = message;
+    mediaHelp.hidden = false;
+  };
+
+  const setMediaRequestState = (loading) => {
+    state.mediaRequestInFlight = loading;
+    enableMediaButton.disabled = loading;
+    if (loading) {
+      enableMediaButton.innerHTML = "⏳ <span>Solicitando permissão…</span>";
+    } else if (!state.localStream) {
+      enableMediaButton.innerHTML = "🎙️ <span>Liberar câmera e microfone</span>";
+    }
   };
 
   const copyInvite = async () => {
@@ -224,7 +263,10 @@
     socket.on("webrtc_signal", handleSignal);
     socket.on("screen_share_state", ({ active }) => {
       remoteVideo.classList.toggle("is-screen", active === true);
-      if (active) showToast("A outra tela está sendo compartilhada");
+      if (active) {
+        if (!state.spotlightChosen) setSpotlight("remote");
+        showToast("A outra tela está sendo compartilhada");
+      }
     });
     socket.on("peer_left", async ({ participants }) => {
       state.participants = Number(participants) || 1;
@@ -258,6 +300,9 @@
 
   const requestLocalMedia = async () => {
     if (state.localStream) return state.localStream;
+    if (state.mediaRequestInFlight) return null;
+    setMediaRequestState(true);
+    hideMediaHelp();
     try {
       if (!window.isSecureContext && !["localhost", "127.0.0.1"].includes(window.location.hostname)) {
         throw new Error("A videochamada precisa ser aberta por HTTPS para acessar câmera e microfone.");
@@ -272,6 +317,7 @@
       state.cameraTrack = state.localStream.getVideoTracks()[0] || null;
       localVideo.srcObject = state.localStream;
       showMediaControls(true);
+      hideMediaHelp();
       if (state.peer) {
         state.localStream.getTracks().forEach((track) => {
           if (track.kind !== "video" || !state.screenTrack) {
@@ -283,11 +329,19 @@
       return state.localStream;
     } catch (error) {
       const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
-      enableMediaButton.innerHTML = "🔒 <span>Liberar câmera e microfone</span>";
-      showToast(denied
-        ? "Câmera e microfone estão bloqueados. Use o cadeado ao lado do endereço para permitir."
-        : (error.message || "Não foi possível acessar câmera e microfone."));
+      let message = error.message || "Não foi possível acessar câmera e microfone.";
+      if (denied) {
+        message = "O navegador bloqueou a câmera ou o microfone. Abra o cadeado ao lado do endereço, permita os dois e depois tente novamente.";
+      } else if (error?.name === "NotFoundError") {
+        message = "Não encontramos câmera ou microfone. Conecte um dispositivo e feche outros aplicativos que possam estar usando-o.";
+      } else if (error?.name === "NotReadableError") {
+        message = "A câmera ou o microfone já está em uso por outro aplicativo. Feche Zoom, Meet ou outro programa e tente novamente.";
+      }
+      showMediaHelp(message, denied ? "A permissão está bloqueada no navegador" : "Não foi possível ativar os dispositivos");
+      showToast(denied ? "Permissão bloqueada — veja como liberar abaixo" : message);
       throw error;
+    } finally {
+      if (!state.localStream) setMediaRequestState(false);
     }
   };
 
@@ -296,6 +350,10 @@
     try {
       lobby.hidden = true;
       callRoom.hidden = false;
+      showMediaControls(false);
+      hideMediaHelp();
+      state.spotlightChosen = false;
+      setSpotlight("remote");
       connectSocket();
     } catch (error) {
       lobby.hidden = false;
@@ -357,6 +415,7 @@
       state.screenStream = displayStream;
       state.screenSender = sender;
       localVideo.srcObject = displayStream;
+      setSpotlight("local");
       localTile.classList.add("is-sharing");
       shareButton.classList.add("is-active");
       shareButton.setAttribute("aria-pressed", "true");
@@ -391,11 +450,24 @@
     state.screenSender = null;
     state.socket = null;
     state.ended = false;
+    state.spotlightChosen = false;
+    showMediaControls(false);
+    hideMediaHelp();
+    setSpotlight("remote");
     showToast("Chamada encerrada");
   };
 
   startButton.addEventListener("click", startRoom);
   enableMediaButton.addEventListener("click", () => { requestLocalMedia().catch(() => {}); });
+  retryMediaButton.addEventListener("click", () => { requestLocalMedia().catch(() => {}); });
+  focusRemoteButton.addEventListener("click", () => setSpotlight("remote", true));
+  focusLocalButton.addEventListener("click", () => {
+    if (!state.localStream && !state.screenStream) {
+      showToast("Ative a câmera ou compartilhe a tela para colocá-la em destaque");
+      return;
+    }
+    setSpotlight("local", true);
+  });
   $("#copyInvite").addEventListener("click", copyInvite);
   micButton.addEventListener("click", () => toggleTrack("audio", micButton));
   cameraButton.addEventListener("click", () => toggleTrack("video", cameraButton));
