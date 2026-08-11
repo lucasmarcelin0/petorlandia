@@ -150,6 +150,16 @@
     }
     .card--music:hover { border-color: rgba(245,158,11,.4); }
 
+    /* Card 3 – Sala a Dois */
+    .card--date {
+      --card-glow: radial-gradient(ellipse at 20% 0%, rgba(244,114,182,.15) 0%, transparent 65%);
+      --tag-bg: rgba(244,114,182,.15);
+      --tag-color: #f9a8d4;
+      --btn-bg: linear-gradient(135deg,#f472b6,#e11d48);
+      --btn-shadow: rgba(225,29,72,.3);
+    }
+    .card--date:hover { border-color: rgba(244,114,182,.45); }
+
     .card-icon {
       font-size: 2.8rem; line-height: 1;
       filter: drop-shadow(0 4px 12px rgba(15,23,42,.5));
@@ -350,6 +360,24 @@
           <span class="card-chip">🔊 Áudio</span>
         </div>
         <span class="card-btn">Abrir estúdio →</span>
+      </a>
+
+      <!-- Sala a Dois: videochamada e compartilhamento -->
+      <a class="card card--date" href="/surpresa/sala-a-dois.html">
+        <span class="ribbon">NOVO</span>
+        <span class="card-icon">💗</span>
+        <span class="card-tag">A dois</span>
+        <div class="card-title">Sala a Dois</div>
+        <p class="card-desc">
+          Um cantinho privado para conversar por vídeo e compartilhar a tela,
+          perfeito para vocês assistirem e descobrirem coisas juntos.
+        </p>
+        <div class="card-meta">
+          <span class="card-chip">🎥 Videochamada</span>
+          <span class="card-chip">🖥️ Compartilhar tela</span>
+          <span class="card-chip">🔒 Só duas pessoas</span>
+        </div>
+        <span class="card-btn">Criar nossa sala →</span>
       </a>
 
     </div>

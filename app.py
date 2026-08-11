@@ -880,6 +880,15 @@ nim_session_players: Dict[str, int] = {}
 nim_room_members: Dict[str, set[str]] = defaultdict(set)
 nim_room_players: Dict[str, dict[int, str]] = defaultdict(dict)
 
+# A videochamada usa um namespace próprio para não misturar presença e sinais
+# WebRTC com as partidas do Desafio de Palitos. Apenas metadados efêmeros ficam
+# no servidor; áudio, vídeo e compartilhamento de tela trafegam entre os pares.
+CALL_NAMESPACE = "/chamada"
+call_session_rooms: Dict[str, str] = {}
+call_session_players: Dict[str, int] = {}
+call_room_members: Dict[str, set[str]] = defaultdict(set)
+call_room_players: Dict[str, dict[int, str]] = defaultdict(dict)
+
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
 
@@ -1485,6 +1494,116 @@ def nim_disconnect():  # pragma: no cover - exercised via browser
             if not players:
                 nim_room_players.pop(room, None)
         leave_room(room)
+
+
+def _call_room_from_request() -> str:
+    room = (request.args.get("sala", "") or request.args.get("room", "") or "").strip()
+    sanitized = "".join(ch for ch in room if ch.isalnum() or ch in {"_", "-"})
+    return sanitized[:48].upper() or "SALA-A-DOIS"
+
+
+@socketio.on("connect", namespace=CALL_NAMESPACE)
+def call_connect():  # pragma: no cover - integration tested with Socket.IO client
+    room = _call_room_from_request()
+    members = call_room_members[room]
+    if len(members) >= 2:
+        emit(
+            "room_full",
+            {"message": "Esta sala já tem duas pessoas.", "room": room},
+        )
+        disconnect()
+        return
+
+    players = call_room_players[room]
+    for seat, occupant in list(players.items()):
+        if occupant not in members:
+            players.pop(seat, None)
+
+    seat = next((candidate for candidate in (1, 2) if not players.get(candidate)), 1)
+    call_session_rooms[request.sid] = room
+    call_session_players[request.sid] = seat
+    players[seat] = request.sid
+    members.add(request.sid)
+    join_room(room)
+
+    emit(
+        "room_state",
+        {
+            "room": room,
+            "participants": len(members),
+            "seat": seat,
+            "initiator": seat == 1,
+        },
+    )
+    emit("peer_joined", {"participants": len(members)}, room=room, include_self=False)
+    emit("presence", {"participants": len(members)}, room=room)
+
+
+@socketio.on("webrtc_signal", namespace=CALL_NAMESPACE)
+def call_webrtc_signal(data):  # pragma: no cover - payload relay tested below
+    room = call_session_rooms.get(request.sid)
+    if not room or not isinstance(data, dict):
+        return
+
+    safe_payload = None
+    description = data.get("description")
+    candidate = data.get("candidate")
+    if isinstance(description, dict):
+        description_type = str(description.get("type", ""))[:12]
+        sdp = str(description.get("sdp", ""))[:120_000]
+        if description_type in {"offer", "answer", "rollback"}:
+            safe_payload = {
+                "description": {"type": description_type, "sdp": sdp},
+            }
+    elif isinstance(candidate, dict):
+        raw_candidate = str(candidate.get("candidate", ""))[:4_096]
+        safe_payload = {
+            "candidate": {
+                "candidate": raw_candidate,
+                "sdpMid": str(candidate.get("sdpMid", ""))[:128] or None,
+                "sdpMLineIndex": candidate.get("sdpMLineIndex"),
+                "usernameFragment": str(candidate.get("usernameFragment", ""))[:256] or None,
+            },
+        }
+
+    if safe_payload:
+        emit("webrtc_signal", safe_payload, room=room, include_self=False)
+
+
+@socketio.on("screen_share_state", namespace=CALL_NAMESPACE)
+def call_screen_share_state(data):
+    room = call_session_rooms.get(request.sid)
+    if not room or not isinstance(data, dict):
+        return
+    emit(
+        "screen_share_state",
+        {"active": data.get("active") is True},
+        room=room,
+        include_self=False,
+    )
+
+
+@socketio.on("disconnect", namespace=CALL_NAMESPACE)
+def call_disconnect():  # pragma: no cover - integration tested with Socket.IO client
+    room = call_session_rooms.pop(request.sid, None)
+    seat = call_session_players.pop(request.sid, None)
+    if not room:
+        return
+
+    members = call_room_members.get(room)
+    if members:
+        members.discard(request.sid)
+    players = call_room_players.get(room)
+    if players and players.get(seat) == request.sid:
+        players.pop(seat, None)
+    leave_room(room)
+
+    remaining = len(members or ())
+    emit("peer_left", {"participants": remaining}, room=room)
+    emit("presence", {"participants": remaining}, room=room)
+    if not remaining:
+        call_room_members.pop(room, None)
+        call_room_players.pop(room, None)
 
 
 def local_date_range_to_utc(start_dt, end_dt):
