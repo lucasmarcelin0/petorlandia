@@ -15,7 +15,12 @@
   <title>{% block page_title %}PetOrlândia{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}PetOrlândia — cuidado, agenda e histórico do seu pet em um só lugar.{% endblock %}">
 
+  {# As dimensões acompanham a imagem: declarar 1200x630 para uma arte quadrada
+     faz o WhatsApp cortar a prévia ou descartá-la. Páginas do tutor definem as
+     três variáveis com `{% set %}` no topo do template. #}
   {% set _og_image = og_image if og_image is defined and og_image else 'img/og-petorlandia.png' %}
+  {% set _og_image_width = og_image_width if og_image_width is defined and og_image_width else 1200 %}
+  {% set _og_image_height = og_image_height if og_image_height is defined and og_image_height else 630 %}
   <link rel="canonical" href="{{ request.base_url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="PetOrlândia">
@@ -24,9 +29,9 @@
   <meta property="og:description" content="{{ self.meta_description()|trim }}">
   <meta property="og:url" content="{{ request.base_url }}">
   <meta property="og:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:image:width" content="{{ _og_image_width }}">
+  <meta property="og:image:height" content="{{ _og_image_height }}">
+  <meta name="twitter:card" content="{{ 'summary' if _og_image_width == _og_image_height else 'summary_large_image' }}">
   <meta name="twitter:title" content="{{ self.page_title()|trim }}">
   <meta name="twitter:description" content="{{ self.meta_description()|trim }}">
   <meta name="twitter:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">

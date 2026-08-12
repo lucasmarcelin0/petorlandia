@@ -1,5 +1,11 @@
 {% extends "layout.html" %}
 
+{# Mesma prévia da carteirinha: essa página também é compartilhada com o
+   tutor. Ver templates/vacina_pmo/public_certificate.html. #}
+{% set og_image = 'img/og-carteirinha.png' %}
+{% set og_image_width = 600 %}
+{% set og_image_height = 600 %}
+
 {% block head %}
   <style>
     :root {
