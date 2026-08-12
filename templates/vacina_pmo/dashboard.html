@@ -1411,7 +1411,7 @@
     ctx.font = '600 28px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(item.species === 'gato' ? 'Gato vacinado' : 'Cao vacinado', x + w / 2, y + h - 28);
+    ctx.fillText(item.species === 'gato' ? 'Gato vacinado' : 'Cão vacinado', x + w / 2, y + h - 28);
     ctx.restore();
   }
 
@@ -1475,11 +1475,15 @@
   }
 
   function drawVideoBackground(ctx, canvas) {
-    ctx.fillStyle = '#f8fafc';
+    // Cores extraídas do brasão: azul, vermelho e dourado, sem alterar a
+    // altura total de 260 px do cabeçalho.
+    ctx.fillStyle = '#f8f6ef';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#0f766e';
-    ctx.fillRect(0, 0, canvas.width, 250);
-    ctx.fillStyle = '#134e4a';
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillRect(0, 0, canvas.width, 240);
+    ctx.fillStyle = '#d3232a';
+    ctx.fillRect(0, 240, canvas.width, 10);
+    ctx.fillStyle = '#f2c230';
     ctx.fillRect(0, 250, canvas.width, 10);
   }
 
@@ -1487,10 +1491,14 @@
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Mantém o cabeçalho com 260 px: o brasão ocupa o canto direito sem criar
-    // uma nova linha nem aumentar a área reservada ao título.
+    // Mantém o cabeçalho com 260 px. A proporção original e o centramento
+    // vertical evitam que o brasão fique achatado ou deslocado.
     if (municipalLogoImage) {
-      ctx.drawImage(municipalLogoImage, canvas.width - 146, 18, 112, 112);
+      const logoHeight = 104;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      const logoX = canvas.width - logoWidth - 42;
+      const logoY = (240 - logoHeight) / 2;
+      ctx.drawImage(municipalLogoImage, logoX, logoY, logoWidth, logoHeight);
     }
     fitCenterText(ctx, title, canvas.width / 2 - 36, 104, canvas.width - 210, 60, 900);
     ctx.font = '600 34px Arial, sans-serif';
@@ -1502,7 +1510,7 @@
     drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
     const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
-    ctx.fillStyle = '#334155';
+    ctx.fillStyle = '#1f3f8f';
     ctx.font = '600 24px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`Campanha municipal de vacinação antirrábica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
@@ -1511,22 +1519,22 @@
   function drawIntro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
     drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
-    fitCenterText(ctx, `${count} animal${count === 1 ? '' : 'is'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
+    fitCenterText(ctx, `${count} ${count === 1 ? 'animal' : 'animais'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
     ctx.font = '600 38px Arial, sans-serif';
-    ctx.fillStyle = '#475569';
+    ctx.fillStyle = '#b5222a';
     ctx.fillText('Campanha municipal de vacinação antirrábica', canvas.width / 2, 930);
   }
 
   function drawOutro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
     drawVideoTitle(ctx, canvas, 'Obrigado pela participação', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
     fitCenterText(ctx, 'Vacina em dia protege o animal, a família e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
     ctx.font = '600 32px Arial, sans-serif';
-    ctx.fillStyle = '#475569';
+    ctx.fillStyle = '#b5222a';
     ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste vídeo`, canvas.width / 2, 950);
   }
 
@@ -1558,7 +1566,7 @@
     }
     const items = collectVaccinatedVideoItems();
     if (!items.length) {
-      throw new Error('Nao ha animais vacinados com foto nos filtros atuais.');
+      throw new Error('Não há animais vacinados com foto nos filtros atuais.');
     }
 
     clearGeneratedVideo();
@@ -1614,7 +1622,7 @@
     videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
-    setVideoStatus(`Vídeo pronto com ${items.length} animal${items.length === 1 ? '' : 'is'}.`);
+    setVideoStatus(`Vídeo pronto com ${items.length} ${items.length === 1 ? 'animal' : 'animais'}.`);
   }
 
   if (videoModal) {
