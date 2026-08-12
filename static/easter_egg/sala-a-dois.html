@@ -161,6 +161,11 @@
     .control.is-active { background: rgba(97, 215, 170, .17); border-color: rgba(97, 215, 170, .4); }
     .control--hangup { padding-inline: 21px; background: var(--danger); border-color: transparent; font-weight: 700; }
     .control--hangup:hover { background: #ff6679; }
+    .reliable-call { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(97, 215, 170, .48); border-radius: 14px; background: rgba(97, 215, 170, .1); }
+    .reliable-call strong { display: block; color: #eafff7; }
+    .reliable-call p { margin: 5px 0 0; color: #cbe9de; font-size: .82rem; line-height: 1.45; }
+    .reliable-call a { flex: 0 0 auto; padding: 10px 15px; border-radius: 999px; background: #fff; color: #20372f; font-size: .82rem; font-weight: 800; text-decoration: none; text-align: center; }
+    .reliable-call a:hover { filter: brightness(1.05); transform: translateY(-1px); }
     .media-help { margin: 14px 0 0; padding: 14px 16px; border: 1px solid rgba(245, 184, 74, .52); border-radius: 14px; background: rgba(245, 184, 74, .1); color: #fff4d9; }
     .media-help[hidden] { display: none; }
     .media-help strong { display: block; }
@@ -217,10 +222,12 @@
       .control { height: 43px; padding-inline: 12px; }
       .control span { display: none; }
       .control--hangup span { display: inline; }
+      .reliable-call { align-items: stretch; flex-direction: column; }
+      .reliable-call a { width: 100%; }
     }
   </style>
   <script src="/surpresa/socket.io.min.js"></script>
-  <script defer src="/surpresa/sala-a-dois.js?v=20260811c"></script>
+  <script defer src="/surpresa/sala-a-dois.js?v=20260811d"></script>
 </head>
 <body>
   <div class="ambient" aria-hidden="true"><span>♥</span><span>♥</span><span>♥</span><span>♥</span></div>
@@ -291,6 +298,13 @@
             <button class="control" id="shareScreen" type="button" aria-pressed="false" title="Compartilhar a tela">🖥️ <span>Compartilhar tela</span></button>
             <button class="control control--hangup" id="hangUp" type="button" title="Encerrar chamada">☎ <span>Encerrar</span></button>
           </div>
+          <aside class="reliable-call" id="reliableCall" aria-label="Alternativa estável para videochamada">
+            <div>
+              <strong>🎥 Vídeo estável para redes diferentes</strong>
+              <p>Abre uma sala Jitsi exclusiva para este convite, com câmera, áudio, chat e compartilhamento de tela. A primeira pessoa autentica; a segunda entra sem conta.</p>
+            </div>
+            <a id="reliableCallLink" href="#" target="_blank" rel="noopener noreferrer">Abrir vídeo estável agora</a>
+          </aside>
           <aside class="media-help" id="mediaHelp" hidden aria-live="polite">
             <strong id="mediaHelpTitle">Precisamos liberar a câmera e o microfone</strong>
             <p id="mediaHelpText"></p>

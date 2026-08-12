@@ -30,8 +30,9 @@
   const chatEmpty = $("#chatEmpty");
   const chatForm = $("#chatForm");
   const chatInput = $("#chatInput");
+  const reliableCallLink = $("#reliableCallLink");
   const toast = $("#toast");
-  const ROOM_ASSET_VERSION = "20260811c";
+  const ROOM_ASSET_VERSION = "20260811d";
 
   const sanitizeRoom = (value) => (value || "")
     .toString()
@@ -62,8 +63,11 @@
   }
   if (pageUrlChanged) window.history.replaceState(null, "", pageUrl.toString());
   const inviteUrl = pageUrl.toString();
+  const reliableRoomName = `PetOrlandiaSalaADois-${roomCode}`;
+  const reliableCallUrl = `https://meet.jit.si/${encodeURIComponent(reliableRoomName)}`;
   roomCodeTop.textContent = roomCode;
   inviteInput.value = inviteUrl;
+  reliableCallLink.href = reliableCallUrl;
 
   const baseIceServers = [
     { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
@@ -249,9 +253,7 @@
       } else if (status === "failed") {
         setConnectionStatus("A conexão falhou");
         waitingTitle.textContent = "Não conseguimos completar a chamada";
-        waitingText.textContent = state.relayCandidateFound
-          ? "A rota de reserva respondeu, mas a chamada não fechou. Vocês ainda podem conversar pelo chat abaixo."
-          : "O servidor de apoio não respondeu nesta rede. Vocês ainda podem conversar pelo chat abaixo.";
+        waitingText.textContent = "A rota direta não fechou. Cliquem em “Abrir vídeo estável agora” abaixo; o mesmo botão leva vocês à mesma sala.";
         remotePlaceholder.hidden = false;
         appendChatMessage("O vídeo não conectou, mas as mensagens continuam funcionando.", { system: true });
       } else if (status === "disconnected") {
@@ -627,6 +629,12 @@
   micButton.addEventListener("click", () => toggleTrack("audio", micButton));
   cameraButton.addEventListener("click", () => toggleTrack("video", cameraButton));
   shareButton.addEventListener("click", toggleScreenShare);
+  reliableCallLink.addEventListener("click", () => {
+    appendChatMessage("Abrindo a sala de vídeo estável. Peça para sua companhia usar o mesmo botão.", { system: true });
+    if (state.socket?.connected) {
+      state.socket.emit("chat_message", { message: "Clique em “Abrir vídeo estável agora” para entrar comigo na chamada." });
+    }
+  });
   chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const message = chatInput.value.trim();

@@ -67,8 +67,11 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "Ativamos um dispositivo; falta liberar o outro" in room_script
     assert "turns:staticauth.openrelay.metered.ca:443?transport=tcp" in room_script
     assert "createOffer({ iceRestart })" in room_script
-    assert 'src="/surpresa/sala-a-dois.js?v=20260811c"' in room_html
-    assert 'ROOM_ASSET_VERSION = "20260811c"' in room_script
+    assert 'src="/surpresa/sala-a-dois.js?v=20260811d"' in room_html
+    assert 'ROOM_ASSET_VERSION = "20260811d"' in room_script
+    assert 'id="reliableCallLink"' in room_html
+    assert "https://meet.jit.si/" in room_script
+    assert "PetOrlandiaSalaADois-${roomCode}" in room_script
     assert 'id="localScreenVideo"' in room_html
     assert 'id="chatForm"' in room_html
     assert 'id="chatMessages"' in room_html
