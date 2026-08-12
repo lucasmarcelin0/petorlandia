@@ -59,6 +59,8 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "showMediaHelp" in room_script
     assert "getUserMedia(request.constraints)" in room_script
     assert "Ativamos um dispositivo; falta liberar o outro" in room_script
+    assert "turns:staticauth.openrelay.metered.ca:443?transport=tcp" in room_script
+    assert "createOffer({ iceRestart })" in room_script
 
 
 def test_call_room_relays_signals_only_to_the_other_participant(app):

@@ -53,6 +53,10 @@
   roomCodeTop.textContent = roomCode;
   inviteInput.value = inviteUrl;
 
+  const baseIceServers = [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+  ];
+
   const state = {
     socket: null,
     peer: null,
@@ -68,6 +72,9 @@
     spotlight: "remote",
     spotlightChosen: false,
     mediaRequestInFlight: false,
+    iceServers: baseIceServers,
+    relayAvailable: false,
+    iceRestarted: false,
   };
 
   const showToast = (message) => {
@@ -111,6 +118,43 @@
     }
   };
 
+  const toBase64 = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    bytes.forEach((value) => { binary += String.fromCharCode(value); });
+    return window.btoa(binary);
+  };
+
+  const prepareIceServers = async () => {
+    if (!window.crypto?.subtle || state.relayAvailable) return;
+    try {
+      const username = `${Math.floor(Date.now() / 1000) + 3600}:petorlandia`;
+      const key = await window.crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode("openrelayprojectsecret"),
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"],
+      );
+      const signature = await window.crypto.subtle.sign("HMAC", key, new TextEncoder().encode(username));
+      state.iceServers = [
+        ...baseIceServers,
+        {
+          urls: [
+            "turn:staticauth.openrelay.metered.ca:80?transport=udp",
+            "turn:staticauth.openrelay.metered.ca:443?transport=tcp",
+            "turns:staticauth.openrelay.metered.ca:443?transport=tcp",
+          ],
+          username,
+          credential: toBase64(signature),
+        },
+      ];
+      state.relayAvailable = true;
+    } catch (error) {
+      console.warn("Não foi possível preparar a rota de reserva da chamada", error);
+    }
+  };
+
   const copyInvite = async () => {
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -139,11 +183,7 @@
   const ensurePeer = () => {
     if (state.peer && state.peer.connectionState !== "closed") return state.peer;
 
-    const peer = new RTCPeerConnection({
-      iceServers: [
-        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-      ],
-    });
+    const peer = new RTCPeerConnection({ iceServers: state.iceServers });
     state.peer = peer;
 
     state.localStream?.getTracks().forEach((track) => peer.addTrack(track, state.localStream));
@@ -171,19 +211,26 @@
       } else if (status === "failed") {
         setConnectionStatus("A conexão falhou");
         waitingTitle.textContent = "Não conseguimos completar a chamada";
-        waitingText.textContent = "Tentem trocar de rede ou recarregar a sala. Algumas redes exigem um servidor TURN.";
+        waitingText.textContent = "A rota de reserva foi tentada. Recarreguem a sala e confirmem que os dois estão usando o mesmo convite.";
         remotePlaceholder.hidden = false;
       } else if (status === "disconnected") {
         setConnectionStatus("Reconectando…");
       }
     };
+    peer.oniceconnectionstatechange = () => {
+      if (peer.iceConnectionState !== "failed" || state.iceRestarted || state.seat !== 1) return;
+      state.iceRestarted = true;
+      setConnectionStatus("Tentando uma rota de reserva…");
+      showToast("A rede direta falhou; tentando reconectar pela rota de reserva");
+      sendOffer({ iceRestart: true }).catch(() => {});
+    };
     return peer;
   };
 
-  const sendOffer = async () => {
+  const sendOffer = async ({ iceRestart = false } = {}) => {
     const peer = ensurePeer();
     if (!state.socket?.connected || peer.signalingState !== "stable") return;
-    const offer = await peer.createOffer();
+    const offer = await peer.createOffer({ iceRestart });
     await peer.setLocalDescription(offer);
     state.socket.emit("webrtc_signal", { description: peer.localDescription });
   };
@@ -383,9 +430,11 @@
     }
   };
 
-  const startRoom = () => {
+  const startRoom = async () => {
     startButton.disabled = true;
+    startButton.innerHTML = "Preparando conexão <span>…</span>";
     try {
+      await prepareIceServers();
       lobby.hidden = true;
       callRoom.hidden = false;
       updateMediaControls();
@@ -397,6 +446,7 @@
       lobby.hidden = false;
       callRoom.hidden = true;
       startButton.disabled = false;
+      startButton.innerHTML = "Entrar na sala <span>→</span>";
       showToast(error.message || "Não foi possível entrar na sala.");
     }
   };
@@ -488,6 +538,7 @@
     state.screenSender = null;
     state.socket = null;
     state.ended = false;
+    state.iceRestarted = false;
     state.spotlightChosen = false;
     updateMediaControls();
     hideMediaHelp();
