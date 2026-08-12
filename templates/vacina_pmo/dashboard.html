@@ -1157,7 +1157,7 @@
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
         <h5 class="mb-1"><i class="fas fa-video me-1"></i> Vídeo do dia</h5>
-        <div class="text-muted small">Gera um .webm com as fotos dos animais vacinados visíveis nos filtros atuais.</div>
+        <div class="text-muted small">Gera um .mp4 (compatível com WhatsApp) com as fotos dos animais vacinados visíveis nos filtros atuais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
     </div>
@@ -1167,7 +1167,7 @@
       <button type="button" class="btn btn-success" id="pmo-video-start">
         <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar vídeo
       </button>
-      <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.webm" aria-disabled="true">
+      <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.mp4" aria-disabled="true">
         <i class="fas fa-download me-1"></i> Baixar
       </a>
       <button type="button" class="btn btn-outline-secondary" data-action="video-modal-close">Fechar</button>
@@ -1570,13 +1570,33 @@
     return frames;
   }
 
+  // O WhatsApp recusa WebM ("formato incompatível"): aceita MP4/H.264. Por isso
+  // o MP4 vem primeiro e o WebM fica só como último recurso para navegadores
+  // antigos — nesse caso o usuário é avisado de que o envio pode falhar.
+  const VIDEO_FORMAT_CANDIDATES = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp8',
+    'video/webm;codecs=vp9',
+    'video/webm',
+  ];
+
   function mediaRecorderMimeType() {
-    const options = [
-      'video/webm;codecs=vp8',
-      'video/webm;codecs=vp9',
-      'video/webm',
-    ];
-    return options.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+    return VIDEO_FORMAT_CANDIDATES.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+  }
+
+  // A extensão tem que sair do que o navegador realmente gravou, nunca de um
+  // literal: o MediaRecorder normaliza o codec pedido (avc1.42E01E virou
+  // avc1.420028 em 1080x1920) e pode ignorar o container solicitado. Um .webm
+  // renomeado para .mp4 é recusado pelo WhatsApp do mesmo jeito.
+  function videoContainerMime(recorder, requestedMime) {
+    const raw = recorder?.mimeType || requestedMime || 'video/webm';
+    return raw.split(';')[0].trim() || 'video/webm';
+  }
+
+  function videoFileExtension(containerMime) {
+    return containerMime.includes('mp4') ? 'mp4' : 'webm';
   }
 
   async function generateVaccinationVideo() {
@@ -1629,7 +1649,9 @@
     await stopped;
     stream.getTracks().forEach((track) => track.stop());
 
-    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+    const containerMime = videoContainerMime(recorder, mimeType);
+    const extension = videoFileExtension(containerMime);
+    const blob = new Blob(chunks, { type: containerMime });
     if (blob.size < 1024) {
       throw new Error('Não foi possível finalizar o vídeo. Gere novamente em uma aba ativa do navegador.');
     }
@@ -1639,15 +1661,18 @@
     // do preview: quando a reprodução falha o vídeo continua válido e o
     // usuário precisa conseguir baixá-lo mesmo assim.
     videoDownload.href = videoObjectUrl;
-    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
+    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.${extension}`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
 
     const totalLabel = `${items.length} ${items.length === 1 ? 'animal' : 'animais'}`;
     const played = await previewGeneratedVideo();
-    setVideoStatus(played
+    const base = played
       ? `Vídeo pronto com ${totalLabel}.`
-      : `Vídeo pronto com ${totalLabel}. A prévia não abriu neste navegador — use "Baixar".`);
+      : `Vídeo pronto com ${totalLabel}. A prévia não abriu neste navegador — use "Baixar".`;
+    setVideoStatus(extension === 'mp4'
+      ? `${base} Arquivo .mp4, pronto para enviar no WhatsApp.`
+      : `${base} Este navegador só gerou .webm, que o WhatsApp recusa — atualize o Chrome ou o Edge para sair em .mp4.`);
   }
 
   // Resolve com `true` quando o navegador conseguiu carregar a prévia e com
