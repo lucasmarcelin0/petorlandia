@@ -39,7 +39,13 @@ def _set_request_id_header(response):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        if request.path == "/surpresa/sala-a-dois.html":
+            response.headers.setdefault(
+                "Permissions-Policy",
+                "camera=(self), microphone=(self), display-capture=(self), geolocation=(self)",
+            )
+        else:
+            response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "

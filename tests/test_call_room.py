@@ -43,6 +43,9 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert arcade.status_code == 200
     assert b"/surpresa/sala-a-dois.html" in arcade.data
     assert room.status_code == 200
+    assert "camera=(self)" in room.headers["Permissions-Policy"]
+    assert "microphone=(self)" in room.headers["Permissions-Policy"]
+    assert "display-capture=(self)" in room.headers["Permissions-Policy"]
     assert socket_client.status_code == 200
     assert b"Socket.IO" in socket_client.data
     room_html = room.get_data(as_text=True)
@@ -61,6 +64,12 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "Ativamos um dispositivo; falta liberar o outro" in room_script
     assert "turns:staticauth.openrelay.metered.ca:443?transport=tcp" in room_script
     assert "createOffer({ iceRestart })" in room_script
+
+
+def test_media_permissions_remain_blocked_outside_call_room(app):
+    response = app.test_client().get("/live")
+
+    assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=(self)"
 
 
 def test_call_room_relays_signals_only_to_the_other_participant(app):
