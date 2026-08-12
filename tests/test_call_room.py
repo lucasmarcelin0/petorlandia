@@ -64,6 +64,11 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "Ativamos um dispositivo; falta liberar o outro" in room_script
     assert "turns:staticauth.openrelay.metered.ca:443?transport=tcp" in room_script
     assert "createOffer({ iceRestart })" in room_script
+    assert 'id="localScreenVideo"' in room_html
+    assert 'id="chatForm"' in room_html
+    assert 'id="chatMessages"' in room_html
+    assert "localScreenVideo.srcObject = displayStream" in room_script
+    assert "localVideo.srcObject = displayStream" not in room_script
 
 
 def test_media_permissions_remain_blocked_outside_call_room(app):
@@ -94,6 +99,29 @@ def test_call_room_relays_signals_only_to_the_other_participant(app):
         assert relayed[0]["args"][0] == {
             "description": {"type": "offer", "sdp": "v=0\r\nexample"}
         }
+    finally:
+        if first.is_connected(CALL_NAMESPACE):
+            first.disconnect(namespace=CALL_NAMESPACE)
+        if second.is_connected(CALL_NAMESPACE):
+            second.disconnect(namespace=CALL_NAMESPACE)
+        _reset_call_state()
+
+
+def test_call_room_chat_works_even_without_media(app):
+    _reset_call_state()
+    first = socketio.test_client(app, namespace=CALL_NAMESPACE, query_string="sala=CHAT123")
+    second = socketio.test_client(app, namespace=CALL_NAMESPACE, query_string="sala=CHAT123")
+
+    try:
+        first.get_received(CALL_NAMESPACE)
+        second.get_received(CALL_NAMESPACE)
+
+        first.emit("chat_message", {"message": "  Oi,   amor!  "}, namespace=CALL_NAMESPACE)
+
+        first_message = _events(first, "chat_message")[0]["args"][0]
+        second_message = _events(second, "chat_message")[0]["args"][0]
+        assert first_message == {"message": "Oi, amor!", "sender": 1}
+        assert second_message == first_message
     finally:
         if first.is_connected(CALL_NAMESPACE):
             first.disconnect(namespace=CALL_NAMESPACE)

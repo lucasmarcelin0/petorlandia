@@ -1583,6 +1583,24 @@ def call_screen_share_state(data):
     )
 
 
+@socketio.on("chat_message", namespace=CALL_NAMESPACE)
+def call_chat_message(data):
+    room = call_session_rooms.get(request.sid)
+    seat = call_session_players.get(request.sid)
+    if not room or seat not in {1, 2} or not isinstance(data, dict):
+        return
+
+    message = " ".join(str(data.get("message", "")).split())[:500]
+    if not message:
+        return
+
+    emit(
+        "chat_message",
+        {"message": message, "sender": seat},
+        room=room,
+    )
+
+
 @socketio.on("disconnect", namespace=CALL_NAMESPACE)
 def call_disconnect():  # pragma: no cover - integration tested with Socket.IO client
     room = call_session_rooms.pop(request.sid, None)

@@ -6,6 +6,7 @@
   const callRoom = $("#callRoom");
   const startButton = $("#startCall");
   const localVideo = $("#localVideo");
+  const localScreenVideo = $("#localScreenVideo");
   const remoteVideo = $("#remoteVideo");
   const remotePlaceholder = $("#remotePlaceholder");
   const waitingTitle = $("#waitingTitle");
@@ -25,6 +26,10 @@
   const mediaHelpTitle = $("#mediaHelpTitle");
   const mediaHelpText = $("#mediaHelpText");
   const retryMediaButton = $("#retryMedia");
+  const chatMessages = $("#chatMessages");
+  const chatEmpty = $("#chatEmpty");
+  const chatForm = $("#chatForm");
+  const chatInput = $("#chatInput");
   const toast = $("#toast");
 
   const sanitizeRoom = (value) => (value || "")
@@ -75,6 +80,9 @@
     iceServers: baseIceServers,
     relayAvailable: false,
     iceRestarted: false,
+    relayForced: false,
+    relayCandidateFound: false,
+    relayTimer: null,
   };
 
   const showToast = (message) => {
@@ -89,11 +97,24 @@
     connectionBadge.classList.toggle("is-live", live);
   };
 
+  const appendChatMessage = (message, { mine = false, system = false } = {}) => {
+    const text = String(message || "").trim();
+    if (!text) return;
+    chatEmpty.hidden = true;
+    const bubble = document.createElement("div");
+    bubble.className = `chat-message${mine ? " is-mine" : ""}${system ? " is-system" : ""}`;
+    bubble.textContent = text;
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  };
+
   const setSpotlight = (target, chosenByUser = false) => {
     const local = target === "local";
+    const localScreen = local && Boolean(state.screenStream);
     state.spotlight = local ? "local" : "remote";
     if (chosenByUser) state.spotlightChosen = true;
-    videoStage.classList.toggle("is-local-featured", local);
+    videoStage.classList.toggle("is-local-featured", local && !localScreen);
+    videoStage.classList.toggle("is-local-screen-featured", localScreen);
     focusLocalButton.setAttribute("aria-pressed", String(local));
     focusRemoteButton.setAttribute("aria-pressed", String(!local));
   };
@@ -168,6 +189,11 @@
   };
 
   const closePeer = () => {
+    window.clearTimeout(state.relayTimer);
+    state.relayTimer = null;
+    state.relayForced = false;
+    state.iceRestarted = false;
+    state.relayCandidateFound = false;
     if (state.peer) {
       state.peer.ontrack = null;
       state.peer.onicecandidate = null;
@@ -186,12 +212,15 @@
     const peer = new RTCPeerConnection({ iceServers: state.iceServers });
     state.peer = peer;
 
-    state.localStream?.getTracks().forEach((track) => peer.addTrack(track, state.localStream));
+    state.localStream?.getTracks().forEach((track) => {
+      if (track.kind !== "video" || !state.screenTrack) peer.addTrack(track, state.localStream);
+    });
     if (state.screenTrack && state.screenStream) {
       state.screenSender = peer.addTrack(state.screenTrack, state.screenStream);
     }
     peer.onicecandidate = ({ candidate }) => {
       if (candidate && state.socket?.connected) {
+        if (candidate.candidate.includes(" typ relay ")) state.relayCandidateFound = true;
         state.socket.emit("webrtc_signal", { candidate: candidate.toJSON() });
       }
     };
@@ -204,26 +233,33 @@
     peer.onconnectionstatechange = () => {
       const status = peer.connectionState;
       if (status === "connected") {
+        window.clearTimeout(state.relayTimer);
         setConnectionStatus("Vocês estão juntinhos", true);
         remotePlaceholder.hidden = true;
+        appendChatMessage("Chamada de áudio e vídeo conectada.", { system: true });
       } else if (status === "connecting") {
         setConnectionStatus("Aproximando vocês…");
       } else if (status === "failed") {
         setConnectionStatus("A conexão falhou");
         waitingTitle.textContent = "Não conseguimos completar a chamada";
-        waitingText.textContent = "A rota de reserva foi tentada. Recarreguem a sala e confirmem que os dois estão usando o mesmo convite.";
+        waitingText.textContent = state.relayCandidateFound
+          ? "A rota de reserva respondeu, mas a chamada não fechou. Vocês ainda podem conversar pelo chat abaixo."
+          : "O servidor de apoio não respondeu nesta rede. Vocês ainda podem conversar pelo chat abaixo.";
         remotePlaceholder.hidden = false;
+        appendChatMessage("O vídeo não conectou, mas as mensagens continuam funcionando.", { system: true });
       } else if (status === "disconnected") {
         setConnectionStatus("Reconectando…");
       }
     };
     peer.oniceconnectionstatechange = () => {
-      if (peer.iceConnectionState !== "failed" || state.iceRestarted || state.seat !== 1) return;
-      state.iceRestarted = true;
-      setConnectionStatus("Tentando uma rota de reserva…");
-      showToast("A rede direta falhou; tentando reconectar pela rota de reserva");
-      sendOffer({ iceRestart: true }).catch(() => {});
+      if (peer.iceConnectionState === "failed") forceRelayConnection().catch(() => {});
     };
+    window.clearTimeout(state.relayTimer);
+    state.relayTimer = window.setTimeout(() => {
+      if (!["connected", "completed"].includes(peer.iceConnectionState)) {
+        forceRelayConnection().catch(() => {});
+      }
+    }, 8000);
     return peer;
   };
 
@@ -233,6 +269,17 @@
     const offer = await peer.createOffer({ iceRestart });
     await peer.setLocalDescription(offer);
     state.socket.emit("webrtc_signal", { description: peer.localDescription });
+  };
+
+  const forceRelayConnection = async () => {
+    const peer = state.peer;
+    if (!peer || state.relayForced || !state.relayAvailable) return;
+    state.relayForced = true;
+    state.iceRestarted = true;
+    setConnectionStatus("Conectando pelo servidor de apoio…");
+    showToast("Tentando uma rota mais compatível com as duas redes");
+    peer.setConfiguration({ iceServers: state.iceServers, iceTransportPolicy: "relay" });
+    if (state.seat === 1 && peer.signalingState === "stable") await sendOffer({ iceRestart: true });
   };
 
   const renegotiate = async () => {
@@ -304,10 +351,14 @@
       setConnectionStatus("Conectando vocês…");
       waitingTitle.textContent = "Ela chegou 💗";
       waitingText.textContent = "Só mais um instante para conectar o vídeo.";
+      appendChatMessage("Sua companhia entrou na sala.", { system: true });
       if (state.screenTrack) state.socket.emit("screen_share_state", { active: true });
       if (state.seat === 1) await sendOffer();
     });
     socket.on("webrtc_signal", handleSignal);
+    socket.on("chat_message", ({ message, sender }) => {
+      appendChatMessage(message, { mine: Number(sender) === state.seat });
+    });
     socket.on("screen_share_state", ({ active }) => {
       remoteVideo.classList.toggle("is-screen", active === true);
       if (active) {
@@ -322,6 +373,7 @@
       waitingTitle.textContent = "Sua companhia saiu da sala";
       waitingText.textContent = "O mesmo convite continua funcionando caso ela queira voltar.";
       setConnectionStatus("Esperando companhia");
+      appendChatMessage("Sua companhia saiu da sala.", { system: true });
     });
     socket.on("room_full", ({ message }) => {
       showToast(message || "Esta sala já está cheia.");
@@ -476,8 +528,10 @@
     }
     state.screenStream = null;
     state.screenSender = null;
+    localScreenVideo.srcObject = null;
     localVideo.srcObject = state.localStream;
     localTile.classList.remove("is-sharing");
+    setSpotlight(state.spotlight);
     shareButton.classList.remove("is-active");
     shareButton.setAttribute("aria-pressed", "false");
     shareButton.firstChild.textContent = "🖥️ ";
@@ -502,9 +556,9 @@
       state.screenTrack = screenTrack;
       state.screenStream = displayStream;
       state.screenSender = sender;
-      localVideo.srcObject = displayStream;
+      localScreenVideo.srcObject = displayStream;
+      localVideo.srcObject = state.localStream;
       setSpotlight("local");
-      localTile.classList.add("is-sharing");
       shareButton.classList.add("is-active");
       shareButton.setAttribute("aria-pressed", "true");
       shareButton.firstChild.textContent = "⏹️ ";
@@ -527,6 +581,7 @@
     state.socket?.disconnect();
     closePeer();
     localVideo.srcObject = null;
+    localScreenVideo.srcObject = null;
     callRoom.hidden = true;
     lobby.hidden = false;
     startButton.disabled = false;
@@ -539,6 +594,10 @@
     state.socket = null;
     state.ended = false;
     state.iceRestarted = false;
+    state.relayForced = false;
+    state.relayCandidateFound = false;
+    window.clearTimeout(state.relayTimer);
+    state.relayTimer = null;
     state.spotlightChosen = false;
     updateMediaControls();
     hideMediaHelp();
@@ -561,6 +620,18 @@
   micButton.addEventListener("click", () => toggleTrack("audio", micButton));
   cameraButton.addEventListener("click", () => toggleTrack("video", cameraButton));
   shareButton.addEventListener("click", toggleScreenShare);
+  chatForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message) return;
+    if (!state.socket?.connected) {
+      showToast("Aguarde a sala terminar de conectar para enviar mensagens");
+      return;
+    }
+    state.socket.emit("chat_message", { message });
+    chatInput.value = "";
+    chatInput.focus();
+  });
   $("#hangUp").addEventListener("click", endCall);
   window.addEventListener("beforeunload", () => {
     state.localStream?.getTracks().forEach((track) => track.stop());
