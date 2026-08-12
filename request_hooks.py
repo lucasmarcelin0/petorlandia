@@ -52,7 +52,12 @@ def _set_request_id_header(response):
             # jsdelivr precisa estar em font-src: o CSS do bootstrap-icons vem
             # de la e referencia a fonte no mesmo host. Sem isso a fonte era
             # bloqueada e todo icone `bi-*` virava um retangulo vazio.
-            "img-src 'self' data: https:; "
+            # blob: e obrigatorio: a foto recem-tirada no PMO so existe como
+            # object URL ate o upload terminar, e o video do dia e montado em
+            # canvas e exibido/baixado como blob. Sem isso o Chrome rejeita a
+            # midia com "Media load rejected by URL safety check".
+            "img-src 'self' data: blob: https:; "
+            "media-src 'self' data: blob:; "
             "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "

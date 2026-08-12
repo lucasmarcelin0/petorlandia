@@ -1542,17 +1542,32 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function nextCaptureTick() {
+    // requestAnimationFrame acompanha o compositor e rende ~3x mais quadros que
+    // setTimeout, que o Chrome estrangula (chega a 1 tique por segundo quando a
+    // aba perde o foco). Com a aba oculta o rAF para de disparar, então o
+    // setTimeout fica como rede de segurança para o loop não travar.
+    if (document.visibilityState === 'visible' && typeof window.requestAnimationFrame === 'function') {
+      return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    return delay(1000 / 30);
+  }
+
   async function holdCanvasFrame(drawFn, durationMs, captureTrack) {
-    const frameMs = 1000 / 30;
     const started = performance.now();
-    while (performance.now() - started < durationMs) {
+    let frames = 0;
+    // Mesmo com os timers estrangulados cada trecho precisa render pelo menos
+    // dois quadros, senão o slide pode não aparecer no arquivo final.
+    while (performance.now() - started < durationMs || frames < 2) {
       drawFn();
       // Alguns navegadores não incluem atualizações de um canvas oculto na
       // captura automática. Solicitar o frame explicitamente mantém a duração
       // e a imagem do WebM corretas.
       captureTrack?.requestFrame?.();
-      await delay(frameMs);
+      frames += 1;
+      await nextCaptureTick();
     }
+    return frames;
   }
 
   function mediaRecorderMimeType() {
@@ -1620,23 +1635,50 @@
     }
 
     videoObjectUrl = URL.createObjectURL(blob);
-    videoPreview.muted = true;
-    videoPreview.preload = 'auto';
-    videoPreview.src = videoObjectUrl;
-    videoPreview.hidden = false;
-    await new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error('O navegador não conseguiu carregar o vídeo gerado.')), 10000);
-      const cleanup = () => window.clearTimeout(timeout);
-      videoPreview.onloadeddata = () => { cleanup(); resolve(); };
-      videoPreview.onerror = () => { cleanup(); reject(new Error('O navegador não conseguiu reproduzir o vídeo gerado.')); };
-      videoPreview.load();
-    });
-    await videoPreview.play().catch(() => {});
+    // O download é liberado assim que o arquivo existe. Ele não pode depender
+    // do preview: quando a reprodução falha o vídeo continua válido e o
+    // usuário precisa conseguir baixá-lo mesmo assim.
     videoDownload.href = videoObjectUrl;
     videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
-    setVideoStatus(`Vídeo pronto com ${items.length} ${items.length === 1 ? 'animal' : 'animais'}.`);
+
+    const totalLabel = `${items.length} ${items.length === 1 ? 'animal' : 'animais'}`;
+    const played = await previewGeneratedVideo();
+    setVideoStatus(played
+      ? `Vídeo pronto com ${totalLabel}.`
+      : `Vídeo pronto com ${totalLabel}. A prévia não abriu neste navegador — use "Baixar".`);
+  }
+
+  // Resolve com `true` quando o navegador conseguiu carregar a prévia e com
+  // `false` quando não conseguiu. Nunca rejeita: falha de preview não invalida
+  // o vídeo gerado.
+  function previewGeneratedVideo() {
+    if (!videoPreview || !videoObjectUrl) return Promise.resolve(false);
+    videoPreview.muted = true;
+    videoPreview.playsInline = true;
+    videoPreview.preload = 'auto';
+    videoPreview.src = videoObjectUrl;
+    videoPreview.hidden = false;
+    return new Promise((resolve) => {
+      const timeout = window.setTimeout(() => finish(false), 10000);
+      let settled = false;
+      function finish(ok) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        videoPreview.onloadeddata = null;
+        videoPreview.onerror = null;
+        if (!ok) videoPreview.hidden = true;
+        resolve(ok);
+      }
+      videoPreview.onloadeddata = () => finish(true);
+      videoPreview.onerror = () => finish(false);
+      videoPreview.load();
+    }).then(async (ok) => {
+      if (ok) await videoPreview.play().catch(() => {});
+      return ok;
+    });
   }
 
   if (videoModal) {
