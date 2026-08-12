@@ -1542,19 +1542,23 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function holdCanvasFrame(drawFn, durationMs) {
+  async function holdCanvasFrame(drawFn, durationMs, captureTrack) {
     const frameMs = 1000 / 30;
     const started = performance.now();
     while (performance.now() - started < durationMs) {
       drawFn();
+      // Alguns navegadores não incluem atualizações de um canvas oculto na
+      // captura automática. Solicitar o frame explicitamente mantém a duração
+      // e a imagem do WebM corretas.
+      captureTrack?.requestFrame?.();
       await delay(frameMs);
     }
   }
 
   function mediaRecorderMimeType() {
     const options = [
-      'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
+      'video/webm;codecs=vp9',
       'video/webm',
     ];
     return options.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
@@ -1581,6 +1585,7 @@
     }
     const chunks = [];
     const stream = canvas.captureStream(30);
+    const captureTrack = stream.getVideoTracks()[0];
     const mimeType = mediaRecorderMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     recorder.ondataavailable = (event) => {
@@ -1594,30 +1599,39 @@
     for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
     // Emitir blocos durante a gravação deixa o WebM finalizável também em
     // navegadores que não entregam todo o conteúdo quando stop() é imediato.
-    recorder.start(250);
-    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600);
+    recorder.start(500);
+    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600, captureTrack);
     for (let i = 0; i < groups.length; i += 1) {
       setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
       const group = groups[i];
       const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
       const focuses = images.map((img) => estimatePetFocus(img));
       setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800);
+      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800, captureTrack);
     }
-    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300);
+    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300, captureTrack);
     recorder.stop();
     await stopped;
     stream.getTracks().forEach((track) => track.stop());
 
-    if (!chunks.length) {
+    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+    if (blob.size < 1024) {
       throw new Error('Não foi possível finalizar o vídeo. Gere novamente em uma aba ativa do navegador.');
     }
 
-    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
     videoObjectUrl = URL.createObjectURL(blob);
+    videoPreview.muted = true;
+    videoPreview.preload = 'auto';
     videoPreview.src = videoObjectUrl;
     videoPreview.hidden = false;
-    videoPreview.load();
+    await new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error('O navegador não conseguiu carregar o vídeo gerado.')), 10000);
+      const cleanup = () => window.clearTimeout(timeout);
+      videoPreview.onloadeddata = () => { cleanup(); resolve(); };
+      videoPreview.onerror = () => { cleanup(); reject(new Error('O navegador não conseguiu reproduzir o vídeo gerado.')); };
+      videoPreview.load();
+    });
+    await videoPreview.play().catch(() => {});
     videoDownload.href = videoObjectUrl;
     videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
     videoDownload.classList.remove('disabled');
