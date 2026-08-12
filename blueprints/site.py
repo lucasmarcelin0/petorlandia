@@ -155,7 +155,15 @@ def secret_game_partituras():
 
 @bp.route("/surpresa/<path:filename>")
 def secret_game_static(filename: str):
-    return send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
+    response = send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
+    if filename in {"sala-a-dois.html", "sala-a-dois.js"}:
+        # A chamada muda rapidamente e uma versao antiga pode remover TURN,
+        # chat ou permissoes. Nunca deixe o navegador reutilizar estes dois
+        # arquivos sem consultar o servidor.
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 
 @bp.route('/veterinario/assinatura')

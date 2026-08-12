@@ -38,6 +38,7 @@ def test_call_page_is_available_from_the_secret_arcade(app):
 
     arcade = client.get("/surpresa")
     room = client.get("/surpresa/sala-a-dois.html")
+    room_script_response = client.get("/surpresa/sala-a-dois.js")
     socket_client = client.get("/surpresa/socket.io.min.js")
 
     assert arcade.status_code == 200
@@ -46,10 +47,12 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "camera=(self)" in room.headers["Permissions-Policy"]
     assert "microphone=(self)" in room.headers["Permissions-Policy"]
     assert "display-capture=(self)" in room.headers["Permissions-Policy"]
+    assert room.headers["Cache-Control"] == "no-cache, no-store, must-revalidate"
+    assert room_script_response.headers["Cache-Control"] == "no-cache, no-store, must-revalidate"
     assert socket_client.status_code == 200
     assert b"Socket.IO" in socket_client.data
     room_html = room.get_data(as_text=True)
-    room_script = client.get("/surpresa/sala-a-dois.js").get_data(as_text=True)
+    room_script = room_script_response.get_data(as_text=True)
     assert 'src="/surpresa/socket.io.min.js"' in room_html
     assert "cdn.socket.io" not in room_html
     assert "Compartilhar tela sem câmera" in room_html
@@ -64,6 +67,8 @@ def test_call_page_is_available_from_the_secret_arcade(app):
     assert "Ativamos um dispositivo; falta liberar o outro" in room_script
     assert "turns:staticauth.openrelay.metered.ca:443?transport=tcp" in room_script
     assert "createOffer({ iceRestart })" in room_script
+    assert 'src="/surpresa/sala-a-dois.js?v=20260811c"' in room_html
+    assert 'ROOM_ASSET_VERSION = "20260811c"' in room_script
     assert 'id="localScreenVideo"' in room_html
     assert 'id="chatForm"' in room_html
     assert 'id="chatMessages"' in room_html

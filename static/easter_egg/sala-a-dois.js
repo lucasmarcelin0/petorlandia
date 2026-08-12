@@ -31,6 +31,7 @@
   const chatForm = $("#chatForm");
   const chatInput = $("#chatInput");
   const toast = $("#toast");
+  const ROOM_ASSET_VERSION = "20260811c";
 
   const sanitizeRoom = (value) => (value || "")
     .toString()
@@ -49,12 +50,18 @@
 
   const pageUrl = new URL(window.location.href);
   let roomCode = sanitizeRoom(pageUrl.searchParams.get("sala"));
+  let pageUrlChanged = false;
   if (!roomCode) {
     roomCode = makeRoomCode();
     pageUrl.searchParams.set("sala", roomCode);
-    window.history.replaceState(null, "", pageUrl.toString());
+    pageUrlChanged = true;
   }
-  const inviteUrl = `${window.location.origin}${window.location.pathname}?sala=${encodeURIComponent(roomCode)}`;
+  if (pageUrl.searchParams.get("v") !== ROOM_ASSET_VERSION) {
+    pageUrl.searchParams.set("v", ROOM_ASSET_VERSION);
+    pageUrlChanged = true;
+  }
+  if (pageUrlChanged) window.history.replaceState(null, "", pageUrl.toString());
+  const inviteUrl = pageUrl.toString();
   roomCodeTop.textContent = roomCode;
   inviteInput.value = inviteUrl;
 
