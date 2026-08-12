@@ -907,7 +907,7 @@
 
   <div class="d-flex flex-wrap gap-2 justify-content-end mb-3">
     <button type="button" class="btn btn-success" id="pmo-video-generate">
-      <i class="fas fa-video me-1"></i> Video do dia
+      <i class="fas fa-video me-1"></i> Vídeo do dia
     </button>
   </div>
 
@@ -1156,8 +1156,8 @@
   <div class="pmo-video-modal__content">
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
-        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Video do dia</h5>
-        <div class="text-muted small">Gera um .webm com as fotos dos animais vacinados visiveis nos filtros atuais.</div>
+        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Vídeo do dia</h5>
+        <div class="text-muted small">Gera um .webm com as fotos dos animais vacinados visíveis nos filtros atuais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
     </div>
@@ -1165,7 +1165,7 @@
     <div class="pmo-video-status" id="pmo-video-status">Pronto para gerar.</div>
     <div class="pmo-video-actions">
       <button type="button" class="btn btn-success" id="pmo-video-start">
-        <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar video
+        <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar vídeo
       </button>
       <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.webm" aria-disabled="true">
         <i class="fas fa-download me-1"></i> Baixar
@@ -1219,6 +1219,8 @@
   const videoDownload = document.getElementById('pmo-video-download');
   const videoStatus = document.getElementById('pmo-video-status');
   let videoObjectUrl = '';
+  const municipalLogoSrc = {{ url_for('static', filename='sim_portal/assets/brasao-orlandia.png') | tojson }};
+  let municipalLogoImage = null;
 
   function setVideoStatus(message) {
     if (videoStatus) videoStatus.textContent = message;
@@ -1284,7 +1286,7 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Nao foi possivel carregar uma das fotos do video.'));
+      img.onerror = () => reject(new Error('Não foi possível carregar uma das fotos do vídeo.'));
       img.src = src;
     });
   }
@@ -1485,42 +1487,47 @@
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    fitCenterText(ctx, title, canvas.width / 2, 104, canvas.width - 100, 60, 900);
+    // Mantém o cabeçalho com 260 px: o brasão ocupa o canto direito sem criar
+    // uma nova linha nem aumentar a área reservada ao título.
+    if (municipalLogoImage) {
+      ctx.drawImage(municipalLogoImage, canvas.width - 146, 18, 112, 112);
+    }
+    fitCenterText(ctx, title, canvas.width / 2 - 36, 104, canvas.width - 210, 60, 900);
     ctx.font = '600 34px Arial, sans-serif';
-    ctx.fillText(subtitle, canvas.width / 2, 172);
+    ctx.fillText(subtitle, canvas.width / 2 - 36, 172);
   }
 
   function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Orlandia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
     const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
     ctx.fillStyle = '#334155';
     ctx.font = '600 24px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`Campanha municipal de vacinacao antirrabica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
+    ctx.fillText(`Campanha municipal de vacinação antirrábica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
   }
 
   function drawIntro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura de Orlandia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'center';
     fitCenterText(ctx, `${count} animal${count === 1 ? '' : 'is'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
     ctx.font = '600 38px Arial, sans-serif';
     ctx.fillStyle = '#475569';
-    ctx.fillText('Campanha municipal de vacinacao antirrabica', canvas.width / 2, 930);
+    ctx.fillText('Campanha municipal de vacinação antirrábica', canvas.width / 2, 930);
   }
 
   function drawOutro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Obrigado pela participacao', `Prefeitura de Orlandia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'center';
-    fitCenterText(ctx, 'Vacina em dia protege o animal, a familia e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
+    fitCenterText(ctx, 'Vacina em dia protege o animal, a família e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
     ctx.font = '600 32px Arial, sans-serif';
     ctx.fillStyle = '#475569';
-    ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste video`, canvas.width / 2, 950);
+    ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste vídeo`, canvas.width / 2, 950);
   }
 
   function delay(ms) {
@@ -1547,7 +1554,7 @@
 
   async function generateVaccinationVideo() {
     if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-      throw new Error('Este navegador nao consegue gerar video automaticamente. Tente pelo Chrome ou Edge.');
+      throw new Error('Este navegador não consegue gerar vídeo automaticamente. Tente pelo Chrome ou Edge.');
     }
     const items = collectVaccinatedVideoItems();
     if (!items.length) {
@@ -1559,6 +1566,11 @@
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
+    try {
+      municipalLogoImage = await loadVideoImage(municipalLogoSrc);
+    } catch (error) {
+      municipalLogoImage = null;
+    }
     const chunks = [];
     const stream = canvas.captureStream(30);
     const mimeType = mediaRecorderMimeType();
@@ -1572,7 +1584,9 @@
 
     const groups = [];
     for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
-    recorder.start();
+    // Emitir blocos durante a gravação deixa o WebM finalizável também em
+    // navegadores que não entregam todo o conteúdo quando stop() é imediato.
+    recorder.start(250);
     await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600);
     for (let i = 0; i < groups.length; i += 1) {
       setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
@@ -1584,8 +1598,12 @@
     }
     await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300);
     recorder.stop();
-    stream.getTracks().forEach((track) => track.stop());
     await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+
+    if (!chunks.length) {
+      throw new Error('Não foi possível finalizar o vídeo. Gere novamente em uma aba ativa do navegador.');
+    }
 
     const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
     videoObjectUrl = URL.createObjectURL(blob);
@@ -1596,7 +1614,7 @@
     videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
-    setVideoStatus(`Video pronto com ${items.length} animal${items.length === 1 ? '' : 'is'}.`);
+    setVideoStatus(`Vídeo pronto com ${items.length} animal${items.length === 1 ? '' : 'is'}.`);
   }
 
   if (videoModal) {
