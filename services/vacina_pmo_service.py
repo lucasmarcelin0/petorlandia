@@ -79,6 +79,11 @@ PMO_CATS_VACCINATED_COLUMN = "N"
 PMO_ATTENDED_BY_COLUMN = "O"
 PMO_NOTE_COLUMN = "K"
 PMO_ANIMAL_NAMES_COLUMN = "J"
+# Quantidade de animais da casa (o que foi inscrito). É a contagem AUTORITATIVA
+# usada por parse_animals para casar cada nome da coluna J com a espécie, então
+# todo animal incluído na hora precisa aparecer aqui — senão o próximo sync o apaga.
+PMO_DOGS_COLUMN = "H"
+PMO_CATS_COLUMN = "I"
 
 # Aba mestre de status (mantida pelo sync agendado). O app NUNCA deve escrever
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
@@ -2330,8 +2335,56 @@ def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
 
 
-def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
-    """Corrige o nome de um animal e replica a célula de nomes (coluna J) na planilha."""
+def write_animal_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve quantos cães (H) e gatos (I) a casa tem na linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar contagem de animais PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = (
+            f"{_quote_sheet_title(title)}!"
+            f"{PMO_DOGS_COLUMN}{visit.source_row}:{PMO_CATS_COLUMN}{visit.source_row}"
+        )
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[visit.dogs or 0, visit.cats or 0]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar contagem de animais na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
+def _validate_pmo_animal_name(name: Any) -> str:
     normalized = _normalize_text(name)
     if not normalized:
         raise ValueError("Digite o nome do animal.")
@@ -2341,6 +2394,12 @@ def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
     # esses separadores viraria dois animais na próxima sincronização.
     if len(_split_animals(normalized)) > 1:
         raise ValueError("Use um nome sem vírgulas, ponto e vírgula ou \" e \" — ele separa animais na planilha.")
+    return normalized
+
+
+def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
+    """Corrige o nome de um animal e replica a célula de nomes (coluna J) na planilha."""
+    normalized = _validate_pmo_animal_name(name)
 
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     old_name = animal.name or ""
@@ -2465,6 +2524,67 @@ def update_vacina_pmo_visit_attended_by(visit_id: int, attended_by: str | None) 
     visit.attended_by = normalized or None
     db.session.commit()
     write_attended_by_to_sheet(visit)
+    return _serialize_visit(visit)
+
+
+# Teto de animais por casa. O dia inteiro é planejado para ~23 animais
+# (PMO_DAY_TARGET_ANIMALS), então uma casa passar disso é quase sempre engano de
+# digitação — melhor barrar do que estourar a rota do turno sem ninguém perceber.
+PMO_VISIT_ANIMALS_MAX = 12
+
+
+def _pmo_sort_visit_animals(visit: PmoVaccinationVisit) -> None:
+    """Reordena as posições: cães primeiro, gatos depois.
+
+    É a mesma ordem que ``_build_animals`` usa ao reconstruir a visita a partir da
+    planilha (a espécie de cada slot vem da posição). Mantendo a ordem igual, a
+    coluna J escrita agora volta idêntica no próximo sync.
+    """
+    ordered = sorted(visit.animals, key=lambda animal: (animal.species != "cao", animal.position))
+    for position, animal in enumerate(ordered, start=1):
+        animal.position = position
+
+
+def add_vacina_pmo_visit_animal(visit_id: int, name: Any, species: Any) -> dict[str, Any]:
+    """Inclui um animal que apareceu na hora da visita (tutor trouxe mais um).
+
+    Além do banco, atualiza a planilha (nomes na J e contagem em H/I) porque o
+    sync reconstrói os animais a partir dessas células — sem isso o bicho
+    vacinado sumiria na próxima sincronização da aba.
+    """
+    visit = PmoVaccinationVisit.query.get_or_404(visit_id)
+    normalized = _validate_pmo_animal_name(name)
+    species_value = _strip_accents(_normalize_text(species)).lower()
+    if species_value not in {"cao", "gato"}:
+        raise ValueError("Escolha se o animal é cão ou gato.")
+    if len(visit.animals) >= PMO_VISIT_ANIMALS_MAX:
+        raise ValueError(f"Esta casa já está com {PMO_VISIT_ANIMALS_MAX} animais — confira a lista.")
+
+    wanted = _strip_accents(normalized).casefold()
+    if any(_strip_accents(animal.name or "").casefold() == wanted for animal in visit.animals):
+        raise ValueError(f"Já existe um animal chamado {normalized} nesta casa.")
+
+    animal = PmoVaccinationAnimal(
+        visit=visit,
+        position=len(visit.animals) + 1,
+        name=normalized,
+        species=species_value,
+        status="pendente",
+    )
+    db.session.add(animal)
+    db.session.flush()
+    _pmo_sort_visit_animals(visit)
+    visit.dogs = sum(1 for item in visit.animals if item.species == "cao")
+    visit.cats = sum(1 for item in visit.animals if item.species == "gato")
+    _append_visit_note(
+        visit,
+        f"{_pmo_event_time_label()} - {normalized} ({'cão' if species_value == 'cao' else 'gato'}) incluído na hora.",
+    )
+    _ensure_real_animal(animal)
+    db.session.commit()
+    write_animal_names_to_sheet(visit)
+    write_animal_counts_to_sheet(visit)
+    write_note_to_sheet(visit)
     return _serialize_visit(visit)
 
 

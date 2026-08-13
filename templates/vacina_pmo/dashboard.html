@@ -773,6 +773,84 @@
     color: #b91c1c;
   }
 
+  .pmo-add-animal {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px dashed #94a3b8;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 1.1rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pmo-add-animal__btn:hover {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #14532d;
+  }
+
+  .pmo-add-animal__form {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+  }
+
+  .pmo-add-animal__input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
+  }
+
+  .pmo-add-animal__species {
+    display: flex;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pmo-add-animal__chip.is-active {
+    border-color: #16a34a;
+    background: #dcfce7;
+    color: #14532d;
+    font-weight: 600;
+  }
+
   .pmo-video-modal {
     position: fixed;
     inset: 0;
@@ -2595,6 +2673,33 @@
     }
   }
 
+  async function addAnimal(row, name, species) {
+    if (!row.visitId) {
+      throw new Error('Sincronize a aba antes de incluir animais.');
+    }
+    const response = await fetch(`/vacina-pmo/visit/${row.visitId}/animal`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ name, species }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível incluir o animal.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+      hydrateQueuedPhotos();
+      return updated;
+    }
+    return null;
+  }
+
   const lossesTimers = new Map();
 
   async function saveLosses(row, losses) {
@@ -2800,6 +2905,35 @@
     `;
   }
 
+  function renderAddAnimal(row) {
+    if (row.addingAnimal) {
+      return `
+        <div class="pmo-add-animal">
+          <form class="pmo-add-animal__form" data-action="animal-add-form" autocomplete="off">
+            <input type="text" class="pmo-add-animal__input" data-action="animal-add-input" maxlength="100"
+              placeholder="Nome do animal" aria-label="Nome do animal que apareceu na hora">
+            <div class="pmo-add-animal__species" role="group" aria-label="Espécie do animal">
+              <button type="button" class="pmo-add-animal__chip is-active" data-action="animal-add-species" data-species="cao"><i class="fas fa-dog"></i>Cão</button>
+              <button type="button" class="pmo-add-animal__chip" data-action="animal-add-species" data-species="gato"><i class="fas fa-cat"></i>Gato</button>
+            </div>
+            <div class="pmo-add-animal__actions">
+              <button type="submit" class="btn btn-sm btn-primary">Adicionar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-action="animal-add-cancel">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+    return `
+      <div class="pmo-add-animal">
+        <div class="pmo-add-animal__actions">
+          <button type="button" class="pmo-add-animal__btn" data-action="animal-add" title="Incluir um animal que apareceu na hora (vai para a planilha)" aria-label="Incluir animal">+</button>
+          <span class="text-muted small"><i class="fas fa-paw"></i> animal</span>
+        </div>
+      </div>
+    `;
+  }
+
   function renderNote(row) {
     if (row.editingNote) {
       return `
@@ -2901,6 +3035,7 @@
         ${progress.total ? `<div class="pmo-progress" role="progressbar" aria-valuenow="${progress.done}" aria-valuemin="0" aria-valuemax="${progress.total}" aria-label="Animais vacinados nesta visita"><div class="pmo-progress__bar" data-status="${row.status}" style="width:${progress.pct}%"></div></div>` : ''}
         <div class="pmo-animal-list">
           ${renderAnimalControls(row)}
+          ${renderAddAnimal(row)}
           ${renderLosses(row)}
           ${renderNote(row)}
         </div>
@@ -3112,7 +3247,7 @@
     });
 
     tbody.innerHTML = prepared.map((row) => {
-      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderLosses(row)}${renderNote(row)}</div>`;
+      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderAddAnimal(row)}${renderLosses(row)}${renderNote(row)}</div>`;
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
@@ -3260,10 +3395,29 @@
       }
       return;
     }
+    if (action === 'animal-add-species') {
+      // Troca a espécie sem re-renderizar para não perder o nome já digitado.
+      actionEl.closest('.pmo-add-animal__species')?.querySelectorAll('.pmo-add-animal__chip')
+        .forEach((chip) => chip.classList.toggle('is-active', chip === actionEl));
+      return;
+    }
     const findFreshRow = () => rowEl.classList.contains('pmo-visit-card')
       ? cardsEl.querySelector(`[data-id="${row.id}"]`)
       : tbody.querySelector(`tr[data-id="${row.id}"]`);
-    if (action === 'attended-edit') {
+    if (action === 'animal-add') {
+      if (!row.visitId) {
+        window.showAppToast ? window.showAppToast('Sincronize a aba antes de incluir animais.', 'warning') : alert('Sincronize a aba antes de incluir animais.');
+        return;
+      }
+      state.rows.forEach((other) => { if (other !== row) other.addingAnimal = false; });
+      row.addingAnimal = true;
+      render();
+      const input = findFreshRow()?.querySelector('[data-action="animal-add-input"]');
+      if (input) input.focus();
+    } else if (action === 'animal-add-cancel') {
+      row.addingAnimal = false;
+      render();
+    } else if (action === 'attended-edit') {
       state.rows.forEach((other) => { if (other !== row) other.editingAttendedBy = false; });
       row.editingAttendedBy = true;
       render();
@@ -3293,7 +3447,38 @@
   });
 
   listPanel.addEventListener('submit', (event) => {
-    if (event.target.dataset.action === 'animal-name-form') {
+    if (event.target.dataset.action === 'animal-add-form') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      const input = event.target.querySelector('[data-action="animal-add-input"]');
+      if (!row || !input) return;
+      const name = input.value.trim();
+      if (!name) {
+        window.showAppToast ? window.showAppToast('Digite o nome do animal.', 'warning') : alert('Digite o nome do animal.');
+        input.focus();
+        return;
+      }
+      const species = event.target.querySelector('.pmo-add-animal__chip.is-active')?.dataset.species || 'cao';
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>';
+      }
+      addAnimal(row, name, species)
+        .then(() => {
+          row.addingAnimal = false;
+          render();
+          window.showAppToast ? window.showAppToast(`${name} incluído nesta visita.`, 'success') : null;
+        })
+        .catch((error) => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Adicionar';
+          }
+          window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        });
+    } else if (event.target.dataset.action === 'animal-name-form') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
@@ -3331,7 +3516,15 @@
   });
 
   listPanel.addEventListener('keydown', (event) => {
-    if (event.target.dataset.action === 'animal-name-input' && event.key === 'Escape') {
+    if (event.target.dataset.action === 'animal-add-input' && event.key === 'Escape') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (row) {
+        row.addingAnimal = false;
+        render();
+      }
+    } else if (event.target.dataset.action === 'animal-name-input' && event.key === 'Escape') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);

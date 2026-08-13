@@ -930,6 +930,27 @@ def vacina_pmo_visit_attended_by(visit_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@bp.route('/vacina-pmo/visit/<int:visit_id>/animal', methods=['POST'])
+@login_required
+def vacina_pmo_visit_add_animal(visit_id):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    try:
+        from services.vacina_pmo_service import add_vacina_pmo_visit_animal
+
+        payload = request.get_json(silent=True) or {}
+        row = add_vacina_pmo_visit_animal(
+            visit_id, payload.get('name'), payload.get('species')
+        )
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao adicionar animal Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @bp.route('/vacina-pmo/visit/<int:visit_id>/losses', methods=['POST'])
 @login_required
 def vacina_pmo_visit_losses(visit_id):

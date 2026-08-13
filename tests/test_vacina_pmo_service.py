@@ -1,14 +1,20 @@
 from datetime import date, timedelta
 from io import BytesIO
 
+import pytest
 from PIL import Image
 from services import vacina_pmo_service
 from services.vacina_pmo_service import (
+    add_vacina_pmo_visit_animal,
     append_vacina_pmo_visit_note,
+    PMO_ANIMAL_NAMES_COLUMN,
     PMO_ATTENDED_BY_COLUMN,
+    PMO_CATS_COLUMN,
     PMO_CATS_VACCINATED_COLUMN,
+    PMO_DOGS_COLUMN,
     PMO_DOGS_VACCINATED_COLUMN,
     PMO_NOTE_COLUMN,
+    PMO_VISIT_ANIMALS_MAX,
     PMO_REQUEST_HEADERS,
     normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
@@ -1419,6 +1425,185 @@ def test_update_animal_status_swallows_sheet_failures(app, monkeypatch):
         result = update_vacina_pmo_animal_status(animal_id, "vacinado")
 
     assert result["animals"][0]["status"] == "vacinado"
+
+
+def _pmo_extra_animal_row(**overrides):
+    row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Tutor Extra",
+        "address": "Rua 7, 310, Centro",
+        "phone1": "5516988887777",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 1,
+        "animals": [
+            {"name": "Lua", "species": "cao", "status": "pendente"},
+            {"name": "Mia", "species": "gato", "status": "pendente"},
+        ],
+        "note": "",
+        "date": "2026-05-28",
+        "shift": "Manha",
+        "password": "PMOA7777",
+        "certificateUrl": "",
+        "sourceRow": 7,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_add_animal_writes_names_and_counts_and_keeps_dogs_first(app, monkeypatch):
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+    monkeypatch.setattr(vacina_pmo_service, "_pmo_event_time_label", lambda: "09:20")
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_pmo_extra_animal_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="770",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        updated = add_vacina_pmo_visit_animal(saved[0]["visitId"], "Bidu", "cao")
+
+    # Cães primeiro, gatos depois: mesma ordem que o sync reconstrói da planilha.
+    assert [animal["name"] for animal in updated["animals"]] == ["Lua", "Bidu", "Mia"]
+    assert (updated["dogs"], updated["cats"]) == (2, 1)
+    assert updated["animals"][1]["status"] == "pendente"
+
+    name_updates = [
+        call for call in fake_service.updates
+        if call["range"].endswith(f"{PMO_ANIMAL_NAMES_COLUMN}7")
+    ]
+    count_updates = [
+        call for call in fake_service.updates
+        if call["range"].endswith(f"{PMO_DOGS_COLUMN}7:{PMO_CATS_COLUMN}7")
+    ]
+    note_updates = [
+        call for call in fake_service.updates if call["range"].endswith(f"{PMO_NOTE_COLUMN}7")
+    ]
+    assert name_updates[-1]["body"] == {"values": [["Lua, Bidu, Mia"]]}
+    assert count_updates[-1]["body"] == {"values": [[2, 1]]}
+    assert note_updates[-1]["body"] == {"values": [["09:20 - Bidu (cão) incluído na hora."]]}
+
+
+def test_added_animal_survives_next_sheet_sync(app, monkeypatch):
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_pmo_extra_animal_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="771",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        updated = add_vacina_pmo_visit_animal(saved[0]["visitId"], "Bidu", "cao")
+        added_id = next(a["id"] for a in updated["animals"] if a["name"] == "Bidu")
+        update_vacina_pmo_animal_status(added_id, "vacinado")
+
+        # Reconstrói a linha da planilha com o que o app acabou de gravar (H, I e J)
+        # e re-sincroniza: é assim que o animal incluído na hora se mantém.
+        names = next(
+            call for call in reversed(fake_service.updates)
+            if call["range"].endswith(f"{PMO_ANIMAL_NAMES_COLUMN}7")
+        )["body"]["values"][0][0]
+        dogs, cats = next(
+            call for call in reversed(fake_service.updates)
+            if call["range"].endswith(f"{PMO_DOGS_COLUMN}7:{PMO_CATS_COLUMN}7")
+        )["body"]["values"][0]
+
+        sheet_row = [
+            "Tutor Extra", "Rua 7", "310", "", "Centro",
+            "5516988887777", "", dogs, cats, names, "", "28/05/2026",
+            "", "", "", "", "", "Manha",
+        ]
+        parsed = parse_vacina_pmo_rows([[] for _ in range(6)] + [sheet_row])
+        persist_vacina_pmo_rows(
+            parsed,
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="771",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        state = get_saved_vacina_pmo_rows(sheet_gid="771")
+
+    animals = state["rows"][0]["animals"]
+    assert [(a["name"], a["species"]) for a in animals] == [
+        ("Lua", "cao"), ("Bidu", "cao"), ("Mia", "gato")
+    ]
+    assert [a["status"] for a in animals] == ["pendente", "vacinado", "pendente"]
+
+
+def test_add_animal_rejects_duplicate_species_and_overflow(app, monkeypatch):
+    fake_service = _FakeSheetsService()
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: fake_service)
+
+    with app.app_context():
+        saved = persist_vacina_pmo_rows(
+            [_pmo_extra_animal_row()],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="772",
+            sheet_title="Vacinacao Antirrabica_7",
+        )
+        visit_id = saved[0]["visitId"]
+
+        with pytest.raises(ValueError):
+            add_vacina_pmo_visit_animal(visit_id, "lua", "cao")  # já existe (sem acento/caixa)
+        with pytest.raises(ValueError):
+            add_vacina_pmo_visit_animal(visit_id, "Bidu", "coelho")
+        with pytest.raises(ValueError):
+            add_vacina_pmo_visit_animal(visit_id, "Bidu, Rex", "cao")  # vira dois no sync
+        with pytest.raises(ValueError):
+            add_vacina_pmo_visit_animal(visit_id, "", "cao")
+
+        for index in range(PMO_VISIT_ANIMALS_MAX - 2):
+            add_vacina_pmo_visit_animal(visit_id, f"Extra{index}", "cao")
+        with pytest.raises(ValueError):
+            add_vacina_pmo_visit_animal(visit_id, "UmAMais", "cao")
+
+        state = get_saved_vacina_pmo_rows(sheet_gid="772")
+
+    assert len(state["rows"][0]["animals"]) == PMO_VISIT_ANIMALS_MAX
+
+
+def test_pmo_add_animal_endpoint_requires_vaccinator_role(app, client, monkeypatch):
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service_rw", lambda: _FakeSheetsService())
+
+    with app.app_context():
+        admin = User(name="Admin Extra", email="admin-extra-animal@example.com", role="admin")
+        admin.set_password("senha")
+        tutor = User(name="Tutor Comum", email="tutor-extra-animal@example.com", role="adotante")
+        tutor.set_password("senha")
+        db.session.add_all([admin, tutor])
+        persist_vacina_pmo_rows(
+            [_pmo_extra_animal_row(sourceRow=3)],
+            spreadsheet_id="planilha-pmo",
+            sheet_gid="773",
+            sheet_title="28/05/2026",
+        )
+        db.session.commit()
+        visit_id = PmoVaccinationVisit.query.filter_by(sheet_gid="773").one().id
+
+    # Login de verdade nos dois clientes: _pmo_login (session_transaction) não
+    # isola sessões quando o mesmo teste usa duas identidades.
+    tutor_client = app.test_client()
+    tutor_client.post(
+        "/login", data={"email": "tutor-extra-animal@example.com", "password": "senha"}
+    )
+    blocked = tutor_client.post(
+        f"/vacina-pmo/visit/{visit_id}/animal", json={"name": "Bidu", "species": "cao"}
+    )
+    # handle_http_exception mascara 403 como 404 nas respostas JSON.
+    assert blocked.status_code == 404
+
+    client.post("/login", data={"email": "admin-extra-animal@example.com", "password": "senha"})
+    created = client.post(f"/vacina-pmo/visit/{visit_id}/animal", json={"name": "Bidu", "species": "cao"})
+    invalid = client.post(f"/vacina-pmo/visit/{visit_id}/animal", json={"name": "Bidu", "species": ""})
+
+    assert created.status_code == 200
+    assert [a["name"] for a in created.get_json()["row"]["animals"]] == ["Lua", "Bidu", "Mia"]
+    assert invalid.status_code == 400
+    assert invalid.get_json()["success"] is False
 
 
 def test_append_visit_note_preserves_existing_observation_in_same_cell(app, monkeypatch):
