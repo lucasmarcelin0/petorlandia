@@ -1585,35 +1585,40 @@
 
   function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
     const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
     ctx.fillStyle = '#1f3f8f';
     ctx.font = '600 24px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`Campanha municipal de vacinação antirrábica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function drawIntro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
     ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
     fitCenterText(ctx, `${count} ${count === 1 ? 'animal' : 'animais'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
     ctx.font = '600 38px Arial, sans-serif';
     ctx.fillStyle = '#b5222a';
-    ctx.fillText('Campanha municipal de vacinação antirrábica', canvas.width / 2, 930);
+    ctx.fillText('Vacinação antirrábica de rotina', canvas.width / 2, 930);
+    ctx.font = '600 32px Arial, sans-serif';
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function drawOutro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', `Prefeitura Municipal de Orlândia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', videoDateLabel());
     ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
     fitCenterText(ctx, 'Vacina em dia protege o animal, a família e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
     ctx.font = '600 32px Arial, sans-serif';
     ctx.fillStyle = '#b5222a';
     ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste vídeo`, canvas.width / 2, 950);
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function delay(ms) {
