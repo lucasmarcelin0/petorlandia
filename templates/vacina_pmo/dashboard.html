@@ -2060,6 +2060,15 @@
     return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
   }
 
+  // Guarda qual aba está aberta E de que dia ela é. A data é o que permite, na
+  // próxima abertura, carregar as visitas antes da lista de abas sem correr o
+  // risco de mostrar o dia anterior.
+  function rememberSelectedSheet() {
+    if (!sheetEl.value) return;
+    localStorage.setItem('pmo_sheet_gid', sheetEl.value);
+    localStorage.setItem('pmo_sheet_date', sheetEl.selectedOptions[0]?.dataset.date || '');
+  }
+
   function currentSheetDate() {
     const configured = sheetEl.dataset.today || '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(configured)) return configured;
@@ -2231,7 +2240,7 @@
       renderSheetOptions('', toSelect);
       if (toSelect) {
         sheetEl.value = toSelect;
-        localStorage.setItem('pmo_sheet_gid', toSelect);
+        rememberSelectedSheet();
         updatePrintLinks();
       }
       sheetInfoEl.textContent = todaySheet
@@ -2368,9 +2377,17 @@
     });
   }
 
-  async function loadSavedState(useSelectedSheet = false) {
+  // Na abertura o painel dispara duas cargas de estado em paralelo (a "adiantada",
+  // pelo gid guardado no aparelho, e a que confirma a aba do dia). A resposta de
+  // uma carga antiga nunca pode sobrescrever a mais nova.
+  let stateLoadSeq = 0;
+
+  async function loadSavedState(useSelectedSheet = false, { sheetGid = '' } = {}) {
+    const seq = ++stateLoadSeq;
     const params = new URLSearchParams();
-    if (useSelectedSheet) {
+    if (sheetGid) {
+      params.set('sheet_gid', sheetGid);
+    } else if (useSelectedSheet) {
       if (sheetEl.value) params.set('sheet_gid', sheetEl.value);
       const title = sheetEl.selectedOptions[0]?.dataset.title || '';
       if (title) params.set('sheet_title', title);
@@ -2382,9 +2399,10 @@
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || 'Não foi possível carregar o estado salvo.');
       }
+      if (seq !== stateLoadSeq) return state.rows.length;
       if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
         sheetEl.value = payload.sheet_gid;
-        localStorage.setItem('pmo_sheet_gid', payload.sheet_gid);
+        rememberSelectedSheet();
       }
       state.rows = normalizeSyncedRows(payload.rows || []);
       render();
@@ -3608,7 +3626,7 @@
   evalScopeDayBtn?.addEventListener('click', () => setEvalScope('day'));
   evalScopeAllBtn?.addEventListener('click', () => setEvalScope('all'));
   sheetEl.addEventListener('change', () => {
-    if (sheetEl.value) localStorage.setItem('pmo_sheet_gid', sheetEl.value);
+    rememberSelectedSheet();
     updatePrintLinks();
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
@@ -3620,8 +3638,26 @@
     sheetSearchEl.addEventListener('input', () => renderSheetOptions(sheetSearchEl.value));
   }
 
-  // Abre já na aba de hoje (a selecionada), não na última aba salva.
-  loadSheets().then(() => loadSelectedSheet({ syncWhenEmpty: true }));
+  // A lista de abas vem da API do Google e trava de 0,5s a vários segundos (pior
+  // com o processo frio, logo depois de um deploy). As visitas não esperam mais
+  // por ela: quando o aparelho já tem a aba de HOJE guardada, o estado salvo é
+  // buscado em paralelo e os cards aparecem em ~150ms. A lista, quando chega, só
+  // confirma a aba — se for outra, recarrega o estado dela.
+  const bootGid = localStorage.getItem('pmo_sheet_date') === currentSheetDate()
+    ? (localStorage.getItem('pmo_sheet_gid') || '')
+    : '';
+  const bootRows = bootGid ? loadSavedState(false, { sheetGid: bootGid }) : null;
+  loadSheets().then(async () => {
+    const selected = sheetEl.value || '';
+    if (!bootGid || (selected && selected !== bootGid)) {
+      await loadSelectedSheet({ syncWhenEmpty: true });
+      return;
+    }
+    if ((await bootRows) === 0 && selected) {
+      sheetInfoEl.textContent = 'A aba ainda não estava carregada. Sincronizando automaticamente...';
+      await syncSheet('pmo-sync-inline', { silent: true });
+    }
+  });
   render();
 })();
 </script>

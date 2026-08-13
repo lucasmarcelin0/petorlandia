@@ -1503,12 +1503,28 @@ def _resolve_sheet_target(
     return spreadsheet_id, range_value, "", ""
 
 
-def list_vacina_pmo_sheets() -> list[dict[str, Any]]:
+# A lista de abas sai de uma chamada à API do Google que o painel faz antes de
+# mostrar qualquer visita: ~0,5s no caminho quente e vários segundos com o
+# cliente frio (logo depois de um deploy). As abas só mudam quando um dia novo é
+# criado — e aí invalidamos o cache —, então guardar por alguns minutos tira esse
+# tempo do caminho de abertura do painel.
+PMO_SHEETS_CACHE_TTL = 300.0
+_PMO_SHEETS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def invalidate_vacina_pmo_sheets_cache() -> None:
+    _PMO_SHEETS_CACHE.clear()
+
+
+def list_vacina_pmo_sheets(*, use_cache: bool = True) -> list[dict[str, Any]]:
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
-    service = _get_sheets_service()
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
         raise RuntimeError("URL/ID da planilha PMO inválido.")
+    cached = _PMO_SHEETS_CACHE.get(spreadsheet_id)
+    if use_cache and cached and (time.monotonic() - cached[0]) < PMO_SHEETS_CACHE_TTL:
+        return [dict(item) for item in cached[1]]
+    service = _get_sheets_service()
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
@@ -1527,7 +1543,8 @@ def list_vacina_pmo_sheets() -> list[dict[str, Any]]:
                 "date": _parse_date(title),
             }
         )
-    return sheets
+    _PMO_SHEETS_CACHE[spreadsheet_id] = (time.monotonic(), sheets)
+    return [dict(item) for item in sheets]
 
 
 def infer_visit_status(animals: list[dict[str, Any]] | list[PmoVaccinationAnimal]) -> str:
@@ -3389,6 +3406,9 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     for house, rownum in zip(tarde[:placed_tarde], tarde_slots[:placed_tarde]):
         wa_assignments.append((house["cells"], rownum, "Tarde"))
     _pmo_write_whatsapp_links(service, spreadsheet_id, date_label, target_date, wa_assignments)
+
+    # A aba nova precisa aparecer no seletor do painel na hora.
+    invalidate_vacina_pmo_sheets_cache()
 
     return {
         "date": date_label,

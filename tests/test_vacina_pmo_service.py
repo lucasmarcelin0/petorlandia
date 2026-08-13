@@ -16,6 +16,7 @@ from services.vacina_pmo_service import (
     PMO_NOTE_COLUMN,
     PMO_VISIT_ANIMALS_MAX,
     PMO_REQUEST_HEADERS,
+    list_vacina_pmo_sheets,
     normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
@@ -1425,6 +1426,45 @@ def test_update_animal_status_swallows_sheet_failures(app, monkeypatch):
         result = update_vacina_pmo_animal_status(animal_id, "vacinado")
 
     assert result["animals"][0]["status"] == "vacinado"
+
+
+def test_list_sheets_reuses_cache_until_invalidated(monkeypatch):
+    calls = {"count": 0}
+
+    class _FakeMetadataService:
+        def spreadsheets(self):
+            return self
+
+        def get(self, *, spreadsheetId, fields):
+            calls["count"] += 1
+            return _FakeSheetsExecute(
+                {"sheets": [{"properties": {"title": "13/08/2026", "sheetId": 873867760}}]}
+            )
+
+    monkeypatch.setattr(vacina_pmo_service, "_get_sheets_service", lambda: _FakeMetadataService())
+    monkeypatch.setenv(
+        "PMO_VACCINE_SHEET_URL", "https://docs.google.com/spreadsheets/d/planilha-cache/edit"
+    )
+    vacina_pmo_service.invalidate_vacina_pmo_sheets_cache()
+
+    first = list_vacina_pmo_sheets()
+    second = list_vacina_pmo_sheets()
+
+    assert calls["count"] == 1  # a segunda leitura não vai ao Google
+    assert second == first
+    assert first[0]["gid"] == "873867760"
+
+    first[0]["title"] = "mexido pelo chamador"
+    assert list_vacina_pmo_sheets()[0]["title"] == "13/08/2026"  # cache imutável
+
+    # Criar um dia novo precisa aparecer no seletor na hora.
+    vacina_pmo_service.invalidate_vacina_pmo_sheets_cache()
+    list_vacina_pmo_sheets()
+    assert calls["count"] == 2
+
+    assert list_vacina_pmo_sheets(use_cache=False)
+    assert calls["count"] == 3
+    vacina_pmo_service.invalidate_vacina_pmo_sheets_cache()
 
 
 def _pmo_extra_animal_row(**overrides):
