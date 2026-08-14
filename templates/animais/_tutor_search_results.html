@@ -1,0 +1,31 @@
+{% if is_admin and tutor_results is not none %}
+<section class="mb-4" aria-labelledby="tutores-encontrados-title">
+  <h2 id="tutores-encontrados-title" class="h5 mb-3">Tutores encontrados</h2>
+  {% if tutor_results %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+    {% for result in tutor_results %}
+      {% set tutor = result.tutor %}
+      <div class="col">
+        <article class="card h-100 border-primary-subtle shadow-sm rounded-4">
+          <div class="card-body">
+            <h3 class="h6 mb-2">{{ tutor.name }}</h3>
+            <dl class="small mb-3">
+              {% if tutor.cpf %}<div><dt class="visually-hidden">CPF</dt><dd class="mb-1">CPF: {{ tutor.cpf }}</dd></div>{% endif %}
+              {% if tutor.phone %}<div><dt class="visually-hidden">Telefone</dt><dd class="mb-1">Telefone: {{ tutor.phone }}</dd></div>{% endif %}
+              {% if tutor.email and not tutor.email_is_placeholder %}<div><dt class="visually-hidden">E-mail</dt><dd class="mb-1 text-break">{{ tutor.email }}</dd></div>{% endif %}
+              {% if tutor.address %}<div><dt class="visually-hidden">Endereço</dt><dd class="mb-0 text-break">{{ tutor.address }}</dd></div>{% endif %}
+            </dl>
+            <div class="d-flex justify-content-between align-items-center gap-2">
+              <span class="badge text-bg-light">{{ result.animal_count }} {{ 'animal' if result.animal_count == 1 else 'animais' }}</span>
+              <a class="btn btn-outline-primary btn-sm rounded-pill" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">Ver tutor</a>
+            </div>
+          </div>
+        </article>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted mb-0">Nenhum tutor encontrado. A busca também considera tutores sem animais cadastrados.</p>
+  {% endif %}
+</section>
+{% endif %}

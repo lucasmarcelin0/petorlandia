@@ -385,6 +385,34 @@ def list_animals():
     tutor_name_query = (request.args.get('tutor_name') or '').strip()
     tutor_search_query = (request.args.get('tutor_search') or '').strip()
     is_admin_user = _is_admin()
+    admin_tutor_query = (tutor_search_query or tutor_name_query) if is_admin_user else ''
+
+    def admin_tutor_filters(term):
+        """Busca administrativa por dados do tutor, inclusive CPF sem máscara."""
+        like_term = f"%{term}%"
+        filters = [
+            User.name.ilike(like_term),
+            User.email.ilike(like_term),
+            User.cpf.ilike(like_term),
+            User.rg.ilike(like_term),
+            User.phone.ilike(like_term),
+            User.phone2.ilike(like_term),
+            User.address.ilike(like_term),
+        ]
+        digits = re.sub(r'\D', '', term)
+        if digits:
+            normalized_like = f"%{digits}%"
+            for column, punctuation in (
+                (User.cpf, ['.', '-', '/', ' ']),
+                (User.rg, ['.', '-', '/', ' ']),
+                (User.phone, ['(', ')', '-', ' ']),
+                (User.phone2, ['(', ')', '-', ' ']),
+            ):
+                normalized_column = column
+                for char in punctuation:
+                    normalized_column = func.replace(normalized_column, char, '')
+                filters.append(normalized_column.ilike(normalized_like))
+        return filters
 
     # Base query: ignora animais removidos e sem responsável cadastrado
     query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
@@ -447,42 +475,32 @@ def list_animals():
         query = query.filter(Animal.age.ilike(f"{age}%"))
     if name_query:
         query = query.filter(Animal.name.ilike(f"%{name_query}%"))
-    if tutor_name_query or (is_admin_user and tutor_search_query):
+    tutor_results = None
+    if is_admin_user and admin_tutor_query:
+        tutor_filters = admin_tutor_filters(admin_tutor_query)
         query = query.join(User, Animal.user_id == User.id)
-
-        if tutor_name_query:
-            query = query.filter(User.name.ilike(f"%{tutor_name_query}%"))
-
-        if is_admin_user and tutor_search_query:
-            like_tutor_search = f"%{tutor_search_query}%"
-            digits = re.sub(r'\D', '', tutor_search_query)
-            tutor_filters = [
-                User.name.ilike(like_tutor_search),
-                User.email.ilike(like_tutor_search),
-                User.cpf.ilike(like_tutor_search),
-                User.rg.ilike(like_tutor_search),
-                User.phone.ilike(like_tutor_search),
-                User.phone2.ilike(like_tutor_search),
-                User.address.ilike(like_tutor_search),
-            ]
-
-            # CPF, RG e telefone podem estar armazenados com ou sem máscara.
-            # A comparação normalizada permite localizar todos os cadastros do
-            # mesmo documento, mesmo se os formatos forem diferentes.
-            if digits:
-                normalized_like = f"%{digits}%"
-                for column, punctuation in (
-                    (User.cpf, ['.', '-', '/', ' ']),
-                    (User.rg, ['.', '-', '/', ' ']),
-                    (User.phone, ['(', ')', '-', ' ']),
-                    (User.phone2, ['(', ')', '-', ' ']),
-                ):
-                    normalized_column = column
-                    for char in punctuation:
-                        normalized_column = func.replace(normalized_column, char, '')
-                    tutor_filters.append(normalized_column.ilike(normalized_like))
-
-            query = query.filter(or_(*tutor_filters))
+        query = query.filter(or_(*tutor_filters))
+        matched_tutors = (
+            User.query
+            .options(selectinload(User.animals))
+            .filter(or_(*tutor_filters))
+            .order_by(func.lower(User.name))
+            .limit(30)
+            .all()
+        )
+        tutor_results = [
+            {
+                'tutor': tutor,
+                'animal_count': sum(
+                    1 for animal in tutor.animals if not getattr(animal, 'removido_em', None)
+                ),
+            }
+            for tutor in matched_tutors
+        ]
+    elif tutor_name_query:
+        query = query.join(User, Animal.user_id == User.id).filter(
+            User.name.ilike(f"%{tutor_name_query}%")
+        )
 
     # Ordenação e paginação
     query = query.options(
@@ -519,6 +537,7 @@ def list_animals():
         name=name_query,
         tutor_name=tutor_name_query,
         tutor_search=tutor_search_query if is_admin_user else '',
+        tutor_results=tutor_results,
         pmo_dates=pmo_dates,
         is_admin=is_admin_user,
         show_all=show_all,
@@ -526,7 +545,7 @@ def list_animals():
     )
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_template('animais/_animals_grid.html', **context)
+        html = render_template('animais/_animals_content.html', **context)
         return jsonify(
             {
                 'html': html,
