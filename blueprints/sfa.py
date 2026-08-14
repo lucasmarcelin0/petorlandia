@@ -23,6 +23,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from functools import wraps
 
 from extensions import csrf
@@ -46,6 +47,27 @@ bp = Blueprint("sfa_routes", __name__, url_prefix="/sfa",
 
 def get_blueprint():
     return bp
+
+
+def _sfa_source_sheet_url() -> str:
+    source = os.getenv(
+        "SFA_SHEET_ID_SINAN",
+        "15UdUxNhuL3VUNpJr_iEiiWTVM-rlKtVcGPeY9jSFJ_E",
+    ).strip()
+    match = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", source)
+    spreadsheet_id = match.group(1) if match else source
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", spreadsheet_id):
+        return ""
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+    gid = os.getenv("SFA_SHEET_GID_SINAN", "").strip()
+    if gid.isdigit():
+        url += f"#gid={gid}"
+    return url
+
+
+@bp.context_processor
+def _inject_sfa_source_sheet_url():
+    return {"sfa_source_sheet_url": _sfa_source_sheet_url()}
 
 
 # ---------------------------------------------------------------------------

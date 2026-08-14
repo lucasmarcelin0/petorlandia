@@ -135,6 +135,14 @@
         </button>
       </form>
     </li>
+    {% if sfa_source_sheet_url %}
+    <li class="nav-item px-3 mb-1">
+      <a class="btn btn-sm btn-outline-light w-100 text-start"
+         href="{{ sfa_source_sheet_url }}" target="_blank" rel="noopener">
+        <i class="fas fa-table me-1"></i> Planilha de origem
+      </a>
+    </li>
+    {% endif %}
     <li class="nav-item">
       <form method="POST" action="{{ url_for('sfa_routes.rodar_rotina') }}" class="px-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

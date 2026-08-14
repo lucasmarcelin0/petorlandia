@@ -27,6 +27,8 @@ def test_sfa_dashboard_requires_auth_or_token(app, client, monkeypatch):
 def test_sfa_dashboard_allows_admin_session(app, client, monkeypatch):
     monkeypatch.setenv("SFA_ALLOW_OPEN_ACCESS", "0")
     monkeypatch.delenv("SFA_ADMIN_TOKEN", raising=False)
+    monkeypatch.setenv("SFA_SHEET_ID_SINAN", "sheet-sfa-test")
+    monkeypatch.setenv("SFA_SHEET_GID_SINAN", "12345")
     app.config["TESTING"] = False
 
     with app.app_context():
@@ -39,6 +41,9 @@ def test_sfa_dashboard_allows_admin_session(app, client, monkeypatch):
     response = client.get("/sfa/")
 
     assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Planilha de origem" in html
+    assert 'href="https://docs.google.com/spreadsheets/d/sheet-sfa-test/edit#gid=12345"' in html
 
 
 def test_sfa_dashboard_allows_admin_token(app, client, monkeypatch):
