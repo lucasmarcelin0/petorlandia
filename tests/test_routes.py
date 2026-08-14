@@ -942,6 +942,8 @@ def test_vacina_pmo_dashboard_prefers_today_sheet(app, monkeypatch):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert 'data-today="2026-06-17"' in body
+    assert 'Abrir planilha de origem' in body
+    assert 'href="https://docs.google.com/spreadsheets/d/' in body
     assert 'const todaySheet = sortedSheets.find((sheet) => sheet.date === today);' in body
     assert "const toSelect = todaySheet?.gid ||" in body
 

@@ -286,9 +286,15 @@ def vacina_pmo():
     # datetime resolvido via módulo app em tempo de request: testes congelam a
     # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
     import app as app_module
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL
 
     today = app_module.datetime.now(BR_TZ).date().isoformat()
-    return render_template('vacina_pmo/dashboard.html', today=today)
+    source_sheet_url = os.getenv('PMO_VACCINE_SHEET_URL', DEFAULT_SHEET_URL)
+    return render_template(
+        'vacina_pmo/dashboard.html',
+        today=today,
+        source_sheet_url=source_sheet_url,
+    )
 
 
 @bp.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
@@ -1379,4 +1385,3 @@ def castracao_pmo_solicitar():
         historico=historico,
         success_token=success_token,
     )
-
