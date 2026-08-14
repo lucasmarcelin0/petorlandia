@@ -383,6 +383,8 @@ def list_animals():
     show_all = _is_admin() and request.args.get('show_all') == '1'
     name_query = request.args.get('name')
     tutor_name_query = (request.args.get('tutor_name') or '').strip()
+    tutor_search_query = (request.args.get('tutor_search') or '').strip()
+    is_admin_user = _is_admin()
 
     # Base query: ignora animais removidos e sem responsável cadastrado
     query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
@@ -400,7 +402,6 @@ def list_animals():
         query = query.filter_by(modo=modo)
     else:
         # Admins can see all animals without filtering
-        is_admin_user = _is_admin()
         vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
@@ -446,10 +447,42 @@ def list_animals():
         query = query.filter(Animal.age.ilike(f"{age}%"))
     if name_query:
         query = query.filter(Animal.name.ilike(f"%{name_query}%"))
-    if tutor_name_query:
-        query = query.join(User, Animal.user_id == User.id).filter(
-            User.name.ilike(f"%{tutor_name_query}%")
-        )
+    if tutor_name_query or (is_admin_user and tutor_search_query):
+        query = query.join(User, Animal.user_id == User.id)
+
+        if tutor_name_query:
+            query = query.filter(User.name.ilike(f"%{tutor_name_query}%"))
+
+        if is_admin_user and tutor_search_query:
+            like_tutor_search = f"%{tutor_search_query}%"
+            digits = re.sub(r'\D', '', tutor_search_query)
+            tutor_filters = [
+                User.name.ilike(like_tutor_search),
+                User.email.ilike(like_tutor_search),
+                User.cpf.ilike(like_tutor_search),
+                User.rg.ilike(like_tutor_search),
+                User.phone.ilike(like_tutor_search),
+                User.phone2.ilike(like_tutor_search),
+                User.address.ilike(like_tutor_search),
+            ]
+
+            # CPF, RG e telefone podem estar armazenados com ou sem máscara.
+            # A comparação normalizada permite localizar todos os cadastros do
+            # mesmo documento, mesmo se os formatos forem diferentes.
+            if digits:
+                normalized_like = f"%{digits}%"
+                for column, punctuation in (
+                    (User.cpf, ['.', '-', '/', ' ']),
+                    (User.rg, ['.', '-', '/', ' ']),
+                    (User.phone, ['(', ')', '-', ' ']),
+                    (User.phone2, ['(', ')', '-', ' ']),
+                ):
+                    normalized_column = column
+                    for char in punctuation:
+                        normalized_column = func.replace(normalized_column, char, '')
+                    tutor_filters.append(normalized_column.ilike(normalized_like))
+
+            query = query.filter(or_(*tutor_filters))
 
     # Ordenação e paginação
     query = query.options(
@@ -485,8 +518,9 @@ def list_animals():
         age=age,
         name=name_query,
         tutor_name=tutor_name_query,
+        tutor_search=tutor_search_query if is_admin_user else '',
         pmo_dates=pmo_dates,
-        is_admin=_is_admin(),
+        is_admin=is_admin_user,
         show_all=show_all,
         scope=scope,
     )
