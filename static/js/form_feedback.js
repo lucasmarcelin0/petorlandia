@@ -243,9 +243,28 @@
     });
   }
 
+  function ensureStatus(form) {
+    if (!form) return null;
+    let status = form.querySelector('.form-status-message');
+    if (status) return status;
+
+    status = document.createElement('div');
+    status.className = 'form-status-message alert d-none mt-3';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+
+    const button = getButton(form);
+    if (button && button.parentNode === form) {
+      form.insertBefore(status, button);
+    } else {
+      form.appendChild(status);
+    }
+    return status;
+  }
+
   function showStatus(form, message, variant = 'success') {
     if (!form) return;
-    const status = form.querySelector('.form-status-message');
+    const status = ensureStatus(form);
     if (!status) return;
     status.textContent = formatMessage(message, '');
     status.classList.remove('d-none');
@@ -502,19 +521,6 @@
 
     return result;
   }
-
-  function handleDataSyncForm(form) {
-    form.addEventListener('submit', () => {
-      const button = getButton(form);
-      if (!button) return;
-      setLoading(button, { form });
-      clearStatus(form);
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('form[data-sync]').forEach(handleDataSyncForm);
-  });
 
   document.addEventListener('form-sync-success', (ev) => {
     const detail = ev.detail || {};

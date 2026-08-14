@@ -1371,14 +1371,14 @@ def tutores():
     # Criação de novo tutor
     if request.method == 'POST':
         wants_json = 'application/json' in request.headers.get('Accept', '')
-        name = request.form.get('tutor_name') or request.form.get('name')
-        email = (request.form.get('tutor_email') or request.form.get('email') or '').strip()
+        name = (request.form.get('tutor_name') or request.form.get('name') or '').strip()
+        email = (request.form.get('tutor_email') or request.form.get('email') or '').strip().lower()
         email_is_placeholder = not email
 
         if not name:
-            message = 'Nome e e‑mail são obrigatórios.'
+            message = 'Informe o nome do tutor.'
             if wants_json:
-                return jsonify(success=False, message=message, category='warning')
+                return jsonify(success=False, message=message, category='warning'), 400
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
@@ -1387,12 +1387,20 @@ def tutores():
         if User.query.filter_by(email=email).first():
             message = 'Já existe um tutor com esse e‑mail.'
             if wants_json:
-                return jsonify(success=False, message=message, category='warning')
+                return jsonify(success=False, message=message, category='warning'), 409
+            flash(message, 'warning')
+            return redirect(url_for('tutores'))
+
+        cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
+        if cpf and User.query.filter_by(cpf=cpf).first():
+            message = 'CPF já cadastrado para outro tutor.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='warning'), 409
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
         novo = User(
-            name=name.strip(),
+            name=name,
             email=email,
             email_is_placeholder=email_is_placeholder,
             role='adotante',  # padrão inicial
@@ -1400,11 +1408,11 @@ def tutores():
             added_by=current_user,
             is_private=True,
         )
-        novo.set_password('123456789')  # ⚠️ Sugestão: depois trocar por um token de convite
+        novo.set_password(secrets.token_urlsafe(32))
 
         # Campos opcionais
         novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
-        novo.cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
+        novo.cpf = cpf
         novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
         novo.address = None
 
@@ -1470,7 +1478,16 @@ def tutores():
             novo.profile_photo = f"/static/uploads/{filename}"
 
         db.session.add(novo)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Erro ao cadastrar tutor')
+            message = 'Não foi possível cadastrar o tutor. Revise os dados e tente novamente.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='danger'), 500
+            flash(message, 'danger')
+            return redirect(url_for('tutores'))
 
         if request.accept_mimetypes.accept_json:
             scope = request.args.get('scope', 'all')
@@ -1500,6 +1517,7 @@ def tutores():
                 compact=True,
             )
             return jsonify(
+                success=True,
                 message='Tutor criado com sucesso!',
                 category='success',
                 html=html,

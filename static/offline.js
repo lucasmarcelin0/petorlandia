@@ -379,7 +379,12 @@
         }
       }
 
-      const mainMessage = json && json.message ? json.message : undefined;
+      const isSuccess = offlineQueued || (resp && resp.ok && !(json && json.success === false));
+      const mainMessage = json && json.message
+        ? json.message
+        : (!isSuccess && resp
+          ? 'Não foi possível concluir o envio. Revise os dados e tente novamente.'
+          : undefined);
       const category = json && json.category
         ? json.category
         : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success');
@@ -396,12 +401,6 @@
           }
         });
       }
-      const isSuccess = offlineQueued || (resp && resp.ok && !(json && json.success === false));
-      if (!isSuccess && !mainMessage && resp && !resp.ok) {
-        const fallback = resp.statusText || 'Falha ao processar o formulário.';
-        showFormMessage(form, fallback, 'danger');
-      }
-
       if (!isSuccess) {
         return { success: false, message: mainMessage, level: category, offlineQueued: false };
       }
