@@ -362,6 +362,65 @@ def test_checkout_veterinario_troca_ciclo_pendente_para_anual(
     assert created["reason"] == "Assinatura PetOrlandia (anual)"
 
 
+def test_preco_anual_sem_config_bate_entre_tela_e_checkout(
+    app, client, monkeypatch
+):
+    """Sem a env var, tela e checkout precisam anunciar o mesmo valor."""
+
+    import app as app_module
+
+    user = _user("preco-anual@example.com")
+    vet = Veterinario(user=user, crmv="11223", crmv_estado="SP")
+    db.session.add(vet)
+    db.session.flush()
+    membership = VeterinarianMembership.query.filter_by(veterinario_id=vet.id).one()
+    # Avaliação já encerrada: com trial ativo o render chama
+    # remaining_trial_days() e esbarra no datetime naive devolvido pelo SQLite.
+    membership.started_at = utcnow() - timedelta(days=60)
+    membership.trial_ends_at = utcnow() - timedelta(days=30)
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    monkeypatch.delitem(
+        app.config, "VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE", raising=False
+    )
+
+    created = {}
+
+    class FakePreapproval:
+        def create(self, payload):
+            created.update(payload)
+            return {
+                "status": 201,
+                "response": {
+                    "id": "pre-anual-fallback",
+                    "init_point": "https://mp.example/anual",
+                },
+            }
+
+    class FakeSDK:
+        def preapproval(self):
+            return FakePreapproval()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda: FakeSDK())
+
+    tela = client.get("/veterinario/assinatura")
+    assert tela.status_code == 200
+    # 10 mensalidades de R$ 60 é o fallback compartilhado.
+    assert "R$ 600" in tela.get_data(as_text=True)
+
+    response = client.post(
+        "/veterinario/assinatura/checkout",
+        data={"plano": "anual"},
+        follow_redirects=False,
+    )
+
+    # Antes o checkout caía no fallback 0 e recusava com 'Plano indisponível'.
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://mp.example/anual"
+    assert created["auto_recurring"]["transaction_amount"] == 600.0
+
+
 def test_checkout_admin_sem_perfil_nao_cria_assinatura_orfa(
     app, client, monkeypatch
 ):

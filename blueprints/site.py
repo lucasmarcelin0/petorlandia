@@ -60,6 +60,7 @@ from app import (  # noqa: E402
     _current_professional_service_audience,
     _ensure_professional_services_table,
     _format_reais,
+    _get_veterinarian_membership_annual_price,
     _get_veterinarian_membership_price,
     _is_bh_consulta_extra_public_profile,
     _is_public_veterinarian,
@@ -213,7 +214,7 @@ def veterinarian_membership():
         checkout_form.plano.data = preferred_plan
     cancel_recurring_form = VeterinarianMembershipCancelRecurringForm()
     price = float(_get_veterinarian_membership_price())
-    annual_price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', price * 10))
+    annual_price = float(_get_veterinarian_membership_annual_price())
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
 
     return render_template(
@@ -262,7 +263,7 @@ def veterinarian_membership_checkout():
     # ficou em aberto na visita anterior.
     plano = (form.plano.data or 'mensal').strip().lower()
     if plano == 'anual':
-        price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', 0) or 0)
+        price = float(_get_veterinarian_membership_annual_price())
         frequency = 12
         ciclo_label = 'anual'
     else:
@@ -886,7 +887,7 @@ def precos():
 
     trial_days = int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30)
     monthly = float(_get_veterinarian_membership_price())
-    annual = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', monthly * 10))
+    annual = float(_get_veterinarian_membership_annual_price())
     annual_monthly = annual / 12 if annual else 0.0
     # Quantas mensalidades o plano anual economiza, arredondado para baixo.
     months_free = int((monthly * 12 - annual) // monthly) if monthly else 0
