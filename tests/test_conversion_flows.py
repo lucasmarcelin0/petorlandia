@@ -290,6 +290,78 @@ def test_checkout_veterinario_reabre_preapproval_pendente_sem_cancelar(
     assert VeterinarianMembershipSubscription.query.count() == 1
 
 
+def test_checkout_veterinario_troca_ciclo_pendente_para_anual(
+    app, client, monkeypatch
+):
+    """Escolher o anual não pode reaproveitar o checkout mensal pendente."""
+
+    import app as app_module
+
+    user = _user("trocar-ciclo@example.com")
+    vet = Veterinario(user=user, crmv="99887", crmv_estado="SP")
+    db.session.add(vet)
+    db.session.commit()
+    membership = VeterinarianMembership.query.filter_by(veterinario_id=vet.id).one()
+    membership.preapproval_id = "pre-mensal-pendente"
+    db.session.commit()
+    _login(monkeypatch, user)
+
+    canceled = []
+    created = {}
+
+    class FakePreapproval:
+        def get(self, preapproval_id):
+            return {
+                "status": 200,
+                "response": {
+                    "id": preapproval_id,
+                    "status": "pending",
+                    "external_reference": f"vet-membership-{membership.id}-legacy-mensal",
+                    "init_point": "https://mp.example/checkout-mensal",
+                    "auto_recurring": {
+                        "frequency": 1,
+                        "frequency_type": "months",
+                        "transaction_amount": 60,
+                        "currency_id": "BRL",
+                    },
+                },
+            }
+
+        def update(self, preapproval_id, payload):
+            canceled.append((preapproval_id, payload.get("status")))
+            return {"status": 200, "response": {"id": preapproval_id}}
+
+        def create(self, payload):
+            created.update(payload)
+            return {
+                "status": 201,
+                "response": {
+                    "id": "pre-anual-novo",
+                    "init_point": "https://mp.example/checkout-anual",
+                },
+            }
+
+    class FakeSDK:
+        def preapproval(self):
+            return FakePreapproval()
+
+    monkeypatch.setattr(app_module, "mp_sdk", lambda: FakeSDK())
+
+    response = client.post(
+        "/veterinario/assinatura/checkout",
+        data={"plano": "anual"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    # Sem a correção o usuário voltava para o init_point mensal já pendente.
+    assert response.headers["Location"] == "https://mp.example/checkout-anual"
+    assert canceled == [("pre-mensal-pendente", "canceled")]
+    assert created["auto_recurring"]["frequency"] == 12
+    assert created["auto_recurring"]["frequency_type"] == "months"
+    assert created["reason"] == "Assinatura PetOrlandia (anual)"
+
+
 def test_checkout_admin_sem_perfil_nao_cria_assinatura_orfa(
     app, client, monkeypatch
 ):

@@ -39,6 +39,8 @@ from services.veterinarian_billing import (
     create_subscription_attempt,
     current_subscription_for_membership,
     mark_subscription_attempt_failed,
+    mark_subscription_superseded,
+    membership_plan_from_preapproval_payload,
     normalize_preapproval_status,
     provider_response_payload,
     sync_preapproval_payload,
@@ -253,6 +255,22 @@ def veterinarian_membership_checkout():
             'warning',
         )
         return redirect(url_for('veterinarian_membership'))
+    # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
+    # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
+    # Precisa ser resolvido antes de reaproveitar uma assinatura pendente: sem
+    # isso, quem escolhe o anual acaba mandado de volta ao checkout mensal que
+    # ficou em aberto na visita anterior.
+    plano = (form.plano.data or 'mensal').strip().lower()
+    if plano == 'anual':
+        price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', 0) or 0)
+        frequency = 12
+        ciclo_label = 'anual'
+    else:
+        plano = 'mensal'
+        price = float(_get_veterinarian_membership_price())
+        frequency = 1
+        ciclo_label = 'mensal'
+
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     if membership:
         membership.ensure_trial_dates(trial_days)
@@ -280,27 +298,45 @@ def veterinarian_membership_checkout():
                     db.session.commit()
                     provider_status = normalize_preapproval_status(payload.get('status'))
                     if provider_status == 'pending':
-                        init_point = (
-                            payload.get('init_point')
-                            or payload.get('sandbox_init_point')
-                            or (subscription.init_point if subscription else None)
-                        )
-                        if init_point:
-                            flash(
-                                'Continuando a configuração de pagamento que já estava em andamento.',
-                                'info',
+                        pending_plan = membership_plan_from_preapproval_payload(payload)
+                        if pending_plan != plano:
+                            # O ciclo pendente não é o que acabou de ser
+                            # escolhido. Reaproveitar o init_point mandaria a
+                            # pessoa para o checkout errado, então cancelamos o
+                            # pendente e seguimos criando um novo.
+                            if not _cancel_membership_preapproval(membership):
+                                db.session.rollback()
+                                flash(
+                                    'Não foi possível trocar o ciclo da assinatura agora. '
+                                    'Tente novamente em instantes.',
+                                    'danger',
+                                )
+                                return redirect(url_for('veterinarian_membership'))
+                            if subscription:
+                                mark_subscription_superseded(subscription)
+                            db.session.commit()
+                        else:
+                            init_point = (
+                                payload.get('init_point')
+                                or payload.get('sandbox_init_point')
+                                or (subscription.init_point if subscription else None)
                             )
-                            return redirect(init_point)
-                        flash(
-                            'O Mercado Pago ainda está processando essa configuração. '
-                            'Tente novamente em instantes.',
-                            'warning',
-                        )
-                        return redirect(url_for('veterinarian_membership'))
-                    if provider_status == 'authorized':
+                            if init_point:
+                                flash(
+                                    'Continuando a configuração de pagamento que já estava em andamento.',
+                                    'info',
+                                )
+                                return redirect(init_point)
+                            flash(
+                                'O Mercado Pago ainda está processando essa configuração. '
+                                'Tente novamente em instantes.',
+                                'warning',
+                            )
+                            return redirect(url_for('veterinarian_membership'))
+                    elif provider_status == 'authorized':
                         flash('Sua renovação automática já está configurada.', 'info')
                         return redirect(url_for('veterinarian_membership'))
-                    if provider_status != 'canceled':
+                    elif provider_status != 'canceled':
                         flash(
                             'A assinatura existente precisa ser regularizada antes de iniciar outra.',
                             'warning',
@@ -321,19 +357,6 @@ def veterinarian_membership_checkout():
 
         db.session.add(membership)
         db.session.commit()
-
-    # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
-    # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
-    plano = (form.plano.data or 'mensal').strip().lower()
-    if plano == 'anual':
-        price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', 0) or 0)
-        frequency = 12
-        ciclo_label = 'anual'
-    else:
-        plano = 'mensal'
-        price = float(_get_veterinarian_membership_price())
-        frequency = 1
-        ciclo_label = 'mensal'
 
     if price <= 0:
         flash('Plano indisponível no momento. Fale com o suporte.', 'danger')
