@@ -303,18 +303,20 @@ def veterinarian_membership_checkout():
                         if pending_plan != plano:
                             # O ciclo pendente não é o que acabou de ser
                             # escolhido. Reaproveitar o init_point mandaria a
-                            # pessoa para o checkout errado, então cancelamos o
-                            # pendente e seguimos criando um novo.
-                            if not _cancel_membership_preapproval(membership):
-                                db.session.rollback()
-                                flash(
-                                    'Não foi possível trocar o ciclo da assinatura agora. '
-                                    'Tente novamente em instantes.',
-                                    'danger',
-                                )
-                                return redirect(url_for('veterinarian_membership'))
+                            # pessoa para o checkout errado, então abandonamos
+                            # o pendente e seguimos criando um novo.
+                            #
+                            # Abandonar, e não cancelar: o Mercado Pago recusa
+                            # `status: canceled` enquanto a preapproval está
+                            # pendente ("Invalid preapproval status param"),
+                            # porque só aceita cancelamento depois de
+                            # autorizada. E não há o que cancelar de fato —
+                            # sem cartão vinculado ela nunca cobra nada.
                             if subscription:
                                 mark_subscription_superseded(subscription)
+                            membership.preapproval_id = None
+                            membership.payment_method_set_at = None
+                            db.session.add(membership)
                             db.session.commit()
                         else:
                             init_point = (

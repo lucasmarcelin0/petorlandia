@@ -328,8 +328,16 @@ def test_checkout_veterinario_troca_ciclo_pendente_para_anual(
             }
 
         def update(self, preapproval_id, payload):
+            # Resposta real do Mercado Pago: uma preapproval pendente não
+            # aceita cancelamento, só depois de autorizada.
             canceled.append((preapproval_id, payload.get("status")))
-            return {"status": 200, "response": {"id": preapproval_id}}
+            return {
+                "status": 400,
+                "response": {
+                    "message": "Invalid preapproval status param: canceled",
+                    "status": 400,
+                },
+            }
 
         def create(self, payload):
             created.update(payload)
@@ -356,7 +364,9 @@ def test_checkout_veterinario_troca_ciclo_pendente_para_anual(
     assert response.status_code == 302
     # Sem a correção o usuário voltava para o init_point mensal já pendente.
     assert response.headers["Location"] == "https://mp.example/checkout-anual"
-    assert canceled == [("pre-mensal-pendente", "canceled")]
+    # A pendente é abandonada, não cancelada: tentar cancelar dá 400 no
+    # Mercado Pago e travava a troca de ciclo com "Tente novamente".
+    assert canceled == []
     assert created["auto_recurring"]["frequency"] == 12
     assert created["auto_recurring"]["frequency_type"] == "months"
     assert created["reason"] == "Assinatura PetOrlandia (anual)"
