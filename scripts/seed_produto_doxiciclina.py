@@ -22,7 +22,10 @@ from extensions import db
 from models import Product
 
 
-NOME = "Doxiciclina 100mg 15 comprimidos Sandoz Genérico"
+NOME = "Doxiciclina 100mg 15 comprimidos Genérico"
+# Nomes já usados: o seed casa por eles antes de criar, para renomear o
+# produto existente em vez de cadastrar um duplicado na vitrine.
+NOMES_ANTERIORES = ["Doxiciclina 100mg 15 comprimidos Sandoz Genérico"]
 DESCRICAO = (
     "Cloridrato de doxiciclina 100mg, 15 comprimidos solúveis. "
     "Medicamento genérico. Venda sob prescrição médica."
@@ -44,10 +47,16 @@ def main():
     app = create_app()
     with app.app_context():
         produto = Product.query.filter_by(name=args.nome).first()
+        if produto is None:
+            produto = Product.query.filter(
+                Product.name.in_(NOMES_ANTERIORES)
+            ).first()
         criado = produto is None
         if criado:
             produto = Product(name=args.nome)
             db.session.add(produto)
+        else:
+            produto.name = args.nome
 
         produto.description = DESCRICAO
         produto.price = args.preco
