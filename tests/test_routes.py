@@ -692,6 +692,141 @@ def test_first_access_signed_link_allows_existing_user(app):
         assert updated.check_password('senha-nova')
 
 
+def test_first_access_signed_link_works_when_phone_has_two_accounts(app):
+    """Carteirinha PMO: o link assinado sabe qual conta é a da tutora.
+
+    Duas famílias na campanha podem dividir o mesmo celular (e a mesma tutora
+    ganha conta nova quando a planilha muda a grafia do nome). Antes o primeiro
+    acesso parava em "Há mais de uma conta com este celular", e o e-mail
+    sugerido como alternativa era provisório, que a pessoa não conhece.
+    """
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        outra = User(
+            name='Outra Familia',
+            email='pmo-5516999992222@petorlandia.local',
+            phone='+5516999992222',
+        )
+        outra.set_password('PMOA2222')
+        tutora = User(
+            name='Ana Marcia da Costa Pinheiro',
+            email='pmo-5516999992222-9@petorlandia.local',
+            phone='+5516999992222',
+        )
+        tutora.set_password('PMOY2222')
+        db.session.add_all([outra, tutora])
+        db.session.commit()
+        tutora_id = tutora.id
+        token = app_module._first_access_token_for_user(tutora)
+
+    response = client.post(
+        f'/primeiro-acesso?token={token}',
+        data={'phone': '(16) 99999-2222'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert '/primeiro-acesso/senha' in response.headers['Location']
+
+    response = client.post(
+        '/primeiro-acesso/senha',
+        data={
+            'email': '',
+            'password': 'senha-da-ana',
+            'confirm_password': 'senha-da-ana',
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with client.session_transaction() as sess:
+        assert sess.get('_user_id') == str(tutora_id)
+
+
+def test_first_access_without_token_still_refuses_ambiguous_phone(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        for index in (1, 2):
+            user = User(
+                name=f'Familia {index}',
+                email=f'pmo-5516999993333-{index}@petorlandia.local',
+                phone='+5516999993333',
+            )
+            user.set_password('PMOA3333')
+            db.session.add(user)
+        db.session.commit()
+
+    response = client.post(
+        '/primeiro-acesso',
+        data={'phone': '(16) 99999-3333'},
+        follow_redirects=True,
+    )
+    assert 'Há mais de uma conta com este celular'.encode() in response.data
+
+
+def test_login_by_phone_uses_password_to_pick_between_accounts(app):
+    """Sem isto, quem divide o celular não entra: o e-mail é provisório."""
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        vizinho = User(
+            name='Vizinho Homonimo',
+            email='pmo-5516999994444@petorlandia.local',
+            phone='+5516999994444',
+        )
+        vizinho.set_password('senha-do-vizinho')
+        tutora = User(
+            name='Ana Marcia da Costa Pinheiro',
+            email='pmo-5516999994444-7@petorlandia.local',
+            phone='+5516999994444',
+        )
+        tutora.set_password('senha-da-tutora')
+        db.session.add_all([vizinho, tutora])
+        db.session.commit()
+        tutora_id = tutora.id
+
+    response = client.post(
+        '/login',
+        data={'login': '(16) 99999-4444', 'password': 'senha-da-tutora'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    with client.session_transaction() as sess:
+        assert sess.get('_user_id') == str(tutora_id)
+
+
+def test_login_by_phone_still_warns_when_password_matches_no_account(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        for index in (1, 2):
+            user = User(
+                name=f'Familia {index}',
+                email=f'pmo-5516999995555-{index}@petorlandia.local',
+                phone='+5516999995555',
+            )
+            user.set_password(f'senha-{index}')
+            db.session.add(user)
+        db.session.commit()
+
+    response = client.post(
+        '/login',
+        data={'login': '(16) 99999-5555', 'password': 'senha-errada'},
+        follow_redirects=True,
+    )
+    assert 'Há mais de uma conta com este celular'.encode() in response.data
+
+
 def test_logout_requires_login(app):
     client = app.test_client()
     response = client.get('/logout')
@@ -845,6 +980,48 @@ def test_animals_page_filters_by_tutor_name(app):
         body = response.get_data(as_text=True)
         assert 'Rex' in body
         assert 'Nina' not in body
+
+
+def test_admin_animals_page_searches_tutor_by_unmasked_cpf(app, monkeypatch):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(name='Admin', email='admin-cpf-search@test', role='admin')
+        admin.set_password('x')
+        matching_tutor = User(
+            name='Maria CPF', email='maria-cpf-search@test', cpf='123.456.789-00'
+        )
+        matching_tutor.set_password('x')
+        other_tutor = User(
+            name='Joao CPF', email='joao-cpf-search@test', cpf='987.654.321-00'
+        )
+        other_tutor.set_password('x')
+        db.session.add_all([admin, matching_tutor, other_tutor])
+        db.session.flush()
+        db.session.add_all([
+            Animal(name='Rex CPF', modo='doação', user_id=matching_tutor.id),
+            Animal(name='Nina CPF', modo='doação', user_id=other_tutor.id),
+        ])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        import blueprints.pacientes as pacientes_module
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        # O patch precisa ser no namespace de blueprints.pacientes: a view fez
+        # `from app import _is_admin`, entao ja tem a referencia propria e nao
+        # enxerga um patch aplicado em app._is_admin.
+        monkeypatch.setattr(pacientes_module, '_is_admin', lambda: True)
+
+        response = client.get('/animals?tutor_search=12345678900')
+
+        assert response.status_code == 200
+        # O template aplica title-case nos nomes ("Rex CPF" sai como "Rex Cpf").
+        body = response.get_data(as_text=True).lower()
+        assert 'rex cpf' in body
+        assert 'nina cpf' not in body
 
 
 def test_animals_page_shows_pmo_request_and_vaccination_dates(app, monkeypatch):

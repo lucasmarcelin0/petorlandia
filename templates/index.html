@@ -1,7 +1,70 @@
 {% extends "layout.html" %}
 
-{% block page_title %}PetOrlândia — a clínica veterinária inteira em um sistema só{% endblock %}
-{% block meta_description %}Agenda, prontuário, vacinas e financeiro da sua clínica veterinária em um lugar só. R$ 60/mês por veterinário, com 30 dias grátis.{% endblock %}
+{% block page_title %}PetOrlândia — Sistema para Clínicas Veterinárias e Gestão Pet{% endblock %}
+{% block meta_description %}Software completo para clínicas veterinárias e veterinários autônomos por R$ 60/mês. Agenda, prontuário, vacinas, financeiro e carteira digital para tutores. Teste 30 dias grátis.{% endblock %}
+{% block meta_keywords %}sistema para clinica veterinaria, software veterinario, prontuario veterinario eletronico, sistema gestao veterinaria, agenda veterinaria, carteira de vacinacao pet, pet orlandia, vacinas pet orlandia{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "PetOrlândia",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, Mobile",
+      "url": "{{ url_for('index', _external=True) }}",
+      "image": "{{ url_for('static', filename='img/og-petorlandia.png', _external=True) }}",
+      "description": "Software de gestão completo para clínicas veterinárias com agenda inteligente, prontuário eletrônico, controle de vacinas e gestão financeira.",
+      "offers": {
+        "@type": "Offer",
+        "price": "{{ '%.2f'|format(monthly_price if monthly_price is defined else 60.0) }}",
+        "priceCurrency": "BRL",
+        "priceValidUntil": "2027-12-31"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "O que é o PetOrlândia?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "O PetOrlândia é um sistema integrado de gestão veterinária e saúde pet que conecta clínicas, veterinários autônomos e tutores em uma plataforma única com prontuário, agenda, vacinação e controle financeiro."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Quanto custa o sistema veterinário PetOrlândia?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "O sistema custa R$ 60/mês por veterinário ativo com 30 dias de teste grátis, sem taxa de implantação, sem contrato de fidelidade e com suporte incluso."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "O PetOrlândia é gratuito para tutores de pets?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim! Tutores de pets podem criar uma conta gratuitamente para acompanhar a carteira de vacinas com lembretes automáticos, histórico de consultas e agendamentos de serviços na região."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Como funciona o agendamento de vacinas e consultas em Orlândia e região?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Pelo portal do PetOrlândia, tutores podem encontrar profissionais credenciados, agendar atendimentos presenciais ou a domicílio e acompanhar campanhas públicas de saúde animal."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+{% endblock %}
 
 {% block main %}
 {% if current_user.is_authenticated %}
@@ -210,6 +273,169 @@
             top: .75rem;
             right: .75rem;
             background: #dc3545;
+            </a>
+        </div>
+
+        {% if meus_pets %}
+        <p class="text-muted small mb-3">Um resumo de cada um e do que precisa de atenção.</p>
+        <div class="row g-4 text-start">
+            {% for pet in meus_pets %}
+            {% set atrasadas = doses_atrasadas.get(pet.id) %}
+            {% set proxima_vacina = proximas_vacinas.get(pet.id) %}
+            {% set proxima_consulta = proximos_agendamentos.get(pet.id) %}
+            <div class="col-12 col-sm-6 col-lg-4">
+                <a href="{{ url_for('ficha_animal', animal_id=pet.id) }}"
+                   class="pet-hero-card d-flex flex-column h-100 text-decoration-none"
+                   aria-label="Abrir ficha de {{ pet.name }}">
+                    <div class="pet-hero-media">
+                        {% if pet.image %}
+                        <img src="{{ pet.image }}" alt="Foto de {{ pet.name }}" loading="lazy">
+                        {% else %}
+                        <div class="pet-hero-placeholder">
+                            <i class="fa-solid fa-paw" aria-hidden="true"></i>
+                        </div>
+                        {% endif %}
+                        <div class="pet-hero-scrim"></div>
+
+                        {% if atrasadas %}
+                        <span class="pet-hero-flag">
+                            <i class="fa-solid fa-syringe me-1"></i>
+                            {% if atrasadas|length == 1 %}Vacina atrasada{% else %}{{ atrasadas|length }} vacinas atrasadas{% endif %}
+                        </span>
+                        {% elif not proxima_vacina and not proxima_consulta %}
+                        <span class="pet-hero-flag pet-hero-flag--ok">
+                            <i class="fa-solid fa-circle-check me-1"></i> Em dia
+                        </span>
+                        {% endif %}
+
+                        <div class="pet-hero-caption">
+                            <span class="pet-hero-name">{{ pet.name }}</span>
+                            <span class="pet-hero-details">
+                                {{ [pet.species.name if pet.species else None, pet.breed.name if pet.breed else None, pet.age_display]|select|join(' • ') }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="pet-hero-body d-flex flex-column flex-grow-1">
+                        <ul class="list-unstyled small mb-3 flex-grow-1">
+                            {% if atrasadas %}
+                            <li class="text-danger mb-1">
+                                <i class="fa-solid fa-syringe me-1"></i>
+                                {% if atrasadas|length == 1 %}
+                                Vacina atrasada: {{ atrasadas[0].nome }}
+                                {% else %}
+                                {{ atrasadas|length }} vacinas atrasadas — veja na ficha
+                                {% endif %}
+                            </li>
+                            {% endif %}
+                            {% if proxima_vacina %}
+                            <li class="text-primary mb-1">
+                                <i class="fa-solid fa-calendar-check me-1"></i>
+                                Próxima vacina: {{ proxima_vacina.nome }} em {{ proxima_vacina.aplicada_em.strftime('%d/%m') }}
+                            </li>
+                            {% endif %}
+                            {% if proxima_consulta %}
+                            <li class="text-primary mb-1">
+                                <i class="fa-solid fa-stethoscope me-1"></i>
+                                Consulta dia {{ proxima_consulta.scheduled_at|format_datetime_brazil('%d/%m às %H:%M') }}
+                            </li>
+                            {% endif %}
+                            {% if not atrasadas and not proxima_vacina and not proxima_consulta %}
+                            <li class="text-success mb-1">
+                                <i class="fa-solid fa-circle-check me-1"></i> Tudo em dia por aqui
+                            </li>
+                            {% endif %}
+                        </ul>
+                        <span class="pet-hero-cta">Ver ficha completa <i class="fa-solid fa-arrow-right ms-1"></i></span>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <div class="display-6 mb-2">🐶🐱</div>
+            <p class="mb-1 fw-semibold">Você ainda não cadastrou nenhum pet.</p>
+            <p class="text-muted small mb-3">Cadastrando seu pet, você acompanha vacinas, consultas e histórico em um só lugar.</p>
+            <a href="{{ url_for('add_animal') }}" class="btn btn-success rounded-pill shadow-sm px-4 py-2">
+                ➕ Cadastrar meu primeiro pet
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <style>
+        .pet-hero-card {
+            background: #fff;
+            border: 1px solid rgba(13, 110, 253, .08);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 6px 22px rgba(15, 23, 42, .08);
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+        .pet-hero-card:hover,
+        .pet-hero-card:focus-visible {
+            transform: translateY(-4px);
+            box-shadow: 0 14px 32px rgba(15, 23, 42, .16);
+        }
+        .pet-hero-media {
+            position: relative;
+            height: 200px;
+            overflow: hidden;
+            background: #eef4ff;
+        }
+        .pet-hero-media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform .35s ease;
+        }
+        .pet-hero-card:hover .pet-hero-media img {
+            transform: scale(1.05);
+        }
+        .pet-hero-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
+            color: rgba(13, 110, 253, .40);
+            font-size: 4rem;
+        }
+        .pet-hero-scrim {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0) 45%, rgba(2, 6, 23, .72) 100%);
+            pointer-events: none;
+        }
+        .pet-hero-caption {
+            position: absolute;
+            left: 1rem;
+            right: 1rem;
+            bottom: .8rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .pet-hero-name {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.3rem;
+            line-height: 1.2;
+            text-shadow: 0 1px 6px rgba(0, 0, 0, .45);
+        }
+        .pet-hero-details {
+            color: rgba(255, 255, 255, .88);
+            font-size: .8rem;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, .45);
+        }
+        .pet-hero-flag {
+            position: absolute;
+            top: .75rem;
+            right: .75rem;
+            background: #dc3545;
             color: #fff;
             font-size: .72rem;
             font-weight: 600;
@@ -239,10 +465,16 @@
 <section class="landing-page" aria-labelledby="landing-title">
     <div class="landing-hero">
         <div class="landing-hero__content">
-            <span class="landing-badge">
-                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-                Feito em Orlândia-SP, por quem atende
-            </span>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <span class="landing-badge">
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                    Feito em Orlândia-SP, por quem atende
+                </span>
+                <a href="{{ url_for('para_tutores') }}" class="landing-badge text-decoration-none" style="background:#eef4ff; color:#0d6efd; border: 1px solid #bfdbfe;">
+                    <i class="fa-solid fa-paw" aria-hidden="true"></i>
+                    É tutor de pet? Acesse a carteira grátis <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
+            </div>
 
             <h1 id="landing-title">
                 Sua clínica veterinária inteira em um sistema só.
@@ -258,10 +490,6 @@
                 <strong>R$ {{ '%.0f'|format(monthly_price) }}/mês por veterinário.</strong>
                 {{ trial_days }} dias grátis. Primeira cobrança só no {{ trial_days + 1 }}º dia.
             </p>
-
-            <div class="landing-actions" aria-label="Ações principais">
-                <a href="{{ url_for('register') }}?next={{ url_for('minha_clinica') }}"
-                   class="landing-btn landing-btn--primary">
                     Começar {{ trial_days }} dias grátis
                 </a>
                 <button type="button" class="landing-btn landing-btn--secondary"
@@ -435,6 +663,71 @@
                 <p>A história do projeto, o propósito e o veterinário que desenvolve o sistema.</p>
                 <a class="landing-btn landing-btn--secondary" href="{{ url_for('sobre') }}">Sobre a PetOrlândia</a>
             </article>
+        </div>
+    </section>
+
+    <section class="landing-section" aria-labelledby="faq-title" id="duvidas-frequentes">
+        <div class="landing-section-heading">
+            <span class="landing-section-kicker">Tire suas dúvidas</span>
+            <h2 id="faq-title">Perguntas frequentes sobre o PetOrlândia</h2>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10">
+                <div class="accordion shadow-sm rounded-4 overflow-hidden" id="faqLandingAccordion">
+                    <div class="accordion-item border-0 border-bottom">
+                        <h3 class="accordion-header" id="faqHeading1">
+                            <button class="accordion-button fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse1" aria-expanded="false" aria-controls="faqCollapse1">
+                                O que é o PetOrlândia e para quem ele serve?
+                            </button>
+                        </h3>
+                        <div id="faqCollapse1" class="accordion-collapse collapse" aria-labelledby="faqHeading1" data-bs-parent="#faqLandingAccordion">
+                            <div class="accordion-body text-muted">
+                                O PetOrlândia é uma plataforma completa que atende dois lados: para <strong>clínicas e veterinários autônomos</strong>, é um software ágil de gestão com prontuário eletrônico, agenda inteligente, vacinas e financeiro. Para <strong>tutores de pets</strong>, é um portal gratuito para organizar a carteira de vacinação, histórico do animal e agendar atendimentos e exames.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 border-bottom">
+                        <h3 class="accordion-header" id="faqHeading2">
+                            <button class="accordion-button fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse2" aria-expanded="false" aria-controls="faqCollapse2">
+                                Quanto custa o sistema para clínicas e veterinários?
+                            </button>
+                        </h3>
+                        <div id="faqCollapse2" class="accordion-collapse collapse" aria-labelledby="faqHeading2" data-bs-parent="#faqLandingAccordion">
+                            <div class="accordion-body text-muted">
+                                O plano profissional custa <strong>R$ {{ '%.0f'|format(monthly_price if monthly_price is defined else 60) }}/mês por veterinário ativo</strong>, com {{ trial_days }} dias grátis para você testar na rotina da sua clínica. Não cobramos taxa de adesão, instalação nem fidelidade contratual. Usuários de recepção e pacientes são ilimitados.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 border-bottom">
+                        <h3 class="accordion-header" id="faqHeading3">
+                            <button class="accordion-button fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse3" aria-expanded="false" aria-controls="faqCollapse3">
+                                Tutores pagam para usar a carteira digital e agendar?
+                            </button>
+                        </h3>
+                        <div id="faqCollapse3" class="accordion-collapse collapse" aria-labelledby="faqHeading3" data-bs-parent="#faqLandingAccordion">
+                            <div class="accordion-body text-muted">
+                                <strong>Não. É 100% gratuito para tutores de pets.</strong> Você pode cadastrar quantos animais tiver, receber alertas de vacinas vencidas ou próximas e encontrar profissionais e campanhas públicas da sua cidade.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0">
+                        <h3 class="accordion-header" id="faqHeading4">
+                            <button class="accordion-button fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapse4" aria-expanded="false" aria-controls="faqCollapse4">
+                                Como funciona o suporte e a importação dos meus dados?
+                            </button>
+                        </h3>
+                        <div id="faqCollapse4" class="accordion-collapse collapse" aria-labelledby="faqHeading4" data-bs-parent="#faqLandingAccordion">
+                            <div class="accordion-body text-muted">
+                                O suporte é humanizado e direto com quem desenvolve o sistema. Se você já tem uma lista de tutores e pets em planilhas ou outro sistema, enviamos o modelo de importação e auxiliamos você na migração completa sem custo adicional.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 

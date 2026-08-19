@@ -41,16 +41,31 @@ def _auth_audience():
     return audience if audience in {"student"} else None
 
 
-def _login_rate_limit_key():
-    """Limita tentativas por rede e identificador, sem guardar o e-mail no cache."""
-
+def _login_identifier_hash():
     identifier = (
         request.form.get('login')
         or request.form.get('email')
         or ''
     ).strip().lower()
-    identifier_hash = hashlib.sha256(identifier.encode('utf-8')).hexdigest()[:20]
-    return f"{request.remote_addr or 'unknown'}:{identifier_hash}"
+    return hashlib.sha256(identifier.encode('utf-8')).hexdigest()[:20]
+
+
+def _login_rate_limit_key():
+    """Limita tentativas por rede e identificador, sem guardar o e-mail no cache."""
+
+    return f"{request.remote_addr or 'unknown'}:{_login_identifier_hash()}"
+
+
+def _login_identifier_rate_limit_key():
+    """Limite por identificador, somando todos os IPs.
+
+    O limite por IP+identificador é contornável trocando de IP, e a conta PMO é
+    justamente a mais exposta: o identificador é o celular e a senha da
+    carteirinha é curta. Este segundo limite fecha o ataque distribuído sobre um
+    único telefone.
+    """
+
+    return f"identifier:{_login_identifier_hash()}"
 
 
 def get_blueprint():
@@ -164,6 +179,11 @@ def first_access():
 
     if form.validate_on_submit():
         matches = find_users_by_phone(form.phone.data)
+        # O link assinado da carteirinha já diz qual conta é a dessa pessoa. Sem
+        # isso, quem divide o celular com outra família (comum na campanha PMO)
+        # travava aqui e não tinha e-mail real para usar como alternativa.
+        if token_user and any(match.id == token_user.id for match in matches):
+            matches = [token_user]
         if len(matches) > 1:
             flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
             return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
@@ -425,6 +445,7 @@ def register():
 
 @bp.route("/login", methods=['GET', 'POST'])
 @limiter.limit("10 per minute", methods=["POST"], key_func=_login_rate_limit_key)
+@limiter.limit("20 per hour", methods=["POST"], key_func=_login_identifier_rate_limit_key)
 def login_view():
     form = LoginForm()
     audience = _auth_audience()
@@ -439,7 +460,7 @@ def login_view():
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
-        user, login_error = find_user_by_login_identifier(form.login.data)
+        user, login_error = find_user_by_login_identifier(form.login.data, form.password.data)
         if login_error:
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400

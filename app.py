@@ -191,6 +191,7 @@ from security.crypto import (
     encrypt_bytes,
     encrypt_text,
 )
+from security.csv_safe import safe_csv_writer
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -1682,14 +1683,28 @@ def find_users_by_phone(phone: str | None, *, exclude_user_id: int | None = None
     return matches
 
 
-def find_user_by_login_identifier(identifier: str | None) -> tuple[User | None, str | None]:
-    """Resolve a login identifier as email or phone."""
+def find_user_by_login_identifier(
+    identifier: str | None,
+    password: str | None = None,
+) -> tuple[User | None, str | None]:
+    """Resolve a login identifier as email or phone.
+
+    Quando o mesmo celular pertence a mais de uma conta (campanhas PMO criam uma
+    conta por família e várias famílias dividem o telefone), a senha desempata:
+    entra a única conta cuja senha confere. Sem isso a pessoa fica sem saída,
+    porque o e-mail sugerido é provisório (``@petorlandia.local``) e ela não o
+    conhece.
+    """
     normalized_email = normalize_email(identifier)
     if normalized_email and "@" in normalized_email:
         return User.query.filter(func.lower(User.email) == normalized_email).first(), None
 
     phone_matches = find_users_by_phone(identifier)
     if len(phone_matches) > 1:
+        if password:
+            by_password = [user for user in phone_matches if user.check_password(password)]
+            if len(by_password) == 1:
+                return by_password[0], None
         return None, "Há mais de uma conta com este celular. Entre com seu e-mail por enquanto."
     if phone_matches:
         return phone_matches[0], None
@@ -10556,7 +10571,7 @@ def _build_veterinarian_activity_report(veterinario, start_date, end_date):
 
 def _export_veterinarian_activity_csv(veterinario, activities, start_date, end_date):
     output = StringIO()
-    writer = csv.writer(output)
+    writer = safe_csv_writer(output)
     writer.writerow([
         'Veterinario',
         'CRMV',
@@ -11825,7 +11840,7 @@ def _build_missing_tutor_geocodes():
 
 def _export_data_share_logs_csv(logs):
     output = StringIO()
-    writer = csv.writer(output)
+    writer = safe_csv_writer(output)
     writer.writerow([
         'ID',
         'Data',

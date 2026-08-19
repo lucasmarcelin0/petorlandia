@@ -1,8 +1,34 @@
+<#
+.SYNOPSIS
+Publica no Heroku depois de checar o que costuma quebrar o release phase.
+
+.DESCRIPTION
+Ordem: checagens de repositorio -> preflight de migrations -> testes (se
+pedidos) -> push. Qualquer etapa que falhe cancela o deploy.
+
+O preflight (scripts/preflight_deploy.py) roda sempre, porque a falha mais
+comum -- duas cabecas do Alembic -- nao depende de ter mudado codigo: ela
+aparece sozinha quando duas branches criam migration em paralelo, e derruba o
+"release: flask db upgrade" do Procfile.
+
+.EXAMPLE
+.\scripts\deploy_heroku.ps1
+Publica rodando as checagens.
+
+.EXAMPLE
+.\scripts\deploy_heroku.ps1 -PreflightOnly
+So checa; nao publica.
+
+.EXAMPLE
+.\scripts\deploy_heroku.ps1 -TestPath tests\test_vacina_pmo_service.py
+Publica rodando tambem esses testes.
+#>
 [CmdletBinding()]
 param(
     [string]$TestPath = "",
     [string[]]$PytestArgs = @(),
-    [switch]$PreflightOnly
+    [switch]$PreflightOnly,
+    [switch]$SkipPreflight
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +40,30 @@ function Invoke-Git {
     if ($LASTEXITCODE -ne 0) {
         throw "Git falhou: git $($Arguments -join ' ')"
     }
+}
+
+function Resolve-Python {
+    # Os ambientes .venv deste repositorio foram criados com uma instalacao
+    # antiga da Microsoft Store que nao executa mais; por isso cada candidato e
+    # testado de verdade antes de ser escolhido.
+    $candidates = @(
+        (Join-Path $repository ".venv\Scripts\python.exe"),
+        (Join-Path $repository ".venv-codex\Scripts\python.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Path -LiteralPath $candidate)) { continue }
+        try {
+            & $candidate --version *> $null
+        } catch {
+            continue
+        }
+        if ($LASTEXITCODE -eq 0) { return $candidate }
+    }
+    throw @"
+Nenhum ambiente Python funcional foi encontrado.
+Recrie o ambiente com: py -3.12 -m venv .venv
+Depois execute: .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+"@
 }
 
 Push-Location $repository
@@ -45,33 +95,19 @@ Nao use --force: isso pode apagar correcoes que ja estao em producao.
 "@
     }
 
-    if ($TestPath) {
-        $pythonCandidates = @(
-            (Join-Path $repository ".venv\Scripts\python.exe"),
-            (Join-Path $repository ".venv-codex\Scripts\python.exe")
-        )
-        $python = $null
-        foreach ($candidate in $pythonCandidates) {
-            if (-not (Test-Path -LiteralPath $candidate)) { continue }
-            try {
-                & $candidate --version *> $null
-            } catch {
-                continue
-            }
-            if ($LASTEXITCODE -eq 0) {
-                $python = $candidate
-                break
-            }
-        }
-        if (-not $python) {
-            throw @"
-Nenhum ambiente Python funcional foi encontrado.
-Os ambientes .venv foram criados com uma instalacao antiga da Microsoft Store.
-Reinstale o Python 3.12 e recrie o ambiente com: py -3.12 -m venv .venv
-Depois execute: .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-"@
-        }
+    $python = Resolve-Python
 
+    if (-not $SkipPreflight) {
+        Write-Host "Checando o que o release phase vai executar..." -ForegroundColor Cyan
+        & $python (Join-Path $repository "scripts\preflight_deploy.py")
+        if ($LASTEXITCODE -ne 0) {
+            throw "O preflight reprovou; o deploy foi cancelado. Corrija os itens acima."
+        }
+    } else {
+        Write-Host "Preflight pulado por -SkipPreflight." -ForegroundColor Yellow
+    }
+
+    if ($TestPath) {
         Write-Host "Executando testes antes do deploy..." -ForegroundColor Cyan
         & $python -m pytest $TestPath @PytestArgs
         if ($LASTEXITCODE -ne 0) {

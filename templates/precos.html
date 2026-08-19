@@ -1,7 +1,28 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Preços — PetOrlândia para clínicas veterinárias{% endblock %}
-{% block meta_description %}R$ {{ '%.0f'|format(monthly_price) }} por mês por veterinário, com {{ trial_days }} dias grátis. Agenda, prontuário, vacinas e financeiro em um só sistema.{% endblock %}
+{% block page_title %}Planos e Preços do Software Veterinário — PetOrlândia{% endblock %}
+{% block meta_description %}Sistema para clínicas veterinárias por R$ {{ '%.0f'|format(monthly_price) }}/mês por veterinário com {{ trial_days }} dias grátis. Prontuário ilimitado, agenda, vacinas, financeiro e suporte sem fidelidade.{% endblock %}
+{% block meta_keywords %}preco sistema veterinario, valor software clinica veterinaria, sistema veterinario barato, prontuario veterinario mensalidade, software veterinario teste gratis, pet orlandia precos{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Assinatura do Software Veterinário PetOrlândia",
+  "image": "{{ url_for('static', filename='img/og-petorlandia.png', _external=True) }}",
+  "description": "Software completo para clínicas veterinárias: prontuário, agenda integrada, controle de vacinas e relatórios financeiros.",
+  "offers": {
+    "@type": "Offer",
+    "url": "{{ url_for('precos', _external=True) }}",
+    "priceCurrency": "BRL",
+    "price": "{{ '%.2f'|format(monthly_price) }}",
+    "priceValidUntil": "2027-12-31",
+    "availability": "https://schema.org/InStock"
+  }
+}
+</script>
+{% endblock %}
 
 {% block main %}
 <div class="container precos-page">
