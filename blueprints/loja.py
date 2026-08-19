@@ -1447,9 +1447,28 @@ def produto_detail(product_id):
             filename = secure_filename(file.filename)
             image_url = upload_to_s3(file, filename, folder='products')
             if image_url:
-                db.session.add(ProductPhoto(product_id=product.id, image_url=image_url))
-                db.session.commit()
-                flash('Foto adicionada.', 'success')
+                if not product.image_url:
+                    # A primeira foto vira a imagem principal. Sem isso o slot
+                    # do topo fica em "Imagem indisponível" mesmo com fotos
+                    # enviadas, e a pessoa reenvia achando que o upload falhou
+                    # — foi assim que apareceram miniaturas duplicadas.
+                    product.image_url = image_url
+                    ProductPhoto.query.filter_by(
+                        product_id=product.id, image_url=image_url
+                    ).delete(synchronize_session=False)
+                    db.session.add(product)
+                    db.session.commit()
+                    flash('Foto adicionada.', 'success')
+                elif image_url == product.image_url or ProductPhoto.query.filter_by(
+                    product_id=product.id, image_url=image_url
+                ).first():
+                    flash('Essa foto já está no produto.', 'info')
+                else:
+                    db.session.add(
+                        ProductPhoto(product_id=product.id, image_url=image_url)
+                    )
+                    db.session.commit()
+                    flash('Foto adicionada.', 'success')
             return redirect(url_for('produto_detail', product_id=product.id))
 
     related_products = (

@@ -2895,6 +2895,26 @@ def _get_veterinarian_membership_price() -> Decimal:
     return VeterinarianSettings.membership_price_amount()
 
 
+def _get_veterinarian_membership_annual_price() -> Decimal:
+    """Return the annual membership price, falling back to 10 monthly charges.
+
+    A tela de assinatura e o checkout precisam concordar: quando cada um usava
+    o seu próprio fallback, remover ``VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE`` do
+    ambiente fazia a tela anunciar um preço que o checkout recusava como
+    'Plano indisponível'. Um valor explícito e não positivo é preservado, já
+    que desligar o ciclo anual é uma decisão legítima de operação.
+    """
+
+    monthly = _get_veterinarian_membership_price()
+    configured = current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE')
+    if configured is None or configured == '':
+        return (monthly * 10).quantize(Decimal('0.01'))
+    try:
+        return Decimal(str(configured)).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        return (monthly * 10).quantize(Decimal('0.01'))
+
+
 def _format_brl_price(value) -> str | None:
     if value is None:
         return None
