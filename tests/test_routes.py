@@ -977,6 +977,40 @@ def test_vacina_pmo_dashboard_exposes_print_menu(app):
     assert 'pmo-print-card' not in body
 
 
+def test_vacina_pmo_dashboard_offers_camera_and_gallery_photo_sources(app):
+    """O botao de foto abre a escolha entre tirar na hora ou usar a galeria."""
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(name='PMO Admin', email='pmo-photo-ui@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    login(client, admin_id)
+
+    response = client.get('/vacina-pmo')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    # Folha de escolha da origem da foto.
+    assert 'id="pmo-photo-sheet"' in body
+    assert 'data-action="photo-source-camera"' in body
+    assert 'data-action="photo-source-gallery"' in body
+    # Um input dedicado por origem: camera nativa e galeria/arquivos.
+    assert 'data-photo-source="camera"' in body
+    assert 'data-photo-source="gallery"' in body
+    # Camera embutida para aparelhos sem app de camera (desktop).
+    assert 'id="pmo-camera-modal"' in body
+    assert 'id="pmo-camera-shutter"' in body
+    # O modal de visualizacao permite trocar por foto nova ou da galeria.
+    assert 'id="pmo-photo-retake"' in body
+    assert 'id="pmo-photo-pick"' in body
+
+
 def _pmo_add_visit(title, row, tutor, phone, animais, gid='g', note=None, dogs=0, cats=0):
     visit = PmoVaccinationVisit(
         spreadsheet_id='s', sheet_gid=gid, sheet_title=title, shift='Manha',

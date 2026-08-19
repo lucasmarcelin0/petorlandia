@@ -534,6 +534,282 @@
     flex-wrap: wrap;
   }
 
+  /* --- Escolha da origem da foto (tirar agora x galeria) --- */
+  .pmo-photo-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 1095;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .pmo-photo-sheet[hidden] {
+    display: none;
+  }
+
+  .pmo-photo-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    animation: pmoPhotoFade 0.18s ease-out;
+  }
+
+  .pmo-photo-sheet__panel {
+    position: relative;
+    width: min(100%, 440px);
+    background: #fff;
+    border-radius: 20px 20px 0 0;
+    padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -12px 44px rgba(15, 23, 42, 0.28);
+    animation: pmoPhotoSheetUp 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pmo-photo-sheet__grabber {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    margin: 0 auto 12px;
+  }
+
+  .pmo-photo-sheet__title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+    color: #0f172a;
+  }
+
+  .pmo-photo-sheet__subtitle {
+    margin: 2px 0 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .pmo-photo-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #fff;
+    text-align: left;
+    color: #0f172a;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .pmo-photo-option + .pmo-photo-option {
+    margin-top: 8px;
+  }
+
+  .pmo-photo-option:hover,
+  .pmo-photo-option:focus-visible {
+    border-color: #0d6efd;
+    background: #f8fbff;
+  }
+
+  .pmo-photo-option:active {
+    transform: scale(0.99);
+  }
+
+  .pmo-photo-option__icon {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    color: #fff;
+    background: #0d6efd;
+  }
+
+  .pmo-photo-option--gallery .pmo-photo-option__icon {
+    background: #198754;
+  }
+
+  .pmo-photo-option__label {
+    display: block;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .pmo-photo-option__hint {
+    display: block;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    color: #64748b;
+  }
+
+  .pmo-photo-sheet__cancel {
+    width: 100%;
+    margin-top: 12px;
+    border: 0;
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 11px;
+  }
+
+  @media (min-width: 576px) {
+    .pmo-photo-sheet {
+      align-items: center;
+      padding: 16px;
+    }
+
+    .pmo-photo-sheet__panel {
+      border-radius: 18px;
+      padding-bottom: 16px;
+      animation: pmoPhotoPop 0.18s ease-out;
+    }
+
+    .pmo-photo-sheet__grabber {
+      display: none;
+    }
+  }
+
+  /* --- Camera embutida (desktop/notebook sem app de camera) --- */
+  .pmo-camera-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1096;
+    background: #0b1120;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pmo-camera-modal[hidden] {
+    display: none;
+  }
+
+  .pmo-camera-modal__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+    color: #f8fafc;
+  }
+
+  .pmo-camera-modal__title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pmo-camera-modal__icon-btn {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(248, 250, 252, 0.14);
+    color: #f8fafc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pmo-camera-modal__icon-btn:disabled {
+    opacity: 0.4;
+  }
+
+  .pmo-camera-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .pmo-camera-stage video,
+  .pmo-camera-stage img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .pmo-camera-stage video.is-mirrored {
+    transform: scaleX(-1);
+  }
+
+  .pmo-camera-status {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 82%;
+    text-align: center;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .pmo-camera-status[hidden] {
+    display: none;
+  }
+
+  .pmo-camera-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pmo-camera-bar[hidden] {
+    display: none;
+  }
+
+  .pmo-camera-shutter {
+    width: 68px;
+    height: 68px;
+    border-radius: 999px;
+    border: 4px solid rgba(248, 250, 252, 0.9);
+    background: #f8fafc;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.6) inset;
+    flex: 0 0 auto;
+  }
+
+  .pmo-camera-shutter:disabled {
+    opacity: 0.45;
+  }
+
+  .pmo-camera-bar__side {
+    width: 40px;
+    flex: 0 0 auto;
+  }
+
+  @keyframes pmoPhotoFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes pmoPhotoSheetUp {
+    from { transform: translateY(18%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes pmoPhotoPop {
+    from { transform: scale(0.97); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pmo-photo-sheet__panel,
+    .pmo-photo-sheet__backdrop {
+      animation: none;
+    }
+  }
+
   .pmo-animal-name {
     font-weight: 600;
   }
@@ -1226,9 +1502,60 @@
   <div class="pmo-photo-modal__content">
     <img class="pmo-photo-modal__img" id="pmo-photo-modal-img" src="" alt="Foto do animal">
     <div class="pmo-photo-modal__actions">
-      <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra foto</button>
+      <button type="button" class="btn btn-primary" id="pmo-photo-retake"><i class="fas fa-camera me-1"></i> Tirar outra</button>
+      <button type="button" class="btn btn-success" id="pmo-photo-pick"><i class="fas fa-images me-1"></i> Da galeria</button>
       <button type="button" class="btn btn-outline-secondary" data-action="photo-modal-close">Fechar</button>
     </div>
+  </div>
+</div>
+
+<div class="pmo-photo-sheet" id="pmo-photo-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="pmo-photo-sheet-title">
+  <div class="pmo-photo-sheet__backdrop" data-action="photo-sheet-close"></div>
+  <div class="pmo-photo-sheet__panel">
+    <div class="pmo-photo-sheet__grabber" aria-hidden="true"></div>
+    <h6 class="pmo-photo-sheet__title" id="pmo-photo-sheet-title">Foto do animal</h6>
+    <p class="pmo-photo-sheet__subtitle" id="pmo-photo-sheet-subtitle">Escolha como quer adicionar a foto.</p>
+    <button type="button" class="pmo-photo-option" data-action="photo-source-camera">
+      <span class="pmo-photo-option__icon"><i class="fas fa-camera" aria-hidden="true"></i></span>
+      <span>
+        <span class="pmo-photo-option__label">Tirar foto agora</span>
+        <span class="pmo-photo-option__hint">Abre a câmera do aparelho</span>
+      </span>
+    </button>
+    <button type="button" class="pmo-photo-option pmo-photo-option--gallery" data-action="photo-source-gallery">
+      <span class="pmo-photo-option__icon"><i class="fas fa-images" aria-hidden="true"></i></span>
+      <span>
+        <span class="pmo-photo-option__label">Escolher da galeria</span>
+        <span class="pmo-photo-option__hint">Usa uma foto já tirada no aparelho</span>
+      </span>
+    </button>
+    <button type="button" class="pmo-photo-sheet__cancel" data-action="photo-sheet-close">Cancelar</button>
+  </div>
+</div>
+
+<div class="pmo-camera-modal" id="pmo-camera-modal" hidden role="dialog" aria-modal="true" aria-labelledby="pmo-camera-title">
+  <div class="pmo-camera-modal__top">
+    <button type="button" class="pmo-camera-modal__icon-btn" data-action="camera-close" aria-label="Fechar câmera"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    <span class="pmo-camera-modal__title" id="pmo-camera-title">Foto do animal</span>
+    <button type="button" class="pmo-camera-modal__icon-btn" id="pmo-camera-flip" aria-label="Trocar de câmera"><i class="fas fa-camera-rotate" aria-hidden="true"></i></button>
+  </div>
+  <div class="pmo-camera-stage">
+    <video id="pmo-camera-video" playsinline muted autoplay></video>
+    <img id="pmo-camera-preview" alt="Prévia da foto" hidden>
+    <p class="pmo-camera-status" id="pmo-camera-status">Abrindo a câmera...</p>
+  </div>
+  <div class="pmo-camera-bar" id="pmo-camera-bar-live">
+    <span class="pmo-camera-bar__side"></span>
+    <button type="button" class="pmo-camera-shutter" id="pmo-camera-shutter" aria-label="Tirar foto"></button>
+    <span class="pmo-camera-bar__side"></span>
+  </div>
+  <div class="pmo-camera-bar" id="pmo-camera-bar-review" hidden>
+    <button type="button" class="btn btn-outline-light" id="pmo-camera-retake"><i class="fas fa-rotate-left me-1"></i> Repetir</button>
+    <button type="button" class="btn btn-success" id="pmo-camera-confirm"><i class="fas fa-check me-1"></i> Usar esta foto</button>
+  </div>
+  <div class="pmo-camera-bar" id="pmo-camera-bar-error" hidden>
+    <button type="button" class="btn btn-outline-light" data-action="camera-close">Cancelar</button>
+    <button type="button" class="btn btn-success" id="pmo-camera-fallback"><i class="fas fa-images me-1"></i> Escolher da galeria</button>
   </div>
 </div>
 
@@ -1262,33 +1589,287 @@
   const cardsEl = document.getElementById('pmo-cards');
   const listPanel = tbody.closest('.pmo-panel');
 
-  // --- Modal de foto do animal (ver maior / tirar outra) ---
+  // --- Modal de foto do animal (ver maior / trocar) ---
   const photoModal = document.getElementById('pmo-photo-modal');
   const photoModalImg = document.getElementById('pmo-photo-modal-img');
   const photoRetakeBtn = document.getElementById('pmo-photo-retake');
-  let photoModalInput = null;
+  const photoPickBtn = document.getElementById('pmo-photo-pick');
+  let photoModalTarget = null;
 
-  function openPhotoModal(url, input) {
-    photoModalInput = input || null;
+  function openPhotoModal(url, target) {
+    photoModalTarget = target || null;
     photoModalImg.src = url;
     photoModal.hidden = false;
   }
   function closePhotoModal() {
     photoModal.hidden = true;
     photoModalImg.src = '';
-    photoModalInput = null;
+    photoModalTarget = null;
   }
   if (photoModal) {
     photoModal.addEventListener('click', (event) => {
       if (event.target.dataset.action === 'photo-modal-close') closePhotoModal();
     });
     photoRetakeBtn.addEventListener('click', () => {
-      const input = photoModalInput;
+      const target = photoModalTarget;
       closePhotoModal();
-      if (input) input.click();
+      requestAnimalPhoto(target, 'camera');
+    });
+    photoPickBtn.addEventListener('click', () => {
+      const target = photoModalTarget;
+      closePhotoModal();
+      requestAnimalPhoto(target, 'gallery');
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !photoModal.hidden) closePhotoModal();
+    });
+  }
+
+  // --- Origem da foto: tirar agora ou pegar da galeria ---
+  const photoSheet = document.getElementById('pmo-photo-sheet');
+  const photoSheetSubtitle = document.getElementById('pmo-photo-sheet-subtitle');
+  let photoSheetTarget = null;
+  let photoSheetLastFocus = null;
+
+  function cssEscape(value) {
+    const text = String(value ?? '');
+    return (window.CSS && typeof window.CSS.escape === 'function')
+      ? window.CSS.escape(text)
+      : text.replace(/["\\]/g, '\\$&');
+  }
+
+  function findAnimalPhotoInput(target, source) {
+    if (!target) return null;
+    const selector = `[data-id="${cssEscape(target.rowId)}"] .pmo-animal-photo-input`
+      + `[data-animal-index="${cssEscape(target.index)}"][data-photo-source="${cssEscape(source)}"]`;
+    const inputs = Array.from(listPanel.querySelectorAll(selector));
+    // Tabela e cards renderizam o mesmo animal; usa o container visivel quando houver.
+    return inputs.find((input) => input.closest('.pmo-visit-card, tr')?.offsetParent !== null) || inputs[0] || null;
+  }
+
+  function findAnimalByTarget(target) {
+    if (!target) return null;
+    const row = state.rows.find((item) => item.id === target.rowId);
+    return row?.animals?.[Number(target.index)] || null;
+  }
+
+  function animalTargetName(target) {
+    return findAnimalByTarget(target)?.name || target?.name || 'animal';
+  }
+
+  // Em celular/tablet o app nativo de camera da a melhor foto; no desktop o
+  // atributo capture e ignorado, entao abrimos a camera dentro da pagina.
+  function prefersNativeCamera() {
+    if (!window.matchMedia) return true;
+    return window.matchMedia('(pointer: coarse)').matches;
+  }
+
+  function supportsInPageCamera() {
+    return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
+  function requestAnimalPhoto(target, source) {
+    if (!target) return;
+    if (!source) {
+      openPhotoSheet(target);
+      return;
+    }
+    if (source === 'camera' && !prefersNativeCamera() && supportsInPageCamera()) {
+      openCameraModal(target);
+      return;
+    }
+    const input = findAnimalPhotoInput(target, source);
+    if (input) input.click();
+  }
+
+  function openPhotoSheet(target) {
+    if (!photoSheet || !target) return;
+    photoSheetTarget = target;
+    photoSheetLastFocus = document.activeElement;
+    const name = animalTargetName(target);
+    photoSheetSubtitle.textContent = `Como voce quer adicionar a foto de ${name}?`;
+    photoSheet.hidden = false;
+    photoSheet.querySelector('[data-action="photo-source-camera"]')?.focus();
+  }
+
+  function closePhotoSheet() {
+    if (!photoSheet) return;
+    photoSheet.hidden = true;
+    photoSheetTarget = null;
+    if (photoSheetLastFocus && typeof photoSheetLastFocus.focus === 'function') {
+      photoSheetLastFocus.focus();
+    }
+    photoSheetLastFocus = null;
+  }
+
+  if (photoSheet) {
+    photoSheet.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      if (action === 'photo-sheet-close') {
+        closePhotoSheet();
+        return;
+      }
+      if (action === 'photo-source-camera' || action === 'photo-source-gallery') {
+        const target = photoSheetTarget;
+        closePhotoSheet();
+        requestAnimalPhoto(target, action === 'photo-source-camera' ? 'camera' : 'gallery');
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !photoSheet.hidden) closePhotoSheet();
+    });
+  }
+
+  // --- Camera dentro da pagina (usada quando nao ha app de camera nativo) ---
+  const cameraModal = document.getElementById('pmo-camera-modal');
+  const cameraVideo = document.getElementById('pmo-camera-video');
+  const cameraPreview = document.getElementById('pmo-camera-preview');
+  const cameraStatus = document.getElementById('pmo-camera-status');
+  const cameraTitle = document.getElementById('pmo-camera-title');
+  const cameraShutter = document.getElementById('pmo-camera-shutter');
+  const cameraFlipBtn = document.getElementById('pmo-camera-flip');
+  const cameraBarLive = document.getElementById('pmo-camera-bar-live');
+  const cameraBarReview = document.getElementById('pmo-camera-bar-review');
+  const cameraBarError = document.getElementById('pmo-camera-bar-error');
+  const cameraRetakeBtn = document.getElementById('pmo-camera-retake');
+  const cameraConfirmBtn = document.getElementById('pmo-camera-confirm');
+  const cameraFallbackBtn = document.getElementById('pmo-camera-fallback');
+  let cameraStream = null;
+  let cameraTarget = null;
+  let cameraFacing = 'environment';
+  let cameraPendingFile = null;
+  let cameraPreviewUrl = '';
+
+  function setCameraMode(mode, message) {
+    if (!cameraModal) return;
+    cameraStatus.hidden = !message;
+    if (message) cameraStatus.textContent = message;
+    cameraVideo.hidden = mode !== 'live';
+    cameraPreview.hidden = mode !== 'review';
+    cameraBarLive.hidden = mode !== 'live';
+    cameraBarReview.hidden = mode !== 'review';
+    cameraBarError.hidden = mode !== 'error';
+    cameraShutter.disabled = mode !== 'live';
+    cameraFlipBtn.disabled = mode !== 'live';
+  }
+
+  function stopCameraStream() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+    }
+    cameraVideo.srcObject = null;
+  }
+
+  function clearCameraPreview() {
+    if (cameraPreviewUrl) {
+      URL.revokeObjectURL(cameraPreviewUrl);
+      cameraPreviewUrl = '';
+    }
+    cameraPreview.removeAttribute('src');
+    cameraPendingFile = null;
+  }
+
+  async function startCameraStream() {
+    stopCameraStream();
+    setCameraMode('live', 'Abrindo a camera...');
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: cameraFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      cameraVideo.srcObject = cameraStream;
+      cameraVideo.classList.toggle('is-mirrored', cameraFacing === 'user');
+      await cameraVideo.play().catch(() => {});
+      setCameraMode('live', '');
+    } catch (error) {
+      const denied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
+      setCameraMode('error', denied
+        ? 'Precisamos da permissao de camera do navegador. Libere o acesso ou escolha uma foto da galeria.'
+        : 'Nao foi possivel abrir a camera neste aparelho. Escolha uma foto da galeria.');
+    }
+  }
+
+  function openCameraModal(target) {
+    if (!cameraModal || !target) return;
+    cameraTarget = target;
+    cameraTitle.textContent = `Foto de ${animalTargetName(target)}`;
+    cameraFacing = 'environment';
+    clearCameraPreview();
+    cameraModal.hidden = false;
+    startCameraStream();
+  }
+
+  function closeCameraModal() {
+    if (!cameraModal) return;
+    stopCameraStream();
+    clearCameraPreview();
+    cameraModal.hidden = true;
+    cameraTarget = null;
+  }
+
+  async function captureCameraFrame() {
+    const width = cameraVideo.videoWidth;
+    const height = cameraVideo.videoHeight;
+    if (!width || !height) {
+      setCameraMode('live', 'A camera ainda esta carregando. Tente de novo em um instante.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (cameraFacing === 'user') {
+      context.translate(width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(cameraVideo, 0, 0, width, height);
+    const blob = await canvasBlob(canvas, 'image/jpeg', 0.9);
+    if (!blob) {
+      setCameraMode('live', 'Nao foi possivel capturar a foto. Tente novamente.');
+      return;
+    }
+    clearCameraPreview();
+    cameraPendingFile = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    cameraPreviewUrl = URL.createObjectURL(blob);
+    cameraPreview.src = cameraPreviewUrl;
+    stopCameraStream();
+    setCameraMode('review', '');
+  }
+
+  if (cameraModal) {
+    cameraModal.addEventListener('click', (event) => {
+      if (event.target.closest('[data-action="camera-close"]')) closeCameraModal();
+    });
+    cameraShutter.addEventListener('click', () => { captureCameraFrame(); });
+    cameraFlipBtn.addEventListener('click', () => {
+      cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+      startCameraStream();
+    });
+    cameraRetakeBtn.addEventListener('click', () => {
+      clearCameraPreview();
+      startCameraStream();
+    });
+    cameraConfirmBtn.addEventListener('click', async () => {
+      const target = cameraTarget;
+      const file = cameraPendingFile;
+      const animal = findAnimalByTarget(target);
+      closeCameraModal();
+      if (!animal || !file) return;
+      try {
+        await queueAnimalPhotoUpload(animal, file);
+      } catch (error) {
+        window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+      }
+    });
+    cameraFallbackBtn.addEventListener('click', () => {
+      const target = cameraTarget;
+      closeCameraModal();
+      requestAnimalPhoto(target, 'gallery');
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !cameraModal.hidden) closeCameraModal();
     });
   }
 
@@ -2995,7 +3576,7 @@
       ? 'Foto guardada no aparelho e enviando'
       : (stateName === 'pending'
           ? 'Foto guardada no aparelho; sera reenviada automaticamente'
-          : (stateName === 'error' ? 'Foto guardada; toque para tentar trocar' : 'Ver foto ou tirar outra'));
+          : (stateName === 'error' ? 'Foto guardada; toque para tentar trocar' : 'Ver foto, tirar outra ou escolher da galeria'));
 
     if (imageUrl) {
       return `
@@ -3006,7 +3587,7 @@
       `;
     }
 
-    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Tirar foto do animal" aria-label="Tirar foto do animal"><i class="fas fa-camera"></i></button>`;
+    return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera"></i></button>`;
   }
 
   function renderAnimalControls(row) {
@@ -3030,7 +3611,8 @@
             ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
           </select>
           ${renderAnimalPhotoControl(animal, index)}
-          <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-animal-index="${index}" hidden>
+          <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="camera" data-animal-index="${index}" hidden>
+          <input type="file" accept="image/*" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="gallery" data-animal-index="${index}" hidden>
         </div>
       </div>
     `).join('');
@@ -3396,15 +3978,16 @@
     const actionEl = event.target.closest('[data-action]');
     const action = actionEl?.dataset.action;
     if (action === 'animal-photo') {
-      const input = actionEl.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-input');
-      if (input) input.click();
+      const index = Number(actionEl.dataset.animalIndex);
+      const animal = row.animals[index];
+      openPhotoSheet({ rowId: row.id, index, name: animal?.name || '' });
       return;
     }
     if (action === 'animal-photo-view') {
-      const animal = row.animals[Number(actionEl.dataset.animalIndex)];
-      const input = actionEl.closest('.pmo-animal-status')?.querySelector('.pmo-animal-photo-input');
+      const index = Number(actionEl.dataset.animalIndex);
+      const animal = row.animals[index];
       const imageUrl = animal?.pendingImageUrl || animal?.imageUrl || '';
-      if (imageUrl) openPhotoModal(imageUrl, input);
+      if (imageUrl) openPhotoModal(imageUrl, { rowId: row.id, index, name: animal?.name || '' });
       return;
     }
     if (action === 'animal-name-edit') {
