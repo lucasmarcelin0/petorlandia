@@ -90,3 +90,57 @@ def test_tutor_creation_reports_validation_and_uniqueness_errors(app, client):
     assert duplicate_cpf.status_code == 409
     assert duplicate_cpf.get_json()["message"] == "CPF já cadastrado para outro tutor."
 
+
+def test_tutor_creation_blocks_duplicates_ignoring_case_and_mask(app, client):
+    """Cadastros antigos guardam e-mail com a caixa digitada e CPF com máscara."""
+    professional_id = _create_professional(app)
+    with app.app_context():
+        existing = User(
+            name="Tutor Antigo",
+            email="Existente@Example.com",
+            cpf="111.222.333-44",
+        )
+        existing.set_password("senha")
+        db.session.add(existing)
+        db.session.commit()
+    _login(client, professional_id)
+
+    headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
+
+    same_email_other_case = client.post(
+        "/tutores",
+        data={"name": "Outro", "email": "existente@example.com"},
+        headers=headers,
+    )
+    assert same_email_other_case.status_code == 409
+
+    same_cpf_without_mask = client.post(
+        "/tutores",
+        data={"name": "Outro", "cpf": "11122233344"},
+        headers=headers,
+    )
+    assert same_cpf_without_mask.status_code == 409
+
+    with app.app_context():
+        assert User.query.filter(User.name == "Outro").count() == 0
+
+
+def test_tutor_creation_redirects_plain_browser_submit(app, client):
+    """Submit sem fetch (Accept do navegador) não pode receber JSON cru."""
+    professional_id = _create_professional(app)
+    _login(client, professional_id)
+
+    response = client.post(
+        "/tutores",
+        data={"name": "Joao Navegador", "email": "joao.nav@example.com"},
+        headers={
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8"
+            )
+        },
+    )
+
+    assert response.status_code == 302
+    assert "/ficha_tutor/" in response.headers["Location"]
+

@@ -540,13 +540,17 @@ def vacina_pmo_status_webhook():
             'message': 'Uma sincronização de status já está em andamento.',
         })
 
+    # A thread não herda o contexto da request: current_app lá dentro levanta
+    # RuntimeError e o log nunca saía — nem o de sucesso nem o do except.
+    app_obj = current_app._get_current_object()
+
     def _job():
         try:
             from scripts.sync_pmo_full_status import run_pmo_full_sync
             result = run_pmo_full_sync(apply=True, skip_sheet_sync=False)
-            current_app.logger.info('[PMO webhook] Sincronização de status concluída: %s', result)
+            app_obj.logger.info('[PMO webhook] Sincronização de status concluída: %s', result)
         except Exception:
-            current_app.logger.exception('[PMO webhook] Falha na sincronização de status')
+            app_obj.logger.exception('[PMO webhook] Falha na sincronização de status')
         finally:
             _pmo_status_sync_lock.release()
 

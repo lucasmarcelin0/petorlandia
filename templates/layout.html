@@ -14,6 +14,11 @@
      vende — landing e /precos — sobrescreve os dois blocos. #}
   <title>{% block page_title %}PetOrlândia{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}PetOrlândia — cuidado, agenda e histórico do seu pet em um só lugar.{% endblock %}">
+  <meta name="keywords" content="{% block meta_keywords %}sistema clinica veterinaria, software veterinario, prontuario veterinario, carteira de vacinacao pet, agendamento veterinario, pet orlandia, saude animal{% endblock %}">
+  <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+  {% if config.GOOGLE_SITE_VERIFICATION %}
+  <meta name="google-site-verification" content="{{ config.GOOGLE_SITE_VERIFICATION }}">
+  {% endif %}
 
   {# As dimensões acompanham a imagem: declarar 1200x630 para uma arte quadrada
      faz o WhatsApp cortar a prévia ou descartá-la. Páginas do tutor definem as

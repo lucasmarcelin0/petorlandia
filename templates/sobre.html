@@ -1,7 +1,34 @@
 {% extends "layout.html" %}
 
-{% block page_title %}Sobre a PetOrlândia — quem faz e por quê{% endblock %}
-{% block meta_description %}A PetOrlândia é desenvolvida por um médico-veterinário de Orlândia-SP que vive a rotina de clínica. Conheça o propósito, os valores e quem está por trás do sistema.{% endblock %}
+{% block page_title %}Sobre a PetOrlândia — Conheça a História e o Fundador{% endblock %}
+{% block meta_description %}A PetOrlândia é desenvolvida por Lucas Marcelino Campos Ferreira, médico-veterinário de Orlândia-SP. Conheça o propósito e a história do sistema.{% endblock %}
+{% block meta_keywords %}sobre petorlandia, lucas marcelino campos ferreira, fundador petorlandia, sistema veterinario orlandia, historia petorlandia, biografia fundador petorlandia{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "AboutPage",
+      "name": "Sobre a PetOrlândia",
+      "url": "{{ url_for('sobre', _external=True) }}",
+      "description": "História, valores e propósito da plataforma PetOrlândia."
+    },
+    {
+      "@type": "Person",
+      "name": "Lucas Marcelino Campos Ferreira",
+      "jobTitle": "Médico-Veterinário e Fundador",
+      "worksFor": {
+        "@type": "Organization",
+        "name": "PetOrlândia"
+      },
+      "alumniOf": "HarvardX CS50"
+    }
+  ]
+}
+</script>
+{% endblock %}
 
 {% block main %}
 <section class="landing-page" aria-labelledby="sobre-title">

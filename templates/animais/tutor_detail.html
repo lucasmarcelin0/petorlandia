@@ -176,6 +176,21 @@
             {% include "partials/endereco_form.html" with context %}
 
             <div class="col-12">
+              <div class="section-divider"></div>
+              <p class="section-eyebrow">Observações</p>
+              <label for="observacoes" class="form-label small text-muted mb-1">
+                Anotações da clínica sobre este tutor
+              </label>
+              <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                        placeholder="Ex.: endereços anteriores, preferências de contato, observações da equipe."
+                        data-autogrow>{{ tutor.observacoes or '' }}</textarea>
+              <div class="form-text">
+                Quando o tutor tem mais de um endereço, o mais recente fica no campo acima
+                e os anteriores são registrados aqui automaticamente.
+              </div>
+            </div>
+
+            <div class="col-12">
               <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
                 <button class="btn btn-primary px-4" data-loading-text="Salvando..." data-success-text="Alterações salvas!">
                   <i class="fas fa-save me-2"></i>Salvar alterações

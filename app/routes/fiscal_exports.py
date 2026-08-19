@@ -9,6 +9,7 @@ from flask import abort, make_response, request
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
+from authz import can_view_fiscal_documents
 from helpers import has_veterinarian_profile
 from models import FiscalDocument, FiscalDocumentStatus, FiscalDocumentType
 
@@ -47,6 +48,11 @@ def _build_filename(document: FiscalDocument, used_names: set[str]) -> str:
 def fiscal_exports_xmls():
     clinic_id = _current_user_clinic_id()
     if not clinic_id:
+        abort(403)
+    # Estar vinculado à clínica não basta: XML autorizado é documento fiscal, e
+    # a matriz RBAC só libera para admin e dono. Sem esta linha qualquer
+    # veterinário da clínica baixava o pacote inteiro.
+    if not can_view_fiscal_documents(current_user, clinic_id):
         abort(403)
 
     start_date_raw = request.args.get("start_date")

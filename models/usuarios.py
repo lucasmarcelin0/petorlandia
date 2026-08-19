@@ -19,11 +19,20 @@ import unicodedata
 import enum
 import uuid
 PLACEHOLDER_EMAIL_DOMAIN = 'nao-informado.petorlandia.invalid'
+# A campanha PMO cria a conta a partir da planilha, onde o e-mail não é
+# coletado, e usa pmo-<telefone>@petorlandia.local como identificador interno.
+# É tão pouco entregável quanto o domínio acima, então conta como placeholder.
+PMO_PROVISIONAL_EMAIL_DOMAIN = 'petorlandia.local'
+PLACEHOLDER_EMAIL_DOMAINS = (PLACEHOLDER_EMAIL_DOMAIN, PMO_PROVISIONAL_EMAIL_DOMAIN)
+
 def build_placeholder_email():
     return f'tutor-sem-email-{uuid.uuid4().hex}@{PLACEHOLDER_EMAIL_DOMAIN}'
 
 def is_placeholder_email(value):
-    return isinstance(value, str) and value.lower().endswith(f'@{PLACEHOLDER_EMAIL_DOMAIN}')
+    if not isinstance(value, str):
+        return False
+    lowered = value.lower()
+    return any(lowered.endswith(f'@{domain}') for domain in PLACEHOLDER_EMAIL_DOMAINS)
 from sqlalchemy import Enum, event, func, case, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
@@ -106,6 +115,12 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     email_is_placeholder = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    # Marca contas criadas internamente para teste. Sem isso elas se misturam aos
+    # tutores reais nas auditorias (ex.: telefones duplicados) e nos relatórios.
+    is_test_account = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false(), index=True
+    )
+    test_label = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='adotante', nullable=True)
 
@@ -120,6 +135,11 @@ class User(UserMixin, db.Model):
     address = db.Column(db.String(200))
     endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'), nullable=True)
     endereco = db.relationship('Endereco', backref='usuarios')
+    # Texto livre da clínica sobre o tutor. Guarda também os endereços
+    # anteriores: o modelo tem uma única vaga de endereço, mas existe tutor com
+    # mais de um (animais que vivem em locais diferentes), e trocar o endereço
+    # sem registrar o antigo apagaria a informação.
+    observacoes = db.Column(db.Text, nullable=True)
 
 
 

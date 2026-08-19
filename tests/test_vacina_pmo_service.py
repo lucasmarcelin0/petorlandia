@@ -618,6 +618,103 @@ def test_pmo_sync_relinks_when_sheet_row_changes_tutor_and_animals(app):
     assert linked_tutor_names == ["Elis Regina Sestari", "Elis Regina Sestari"]
 
 
+def test_pmo_reuses_tutor_account_when_later_sheet_abbreviates_the_name(app):
+    """Mesma tutora em outra campanha não pode virar uma segunda conta.
+
+    A planilha é redigitada a cada dia de campanha; se a grafia do nome muda,
+    o casamento por telefone+nome falhava e nascia outra conta no mesmo
+    celular — deixando a tutora travada no login e no primeiro acesso.
+    """
+    base_row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Ana Marcia Pinheiro",
+        "address": "Rua das Flores, 10, Centro",
+        "phone1": "5516988013003",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Bolinha", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-29",
+        "shift": "Manha",
+        "password": "PMOY3003",
+        "certificateUrl": "",
+        "sourceRow": 4,
+    }
+    later_row = {
+        **base_row,
+        "tutor": "Ana marcia da costa Pinheiro",
+        "dogs": 2,
+        "animals": [
+            {"name": "Bily", "species": "cao", "status": "pendente"},
+            {"name": "Freed", "species": "cao", "status": "pendente"},
+        ],
+        "date": "2026-08-13",
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [base_row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="maio",
+            sheet_title="29/05/2026",
+        )
+        persist_vacina_pmo_rows(
+            [later_row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="agosto",
+            sheet_title="13/08/2026",
+        )
+
+        contas = User.query.filter_by(phone="+5516988013003").all()
+        visitas = PmoVaccinationVisit.query.order_by(PmoVaccinationVisit.id).all()
+        tutor_ids = {visit.tutor_user_id for visit in visitas}
+
+    assert len(contas) == 1
+    assert len(visitas) == 2
+    assert tutor_ids == {contas[0].id}
+
+
+def test_pmo_keeps_separate_accounts_for_families_sharing_a_phone(app):
+    agente_row = {
+        "id": "sheet-1",
+        "status": "pendente",
+        "tutor": "Maria Silva",
+        "address": "Rua A, 1, Centro",
+        "phone1": "5516988014004",
+        "phone2": "",
+        "dogs": 1,
+        "cats": 0,
+        "animals": [{"name": "Rex", "species": "cao", "status": "pendente"}],
+        "note": "",
+        "date": "2026-05-29",
+        "shift": "Manha",
+        "password": "PMOA4004",
+        "certificateUrl": "",
+        "sourceRow": 4,
+    }
+    vizinho_row = {
+        **agente_row,
+        "tutor": "Joao Silva",
+        "address": "Rua A, 3, Centro",
+        "animals": [{"name": "Mel", "species": "cao", "status": "pendente"}],
+        "sourceRow": 5,
+    }
+
+    with app.app_context():
+        persist_vacina_pmo_rows(
+            [agente_row, vizinho_row],
+            spreadsheet_id="sheet-test",
+            sheet_gid="familias",
+            sheet_title="29/05/2026",
+        )
+
+        nomes = sorted(user.name for user in User.query.filter_by(phone="+5516988014004").all())
+
+    assert nomes == ["Joao Silva", "Maria Silva"]
+
+
 def test_optimize_vacina_pmo_route_reorders_shift_in_sheet_and_state(app, monkeypatch):
     rows = [
         {

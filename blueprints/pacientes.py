@@ -1397,6 +1397,22 @@ def tutor_detail(tutor_id):
     return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
 
+def _find_user_by_cpf(cpf: str | None) -> User | None:
+    """Localiza um tutor pelo CPF ignorando a máscara.
+
+    O mesmo documento aparece como ``123.456.789-00`` e ``12345678900`` conforme
+    a tela que cadastrou. Comparar a string crua deixava passar a duplicata, que
+    só estourava no commit como IntegrityError.
+    """
+    digits = re.sub(r'\D', '', cpf or '')
+    if not digits:
+        return None
+    normalized_column = User.cpf
+    for char in ('.', '-', '/', ' '):
+        normalized_column = func.replace(normalized_column, char, '')
+    return User.query.filter(normalized_column == digits).first()
+
+
 @bp.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
@@ -1437,7 +1453,10 @@ def tutores():
 
         if email_is_placeholder:
             email = build_placeholder_email()
-        if User.query.filter_by(email=email).first():
+        # Comparação sem caixa: contas antigas foram gravadas com a caixa que o
+        # usuário digitou, então filter_by(email=...) deixava passar duplicatas
+        # que só diferem em maiúsculas.
+        if User.query.filter(func.lower(User.email) == email.lower()).first():
             message = 'Já existe um tutor com esse e‑mail.'
             if wants_json:
                 return jsonify(success=False, message=message, category='warning'), 409
@@ -1445,7 +1464,7 @@ def tutores():
             return redirect(url_for('tutores'))
 
         cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
-        if cpf and User.query.filter_by(cpf=cpf).first():
+        if cpf and _find_user_by_cpf(cpf):
             message = 'CPF já cadastrado para outro tutor.'
             if wants_json:
                 return jsonify(success=False, message=message, category='warning'), 409
@@ -1542,7 +1561,10 @@ def tutores():
             flash(message, 'danger')
             return redirect(url_for('tutores'))
 
-        if request.accept_mimetypes.accept_json:
+        # Mesmo critério dos ramos de erro acima. ``accept_mimetypes.accept_json``
+        # é verdadeiro para o ``*/*`` que todo navegador manda, então o submit
+        # normal (sem fetch) recebia o JSON cru na tela em vez do redirect.
+        if wants_json:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
             tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
@@ -1779,6 +1801,11 @@ def update_tutor(user_id):
         value = request.form.get(field)
         if value:
             setattr(user, field, value)
+
+    # Observações: diferente dos campos acima, aceita ficar vazio — é assim que
+    # a clínica apaga uma anotação que não vale mais.
+    if 'observacoes' in request.form:
+        user.observacoes = (request.form.get('observacoes') or '').strip() or None
 
     # CPF precisa ser único
     cpf_val = request.form.get('cpf')
