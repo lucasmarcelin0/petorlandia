@@ -4,6 +4,7 @@ from flask_admin.menu import MenuLink
 from flask import redirect, url_for, flash, current_app, request
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileAllowed
 from wtforms import (
     SelectField,
     DateField,
@@ -13,7 +14,8 @@ from wtforms import (
     StringField,
     PasswordField,
 )
-from markupsafe import Markup
+from wtforms.validators import NumberRange, Optional
+from markupsafe import Markup, escape
 import os
 import uuid
 from datetime import timedelta
@@ -45,6 +47,36 @@ USER_WORKER_CHOICES = [
     ('admin_clinica', 'Administrador de clínica'),
     ('master', 'Master'),
 ]
+
+ADMIN_IMAGE_EXTENSIONS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
+ADMIN_IMAGE_ACCEPT = ','.join(f'image/{extension}' for extension in ADMIN_IMAGE_EXTENSIONS)
+
+
+def _admin_image_upload_field(label):
+    return FileField(
+        label,
+        validators=[
+            FileAllowed(
+                ADMIN_IMAGE_EXTENSIONS,
+                'Envie uma imagem JPG, PNG, GIF, WebP ou BMP.',
+            )
+        ],
+        render_kw={
+            'accept': ADMIN_IMAGE_ACCEPT,
+            'data-image-paste': 'true',
+            'data-max-bytes': str(20 * 1024 * 1024),
+        },
+    )
+
+
+def _admin_image_src(value):
+    """Turn legacy relative upload paths into stable URLs inside /painel/."""
+    image_path = str(value or '').strip()
+    if not image_path or image_path.startswith(('http://', 'https://', 'data:', '/')):
+        return image_path
+    if image_path.startswith('static/'):
+        image_path = image_path[len('static/'):]
+    return url_for('static', filename=image_path)
 
 def _is_admin():
     """Return True if the current user has the admin role."""
@@ -604,7 +636,7 @@ class PickupLocationView(ModelView):
 
 class UserAdminView(MyModelView):
     form_extra_fields = {
-        'profile_photo_upload': FileField('Foto de perfil'),
+        'profile_photo_upload': _admin_image_upload_field('Foto de perfil'),
         'new_password': PasswordField(
             'Nova senha',
             description='Preencha apenas para redefinir a senha do usuário '
@@ -634,7 +666,7 @@ class UserAdminView(MyModelView):
             f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'profile_photo': lambda v, c, m, p: Markup(
-            f'<img src="{m.profile_photo}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.profile_photo))}" width="100">'
         ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
@@ -674,7 +706,7 @@ class UserAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.profile_photo:
             form.profile_photo_upload.description = Markup(
-                f'<img src="{obj.profile_photo}" alt="Foto atual" '
+                f'<img src="{escape(_admin_image_src(obj.profile_photo))}" alt="Foto atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -838,7 +870,7 @@ class VeterinarianSettingsView(BaseView):
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': FileField('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo')
     }
 
     form_ajax_refs = {
@@ -855,7 +887,7 @@ class ClinicaAdmin(MyModelView):
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(
-            f'<img src="{m.logotipo}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.logotipo))}" width="100">'
         ) if m.logotipo else ''
     }
 
@@ -872,7 +904,7 @@ class ClinicaAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
-                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -1025,7 +1057,7 @@ from flask import url_for
 
 class AnimalAdminView(MyModelView):
     form_extra_fields = {
-        'image_upload': FileField('Imagem'),
+        'image_upload': _admin_image_upload_field('Imagem'),
         'modo': SelectField(
             'Modo',
             choices=[
@@ -1077,14 +1109,14 @@ class AnimalAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image}" alt="Imagem atual" '
+                f'<img src="{escape(_admin_image_src(obj.image))}" alt="Imagem atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
 
     column_formatters = {
         'image': lambda v, c, m, p: Markup(
-            f'<img src="{m.image}" width="100">'
+            f'<img src="{escape(_admin_image_src(m.image))}" width="100">'
         ) if m.image else '',
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
@@ -1151,9 +1183,108 @@ class ProductCategoryAdmin(MyModelView):
     }
 
 
+def _product_admin_image(view, context, model, name):
+    if not model.image_url:
+        return Markup(
+            '<span class="product-image-placeholder" aria-label="Produto sem imagem">'
+            '<i class="fa-solid fa-image"></i></span>'
+        )
+    return Markup(
+        f'<img class="product-admin-image" src="{escape(_admin_image_src(model.image_url))}" '
+        f'alt="Foto de {escape(model.name)}" loading="lazy">'
+    )
+
+
+def _product_admin_name(view, context, model, name):
+    category = escape(model.category_label or 'Sem categoria')
+    detail_url = url_for('produto_detail', product_id=model.id)
+    return Markup(
+        '<div class="product-admin-name">'
+        f'<a href="{detail_url}" target="_blank" rel="noopener">{escape(model.name)}</a>'
+        f'<span><i class="fa-solid fa-tag"></i> {category} · ID {model.id}</span>'
+        '</div>'
+    )
+
+
+def _format_brl(value):
+    amount = Decimal(str(value or 0))
+    formatted = f'{amount:,.2f}'.replace(',', '#').replace('.', ',').replace('#', '.')
+    return f'R$ {formatted}'
+
+
+def _product_admin_sale_mode(view, context, model, name):
+    if not model.subscription_enabled:
+        return Markup(
+            '<div class="sale-mode sale-mode--single">'
+            '<span class="sale-mode__badge"><i class="fa-solid fa-bag-shopping"></i> Compra única</span>'
+            '<small>Uma cobrança por pedido</small>'
+            '</div>'
+        )
+
+    discount = Decimal(str(model.subscription_discount_percent or 0))
+    shipping = Decimal(str(model.subscription_shipping_fee or 0))
+    recurring = model.subscription_price_min or Decimal('0')
+    discount_text = f' · {discount:.0f}% de desconto' if discount > 0 else ''
+    return Markup(
+        '<div class="sale-mode sale-mode--subscription">'
+        '<span class="sale-mode__badge"><i class="fa-solid fa-arrows-rotate"></i> Compra + assinatura</span>'
+        f'<strong>{_format_brl(recurring)} por ciclo</strong>'
+        f'<small>Frete {_format_brl(shipping)}{discount_text}</small>'
+        '</div>'
+    )
+
+
+def _product_admin_price(view, context, model, name):
+    base = Decimal(str(model.price or 0))
+    public = model.public_price_min or Decimal('0')
+    public_max = model.public_price_max or public
+    public_text = _format_brl(public)
+    if public_max != public:
+        public_text += f' a {_format_brl(public_max)}'
+    return Markup(
+        '<div class="product-price-stack">'
+        f'<strong>{public_text}</strong>'
+        f'<small>Repasse base: {_format_brl(base)}</small>'
+        '</div>'
+    )
+
+
+def _product_admin_stock(view, context, model, name):
+    stock = int(model.stock or 0)
+    tone = 'danger' if stock <= 0 else 'warning' if stock <= 5 else 'success'
+    label = 'Sem estoque' if stock <= 0 else f'{stock} em estoque'
+    return Markup(
+        f'<span class="stock-indicator stock-indicator--{tone}">'
+        f'<i class="fa-solid fa-box"></i> {label}</span>'
+    )
+
+
+def _product_admin_status(view, context, model, name):
+    config = {
+        'active': ('success', 'Ativo na loja'),
+        'inactive': ('secondary', 'Oculto'),
+        'pending': ('warning', 'Aguardando aprovação'),
+    }
+    tone, label = config.get(model.status, ('secondary', model.status or 'Sem status'))
+    return Markup(f'<span class="product-status product-status--{tone}">{escape(label)}</span>')
+
+
+def _product_admin_seller(view, context, model, name):
+    if model.casa_de_racao:
+        icon, seller = 'fa-store', model.casa_de_racao.nome
+    elif model.clinica:
+        icon, seller = 'fa-house-medical', model.clinica.nome
+    else:
+        icon, seller = 'fa-shield-paw', 'PetOrlândia (plataforma)'
+    return Markup(
+        f'<span class="product-seller"><i class="fa-solid {icon}"></i>{escape(seller)}</span>'
+    )
+
+
 class ProductAdmin(MyModelView):
+    list_template = 'admin/product_list.html'
     form_extra_fields = {
-        'image_upload': FileField('Imagem')
+        'image_upload': _admin_image_upload_field('Imagem')
     }
 
     form_columns = [
@@ -1162,38 +1293,90 @@ class ProductAdmin(MyModelView):
         'price',
         'stock',
         'status',
+        'category',
         'clinica',
         'casa_de_racao',
+        'subscription_enabled',
+        'subscription_discount_percent',
+        'subscription_shipping_fee',
         'mp_category_id',
         'image_upload',
     ]
 
-    column_list = ['image_url', 'name', 'price', 'stock', 'status', 'seller']
+    column_list = ['image_url', 'name', 'seller', 'subscription_enabled', 'price', 'stock', 'status']
     column_searchable_list = ('name', 'casa_de_racao.nome', 'clinica.nome')
-    column_filters = ('status', 'clinica', 'casa_de_racao')
+    column_filters = ('subscription_enabled', 'status', 'clinica', 'casa_de_racao', 'category')
     column_sortable_list = ('name', 'price', 'stock', 'status', 'id')
+    column_default_sort = ('id', True)
     column_labels = {
         'image_url': 'Imagem',
         'name': 'Produto',
-        'price': 'Preco',
+        'price': 'Preço na loja',
         'stock': 'Estoque',
         'status': 'Status',
         'seller': 'Vendedor',
-        'casa_de_racao': 'Casa de racao',
-        'clinica': 'Clinica',
+        'casa_de_racao': 'Casa de ração parceira',
+        'clinica': 'Clínica parceira',
+        'category': 'Categoria',
+        'subscription_enabled': 'Modalidade de venda',
+        'subscription_discount_percent': 'Desconto para assinatura (%)',
+        'subscription_shipping_fee': 'Frete por ciclo (R$)',
+    }
+    column_descriptions = {
+        'subscription_enabled': 'Indica se o cliente pode comprar uma vez ou também contratar cobrança recorrente.',
+        'price': 'Preço público exibido ao cliente e valor-base informado pelo vendedor.',
+        'clinica': 'Deixe em branco quando o produto for vendido pela própria PetOrlândia. Selecione apenas para uma clínica parceira.',
+        'casa_de_racao': 'Deixe em branco quando o produto for vendido pela própria PetOrlândia. Selecione apenas para uma casa de ração parceira.',
+    }
+    form_args = {
+        'clinica': {
+            'description': 'Produto da PetOrlândia: deixe em branco. Selecione apenas quando uma clínica parceira for a vendedora e receber o pagamento.',
+        },
+        'casa_de_racao': {
+            'description': 'Produto da PetOrlândia: deixe em branco. Selecione apenas quando uma casa de ração parceira for a vendedora e receber o pagamento.',
+        },
+        'subscription_enabled': {
+            'label': 'Permitir assinatura recorrente',
+            'description': 'Ative somente se o vendedor conseguir repor e entregar este produto em todos os ciclos. A compra única continuará disponível.',
+        },
+        'subscription_discount_percent': {
+            'description': 'Opcional. De 0% a 50%, aplicado somente nas cobranças recorrentes.',
+            'validators': [Optional(), NumberRange(min=0, max=50)],
+        },
+        'subscription_shipping_fee': {
+            'description': 'Valor cobrado em cada entrega da assinatura. Use 0 para frete grátis.',
+            'validators': [Optional(), NumberRange(min=0)],
+        },
+        'price': {
+            'description': 'Valor-base de repasse do vendedor. A taxa da plataforma é incorporada ao preço público.',
+        },
     }
     column_formatters = {
-        'image_url': lambda v, c, m, p: Markup(
-            f'<img src="{m.image_url}" width="100">'
-        ) if m.image_url else '',
-        'seller': lambda v, c, m, p: (
-            m.casa_de_racao.nome if m.casa_de_racao else
-            m.clinica.nome if m.clinica else
-            'Sem vendedor'
-        ),
+        'image_url': _product_admin_image,
+        'name': _product_admin_name,
+        'seller': _product_admin_seller,
+        'subscription_enabled': _product_admin_sale_mode,
+        'price': _product_admin_price,
+        'stock': _product_admin_stock,
+        'status': _product_admin_status,
     }
 
+    def render(self, template, **kwargs):
+        if template == self.list_template:
+            kwargs['product_stats'] = {
+                'total': Product.query.count(),
+                'active': Product.query.filter_by(status='active').count(),
+                'subscription': Product.query.filter_by(subscription_enabled=True).count(),
+                'single': Product.query.filter_by(subscription_enabled=False).count(),
+            }
+        return super().render(template, **kwargs)
+
     def on_model_change(self, form, model, is_created):
+        if model.clinica_id and model.casa_de_racao_id:
+            raise ValueError(
+                'Escolha somente um vendedor parceiro: clínica ou casa de ração. '
+                'Para produtos da PetOrlândia, deixe os dois campos em branco.'
+            )
         if form.image_upload.data:
             file = form.image_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
@@ -1205,8 +1388,9 @@ class ProductAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image_url:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image_url}" alt="Imagem atual" '
-                f'style="max-height:150px;margin-top:10px;">'
+                f'<img src="{escape(_admin_image_src(obj.image_url))}" alt="Imagem atual" '
+                f'style="width:150px;height:150px;object-fit:contain;padding:10px;'
+                f'background:#fff;border:1px solid #e3e7ef;border-radius:12px;margin-top:10px;">'
             )
 
     def on_model_delete(self, model):
@@ -1217,7 +1401,7 @@ class ProductAdmin(MyModelView):
 
 class CasaDeRacaoAdminView(MyModelView):
     form_extra_fields = {
-        'logotipo_upload': FileField('Logotipo')
+        'logotipo_upload': _admin_image_upload_field('Logotipo')
     }
 
     column_list = (
@@ -1316,7 +1500,7 @@ class CasaDeRacaoAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
-                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'<img src="{escape(_admin_image_src(obj.logotipo))}" alt="Logotipo atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 

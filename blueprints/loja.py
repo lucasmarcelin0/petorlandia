@@ -69,6 +69,13 @@ from models import (
 from security.crypto import MissingMasterKeyError
 from services.payment_state import advance_payment_status
 from services.product_analytics import track_event
+from services.veterinarian_billing import (
+    MercadoPagoBillingError,
+    MercadoPagoSubscriptionClient,
+    sync_authorized_payment_payload,
+    sync_membership_payment_payload,
+    sync_preapproval_payload,
+)
 from template_filters import digits_only, format_datetime_brazil
 from time_utils import now_in_brazil, utcnow
 
@@ -88,6 +95,7 @@ from app import (
     _delivery_sections_payload,
     _export_data_share_logs_csv,
     _export_data_share_logs_pdf,
+    _get_catalog_categories,
     _get_or_create_delivery_research_contact,
     _get_vendedores_ativos,
     _mp_auto_return_enabled,
@@ -122,6 +130,19 @@ def _is_admin():
     import app as app_module
 
     return app_module._is_admin()
+
+
+def _checkout_max_installments() -> int:
+    """Máximo de parcelas oferecido no Checkout Pro da loja.
+
+    Configurável por ambiente para o caso de o adquirente mudar as regras de
+    antecipação. O piso é 1: um valor inválido nunca deve impedir a compra.
+    """
+    try:
+        configured = int(current_app.config.get('MERCADOPAGO_MAX_INSTALLMENTS', 6))
+    except (TypeError, ValueError):
+        configured = 6
+    return max(1, min(configured, 12))
 
 
 def mp_sdk(*args, **kwargs):
@@ -1238,7 +1259,12 @@ def loja():
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor, categoria)
+    # O admin enxerga também os produtos de demonstração — é quem mantém o
+    # cadastro e precisa alcançá-los. O público vê só catálogo real.
+    include_demo = _is_admin()
+    query = _build_loja_query(
+        search_term, filtro, vendedor, categoria, include_demo=include_demo
+    )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -1252,7 +1278,16 @@ def loja():
         if current_user.is_authenticated
         else None
     )
-    vendedores = _get_vendedores_ativos()
+    vendedores = _get_vendedores_ativos(include_demo=include_demo)
+    categories = _get_catalog_categories(
+        vendedor=vendedor,
+        include_demo=include_demo,
+    )
+    catalog_total = (
+        _build_loja_query('', 'all', include_demo=include_demo)
+        .order_by(None)
+        .count()
+    )
 
     return render_template(
         "loja/loja.html",
@@ -1266,14 +1301,20 @@ def loja():
         minha_clinica=minha_clinica,
         vendedores=vendedores,
         selected_vendedor=vendedor,
-        categories=get_active_product_categories(),
+        categories=categories,
         selected_category=categoria,
+        catalog_total=catalog_total,
     )
 
 
 @bp.route("/loja/data", methods=["GET"])
-@login_required
 def loja_data():
+    """Fragmento do catálogo usado pela busca e pela paginação da loja.
+
+    Público pelo mesmo motivo que ``/loja`` é: sem isso, o visitante anônimo
+    via a primeira página e qualquer filtro ou próxima página o expulsava para
+    a tela de login.
+    """
     search_term = request.args.get("q", "").strip()
     filtro = request.args.get("filter", "all")
     vendedor = request.args.get("vendedor", "").strip()
@@ -1281,7 +1322,9 @@ def loja_data():
     page = request.args.get("page", 1, type=int)
     per_page = 12
 
-    query = _build_loja_query(search_term, filtro, vendedor, categoria)
+    query = _build_loja_query(
+        search_term, filtro, vendedor, categoria, include_demo=_is_admin()
+    )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     produtos = pagination.items
     form = AddToCartForm()
@@ -1318,17 +1361,37 @@ def loja_data():
 
 
 @bp.route("/produto/<int:product_id>", methods=["GET", "POST"])
-@login_required
 def produto_detail(product_id):
-    """Exibe detalhes do produto e permite edições para administradores."""
+    """Exibe detalhes do produto e permite edições para administradores.
+
+    A ficha é pública: exigir conta para ver preço e descrição empurrava para
+    um cadastro quem ainda estava decidindo, e mantinha o catálogo fora do
+    alcance da busca. A conta continua obrigatória para comprar.
+    """
     product = Product.query.options(db.joinedload(Product.extra_photos)).get_or_404(product_id)
+
+    # Produto de demonstração não é vitrine: só quem administra o catálogo
+    # chega nele por link direto.
+    if product.is_demo and not _is_admin():
+        abort(404)
+
+    if request.method == "POST" and not _is_admin():
+        abort(403)
 
     update_form = ProductUpdateForm(obj=product, prefix='upd')
     photo_form = ProductPhotoForm(prefix='photo')
     form = AddToCartForm()
 
+    # Qual formulário foi enviado é decidido pela PRESENÇA da chave, não pelo
+    # valor dela. ``SubmitField`` herda de ``BooleanField`` e lê string vazia
+    # como False — e um <button name="x"> sem ``value`` envia exatamente isso.
+    # Amarrar a gravação a esse booleano fazia o Salvar passar pela validação
+    # e não gravar nada, em silêncio.
+    enviou_edicao = 'upd-submit' in request.form
+    enviou_foto = 'photo-submit' in request.form
+
     if _is_admin():
-        if update_form.validate_on_submit() and update_form.submit.data:
+        if enviou_edicao and update_form.validate_on_submit():
             product.name = update_form.name.data
             product.description = update_form.description.data
             product.price = float(update_form.price.data or 0)
@@ -1344,6 +1407,9 @@ def produto_detail(product_id):
             product.aliquota_icms = update_form.aliquota_icms.data
             product.aliquota_pis = update_form.aliquota_pis.data
             product.aliquota_cofins = update_form.aliquota_cofins.data
+            product.subscription_enabled = bool(update_form.subscription_enabled.data)
+            product.subscription_discount_percent = update_form.subscription_discount_percent.data or Decimal('0')
+            product.subscription_shipping_fee = update_form.subscription_shipping_fee.data or Decimal('0')
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -1351,18 +1417,74 @@ def produto_detail(product_id):
                 if image_url:
                     product.image_url = image_url
             db.session.commit()
-            flash('Produto atualizado.', 'success')
+            if product.subscription_enabled:
+                flash(
+                    'Produto atualizado. A assinatura recorrente já aparece '
+                    'na página do produto.',
+                    'success',
+                )
+            else:
+                flash('Produto atualizado.', 'success')
             return redirect(url_for('produto_detail', product_id=product.id))
 
-        if photo_form.validate_on_submit() and photo_form.submit.data:
+        # Sem este aviso, um Salvar recusado pela validação apenas re-renderiza
+        # a página: a pessoa sai achando que gravou, e a alteração some.
+        if enviou_edicao and update_form.errors:
+            rotulos = ', '.join(
+                getattr(update_form, campo).label.text
+                for campo in update_form.errors
+                if hasattr(update_form, campo)
+            )
+            flash(
+                f'O produto não foi salvo. Revise: {rotulos}.'
+                if rotulos
+                else 'O produto não foi salvo. Revise os campos destacados.',
+                'warning',
+            )
+
+        if enviou_foto and photo_form.validate_on_submit():
             file = photo_form.image.data
             filename = secure_filename(file.filename)
             image_url = upload_to_s3(file, filename, folder='products')
             if image_url:
-                db.session.add(ProductPhoto(product_id=product.id, image_url=image_url))
-                db.session.commit()
-                flash('Foto adicionada.', 'success')
+                if not product.image_url:
+                    # A primeira foto vira a imagem principal. Sem isso o slot
+                    # do topo fica em "Imagem indisponível" mesmo com fotos
+                    # enviadas, e a pessoa reenvia achando que o upload falhou
+                    # — foi assim que apareceram miniaturas duplicadas.
+                    product.image_url = image_url
+                    ProductPhoto.query.filter_by(
+                        product_id=product.id, image_url=image_url
+                    ).delete(synchronize_session=False)
+                    db.session.add(product)
+                    db.session.commit()
+                    flash('Foto adicionada.', 'success')
+                elif image_url == product.image_url or ProductPhoto.query.filter_by(
+                    product_id=product.id, image_url=image_url
+                ).first():
+                    flash('Essa foto já está no produto.', 'info')
+                else:
+                    db.session.add(
+                        ProductPhoto(product_id=product.id, image_url=image_url)
+                    )
+                    db.session.commit()
+                    flash('Foto adicionada.', 'success')
             return redirect(url_for('produto_detail', product_id=product.id))
+
+    related_products = (
+        Product.query.filter(
+            Product.id != product.id,
+            Product.status == 'active',
+            Product.is_demo.is_(False),
+            Product.stock > 0,
+        )
+        .order_by(
+            db.case((Product.category == product.category, 0), else_=1),
+            Product.id.desc(),
+        )
+        .limit(4)
+        .all()
+    )
 
     return render_template(
         'loja/product_detail.html',
@@ -1371,7 +1493,196 @@ def produto_detail(product_id):
         photo_form=photo_form,
         form=form,
         is_admin=_is_admin(),
+        related_products=related_products,
     )
+
+
+@bp.route("/produto/<int:product_id>/toggle-status", methods=["POST"])
+@login_required
+def produto_toggle_status(product_id):
+    """Alterna a visibilidade de um produto para administradores."""
+    if not _is_admin():
+        abort(403)
+    product = Product.query.get_or_404(product_id)
+    product.status = 'inactive' if product.status == 'active' else 'active'
+    db.session.commit()
+    state = 'ativado' if product.status == 'active' else 'inativado'
+    flash(f'Produto {state} na loja.', 'success')
+    return redirect(url_for('produto_detail', product_id=product.id))
+
+
+def _ensure_current_order():
+    """Carrinho aberto do usuário, criando um se ainda não houver."""
+    order = _get_current_order()
+    if not order:
+        order = Order(user_id=current_user.id)
+        db.session.add(order)
+        db.session.commit()
+        session["current_order"] = order.id
+    return order
+
+
+def _upsert_cart_item(order, product, qty: int):
+    """Soma ``qty`` de ``product`` ao carrinho, congelando os valores do split.
+
+    Um só lugar calcula preço público, repasse ao lojista e taxa da
+    plataforma. Duplicar essa conta em cada porta de entrada do carrinho é
+    como as divergências de repasse nascem.
+    """
+    public_price = product.preco_publico or Decimal("0")
+    seller_amount = product.price or Decimal("0")
+    platform_fee = max(
+        Decimal("0"),
+        Decimal(str(public_price)) - Decimal(str(seller_amount)),
+    )
+    seller_type = (
+        'casa_de_racao' if product.casa_de_racao_id
+        else 'clinica' if product.clinica_id
+        else None
+    )
+
+    item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
+    if item:
+        item.quantity += qty
+        item.unit_price = public_price
+        item.seller_unit_amount = seller_amount
+        item.platform_fee_amount = platform_fee
+        item.seller_type = seller_type
+        item.seller_id = product.casa_de_racao_id or product.clinica_id
+    else:
+        item = OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            # Preço público (taxa embutida) — é o que o comprador paga.
+            unit_price=public_price,
+            seller_unit_amount=seller_amount,
+            platform_fee_amount=platform_fee,
+            seller_type=seller_type,
+            seller_id=product.casa_de_racao_id or product.clinica_id,
+            quantity=qty,
+        )
+        db.session.add(item)
+    return item
+
+
+@bp.route("/bloco_prescricao/<int:bloco_id>/comprar", methods=["POST"])
+@login_required
+def comprar_prescricao(bloco_id):
+    """Coloca no carrinho os medicamentos da receita que a loja tem hoje.
+
+    Os produtos são resolvidos no servidor a partir do bloco — a página não
+    envia ids. Assim o botão não pode ser usado para inserir no carrinho um
+    item que não foi prescrito, e a regra vale de verdade, não só na tela.
+
+    Item a item, vale qualquer produto sugerido que tenha estoque: quem clica
+    está vendo o aviso de apresentação ao lado do botão. Em lote, só entram os
+    de apresentação compatível — um botão que adiciona vários de uma vez não
+    pode incluir em silêncio uma concentração diferente da prescrita.
+    """
+    from models import BlocoPrescricao
+    from services.prescription_store import (
+        build_prescription_offers,
+        bulk_buyable_products,
+    )
+
+    bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    if not _pode_ver_prescricao(bloco):
+        abort(403)
+
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
+    linhas = build_prescription_offers(bloco.prescricoes)
+
+    def responder_erro(mensagem, info=False):
+        """``info`` marca o que não é falha — "já está no carrinho", por ex."""
+        if wants_json:
+            return jsonify(success=False, info=info, message=mensagem), 400
+        flash(mensagem, 'info' if info else 'warning')
+        return redirect(url_for('imprimir_bloco_prescricao', bloco_id=bloco.id))
+
+    escolhido = request.form.get('product_id', type=int)
+    if escolhido:
+        disponiveis = {
+            match.product.id: match.product
+            for linha in linhas
+            for match in linha.matches
+            if match.in_stock
+        }
+        produto = disponiveis.get(escolhido)
+        if produto is None:
+            return responder_erro('Este medicamento não está disponível na loja agora.')
+        produtos = [produto]
+        order = _ensure_current_order()
+    else:
+        produtos = bulk_buyable_products(linhas)
+        if not produtos:
+            return responder_erro(
+                'Nenhum medicamento desta receita está disponível na loja no momento.'
+            )
+        order = _ensure_current_order()
+        # "Adicionar todos" garante presença, não soma outra unidade: quem já
+        # tinha clicado item a item não pode acabar com duas caixas do mesmo
+        # medicamento sem perceber.
+        ja_no_carrinho = {
+            item.product_id for item in order.items if item.product_id
+        }
+        produtos = [p for p in produtos if p.id not in ja_no_carrinho]
+        if not produtos:
+            return responder_erro(
+                'Os medicamentos disponíveis desta receita já estão no seu carrinho.',
+                info=True,
+            )
+
+    for produto in produtos:
+        _upsert_cart_item(order, produto, 1)
+    db.session.commit()
+
+    total = sum(float(p.preco_publico or 0) for p in produtos)
+    track_event(
+        'add_to_cart',
+        source_path=f'/bloco_prescricao/{bloco.id}/imprimir',
+        feature='receita',
+        amount=total,
+        items=len(produtos),
+    )
+    plural = 's' if len(produtos) > 1 else ''
+    mensagem = (
+        f'{len(produtos)} medicamento{plural} da receita '
+        f'adicionado{plural} ao carrinho.'
+    )
+
+    if wants_json:
+        # O tutor continua na receita: a resposta traz o que o rodapé precisa
+        # para se atualizar sem recarregar a página.
+        return jsonify(
+            success=True,
+            message=mensagem,
+            added=[produto.id for produto in produtos],
+            cart_quantity=sum(int(item.quantity or 0) for item in order.items),
+            cart_total_formatted=f'R$ {_order_checkout_total(order):.2f}'.replace('.', ','),
+            cart_url=url_for('ver_carrinho'),
+        )
+
+    flash(mensagem, 'success')
+    return redirect(url_for('ver_carrinho'))
+
+
+def _pode_ver_prescricao(bloco) -> bool:
+    """Tutor do animal, equipe da clínica que emitiu ou admin."""
+    if _is_admin():
+        return True
+    animal = getattr(bloco, 'animal', None)
+    if animal is not None and animal.user_id == getattr(current_user, 'id', None):
+        return True
+    try:
+        from access_control import can_view_clinic
+
+        return bool(can_view_clinic(current_user, bloco.clinica_id))
+    except Exception:  # noqa: BLE001 — sem resposta confiável, nega
+        return False
 
 
 @bp.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
@@ -1407,31 +1718,17 @@ def adicionar_carrinho(product_id):
     else:
         qty = form.quantity.data or 1
 
-    order = _get_current_order()
-    if not order:
-        order = Order(user_id=current_user.id)
-        db.session.add(order)
-        db.session.commit()
-        session["current_order"] = order.id
-
-    # Verifica se o produto já está no carrinho para somar as quantidades
-    item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
-    if item:
-        item.quantity += qty
-    else:
-        item = OrderItem(
-            order_id=order.id,
-            product_id=product.id,
-            item_name=product.name,
-            # Preço público (taxa embutida) — é o que o comprador paga.
-            unit_price=product.preco_publico or Decimal("0"),
-            quantity=qty,
-        )
-        db.session.add(item)
-
+    order = _ensure_current_order()
+    item = _upsert_cart_item(order, product, qty)
     db.session.commit()
+    track_event(
+        'add_to_cart',
+        category=product.category,
+        amount=float(product.preco_publico or 0) * qty,
+        items=qty,
+    )
     flash("Produto adicionado ao carrinho.", "success")
-    
+
     if is_ajax:
         total_value = _order_checkout_total(order)
         total_qty = sum(i.quantity for i in order.items)
@@ -1677,6 +1974,23 @@ def checkout():
         return respond_error("Seu carrinho está vazio.", "warning")
     # Nunca cobrar preço defasado: reprecifica com o preço público vigente.
     _reprice_order_items(order)
+    seller_keys = {
+        (item.product.clinica_id, item.product.casa_de_racao_id)
+        for item in order.items
+        if item.product and (item.product.clinica_id or item.product.casa_de_racao_id)
+    }
+    if len(seller_keys) > 1:
+        return respond_error(
+            "Finalize os produtos de cada loja em pedidos separados. "
+            "Assim cada vendedor recebe diretamente e o repasse fica protegido.",
+            "warning",
+        )
+    if seller_keys and not _connected_mercadopago_account_for_order(order):
+        return respond_error(
+            "Esta loja ainda não concluiu a configuração de recebimento. "
+            "Nenhuma cobrança foi feita; tente novamente mais tarde.",
+            "warning",
+        )
 
     address_text = None
     if form.address_id.data is not None and form.address_id.data >= 0:
@@ -1823,7 +2137,10 @@ def checkout():
         "items": items,
         "external_reference": payment.external_reference,
         "notification_url":   _mercadopago_notification_url(),
-        "payment_methods":    {"installments": 1},
+        # Ração e medicamento caem na faixa em que o comprador brasileiro
+        # decide pela parcela. Travar em 1x tirava do funil quem compraria
+        # parcelado — e não muda o repasse ao lojista, que sai do split.
+        "payment_methods":    {"installments": _checkout_max_installments()},
         "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
         "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
         "back_urls": back_urls,
@@ -1878,6 +2195,13 @@ def checkout():
     db.session.commit()
 
     session["last_pending_payment"] = payment.id
+    # Marca a saída do site rumo ao Mercado Pago. Cruzado com
+    # purchase_completed, é o que dá a taxa de abandono do checkout.
+    track_event(
+        'checkout_started',
+        amount=float(payment.amount or 0),
+        items=sum(int(it.quantity or 0) for it in order.items),
+    )
     if prefers_json:
         return jsonify(success=True, redirect=pref["init_point"])
     return redirect(pref["init_point"])
@@ -1895,16 +2219,50 @@ def notificacoes_mercado_pago():
 
     # Check notification type
     notification_type = request.args.get("type") or request.args.get("topic")
-    if notification_type != "payment":
-        current_app.logger.info("Ignoring non-payment notification: %s", notification_type)
-        return jsonify(status="ignored"), 200
-
-    # Extract mp_id
     data = request.get_json(silent=True) or {}
     mp_id = (data.get("data", {}).get("id") or  # v1
              data.get("resource", "").split("/")[-1])  # v2
 
     if not mp_id:
+        return jsonify(status="ignored"), 200
+
+    if notification_type in {"subscription_preapproval", "subscription_authorized_payment"}:
+        try:
+            provider = MercadoPagoSubscriptionClient(
+                current_app.config.get("MERCADOPAGO_ACCESS_TOKEN", "")
+            )
+            if notification_type == "subscription_preapproval":
+                billing_record = sync_preapproval_payload(
+                    provider.get_preapproval(str(mp_id))
+                )
+            else:
+                billing_record = sync_authorized_payment_payload(
+                    provider.get_authorized_payment(str(mp_id))
+                )
+            if not billing_record:
+                db.session.rollback()
+                return jsonify(status="ignored"), 200
+            db.session.commit()
+            current_app.logger.info(
+                "Mercado Pago membership webhook synchronized type=%s resource_id=%s",
+                notification_type,
+                mp_id,
+            )
+            return jsonify(status="ok"), 200
+        except LookupError:
+            db.session.rollback()
+            return jsonify(status="not_found"), 404
+        except (MercadoPagoBillingError, SQLAlchemyError):
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao processar webhook de assinatura Mercado Pago type=%s id=%s",
+                notification_type,
+                mp_id,
+            )
+            return jsonify(error="billing sync failed"), 500
+
+    if notification_type != "payment":
+        current_app.logger.info("Ignoring non-payment notification: %s", notification_type)
         return jsonify(status="ignored"), 200
 
     # Query payment
@@ -1924,6 +2282,34 @@ def notificacoes_mercado_pago():
     extref = info.get("external_reference")
     if not extref:
         return jsonify(status="ignored"), 200
+
+    if extref.startswith("vet-membership-"):
+        try:
+            charge = sync_membership_payment_payload(info)
+            if not charge:
+                db.session.rollback()
+                current_app.logger.warning(
+                    "Veterinarian membership not found for payment %s reference %s",
+                    mp_id,
+                    extref,
+                )
+                return jsonify(error="membership not found"), 404
+            db.session.commit()
+            current_app.logger.info(
+                "Mercado Pago membership charge synchronized payment_id=%s charge_id=%s status=%s applied=%s",
+                mp_id,
+                charge.id,
+                charge.status,
+                bool(charge.access_applied_at),
+            )
+            return jsonify(status="ok"), 200
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao persistir cobrança de assinatura payment_id=%s",
+                mp_id,
+            )
+            return jsonify(error="billing persistence failed"), 500
 
     # Update database
     status_map = {
@@ -1971,6 +2357,12 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             pass
 
+    # O funil de receita se fecha aqui: é o webhook que sabe se o pagamento
+    # entrou. O evento é montado dentro da transação mas só disparado depois
+    # dela — track_event commita, e um commit no meio do bloco publicaria
+    # estado parcial.
+    revenue_event: tuple[str, dict] | None = None
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
@@ -1981,12 +2373,30 @@ def notificacoes_mercado_pago():
                 return jsonify(error="payment not found"), 404
 
             if pay:
+                previous_status = pay.status
                 payment_status = advance_payment_status(
                     pay.status,
                     payment_status,
                     provider_status=status,
                 )
                 pay.status = payment_status
+
+                # Só a primeira transição vira evento: o Mercado Pago reenvia
+                # a mesma notificação e uma compra não pode ser contada duas
+                # vezes.
+                if previous_status != payment_status:
+                    if payment_status == PaymentStatus.COMPLETED:
+                        revenue_event = ('purchase_completed', {
+                            'amount': float(pay.amount or 0),
+                            'method': str(status or ''),
+                            'user_id': pay.user_id,
+                        })
+                    elif payment_status == PaymentStatus.FAILED:
+                        revenue_event = ('payment_failed', {
+                            'amount': float(pay.amount or 0),
+                            'reason': str(status or ''),
+                            'user_id': pay.user_id,
+                        })
                 pay.mercado_pago_id = mp_id
 
                 if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
@@ -2206,6 +2616,20 @@ def notificacoes_mercado_pago():
         current_app.logger.exception("DB error: %s", e)
         return jsonify(error="db failure"), 500
 
+    if revenue_event:
+        event_name, payload = revenue_event
+        track_event(event_name, source_path='/notificacoes', **payload)
+
+    # Se o pagamento acima foi a primeira mensalidade de uma clínica, fecha a
+    # conversão agora em vez de esperar a próxima reconciliação.
+    from services.membership_conversion import process_pending_conversions
+
+    try:
+        process_pending_conversions()
+    except Exception:  # noqa: BLE001 — a notificação já foi aplicada
+        db.session.rollback()
+        current_app.logger.exception('Falha ao processar conversões após webhook')
+
     return jsonify(status="updated"), 200
 
 
@@ -2300,6 +2724,16 @@ def payment_status(payment_id):
     )
     edit_address_url = url_for('edit_order_address', order_id=payment.order_id) if order else None
 
+    related_products = []
+    if order and result in {"success", "completed", "approved"}:
+        purchased_ids = [item.product_id for item in order.items]
+        related_products = Product.query.filter(
+            Product.id.notin_(purchased_ids),
+            Product.status == 'active',
+            Product.is_demo.is_(False),
+            Product.stock > 0,
+        ).order_by(Product.id.desc()).limit(3).all()
+
     return render_template(
         "loja/payment_status.html",
         payment          = payment,
@@ -2311,6 +2745,7 @@ def payment_status(payment_id):
         delivery_estimate= delivery_estimate,
         cancel_url       = cancel_url,
         edit_address_url = edit_address_url,
+        related_products = related_products,
     )
 
 
@@ -2431,18 +2866,111 @@ RACAO_ASSINATURA_FREQUENCIAS = {
 
 
 def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
-    """Registra um ciclo pago da assinatura e notifica tutor e lojista."""
+    """Materializa exatamente um pedido para cada pagamento recorrente."""
+    from models import RacaoAssinaturaCiclo
+
+    provider_payment_id = str(mp_id or '').strip()
+    if not provider_payment_id:
+        current_app.logger.error(
+            'Ciclo da assinatura %s sem payment id; ignorado por segurança',
+            racao_sub.id,
+        )
+        return None
+    existing = RacaoAssinaturaCiclo.query.filter_by(
+        provider_payment_id=provider_payment_id,
+    ).first()
+    if existing:
+        return existing
+
     primeira_vez = racao_sub.status != 'active'
     if primeira_vez:
         racao_sub.status = 'active'
         racao_sub.activated_at = utcnow()
-    if mp_id and not racao_sub.mp_preapproval_id:
-        racao_sub.mp_preapproval_id = str(mp_id)
     racao_sub.ciclos_pagos = (racao_sub.ciclos_pagos or 0) + 1
     racao_sub.ultimo_ciclo_em = utcnow()
 
     produto = racao_sub.product
     nome_produto = racao_sub.variant.name if racao_sub.variant else (produto.name if produto else 'Assinatura')
+    quantidade = racao_sub.quantidade or 1
+    unit_price = Decimal(str(racao_sub.preco_unitario or 0))
+    if unit_price <= 0:
+        subtotal = Decimal(str(racao_sub.preco_ciclo or 0)) - Decimal(str(racao_sub.frete_ciclo or 0))
+        unit_price = (subtotal / Decimal(quantidade)).quantize(Decimal('0.01'))
+
+    order = Order(user_id=racao_sub.user_id, shipping_address=racao_sub.endereco_entrega)
+    db.session.add(order)
+    db.session.flush()
+
+    base_price = Decimal(str(
+        racao_sub.variant.price if racao_sub.variant else (produto.price if produto else 0)
+    ))
+    discount = produto.subscription_discount if produto else Decimal('0')
+    seller_unit = (base_price * (Decimal('1') - discount / Decimal('100'))).quantize(Decimal('0.01'))
+    db.session.add(OrderItem(
+        order_id=order.id,
+        product_id=racao_sub.product_id,
+        variant_id=racao_sub.variant_id,
+        item_name=nome_produto,
+        quantity=quantidade,
+        unit_price=unit_price,
+        seller_unit_amount=seller_unit,
+        platform_fee_amount=max(Decimal('0'), unit_price - seller_unit),
+        seller_type=('casa_de_racao' if produto and produto.casa_de_racao_id else 'clinica' if produto and produto.clinica_id else None),
+        seller_id=(produto.casa_de_racao_id if produto and produto.casa_de_racao_id else produto.clinica_id if produto else None),
+    ))
+
+    casa = produto.casa_de_racao if produto else None
+    clinica = produto.clinica if produto else None
+    tipo_entrega = 'propria' if (
+        (casa and casa.modo_entrega == 'propria') or
+        (clinica and clinica.modo_entrega == 'propria')
+    ) else 'plataforma'
+    db.session.add(DeliveryRequest(
+        order_id=order.id,
+        requested_by_id=racao_sub.user_id,
+        dedupe_key=f'racao-subscription:{racao_sub.id}:payment:{provider_payment_id}',
+        status='pendente',
+        clinica_id=produto.clinica_id if produto else None,
+        casa_de_racao_id=produto.casa_de_racao_id if produto else None,
+        tipo_entrega=tipo_entrega,
+        frete_valor=racao_sub.frete_ciclo or Decimal('0'),
+    ))
+
+    stock_attention = False
+    if racao_sub.variant:
+        before = racao_sub.variant.stock or 0
+        stock_attention = before < quantidade
+        racao_sub.variant.stock = max(0, before - quantidade)
+    if produto and produto.clinic_inventory_item_id:
+        inv = ClinicInventoryItem.query.get(produto.clinic_inventory_item_id)
+        if inv:
+            before = inv.quantity or 0
+            stock_attention = stock_attention or before < quantidade
+            inv.quantity = max(0, before - quantidade)
+            produto.stock = inv.quantity
+            db.session.add(ClinicInventoryMovement(
+                clinica_id=inv.clinica_id,
+                item=inv,
+                quantity_change=-min(before, quantidade),
+                quantity_before=before,
+                quantity_after=inv.quantity,
+                tipo='saida',
+                motivo=f'Assinatura — Pedido #{order.id}',
+            ))
+    elif produto:
+        before = produto.stock or 0
+        stock_attention = stock_attention or before < quantidade
+        produto.stock = max(0, before - quantidade)
+
+    cycle = RacaoAssinaturaCiclo(
+        assinatura_id=racao_sub.id,
+        provider_payment_id=provider_payment_id,
+        order_id=order.id,
+        valor=racao_sub.preco_ciclo,
+        status='stock_attention' if stock_attention else 'paid',
+        processed_at=utcnow(),
+    )
+    db.session.add(cycle)
 
     # Tutor: confirmação do ciclo
     try:
@@ -2458,7 +2986,6 @@ def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
         current_app.logger.debug('push tutor assinatura falhou', exc_info=True)
 
     # Lojista: preparar entrega
-    casa = produto.casa_de_racao if produto else None
     if casa and casa.owner_id:
         endereco = racao_sub.endereco_entrega or 'endereço cadastrado do cliente'
         cliente = racao_sub.user.name if racao_sub.user else 'cliente'
@@ -2483,6 +3010,12 @@ def _process_racao_assinatura_ciclo(racao_sub, mp_id=None):
                 ))
             except Exception:  # noqa: BLE001
                 current_app.logger.warning('Falha ao avisar lojista por e-mail (assinatura %s)', racao_sub.id)
+    if stock_attention:
+        avisar_admin_nova_solicitacao(
+            f'Estoque insuficiente na assinatura #{racao_sub.id}',
+            f'O pedido #{order.id} foi cobrado e precisa de reposição urgente: {quantidade}x {nome_produto}.',
+        )
+    return cycle
 
 
 @bp.route('/produto/<int:product_id>/assinar', methods=['GET', 'POST'])
@@ -2492,7 +3025,7 @@ def racao_assinar(product_id):
     from models import Animal, ProductVariant, RacaoAssinatura
 
     product = Product.query.get_or_404(product_id)
-    if product.status != 'active':
+    if product.status != 'active' or not product.subscription_enabled:
         abort(404)
 
     variantes = [v for v in (product.variants or []) if v.status == 'active']
@@ -2506,22 +3039,65 @@ def racao_assinar(product_id):
     if request.method == 'POST':
         freq = request.form.get('frequencia_dias', type=int) or 30
         if freq not in RACAO_ASSINATURA_FREQUENCIAS:
-            freq = 30
+            flash('Escolha uma frequência válida para a assinatura.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
         quantidade = max(1, min(request.form.get('quantidade', type=int) or 1, 10))
         variant = None
         variant_id = request.form.get('variant_id', type=int)
-        if variant_id:
-            variant = ProductVariant.query.filter_by(id=variant_id, product_id=product.id).first()
+        if variantes:
+            variant = ProductVariant.query.filter_by(
+                id=variant_id,
+                product_id=product.id,
+                status='active',
+            ).first()
+            if not variant:
+                flash('Escolha uma apresentação válida.', 'danger')
+                return redirect(url_for('racao_assinar', product_id=product.id))
         animal_id = request.form.get('animal_id', type=int) or None
         if animal_id and not any(a.id == animal_id for a in animais):
             animal_id = None
-        endereco = (request.form.get('endereco_entrega') or '').strip()[:255] or None
+        endereco = (request.form.get('endereco_entrega') or '').strip()[:255]
+        if not endereco:
+            flash('Informe o endereço completo de cada entrega.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
+        if request.form.get('subscription_consent') != 'yes':
+            flash('Confirme que entendeu e autoriza a cobrança recorrente.', 'danger')
+            return redirect(url_for('racao_assinar', product_id=product.id))
 
         preco_unit = variant.preco_publico if variant else product.preco_publico
-        preco_ciclo = float(preco_unit or 0) * quantidade
+        preco_unit = product.subscription_price_from_public(preco_unit)
+        frete_ciclo = Decimal(str(product.subscription_shipping_fee or 0)).quantize(Decimal('0.01'))
+        preco_ciclo = (preco_unit * quantidade + frete_ciclo).quantize(Decimal('0.01'))
         if preco_ciclo <= 0:
             flash('Produto sem preço válido para assinatura.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
+
+        variant_filter = (
+            RacaoAssinatura.variant_id.is_(None)
+            if variant is None else RacaoAssinatura.variant_id == variant.id
+        )
+        animal_filter = (
+            RacaoAssinatura.animal_id.is_(None)
+            if animal_id is None else RacaoAssinatura.animal_id == animal_id
+        )
+        duplicate = RacaoAssinatura.query.filter(
+            RacaoAssinatura.user_id == current_user.id,
+            RacaoAssinatura.product_id == product.id,
+            variant_filter,
+            animal_filter,
+            RacaoAssinatura.quantidade == quantidade,
+            RacaoAssinatura.frequencia_dias == freq,
+            RacaoAssinatura.status.in_(['creating', 'pending', 'active', 'cancel_pending']),
+        ).order_by(RacaoAssinatura.created_at.desc()).first()
+        if duplicate:
+            if duplicate.status == 'active':
+                flash('Você já possui esta assinatura ativa. Gerencie-a abaixo.', 'info')
+                return redirect(url_for('racao_minhas_assinaturas'))
+            if duplicate.init_point:
+                flash('Retomamos a configuração de pagamento que já estava em andamento.', 'info')
+                return redirect(duplicate.init_point)
+            duplicate.status = 'failed'
+            duplicate.last_error = 'Configuração anterior sem URL de checkout; substituída com segurança.'
 
         sub = RacaoAssinatura(
             user_id=current_user.id,
@@ -2530,9 +3106,15 @@ def racao_assinar(product_id):
             animal_id=animal_id,
             quantidade=quantidade,
             frequencia_dias=freq,
+            preco_unitario=preco_unit,
+            frete_ciclo=frete_ciclo,
             preco_ciclo=preco_ciclo,
             endereco_entrega=endereco,
-            status='pending',
+            status='creating',
+            consent_at=utcnow(),
+            consent_ip=(request.access_route[0] if request.access_route else request.remote_addr),
+            consent_user_agent=(request.user_agent.string or '')[:255],
+            terms_version='store-subscription-2026-08-01',
         )
         db.session.add(sub)
         db.session.commit()
@@ -2546,32 +3128,49 @@ def racao_assinar(product_id):
             'auto_recurring': {
                 'frequency': frequency,
                 'frequency_type': frequency_type,
-                'transaction_amount': preco_ciclo,
+                'transaction_amount': float(preco_ciclo),
                 'currency_id': 'BRL',
             },
             'external_reference': f'racao-assinatura-{sub.id}',
         }
         try:
             resp = mp_sdk().preapproval().create(preapproval_data)
-        except Exception:
+        except Exception as exc:
             current_app.logger.exception('Erro ao criar preapproval de assinatura de ração')
+            sub.status = 'failed'
+            sub.last_error = str(exc)[:500]
+            db.session.commit()
             flash('Falha ao conectar com o Mercado Pago. Tente novamente.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
 
         if resp.get('status') not in {200, 201}:
             current_app.logger.warning('Preapproval de ração rejeitado: %s', resp)
+            sub.status = 'failed'
+            sub.last_error = str(resp.get('response') or resp)[:500]
+            db.session.commit()
             flash('Erro ao iniciar a assinatura. Tente novamente.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
 
         body = resp.get('response', {}) or {}
         mp_id = body.get('id')
         init_point = body.get('init_point') or body.get('sandbox_init_point')
-        if mp_id:
-            sub.mp_preapproval_id = str(mp_id)
+        if not init_point or not mp_id:
+            sub.status = 'failed'
+            sub.last_error = 'Mercado Pago não retornou a identificação e a URL do checkout.'
             db.session.commit()
-        if not init_point:
             flash('Erro ao iniciar a assinatura.', 'danger')
             return redirect(url_for('produto_detail', product_id=product.id))
+        sub.mp_preapproval_id = str(mp_id) if mp_id else None
+        sub.init_point = init_point
+        sub.status = 'pending'
+        sub.last_error = None
+        db.session.commit()
+        track_event(
+            'subscription_started',
+            plan='racao',
+            amount=float(preco_ciclo or 0),
+            category=product.category,
+        )
         return redirect(init_point)
 
     return render_template(
@@ -2605,13 +3204,28 @@ def racao_assinatura_cancelar(sub_id):
     sub = RacaoAssinatura.query.get_or_404(sub_id)
     if sub.user_id != current_user.id and not _is_admin():
         abort(403)
+    if sub.status in {'canceled', 'cancelled'}:
+        flash('Esta assinatura já está cancelada.', 'info')
+        return redirect(url_for('racao_minhas_assinaturas'))
     if sub.mp_preapproval_id:
         try:
-            mp_sdk().preapproval().update(sub.mp_preapproval_id, {'status': 'cancelled'})
-        except Exception:
+            response = mp_sdk().preapproval().update(sub.mp_preapproval_id, {'status': 'canceled'})
+            body = response.get('response', {}) or {}
+            if response.get('status') not in {200, 201} or body.get('status') not in {None, 'canceled'}:
+                raise RuntimeError(str(body or response))
+        except Exception as exc:
             current_app.logger.exception('Falha ao cancelar preapproval %s', sub.mp_preapproval_id)
-    sub.status = 'cancelled'
+            sub.last_error = f'Falha ao cancelar no Mercado Pago: {exc}'[:500]
+            db.session.commit()
+            flash(
+                'Não foi possível confirmar o cancelamento no Mercado Pago. '
+                'A assinatura continua ativa; tente novamente ou fale com o suporte.',
+                'danger',
+            )
+            return redirect(url_for('racao_minhas_assinaturas'))
+    sub.status = 'canceled'
     sub.cancelled_at = utcnow()
+    sub.last_error = None
     db.session.commit()
     flash('Assinatura cancelada. Nenhuma nova cobrança será feita.', 'info')
     return redirect(url_for('racao_minhas_assinaturas'))

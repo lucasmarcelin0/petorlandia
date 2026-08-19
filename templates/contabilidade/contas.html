@@ -13,6 +13,7 @@
   <div class="row g-3 mb-4">
     <div class="col-lg-7">
       <form class="card border-0 shadow-sm h-100" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="card-body">
           <h5 class="mb-3">Novo lancamento</h5>
           <div class="row g-3">
@@ -46,6 +47,7 @@
     </div>
     <div class="col-lg-5">
       <form class="card border-0 shadow-sm h-100" method="post" action="{{ url_for('contabilidade_conciliacao_importar', clinica_id=selected_clinic.id, mes=selected_month.strftime('%Y-%m')) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="card-body">
           <h5 class="mb-3">Importar extrato</h5>
           <input class="form-control" type="file" name="arquivo" accept=".ofx,.csv,.txt,.ret,.cnab" required>

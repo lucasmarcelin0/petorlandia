@@ -1,6 +1,7 @@
 import sys
 
 from extensions import db
+from helpers import ensure_veterinarian_membership
 from models import Animal, Endereco, Specialty, User, Veterinario, VeterinarioAtendeCidade
 
 
@@ -49,6 +50,8 @@ def _make_vet(name, email, city=None, coverage=(), specialty=None):
         audience='tutor',
         active=True,
     ))
+    # Vitrine pública exige assinatura ativa.
+    ensure_veterinarian_membership(vet)
     db.session.commit()
     return vet
 
@@ -96,8 +99,8 @@ def test_exames_all_cities_shows_all_specialists(app, client):
         tutor = _make_tutor()
         animal = Animal(name='Rex', user_id=tutor.id)
         db.session.add(animal)
-        _make_vet('Vet Alfa', 'vet-alfa-geo@example.com', city='Belo Horizonte')
-        _make_vet('Vet Beta', 'vet-beta-geo@example.com', city='Contagem')
+        _make_vet('Vet Alfa', 'vet-alfa-geo@clinicageo.com.br', city='Belo Horizonte')
+        _make_vet('Vet Beta', 'vet-beta-geo@clinicageo.com.br', city='Contagem')
         db.session.commit()
         tutor_id, animal_id = tutor.id, animal.id
 
@@ -116,8 +119,8 @@ def test_exames_city_filter_limits_specialists(app, client):
         tutor = _make_tutor(email='tutor-geo3@example.com')
         animal = Animal(name='Rex', user_id=tutor.id)
         db.session.add(animal)
-        _make_vet('Vet Alfa', 'vet-alfa-geo3@example.com', city='Belo Horizonte')
-        _make_vet('Vet Beta', 'vet-beta-geo3@example.com', city='Contagem')
+        _make_vet('Vet Alfa', 'vet-alfa-geo3@clinicageo.com.br', city='Belo Horizonte')
+        _make_vet('Vet Beta', 'vet-beta-geo3@clinicageo.com.br', city='Contagem')
         db.session.commit()
         tutor_id, animal_id = tutor.id, animal.id
 

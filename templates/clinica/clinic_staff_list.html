@@ -4,6 +4,7 @@
 <div class="container mt-4">
   <h2>Funcionários de {{ clinic.nome }}</h2>
   <form method="post" class="mb-4 js-staff-form" data-target="#staffList">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="input-group">
       <input type="email" name="email" class="form-control" placeholder="Email do usuário" required>
       <button class="btn btn-primary" type="submit">Adicionar</button>

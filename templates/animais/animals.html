@@ -59,7 +59,11 @@
         <input type="text" name="name" value="{{ name or '' }}" class="form-control rounded-pill" placeholder="Nome do pet">
       </div>
       <div class="col-md-3">
+        {% if is_admin %}
+        <input type="search" name="tutor_search" value="{{ tutor_search or tutor_name or '' }}" class="form-control rounded-pill" placeholder="Tutor: nome, CPF, telefone, e-mail..." aria-label="Buscar tutor por nome, CPF, telefone, e-mail, RG ou endereço">
+        {% else %}
         <input type="text" name="tutor_name" value="{{ tutor_name or '' }}" class="form-control rounded-pill" placeholder="Nome do tutor">
+        {% endif %}
       </div>
       <div class="col-md-2">
         <select name="modo" class="form-select rounded-pill">
@@ -107,7 +111,7 @@
 
   <!-- Cards -->
   <div id="animals-container">
-    {% include 'animais/_animals_grid.html' %}
+    {% include 'animais/_animals_content.html' %}
   </div>
 </div>
 <script type="module" src="{{ url_for('static', filename='js/animals.js') }}"></script>

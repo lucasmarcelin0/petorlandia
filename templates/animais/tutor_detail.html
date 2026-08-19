@@ -57,8 +57,10 @@
           </div>
           <p class="text-muted mb-3">Dados completos, contatos e histórico de animais deste tutor.</p>
           <div class="d-flex flex-wrap gap-2 mb-3 tutor-chips">
-            {% if tutor.email %}
+            {% if tutor.email and not tutor.email_is_placeholder %}
               <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email }}</span>
+            {% else %}
+              <span class="chip text-muted"><i class="fas fa-envelope-open"></i> Sem e-mail informado</span>
             {% endif %}
             {% if tutor.phone %}
               <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone }}</span>
@@ -127,7 +129,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label">E‑mail</label>
-              <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
+              <input name="email" type="email" class="form-control" value="{{ '' if tutor.email_is_placeholder else (tutor.email or '') }}">
             </div>
             <div class="col-md-4">
               <label class="form-label">Telefone</label>
@@ -172,6 +174,21 @@
             </div>
 
             {% include "partials/endereco_form.html" with context %}
+
+            <div class="col-12">
+              <div class="section-divider"></div>
+              <p class="section-eyebrow">Observações</p>
+              <label for="observacoes" class="form-label small text-muted mb-1">
+                Anotações da clínica sobre este tutor
+              </label>
+              <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                        placeholder="Ex.: endereços anteriores, preferências de contato, observações da equipe."
+                        data-autogrow>{{ tutor.observacoes or '' }}</textarea>
+              <div class="form-text">
+                Quando o tutor tem mais de um endereço, o mais recente fica no campo acima
+                e os anteriores são registrados aqui automaticamente.
+              </div>
+            </div>
 
             <div class="col-12">
               <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">

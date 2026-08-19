@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from extensions import db
+from helpers import ensure_veterinarian_membership
 from models import Animal, Endereco, User, VaccineServiceItem, Veterinario
 
 
@@ -18,9 +19,10 @@ def _create_public_vet(name, email, city):
         worker='veterinario',
         endereco=Endereco(cidade=city, estado='MG'),
     )
+    # CRMV só de zeros equivale a cadastro incompleto e some da vitrine.
     vet = Veterinario(
         user=user,
-        crmv='00000',
+        crmv='12345',
         public_visible=True,
         public_profile_type='profissional',
     )
@@ -35,6 +37,8 @@ def _create_public_vet(name, email, city):
         audience='tutor',
         active=True,
     ))
+    # Vitrine pública exige assinatura ativa.
+    ensure_veterinarian_membership(vet)
     return vet
 
 

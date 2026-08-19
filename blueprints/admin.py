@@ -41,6 +41,8 @@ from models import (
     CasaDeRacao,
     Clinica,
     PartnerInvite,
+    PropostaProtocoloClinico,
+    ProductEvent,
     User,
     Veterinario,
 )
@@ -75,6 +77,140 @@ def _partner_invite_whatsapp_url(invite, link):
     numero = only_digits(invite.telefone or '')
     base = f'https://wa.me/55{numero}' if len(numero) in (10, 11) else 'https://wa.me/'
     return f'{base}?text={quote_plus(texto)}'
+
+
+@bp.route("/admin/analytics-produto", methods=["GET"])
+@login_required
+def product_analytics_dashboard():
+    if not _is_admin():
+        abort(403)
+
+    period_days = request.args.get('days', 30, type=int)
+    if period_days not in {7, 30, 90}:
+        period_days = 30
+    since = now_in_brazil() - timedelta(days=period_days)
+
+    event_names = (
+        'landing_viewed',
+        'signup_completed',
+        'onboarding_viewed',
+        'onboarding_progress_viewed',
+        'pricing_viewed',
+        'catalog_viewed',
+        'add_to_cart',
+        'checkout_started',
+        'checkout_abandoned',
+        'purchase_completed',
+        'payment_failed',
+        'subscription_started',
+        'trial_converted',
+        'service_requested',
+    )
+    rows = (
+        db.session.query(ProductEvent.event_name, func.count(ProductEvent.id))
+        .filter(ProductEvent.created_at >= since)
+        .filter(ProductEvent.event_name.in_(event_names))
+        .group_by(ProductEvent.event_name)
+        .all()
+    )
+    counts = dict(rows)
+
+    def rate(outcome, base):
+        denominator = counts.get(base, 0)
+        if not denominator:
+            return None
+        return round(counts.get(outcome, 0) * 100 / denominator, 1)
+
+    acquisition_funnel = (
+        ('Visitas à página inicial', counts.get('landing_viewed', 0), None),
+        (
+            'Cadastros concluídos',
+            counts.get('signup_completed', 0),
+            rate('signup_completed', 'landing_viewed'),
+        ),
+        (
+            'Onboardings iniciados',
+            counts.get('onboarding_viewed', 0),
+            rate('onboarding_viewed', 'signup_completed'),
+        ),
+        (
+            'Trials convertidos',
+            counts.get('trial_converted', 0),
+            rate('trial_converted', 'signup_completed'),
+        ),
+    )
+    commerce_funnel = (
+        ('Visitas à loja', counts.get('catalog_viewed', 0), None),
+        (
+            'Adições ao carrinho',
+            counts.get('add_to_cart', 0),
+            rate('add_to_cart', 'catalog_viewed'),
+        ),
+        (
+            'Checkouts iniciados',
+            counts.get('checkout_started', 0),
+            rate('checkout_started', 'add_to_cart'),
+        ),
+        (
+            'Compras aprovadas',
+            counts.get('purchase_completed', 0),
+            rate('purchase_completed', 'checkout_started'),
+        ),
+    )
+
+    revenue_events = (
+        ProductEvent.query
+        .filter(ProductEvent.created_at >= since)
+        .filter(ProductEvent.event_name.in_(('purchase_completed', 'payment_failed')))
+        .all()
+    )
+
+    def amount_for(event_name):
+        total = 0.0
+        for event in revenue_events:
+            if event.event_name != event_name:
+                continue
+            try:
+                total += float((event.properties or {}).get('amount') or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    revenue_summary = {
+        'approved_amount': amount_for('purchase_completed'),
+        'failed_amount': amount_for('payment_failed'),
+        'abandoned': counts.get('checkout_abandoned', 0),
+        'subscriptions_started': counts.get('subscription_started', 0),
+        'services_requested': counts.get('service_requested', 0),
+    }
+    sources = (
+        db.session.query(
+            func.coalesce(ProductEvent.utm_source, 'direto'),
+            func.count(func.distinct(ProductEvent.anonymous_id)),
+        )
+        .filter(ProductEvent.created_at >= since)
+        .group_by(func.coalesce(ProductEvent.utm_source, 'direto'))
+        .order_by(func.count(func.distinct(ProductEvent.anonymous_id)).desc())
+        .limit(12)
+        .all()
+    )
+    recent = (
+        ProductEvent.query
+        .order_by(ProductEvent.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return render_template(
+        'admin/product_analytics.html',
+        acquisition_funnel=acquisition_funnel,
+        commerce_funnel=commerce_funnel,
+        revenue_summary=revenue_summary,
+        counts=counts,
+        sources=sources,
+        recent=recent,
+        since=since,
+        period_days=period_days,
+    )
 
 
 @bp.route("/admin/notificacoes", methods=["GET"])
@@ -167,6 +303,85 @@ def admin_notification_resolve(notification_id):
         db.session.commit()
         _invalidate_admin_action_cache(current_user.id)
     return redirect(request.referrer or url_for('admin_notifications'))
+
+
+@bp.route("/admin/propostas-protocolos", methods=["GET"])
+@login_required
+def admin_protocol_proposals():
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+
+    status = (request.args.get('status') or 'pending_review').strip().lower()
+    allowed_statuses = {'pending_review', 'in_review', 'converted', 'archived', 'all'}
+    if status not in allowed_statuses:
+        status = 'pending_review'
+
+    query = PropostaProtocoloClinico.query
+    if status != 'all':
+        query = query.filter(PropostaProtocoloClinico.status == status)
+    proposals = (
+        query
+        .order_by(PropostaProtocoloClinico.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    counts = dict(
+        db.session.query(
+            PropostaProtocoloClinico.status,
+            func.count(PropostaProtocoloClinico.id),
+        )
+        .group_by(PropostaProtocoloClinico.status)
+        .all()
+    )
+    return render_template(
+        'admin/protocol_proposals.html',
+        proposals=proposals,
+        counts=counts,
+        status=status,
+    )
+
+
+@bp.route("/admin/propostas-protocolos/<int:proposal_id>/iniciar-revisao", methods=["POST"])
+@login_required
+def admin_start_protocol_proposal_review(proposal_id):
+    if (getattr(current_user, 'role', '') or '').lower() != 'admin':
+        abort(403)
+
+    proposal = PropostaProtocoloClinico.query.get_or_404(proposal_id)
+    if proposal.status == 'pending_review':
+        proposal.status = 'in_review'
+        proposal.reviewed_by = current_user.id
+        proposal.reviewed_at = now_in_brazil()
+        affected_admin_ids = [
+            row[0]
+            for row in db.session.query(AdminActionNotification.recipient_user_id)
+            .filter(
+                AdminActionNotification.entity_type == 'protocol_proposal',
+                AdminActionNotification.entity_id == proposal.id,
+                AdminActionNotification.status.in_(['unread', 'read']),
+            )
+            .distinct()
+            .all()
+        ]
+        AdminActionNotification.query.filter(
+            AdminActionNotification.entity_type == 'protocol_proposal',
+            AdminActionNotification.entity_id == proposal.id,
+            AdminActionNotification.status.in_(['unread', 'read']),
+        ).update({
+            AdminActionNotification.status: 'resolved',
+            AdminActionNotification.read_at: now_in_brazil(),
+            AdminActionNotification.resolved_at: now_in_brazil(),
+            AdminActionNotification.resolved_by_id: current_user.id,
+        }, synchronize_session=False)
+        db.session.commit()
+        for admin_id in affected_admin_ids:
+            _invalidate_admin_action_cache(admin_id)
+        flash('Sugestão marcada como em revisão.', 'success')
+    elif proposal.status == 'in_review':
+        flash('Esta sugestão já está em revisão.', 'info')
+    else:
+        flash('Esta sugestão não está mais aguardando revisão.', 'warning')
+    return redirect(url_for('admin_protocol_proposals', status='in_review', _anchor=f'proposal-{proposal.id}'))
 
 
 @bp.route("/admin/users/<int:user_id>/promover_veterinario", methods=["POST"])
@@ -379,18 +594,89 @@ def admin_toggle_site_flag():
     if not _is_admin():
         return jsonify({'error': 'Acesso negado'}), 403
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or request.form
     key = (data.get('key') or '').strip()
     ALLOWED_KEYS = {
         'loja_em_breve': 'Loja PetOrlândia — Em breve',
         'plano_saude_em_breve': 'Plano de Saúde — Em breve',
+        'home_shortcut_service': 'Atalho inicial — Agendar serviço',
+        'home_shortcut_store': 'Atalho inicial — Loja Pet',
+        'home_shortcut_health_plan': 'Atalho inicial — Plano de Saúde Pet',
+        'home_shortcut_animals': 'Atalho inicial — Todos os animais',
+        'home_section_shortcuts': 'Bloco inicial — Atalhos',
+        'home_section_pets': 'Bloco inicial — Meus pets',
+        'home_section_work_areas': 'Bloco inicial — Áreas de trabalho',
     }
     if key not in ALLOWED_KEYS:
         return jsonify({'error': f'Flag desconhecida: {key}'}), 400
 
-    new_value = bool(data.get('value', not SiteFlag.get(key)))
+    raw_value = data.get('value')
+    new_value = (not SiteFlag.get(key, True)) if raw_value is None else str(raw_value).lower() in ('1', 'true', 'on', 'yes')
     SiteFlag.set(key, new_value, label=ALLOWED_KEYS[key])
+    if not request.is_json:
+        flash(f'Atalho {"ativado" if new_value else "inativado"} na página inicial.', 'success')
+        if request.form.get('return_to') == 'home_editor':
+            return redirect(url_for('admin_home_editor'))
+        return redirect(url_for('index'))
     return jsonify({'key': key, 'value': new_value})
+
+
+@bp.route('/admin/home-editor', methods=['GET'])
+@login_required
+def admin_home_editor():
+    if not _is_admin():
+        abort(403)
+    from models.base import SiteFlag, SiteText
+    flags = [
+        ('home_section_work_areas', 'Áreas de trabalho', 'Bloco com os módulos profissionais e operacionais.'),
+        ('home_section_shortcuts', 'Atalhos principais', 'Agendar serviço, Loja, Plano de Saúde e Animais.'),
+        ('home_section_pets', 'Meus pets', 'Resumo dos pets cadastrados e próximos cuidados.'),
+        ('home_shortcut_service', 'Botão: Agendar um serviço', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_store', 'Botão: Loja Pet', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_health_plan', 'Botão: Plano de Saúde Pet', 'Atalho dentro do bloco principal.'),
+        ('home_shortcut_animals', 'Botão: Ver todos os animais', 'Atalho dentro do bloco principal.'),
+    ]
+    text_defaults = {
+        'shortcuts_title': 'Olá',
+        'shortcuts_subtitle': 'O que você deseja fazer hoje?',
+        'shortcut_service': '🐾 Agendar um serviço',
+        'shortcut_store': '🛍️ Loja Pet',
+        'shortcut_health_plan': '❤️ Plano de Saúde Pet',
+        'shortcut_animals': '📋 Ver todos os animais',
+        'pets_title': 'Meus pets',
+        'pets_add_button': 'Cadastrar pet',
+    }
+    flag_data = [
+        {'key': key, 'label': label, 'description': description, 'enabled': SiteFlag.get(key, True)}
+        for key, label, description in flags
+    ]
+    return render_template(
+        'admin/home_editor.html',
+        flags=flag_data,
+        flag_map={flag['key']: flag for flag in flag_data},
+        texts={key: SiteText.get(key, default) for key, default in text_defaults.items()},
+    )
+
+
+@bp.route('/admin/home-editor/texts', methods=['POST'])
+@login_required
+def admin_update_home_texts():
+    if not _is_admin():
+        abort(403)
+    from models.base import SiteText
+    allowed = {
+        'shortcuts_title', 'shortcuts_subtitle', 'shortcut_service', 'shortcut_store',
+        'shortcut_health_plan', 'shortcut_animals', 'pets_title', 'pets_add_button',
+    }
+    for key in allowed:
+        value = (request.form.get(key) or '').strip()
+        if not value or len(value) > 240:
+            flash('Preencha os textos com até 240 caracteres.', 'warning')
+            return redirect(url_for('admin_home_editor'))
+    for key in allowed:
+        SiteText.set(key, request.form[key].strip())
+    flash('Textos da página inicial atualizados.', 'success')
+    return redirect(url_for('admin_home_editor'))
 
 
 @bp.route("/admin/parcerias", methods=["GET"])
@@ -541,4 +827,3 @@ def admin_criar_convite():
     else:
         flash('Convite criado. Envie o link pelo WhatsApp ou copie e compartilhe.', 'success')
     return redirect(url_for('admin_parcerias'))
-

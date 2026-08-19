@@ -1,0 +1,185 @@
+.public-navbar-nav .nav-link--auth {
+  align-items: center;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  color: #fff !important;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 152px;
+  padding: 9px 16px !important;
+  transition:
+    background-color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .18s ease;
+}
+
+.public-navbar-nav .nav-link--auth:hover,
+.public-navbar-nav .nav-link--auth:focus-visible {
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.public-navbar-nav .nav-link--login {
+  background: #2458d3;
+  border-color: #2458d3;
+  box-shadow: 0 8px 18px -12px rgba(36, 88, 211, .9);
+}
+
+.public-navbar-nav .nav-link--login:hover,
+.public-navbar-nav .nav-link--login:focus-visible {
+  background: #1949bd;
+  border-color: #1949bd;
+  box-shadow: 0 10px 22px -12px rgba(36, 88, 211, 1);
+}
+
+.public-navbar-nav .nav-link--trial {
+  background: #198754;
+  border-color: #198754;
+  box-shadow: 0 8px 18px -12px rgba(25, 135, 84, .9);
+}
+
+.public-navbar-nav .nav-link--trial:hover,
+.public-navbar-nav .nav-link--trial:focus-visible {
+  background: #146c43;
+  border-color: #146c43;
+  box-shadow: 0 10px 22px -12px rgba(25, 135, 84, 1);
+}
+
+@media (min-width: 992px) {
+  .public-navbar-nav .public-auth-item {
+    margin-left: .35rem;
+  }
+}
+
+/* === Acesso rápido no celular ===
+   Abaixo de lg as ações de acesso saem do menu recolhido e passam a viver na
+   barra fixa, ao lado do botão de menu. As versões de dentro da sanfona ficam
+   ocultas para não duplicar a mesma ação na tela. */
+@media (max-width: 991.98px) {
+  .public-navbar-nav .public-auth-item {
+    display: none;
+  }
+}
+
+.public-auth-quick {
+  align-items: center;
+  display: flex;
+  gap: .4rem;
+  margin-left: auto;
+  margin-right: .4rem;
+}
+
+.public-auth-quick__link {
+  align-items: center;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: .875rem;
+  font-weight: 700;
+  justify-content: center;
+  line-height: 1.1;
+  min-height: 44px;
+  padding: 0 .9rem;
+  text-decoration: none;
+  transition:
+    background-color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    color .18s ease;
+  white-space: nowrap;
+}
+
+.public-auth-quick__link:focus-visible {
+  outline: 2px solid #1949bd;
+  outline-offset: 2px;
+}
+
+.public-auth-quick__login {
+  background: transparent;
+  border-color: rgba(36, 88, 211, .38);
+  color: #2458d3;
+}
+
+.public-auth-quick__login:hover,
+.public-auth-quick__login:focus-visible {
+  background: rgba(36, 88, 211, .09);
+  border-color: #2458d3;
+  color: #1949bd;
+}
+
+.public-auth-quick__trial {
+  background: #198754;
+  border-color: #198754;
+  box-shadow: 0 6px 14px -9px rgba(25, 135, 84, .95);
+  color: #fff;
+}
+
+.public-auth-quick__trial:hover,
+.public-auth-quick__trial:focus-visible {
+  background: #146c43;
+  border-color: #146c43;
+  color: #fff;
+}
+
+/* A marca cede espaço primeiro: encolhe o nome no celular e, só em telas bem
+   estreitas, deixa o logotipo sozinho — o nome segue legível a leitores de
+   tela para o link continuar com rótulo acessível. */
+.navbar--public .navbar-brand {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+@media (max-width: 575.98px) {
+  .navbar--public .navbar-brand {
+    /* O espaçamento até as ações já vem do `margin-left: auto` do grupo. */
+    font-size: .95rem;
+    margin-right: 0;
+  }
+
+  .public-auth-quick__link {
+    padding: 0 .8rem;
+  }
+}
+
+@media (max-width: 419.98px) {
+  .navbar--public .navbar-brand span {
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .public-auth-quick {
+    gap: .3rem;
+    margin-right: .25rem;
+  }
+
+  .public-auth-quick__link {
+    font-size: .8125rem;
+    padding: 0 .7rem;
+  }
+}
+
+/* Selo "grátis" ao lado de "Para tutores": quem chega pelo Google precisa
+   ver, sem clicar, que existe um caminho sem custo para ele. */
+.nav-badge-free {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e7f5ec;
+  color: #146c43;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  vertical-align: middle;
+}

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#170f24">
+  <title>PetOrlândia · Sala a Dois</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #110b1b;
+      --surface: rgba(34, 23, 49, .82);
+      --surface-strong: #251833;
+      --border: rgba(255, 255, 255, .1);
+      --text: #fff8fb;
+      --muted: #c9b8ca;
+      --pink: #ff6b9d;
+      --rose: #e84777;
+      --peach: #ff9c77;
+      --green: #61d7aa;
+      --danger: #f15368;
+    }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      min-height: 100vh; margin: 0; color: var(--text);
+      font-family: "DM Sans", sans-serif;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(232, 71, 119, .22), transparent 34%),
+        radial-gradient(circle at 92% 14%, rgba(152, 90, 210, .2), transparent 30%),
+        radial-gradient(circle at 54% 110%, rgba(255, 156, 119, .14), transparent 38%),
+        var(--bg);
+      overflow-x: hidden;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .ambient { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+    .ambient span {
+      position: absolute; color: rgba(255, 255, 255, .08); font-size: 22px;
+      animation: rise 16s linear infinite;
+    }
+    .ambient span:nth-child(1) { left: 8%; bottom: -40px; animation-delay: -3s; }
+    .ambient span:nth-child(2) { left: 28%; bottom: -50px; animation-delay: -11s; font-size: 14px; }
+    .ambient span:nth-child(3) { left: 72%; bottom: -60px; animation-delay: -6s; font-size: 28px; }
+    .ambient span:nth-child(4) { left: 91%; bottom: -30px; animation-delay: -14s; font-size: 17px; }
+    @keyframes rise {
+      from { transform: translateY(0) rotate(0); opacity: 0; }
+      15% { opacity: 1; }
+      to { transform: translateY(-115vh) rotate(35deg); opacity: 0; }
+    }
+    .topbar {
+      position: relative; z-index: 2; width: min(1180px, calc(100% - 32px));
+      margin: 0 auto; padding: 22px 0 10px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .back-link, .room-pill {
+      display: inline-flex; align-items: center; gap: 8px; min-height: 38px;
+      padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px;
+      color: var(--muted); text-decoration: none; background: rgba(20, 12, 30, .56);
+      backdrop-filter: blur(12px); font-size: .84rem;
+    }
+    .back-link:hover { color: var(--text); border-color: rgba(255, 107, 157, .45); }
+    .room-pill strong { color: var(--text); letter-spacing: .08em; }
+    .page { position: relative; z-index: 1; width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; color: #ff9dbc;
+      font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 24px; height: 1px; background: currentColor; }
+    h1, h2, p { margin-top: 0; }
+    h1, h2 { font-family: "Playfair Display", serif; }
+    .lobby {
+      min-height: calc(100vh - 130px); display: grid; grid-template-columns: 1.05fr .95fr;
+      gap: clamp(30px, 7vw, 90px); align-items: center;
+    }
+    .lobby-copy h1 { max-width: 680px; margin: 15px 0 20px; font-size: clamp(3rem, 7vw, 6.2rem); line-height: .96; letter-spacing: -.04em; }
+    .lobby-copy { min-width: 0; }
+    .lobby-copy h1 em { color: var(--pink); font-style: italic; font-weight: 600; }
+    .lobby-copy > p { max-width: 600px; color: var(--muted); font-size: clamp(1rem, 2vw, 1.15rem); line-height: 1.75; }
+    .features { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0; }
+    .feature {
+      padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
+      background: rgba(255, 255, 255, .035); color: #eadde8; font-size: .82rem;
+    }
+    .start-button, .copy-button, .control {
+      border: 0; cursor: pointer; transition: transform .18s ease, filter .18s ease, background .18s ease;
+    }
+    .start-button {
+      display: inline-flex; align-items: center; gap: 10px; padding: 15px 23px;
+      border-radius: 999px; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, var(--pink), var(--rose));
+      box-shadow: 0 16px 40px rgba(232, 71, 119, .28);
+    }
+    .start-button:hover, .copy-button:hover { transform: translateY(-2px); filter: brightness(1.07); }
+    .start-button:disabled { opacity: .55; cursor: wait; transform: none; }
+    .privacy { margin-top: 14px; color: #a995aa; font-size: .76rem; }
+    .lobby-art {
+      position: relative; min-height: 500px; display: grid; place-items: center;
+    }
+    .portrait {
+      position: absolute; overflow: hidden; width: min(70%, 330px); aspect-ratio: .78;
+      border-radius: 180px 180px 36px 36px; border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 35px 85px rgba(0, 0, 0, .34);
+    }
+    .portrait::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(17, 11, 27, .75)); }
+    .portrait--one { left: 5%; top: 3%; transform: rotate(-7deg); background: radial-gradient(circle at 50% 28%, #ffd2c6 0 13%, transparent 14%), linear-gradient(145deg, #8c456e, #2f1c45); }
+    .portrait--two { right: 1%; bottom: 1%; transform: rotate(7deg); background: radial-gradient(circle at 50% 28%, #e3a98f 0 13%, transparent 14%), linear-gradient(145deg, #554178, #bf526f); }
+    .portrait span { position: absolute; z-index: 2; left: 0; right: 0; bottom: 28px; text-align: center; font-family: "Playfair Display", serif; font-size: 1.2rem; }
+    .art-heart { position: relative; z-index: 4; font-size: clamp(4rem, 8vw, 7rem); filter: drop-shadow(0 18px 30px rgba(232, 71, 119, .4)); animation: heartbeat 2.4s ease-in-out infinite; }
+    @keyframes heartbeat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.08); } 22% { transform: scale(1); } }
+    .call-room[hidden], .lobby[hidden] { display: none; }
+    .call-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 18px 0 22px; }
+    .call-heading h1 { margin: 7px 0 0; font-size: clamp(2rem, 4vw, 3.35rem); }
+    .invite-panel { display: flex; gap: 8px; align-items: center; max-width: 520px; width: 100%; }
+    .invite-link {
+      min-width: 0; flex: 1; padding: 11px 14px; border: 1px solid var(--border); border-radius: 12px;
+      color: var(--muted); background: rgba(255, 255, 255, .045); outline: none; font-size: .78rem;
+    }
+    .copy-button { flex: 0 0 auto; padding: 11px 16px; border-radius: 12px; background: #fff; color: #2b1b31; font-weight: 700; font-size: .82rem; }
+    .room-grid { width: 100%; }
+    .video-card {
+      border: 1px solid var(--border); background: var(--surface); border-radius: 24px;
+      box-shadow: 0 28px 75px rgba(0, 0, 0, .25); backdrop-filter: blur(18px);
+    }
+    .video-card { padding: 14px; }
+    .video-stage { position: relative; min-height: 540px; height: min(68vh, 680px); overflow: hidden; border-radius: 17px; background: #0b0810; }
+    video { display: block; width: 100%; height: 100%; object-fit: cover; background: #0b0810; }
+    #remoteVideo { position: absolute; z-index: 1; inset: 0; }
+    #remoteVideo.is-screen { object-fit: contain; }
+    #localScreenVideo { display: none; position: absolute; z-index: 1; inset: 0; object-fit: contain; }
+    .remote-placeholder { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: radial-gradient(circle at 50% 45%, #2e1d3c, #0c0911 68%); }
+    .remote-placeholder[hidden] { display: none; }
+    .waiting-heart { display: block; font-size: 3.5rem; margin-bottom: 16px; animation: heartbeat 2.4s ease-in-out infinite; }
+    .remote-placeholder strong { display: block; font-family: "Playfair Display", serif; font-size: 1.45rem; }
+    .remote-placeholder small { display: block; max-width: 330px; margin-top: 8px; color: var(--muted); line-height: 1.55; }
+    .local-tile { position: absolute; z-index: 3; right: 14px; top: 14px; width: min(26%, 185px); aspect-ratio: 3 / 4; overflow: hidden; border-radius: 15px; border: 2px solid rgba(255, 255, 255, .58); background: #211628; box-shadow: 0 14px 34px rgba(0, 0, 0, .34); }
+    #localVideo { transform: scaleX(-1); }
+    .local-tile.is-sharing #localVideo { transform: none; object-fit: contain; }
+    .local-label { position: absolute; left: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; background: rgba(0, 0, 0, .58); font-size: .68rem; }
+    .video-stage.is-local-featured .local-tile { z-index: 1; inset: 0; width: auto; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
+    .video-stage.is-local-featured #remoteVideo { z-index: 4; inset: 14px 14px auto auto; width: min(26%, 185px); height: auto; aspect-ratio: 3 / 4; overflow: hidden; border: 2px solid rgba(255, 255, 255, .58); border-radius: 15px; box-shadow: 0 14px 34px rgba(0, 0, 0, .34); object-fit: cover; }
+    .video-stage.is-local-featured #remoteVideo.is-screen { object-fit: contain; }
+    .video-stage.is-local-featured .remote-placeholder { display: none; }
+    .video-stage.is-local-screen-featured #localScreenVideo { display: block; }
+    .video-stage.is-local-screen-featured #remoteVideo { z-index: 4; inset: 14px 14px auto auto; width: min(26%, 185px); height: auto; aspect-ratio: 3 / 4; border: 2px solid rgba(255, 255, 255, .58); border-radius: 15px; box-shadow: 0 14px 34px rgba(0, 0, 0, .34); object-fit: cover; }
+    .video-stage.is-local-screen-featured #remoteVideo.is-screen { object-fit: contain; }
+    .video-stage.is-local-screen-featured .remote-placeholder { display: none; }
+    .video-stage.is-local-screen-featured .local-tile { z-index: 5; inset: auto 14px 14px auto; width: min(20%, 150px); aspect-ratio: 3 / 4; }
+    .spotlight-switcher { position: absolute; z-index: 6; left: 14px; bottom: 14px; display: flex; gap: 7px; padding: 6px; border: 1px solid var(--border); border-radius: 999px; background: rgba(10, 7, 13, .72); backdrop-filter: blur(10px); }
+    .spotlight-button { padding: 7px 10px; border: 0; border-radius: 999px; background: transparent; color: #e9dbe8; font-size: .74rem; font-weight: 700; }
+    .spotlight-button[aria-pressed="true"] { background: #fff; color: #2b1b31; }
+    .connection-badge { position: absolute; z-index: 4; left: 14px; top: 14px; padding: 7px 11px; border-radius: 999px; background: rgba(8, 7, 11, .7); border: 1px solid rgba(255, 255, 255, .12); font-size: .72rem; color: #ddcedc; }
+    .connection-badge::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #f5b84a; }
+    .connection-badge.is-live::before { background: var(--green); box-shadow: 0 0 0 4px rgba(97, 215, 170, .14); }
+    .controls { display: flex; justify-content: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .control { min-width: 48px; height: 46px; padding: 0 15px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255, 255, 255, .07); }
+    .control:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .12); }
+    .control.is-off { background: rgba(241, 83, 104, .18); border-color: rgba(241, 83, 104, .4); }
+    .control.is-active { background: rgba(97, 215, 170, .17); border-color: rgba(97, 215, 170, .4); }
+    .control--hangup { padding-inline: 21px; background: var(--danger); border-color: transparent; font-weight: 700; }
+    .control--hangup:hover { background: #ff6679; }
+    .reliable-call { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(97, 215, 170, .48); border-radius: 14px; background: rgba(97, 215, 170, .1); }
+    .reliable-call strong { display: block; color: #eafff7; }
+    .reliable-call p { margin: 5px 0 0; color: #cbe9de; font-size: .82rem; line-height: 1.45; }
+    .reliable-call a { flex: 0 0 auto; padding: 10px 15px; border-radius: 999px; background: #fff; color: #20372f; font-size: .82rem; font-weight: 800; text-decoration: none; text-align: center; }
+    .reliable-call a:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .media-help { margin: 14px 0 0; padding: 14px 16px; border: 1px solid rgba(245, 184, 74, .52); border-radius: 14px; background: rgba(245, 184, 74, .1); color: #fff4d9; }
+    .media-help[hidden] { display: none; }
+    .media-help strong { display: block; }
+    .media-help p { margin: 6px 0 0; color: #f1dfbc; line-height: 1.45; font-size: .88rem; }
+    .media-help ol { margin: 9px 0 0 18px; padding: 0; color: #f1dfbc; font-size: .84rem; line-height: 1.55; }
+    .media-help button { margin-top: 11px; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .42); background: #fff; color: #2b1b31; font-weight: 700; }
+    .chat-panel { margin-top: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: rgba(8, 6, 11, .46); }
+    .chat-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .chat-heading strong { font-size: .9rem; }
+    .chat-heading span { color: var(--muted); font-size: .74rem; }
+    .chat-messages { display: flex; flex-direction: column; gap: 8px; min-height: 72px; max-height: 230px; padding: 13px; overflow-y: auto; }
+    .chat-empty { margin: auto; color: var(--muted); font-size: .82rem; text-align: center; }
+    .chat-message { align-self: flex-start; max-width: min(78%, 560px); padding: 8px 11px; border-radius: 13px 13px 13px 4px; background: rgba(255, 255, 255, .1); color: #f7edf7; font-size: .85rem; line-height: 1.4; overflow-wrap: anywhere; }
+    .chat-message.is-mine { align-self: flex-end; border-radius: 13px 13px 4px 13px; background: rgba(244, 77, 140, .28); }
+    .chat-message.is-system { align-self: center; max-width: 100%; padding: 4px 8px; background: transparent; color: var(--muted); font-size: .76rem; text-align: center; }
+    .chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+    .chat-input { min-width: 0; flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, .06); color: #fff; outline: none; }
+    .chat-input:focus { border-color: rgba(244, 77, 140, .7); }
+    .chat-send { flex: 0 0 auto; padding: 10px 16px; border-radius: 11px; background: #fff; color: #2b1b31; font-weight: 700; }
+    .toast { position: fixed; z-index: 20; left: 50%; bottom: 26px; transform: translate(-50%, 18px); padding: 10px 16px; border-radius: 999px; background: #fff; color: #251833; font-weight: 700; font-size: .82rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; box-shadow: 0 16px 40px rgba(0, 0, 0, .28); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 900px) {
+      .lobby { grid-template-columns: 1fr; padding-top: 46px; text-align: center; }
+      .lobby-copy > p { margin-inline: auto; }
+      .features { justify-content: center; }
+      .lobby-art { min-height: 410px; }
+      .call-heading { align-items: flex-start; flex-direction: column; }
+      .video-stage { min-height: 460px; }
+    }
+    @media (max-width: 560px) {
+      .topbar { width: min(100% - 24px, 1180px); }
+      .page { width: min(100% - 24px, 1180px); padding-top: 12px; }
+      .room-pill { display: none; }
+      .lobby-copy h1 { font-size: clamp(2.75rem, 13.2vw, 4rem); }
+      .lobby-copy > p { font-size: .98rem; }
+      .features { gap: 8px; }
+      .feature { padding-inline: 10px; font-size: .76rem; }
+      .start-button { max-width: 100%; padding-inline: 18px; }
+      .lobby-art { min-height: 340px; }
+      .portrait { width: 62%; }
+      .call-heading { margin-top: 8px; }
+      .invite-panel { align-items: stretch; }
+      .invite-link { width: 100%; }
+      .video-card { padding: 8px; border-radius: 18px; }
+      .video-stage { min-height: 0; height: 62vh; border-radius: 12px; }
+      .local-tile { width: 31%; right: 9px; top: 9px; }
+      .video-stage.is-local-featured #remoteVideo { inset: 9px 9px auto auto; width: 31%; }
+      .video-stage.is-local-screen-featured #remoteVideo { inset: 9px 9px auto auto; width: 31%; }
+      .video-stage.is-local-screen-featured .local-tile { inset: auto 9px 9px auto; width: 24%; }
+      .spotlight-switcher { left: 9px; bottom: 9px; }
+      .spotlight-button { padding: 7px 8px; }
+      .connection-badge { left: 9px; top: 9px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .controls { gap: 7px; }
+      .control { height: 43px; padding-inline: 12px; }
+      .control span { display: none; }
+      .control--hangup span { display: inline; }
+      .reliable-call { align-items: stretch; flex-direction: column; }
+      .reliable-call a { width: 100%; }
+    }
+  </style>
+  <script src="/surpresa/socket.io.min.js"></script>
+  <script defer src="/surpresa/sala-a-dois.js?v=20260811d"></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"><span>♥</span><span>♥</span><span>♥</span><span>♥</span></div>
+  <header class="topbar">
+    <a class="back-link" href="/surpresa">← Voltar ao arcade</a>
+    <div class="room-pill">Sala <strong id="roomCodeTop">······</strong></div>
+  </header>
+
+  <main class="page">
+    <section class="lobby" id="lobby">
+      <div class="lobby-copy">
+        <span class="eyebrow">Um cantinho só de vocês</span>
+        <h1>Mais perto,<br>mesmo <em>de longe.</em></h1>
+        <p>Uma sala privada para conversar e compartilhar a tela. Envie o link para sua namorada e assistam, naveguem ou descubram coisas juntos.</p>
+        <div class="features" aria-label="Recursos da sala">
+          <span class="feature">🎥 Vídeo a dois</span>
+          <span class="feature">🖥️ Compartilhar tela sem câmera</span>
+          <span class="feature">🔒 Sala só para vocês</span>
+        </div>
+        <button class="start-button" id="startCall" type="button">Entrar na sala <span>→</span></button>
+        <p class="privacy">🔒 Câmera, microfone e tela só são solicitados quando você escolher ativá-los. Nada é gravado.</p>
+      </div>
+      <div class="lobby-art" aria-hidden="true">
+        <div class="portrait portrait--one"><span>Você</span></div>
+        <div class="portrait portrait--two"><span>Seu amor</span></div>
+        <div class="art-heart">💗</div>
+      </div>
+    </section>
+
+    <section class="call-room" id="callRoom" hidden>
+      <div class="call-heading">
+        <div>
+          <span class="eyebrow">Sala a Dois</span>
+          <h1>Nosso encontro</h1>
+        </div>
+        <div class="invite-panel">
+          <input class="invite-link" id="inviteLink" type="text" readonly aria-label="Link de convite">
+          <button class="copy-button" id="copyInvite" type="button">Copiar convite</button>
+        </div>
+      </div>
+
+      <div class="room-grid">
+        <section class="video-card" aria-label="Videochamada">
+          <div class="video-stage">
+            <video id="remoteVideo" autoplay playsinline></video>
+            <video id="localScreenVideo" autoplay muted playsinline></video>
+            <div class="remote-placeholder" id="remotePlaceholder">
+              <div>
+                <span class="waiting-heart">💗</span>
+                <strong id="waitingTitle">Preparando sua sala…</strong>
+                <small id="waitingText">Assim que tudo estiver pronto, copie o convite e envie para sua namorada.</small>
+              </div>
+            </div>
+            <div class="connection-badge" id="connectionBadge" role="status">Conectando…</div>
+            <div class="local-tile" id="localTile">
+              <video id="localVideo" autoplay muted playsinline></video>
+              <span class="local-label">Você</span>
+            </div>
+            <div class="spotlight-switcher" role="group" aria-label="Escolher vídeo em destaque">
+              <button class="spotlight-button" id="focusRemote" type="button" aria-pressed="true">Em destaque: parceira</button>
+              <button class="spotlight-button" id="focusLocal" type="button" aria-pressed="false">Minha tela</button>
+            </div>
+          </div>
+          <div class="controls" aria-label="Controles da chamada">
+            <button class="control" id="enableMedia" type="button" title="Ativar câmera e microfone">🎙️ <span>Ativar câmera e microfone</span></button>
+            <button class="control" id="toggleMic" type="button" aria-pressed="false" title="Ligar ou desligar microfone" hidden>🎙️ <span>Microfone</span></button>
+            <button class="control" id="toggleCamera" type="button" aria-pressed="false" title="Ligar ou desligar câmera" hidden>📹 <span>Câmera</span></button>
+            <button class="control" id="shareScreen" type="button" aria-pressed="false" title="Compartilhar a tela">🖥️ <span>Compartilhar tela</span></button>
+            <button class="control control--hangup" id="hangUp" type="button" title="Encerrar chamada">☎ <span>Encerrar</span></button>
+          </div>
+          <aside class="reliable-call" id="reliableCall" aria-label="Alternativa estável para videochamada">
+            <div>
+              <strong>🎥 Vídeo estável para redes diferentes</strong>
+              <p>Abre uma sala Jitsi exclusiva para este convite, com câmera, áudio, chat e compartilhamento de tela. A primeira pessoa autentica; a segunda entra sem conta.</p>
+            </div>
+            <a id="reliableCallLink" href="#" target="_blank" rel="noopener noreferrer">Abrir vídeo estável agora</a>
+          </aside>
+          <aside class="media-help" id="mediaHelp" hidden aria-live="polite">
+            <strong id="mediaHelpTitle">Precisamos liberar a câmera e o microfone</strong>
+            <p id="mediaHelpText"></p>
+            <ol>
+              <li>Clique no cadeado ao lado do endereço do site.</li>
+              <li>Em “Câmera” e “Microfone”, escolha “Permitir”.</li>
+              <li>Volte aqui e clique em “Tentar novamente”.</li>
+            </ol>
+            <button id="retryMedia" type="button">Tentar novamente</button>
+          </aside>
+          <section class="chat-panel" aria-label="Mensagens da sala">
+            <div class="chat-heading">
+              <strong>💬 Mensagens</strong>
+              <span>Funcionam mesmo se o vídeo falhar</span>
+            </div>
+            <div class="chat-messages" id="chatMessages" role="log" aria-live="polite">
+              <p class="chat-empty" id="chatEmpty">Escreva algo para sua companhia.</p>
+            </div>
+            <form class="chat-form" id="chatForm">
+              <input class="chat-input" id="chatInput" type="text" maxlength="500" autocomplete="off" placeholder="Digite uma mensagem…" aria-label="Mensagem">
+              <button class="chat-send" type="submit">Enviar</button>
+            </form>
+          </section>
+        </section>
+
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

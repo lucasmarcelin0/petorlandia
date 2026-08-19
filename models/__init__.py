@@ -1,7 +1,8 @@
 """Pacote de modelos com reexportações para compatibilidade."""
 
 from .base import *  # noqa: F401,F403
-from .base import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite, StorePaymentAccount, SiteFlag  # noqa: F401
+from .clinica import ClinicInternshipCase, ClinicStaff  # noqa: F401
+from .base import CasaDeRacao, CasaDeRacaoHorario, CasaDeRacaoOnboardingInvite, PartnerInvite, StorePaymentAccount, SiteFlag, SiteText  # noqa: F401
 from .agenda import AgendaEvento, Appointment, ExamAppointment, PlantaoModelo, PlantonistaEscala, VetSchedule
 from .loja import (
     DeliveryRequest,
@@ -25,6 +26,10 @@ from .usuarios import (
     Veterinario,
     VeterinarianMembership,
     VeterinarianSettings,
+)
+from .membership_billing import (  # noqa: F401
+    VeterinarianMembershipCharge,
+    VeterinarianMembershipSubscription,
 )
 from .oauth import (
     OAuthAccessToken,
@@ -106,6 +111,8 @@ __all__ = [
     "VeterinarioAtendeCidade",
     "ProfessionalService",
     "VeterinarianMembership",
+    "VeterinarianMembershipCharge",
+    "VeterinarianMembershipSubscription",
     "VeterinarianSettings",
     "OAuthAccessToken",
     "OAuthAuthorizationCode",
@@ -127,6 +134,8 @@ __all__ = [
     "OrthancStudy",
     "ClinicInventory",
     "ClinicInventoryMovement",
+    "ClinicInternshipCase",
+    "ClinicStaff",
     "ProtocoloClinico",
     "ProtocoloClinicoExame",
     "ProtocoloClinicoMedicamento",
@@ -145,10 +154,13 @@ __all__ = [
     "ReferralCode",
     "ReferralSignup",
     "SiteFlag",
+    "SiteText",
     "WaitlistLead",
+    "ProductEvent",
     "AdminActionNotification",
     "AnimalHealthRecord",
     "CarteirinhaImportacao",
     "PushSubscription",
     "RacaoAssinatura",
+    "RacaoAssinaturaCiclo",
 ]

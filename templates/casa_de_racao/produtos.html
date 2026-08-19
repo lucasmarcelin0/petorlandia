@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <div class="container mt-4">
 
@@ -63,6 +64,8 @@
               <div class="form-text">Categoria Mercado Pago (opcional).</div>
             </div>
 
+            {% with subscription_form=form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
             <div class="mb-3">
               {{ form.image_upload.label(class="form-label fw-semibold") }}
               {{ form.image_upload(class="form-control") }}
@@ -83,19 +86,7 @@
         {% for p in produtos %}
         <div class="col-sm-6 col-xl-4">
           <div class="card h-100 border-0 shadow-sm rounded-3 {% if p.status != 'active' %}opacity-50{% endif %}">
-            {% if p.image_url %}
-            <div class="ratio ratio-4x3">
-              {% if 'http' in p.image_url %}
-              <img src="{{ p.image_url }}" class="card-img-top object-fit-cover rounded-top-3" alt="{{ p.name }}">
-              {% else %}
-              <img src="{{ url_for('static', filename=p.image_url) }}" class="card-img-top object-fit-cover rounded-top-3" alt="{{ p.name }}">
-              {% endif %}
-            </div>
-            {% else %}
-            <div class="ratio ratio-4x3 bg-light rounded-top-3 d-flex align-items-center justify-content-center">
-              <i class="fa-regular fa-image fa-2x text-muted"></i>
-            </div>
-            {% endif %}
+            {{ product_media(p, 'card') }}
 
             <div class="card-body p-3">
               <div class="d-flex justify-content-between align-items-start mb-1">
@@ -108,6 +99,7 @@
               </div>
 
               <p class="text-success fw-bold mb-1">R$ {{ '%.2f'|format(p.price)|replace('.', ',') }}</p>
+              {% if p.subscription_enabled %}<span class="badge rounded-pill text-bg-primary mb-2"><i class="fa-solid fa-arrows-rotate me-1"></i>Compra única + assinatura</span>{% else %}<span class="badge rounded-pill text-bg-light border mb-2">Somente compra única</span>{% endif %}
               <p class="small text-muted mb-2">
                 <i class="fa-solid fa-boxes-stacked me-1"></i>Estoque: {{ p.stock }}
               </p>

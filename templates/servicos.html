@@ -1,4 +1,26 @@
 {% extends "layout.html" %}
+{% block page_title %}Serviços Veterinários e Vacinas por Cidade — PetOrlândia{% endblock %}
+{% block meta_description %}Encontre consultas presenciais e a domicílio, vacinação, exames laboratoriais, ultrassom e castração na sua cidade pelo PetOrlândia.{% endblock %}
+{% block meta_keywords %}servicos veterinarios orlandia, vacina cachorro orlandia, veterinario domicilio, ultrassom veterinario, castracao gratuita orlandia, exames pet orlandia{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "PetOrlândia — Serviços Veterinários",
+  "description": "Plataforma de serviços veterinários, agendamento de consultas, vacinas e exames.",
+  "url": "{{ url_for('servicos', _external=True) }}",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Orlândia",
+    "addressRegion": "SP",
+    "addressCountry": "BR"
+  },
+  "areaServed": ["Orlândia", "Franca", "Ribeirão Preto", "São Joaquim da Barra", "Morro Agudo", "Belo Horizonte", "Contagem"]
+}
+</script>
+{% endblock %}
 {% block main %}
 
 {% if is_admin %}

@@ -14,8 +14,18 @@
      vende — landing e /precos — sobrescreve os dois blocos. #}
   <title>{% block page_title %}PetOrlândia{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}PetOrlândia — cuidado, agenda e histórico do seu pet em um só lugar.{% endblock %}">
+  <meta name="keywords" content="{% block meta_keywords %}sistema clinica veterinaria, software veterinario, prontuario veterinario, carteira de vacinacao pet, agendamento veterinario, pet orlandia, saude animal{% endblock %}">
+  <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+  {% if config.GOOGLE_SITE_VERIFICATION %}
+  <meta name="google-site-verification" content="{{ config.GOOGLE_SITE_VERIFICATION }}">
+  {% endif %}
 
+  {# As dimensões acompanham a imagem: declarar 1200x630 para uma arte quadrada
+     faz o WhatsApp cortar a prévia ou descartá-la. Páginas do tutor definem as
+     três variáveis com `{% set %}` no topo do template. #}
   {% set _og_image = og_image if og_image is defined and og_image else 'img/og-petorlandia.png' %}
+  {% set _og_image_width = og_image_width if og_image_width is defined and og_image_width else 1200 %}
+  {% set _og_image_height = og_image_height if og_image_height is defined and og_image_height else 630 %}
   <link rel="canonical" href="{{ request.base_url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="PetOrlândia">
@@ -24,12 +34,27 @@
   <meta property="og:description" content="{{ self.meta_description()|trim }}">
   <meta property="og:url" content="{{ request.base_url }}">
   <meta property="og:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:image:width" content="{{ _og_image_width }}">
+  <meta property="og:image:height" content="{{ _og_image_height }}">
+  <meta name="twitter:card" content="{{ 'summary' if _og_image_width == _og_image_height else 'summary_large_image' }}">
   <meta name="twitter:title" content="{{ self.page_title()|trim }}">
   <meta name="twitter:description" content="{{ self.meta_description()|trim }}">
   <meta name="twitter:image" content="{{ url_for('static', filename=_og_image, _external=True) }}">
+  {% block structured_data %}
+  <script type="application/ld+json">
+    {{ {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "PetOrlândia",
+      "url": url_for("index", _external=True),
+      "logo": url_for("static", filename="img/og-petorlandia.png", _external=True),
+      "founder": {"@type": "Person", "name": "Lucas Marcelino Campos Ferreira"},
+      "email": support_contact_email,
+      "areaServed": "Brasil",
+      "sameAs": []
+    } | tojson }}
+  </script>
+  {% endblock %}
 
   {% block head %}
   {% endblock %}
@@ -38,6 +63,10 @@
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#4e73df">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  {# Precisa vir antes de qualquer script que faca requisicao: anexa o token
+     CSRF em fetch/XHR mutantes same-origin. Sem isto, chamadas AJAX que
+     esquecem o header levam 400 e falham em silencio. #}
+  <script src="{{ url_for('static', filename='csrf_fetch.js', v='1') }}"></script>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,7 +75,10 @@
 
   <!-- Bootstrap 5 -->
   <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+  {# Diversos templates ainda inicializam modais em scripts inline durante o
+     parsing. Bootstrap precisa estar disponível antes deles; defer fazia
+     botões falharem silenciosamente em telas operacionais. #}
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js', v='5.3') }}"></script>
 
   <!-- Font Awesome 6 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -54,24 +86,104 @@
   <!-- Bootstrap Icons (usado pelas classes bi-* em todo o app) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-  <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='images.css', v='20260802-product-media') }}" rel="stylesheet">
   {# Suba este valor SEMPRE que styles.css mudar: sem isso o navegador serve a
      folha antiga do cache e as telas novas aparecem sem estilo nenhum. #}
-  <link href="{{ url_for('static', filename='styles.css', v='20260729unified') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css', v='20260729hotfix1') }}" rel="stylesheet">
+  {% if not current_user.is_authenticated %}
+  <link href="{{ url_for('static', filename='css/public_nav_auth.css', v='20260731b') }}" rel="stylesheet">
+  {% endif %}
+  {# clinic.css ainda contém a base visual compartilhada (body, footer,
+     alertas e responsividade). Mantê-la global evita que páginas públicas
+     percam essas regras até a separação definitiva em base-shell.css. #}
+  <link href="{{ url_for('static', filename='css/clinic.css', v='20260802-mobile-navbar2') }}" rel="stylesheet">
 
   {% if config.GA_MEASUREMENT_ID %}
-  <!-- Google Analytics 4 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GA_MEASUREMENT_ID }}"></script>
+  <!-- Analytics opcionais: nenhum recurso do Google é carregado antes da
+       escolha. A recusa preserva integralmente as funções do produto. -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', '{{ config.GA_MEASUREMENT_ID }}', { 'anonymize_ip': true });
+    window.PetorlandiaAnalytics = (function () {
+      const storageKey = 'petorlandia.analytics_consent.v1';
+      const cookieKey = 'petorlandia_analytics_consent';
+      const measurementId = {{ config.GA_MEASUREMENT_ID|tojson }};
+      let started = false;
+
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ window.dataLayer.push(arguments); }
+      window.gtag = window.gtag || gtag;
+
+      function readChoice() {
+        try {
+          const localChoice = window.localStorage.getItem(storageKey);
+          if (localChoice === 'granted' || localChoice === 'denied') return localChoice;
+        } catch (error) {}
+        const cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + cookieKey + '=([^;]*)'));
+        const cookieChoice = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+        return cookieChoice === 'granted' || cookieChoice === 'denied' ? cookieChoice : null;
+      }
+
+      function saveChoice(value) {
+        try { window.localStorage.setItem(storageKey, value); }
+        catch (error) {}
+        const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = cookieKey + '=' + encodeURIComponent(value)
+          + '; Max-Age=31536000; Path=/; SameSite=Lax' + secureFlag;
+      }
+
+      function start() {
+        if (started || readChoice() !== 'granted') return;
+        started = true;
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId);
+        document.head.appendChild(script);
+
+        gtag('js', new Date());
+        {%- if current_user.is_authenticated %}
+        gtag('set', 'user_properties', { 'user_role': {{ (current_user.role or 'indefinido')|tojson }} });
+        {%- endif %}
+        gtag('config', measurementId, {
+          'anonymize_ip': true{% if current_user.is_authenticated %},
+          'user_id': {{ current_user.id|string|tojson }}{% endif %}
+        });
+        {%- for evento in ga_pending_events() %}
+        gtag('event', {{ evento.name|tojson }}, {{ evento.params|tojson }});
+        {%- endfor %}
+      }
+
+      function setChoice(value) {
+        saveChoice(value);
+        const banner = document.getElementById('analytics-consent');
+        if (banner) banner.hidden = true;
+        if (value === 'granted') start();
+      }
+
+      function openPreferences() {
+        const banner = document.getElementById('analytics-consent');
+        if (banner) banner.hidden = false;
+      }
+
+      if (readChoice() === 'granted') start();
+      document.addEventListener('DOMContentLoaded', function () {
+        const banner = document.getElementById('analytics-consent');
+        if (banner && !readChoice()) banner.hidden = false;
+        document.querySelector('[data-analytics-accept]')?.addEventListener('click', function () { setChoice('granted'); });
+        document.querySelector('[data-analytics-reject]')?.addEventListener('click', function () { setChoice('denied'); });
+        document.querySelector('[data-analytics-preferences]')?.addEventListener('click', function (event) {
+          event.preventDefault();
+          openPreferences();
+        });
+      });
+
+      return {openPreferences: openPreferences};
+    })();
   </script>
   {% endif %}
 </head>
 
+{# Mensagens podem ser listas (por exemplo, erros de validação). O filtro
+   `unique` exige valores hashable e fazia qualquer redirect assim terminar em
+   erro 500. Duplicatas são muito menos graves do que impedir o atendimento. #}
 {% set flash_messages = get_flashed_messages(with_categories=true) %}
 
 <!-- Bootstrap Tooltip e Popover -->
@@ -202,14 +314,24 @@
   });
 </script>
 
-<body>
+{# Identifica de quem é a sessão para o JS separar preferências salvas no
+   navegador. Sem isso, um dispositivo compartilhado entrega as preferências
+   (e o termo de busca) de uma pessoa para a próxima que entrar. #}
+<body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}">
   {% include 'partials/navbar.html' %}
+
+  {% include 'partials/_activation_bar.html' %}
+  {% include 'partials/_membership_continuity_bar.html' %}
 
   {% if flash_messages %}
   {% for category, message in flash_messages %}
   <div class="alert-container">
     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-      {{ message }}
+      {% if message is sequence and message is not string %}
+        {{ message|join(' ') }}
+      {% else %}
+        {{ message }}
+      {% endif %}
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   </div>
@@ -231,11 +353,21 @@
     <a href="{{ url_for('terms') }}" class="text-decoration-none">Termos</a>
     <span class="mx-1">|</span>
     <a href="{{ url_for('support') }}" class="text-decoration-none">Suporte</a>
+    {% if config.GA_MEASUREMENT_ID %}
+    <span class="mx-1">|</span>
+    <a href="#preferencias-analytics" class="text-decoration-none" data-analytics-preferences>Cookies</a>
+    {% endif %}
     <span class="mx-1">|</span>
     <a href="{{ url_for('petsitter_routes.carreiras') }}" class="text-decoration-none">Carreiras</a>
     {% if current_user.is_authenticated %}
     <span class="mx-1">|</span>
     <a href="{{ url_for('petsitter_routes.indicacao') }}" class="text-decoration-none">Indique amigos</a>
+    {% if current_user.is_authenticated and current_user.role == 'admin' %}
+    <span class="mx-2 text-muted">·</span>
+    <a href="{{ url_for('admin_home_editor') }}" class="text-decoration-none" title="Editar elementos da página inicial">
+      <i class="fa-solid fa-house-pen me-1"></i>Editar início
+    </a>
+    {% endif %}
     {% endif %}
     <a href="{{ url_for('secret_game') }}" target="_blank" rel="noopener" class="ms-1 text-decoration-none text-primary"
       title="Surpresa!">
@@ -243,6 +375,24 @@
       <span class="visually-hidden">Abrir o easter egg</span>
     </a>
   </footer>
+  {% if config.GA_MEASUREMENT_ID %}
+  <aside id="analytics-consent" hidden class="position-fixed bottom-0 start-0 end-0 p-3" style="z-index:1085;" aria-labelledby="analytics-consent-title">
+    <div class="card border-primary shadow-lg mx-auto" style="max-width:760px;">
+      <div class="card-body d-flex flex-column flex-md-row align-items-md-center gap-3">
+        <div class="flex-grow-1">
+          <h2 id="analytics-consent-title" class="h6 mb-1">Analytics opcionais</h2>
+          <p class="small text-muted mb-0">
+            Usamos Google Analytics para entender o funil e melhorar o produto. Ele só será carregado se você aceitar; recusar não limita nenhuma função. Veja a <a href="{{ url_for('privacy') }}">Política de Privacidade</a>.
+          </p>
+        </div>
+        <div class="d-grid d-sm-flex gap-2 flex-shrink-0">
+          <button type="button" class="btn btn-outline-primary" data-analytics-reject>Recusar</button>
+          <button type="button" class="btn btn-outline-primary" data-analytics-accept>Aceitar analytics</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  {% endif %}
   {% include 'partials/_lead_capture.html' %}
   <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -368,17 +518,6 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const flashMessages = {{ flash_messages| tojson
-    }};
-    flashMessages.forEach(([category, message], idx) => {
-      setTimeout(() => {
-        const toastEl = document.getElementById('actionToast');
-        toastEl.querySelector('.toast-body').textContent = formatUserMessage(message, 'Ação concluída.');
-        applyToastTone(toastEl, category || 'success');
-        new bootstrap.Toast(toastEl).show();
-      }, idx * 1000);
-    });
-
     const confirmModalEl = document.getElementById('confirmModal');
     const confirmModal = new bootstrap.Modal(confirmModalEl);
     const confirmBtn = document.getElementById('confirmModalOk');
@@ -405,26 +544,25 @@
         });
   </script>
 
-  {% if MERCADOPAGO_PUBLIC_KEY %}
-  <script src="https://sdk.mercadopago.com/js/v2"></script>
-  <script>
-    const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", { locale: 'pt-BR' });
-  </script>
-  {% endif %}
+  {% if current_user.is_authenticated %}
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('{{ url_for('service_worker') }}');
+      navigator.serviceWorker.register('{{ url_for('service_worker', v='20260812-pmo-video') }}');
     }
   </script>
-  <script src="{{ url_for('static', filename='offline.js') }}"></script>
-  {% if current_user.is_authenticated %}
+  <script src="{{ url_for('static', filename='offline.js', v='20260814-form-reliability') }}" defer></script>
   <script src="{{ url_for('static', filename='push.js', v='20260709') }}" defer></script>
   {% endif %}
-  <script src="{{ url_for('static', filename='js/form_feedback.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/form_feedback.js', v='20260814-form-reliability-b') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/autogrow.js', v='20260802') }}" defer></script>
   <script src="{{ url_for('static', filename='js/lead_capture.js', v='20260729b') }}" defer></script>
+  {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='photo_cropper.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>
+  {# Versionado: a limpeza das chaves antigas do localStorage só acontece se o
+     navegador buscar o arquivo novo. Suba o valor a cada mudança aqui. #}
+  <script src="{{ url_for('static', filename='js/listing_panels.js', v='20260731a') }}"></script>
   <script src="{{ url_for('static', filename='js/record_panels.js', v='20260701b') }}"></script>
+  {% endif %}
 
   <script>
     const normalizeFetchResult = (result) => ({
@@ -1409,12 +1547,16 @@
       };
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
-  <script src="{{ url_for('static', filename='masks.js') }}"></script>
-  <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
+  {% if current_user.is_authenticated %}
+  <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js" defer></script>
+  <script src="{{ url_for('static', filename='masks.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='avatar_helper.js') }}" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+  {% if current_user.is_authenticated %}
   <script type="module" src="{{ url_for('static', filename='js/time24.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/search_filters.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/search_filters.js') }}" defer></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
   <script src="{{ url_for('static', filename='js/cta_tracking.js', v='20260729') }}" defer></script>
   <!-- Page specific scripts -->

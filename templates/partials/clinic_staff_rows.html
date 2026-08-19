@@ -28,6 +28,9 @@
   </td>
   <td>
     <a href="{{ url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=s.user.id) }}" class="btn btn-sm btn-outline-primary">Permissões</a>
+    {% if s.is_intern %}
+    <a href="{{ url_for('clinic_internship_cases', clinica_id=clinic.id, user_id=s.user.id) }}" class="btn btn-sm btn-outline-info">Casos do estágio</a>
+    {% endif %}
   </td>
 </tr>
 {% else %}

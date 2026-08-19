@@ -20,7 +20,7 @@ from models import (
 )
 from security.crypto import encrypt_bytes, encrypt_text
 from services.fiscal.certificate import parse_pfx
-from authz import get_clinic_or_403
+from authz import can_manage_fiscal_documents, get_clinic_or_403
 
 
 FISCAL_UF_CODES = {
@@ -94,6 +94,12 @@ def fiscal_onboarding_step(step: int):
 
     clinic_id = _current_user_clinic_id()
     if not clinic_id:
+        abort(403)
+
+    # O wizard cadastra emissor e sobe o certificado A1 da clínica. Vínculo com
+    # a clínica não é autorização para isso: a matriz RBAC reserva
+    # fiscal_documents a admin e dono.
+    if not can_manage_fiscal_documents(current_user, clinic_id):
         abort(403)
 
     clinic = get_clinic_or_403(clinic_id, current_user)

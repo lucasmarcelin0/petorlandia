@@ -1,6 +1,7 @@
 import sys
 
 from extensions import db
+from helpers import ensure_veterinarian_membership
 from models import (
     Endereco,
     Specialty,
@@ -25,9 +26,12 @@ def _make_tutor(email='tutor-ultra@example.com'):
     return user
 
 
+# Domínio real de propósito: e-mails @example./@teste. são classificados como
+# identidade de teste e ficam fora da vitrine pública, que é justamente o que
+# estes testes exercitam.
 def _make_ultrasound_vet(
     name='Robson Ultra',
-    email='robson-ultra@example.com',
+    email='robson-ultra@clinicaultra.com.br',
     phone='31994911955',
     cidades=('Belo Horizonte', 'Contagem', 'Brumadinho'),
 ):
@@ -57,6 +61,8 @@ def _make_ultrasound_vet(
         VeterinarioAtendeCidade(cidade=c, uf='MG') for c in cidades
     ]
     db.session.add(vet)
+    # A vitrine pública só lista quem tem assinatura ativa.
+    ensure_veterinarian_membership(vet)
     db.session.commit()
     return vet
 
@@ -109,7 +115,7 @@ def test_vet_serves_city_uses_coverage_and_address_fallback(app):
         # sem cobertura cadastrada → cai para a cidade do endereço (compat)
         u = User(
             name='Vet Endereco',
-            email='vet-addr@example.com',
+            email='vet-addr@clinicaultra.com.br',
             role='veterinario',
             worker='veterinario',
         )
@@ -124,6 +130,7 @@ def test_vet_serves_city_uses_coverage_and_address_fallback(app):
             public_profile_type='profissional',
         )
         db.session.add(v2)
+        ensure_veterinarian_membership(v2)
         db.session.commit()
 
         assert app_module._vet_serves_city(v2, 'Sabará')

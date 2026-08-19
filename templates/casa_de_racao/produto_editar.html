@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <div class="container mt-4" style="max-width: 600px;">
 
@@ -22,7 +23,8 @@
 
         <div class="mb-3">
           {{ form.description.label(class="form-label fw-semibold") }}
-          {{ form.description(class="form-control", rows=3) }}
+          {{ form.description(class="form-control product-description-input", rows=14, data_autogrow="true", placeholder="Fórmula, indicações, modo de usar, precauções…") }}
+          <div class="form-text">As quebras de linha que você usar aqui aparecem iguais na página do produto.</div>
         </div>
 
         <div class="mb-3">
@@ -50,15 +52,13 @@
           {{ form.mp_category_id(class="form-control") }}
         </div>
 
+        {% with subscription_form=form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
         <div class="mb-3">
           {{ form.image_upload.label(class="form-label fw-semibold") }}
           {% if product.image_url %}
           <div class="mb-2">
-            {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" alt="{{ product.name }}" class="rounded-3 border" style="height:80px;object-fit:cover;">
-            {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" alt="{{ product.name }}" class="rounded-3 border" style="height:80px;object-fit:cover;">
-            {% endif %}
+            {{ product_media(product, 'editor') }}
             <div class="form-text">Imagem atual. Envie uma nova para substituir.</div>
           </div>
           {% endif %}

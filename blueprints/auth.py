@@ -3,12 +3,13 @@ from flask import Blueprint
 import hashlib, os, uuid
 from datetime import datetime
 from extensions import csrf, db, limiter, mail
-from services.product_analytics import track_event
+from services.product_analytics import queue_ga_event, track_event
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message as MailMessage
 from forms import ChangePasswordForm, DeleteAccountForm, EditProfileForm, FirstAccessPasswordForm, FirstAccessPhoneForm, LoginForm, RegistrationForm, ResetPasswordForm, ResetPasswordRequestForm
 from models import Endereco, Transaction, User
+from models.usuarios import is_placeholder_email
 from sqlalchemy import func
 from template_filters import normalize_email, normalize_phone
 from time_utils import BR_TZ
@@ -40,16 +41,31 @@ def _auth_audience():
     return audience if audience in {"student"} else None
 
 
-def _login_rate_limit_key():
-    """Limita tentativas por rede e identificador, sem guardar o e-mail no cache."""
-
+def _login_identifier_hash():
     identifier = (
         request.form.get('login')
         or request.form.get('email')
         or ''
     ).strip().lower()
-    identifier_hash = hashlib.sha256(identifier.encode('utf-8')).hexdigest()[:20]
-    return f"{request.remote_addr or 'unknown'}:{identifier_hash}"
+    return hashlib.sha256(identifier.encode('utf-8')).hexdigest()[:20]
+
+
+def _login_rate_limit_key():
+    """Limita tentativas por rede e identificador, sem guardar o e-mail no cache."""
+
+    return f"{request.remote_addr or 'unknown'}:{_login_identifier_hash()}"
+
+
+def _login_identifier_rate_limit_key():
+    """Limite por identificador, somando todos os IPs.
+
+    O limite por IP+identificador é contornável trocando de IP, e a conta PMO é
+    justamente a mais exposta: o identificador é o celular e a senha da
+    carteirinha é curta. Este segundo limite fecha o ataque distribuído sobre um
+    único telefone.
+    """
+
+    return f"identifier:{_login_identifier_hash()}"
 
 
 def get_blueprint():
@@ -69,7 +85,7 @@ def reset_password_request():
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user:
+        if user and not getattr(user, 'email_is_placeholder', False) and not is_placeholder_email(user.email):
             token = s.dumps(user.email, salt='password-reset-salt')
             base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
             link = f"{base_url}{url_for('reset_password', token=token)}"
@@ -145,6 +161,35 @@ def reset_password(token):
     return render_template('auth/reset_password.html', form=form)
 
 
+def _first_access_welcome(invite, token_user=None, user=None):
+    """Contexto humano da tela de primeiro acesso.
+
+    Quem chega aqui veio de um link de consulta, receita, tratamento ou
+    carteirinha — nunca do zero. Nomear a pessoa, o pet e a clinica que
+    enviou transforma um formulario anonimo em continuacao de uma conversa
+    que ja comecou. Todo campo e opcional: sem contexto, a tela apenas
+    perde os detalhes, nunca quebra.
+    """
+
+    def _clean(value):
+        return (value or '').strip() or None
+
+    def _first_name(full_name):
+        name = _clean(full_name)
+        return name.split()[0] if name else None
+
+    tutor = getattr(invite, 'tutor', None) or token_user or user
+    animal = getattr(invite, 'animal', None)
+    clinica = getattr(invite, 'clinica', None)
+
+    return {
+        'tutor_name': _first_name(getattr(tutor, 'name', None)),
+        'pet_name': _clean(getattr(animal, 'name', None)),
+        'clinic_name': _clean(getattr(clinica, 'nome', None)),
+        'message': _clean(getattr(invite, 'message', None)),
+    }
+
+
 @bp.route("/primeiro-acesso", methods=['GET', 'POST'])
 @csrf.exempt
 @limiter.limit("10 per minute", methods=["POST"])
@@ -163,13 +208,18 @@ def first_access():
 
     if form.validate_on_submit():
         matches = find_users_by_phone(form.phone.data)
+        # O link assinado da carteirinha já diz qual conta é a dessa pessoa. Sem
+        # isso, quem divide o celular com outra família (comum na campanha PMO)
+        # travava aqui e não tinha e-mail real para usar como alternativa.
+        if token_user and any(match.id == token_user.id for match in matches):
+            matches = [token_user]
         if len(matches) > 1:
             flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
         user = matches[0] if matches else None
         if not user or not _first_access_user_allowed(user, invite, token_user):
             flash('Não encontramos um primeiro acesso ativo para este celular.', 'danger')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
 
         session['first_access_user_id'] = user.id
         session['first_access_invite_token'] = token if invite else ''
@@ -180,7 +230,7 @@ def first_access():
         session['first_access_next'] = _first_access_next_url(invite)
         return redirect(url_for('first_access_password'))
 
-    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '')
+    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '', welcome=_first_access_welcome(invite, token_user))
 
 
 @bp.route("/primeiro-acesso/senha", methods=['GET', 'POST'])
@@ -218,7 +268,7 @@ def first_access_password():
             ).first()
             if existing:
                 form.email.errors.append('Este e-mail já pertence a outra conta.')
-                return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+                return render_template('auth/first_access_password.html', form=form, user=user, invite=invite, welcome=_first_access_welcome(invite, token_user, user))
             user.email = normalized_email
 
         user.set_password(form.password.data)
@@ -235,7 +285,7 @@ def first_access_password():
         flash('Senha cadastrada com sucesso. Você já está conectado.', 'success')
         return redirect(next_url)
 
-    return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+    return render_template('auth/first_access_password.html', form=form, user=user, invite=invite, welcome=_first_access_welcome(invite, token_user, user))
 
 
 @bp.route("/register", methods=['GET', 'POST'])
@@ -244,6 +294,11 @@ def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
     audience = _auth_audience()
+    requested_plan = (request.args.get('plan') or '').strip().lower()
+    if requested_plan in {'mensal', 'anual'}:
+        # Mantém a intenção escolhida na página de preços até o checkout, mesmo
+        # quando o visitante passa por cadastro, Google OAuth e onboarding.
+        session['preferred_membership_plan'] = requested_plan
     requested_next = request.values.get('next')
     next_url = (
         _sanitize_login_next_url(requested_next)
@@ -388,6 +443,7 @@ def register():
             role=getattr(user, 'role', None),
             channel=audience,
         )
+        queue_ga_event('sign_up', method='email')
 
         # Cai no onboarding, não no sistema vazio: é ali que a pessoa dá o
         # primeiro passo em vez de olhar uma tela sem nada dela.
@@ -418,6 +474,7 @@ def register():
 
 @bp.route("/login", methods=['GET', 'POST'])
 @limiter.limit("10 per minute", methods=["POST"], key_func=_login_rate_limit_key)
+@limiter.limit("20 per hour", methods=["POST"], key_func=_login_identifier_rate_limit_key)
 def login_view():
     form = LoginForm()
     audience = _auth_audience()
@@ -432,7 +489,7 @@ def login_view():
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
-        user, login_error = find_user_by_login_identifier(form.login.data)
+        user, login_error = find_user_by_login_identifier(form.login.data, form.password.data)
         if login_error:
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'login': [login_error]}, 'message': login_error}), 400
@@ -457,6 +514,7 @@ def login_view():
                 role=getattr(user, 'role', None),
                 channel=audience,
             )
+            queue_ga_event('login', method='email')
             if form.remember.data:
                 session.permanent = True
             if is_json_request:
@@ -590,8 +648,32 @@ def google_callback():
     session.permanent = True
 
     if created:
+        # O código de indicação vive na sessão, portanto também atravessa o
+        # OAuth. Sem este bloco, cadastros por Google eram atribuídos como
+        # orgânicos mesmo quando vieram de um link de indicação.
+        try:
+            referral_code_value = session.pop('referral_code', None)
+            if referral_code_value:
+                from models import ReferralCode, ReferralSignup
+                referral = ReferralCode.query.filter_by(code=referral_code_value).first()
+                if referral and referral.user_id != user.id:
+                    exists = ReferralSignup.query.filter_by(
+                        code_id=referral.id,
+                        referred_user_id=user.id,
+                    ).first()
+                    if not exists:
+                        db.session.add(ReferralSignup(
+                            code_id=referral.id,
+                            referred_user_id=user.id,
+                        ))
+                        db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Falha ao registrar indicação no cadastro Google')
+
         channel = 'student_google' if is_student_flow else 'google'
         track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
+        queue_ga_event('sign_up', method='google')
         flash('Conta criada com o Google. Bem-vindo!', 'success')
         if urlparse(sanitized_next).path == url_for('index'):
             sanitized_next = url_for('onboarding')
@@ -599,6 +681,7 @@ def google_callback():
 
     channel = 'student_google' if is_student_flow else 'google'
     track_event('login_succeeded', role=getattr(user, 'role', None), channel=channel)
+    queue_ga_event('login', method='google')
     flash('Login realizado com sucesso!', 'success')
     return redirect(sanitized_next)
 

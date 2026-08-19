@@ -8,7 +8,6 @@ import math
 import json
 import time
 import secrets
-import string
 import unicodedata
 import urllib.parse
 from dataclasses import dataclass
@@ -17,9 +16,10 @@ from typing import Any
 
 import requests
 from extensions import db
-from flask import has_request_context, url_for
+from flask import current_app, has_request_context, url_for
 from models import (
     Animal,
+    Endereco,
     PmoRouteOptimizationBackup,
     PmoVaccinationAnimal,
     PmoVaccinationVisit,
@@ -79,6 +79,11 @@ PMO_CATS_VACCINATED_COLUMN = "N"
 PMO_ATTENDED_BY_COLUMN = "O"
 PMO_NOTE_COLUMN = "K"
 PMO_ANIMAL_NAMES_COLUMN = "J"
+# Quantidade de animais da casa (o que foi inscrito). É a contagem AUTORITATIVA
+# usada por parse_animals para casar cada nome da coluna J com a espécie, então
+# todo animal incluído na hora precisa aparecer aqui — senão o próximo sync o apaga.
+PMO_DOGS_COLUMN = "H"
+PMO_CATS_COLUMN = "I"
 
 # Aba mestre de status (mantida pelo sync agendado). O app NUNCA deve escrever
 # nela — a coluna M ali é o "Status PMO" compilado, não a contagem do app.
@@ -929,10 +934,21 @@ def _row_column_offset(row: list[Any]) -> int:
     return 1 if _parse_date_object(_cell(row, 0)) and _cell(row, 1) else 0
 
 
-def _password(seed: str) -> str:
-    suffix = (_digits(seed)[-4:] or "0000").rjust(4, "0")
-    letter = secrets.choice(string.ascii_uppercase.replace("I", "").replace("O", ""))
-    return f"PMO{letter}{suffix}"
+# Sem I/O/0/1: a tutora lê a senha de um papel e digita no celular.
+_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _password(seed: str = "") -> str:
+    """Senha da carteirinha PMO, independente do telefone.
+
+    A versão anterior era ``PMO`` + uma letra sorteada + os 4 últimos dígitos do
+    telefone. Como o telefone é o próprio identificador de login, sobravam 24
+    senhas possíveis para quem soubesse o número — três minutos de tentativas
+    dentro do limite de 10/min. O ``seed`` continua na assinatura só para não
+    quebrar as chamadas existentes.
+    """
+    del seed
+    return "PMO" + "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(5))
 
 
 def _public_token() -> str:
@@ -946,6 +962,66 @@ def _provisional_email(phone: str, visit_id: int | None = None) -> str:
 
 def _normalize_person_name(value: Any) -> str:
     return re.sub(r"\s+", " ", _strip_accents(_normalize_text(value)).lower()).strip()
+
+
+_NAME_PARTICLES = {"da", "das", "de", "do", "dos", "e", "d"}
+
+
+def _person_name_tokens(value: Any) -> list[str]:
+    return [
+        token
+        for token in _normalize_person_name(value).split()
+        if token and token not in _NAME_PARTICLES
+    ]
+
+
+def _same_person_name(left: Any, right: Any) -> bool:
+    """Reconhece a mesma pessoa quando uma campanha abrevia o nome da outra.
+
+    A planilha é digitada de novo a cada dia de campanha, então "Ana Marcia
+    Pinheiro" e "Ana Marcia da Costa Pinheiro" são a mesma tutora. Sem essa
+    tolerância cada grafia virava uma conta nova no mesmo celular, e aí nem o
+    login nem o primeiro acesso conseguiam desempatar.
+
+    Três condições, todas necessárias:
+
+    1. mesmo primeiro nome e mesmo último sobrenome;
+    2. a grafia curta é **subsequência ordenada** da longa (só faltam nomes do
+       meio, nunca há troca de um por outro);
+    3. a grafia curta tem no mínimo 3 tokens.
+
+    A condição 3 é o que separa "Ana Marcia Pinheiro" / "Ana Marcia da Costa
+    Pinheiro" (mesma tutora, une) de "Jose Santos" / "Jose Carlos Santos" (pai
+    e filho no mesmo telefone, mantém separados). Sem ela, todo nome de dois
+    tokens engoliria qualquer homônimo com nome do meio.
+
+    Preferir falso negativo a falso positivo: duas contas separadas da mesma
+    pessoa são um aborrecimento no login; duas famílias fundidas colocam os
+    animais de uma no prontuário da outra.
+    """
+    left_tokens = _person_name_tokens(left)
+    right_tokens = _person_name_tokens(right)
+    if not left_tokens or not right_tokens:
+        return False
+    if left_tokens == right_tokens:
+        return True
+    if left_tokens[0] != right_tokens[0] or left_tokens[-1] != right_tokens[-1]:
+        return False
+
+    short, long = sorted((left_tokens, right_tokens), key=len)
+    # Precisa sobrar algo além do primeiro nome e do último sobrenome; senão
+    # "Jose Santos" engoliria qualquer "Jose <qualquer coisa> Santos".
+    if len(short) < 3:
+        return False
+    if not _is_ordered_subsequence(short, long):
+        return False
+    return True
+
+
+def _is_ordered_subsequence(short: list[str], long: list[str]) -> bool:
+    """``short`` aparece em ``long`` na mesma ordem (podendo pular tokens)."""
+    iterator = iter(long)
+    return all(token in iterator for token in short)
 
 
 def _find_user_by_phone(phone: str) -> User | None:
@@ -968,12 +1044,19 @@ def _find_user_by_phone_and_name(phone: str, name: str) -> User | None:
     if not normalized:
         return None
     target_name = _normalize_person_name(name)
+    candidates = []
     for user in User.query.filter(User.phone.isnot(None), User.phone != "").all():
         if _normalize_login_phone(user.phone) != normalized:
             continue
         if _normalize_person_name(user.name) == target_name:
-            return user
-    return None
+            return user  # grafia idêntica sempre ganha
+        if _same_person_name(user.name, name):
+            candidates.append(user)
+    if not candidates:
+        return None
+    # Empate só acontece entre grafias do mesmo nome; fica com a conta mais
+    # antiga, que é onde o histórico da tutora já está.
+    return min(candidates, key=lambda user: user.id or 0)
 
 
 def _same_family(user: User | None, visit: PmoVaccinationVisit) -> bool:
@@ -982,17 +1065,41 @@ def _same_family(user: User | None, visit: PmoVaccinationVisit) -> bool:
     phone = visit.phone1 or visit.phone2
     if _normalize_login_phone(user.phone) != _normalize_login_phone(phone):
         return False
-    return _normalize_person_name(user.name) == _normalize_person_name(visit.tutor_name)
+    return _same_person_name(user.name, visit.tutor_name)
+
+
+def _email_is_taken(candidate: str) -> bool:
+    return (
+        User.query.filter(func.lower(User.email) == candidate.lower()).first()
+        is not None
+    )
 
 
 def _unique_provisional_email(normalized_phone: str, visit: PmoVaccinationVisit) -> str:
+    """E-mail provisório garantidamente livre.
+
+    ``User.email`` é unique. O sufixo por visita não bastava: quando a planilha
+    muda a identidade da visita, ``tutor_user_id`` é zerado (ver
+    ``_ensure_visit_records``) e uma segunda conta é criada para a MESMA visita
+    — reproduzindo ``pmo-<tel>-<visit.id>@`` e estourando IntegrityError no
+    commit. Por isso a busca continua até achar um endereço livre de fato.
+    """
     candidate = _provisional_email(normalized_phone, visit.id)
-    if not User.query.filter(func.lower(User.email) == candidate.lower()).first():
+    if not _email_is_taken(candidate):
         return candidate
-    # Telefone compartilhado entre famílias: garante e-mail único por visita.
+
+    # Telefone compartilhado entre famílias: desempata por visita.
     digits = _digits(normalized_phone)[-13:] or "x"
-    suffix = visit.id or secrets.token_hex(4)
-    return f"pmo-{digits}-{suffix}@petorlandia.local"
+    if visit.id:
+        candidate = f"pmo-{digits}-{visit.id}@petorlandia.local"
+        if not _email_is_taken(candidate):
+            return candidate
+
+    # Visita ainda sem id, ou id já usado numa revinculação anterior.
+    while True:
+        candidate = f"pmo-{digits}-{secrets.token_hex(4)}@petorlandia.local"
+        if not _email_is_taken(candidate):
+            return candidate
 
 
 def _ensure_visit_public_token(visit: PmoVaccinationVisit) -> None:
@@ -1005,11 +1112,149 @@ def _ensure_visit_public_token(visit: PmoVaccinationVisit) -> None:
             return
 
 
+PMO_DEFAULT_CITY = "Orlândia"
+PMO_DEFAULT_STATE = "SP"
+
+
+def _fit(value: str | None, length: int) -> str | None:
+    """Corta no tamanho da coluna. Sem isso o Postgres recusa o INSERT inteiro."""
+    text = _normalize_text(value)
+    return text[:length] or None if text else None
+
+
+_PREVIOUS_ADDRESS_MARKER = "Endereço anterior"
+
+
+def _visit_recency_key(visit: PmoVaccinationVisit) -> tuple:
+    """Ordena visitas da mais antiga para a mais recente.
+
+    Usa a data da campanha e cai no id quando não há data — ordem de iteração
+    do banco não serve, senão qual endereço "vence" mudaria a cada sync.
+    """
+    when = visit.vaccine_date or visit.requested_date or date.min
+    return (when, visit.id or 0)
+
+
+def _tutor_visits_with_address(user: User) -> list[PmoVaccinationVisit]:
+    return [
+        visit
+        for visit in PmoVaccinationVisit.query.filter_by(tutor_user_id=user.id).all()
+        if _normalize_text(visit.address)
+    ]
+
+
+def _address_came_from_campaign(user: User, visits: list[PmoVaccinationVisit]) -> bool:
+    """O endereço atual do tutor foi escrito pela campanha, não à mão.
+
+    Se ninguém na clínica mexeu, ``user.address`` é igual ao texto de alguma
+    visita. Quando difere de todas, alguém corrigiu na ficha — e correção
+    manual não pode ser desfeita pela planilha.
+    """
+    current = _normalize_text(user.address)
+    if not current:
+        return True
+    return any(_normalize_text(visit.address) == current for visit in visits)
+
+
+def _is_newest_address_source(user: User, visit: PmoVaccinationVisit) -> bool:
+    """A visita é a mais recente do tutor entre as que têm endereço."""
+    siblings = [
+        other for other in _tutor_visits_with_address(user) if other.id != visit.id
+    ]
+    if not siblings:
+        return True
+    return _visit_recency_key(visit) >= max(_visit_recency_key(o) for o in siblings)
+
+
+def _archive_previous_address(user: User, address: str) -> bool:
+    """Guarda um endereço nas observações, sem repetir a cada sincronização."""
+    address = _normalize_text(address)
+    if not address:
+        return False
+    current = user.observacoes or ""
+    if address in current:
+        return False
+    entry = f"{_PREVIOUS_ADDRESS_MARKER}: {address}"
+    user.observacoes = f"{current.rstrip()}\n{entry}".strip() if current else entry
+    return True
+
+
+def _build_endereco(address: str, visit: PmoVaccinationVisit) -> Endereco:
+    parts = _pmo_address_parts(address)
+    endereco = Endereco(
+        rua=_fit(_pmo_clean_address_fragment(parts["rua"]), 120),
+        numero=_fit(parts["numero"], 20),
+        complemento=_fit(parts["complemento"], 100),
+        bairro=_fit(_pmo_clean_address_fragment(parts["bairro"]), 100),
+        cidade=PMO_DEFAULT_CITY,
+        estado=PMO_DEFAULT_STATE,
+    )
+    # Só reaproveita coordenada já calculada. Geocodificar aqui colocaria uma
+    # chamada de rede em cada carregamento do painel; o backfill e a otimização
+    # de rota é que preenchem visit.geocode_*.
+    if visit.geocode_lat is not None and visit.geocode_lng is not None:
+        endereco.latitude = visit.geocode_lat
+        endereco.longitude = visit.geocode_lng
+    db.session.add(endereco)
+    db.session.flush()
+    return endereco
+
+
+def _apply_visit_address(user: User, visit: PmoVaccinationVisit) -> bool:
+    """Espelha o endereço da visita no tutor, em texto **e** estruturado.
+
+    A ficha do tutor (``ficha_tutor`` -> ``endereco_form.html``) lê
+    ``user.endereco``, que é o modelo estruturado; o PMO só preenchia
+    ``user.address``, que é texto livre e aparece apenas nas impressões. Por
+    isso o endereço "sumia": estava gravado, mas no campo que aquela tela não
+    lê.
+
+    Quando o tutor tem mais de um endereço — existe tutora com animais vivendo
+    em locais diferentes — o modelo só tem uma vaga (``User.endereco_id``).
+    Nesse caso vale o endereço da visita **mais recente**, e o anterior vai
+    para ``observacoes`` em vez de ser apagado. Como a ordem é decidida pela
+    data da campanha e não pela ordem de iteração, o resultado não muda a cada
+    sincronização, e o arquivamento não duplica.
+
+    Retorna ``True`` se mudou alguma coisa.
+    """
+    address = _normalize_text(visit.address)
+    if not address:
+        return False
+
+    current = _normalize_text(user.address)
+
+    # Primeiro endereço do tutor: nada a comparar.
+    if not current and not user.endereco_id:
+        user.address = _fit(address, 200)
+        user.endereco_id = _build_endereco(address, visit).id
+        return True
+
+    if current == address:
+        return False
+
+    # Endereço corrigido na ficha vence a planilha: registra o da visita nas
+    # observações e não toca no que a clínica escreveu.
+    if not _address_came_from_campaign(user, _tutor_visits_with_address(user)):
+        return _archive_previous_address(user, address)
+
+    # Tutor já tem endereço e este é outro. Quem vence é a visita mais recente;
+    # o perdedor é registrado para não sumir.
+    if not _is_newest_address_source(user, visit):
+        return _archive_previous_address(user, address)
+
+    if current:
+        _archive_previous_address(user, current)
+    user.address = _fit(address, 200)
+    user.endereco_id = _build_endereco(address, visit).id
+    return True
+
+
 def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
     if visit.tutor_user_id:
         user = visit.tutor_user
-        if user and visit.address and not user.address:
-            user.address = visit.address
+        if user:
+            _apply_visit_address(user, visit)
         return
     phone = visit.phone1 or visit.phone2
     normalized_phone = _normalize_login_phone(phone)
@@ -1020,19 +1265,33 @@ def _ensure_tutor_account(visit: PmoVaccinationVisit) -> None:
     user = _find_user_by_phone_and_name(phone, visit.tutor_name)
     if user:
         visit.tutor_user = user
-        if visit.address and not user.address:
-            user.address = visit.address
+        _apply_visit_address(user, visit)
         return
+    if _find_user_by_phone(phone):
+        # Não é erro (famílias diferentes dividem telefone), mas é o momento em
+        # que o celular deixa de identificar uma conta só — vale registrar para
+        # conferir quando alguém relatar problema de acesso.
+        current_app.logger.info(
+            "PMO: nova conta de tutor no telefone %s já usado por outra família (visita %s, tutor %r)",
+            normalized_phone,
+            visit.id,
+            visit.tutor_name,
+        )
     user = User(
         name=visit.tutor_name,
         email=_unique_provisional_email(normalized_phone, visit),
+        # O endereço pmo-<telefone>@petorlandia.local é um identificador interno,
+        # não um e-mail da tutora: ela não o conhece e nada entregue nele chega.
+        # Sem esta marca a interface o exibia como contato real e montava
+        # mailto: para um domínio que não existe.
+        email_is_placeholder=True,
         phone=normalized_phone,
         role="adotante",
-        address=visit.address or None,
     )
     user.set_password(visit.password)
     db.session.add(user)
     db.session.flush()
+    _apply_visit_address(user, visit)
     visit.tutor_user = user
 
 
@@ -1163,13 +1422,14 @@ def repair_pmo_tutor_links(dry_run: bool = True) -> dict:
             target = User(
                 name=visit.tutor_name,
                 email=_unique_provisional_email(normalized_phone, visit),
+                email_is_placeholder=True,
                 phone=normalized_phone,
                 role="adotante",
-                address=visit.address or None,
             )
             target.set_password(visit.password)
             db.session.add(target)
             db.session.flush()
+            _apply_visit_address(target, visit)
             stats["contas_criadas"] += 1
 
         for animal in misattached:
@@ -1498,12 +1758,28 @@ def _resolve_sheet_target(
     return spreadsheet_id, range_value, "", ""
 
 
-def list_vacina_pmo_sheets() -> list[dict[str, Any]]:
+# A lista de abas sai de uma chamada à API do Google que o painel faz antes de
+# mostrar qualquer visita: ~0,5s no caminho quente e vários segundos com o
+# cliente frio (logo depois de um deploy). As abas só mudam quando um dia novo é
+# criado — e aí invalidamos o cache —, então guardar por alguns minutos tira esse
+# tempo do caminho de abertura do painel.
+PMO_SHEETS_CACHE_TTL = 300.0
+_PMO_SHEETS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def invalidate_vacina_pmo_sheets_cache() -> None:
+    _PMO_SHEETS_CACHE.clear()
+
+
+def list_vacina_pmo_sheets(*, use_cache: bool = True) -> list[dict[str, Any]]:
     sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
-    service = _get_sheets_service()
     spreadsheet_id = _extract_google_sheet_id(sheet_url)
     if not spreadsheet_id:
         raise RuntimeError("URL/ID da planilha PMO inválido.")
+    cached = _PMO_SHEETS_CACHE.get(spreadsheet_id)
+    if use_cache and cached and (time.monotonic() - cached[0]) < PMO_SHEETS_CACHE_TTL:
+        return [dict(item) for item in cached[1]]
+    service = _get_sheets_service()
     metadata = (
         service.spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
@@ -1522,7 +1798,8 @@ def list_vacina_pmo_sheets() -> list[dict[str, Any]]:
                 "date": _parse_date(title),
             }
         )
-    return sheets
+    _PMO_SHEETS_CACHE[spreadsheet_id] = (time.monotonic(), sheets)
+    return [dict(item) for item in sheets]
 
 
 def infer_visit_status(animals: list[dict[str, Any]] | list[PmoVaccinationAnimal]) -> str:
@@ -2330,8 +2607,56 @@ def write_animal_names_to_sheet(visit: PmoVaccinationVisit) -> bool:
         return False
 
 
-def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
-    """Corrige o nome de um animal e replica a célula de nomes (coluna J) na planilha."""
+def write_animal_counts_to_sheet(visit: PmoVaccinationVisit) -> bool:
+    """Escreve quantos cães (H) e gatos (I) a casa tem na linha de origem do tutor."""
+    if not visit.spreadsheet_id or not visit.source_row:
+        return False
+    if not visit.sheet_title and not visit.sheet_gid:
+        return False
+    if _pmo_is_master_sheet(visit.sheet_title):
+        return False  # nunca escreve na aba mestre
+
+    try:
+        service = _get_sheets_service_rw()
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao iniciar cliente Sheets para gravar contagem de animais PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+    try:
+        title = visit.sheet_title
+        if not title and visit.sheet_gid:
+            title = _resolve_sheet_title_by_gid(service, visit.spreadsheet_id, visit.sheet_gid)
+        if not title:
+            return False
+        range_value = (
+            f"{_quote_sheet_title(title)}!"
+            f"{PMO_DOGS_COLUMN}{visit.source_row}:{PMO_CATS_COLUMN}{visit.source_row}"
+        )
+        service.spreadsheets().values().update(
+            spreadsheetId=visit.spreadsheet_id,
+            range=range_value,
+            valueInputOption="USER_ENTERED",
+            body={"values": [[visit.dogs or 0, visit.cats or 0]]},
+        ).execute()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            current_app.logger.warning(
+                "Falha ao atualizar contagem de animais na planilha PMO", exc_info=True
+            )
+        except Exception:
+            pass
+        return False
+
+
+def _validate_pmo_animal_name(name: Any) -> str:
     normalized = _normalize_text(name)
     if not normalized:
         raise ValueError("Digite o nome do animal.")
@@ -2341,6 +2666,12 @@ def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
     # esses separadores viraria dois animais na próxima sincronização.
     if len(_split_animals(normalized)) > 1:
         raise ValueError("Use um nome sem vírgulas, ponto e vírgula ou \" e \" — ele separa animais na planilha.")
+    return normalized
+
+
+def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
+    """Corrige o nome de um animal e replica a célula de nomes (coluna J) na planilha."""
+    normalized = _validate_pmo_animal_name(name)
 
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     old_name = animal.name or ""
@@ -2465,6 +2796,67 @@ def update_vacina_pmo_visit_attended_by(visit_id: int, attended_by: str | None) 
     visit.attended_by = normalized or None
     db.session.commit()
     write_attended_by_to_sheet(visit)
+    return _serialize_visit(visit)
+
+
+# Teto de animais por casa. O dia inteiro é planejado para ~23 animais
+# (PMO_DAY_TARGET_ANIMALS), então uma casa passar disso é quase sempre engano de
+# digitação — melhor barrar do que estourar a rota do turno sem ninguém perceber.
+PMO_VISIT_ANIMALS_MAX = 12
+
+
+def _pmo_sort_visit_animals(visit: PmoVaccinationVisit) -> None:
+    """Reordena as posições: cães primeiro, gatos depois.
+
+    É a mesma ordem que ``_build_animals`` usa ao reconstruir a visita a partir da
+    planilha (a espécie de cada slot vem da posição). Mantendo a ordem igual, a
+    coluna J escrita agora volta idêntica no próximo sync.
+    """
+    ordered = sorted(visit.animals, key=lambda animal: (animal.species != "cao", animal.position))
+    for position, animal in enumerate(ordered, start=1):
+        animal.position = position
+
+
+def add_vacina_pmo_visit_animal(visit_id: int, name: Any, species: Any) -> dict[str, Any]:
+    """Inclui um animal que apareceu na hora da visita (tutor trouxe mais um).
+
+    Além do banco, atualiza a planilha (nomes na J e contagem em H/I) porque o
+    sync reconstrói os animais a partir dessas células — sem isso o bicho
+    vacinado sumiria na próxima sincronização da aba.
+    """
+    visit = PmoVaccinationVisit.query.get_or_404(visit_id)
+    normalized = _validate_pmo_animal_name(name)
+    species_value = _strip_accents(_normalize_text(species)).lower()
+    if species_value not in {"cao", "gato"}:
+        raise ValueError("Escolha se o animal é cão ou gato.")
+    if len(visit.animals) >= PMO_VISIT_ANIMALS_MAX:
+        raise ValueError(f"Esta casa já está com {PMO_VISIT_ANIMALS_MAX} animais — confira a lista.")
+
+    wanted = _strip_accents(normalized).casefold()
+    if any(_strip_accents(animal.name or "").casefold() == wanted for animal in visit.animals):
+        raise ValueError(f"Já existe um animal chamado {normalized} nesta casa.")
+
+    animal = PmoVaccinationAnimal(
+        visit=visit,
+        position=len(visit.animals) + 1,
+        name=normalized,
+        species=species_value,
+        status="pendente",
+    )
+    db.session.add(animal)
+    db.session.flush()
+    _pmo_sort_visit_animals(visit)
+    visit.dogs = sum(1 for item in visit.animals if item.species == "cao")
+    visit.cats = sum(1 for item in visit.animals if item.species == "gato")
+    _append_visit_note(
+        visit,
+        f"{_pmo_event_time_label()} - {normalized} ({'cão' if species_value == 'cao' else 'gato'}) incluído na hora.",
+    )
+    _ensure_real_animal(animal)
+    db.session.commit()
+    write_animal_names_to_sheet(visit)
+    write_animal_counts_to_sheet(visit)
+    write_note_to_sheet(visit)
     return _serialize_visit(visit)
 
 
@@ -3269,6 +3661,9 @@ def criar_dia_vacinacao(date_value: str) -> dict[str, Any]:
     for house, rownum in zip(tarde[:placed_tarde], tarde_slots[:placed_tarde]):
         wa_assignments.append((house["cells"], rownum, "Tarde"))
     _pmo_write_whatsapp_links(service, spreadsheet_id, date_label, target_date, wa_assignments)
+
+    # A aba nova precisa aparecer no seletor do painel na hora.
+    invalidate_vacina_pmo_sheets_cache()
 
     return {
         "date": date_label,

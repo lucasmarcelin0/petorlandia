@@ -1,0 +1,566 @@
+{# Compra dos medicamentos da receita, direto na tela da prescrição.
+
+   Regras que governam este bloco, nesta ordem:
+   1. Nunca sai no papel — a receita impressa é documento clínico.
+   2. Cada produto aparece SOB o item prescrito, como oferta correspondente,
+      nunca no lugar dele.
+   3. Outra concentração só aparece quando a prescrita não está comprável, e
+      sempre com a frase que explica por quê.
+   4. Item sem oferta aparece dito com todas as letras, para o tutor não achar
+      que a receita foi atendida por inteiro.
+   5. Adicionar não tira o tutor da receita: o rodapé acumula e leva ao
+      carrinho quando ele terminar.
+
+   Não usa a classe ``no-print``: o print.css estiliza TODO ``a``/``button``
+   dentro dela como botão da barra de ferramentas (altura fixa, fundo azul,
+   ``white-space: nowrap``), o que estourava a largura no celular. O bloco
+   esconde a si mesmo na impressão, na regra @media print abaixo. #}
+{% set com_oferta = ofertas_receita | selectattr('has_offer') | list %}
+{% if ofertas_receita %}
+<section class="receita-loja" aria-labelledby="receita-loja-titulo"
+         data-receita-loja
+         data-url="{{ url_for('comprar_prescricao', bloco_id=bloco.id) }}"
+         data-carrinho="{{ url_for('ver_carrinho') }}"
+         {# A receita impressa é documento próprio e não estende o layout, logo
+            não existe a meta-tag de CSRF que o resto do site usa. #}
+         data-csrf="{{ csrf_token() }}">
+  <header class="receita-loja__head">
+    <div>
+      <h2 id="receita-loja-titulo" class="receita-loja__title">
+        Comprar os medicamentos desta receita
+      </h2>
+      <p class="receita-loja__sub">
+        {% if com_oferta %}
+          Encontramos produtos na loja PetOrlândia para
+          {{ com_oferta|length }} {{ 'item' if com_oferta|length == 1 else 'itens' }}
+          {{ 'do' if ofertas_receita|length == 1 else 'dos' }}
+          {{ ofertas_receita|length }}
+          {{ 'prescrito' if ofertas_receita|length == 1 else 'prescritos' }},
+          com entrega.
+        {% else %}
+          Nenhum item desta receita está disponível na loja no momento.
+        {% endif %}
+      </p>
+    </div>
+
+    {% if compra_em_lote %}
+    <button type="button" class="receita-loja__cta"
+            data-receita-lote
+            data-cta="receita_comprar_tudo">
+      Adicionar {{ compra_em_lote|length }}
+      {{ 'item' if compra_em_lote|length == 1 else 'itens' }} ao carrinho
+    </button>
+    {% endif %}
+  </header>
+
+  <ol class="receita-loja__list">
+    {% for linha in ofertas_receita %}
+    <li class="receita-loja__item">
+      <div class="receita-loja__prescrito">
+        <span class="receita-loja__num">{{ loop.index }}</span>
+        <span>{{ linha.prescricao.medicamento }}</span>
+      </div>
+
+      {% if not linha.has_offer %}
+      <p class="receita-loja__vazio">
+        Não temos este item na loja. Compre na farmácia de sua preferência.
+      </p>
+      {% else %}
+      <div class="receita-loja__ofertas">
+        {% set ns = namespace(motivo_exibido=false) %}
+        {% for match in linha.matches %}
+        {% set produto = match.product %}
+
+        {# A frase do motivo entra uma única vez, logo antes do primeiro
+           produto em outra concentração. #}
+        {% if not match.same_strength and not ns.motivo_exibido and linha.alternative_reason %}
+        <p class="receita-loja__motivo">{{ linha.alternative_reason }}</p>
+        {% set ns.motivo_exibido = true %}
+        {% endif %}
+
+        <div class="receita-oferta{% if not match.same_strength %} receita-oferta--atencao{% endif %}">
+          <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+             class="receita-oferta__foto" target="_blank" rel="noopener"
+             aria-label="Ver {{ produto.name }} na loja">
+            {% if produto.image_url %}
+            <img src="{{ produto.image_url }}" alt="{{ produto.name }}" loading="lazy">
+            {% else %}
+            <span class="receita-oferta__foto-vazia" aria-hidden="true">Sem foto</span>
+            {% endif %}
+          </a>
+
+          <div class="receita-oferta__info">
+            <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+               class="receita-oferta__nome" target="_blank" rel="noopener">{{ produto.name }}</a>
+
+            <div class="receita-oferta__tags">
+              {% if match.same_strength %}
+              <span class="receita-tag receita-tag--ok">Apresentação compatível</span>
+              {% else %}
+              <span class="receita-tag receita-tag--atencao">
+                Apresentação diferente da prescrita
+              </span>
+              {% endif %}
+              {% if not match.in_stock %}
+              <span class="receita-tag receita-tag--neutro">Sem estoque</span>
+              {% endif %}
+            </div>
+
+            {% if not match.same_strength %}
+            <p class="receita-oferta__aviso">
+              A receita indica
+              {{ match.prescribed_strengths | join(', ') if match.prescribed_strengths else 'outra apresentação' }}.
+              Confirme com o veterinário antes de comprar.
+            </p>
+            {% endif %}
+          </div>
+
+          <div class="receita-oferta__acao">
+            <span class="receita-oferta__preco">{{ produto.public_price_min | currency_br }}</span>
+            {% if match.in_stock %}
+            <button type="button" class="receita-oferta__btn"
+                    data-receita-item="{{ produto.id }}"
+                    data-cta="receita_comprar_item">
+              Adicionar
+            </button>
+            {% else %}
+            <a href="{{ url_for('produto_detail', product_id=produto.id) }}"
+               class="receita-oferta__btn receita-oferta__btn--ghost"
+               target="_blank" rel="noopener">Ver produto</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+  {# Rodapé que só aparece depois do primeiro item adicionado: o tutor decide
+     quando parar de escolher e ir pagar. #}
+  <div class="receita-carrinho" data-receita-rodape hidden>
+    <div class="receita-carrinho__resumo">
+      <strong data-receita-contagem>0 itens no carrinho</strong>
+      <span data-receita-total></span>
+    </div>
+    <a href="{{ url_for('ver_carrinho') }}" class="receita-carrinho__btn"
+       data-cta="receita_ir_carrinho">Ir para o carrinho</a>
+  </div>
+
+  <p class="receita-loja__nota">
+    A loja lista produtos com o mesmo princípio ativo do que foi prescrito.
+    A prescrição do veterinário prevalece: em caso de dúvida sobre marca,
+    concentração ou forma de uso, fale com quem atendeu o seu pet.
+  </p>
+
+  <p class="receita-loja__erro" data-receita-erro hidden role="alert"></p>
+</section>
+
+<style>
+  /* A receita impressa é documento clínico: a oferta comercial fica só na
+     tela. */
+  @media print {
+    .receita-loja { display: none !important; }
+  }
+
+  .receita-loja {
+    margin: 28px 0 8px;
+    border: 1px solid #d9e2ec;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 20px;
+    font-family: inherit;
+  }
+
+  .receita-loja__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 1px solid #e3e9ef;
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+  }
+
+  .receita-loja__title {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #14212b;
+  }
+
+  .receita-loja__sub {
+    margin: 0;
+    font-size: .86rem;
+    color: #55636e;
+    max-width: 56ch;
+  }
+
+  .receita-loja__cta {
+    border: 0;
+    border-radius: 999px;
+    background: #146c43;
+    color: #fff;
+    font-weight: 700;
+    font-size: .88rem;
+    padding: 10px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .receita-loja__cta:hover,
+  .receita-loja__cta:focus-visible { background: #0f5132; }
+  .receita-loja__cta[disabled] { opacity: .6; cursor: default; }
+
+  .receita-loja__list { list-style: none; margin: 0; padding: 0; }
+
+  .receita-loja__item {
+    padding: 16px 0;
+    border-bottom: 1px solid #e9eef3;
+  }
+
+  .receita-loja__item:last-child { border-bottom: 0; padding-bottom: 4px; }
+
+  .receita-loja__prescrito {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-weight: 600;
+    color: #14212b;
+    font-size: .92rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .receita-loja__num {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e3e9ef;
+    color: #47535e;
+    font-size: .72rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  .receita-loja__vazio {
+    margin: 8px 0 0 32px;
+    font-size: .84rem;
+    color: #77838d;
+  }
+
+  .receita-loja__motivo {
+    margin: 4px 0 0;
+    font-size: .8rem;
+    font-weight: 600;
+    color: #8a5a00;
+  }
+
+  .receita-loja__ofertas {
+    margin: 10px 0 0 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .receita-oferta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #dfe6ec;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .receita-oferta--atencao {
+    border-color: #e6c98f;
+    background: #fffdf6;
+  }
+
+  .receita-oferta--adicionado {
+    border-color: #9fd3b6;
+    background: #f4fbf7;
+  }
+
+  .receita-oferta__foto {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    border: 1px solid #e6ecf1;
+    background: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .receita-oferta__foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .receita-oferta__foto-vazia {
+    font-size: .6rem;
+    color: #9aa5ae;
+    text-align: center;
+  }
+
+  .receita-oferta__info { min-width: 0; flex: 1 1 200px; }
+
+  .receita-oferta__nome {
+    display: block;
+    font-weight: 600;
+    color: #14212b;
+    text-decoration: none;
+    font-size: .9rem;
+    /* Nome de composto ("Cetoconazol + Dipropionato de betametasona + …")
+       estourava a largura no celular quando o link ficava inline. */
+    overflow-wrap: anywhere;
+  }
+
+  .receita-oferta__nome:hover { text-decoration: underline; }
+
+  .receita-oferta__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .receita-tag {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+
+  .receita-tag--ok { background: #e4f4ea; color: #146c43; }
+  .receita-tag--atencao { background: #fdf1d8; color: #8a5a00; }
+  .receita-tag--neutro { background: #eceff2; color: #5b666f; }
+
+  .receita-oferta__aviso {
+    margin: 8px 0 0;
+    font-size: .8rem;
+    color: #8a5a00;
+    max-width: 52ch;
+  }
+
+  .receita-oferta__acao {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    margin-left: auto;
+  }
+
+  .receita-oferta__preco {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #14212b;
+    white-space: nowrap;
+  }
+
+  .receita-oferta__btn {
+    border: 0;
+    border-radius: 999px;
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    font-size: .82rem;
+    padding: 8px 16px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .receita-oferta__btn:hover,
+  .receita-oferta__btn:focus-visible { background: #0b5ed7; color: #fff; }
+
+  .receita-oferta__btn--ghost {
+    background: transparent;
+    color: #0d6efd;
+    border: 1px solid #b6d4fe;
+  }
+
+  .receita-oferta__btn--ghost:hover,
+  .receita-oferta__btn--ghost:focus-visible {
+    background: #eaf2ff;
+    color: #0b5ed7;
+  }
+
+  .receita-oferta__btn--feito,
+  .receita-oferta__btn--feito:hover {
+    background: #146c43;
+    color: #fff;
+  }
+
+  .receita-carrinho {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #e8f4ec;
+    border: 1px solid #b9dcc7;
+  }
+
+  .receita-carrinho__resumo {
+    display: flex;
+    flex-direction: column;
+    font-size: .88rem;
+    color: #14212b;
+  }
+
+  .receita-carrinho__resumo span { color: #4a5a52; font-size: .82rem; }
+
+  .receita-carrinho__btn {
+    border-radius: 999px;
+    background: #146c43;
+    color: #fff;
+    font-weight: 700;
+    font-size: .88rem;
+    padding: 10px 20px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .receita-carrinho__btn:hover,
+  .receita-carrinho__btn:focus-visible { background: #0f5132; color: #fff; }
+
+  .receita-loja__nota {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #e3e9ef;
+    font-size: .78rem;
+    color: #77838d;
+    max-width: 72ch;
+  }
+
+  .receita-loja__erro {
+    margin: 10px 0 0;
+    font-size: .84rem;
+    color: #a8322a;
+    font-weight: 600;
+  }
+
+  /* "Já está no carrinho" não é falha: não pode aparecer em vermelho. */
+  .receita-loja__erro--info { color: #55636e; font-weight: 500; }
+
+  @media (max-width: 560px) {
+    .receita-loja { padding: 16px; }
+    .receita-loja__ofertas,
+    .receita-loja__vazio { margin-left: 0; }
+    .receita-oferta__acao { width: 100%; justify-content: space-between; margin-left: 0; }
+    .receita-loja__cta,
+    .receita-carrinho__btn { width: 100%; text-align: center; }
+  }
+</style>
+
+<script>
+  (function () {
+    var raiz = document.querySelector('[data-receita-loja]');
+    if (!raiz) return;
+
+    var url = raiz.dataset.url;
+    var rodape = raiz.querySelector('[data-receita-rodape]');
+    var contagem = raiz.querySelector('[data-receita-contagem]');
+    var total = raiz.querySelector('[data-receita-total]');
+    var erro = raiz.querySelector('[data-receita-erro]');
+    var token = raiz.dataset.csrf;
+
+    function mostrarAviso(mensagem, apenasInformativo) {
+      erro.textContent = mensagem;
+      erro.classList.toggle('receita-loja__erro--info', !!apenasInformativo);
+      erro.hidden = false;
+    }
+
+    function atualizarRodape(dados) {
+      erro.hidden = true;
+      var qtd = dados.cart_quantity || 0;
+      contagem.textContent = qtd + (qtd === 1 ? ' item no carrinho' : ' itens no carrinho');
+      total.textContent = dados.cart_total_formatted || '';
+      rodape.hidden = false;
+    }
+
+    function marcarAdicionados(ids) {
+      (ids || []).forEach(function (id) {
+        var botao = raiz.querySelector('[data-receita-item="' + id + '"]');
+        if (!botao) return;
+        botao.textContent = 'Adicionado';
+        botao.classList.add('receita-oferta__btn--feito');
+        botao.closest('.receita-oferta').classList.add('receita-oferta--adicionado');
+      });
+    }
+
+    function adicionar(botao, productId) {
+      var rotuloOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = 'Adicionando...';
+
+      var corpo = new FormData();
+      if (token) corpo.append('csrf_token', token);
+      if (productId) corpo.append('product_id', productId);
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+        body: corpo
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, dados: d }; }); })
+        .then(function (resposta) {
+          if (!resposta.ok || !resposta.dados.success) {
+            var falha = new Error(resposta.dados.message || 'Não foi possível adicionar agora.');
+            falha.apenasInformativo = !!resposta.dados.info;
+            throw falha;
+          }
+          atualizarRodape(resposta.dados);
+          marcarAdicionados(resposta.dados.added);
+          if (!productId) {
+            botao.textContent = 'Itens adicionados';
+            botao.disabled = true;
+          } else {
+            botao.disabled = false;
+          }
+        })
+        .catch(function (e) {
+          botao.disabled = false;
+          botao.textContent = rotuloOriginal;
+          mostrarAviso(
+            e.message || 'Não foi possível adicionar agora. Tente de novo.',
+            e.apenasInformativo
+          );
+        });
+    }
+
+    raiz.addEventListener('click', function (evento) {
+      var item = evento.target.closest('[data-receita-item]');
+      if (item) {
+        evento.preventDefault();
+        adicionar(item, item.dataset.receitaItem);
+        return;
+      }
+      var lote = evento.target.closest('[data-receita-lote]');
+      if (lote) {
+        evento.preventDefault();
+        adicionar(lote, null);
+      }
+    });
+  })();
+</script>
+{% endif %}

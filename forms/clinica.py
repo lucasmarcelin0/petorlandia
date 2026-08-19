@@ -197,6 +197,10 @@ class ClinicStaffPermissionForm(FlaskForm):
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
     can_view_full_calendar = BooleanField('Visualizar agenda completa da clínica', default=True)
+    is_intern = BooleanField('Modo estágio (sem CRMV próprio)')
+    can_view_all_patients = BooleanField('Ver todos os pacientes da clínica')
+    can_draft_clinical_notes = BooleanField('Criar rascunhos clínicos', default=True)
+    can_print_signed_documents = BooleanField('Imprimir documentos já assinados pelo supervisor')
     appointments_view = SelectField(
         'Visão de Agenda',
         choices=[

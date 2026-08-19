@@ -1,9 +1,12 @@
 """Views do domínio site_routes (migrado do app.py)."""
 from flask import Blueprint
 import os, re, requests
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
+from xml.sax.saxutils import escape
 from extensions import csrf, db, limiter
-from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
+from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
 from helpers import ensure_veterinarian_membership, has_veterinarian_profile
@@ -22,9 +25,26 @@ from models import (
     Vacina,
     VacinaModelo,
     Veterinario,
+    ClinicInternshipCase,
+    ClinicStaff,
+    SiteFlag,
+    SiteText,
 )
 from services.oauth_provider import _oauth_issuer
 from services.product_analytics import track_event
+from services.payments import normalize_preapproval_reason
+from services.veterinarian_billing import (
+    MercadoPagoBillingError,
+    attach_created_preapproval,
+    create_subscription_attempt,
+    current_subscription_for_membership,
+    mark_subscription_attempt_failed,
+    mark_subscription_superseded,
+    membership_plan_from_preapproval_payload,
+    normalize_preapproval_status,
+    provider_response_payload,
+    sync_preapproval_payload,
+)
 from sqlalchemy.orm import joinedload, selectinload
 from time_utils import normalize_to_utc, now_in_brazil, utcnow
 
@@ -40,6 +60,7 @@ from app import (  # noqa: E402
     _current_professional_service_audience,
     _ensure_professional_services_table,
     _format_reais,
+    _get_veterinarian_membership_annual_price,
     _get_veterinarian_membership_price,
     _is_bh_consulta_extra_public_profile,
     _is_public_veterinarian,
@@ -137,7 +158,15 @@ def secret_game_partituras():
 
 @bp.route("/surpresa/<path:filename>")
 def secret_game_static(filename: str):
-    return send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
+    response = send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
+    if filename in {"sala-a-dois.html", "sala-a-dois.js"}:
+        # A chamada muda rapidamente e uma versao antiga pode remover TURN,
+        # chat ou permissoes. Nunca deixe o navegador reutilizar estes dois
+        # arquivos sem consultar o servidor.
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 
 @bp.route('/veterinario/assinatura')
@@ -156,22 +185,21 @@ def veterinarian_membership():
         membership = ensure_veterinarian_membership(current_user.veterinario)
         if membership.preapproval_id and not membership.has_payment_method():
             try:
-                preapproval_response = (
-                    mp_sdk().preapproval().get(membership.preapproval_id)
-                )
-                preapproval_status = (
-                    (preapproval_response.get('response') or {}).get('status')
-                    if isinstance(preapproval_response, dict)
-                    else None
-                )
-                if preapproval_status == 'authorized':
-                    membership.payment_method_set_at = utcnow()
-                    db.session.commit()
-                elif preapproval_status == 'cancelled':
+                preapproval_response = mp_sdk().preapproval().get(membership.preapproval_id)
+                response_status = int(preapproval_response.get('status') or 0)
+                if response_status == 404:
                     membership.preapproval_id = None
                     membership.payment_method_set_at = None
                     db.session.commit()
+                elif 200 <= response_status < 300:
+                    sync_preapproval_payload(provider_response_payload(preapproval_response))
+                    db.session.commit()
+                else:
+                    raise MercadoPagoBillingError(
+                        f"consulta de assinatura retornou HTTP {response_status}"
+                    )
             except Exception:  # noqa: BLE001
+                db.session.rollback()
                 current_app.logger.warning(
                     'Não foi possível sincronizar a assinatura profissional %s',
                     membership.preapproval_id,
@@ -181,9 +209,12 @@ def veterinarian_membership():
     status = request.args.get('status')
 
     checkout_form = VeterinarianMembershipCheckoutForm()
+    preferred_plan = session.get('preferred_membership_plan', 'mensal')
+    if request.method == 'GET' and preferred_plan in {'mensal', 'anual'}:
+        checkout_form.plano.data = preferred_plan
     cancel_recurring_form = VeterinarianMembershipCancelRecurringForm()
     price = float(_get_veterinarian_membership_price())
-    annual_price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', price * 10))
+    annual_price = float(_get_veterinarian_membership_annual_price())
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
 
     return render_template(
@@ -219,6 +250,28 @@ def veterinarian_membership_checkout():
     membership = None
     if has_profile:
         membership = ensure_veterinarian_membership(current_user.veterinario)
+    if membership is None:
+        flash(
+            'Complete o cadastro profissional antes de configurar uma assinatura.',
+            'warning',
+        )
+        return redirect(url_for('veterinarian_membership'))
+    # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
+    # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
+    # Precisa ser resolvido antes de reaproveitar uma assinatura pendente: sem
+    # isso, quem escolhe o anual acaba mandado de volta ao checkout mensal que
+    # ficou em aberto na visita anterior.
+    plano = (form.plano.data or 'mensal').strip().lower()
+    if plano == 'anual':
+        price = float(_get_veterinarian_membership_annual_price())
+        frequency = 12
+        ciclo_label = 'anual'
+    else:
+        plano = 'mensal'
+        price = float(_get_veterinarian_membership_price())
+        frequency = 1
+        ciclo_label = 'mensal'
+
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     if membership:
         membership.ensure_trial_dates(trial_days)
@@ -228,29 +281,85 @@ def veterinarian_membership_checkout():
                 'info',
             )
             return redirect(url_for('veterinarian_membership'))
-        if membership.preapproval_id and not _cancel_membership_preapproval(membership):
-            db.session.rollback()
-            flash(
-                'Há uma configuração de pagamento pendente no Mercado Pago. '
-                'Tente novamente em instantes ou fale com o suporte.',
-                'danger',
-            )
-            return redirect(url_for('veterinarian_membership'))
-        if membership.preapproval_id is None:
-            db.session.commit()
+        if membership.preapproval_id:
+            try:
+                preapproval_response = mp_sdk().preapproval().get(membership.preapproval_id)
+                response_status = int(preapproval_response.get('status') or 0)
+                if response_status == 404:
+                    membership.preapproval_id = None
+                    membership.payment_method_set_at = None
+                    db.session.commit()
+                elif not 200 <= response_status < 300:
+                    raise MercadoPagoBillingError(
+                        f"consulta de assinatura retornou HTTP {response_status}"
+                    )
+                else:
+                    payload = provider_response_payload(preapproval_response)
+                    subscription = sync_preapproval_payload(payload)
+                    db.session.commit()
+                    provider_status = normalize_preapproval_status(payload.get('status'))
+                    if provider_status == 'pending':
+                        pending_plan = membership_plan_from_preapproval_payload(payload)
+                        if pending_plan != plano:
+                            # O ciclo pendente não é o que acabou de ser
+                            # escolhido. Reaproveitar o init_point mandaria a
+                            # pessoa para o checkout errado, então abandonamos
+                            # o pendente e seguimos criando um novo.
+                            #
+                            # Abandonar, e não cancelar: o Mercado Pago recusa
+                            # `status: canceled` enquanto a preapproval está
+                            # pendente ("Invalid preapproval status param"),
+                            # porque só aceita cancelamento depois de
+                            # autorizada. E não há o que cancelar de fato —
+                            # sem cartão vinculado ela nunca cobra nada.
+                            if subscription:
+                                mark_subscription_superseded(subscription)
+                            membership.preapproval_id = None
+                            membership.payment_method_set_at = None
+                            db.session.add(membership)
+                            db.session.commit()
+                        else:
+                            init_point = (
+                                payload.get('init_point')
+                                or payload.get('sandbox_init_point')
+                                or (subscription.init_point if subscription else None)
+                            )
+                            if init_point:
+                                flash(
+                                    'Continuando a configuração de pagamento que já estava em andamento.',
+                                    'info',
+                                )
+                                return redirect(init_point)
+                            flash(
+                                'O Mercado Pago ainda está processando essa configuração. '
+                                'Tente novamente em instantes.',
+                                'warning',
+                            )
+                            return redirect(url_for('veterinarian_membership'))
+                    elif provider_status == 'authorized':
+                        flash('Sua renovação automática já está configurada.', 'info')
+                        return redirect(url_for('veterinarian_membership'))
+                    elif provider_status != 'canceled':
+                        flash(
+                            'A assinatura existente precisa ser regularizada antes de iniciar outra.',
+                            'warning',
+                        )
+                        return redirect(url_for('veterinarian_membership'))
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                current_app.logger.exception(
+                    'Falha ao consultar assinatura profissional pendente %s',
+                    membership.preapproval_id,
+                )
+                flash(
+                    'Não foi possível consultar o Mercado Pago. '
+                    'Nenhuma nova assinatura foi criada; tente novamente em instantes.',
+                    'danger',
+                )
+                return redirect(url_for('veterinarian_membership'))
 
-    # Ciclo escolhido pelo profissional. O anual cobra uma vez a cada 12 meses
-    # e sai mais barato por mês; ambos continuam sendo assinatura recorrente.
-    plano = (form.plano.data or 'mensal').strip().lower()
-    if plano == 'anual':
-        price = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', 0) or 0)
-        frequency = 12
-        ciclo_label = 'anual'
-    else:
-        plano = 'mensal'
-        price = float(_get_veterinarian_membership_price())
-        frequency = 1
-        ciclo_label = 'mensal'
+        db.session.add(membership)
+        db.session.commit()
 
     if price <= 0:
         flash('Plano indisponível no momento. Fale com o suporte.', 'danger')
@@ -259,8 +368,11 @@ def veterinarian_membership_checkout():
     if membership and membership.id is None:
         db.session.flush()
 
-    reason_suffix = current_user.name.strip() if (current_user.name or '').strip() else current_user.email
-    reason = f'Assinatura Profissional PetOrlândia ({ciclo_label}) - {reason_suffix}'
+    # ``external_reference`` and ``payer_email`` already identify this account.
+    # Keep ``reason`` free of PII and short: Mercado Pago rejects > 60 chars.
+    reason = normalize_preapproval_reason(
+        f'Assinatura PetOrlandia ({ciclo_label})'
+    )
 
     auto_recurring = {
         'frequency': frequency,
@@ -287,22 +399,36 @@ def veterinarian_membership_checkout():
         'auto_recurring': auto_recurring,
     }
 
+    attempt = None
     if membership and membership.id:
-        # O sufixo do ciclo permite ao webhook estender o acesso pelo período
-        # certo (30 dias no mensal, 365 no anual).
-        preapproval_data['external_reference'] = f'vet-membership-{membership.id}-{plano}'
+        attempt = create_subscription_attempt(
+            membership=membership,
+            plan_code=plano,
+            amount=price,
+        )
+        db.session.commit()
+        preapproval_data['external_reference'] = attempt.external_reference
 
     try:
         resp = mp_sdk().preapproval().create(preapproval_data)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         current_app.logger.exception('Erro de conexão com Mercado Pago para assinatura de veterinário')
         db.session.rollback()
+        if attempt:
+            mark_subscription_attempt_failed(attempt, exc)
+            db.session.commit()
         flash('Não foi possível iniciar o pagamento. Tente novamente em instantes.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
     if resp.get('status') not in {200, 201}:
         current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
         db.session.rollback()
+        if attempt:
+            mark_subscription_attempt_failed(
+                attempt,
+                (resp.get('response') or {}).get('message') or f"HTTP {resp.get('status')}",
+            )
+            db.session.commit()
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
@@ -312,21 +438,27 @@ def veterinarian_membership_checkout():
     )
 
     if not init_point:
+        if attempt:
+            mark_subscription_attempt_failed(attempt, 'Mercado Pago não retornou init_point')
+            db.session.commit()
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
     # Guarda a assinatura criada: é por ela que sabemos, depois, se existe
     # forma de pagamento cadastrada — o que muda o aviso de fim de avaliação
     # entre "vamos cobrar" e "seu acesso vai pausar".
-    preapproval_id = (resp.get('response') or {}).get('id')
-    if membership and preapproval_id:
-        membership.preapproval_id = str(preapproval_id)[:64]
-        # A criação só gera o link de autorização. A forma de pagamento passa a
-        # existir quando o Mercado Pago devolver status "authorized".
-        membership.payment_method_set_at = None
-        db.session.add(membership)
+    if attempt:
+        try:
+            attach_created_preapproval(attempt, provider_response_payload(resp))
+        except MercadoPagoBillingError as exc:
+            mark_subscription_attempt_failed(attempt, exc)
+            db.session.commit()
+            flash('Erro ao iniciar pagamento.', 'danger')
+            return redirect(url_for('veterinarian_membership'))
 
     db.session.commit()
+    session.pop('preferred_membership_plan', None)
+    track_event('subscription_started', plan=plano, amount=float(price))
 
     return redirect(init_point)
 
@@ -342,9 +474,11 @@ def _cancel_membership_preapproval(membership) -> bool:
     if not preapproval_id:
         return True
     try:
+        # The Subscriptions API requires the American spelling ``canceled``;
+        # ``cancelled`` belongs to the Payments API and is rejected here.
         response = mp_sdk().preapproval().update(
             preapproval_id,
-            {'status': 'cancelled'},
+            {'status': 'canceled'},
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception(
@@ -366,6 +500,12 @@ def _cancel_membership_preapproval(membership) -> bool:
         )
         return False
 
+    subscription = current_subscription_for_membership(membership)
+    if subscription:
+        subscription.status = 'canceled'
+        subscription.provider_status = 'canceled'
+        subscription.last_synced_at = utcnow()
+        db.session.add(subscription)
     membership.preapproval_id = None
     membership.payment_method_set_at = None
     db.session.add(membership)
@@ -585,7 +725,7 @@ def _public_profile_data(profile_key: str) -> dict:
             'secondary_url': url_for('parceiro_clinica_landing'),
             'price': f'R$ {monthly_price:.0f}/mês por veterinário',
             'reassurance': (
-                f'Primeira cobrança só no {trial_days + 1}º dia. Sem fidelidade.'
+                f'{trial_days} dias sem cartão. Você decide se quer continuar.'
             ),
         },
         'veterinario': {
@@ -641,6 +781,7 @@ def index():
     if not current_user.is_authenticated:
         from services.public_stats import public_stats
 
+        track_event('landing_viewed', channel='public')
         selected_profile = (request.args.get('perfil') or 'tutor').strip().lower()
         if selected_profile not in PUBLIC_PROFILE_KEYS:
             selected_profile = 'tutor'
@@ -696,12 +837,36 @@ def index():
             if agendamento.animal_id not in proximos_agendamentos:
                 proximos_agendamentos[agendamento.animal_id] = agendamento
 
+    home_sections = {
+        'shortcuts': SiteFlag.get('home_section_shortcuts', True),
+        'pets': SiteFlag.get('home_section_pets', True),
+        'work_areas': SiteFlag.get('home_section_work_areas', True),
+    }
+    home_text_defaults = {
+        'shortcuts_title': 'Olá',
+        'shortcuts_subtitle': 'O que você deseja fazer hoje?',
+        'shortcut_service': '🐾 Agendar um serviço',
+        'shortcut_store': '🛍️ Loja Pet',
+        'shortcut_health_plan': '❤️ Plano de Saúde Pet',
+        'shortcut_animals': '📋 Ver todos os animais',
+        'pets_title': 'Meus pets',
+        'pets_add_button': 'Cadastrar pet',
+    }
     return render_template(
         'index.html',
         meus_pets=meus_pets,
         doses_atrasadas=doses_atrasadas,
         proximas_vacinas=proximas_vacinas,
         proximos_agendamentos=proximos_agendamentos,
+        home_shortcuts={
+            'service': SiteFlag.get('home_shortcut_service', True),
+            'store': SiteFlag.get('home_shortcut_store', True),
+            'health_plan': SiteFlag.get('home_shortcut_health_plan', True),
+            'animals': SiteFlag.get('home_shortcut_animals', True),
+        },
+        is_admin=_is_admin(),
+        home_sections=home_sections,
+        home_texts={key: SiteText.get(key, default) for key, default in home_text_defaults.items()},
     )
 
 
@@ -724,7 +889,7 @@ def precos():
 
     trial_days = int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30)
     monthly = float(_get_veterinarian_membership_price())
-    annual = float(current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE', monthly * 10))
+    annual = float(_get_veterinarian_membership_annual_price())
     annual_monthly = annual / 12 if annual else 0.0
     # Quantas mensalidades o plano anual economiza, arredondado para baixo.
     months_free = int((monthly * 12 - annual) // monthly) if monthly else 0
@@ -760,6 +925,16 @@ def onboarding():
     )
     tem_clinica = bool(getattr(current_user, 'clinicas', None))
     e_veterinario = has_veterinarian_profile(current_user)
+    from services.activation import activation_steps as _activation_steps
+
+    activation_steps = _activation_steps(current_user)
+    if activation_steps:
+        completed = sum(1 for step in activation_steps if step['done'])
+        track_event(
+            'onboarding_progress_viewed',
+            stage=f'{completed}/{len(activation_steps)}',
+            success=completed == len(activation_steps),
+        )
 
     track_event('onboarding_viewed', role=getattr(current_user, 'role', None))
 
@@ -768,6 +943,7 @@ def onboarding():
         tem_pet=tem_pet,
         tem_clinica=tem_clinica,
         e_veterinario=e_veterinario,
+        activation_steps=activation_steps,
         trial_days=int(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30) or 30),
     )
 
@@ -841,6 +1017,7 @@ def waitlist_signup():
 #: atributos data-cta dos templates.
 CTA_EVENT_PREFIXES = (
     'cta_', 'home_', 'tutor_', 'student_', 'onboarding_', 'login_', 'pricing_', 'clinic_', 'store_',
+    'health_', 'recommendation_', 'value_',
 )
 
 
@@ -864,7 +1041,12 @@ def cta_event():
     if not name.startswith(CTA_EVENT_PREFIXES):
         return ('', 204)
 
-    track_event(name, source='cta')
+    track_event(
+        name,
+        source='cta',
+        source_path=(payload.get('path') or request.path)[:300],
+        link_text=(payload.get('text') or '')[:60],
+    )
     return ('', 204)
 
 
@@ -1038,9 +1220,14 @@ def _student_practice_stage(stage_key: str | None) -> tuple[dict, int]:
 
 
 @bp.route('/estudantes/pratica')
+@bp.route('/estudantes/area-profissional', endpoint='student_professional_area')
 @login_required
 def student_practice():
-    """Simulador educacional: fluxo completo, fictício e sem escrita clínica."""
+    """Área profissional demonstrativa, fictícia e sem escrita clínica.
+
+    O alias explícito deixa claro que o estudante está conhecendo o fluxo
+    profissional, sem conceder acesso às rotas operacionais de veterinários.
+    """
 
     stage, stage_index = _student_practice_stage(request.args.get('etapa'))
     track_event('student_practice_viewed', stage=stage['key'])
@@ -1063,6 +1250,34 @@ def student_practice_stage(stage_key):
         stages=STUDENT_PRACTICE_STAGES,
         stage=stage,
         stage_index=stage_index,
+    )
+
+
+@bp.route('/estagio/clinica/<int:clinica_id>')
+@login_required
+def student_internship_clinic(clinica_id):
+    """Read-only real-clinic view for an active, explicitly authorized intern."""
+    from models import Clinica
+
+    clinic = Clinica.query.get_or_404(clinica_id)
+    staff = ClinicStaff.query.filter_by(
+        clinic_id=clinic.id, user_id=current_user.id, is_intern=True
+    ).first_or_404()
+    if not staff.internship_active:
+        abort(403)
+    if staff.can_view_all_patients:
+        cases = [SimpleNamespace(animal=animal) for animal in Animal.query.filter_by(clinica_id=clinic.id).filter(Animal.removido_em.is_(None)).order_by(Animal.name).all()]
+    else:
+        cases = ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=current_user.id, revoked_at=None
+        ).order_by(ClinicInternshipCase.assigned_at.desc()).all()
+    track_event('student_internship_clinic_viewed', clinic_id=clinic.id)
+    return render_template(
+        'estagio/clinica.html',
+        clinic=clinic,
+        staff=staff,
+        cases=cases,
+        supervisor=getattr(staff, 'internship_supervisor', None),
     )
 
 
@@ -1137,34 +1352,116 @@ def robots_txt():
         "Disallow: /register\n"
         "Disallow: /painel\n"
         "Disallow: /admin\n"
+        "Disallow: /carrinho\n"
+        "Disallow: /checkout\n"
+        "Disallow: /minhas-compras\n"
         f"Sitemap: {sitemap_url}\n"
     )
     response.headers['Content-Type'] = 'text/plain; charset=utf-8'
     return response
 
 
+#: Páginas institucionais estáveis. O que é gerado por dado — cidade,
+#: profissional, produto — entra depois, e só quando existe de verdade.
+_SITEMAP_STATIC_PATHS = (
+    '/',
+    '/precos',
+    '/para-tutores',
+    '/estudantes',
+    '/sobre',
+    '/parceiros/clinica',
+    '/parceiros/loja',
+    '/parceiros/loja/produtos',
+    '/servicos',
+    '/veterinarios',
+    '/privacy',
+    '/terms',
+    '/support',
+    '/chatgpt',
+)
+
+
+def _sitemap_dynamic_paths() -> list[str]:
+    """URLs de aquisição geradas a partir da oferta que existe hoje.
+
+    "vacina a domicílio em Belo Horizonte" e "ultrassom veterinário em
+    Contagem" são buscas com intenção comercial e concorrência local baixa. As
+    páginas já existiam; faltava oferecê-las ao rastreador.
+    """
+    from services.offer_availability import health_plan_is_live, store_is_live
+
+    paths: list[str] = []
+
+    try:
+        from services.vaccine_service_paid import list_cidades as _vaccine_cities
+
+        vets = [
+            vet for vet in _public_veterinarians_query().all()
+            if _is_public_veterinarian(vet)
+        ]
+        cidades = {
+            city
+            for vet in vets
+            for city in _vet_all_public_cities(vet)
+            if city
+        }
+        cidades.update(city for city in _vaccine_cities() if city)
+
+        for cidade in sorted(cidades):
+            encoded = quote(cidade, safe='')
+            paths.append(f'/servicos?cidade={encoded}')
+            paths.append(f'/veterinarios?cidade={encoded}')
+
+        for vet in vets:
+            paths.append(f'/veterinario/{vet.id}/solicitar')
+    except Exception:  # noqa: BLE001 — sitemap degradado é melhor que 500
+        current_app.logger.warning('Falha ao montar rotas locais do sitemap', exc_info=True)
+
+    try:
+        if store_is_live():
+            from models import Product
+
+            paths.append('/loja')
+            produtos = (
+                Product.query
+                .filter(Product.status == 'active')
+                .filter(Product.is_demo.is_(False))
+                .order_by(Product.id)
+                .limit(500)
+                .all()
+            )
+            paths.extend(f'/produto/{produto.id}' for produto in produtos)
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning('Falha ao montar rotas da loja no sitemap', exc_info=True)
+
+    try:
+        if health_plan_is_live():
+            paths.append('/plano-saude')
+    except Exception:  # noqa: BLE001
+        pass
+
+    return paths
+
+
 @bp.route('/sitemap.xml')
 def sitemap_xml():
-    """Small explicit sitemap for stable, public acquisition pages."""
+    """Sitemap das páginas públicas — institucionais e geradas por dado.
+
+    Uma oferta só é anunciada ao rastreador quando existe: a loja entra
+    quando há catálogo real, o plano de saúde quando há plano cadastrado.
+    Oferecer vitrine vazia à busca queima a confiança de quem chega por ela.
+    """
     base = _oauth_issuer()
-    paths = (
-        '/',
-        '/precos',
-        '/para-tutores',
-        '/estudantes',
-        '/sobre',
-        '/parceiros/clinica',
-        '/parceiros/loja',
-        '/parceiros/loja/produtos',
-        '/loja',
-        '/plano-saude',
-        '/servicos',
-        '/privacy',
-        '/terms',
-        '/support',
-        '/chatgpt',
-    )
-    body = ''.join(f'<url><loc>{base}{path}</loc></url>' for path in paths)
+    paths = list(_SITEMAP_STATIC_PATHS) + _sitemap_dynamic_paths()
+
+    seen: set[str] = set()
+    body = ''
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        body += f'<url><loc>{escape(base + path)}</loc></url>'
+
     response = make_response(
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -1176,7 +1473,18 @@ def sitemap_xml():
 
 @bp.route('/service-worker.js')
 def service_worker():
-    return send_from_directory(current_app.static_folder, 'service-worker.js')
+    response = send_from_directory(
+        current_app.static_folder,
+        'service-worker.js',
+        max_age=0,
+    )
+    # O navegador precisa revalidar o worker em cada visita. Cache longo aqui
+    # mantém versões antigas controlando a página mesmo depois de um deploy.
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 
 @bp.route('/veterinario/servicos', methods=['GET', 'POST'])
@@ -1676,7 +1984,7 @@ def servicos():
     from admin import _is_admin
 
     audience = _current_professional_service_audience()
-    vets = _public_veterinarians_query().all()
+    vets = [vet for vet in _public_veterinarians_query().all() if _is_public_veterinarian(vet)]
     professional_services_all = _professional_service_query(active_only=True)
     vet_cities = {
         city
@@ -1875,15 +2183,26 @@ def servicos():
             'cta': 'Ver e contratar',
         })
 
+    # Banho e tosa deixa de ser "em breve" sozinho, no instante em que a
+    # primeira parceira publicar um plano ativo — sem depender de alguém
+    # lembrar de virar uma chave.
+    from services.offer_availability import grooming_is_public
+
+    has_grooming = grooming_is_public()
+
     other_services = [
         {
             'icon': 'fa-scissors',
             'color': 'warning',
             'title': 'Banho & Tosa',
-            'description': 'Planos mensais de banho e tosa nas clínicas e casas parceiras. Em breve disponível.',
+            'description': (
+                'Planos mensais de banho e tosa nas clínicas e casas parceiras da região.'
+                if has_grooming
+                else 'Planos mensais de banho e tosa nas clínicas e casas parceiras. Em breve disponível.'
+            ),
             'url': url_for('grooming_planos_publicos'),
             'cta': 'Ver planos',
-            'soon': True,
+            'soon': not has_grooming,
         },
         {
             'icon': 'fa-dog',
@@ -2052,16 +2371,32 @@ def api_geo_cidade():
 
 
 @bp.route('/servicos/vacinas', methods=['GET', 'POST'])
-@login_required
 def servicos_vacinas():
+    """Catálogo de vacinas a domicílio, com preço visível antes do cadastro.
+
+    Este é o serviço de maior intenção de compra do site. Exigir conta — e um
+    pet já cadastrado — antes de mostrar quanto custa colocava três portões
+    entre "quero vacinar meu cachorro em casa" e a resposta. Ver o preço é
+    público; fechar o pedido continua exigindo conta e pet.
+    """
     from models import VaccineServiceRequest
     from services.vaccine_service_paid import create_vaccine_request, list_active_items, list_cidades
+
+    is_logged_in = bool(getattr(current_user, 'is_authenticated', False))
+
+    if request.method == 'POST' and not is_logged_in:
+        return redirect(url_for(
+            'login_view',
+            next=url_for('servicos_vacinas', **(
+                {'cidade': request.form.get('cidade')} if request.form.get('cidade') else {}
+            )),
+        ))
 
     cidades = list_cidades()
     # Prioridade: query param > cidade do endereço do usuário > primeira cidade disponível
     cidade_param = (request.args.get('cidade') or request.form.get('cidade') or '').strip()
     explicit_city = bool(cidade_param)
-    if not cidade_param and current_user.endereco and current_user.endereco.cidade:
+    if not cidade_param and is_logged_in and current_user.endereco and current_user.endereco.cidade:
         cidade_param = current_user.endereco.cidade.strip()
     if not cidade_param and cidades:
         cidade_param = cidades[0]
@@ -2072,6 +2407,8 @@ def servicos_vacinas():
         .filter(Animal.removido_em.is_(None))
         .order_by(Animal.name)
         .all()
+        if is_logged_in
+        else []
     )
 
     if request.method == 'POST':
@@ -2130,6 +2467,12 @@ def servicos_vacinas():
                     )
                     if first_payment_url is None:
                         first_payment_url = payment_url
+                track_event(
+                    'service_requested',
+                    service='vacina_domicilio',
+                    city=cidade_selecionada,
+                    items=len(selected_animals),
+                )
                 return redirect(first_payment_url)
             except PaymentPreferenceError as exc:
                 db.session.rollback()
@@ -2148,11 +2491,13 @@ def servicos_vacinas():
         .order_by(VaccineServiceRequest.created_at.desc())
         .limit(20)
         .all()
+        if is_logged_in
+        else []
     )
 
-    prof_phone = current_user.phone or ''
+    prof_phone = (current_user.phone or '') if is_logged_in else ''
     prof = {'street': '', 'number': '', 'complement': '', 'neighborhood': ''}
-    if current_user.endereco:
+    if is_logged_in and current_user.endereco:
         prof = {
             'street': current_user.endereco.rua or '',
             'number': current_user.endereco.numero or '',

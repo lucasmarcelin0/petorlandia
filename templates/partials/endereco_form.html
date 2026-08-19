@@ -40,6 +40,39 @@
   </div>
   <div class="address-card__coordinates" data-coordinates-display>Coordenadas não definidas.</div>
   <div class="address-card__map d-none" data-map-preview></div>
+  <style>
+    .address-map-marker {
+      background: transparent;
+      border: 0;
+    }
+
+    .address-map-marker__pin {
+      align-items: center;
+      background: #0d6efd;
+      border: 3px solid #fff;
+      border-radius: 50% 50% 50% 0;
+      box-shadow: 0 3px 9px rgba(15, 23, 42, 0.35);
+      box-sizing: border-box;
+      display: flex;
+      height: 30px;
+      justify-content: center;
+      margin: 6px;
+      transform: rotate(-45deg);
+      width: 30px;
+    }
+
+    .address-map-marker__dot {
+      background: #fff;
+      border-radius: 50%;
+      height: 9px;
+      width: 9px;
+    }
+
+    .address-map-marker.leaflet-marker-draggable:active .address-map-marker__pin {
+      background: #0a58ca;
+      box-shadow: 0 5px 12px rgba(15, 23, 42, 0.45);
+    }
+  </style>
 
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
@@ -219,6 +252,8 @@
 
     if (!leafletPromise) {
       leafletPromise = new Promise((resolve, reject) => {
+        const leafletCssUrl = "{{ url_for('static', filename='leaflet/leaflet.css') }}";
+        const leafletJsUrl = "{{ url_for('static', filename='leaflet/leaflet.js') }}";
         const existingScript = document.querySelector('script[data-leaflet]');
         if (existingScript) {
           existingScript.addEventListener('load', () => resolve(window.L));
@@ -228,11 +263,11 @@
 
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.href = leafletCssUrl;
         document.head.appendChild(link);
 
         const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.src = leafletJsUrl;
         script.defer = true;
         script.setAttribute('data-leaflet', 'true');
         script.onload = () => resolve(window.L);
@@ -283,6 +318,9 @@
       }
 
       mapContainer.classList.remove('d-none');
+      // Leaflet calcula o tamanho no momento da inicialização. Como o mapa
+      // começa oculto, aguardar o próximo frame evita o painel branco.
+      mapContainer.style.minHeight = '280px';
 
       loadLeafletAssets()
         .then(L => {
@@ -292,6 +330,8 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               maxZoom: 19,
               attribution: '&copy; OpenStreetMap contributors'
+            }).on('tileerror', () => {
+              setStatus('O mapa não pôde carregar as imagens agora. As coordenadas continuam salvas.', true);
             }).addTo(mapInstance);
 
             mapInstance.on('click', event => {
@@ -304,7 +344,17 @@
 
           if (hasCoords) {
             if (!mapMarker) {
-              mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
+              const markerIcon = L.divIcon({
+                className: 'address-map-marker',
+                html: '<span class="address-map-marker__pin"><span class="address-map-marker__dot"></span></span>',
+                iconSize: [42, 42],
+                iconAnchor: [21, 42],
+                tooltipAnchor: [0, -38]
+              });
+              mapMarker = L.marker(
+                [coords.lat, coords.lon],
+                { draggable: true, icon: markerIcon }
+              ).addTo(mapInstance);
               mapMarker.bindTooltip('Arraste para ajustar a localização', { direction: 'top' });
               mapMarker.on('dragend', event => {
                 const position = event.target.getLatLng();
@@ -318,6 +368,7 @@
             mapInstance.removeLayer(mapMarker);
             mapMarker = null;
           }
+          requestAnimationFrame(() => mapInstance.invalidateSize());
         })
         .catch(() => {
           setStatus('Não foi possível carregar o mapa para ajustar a localização.', true);
@@ -648,7 +699,7 @@
     const cidadeField = addressCard?.querySelector('#cidade');
     const estadoField = addressCard?.querySelector('#estado');
 
-    const cep = cepField?.value?.replace(/\D/g, '') || '';
+      const cep = cepField?.value?.replace(/\D/g, '') || '';
     const rua = (ruaField?.value || '').trim();
     const numero = (numeroField?.value || '').trim();
     const complemento = (complementoField?.value || '').trim();
@@ -656,7 +707,7 @@
     const cidade = (cidadeField?.value || '').trim();
     const estado = (estadoField?.value || '').trim();
 
-    return { cep, rua, numero, complemento, bairro, cidade, estado };
+      return { cep, rua, numero, complemento, bairro, cidade, estado };
   }
 
   function buscarEnderecoPorCoordenadas(latitude, longitude) {
@@ -700,6 +751,11 @@
       }
 
       const payload = coletarDadosDoEndereco(addressCard);
+
+      if (payload.cep && (payload.cep.length !== 8 || payload.cep === '00000000')) {
+        reject(new Error('Informe um CEP válido para calcular a localização.'));
+        return;
+      }
 
       const hasData = Object.entries(payload).some(([key, value]) => {
         if (key === 'numero' || key === 'complemento') return false;
@@ -825,7 +881,11 @@
 
         buscarEnderecoPorCoordenadas(latitude, longitude)
           .then(data => {
-            preencherEndereco(addressCard, data, { preferCepLookup: true });
+            // A geocodificação reversa já trouxe o endereço. Consultar o CEP
+            // novamente deslocaria o ponto exato para o centro aproximado da
+            // rua ou do CEP.
+            preencherEndereco(addressCard, data, { preferCepLookup: false });
+            applyCoordinates(latitude, longitude);
             setStatus('Endereço atualizado com base na sua localização.');
           })
           .catch(error => {
@@ -893,7 +953,11 @@
 
     buscarEnderecoPorCoordenadas(coords.lat, coords.lon)
       .then(data => {
-        preencherEndereco(addressCard, data, { preferCepLookup: true });
+        // Preserve o ponto escolhido pelo usuário. Uma nova consulta pelo CEP
+        // faria geocodificação direta e poderia mover o marcador para uma
+        // coordenada aproximada do endereço.
+        preencherEndereco(addressCard, data, { preferCepLookup: false });
+        coordinateManager?.setCoordinates(coords.lat, coords.lon);
         setStatus('Endereço atualizado com base no ponto selecionado no mapa.');
       })
       .catch(error => {

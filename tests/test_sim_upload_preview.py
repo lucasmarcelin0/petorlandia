@@ -139,18 +139,20 @@ def test_product_docx_contains_official_anexo_iv_sections():
         ),
     ])
 
+    # Os rótulos do formulário são caixa-alta, e composição/nutricional viraram
+    # seções de topo (3 e 4) em vez de campos numerados 7 e 8.
     for expected in (
-        "4. Nome do produto",
-        "5. Natureza da solicitacao",
-        "6.1 Rotulo",
-        "6.2 Embalagem primaria",
-        "7. Composicao do produto",
-        "8. Informacao nutricional",
-        "9. Processo de fabricacao",
-        "10. Processo de embalagem",
-        "11. Condicoes de armazenamento",
-        "12. Medidas de controle de qualidade",
-        "13. Transporte e expedicao",
+        "4. NOME DO PRODUTO",
+        "5. NATUREZA DA SOLICITACAO",
+        "6.1 ROTULO",
+        "6.2 EMBALAGEM PRIMARIA",
+        "3. COMPOSIÇÃO DO PRODUTO",
+        "4. INFORMAÇÃO NUTRICIONAL",
+        "9. PROCESSO DE FABRICACAO",
+        "10. PROCESSO DE EMBALAGEM",
+        "11. CONDICOES DE ARMAZENAMENTO",
+        "12. MEDIDAS DE CONTROLE DE QUALIDADE",
+        "13. TRANSPORTE E EXPEDICAO",
         "Impresso, Etiqueta",
         "Manter refrigerado",
     ):

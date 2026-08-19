@@ -1,7 +1,53 @@
 {% extends "layout.html" %}
 
-{% block page_title %}PetOrlândia para tutores — a saúde do seu pet organizada{% endblock %}
-{% block meta_description %}Carteira de vacinas, histórico e agendamento de consultas do seu pet em um só lugar. Grátis para tutores, com lembrete quando uma dose vence.{% endblock %}
+{% block page_title %}Carteira de Vacinação Digital do Pet Grátis — PetOrlândia{% endblock %}
+{% block meta_description %}Organize as vacinas, histórico de consultas e exames do seu cão ou gato gratuitamente. Receba lembretes automáticos de reforço de vacinas e agende com veterinários.{% endblock %}
+{% block meta_keywords %}carteira de vacinacao pet, carteirinha de vacina digital cachorro, vacinas gato lembrete, agendamento veterinario gratis, historico de saude animal, pet orlandia tutores, saude pet orlandia{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "name": "PetOrlândia para Tutores",
+      "url": "{{ url_for('para_tutores', _external=True) }}",
+      "description": "Portal gratuito para tutores acompanharem a carteira de vacinas, histórico médico e agendamentos dos seus animais."
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "A carteira de vacinas digital é gratuita?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim, a carteira de vacinas digital e o controle do histórico do seu pet são 100% gratuitos para todos os tutores."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Como recebo os lembretes de vacinas do meu pet?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "O sistema do PetOrlândia calcula as datas de reforço e envia notificações automáticas quando a dose estiver próxima ou com atraso."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Posso agendar consultas e vacinas pela plataforma?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim, você pode encontrar veterinários parceiros credenciados na sua cidade e agendar consultas, exames ou vacinações diretamente pelo portal."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+{% endblock %}
 
 {% block main %}
 <section class="landing-page" aria-labelledby="tutores-title">
@@ -120,7 +166,9 @@
       <li>
         <span class="landing-step-index">1</span>
         <h3>Crie sua conta</h3>
-        <p>Nome, e-mail e senha — ou entre direto com o Google.</p>
+        <p>
+          Nome, e-mail e senha{% if google_login_enabled %} — ou entre direto com o Google{% endif %}.
+        </p>
       </li>
       <li>
         <span class="landing-step-index">2</span>

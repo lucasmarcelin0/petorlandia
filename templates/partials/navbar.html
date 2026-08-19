@@ -2,13 +2,41 @@
 {% set first_name = (current_user.name or '').split(' ')[0] if current_user.is_authenticated else '' %}
 {% set total_pending = (pending_exam_count|default(0)) + (pending_appointment_count|default(0)) %}
 {% set unread_total = unread_messages|default(0) %}
+{% set internship_roles = current_user.clinic_roles | selectattr('is_intern') | list if current_user.is_authenticated else [] %}
 
-<nav class="navbar navbar-expand-lg fixed-top navbar-light">
+<nav class="navbar {% if is_admin %}navbar-expand-xxl navbar--admin{% else %}navbar-expand-lg{% endif %} fixed-top navbar-light{% if not current_user.is_authenticated %} navbar--public{% endif %}">
   <div class="container-fluid">
     <a href="{{ url_for('painel_admin.index') if is_admin else url_for('index') }}" class="navbar-brand">
       <img src="{{ url_for('static', filename='pastorgato-96.png') }}" alt="Logo" class="logo-img" width="96" height="91">
       <span>PetOrlândia</span>
     </a>
+
+    {% if not current_user.is_authenticated %}
+    {# As mesmas ações de acesso do desktop ficam sempre visíveis no celular,
+       fora do menu recolhido, para não depender de abrir a sanfona. #}
+    <div class="public-auth-quick d-lg-none">
+      <a class="public-auth-quick__link public-auth-quick__login"
+         href="{{ url_for('login_view') }}"
+         aria-label="Entrar em uma conta existente">
+        Entrar
+      </a>
+      {% if is_business_context %}
+      <a class="public-auth-quick__link public-auth-quick__trial"
+         href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+         data-cta="cta_nav_trial_mobile"
+         aria-label="Criar uma conta de clínica e testar grátis">
+        Testar grátis
+      </a>
+      {% else %}
+      <a class="public-auth-quick__link public-auth-quick__trial"
+         href="{{ url_for('register') }}"
+         data-cta="cta_nav_signup_mobile"
+         aria-label="Criar uma conta gratuita de tutor">
+        Criar conta grátis
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
       aria-label="Abrir menu de navegação" aria-controls="navbarNav" aria-expanded="false">
@@ -73,21 +101,25 @@
                 <i class="fas fa-file-medical me-2 text-info"></i> Laudos</a></li>
             <li><a class="dropdown-item" href="{{ url_for('servicos') }}">
                 <i class="fas fa-paw me-2 text-danger"></i> Serviços</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin_routes.product_analytics_dashboard') }}">
+                <i class="fas fa-chart-line me-2 text-success"></i> Funil do produto</a></li>
           </ul>
         </li>
 
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-globe me-1 text-info"></i> Site
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('index') }}">
+            <i class="fas fa-home me-1 text-primary"></i> Início
           </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{{ url_for('index') }}">
-                <i class="fas fa-home me-2 text-primary"></i> Início</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('loja') }}">
-                <i class="fas fa-shopping-bag me-2 text-warning"></i> Loja</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('servicos') }}">
-                <i class="fas fa-paw me-2 text-danger"></i> Serviços</a></li>
-          </ul>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('servicos') }}">
+            <i class="fas fa-paw me-1 text-danger"></i> Serviços
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('loja') }}">
+            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+          </a>
         </li>
         <li class="nav-item dropdown position-relative">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -157,6 +189,13 @@
             {% endif %}
           </ul>
         </li>
+        {% if internship_roles %}
+        <li class="nav-item">
+          <a class="nav-link nav-link--primary" href="{{ url_for('student_internship_clinic', clinica_id=internship_roles[0].clinic_id) }}">
+            <i class="fas fa-user-graduate me-1 text-info"></i> Estágio supervisionado
+          </a>
+        </li>
+        {% endif %}
         {% elif current_user.worker == 'colaborador' %}
         <li class="nav-item">
           <a class="nav-link nav-link--primary" href="{{ url_for('appointments') }}">
@@ -235,13 +274,19 @@
         {% endif %}
         {% else %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('index') }}#como-funciona">
-            <i class="fas fa-link me-1 text-primary"></i> Como funciona
+          <a class="nav-link" href="{{ url_for('para_tutores') }}">
+            <i class="fas fa-heart me-1 text-danger"></i> Para tutores
+            <span class="nav-badge-free">grátis</span>
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('index') }}#perfis">
-            <i class="fas fa-users me-1 text-success"></i> Para quem é
+          <a class="nav-link" href="{{ url_for('parceiro_clinica_landing') }}">
+            <i class="fas fa-hospital me-1 text-success"></i> Para clínicas
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('index') }}#como-funciona">
+            <i class="fas fa-link me-1 text-primary"></i> Como funciona
           </a>
         </li>
         <li class="nav-item">
@@ -249,15 +294,41 @@
             <i class="fas fa-paw me-1 text-danger"></i> Serviços
           </a>
         </li>
+        {% if site_flags.loja_publica %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('login_view') }}">
-            <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
+          <a class="nav-link" href="{{ url_for('loja') }}">
+            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
           </a>
         </li>
+        {% endif %}
         <li class="nav-item">
-          <a class="nav-link nav-link--cta fw-semibold text-success" href="{{ url_for('index') }}#perfis">
-            <i class="fas fa-arrow-right me-1"></i> Começar
+          <a class="nav-link" href="{{ url_for('precos') }}">
+            <i class="fas fa-tag me-1 text-success"></i> Preços
           </a>
+        </li>
+        <li class="nav-item public-auth-item">
+          <a class="nav-link nav-link--auth nav-link--login fw-semibold"
+             href="{{ url_for('login_view') }}"
+             aria-label="Entrar em uma conta existente">
+            <i class="fas fa-sign-in-alt me-1"></i> Entrar
+          </a>
+        </li>
+        <li class="nav-item public-auth-item">
+          {% if is_business_context %}
+          <a class="nav-link nav-link--auth nav-link--trial fw-semibold"
+             href="{{ url_for('register', next=url_for('minha_clinica')) }}"
+             data-cta="cta_nav_trial"
+             aria-label="Criar uma conta de clínica e testar grátis">
+            <i class="fas fa-arrow-right me-1"></i> Testar grátis
+          </a>
+          {% else %}
+          <a class="nav-link nav-link--auth nav-link--trial fw-semibold"
+             href="{{ url_for('register') }}"
+             data-cta="cta_nav_signup"
+             aria-label="Criar uma conta gratuita de tutor">
+            <i class="fas fa-arrow-right me-1"></i> Criar conta grátis
+          </a>
+          {% endif %}
         </li>
         {% endif %}
 
@@ -273,17 +344,25 @@
           </a>
         </li>
 
-        <li class="nav-item dropdown">
+        <li class="nav-item dropdown nav-account">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user-circle me-1 text-primary"></i> {{ first_name or 'Conta' }}
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li class="nav-account__logout-mobile">
+              <a class="dropdown-item nav-logout-link" href="{{ url_for('logout') }}">
+                <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair da conta
+              </a>
+            </li>
             <li><a class="dropdown-item" href="{{ url_for('profile') }}">
                 <i class="fas fa-user me-2 text-primary"></i> Meu perfil</a></li>
             <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}">
                 <i class="fas fa-box me-2 text-warning"></i> Minhas compras</a></li>
             <li><a class="dropdown-item" href="{{ url_for('racao_minhas_assinaturas') }}">
                 <i class="fas fa-rotate me-2 text-success"></i> Minhas assinaturas</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('petsitter_routes.indicacao') }}"
+                   data-cta="nav_indicacao">
+                <i class="fas fa-gift me-2 text-danger"></i> Indique e ganhe</a></li>
             {% if current_user.role == 'parceiro' %}
             <li><a class="dropdown-item" href="{{ url_for('parceiro_dashboard') }}">
                 <i class="fa-solid fa-handshake me-2 text-primary"></i> Área do parceiro</a></li>
@@ -306,7 +385,7 @@
               </a>
             </li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+            <li class="nav-account__logout-desktop"><a class="dropdown-item nav-logout-link" href="{{ url_for('logout') }}">
                 <i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
           </ul>
         </li>

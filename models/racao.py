@@ -352,13 +352,21 @@ class RacaoAssinatura(db.Model):
     # Frequência em dias (15, 30, 60...) — convertida para o preapproval do MP.
     frequencia_dias = db.Column(db.Integer, nullable=False, default=30)
     # Preço público do ciclo, congelado na adesão.
+    preco_unitario = db.Column(db.Numeric(10, 2), nullable=True)
+    frete_ciclo = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     preco_ciclo = db.Column(db.Numeric(10, 2), nullable=False)
-    # pending (aguardando 1º pagamento) | active | cancelled
+    # creating | pending | active | cancel_pending | canceled | failed
     status = db.Column(db.String(20), nullable=False, default='pending', index=True)
     mp_preapproval_id = db.Column(db.String(128), nullable=True)
+    init_point = db.Column(db.Text, nullable=True)
+    last_error = db.Column(db.String(500), nullable=True)
     ciclos_pagos = db.Column(db.Integer, nullable=False, default=0)
     ultimo_ciclo_em = db.Column(db.DateTime(timezone=True), nullable=True)
-    endereco_entrega = db.Column(db.String(255), nullable=True)
+    endereco_entrega = db.Column(db.String(255), nullable=False)
+    consent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    consent_ip = db.Column(db.String(64), nullable=True)
+    consent_user_agent = db.Column(db.String(255), nullable=True)
+    terms_version = db.Column(db.String(32), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     activated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     cancelled_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -372,6 +380,37 @@ class RacaoAssinatura(db.Model):
     def frequencia_label(self):
         mapping = {15: 'Quinzenal', 30: 'Mensal', 60: 'A cada 2 meses', 90: 'A cada 3 meses'}
         return mapping.get(self.frequencia_dias, f'A cada {self.frequencia_dias} dias')
+
+
+class RacaoAssinaturaCiclo(db.Model):
+    """Ciclo pago idempotente e pedido de entrega correspondente."""
+
+    __tablename__ = 'racao_assinatura_ciclo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    assinatura_id = db.Column(
+        db.Integer,
+        db.ForeignKey('racao_assinatura.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    provider_payment_id = db.Column(db.String(128), nullable=False, unique=True)
+    order_id = db.Column(
+        db.Integer,
+        db.ForeignKey('order.id', ondelete='SET NULL'),
+        nullable=True,
+        unique=True,
+    )
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    status = db.Column(db.String(24), nullable=False, default='paid')
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    processed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    assinatura = db.relationship(
+        'RacaoAssinatura',
+        backref=db.backref('ciclos', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+    order = db.relationship('Order')
 
 
 
@@ -395,4 +434,3 @@ class RacaoAssinatura(db.Model):
 
 
 #testing sandbox
-

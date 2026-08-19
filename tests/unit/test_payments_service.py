@@ -9,7 +9,22 @@ from services.payments import (
     apply_payment_to_bloco,
     apply_payment_to_orcamento,
     create_payment_preference,
+    normalize_preapproval_reason,
 )
+
+
+def test_normalize_preapproval_reason_enforces_mercado_pago_limit():
+    reason = normalize_preapproval_reason(
+        "  Assinatura   Profissional PetOrlandia - " + "Nome muito longo " * 8
+    )
+
+    assert 1 <= len(reason) <= 60
+    assert "  " not in reason
+    assert not reason.endswith(" ")
+
+
+def test_normalize_preapproval_reason_has_safe_fallback():
+    assert normalize_preapproval_reason("   ") == "Assinatura PetOrlandia"
 
 
 class FakeSession:

@@ -1,50 +1,191 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media, media_image %}
+{% block page_title %}{{ product.name }} — {{ 'compra ou assinatura' if product.subscription_enabled else 'compra única' }} | PetOrlândia{% endblock %}
+{% block meta_description %}{{ ((product.description or ('Compre ' ~ product.name ~ ' com vendedor e preço informados antes do pagamento.')) | striptags | truncate(155, true, '')) }}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+  {{ {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.name,
+    "description": (product.description or product.name),
+    "sku": (product.id|string),
+    "offers": {
+      "@type": "Offer",
+      "url": url_for('produto_detail', product_id=product.id, _external=true),
+      "priceCurrency": "BRL",
+      "price": (product.public_price_min|float),
+      "availability": ("https://schema.org/InStock" if (product.stock or 0) > 0 else "https://schema.org/OutOfStock")
+    }
+  } | tojson }}
+</script>
+{% endblock %}
 {% block main %}
+<style>
+  .purchase-choice { border: 2px solid #e8edf4; border-radius: 1rem; transition: border-color .2s, box-shadow .2s; }
+  .purchase-choice--single { border-color: #2563eb; }
+  .purchase-choice--subscription { border-color: #198754; background: linear-gradient(145deg, #fff, #f2fff8); }
+  .choice-label { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 800; }
+  .price-main { font-size: 1.75rem; line-height: 1; font-weight: 800; }
+
+  /* A descrição vem digitada em parágrafos (fórmula, indicações, modo de
+     usar). Sem isto tudo colapsava num bloco corrido de texto. */
+  .product-description {
+    white-space: pre-line;
+    line-height: 1.65;
+    color: #4b5563;
+    max-width: 68ch;
+  }
+  .product-description--collapsed {
+    max-height: 15rem;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  }
+  .product-description-toggle {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-weight: 600;
+    color: #2563eb;
+  }
+</style>
 <div class="container py-4">
-  <div class="row">
-    <div class="col-md-6">
-      {% if product.image_url %}
-      <img src="{{ product.image_url }}" class="img-fluid mb-3" alt="{{ product.name }}" loading="lazy" width="600" height="600">
-      {% endif %}
+  <nav aria-label="Navegação estrutural" class="mb-3">
+    <a href="{{ url_for('loja') }}" class="text-decoration-none small"><i class="fa-solid fa-arrow-left me-1"></i>Voltar à loja</a>
+  </nav>
+  <div class="row g-4">
+    <div class="col-lg-5">
+      {{ product_media(product, 'hero', 'mb-3', true) }}
+      {% if product.extra_photos %}<div class="d-flex flex-wrap gap-2 mb-3" aria-label="Outras fotos de {{ product.name }}">{% endif %}
       {% for photo in product.extra_photos %}
- 
-        <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Foto extra">
- 
+      {{ media_image(photo.image_url, 'Outra foto de ' ~ product.name, 'gallery') }}
       {% endfor %}
+      {% if product.extra_photos %}</div>{% endif %}
     </div>
-    <div class="col-md-6">
-      <h2>{{ product.name }}</h2>
-      <p>{{ product.description }}</p>
-      <p class="h4 text-success">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</p>
-      <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form" data-skip-global-handler="true">
-        {{ form.hidden_tag() }}
-        {{ form.quantity(class="form-control w-auto", min="1") }}
-        <button type="submit" class="btn btn-primary">Adicionar ao Carrinho</button>
-      </form>
-      <div class="mt-2">
-        <a href="{{ url_for('racao_assinar', product_id=product.id) }}" class="btn btn-success">
-          <i class="fa-solid fa-rotate me-1"></i> Assinar e receber sempre
-        </a>
-        <div class="text-muted small mt-1">Entrega recorrente, sem precisar lembrar de pedir. Cancele quando quiser.</div>
+    <div class="col-lg-7">
+      {% if product.category_label %}<span class="badge text-bg-light border mb-2">{{ product.category_label }}</span>{% endif %}
+      <h1 class="h2 mb-2">{{ product.name }}</h1>
+      {% if is_admin %}
+      <div class="alert {% if product.status == 'active' %}alert-success{% else %}alert-secondary{% endif %} d-flex align-items-center justify-content-between gap-3 py-2 mb-3">
+        <span class="small">
+          <i class="fa-solid {% if product.status == 'active' %}fa-circle-check{% else %}fa-eye-slash{% endif %} me-1"></i>
+          Produto <strong>{% if product.status == 'active' %}ativo{% else %}inativo{% endif %}</strong> na loja.
+        </span>
+        <form method="post" action="{{ url_for('produto_toggle_status', product_id=product.id) }}" class="flex-shrink-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm {% if product.status == 'active' %}btn-outline-warning{% else %}btn-success{% endif %}"
+                  aria-label="{% if product.status == 'active' %}Inativar{% else %}Ativar{% endif %} produto">
+            <i class="fa-solid {% if product.status == 'active' %}fa-eye-slash{% else %}fa-eye{% endif %} me-1"></i>
+            {% if product.status == 'active' %}Inativar{% else %}Ativar{% endif %}
+          </button>
+        </form>
       </div>
-      <div class="mt-3">
-        <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary me-2">Continuar comprando</a>
-        <a href="{{ url_for('ver_carrinho') }}" class="btn btn-outline-primary">Ir ao carrinho</a>
+      {% endif %}
+      {% set seller = product.casa_de_racao if product.casa_de_racao else product.clinica if product.clinica else none %}
+      <p class="small text-muted mb-3">
+        <i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ seller.nome if seller else 'PetOrlândia' }}</strong>
+      </p>
+      {% if product.description %}
+      {# ``pre-line`` preserva as quebras que o vendedor digitou sem abrir mão
+         do escape: fórmula, indicações e modo de usar param de virar um
+         parágrafo único. Bulas longas ficam recolhidas para que o preço e o
+         botão de compra não sejam empurrados para fora da tela. #}
+      <div class="product-description" id="product-description">{{ product.description }}</div>
+      <button type="button" class="product-description-toggle mt-2 mb-4 d-none"
+              id="product-description-toggle"
+              aria-expanded="false" aria-controls="product-description">
+        Ver descrição completa
+      </button>
+      <div class="mb-4"></div>
+      {% endif %}
+
+      <h2 class="h5 mb-3">Como você quer receber?</h2>
+      <div class="row g-3">
+        <div class="col-md-6{% if not product.subscription_enabled %} col-lg-8{% endif %}">
+          <section class="purchase-choice purchase-choice--single h-100 p-3" aria-labelledby="single-title">
+            <div class="choice-label text-primary mb-2"><i class="fa-solid fa-bag-shopping me-1"></i>Compra única</div>
+            <h3 id="single-title" class="h5 mb-1">Comprar somente desta vez</h3>
+            <div class="price-main my-3">{{ product.public_price_min | currency_br }}</div>
+            {% if product.public_price_max != product.public_price_min %}<div class="small text-muted mb-2">até {{ product.public_price_max | currency_br }}, conforme a apresentação</div>{% endif %}
+            <p class="small text-muted">Um único pedido e um único pagamento. Não haverá cobranças automáticas.</p>
+            {% if current_user.is_authenticated %}
+            <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form" data-skip-global-handler="true">
+              {{ form.hidden_tag() }}
+              {{ form.quantity(class="form-control", min="1", max="10", aria_label="Quantidade", style="max-width:78px") }}
+              <button type="submit" class="btn btn-primary flex-grow-1">Adicionar ao carrinho</button>
+            </form>
+            {% else %}
+            <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
+               class="btn btn-primary w-100" data-cta="product_detail_login_to_buy">
+              Entrar para comprar
+            </a>
+            <div class="small text-muted mt-2">O produto continua aqui depois do acesso.</div>
+            {% endif %}
+          </section>
+        </div>
+
+        {% if product.subscription_enabled %}
+        <div class="col-md-6">
+          <section class="purchase-choice purchase-choice--subscription h-100 p-3" aria-labelledby="subscription-title">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="choice-label text-success"><i class="fa-solid fa-arrows-rotate me-1"></i>Assinatura recorrente</div>
+              {% if product.subscription_discount %}<span class="badge bg-success">Economize {{ product.subscription_discount|float|round(0)|int }}%</span>{% endif %}
+            </div>
+            <h3 id="subscription-title" class="h5 mb-1">Receber automaticamente</h3>
+            <div class="price-main text-success my-3">{{ product.subscription_price_min | currency_br }} <span class="fs-6 fw-normal">por ciclo</span></div>
+            <p class="small mb-2"><strong>Cobrança automática recorrente.</strong> Você escolhe a frequência antes de autorizar.</p>
+            <p class="small text-muted">Frete de {{ product.subscription_shipping_fee | currency_br }} por entrega. Sem fidelidade e com cancelamento digital.</p>
+            <a href="{{ url_for('racao_assinar', product_id=product.id) if current_user.is_authenticated else url_for('login_view', next=url_for('racao_assinar', product_id=product.id)) }}" class="btn btn-success w-100">
+              {{ 'Configurar assinatura' if current_user.is_authenticated else 'Entrar para assinar' }} <i class="fa-solid fa-arrow-right ms-1"></i>
+            </a>
+          </section>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="alert alert-light border mt-3 small mb-0">
+        <i class="fa-solid fa-shield-halved text-primary me-1"></i>
+        Antes de pagar, você verá novamente o tipo de compra, o valor total, o frete e, em caso de assinatura, a frequência das próximas cobranças.
       </div>
     </div>
   </div>
 
+  {% include 'loja/_related_products.html' %}
+
   {% if is_admin %}
   <hr>
   {% include "products_edit.html" %}
-
   <hr>
   <h4>Adicionar Foto</h4>
   <form method="post" enctype="multipart/form-data">
     {{ photo_form.hidden_tag() }}
     {{ photo_form.image(class="form-control mb-2") }}
-    <button type="submit" class="btn btn-primary" name="photo-submit">{{ photo_form.submit.label.text }}</button>
+    {# Ver o comentário em products_edit.html: sem ``value`` o botão envia
+       string vazia e o SubmitField a lê como False. #}
+    <button type="submit" class="btn btn-primary" name="photo-submit" value="1">{{ photo_form.submit.label.text }}</button>
   </form>
   {% endif %}
 </div>
+
+<script>
+  (function () {
+    var texto = document.getElementById('product-description');
+    var botao = document.getElementById('product-description-toggle');
+    if (!texto || !botao) return;
+
+    // Só recolhe quando há o que recolher: descrição curta continua inteira.
+    var LIMITE = 240;
+    if (texto.scrollHeight <= LIMITE) return;
+
+    texto.classList.add('product-description--collapsed');
+    botao.classList.remove('d-none');
+
+    botao.addEventListener('click', function () {
+      var recolhido = texto.classList.toggle('product-description--collapsed');
+      botao.setAttribute('aria-expanded', recolhido ? 'false' : 'true');
+      botao.textContent = recolhido ? 'Ver descrição completa' : 'Ver menos';
+    });
+  })();
+</script>
 {% endblock %}

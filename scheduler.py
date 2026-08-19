@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
+import functools
+import gc
 import os
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -12,9 +15,12 @@ from app import (
     app,
     _run_financial_snapshot_job,
     _run_mercadopago_oauth_renewal_job,
+    _run_veterinarian_billing_reconciliation_job,
+    enviar_lembretes_carrinho_abandonado,
     enviar_lembretes_fim_trial,
     enviar_lembretes_recebimento,
     enviar_lembretes_tratamento,
+    enviar_winback_pos_trial,
     verificar_datas_proximas,
 )
 from scripts.sync_pmo_full_status import run_pmo_full_sync
@@ -26,6 +32,35 @@ DEFAULT_HOUR = 4
 DEFAULT_MINUTE = 30
 DEFAULT_MONTHS = 6
 DEFAULT_PMO_SYNC_MINUTES = 10
+
+
+def _release_job_memory() -> None:
+    """Devolve ao sistema memória retida por jobs pesados e bibliotecas C."""
+
+    gc.collect()
+    if os.name != "posix":
+        return
+    try:
+        # CPython/glibc pode manter arenas grandes após o sincronismo do PMO.
+        # malloc_trim reduz o RSS do dyno sem alterar dados ou estado dos jobs.
+        libc = ctypes.CDLL(None)
+        malloc_trim = getattr(libc, "malloc_trim", None)
+        if malloc_trim is not None:
+            malloc_trim(0)
+    except (AttributeError, OSError):
+        # A otimização é opcional em plataformas sem glibc.
+        pass
+
+
+def _memory_bounded_job(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _release_job_memory()
+
+    return wrapped
 
 
 def _parse_clinic_ids(raw: str | None) -> list[int]:
@@ -65,6 +100,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "sim", "on"}
 
 
+@_memory_bounded_job
 def _run_backfill() -> None:
     with app.app_context():
         months = _env_int('ACCOUNTING_BACKFILL_MONTHS', DEFAULT_MONTHS, 1)
@@ -92,6 +128,7 @@ def _run_backfill() -> None:
             )
 
 
+@_memory_bounded_job
 def _run_pmo_sync() -> None:
     with app.app_context():
         if not _env_bool("PMO_SYNC_ENABLED", True):
@@ -105,6 +142,7 @@ def _run_pmo_sync() -> None:
         current_app.logger.info("[Scheduler] Sincronizacao PMO concluida: %s", result)
 
 
+@_memory_bounded_job
 def _run_pmo_doses_compile() -> None:
     with app.app_context():
         if not _env_bool("PMO_DOSES_COMPILE_ENABLED", True):
@@ -163,6 +201,17 @@ def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    billing_interval = _env_int(
+        "VETERINARIAN_BILLING_RECONCILIATION_MINUTES", 30, 5, 1440
+    )
+    scheduler.add_job(
+        _memory_bounded_job(_run_veterinarian_billing_reconciliation_job),
+        IntervalTrigger(minutes=billing_interval),
+        id="mercadopago-membership-reconciliation",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     # Jobs diários que antes rodavam no dyno web (BackgroundScheduler no
     # app.py). Centralizados aqui: uma única execução, independente do nº de
     # workers web. Cada job gerencia o próprio app_context.
@@ -172,12 +221,16 @@ def main() -> None:
         ('lembretes-tratamento', enviar_lembretes_tratamento, 9, 0),
         ('lembretes-recebimento', enviar_lembretes_recebimento, 10, 0),
         ('lembretes-fim-trial', enviar_lembretes_fim_trial, 11, 0),
+        # Recuperação de receita: quem terminou a avaliação sem assinar e quem
+        # montou carrinho e não pagou.
+        ('winback-pos-trial', enviar_winback_pos_trial, 11, 30),
+        ('carrinho-abandonado', enviar_lembretes_carrinho_abandonado, 15, 0),
         ('snapshot-financeiro', _run_financial_snapshot_job, 2, 30),
         ('mercadopago-oauth-renewal', _run_mercadopago_oauth_renewal_job, 3, 15),
     ]
     for job_id, func, hour, minute in daily_jobs:
         scheduler.add_job(
-            func,
+            _memory_bounded_job(func),
             CronTrigger(hour=hour, minute=minute, timezone=br_tz),
             id=job_id,
             replace_existing=True,
@@ -188,10 +241,11 @@ def main() -> None:
     with app.app_context():
         current_app.logger.info(
             'Agendador iniciado. Backfill mensal em %s. PMO a cada %s minuto(s). '
-            'Controle de doses em %s.',
+            'Controle de doses em %s. Reconciliação de assinaturas a cada %s minuto(s).',
             trigger,
             pmo_interval,
             doses_trigger,
+            billing_interval,
         )
     try:
         scheduler.start()

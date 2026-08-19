@@ -31,25 +31,63 @@ def test_users_share_clinic_data(monkeypatch, app):
         db.drop_all()
         db.create_all()
         clinic = Clinica(nome="Clinic")
+        other_clinic = Clinica(nome="Other Clinic")
         vet_user = User(name="Vet", email="vet@example.com", password_hash="x", worker="veterinario")
         vet = Veterinario(user=vet_user, crmv="123", clinica=clinic)
-        colab_user = User(name="Colab", email="colab@example.com", password_hash="y", worker="colaborador", clinica_id=clinic.id)
-        db.session.add_all([clinic, vet_user, vet, colab_user])
+        colab_user = User(
+            name="Colab",
+            email="colab@example.com",
+            password_hash="y",
+            worker="colaborador",
+            clinica=clinic,
+        )
+        other_tutor = User(
+            name="Other Clinic Tutor",
+            email="other-clinic-tutor@example.com",
+            password_hash="z",
+            clinica=other_clinic,
+        )
+        other_animal = Animal(
+            name="Other Clinic Animal",
+            owner=other_tutor,
+            clinica=other_clinic,
+        )
+        db.session.add_all([
+            clinic,
+            other_clinic,
+            vet_user,
+            vet,
+            colab_user,
+            other_tutor,
+            other_animal,
+        ])
         db.session.commit()
 
         # veterinarian adds tutor and animal
         login(monkeypatch, vet_user)
         client.post('/tutores', data={
-            'name': 'Tutor', 'email': 't@t.com',
+            'name': 'Same Clinic Tutor', 'email': 't@t.com',
             # Endereço passou a ser obrigatório no cadastro de tutores.
             'rua': 'Rua A', 'cidade': 'Orlandia', 'estado': 'SP',
         })
         tutor = User.query.filter_by(email='t@t.com').first()
         assert tutor.clinica_id == clinic.id
 
-        client.post('/novo_animal', data={'tutor_id': tutor.id, 'name': 'Rex', 'sex': 'M'})
-        animal = Animal.query.filter_by(name='Rex').first()
+        client.post('/novo_animal', data={
+            'tutor_id': tutor.id,
+            'name': 'Same Clinic Animal',
+            'sex': 'M',
+        })
+        animal = Animal.query.filter_by(name='Same Clinic Animal').first()
         assert animal.clinica_id == clinic.id
+
+        vet_tutors = client.get('/tutores?scope=all')
+        assert b'Same Clinic Tutor' in vet_tutors.data
+        assert b'Other Clinic Tutor' not in vet_tutors.data
+
+        vet_animals = client.get('/novo_animal?scope=all')
+        assert b'Same Clinic Animal' in vet_animals.data
+        assert b'Other Clinic Animal' not in vet_animals.data
 
         client.get('/logout')
         login(monkeypatch, colab_user)
@@ -93,8 +131,13 @@ def test_users_share_clinic_data(monkeypatch, app):
 
         resp_all = client.get('/tutores?scope=all')
         assert resp_all.status_code == 200
+        assert b'Same Clinic Tutor' in resp_all.data
+        assert b'Other Clinic Tutor' not in resp_all.data
+
         resp_animals_all = client.get('/novo_animal?scope=all')
         assert resp_animals_all.status_code == 200
+        assert b'Same Clinic Animal' in resp_animals_all.data
+        assert b'Other Clinic Animal' not in resp_animals_all.data
 
         db.session.remove()
         db.drop_all()

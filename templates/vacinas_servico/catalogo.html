@@ -287,10 +287,21 @@
           </div>
           {% endfor %}
         </div>
-        {% else %}
+        {% elif current_user.is_authenticated %}
         <p class="text-muted small mb-2">Você ainda não tem pets cadastrados.</p>
         <a href="{{ url_for('add_animal') }}" class="btn btn-sm btn-outline-primary">
           <i class="fa-solid fa-plus me-1"></i> Cadastrar pet
+        </a>
+        {% else %}
+        {# Visitante: já viu as vacinas e o preço. A conta entra agora, para
+           dizer qual pet recebe a dose e para onde vamos. #}
+        <p class="text-muted small mb-2">
+          Entre com sua conta para escolher o pet e concluir o agendamento.
+          Criar conta leva um minuto.
+        </p>
+        <a href="{{ url_for('login_view', next=url_for('servicos_vacinas', cidade=cidade_selecionada)) }}"
+           class="btn btn-sm btn-primary" data-cta="vacinas_login_to_book">
+          <i class="fa-solid fa-arrow-right-to-bracket me-1"></i> Entrar e agendar
         </a>
         {% endif %}
         <div class="form-text text-danger d-none" id="vacserv-pet-error">

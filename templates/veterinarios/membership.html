@@ -21,8 +21,8 @@
 
   {% if membership and membership.preapproval_id and not membership.has_payment_method() %}
   <div class="alert alert-warning">
-    A configuração anterior do pagamento não foi concluída. Ao tentar novamente, substituímos
-    esse pedido pendente com segurança.
+    A configuração anterior do pagamento não foi concluída. Ao continuar, você volta
+    ao mesmo checkout seguro do Mercado Pago, sem criar assinaturas duplicadas.
   </div>
   {% endif %}
 
@@ -66,16 +66,33 @@
         </p>
         {% endif %}
       {% else %}
-        <span class="badge bg-warning-subtle text-warning-emphasis mb-2">Assinatura inativa</span>
-        <h2 class="h5 mb-1">Suas ferramentas profissionais estão pausadas.</h2>
+        <span class="badge bg-warning-subtle text-warning-emphasis mb-2">Modo Continuidade gratuito</span>
+        <h2 class="h5 mb-1">Seus dados estão guardados; as ferramentas de operação estão pausadas.</h2>
         <p class="text-muted mb-0">
-          Nada foi apagado — prontuários, agenda e histórico continuam guardados.
-          Ao ativar a assinatura, tudo volta exatamente como você deixou.
+          Nada foi apagado. Você mantém a conta, o perfil profissional e as áreas de leitura
+          disponíveis, mas criar ou editar prontuários, agenda e financeiro requer o plano Profissional.
+          Ao reativar, tudo volta exatamente como você deixou.
         </p>
       {% endif %}
     </div>
   </div>
   {% endif %}
+
+  <section class="card border-0 shadow-sm rounded-4 mb-4" aria-labelledby="plans-compare-title">
+    <div class="card-body p-4">
+      <h2 id="plans-compare-title" class="h5 mb-3">O que fica disponível em cada modo</h2>
+      <div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Recurso</th><th class="text-center">Continuidade<br><span class="fw-normal text-muted small">R$ 0</span></th><th class="text-center">Profissional</th></tr></thead>
+        <tbody>
+          <tr><td>Conta, perfil e dados preservados</td><td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+          <tr><td>Consulta às áreas em modo leitura</td><td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+          <tr><td>Criar e editar agenda e prontuário</td><td class="text-center text-muted">—</td><td class="text-center text-success">✓</td></tr>
+          <tr><td>Vacinas, exames, documentos e financeiro operacionais</td><td class="text-center text-muted">—</td><td class="text-center text-success">✓</td></tr>
+        </tbody>
+      </table></div>
+      <p class="text-muted small mb-0 mt-3">A avaliação gratuita libera o modo Profissional pelo prazo informado. Depois, sem pagamento, a conta muda automaticamente para Continuidade e não há cobrança.</p>
+    </div>
+  </section>
 
   {% if membership and membership.has_payment_method() %}
   <div class="card border-0 bg-light rounded-4 mb-4">
@@ -109,7 +126,7 @@
       <div class="col-md-6">
         <label class="membership-plan h-100" for="plano-mensal">
           <input class="form-check-input" type="radio" name="plano" id="plano-mensal"
-                 value="mensal" checked>
+                 value="mensal"{% if checkout_form.plano.data != 'anual' %} checked{% endif %}>
           <span class="membership-plan__body">
             <span class="membership-plan__name">Mensal</span>
             <span class="membership-plan__price">R$ {{ '%.0f'|format(price) }}<small>/mês</small></span>
@@ -120,7 +137,8 @@
 
       <div class="col-md-6">
         <label class="membership-plan h-100" for="plano-anual">
-          <input class="form-check-input" type="radio" name="plano" id="plano-anual" value="anual">
+          <input class="form-check-input" type="radio" name="plano" id="plano-anual"
+                 value="anual"{% if checkout_form.plano.data == 'anual' %} checked{% endif %}>
           <span class="membership-plan__body">
             <span class="membership-plan__name">
               Anual
@@ -139,16 +157,26 @@
 
     <button type="submit" class="btn btn-primary btn-lg rounded-pill px-4">
       <i class="bi bi-cash-coin me-1"></i>
-      {% if membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
+      {% if membership and membership.preapproval_id and not membership.has_payment_method() %}
+        Continuar no Mercado Pago
+      {% elif membership and membership.is_trial_active() %}Configurar pagamento{% else %}Ativar assinatura{% endif %}
     </button>
     <p class="text-muted small mt-2 mb-0">
-      Pagamento pelo Mercado Pago (cartão, Pix ou boleto). A renovação é automática e você
-      cancela pelo próprio Mercado Pago ou falando com a gente, sem multa.
+       Assinatura recorrente por cartão, processada com segurança pelo Mercado Pago.
+       A renovação é automática e pode ser cancelada sem multa.
     </p>
   </form>
   {% endif %}
 
   {% if membership %}
+  {% if membership.has_valid_payment() %}
+  <div class="card border-primary-subtle bg-primary-subtle rounded-4 mt-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+      <div><strong>Indique uma clínica e ganhe 30 dias.</strong><div class="small text-muted">A recompensa é liberada após a primeira cobrança paga da pessoa indicada.</div></div>
+      <a href="{{ url_for('indicacao') }}" class="btn btn-primary" data-cta="pricing_referral_open">Ver meu link</a>
+    </div>
+  </div>
+  {% endif %}
   <details class="mt-4">
     <summary class="text-muted small">Detalhes da conta</summary>
     <dl class="row mt-3 mb-0 small">

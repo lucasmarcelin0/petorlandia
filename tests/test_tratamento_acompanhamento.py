@@ -32,6 +32,7 @@ def app():
     flask_app.config.update(
         TESTING=True,
         WTF_CSRF_ENABLED=False,
+        RATELIMIT_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
     yield flask_app
@@ -250,6 +251,76 @@ def test_tutor_acessa_pagina_e_marca_acoes(app):
         avulso = AdministracaoRegistro.query.filter_by(item_id=shampoo_id).one()
         assert avulso.status == 'feita'
         assert avulso.observacao == 'banho dado'
+        db.drop_all()
+
+
+def test_tratamento_sem_doses_previstas_exibe_progresso_zero(app):
+    """Cuidados livres não podem causar comparação de ``None`` no template."""
+    bloco_id, _ = _setup_bloco(app)
+    tratamento_id = _ativar(app, bloco_id)
+
+    with app.app_context():
+        acompanhamento = db.session.get(TratamentoAcompanhamento, tratamento_id)
+        for item in acompanhamento.itens:
+            AdministracaoRegistro.query.filter_by(item_id=item.id).delete()
+            item.modo = 'livre'
+        db.session.commit()
+
+    client = app.test_client()
+    with client:
+        _login(client, 'tutor@example.com', 'pw2')
+        response = client.get(f'/tratamento/{tratamento_id}')
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="overall-percent">0</span>%' in html
+    with app.app_context():
+        db.drop_all()
+
+
+def test_acoes_ajax_retornam_progresso_sem_redirecionar(app):
+    bloco_id, _ = _setup_bloco(app)
+    with app.app_context():
+        from services.tratamento import criar_acompanhamento
+        from time_utils import now_in_brazil
+
+        bloco = db.session.get(BlocoPrescricao, bloco_id)
+        vet = User.query.filter_by(email='vet@example.com').one()
+        tratamento_id = criar_acompanhamento(bloco, vet, now_in_brazil()).id
+        db.session.commit()
+        acompanhamento = db.session.get(TratamentoAcompanhamento, tratamento_id)
+        agendado = next(i for i in acompanhamento.itens if i.modo == 'agendado')
+        livre = next(i for i in acompanhamento.itens if i.modo == 'livre')
+        registro_id, agendado_id, livre_id = agendado.registros[0].id, agendado.id, livre.id
+
+    headers = {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}
+    client = app.test_client()
+    with client:
+        _login(client, 'tutor@example.com', 'pw2')
+        compra = client.post(f'/tratamento/item/{agendado_id}/comprado', headers=headers)
+        assert compra.status_code == 200
+        assert compra.get_json()['comprado'] is True
+
+        dose = client.post(
+            f'/tratamento/registro/{registro_id}/marcar',
+            data={'status': 'feita'},
+            headers=headers,
+        )
+        payload = dose.get_json()
+        assert dose.status_code == 200
+        assert payload['status'] == 'feita'
+        assert payload['progresso']['feitas'] == 1
+        assert payload['item_percentual'] > 0
+
+        livre_resp = client.post(
+            f'/tratamento/item/{livre_id}/registrar',
+            data={'observacao': 'banho feito'},
+            headers=headers,
+        )
+        assert livre_resp.status_code == 200
+        assert livre_resp.get_json()['mensagem']
+
+    with app.app_context():
         db.drop_all()
 
 

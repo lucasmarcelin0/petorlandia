@@ -136,11 +136,14 @@ def test_confirmed_requested_exam_visible_with_status_badge(client, monkeypatch)
     response = client.get('/appointments')
     assert response.status_code == 200
     html = response.data.decode()
-    assert 'Exames aguardando outros profissionais' in html
+    # A unificação da agenda (e9bebf4e) trocou a aba própria de exames por um
+    # card "Exames" com subgrupos; o exame confirmado que este vet pediu a
+    # outro profissional continua visível, agora numa linha da agenda.
+    assert 'Aguardando outros profissionais' in html
     assert 'Rex' in html
-    # O card redesenhado mostra o especialista responsável e a tag de espera;
-    # o rótulo por-exame "Confirmado pelo especialista" saiu do HTML servidor.
-    assert 'Especialista responsável' in html
+    # O status vira badge na própria linha, não mais rótulo por-exame.
+    assert 'data-status="confirmed"' in html
+    assert 'data-status-label="Aceito"' in html
     assert 'Dr. Specialist' in html
 
 

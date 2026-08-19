@@ -12,6 +12,7 @@ from flask_login import current_user, login_required
 from forms import AnimalForm, AppointmentForm, EditProfileForm
 from helpers import group_appointments_by_day
 from models import (
+    AdminActionNotification,
     AdministracaoRegistro,
     Animal,
     Appointment,
@@ -36,6 +37,7 @@ from models import (
     OrcamentoItem,
     Prescricao,
     ProtocoloClinico,
+    PropostaProtocoloClinico,
     ServicoClinica,
 )
 from services import coverage_badge, coverage_label
@@ -92,6 +94,22 @@ from app import (  # noqa: E402
 
 bp = Blueprint("consulta_routes", __name__)
 
+PROTOCOL_PROPOSAL_CATEGORIES = {
+    'doenca': 'Doença ou diagnóstico',
+    'sintoma': 'Sintoma ou sinal clínico',
+    'conduta': 'Conduta clínica',
+    'exame': 'Exames',
+    'medicamento': 'Medicamentos',
+    'outro': 'Outro tema',
+}
+PROTOCOL_PROPOSAL_SPECIES = {'', 'cao', 'gato', 'outra'}
+PROTOCOL_PROPOSAL_STATUS_LABELS = {
+    'pending_review': 'Aguardando revisão',
+    'in_review': 'Em revisão',
+    'converted': 'Transformada em protocolo',
+    'archived': 'Arquivada',
+}
+
 
 def get_blueprint():
     return bp
@@ -131,6 +149,66 @@ def mp_sdk(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.mp_sdk.
     import app as app_module
     return app_module.mp_sdk(*args, **kwargs)
+
+
+def _serialize_protocol_proposal(proposal, actor_user_id=None):
+    return {
+        'id': proposal.id,
+        'titulo': proposal.titulo,
+        'categoria': proposal.categoria,
+        'categoria_label': PROTOCOL_PROPOSAL_CATEGORIES.get(
+            proposal.categoria,
+            PROTOCOL_PROPOSAL_CATEGORIES['outro'],
+        ),
+        'especie': proposal.especie or '',
+        'conteudo_livre': proposal.conteudo_livre,
+        'referencias': proposal.referencias or '',
+        'status': proposal.status,
+        'status_label': PROTOCOL_PROPOSAL_STATUS_LABELS.get(
+            proposal.status,
+            proposal.status,
+        ),
+        'autor': getattr(proposal.autor, 'name', None) or 'Usuário removido',
+        'created_at': proposal.created_at.isoformat() if proposal.created_at else None,
+        'updated_at': proposal.updated_at.isoformat() if proposal.updated_at else None,
+        'protocolo_id': proposal.protocolo_id,
+        'can_manage': bool(
+            actor_user_id
+            and proposal.created_by == actor_user_id
+            and proposal.status == 'pending_review'
+        ),
+    }
+
+
+def _protocol_proposal_payload(payload):
+    titulo = str(payload.get('titulo') or '').strip()
+    categoria = str(payload.get('categoria') or 'doenca').strip().lower()
+    especie = str(payload.get('especie') or '').strip().lower()
+    conteudo_livre = str(payload.get('conteudo_livre') or '').strip()
+    referencias = str(payload.get('referencias') or '').strip()
+
+    if len(titulo) < 3:
+        raise ValueError('Informe um título com pelo menos 3 caracteres.')
+    if len(titulo) > 160:
+        raise ValueError('O título deve ter no máximo 160 caracteres.')
+    if categoria not in PROTOCOL_PROPOSAL_CATEGORIES:
+        raise ValueError('Selecione uma categoria válida para a proposta.')
+    if especie not in PROTOCOL_PROPOSAL_SPECIES:
+        raise ValueError('Selecione uma espécie válida para a proposta.')
+    if len(conteudo_livre) < 5:
+        raise ValueError('Descreva a sugestão com pelo menos 5 caracteres.')
+    if len(conteudo_livre) > 12000:
+        raise ValueError('A sugestão deve ter no máximo 12.000 caracteres.')
+    if len(referencias) > 4000:
+        raise ValueError('As referências devem ter no máximo 4.000 caracteres.')
+
+    return {
+        'titulo': titulo,
+        'categoria': categoria,
+        'especie': especie or None,
+        'conteudo_livre': conteudo_livre,
+        'referencias': referencias or None,
+    }
 
 
 def upload_to_s3(*args, **kwargs):
@@ -419,6 +497,215 @@ def criar_protocolo_clinico_inline(consulta_id):
         'message': 'Novo protocolo criado com sucesso.',
         'protocol': _serialize_clinical_protocol(protocolo),
         'clinical_suspicion_options': _clinical_suspicion_options(consulta.clinica_id),
+    })
+
+
+@bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/propostas', methods=['GET'])
+@login_required
+def listar_propostas_protocolo_clinico(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({
+            'success': False,
+            'message': 'Apenas veterinários podem consultar propostas de protocolos.',
+        }), 403
+
+    proposals = (
+        PropostaProtocoloClinico.query
+        .filter(
+            PropostaProtocoloClinico.clinica_id == consulta.clinica_id,
+            PropostaProtocoloClinico.status != 'archived',
+        )
+        .order_by(PropostaProtocoloClinico.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return jsonify({
+        'success': True,
+        'proposals': [
+            _serialize_protocol_proposal(item, actor_user_id=current_user.id)
+            for item in proposals
+        ],
+    })
+
+
+@bp.route('/consulta/<int:consulta_id>/sugestoes_clinicas/propostas', methods=['POST'])
+@login_required
+def criar_proposta_protocolo_clinico(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({
+            'success': False,
+            'message': 'Apenas veterinários podem sugerir protocolos clínicos.',
+        }), 403
+
+    try:
+        values = _protocol_proposal_payload(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    proposal = PropostaProtocoloClinico(
+        clinica_id=consulta.clinica_id,
+        consulta_id=consulta.id,
+        created_by=current_user.id,
+        status='pending_review',
+        **values,
+    )
+    db.session.add(proposal)
+    db.session.flush()
+
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='created',
+        titulo_item=proposal.titulo,
+        justificativa=proposal.conteudo_livre[:500],
+        payload={
+            'proposal_id': proposal.id,
+            'categoria': proposal.categoria,
+            'especie': proposal.especie,
+        },
+    )
+    from services.notifications import queue_admin_action_notification
+
+    queue_admin_action_notification(
+        title=f'Nova sugestão clínica: {proposal.titulo}',
+        body=(
+            f'Clínica: {getattr(proposal.clinica, "nome", None) or proposal.clinica_id}\n'
+            f'Autor: {getattr(current_user, "name", None) or current_user.id}\n'
+            f'Categoria: {PROTOCOL_PROPOSAL_CATEGORIES.get(proposal.categoria, "Outro tema")}'
+        ),
+        event_type='clinical_protocol_proposal',
+        url=url_for('admin_protocol_proposals', _anchor=f'proposal-{proposal.id}'),
+        priority='normal',
+        entity_type='protocol_proposal',
+        entity_id=proposal.id,
+    )
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão enviada para revisão. Ela ainda não interfere nas recomendações clínicas.',
+        'proposal': _serialize_protocol_proposal(proposal, actor_user_id=current_user.id),
+    })
+
+
+@bp.route(
+    '/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>',
+    methods=['PUT'],
+)
+@login_required
+def atualizar_proposta_protocolo_clinico(consulta_id, proposal_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem editar sugestões.'}), 403
+
+    proposal = PropostaProtocoloClinico.query.filter_by(
+        id=proposal_id,
+        clinica_id=consulta.clinica_id,
+    ).first_or_404()
+    if proposal.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Somente o autor pode editar esta sugestão.'}), 403
+    if proposal.status != 'pending_review':
+        return jsonify({
+            'success': False,
+            'message': 'Esta sugestão já entrou em revisão e não pode mais ser editada.',
+        }), 409
+
+    try:
+        values = _protocol_proposal_payload(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    for field, value in values.items():
+        setattr(proposal, field, value)
+    from models import AdminActionNotification
+
+    AdminActionNotification.query.filter(
+        AdminActionNotification.entity_type == 'protocol_proposal',
+        AdminActionNotification.entity_id == proposal.id,
+        AdminActionNotification.status.in_(['unread', 'read']),
+    ).update({
+        AdminActionNotification.title: f'Nova sugestão clínica: {proposal.titulo}',
+        AdminActionNotification.body: (
+            f'Clínica: {getattr(proposal.clinica, "nome", None) or proposal.clinica_id}\n'
+            f'Autor: {getattr(current_user, "name", None) or current_user.id}\n'
+            f'Categoria: {PROTOCOL_PROPOSAL_CATEGORIES.get(proposal.categoria, "Outro tema")}'
+        ),
+    }, synchronize_session=False)
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='updated',
+        titulo_item=proposal.titulo,
+        justificativa=proposal.conteudo_livre[:500],
+        payload={'proposal_id': proposal.id},
+    )
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão atualizada. Ela continua aguardando revisão.',
+        'proposal': _serialize_protocol_proposal(proposal, actor_user_id=current_user.id),
+    })
+
+
+@bp.route(
+    '/consulta/<int:consulta_id>/sugestoes_clinicas/propostas/<int:proposal_id>',
+    methods=['DELETE'],
+)
+@login_required
+def arquivar_proposta_protocolo_clinico(consulta_id, proposal_id):
+    consulta = get_consulta_or_404(consulta_id)
+    ensure_clinic_access(consulta.clinica_id)
+    if not is_veterinarian(current_user):
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem retirar sugestões.'}), 403
+
+    proposal = PropostaProtocoloClinico.query.filter_by(
+        id=proposal_id,
+        clinica_id=consulta.clinica_id,
+    ).first_or_404()
+    if proposal.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Somente o autor pode retirar esta sugestão.'}), 403
+    if proposal.status != 'pending_review':
+        return jsonify({
+            'success': False,
+            'message': 'Esta sugestão já entrou em revisão e não pode mais ser retirada.',
+        }), 409
+
+    proposal.status = 'archived'
+    proposal.review_notes = 'Arquivada pelo autor antes da revisão.'
+    log_suggestion_event(
+        consulta_id=consulta.id,
+        protocolo_id=None,
+        actor_user_id=current_user.id,
+        tipo_item='protocol_proposal',
+        acao='archived',
+        titulo_item=proposal.titulo,
+        justificativa='Arquivada pelo autor antes da revisão.',
+        payload={'proposal_id': proposal.id},
+    )
+
+    now = now_in_brazil()
+    AdminActionNotification.query.filter(
+        AdminActionNotification.entity_type == 'protocol_proposal',
+        AdminActionNotification.entity_id == proposal.id,
+        AdminActionNotification.status.in_(['unread', 'read']),
+    ).update({
+        AdminActionNotification.status: 'resolved',
+        AdminActionNotification.resolved_at: now,
+        AdminActionNotification.resolved_by_id: current_user.id,
+    }, synchronize_session=False)
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'message': 'Sugestão retirada da fila. O registro foi preservado para auditoria.',
     })
 
 
@@ -1892,12 +2179,28 @@ def imprimir_bloco_prescricao(bloco_id):
                 _external=True,
             )
 
+    # Cruzamento receita × loja: é aqui que o tutor está com a maior intenção
+    # de compra do site. Só aparece quando a loja tem catálogo real.
+    from services.offer_availability import store_is_live
+    from services.prescription_store import (
+        build_prescription_offers,
+        bulk_buyable_products,
+    )
+
+    ofertas_receita = []
+    compra_em_lote = []
+    if store_is_live():
+        ofertas_receita = build_prescription_offers(bloco.prescricoes)
+        compra_em_lote = bulk_buyable_products(ofertas_receita)
+
     return render_template(
         'orcamentos/imprimir_bloco.html',
         bloco=bloco,
         consulta=consulta,
         animal=animal,
         tutor=tutor,
+        ofertas_receita=ofertas_receita,
+        compra_em_lote=compra_em_lote,
         clinica=clinica,
         veterinario=veterinario,
         salvo_por=salvo_por,
@@ -2037,6 +2340,50 @@ def acompanhamento_tratamento(tratamento_id):
         reverse=True,
     )
 
+    historico = []
+    dias_com_cuidado = set()
+    for item in acompanhamento.itens:
+        for registro in item.registros:
+            if registro.status not in ('feita', 'pulada'):
+                continue
+            momento = registro.realizada_em or registro.prevista_para
+            momento = coerce_to_brazil_tz(momento) if momento else None
+            if registro.status == 'feita' and momento:
+                dias_com_cuidado.add(momento.date())
+            historico.append({
+                'item': item,
+                'registro': registro,
+                'momento': momento,
+            })
+    historico.sort(key=lambda evento: evento['momento'] or agora, reverse=True)
+
+    sequencia = 0
+    cursor = hoje if hoje in dias_com_cuidado else hoje - timedelta(days=1)
+    while cursor in dias_com_cuidado:
+        sequencia += 1
+        cursor -= timedelta(days=1)
+
+    total_cuidados = len(itens_view)
+    compras_concluidas = sum(1 for i in itens_view if i['item'].comprado_em)
+    total_aplicacoes = sum(i['feitas'] for i in itens_view)
+    progresso = resumo_progresso(acompanhamento)
+    # Tratamentos compostos apenas por cuidados de registro livre não têm
+    # doses previstas. O serviço representa esse caso com ``None``; para a
+    # interface, porém, o início da jornada é sempre 0%, nunca um valor
+    # incomparável que derrube a renderização das conquistas.
+    progresso['percentual'] = progresso.get('percentual') or 0
+    percentual_geral = progresso['percentual']
+    if percentual_geral >= 100:
+        mensagem_progresso = 'Missão cumprida! Você completou todas as doses previstas.'
+    elif percentual_geral >= 75:
+        mensagem_progresso = 'Reta final! Seu cuidado consistente está fazendo diferença.'
+    elif percentual_geral >= 40:
+        mensagem_progresso = 'Ótimo ritmo! Cada cuidado registrado aproxima da recuperação.'
+    elif total_aplicacoes:
+        mensagem_progresso = 'Bom começo! Continue registrando para acompanhar a evolução.'
+    else:
+        mensagem_progresso = 'Vamos começar? O primeiro cuidado já conta muito.'
+
     tutor = animal.owner if animal else None
     is_vet_viewer = is_veterinarian(current_user)
     tutor_whatsapp_url = None
@@ -2059,7 +2406,13 @@ def acompanhamento_tratamento(tratamento_id):
         doses_hoje=doses_hoje,
         doses_atrasadas=doses_atrasadas,
         fotos=fotos,
-        progresso=resumo_progresso(acompanhamento),
+        progresso=progresso,
+        total_cuidados=total_cuidados,
+        compras_concluidas=compras_concluidas,
+        total_aplicacoes=total_aplicacoes,
+        sequencia=sequencia,
+        historico=historico[:30],
+        mensagem_progresso=mensagem_progresso,
         is_owner=is_owner,
         is_vet_viewer=is_vet_viewer,
         tutor_whatsapp_url=tutor_whatsapp_url,
@@ -2079,6 +2432,8 @@ def marcar_item_tratamento_comprado(item_id):
         item.comprado_em = now_in_brazil()
         item.comprado_por_id = current_user.id
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(ok=True, item_id=item.id, comprado=bool(item.comprado_em))
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#compras')
 
 
@@ -2108,6 +2463,20 @@ def marcar_administracao_tratamento(registro_id):
     if observacao:
         registro.observacao = observacao
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from services.tratamento import resumo_progresso
+        previstas = sum(1 for r in item.registros if r.prevista_para is not None)
+        feitas = sum(1 for r in item.registros if r.status == 'feita' and r.prevista_para is not None)
+        return jsonify(
+            ok=True,
+            registro_id=registro.id,
+            status=registro.status,
+            item_id=item.id,
+            item_feitas=feitas,
+            item_previstas=previstas,
+            item_percentual=round(100 * feitas / previstas) if previstas else None,
+            progresso=resumo_progresso(acompanhamento),
+        )
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
 
@@ -2117,14 +2486,23 @@ def registrar_aplicacao_tratamento(item_id):
     item = ItemTratamento.query.get_or_404(item_id)
     acompanhamento, _ = _tratamento_acompanhamento_or_404(item.acompanhamento_id)
     observacao = (request.form.get('observacao') or '').strip() or None
-    db.session.add(AdministracaoRegistro(
+    registro = AdministracaoRegistro(
         item_id=item.id,
         status='feita',
         realizada_em=now_in_brazil(),
         realizada_por_id=current_user.id,
         observacao=observacao,
-    ))
+    )
+    db.session.add(registro)
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(
+            ok=True,
+            item_id=item.id,
+            registro_id=registro.id,
+            realizada_em=registro.realizada_em.isoformat() if registro.realizada_em else None,
+            mensagem='Cuidado registrado! Você está fazendo a diferença.',
+        )
     flash('Aplicação registrada!', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
@@ -2145,13 +2523,24 @@ def enviar_foto_tratamento(tratamento_id):
         flash('Não foi possível enviar a foto. Tente novamente.', 'danger')
         return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
 
-    db.session.add(FotoTratamento(
+    foto = FotoTratamento(
         acompanhamento_id=acompanhamento.id,
         url=url,
         observacao=(request.form.get('observacao') or '').strip() or None,
         enviada_por_id=current_user.id,
-    ))
+    )
+    db.session.add(foto)
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(
+            ok=True,
+            foto={
+                'url': foto.url,
+                'observacao': foto.observacao,
+                'enviada_em': foto.enviada_em.isoformat() if foto.enviada_em else None,
+            },
+            mensagem='Foto adicionada à evolução!',
+        )
     flash('Foto enviada! Ela ajuda o veterinário a avaliar a evolução.', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id) + '#fotos')
 
@@ -2168,6 +2557,8 @@ def alterar_status_tratamento(tratamento_id):
         abort(400)
     acompanhamento.status = novo_status
     db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(ok=True, status=acompanhamento.status)
     flash('Status do tratamento atualizado.', 'success')
     return redirect(url_for('acompanhamento_tratamento', tratamento_id=acompanhamento.id))
 
@@ -3219,4 +3610,3 @@ def atualizar_bloco_orcamento(bloco_id):
 
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
-

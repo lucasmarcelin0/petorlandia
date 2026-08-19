@@ -1,5 +1,11 @@
 {% extends "layout.html" %}
 
+{# Link enviado por WhatsApp para o tutor: a prévia mostra o ícone do
+   pastor-gato, não a arte de venda da landing. Quem recebe já é cliente. #}
+{% set og_image = 'img/og-carteirinha.png' %}
+{% set og_image_width = 600 %}
+{% set og_image_height = 600 %}
+
 {% block head %}
   <style>
     :root {

@@ -374,7 +374,7 @@ def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
                 id=1,
                 medicamento=medicamento,
                 nome_medicamento="Cetoconazol 20mg/g + Dipropionato de Betametasona 0,64mg/g + Sulfato de Neomicina 2,5mg/g Generico C",
-                dosagem_texto="Aplicar uma camada fina sobre a area afetada",
+                dosagem_texto="Aplicar uma camada fina sobre a área afetada",
                 frequencia_texto="2 vezes ao dia",
                 duracao_texto="10 dias",
                 indicacao="Uso topico dermatologico",
@@ -402,14 +402,28 @@ def test_build_clinical_plan_auto_selects_single_topical_presentation(app):
         med = plan["medications"][0]
         assert med["status"] == READY
         assert med["status_label"] == "Pronto para revisar"
-        assert med["calculation"]["dose_pratica"] == "Aplicar sobre a região acometida"
-        assert med["calculation"]["frequencia"] == "12/12h"
-        assert med["calculation"]["duracao"] == "por 10 dias"
-        assert med["calculation"]["posologia_pratica"] == "Aplicar sobre a região acometida 12/12h por 10 dias"
-        assert med["calculation"]["apresentacao_pratica"]["presentation"]["forma"] == "Pomada"
-        assert med["draft_prescription"]["dosagem"] == "Aplicar sobre a região acometida"
-        assert med["draft_prescription"]["frequencia"] == "12/12h"
-        assert med["draft_prescription"]["duracao"] == "por 10 dias"
+        # Texto padronizado de pomada: o veterinário pediu a instrução completa
+        # (camada fina + intervalo + duração, com os números por extenso) em vez
+        # de "Aplicar sobre a região acometida" mais frequência/duração soltas.
+        # A instrução já é auto-suficiente, então frequência e duração saem
+        # vazias para não duplicarem "12/12h" no texto do tutor.
+        instrucao_pomada = (
+            "Aplicar uma camada fina sobre a área afetada de "
+            "12 (doze) em 12 (doze) horas por 10 (dez) dias."
+        )
+        assert med["calculation"]["dose_pratica"] == instrucao_pomada
+        assert med["calculation"]["frequencia"] == ""
+        assert med["calculation"]["duracao"] == ""
+        assert med["calculation"]["posologia_pratica"] == instrucao_pomada
+        # Formas tópicas não carregam mais apresentação "prática": o seletor de
+        # apresentação era a origem de "8 gotas — 50 g pomada - Furanil®" (dose
+        # em gotas colada num produto diferente). O nome do item já traz a
+        # apresentação, e a instrução não depende dela.
+        assert med["calculation"]["apresentacao_pratica"] is None
+        assert med["calculation"]["apresentacao_opcoes"] == []
+        assert med["draft_prescription"]["dosagem"] == instrucao_pomada
+        assert med["draft_prescription"]["frequencia"] == ""
+        assert med["draft_prescription"]["duracao"] == ""
         assert med["draft_prescription"]["use_weight_based_dose"] is False
 
 

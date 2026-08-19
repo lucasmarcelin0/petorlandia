@@ -104,3 +104,11 @@ def test_available_times_endpoint_marks_booked_slots(client):
     resp_simple = client.get(f"/api/specialist/{vet.id}/available_times?date=2024-05-20")
     assert resp_simple.status_code == 200
     assert resp_simple.get_json() == payload["available"]
+
+
+def test_available_times_endpoint_rejects_brazilian_display_date(client):
+    """The API receives ISO dates even though the UI displays DD/MM/YYYY."""
+    response = client.get("/api/specialist/1/available_times?date=20/05/2024")
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Data inválida. Use o formato YYYY-MM-DD."

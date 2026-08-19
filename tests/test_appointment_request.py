@@ -9,6 +9,7 @@ import pytest
 import flask_login.utils as login_utils
 from sqlalchemy.pool import StaticPool
 from app import app as flask_app, db
+from helpers import ensure_veterinarian_membership
 from models import User, Animal, Veterinario, Clinica, Appointment, AppointmentRequest, Message, VetSchedule
 
 
@@ -41,7 +42,8 @@ def _seed():
     tutor.set_password('x')
     vet_user = User(id=2, name='Dra Vet', email='v@v', worker='veterinario')
     vet_user.set_password('x')
-    vet = Veterinario(id=1, user_id=2, crmv='123', clinica_id=1)
+    # Só um vet publicado e com assinatura ativa recebe solicitação de fora.
+    vet = Veterinario(id=1, user_id=2, crmv='123', clinica_id=1, public_visible=True)
     animal = Animal(id=1, name='Rex', user_id=1, clinica_id=1)
     horario = VetSchedule(
         veterinario_id=1,
@@ -50,6 +52,7 @@ def _seed():
         hora_fim=time(16, 0),
     )
     db.session.add_all([clinic, tutor, vet_user, vet, animal, horario])
+    ensure_veterinarian_membership(vet)
     db.session.commit()
 
 

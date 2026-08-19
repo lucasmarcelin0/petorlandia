@@ -6,14 +6,14 @@ import flask_login.utils as login_utils
 
 import app as app_module
 from extensions import db
-from models import CasaDeRacao, Endereco, Order, OrderItem, Payment, Product, User
+from models import CasaDeRacao, Endereco, Order, OrderItem, Payment, Product, SiteFlag, User
 
 
 def _login(monkeypatch, user):
     monkeypatch.setattr(login_utils, "_get_user", lambda: user)
 
 
-def test_checkout_adds_one_shipping_item_per_feed_store(app, client, monkeypatch):
+def test_checkout_blocks_multi_seller_charge_until_split_payout_is_safe(app, client, monkeypatch):
     captured = {}
 
     class FakePreference:
@@ -75,13 +75,11 @@ def test_checkout_adds_one_shipping_item_per_feed_store(app, client, monkeypatch
         resp = client.post("/checkout", data={"address_id": 0}, headers={"Accept": "text/html"})
 
         assert resp.status_code == 302
-        payment = Payment.query.one()
-        # Itens reprecificados ao preço público (taxa embutida):
-        # 100→110 e 2x 50→55 (=110), + fretes 8 e 12 → total 240.
-        assert float(payment.amount) == 240.0
-        titles = [item["title"] for item in captured["payload"]["items"]]
-        assert "Frete - Racoes A" in titles
-        assert "Frete - Racoes B" in titles
+        assert Payment.query.count() == 0
+        assert "payload" not in captured
+        with client.session_transaction() as sess:
+            flashes = [message for _category, message in sess.get("_flashes", [])]
+        assert any("pedidos separados" in message for message in flashes)
 
 
 def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
@@ -110,6 +108,7 @@ def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
             casa_de_racao_id=casa.id,
         )
         db.session.add(product)
+        db.session.add(SiteFlag(key="loja_em_breve", value=False))
         db.session.commit()
         buyer_id = buyer.id
 

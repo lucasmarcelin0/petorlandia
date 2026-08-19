@@ -84,7 +84,8 @@
     </form>
   </div>
 
-  <form action="{{ url_for('checkout_confirm') }}" method="post" class="text-end">
+  <div id="checkoutErrors" class="alert alert-danger d-none text-start" role="alert"></div>
+  <form id="checkoutCartForm" action="{{ url_for('checkout') }}" method="post" class="text-end" data-skip-global-handler="true">
     {{ form.hidden_tag() }}
 
     <div class="mb-3 text-start">
@@ -106,8 +107,11 @@
       <i class="bi bi-shop-window"></i> Continuar comprando
     </a>
     <button type="submit" class="btn btn-lg btn-success shadow-sm">
-      <i class="bi bi-cash-stack"></i> {{ form.submit.label.text }}
+      <i class="fa-solid fa-lock me-1"></i> Ir para o pagamento seguro
     </button>
+    <div class="small text-muted mt-2">
+      Você seguirá para o Mercado Pago, onde poderá revisar o total e escolher a forma de pagamento.
+    </div>
   </form>
 
   {% else %}
@@ -271,6 +275,55 @@
     addressSelect.addEventListener('change', toggleNewAddress);
     toggleNewAddress();
   }
+
+  const checkoutForm = document.getElementById('checkoutCartForm');
+  const checkoutErrors = document.getElementById('checkoutErrors');
+  function showCheckoutError(message) {
+    if (!checkoutErrors) return;
+    checkoutErrors.textContent = message || 'Não foi possível iniciar o pagamento.';
+    checkoutErrors.classList.remove('d-none');
+    checkoutErrors.scrollIntoView({behavior: 'smooth', block: 'center'});
+  }
+
+  checkoutForm?.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    checkoutErrors?.classList.add('d-none');
+
+    if (addressSelect?.value === '-1') {
+      showCheckoutError('Preencha e salve o novo endereço acima antes de continuar.');
+      return;
+    }
+
+    const button = checkoutForm.querySelector('button[type="submit"]');
+    const submitCheckout = async () => {
+      let response;
+      try {
+        response = await fetch(checkoutForm.action, {
+          method: 'POST',
+          body: new FormData(checkoutForm),
+          headers: {'Accept': 'application/json'}
+        });
+      } catch (error) {
+        showCheckoutError('Não foi possível conectar. Verifique sua internet e tente novamente.');
+        return {success: false};
+      }
+
+      let data = {};
+      try { data = await response.json(); } catch (error) {}
+      if (response.ok && data.redirect) {
+        window.location.assign(data.redirect);
+        return {success: true, keepButton: true};
+      }
+      showCheckoutError(data.message || 'Não foi possível iniciar o pagamento. Nenhuma cobrança foi feita.');
+      return {success: false};
+    };
+
+    if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+      await window.FormFeedback.withSavingState(button || checkoutForm, submitCheckout, {loadingText: 'Abrindo Mercado Pago...'});
+    } else {
+      await submitCheckout();
+    }
+  });
 
   const cartForms = document.querySelectorAll('.js-cart-form');
   const cartButtons = document.querySelectorAll('.js-cart-btn');

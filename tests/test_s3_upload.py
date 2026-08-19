@@ -2,11 +2,23 @@ import os
 import shutil
 import sys
 from io import BytesIO
+
+import pytest
 from werkzeug.datastructures import FileStorage
 from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _app_context():
+    """``upload_to_s3`` lê ``current_app.config``; sem contexto de aplicação o
+    helper cai no ``except`` e devolve ``None`` antes de chegar ao S3.
+    """
+    with app.app.app_context():
+        app.app.config["TESTING"] = True
+        yield
 
 
 def test_upload_to_s3_uses_content_type(monkeypatch):
@@ -56,6 +68,39 @@ def test_upload_to_s3_secure_filename(monkeypatch):
 
     assert captured['key'].startswith('clinicas/evil_image.jpg')
     assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
+
+
+def test_upload_to_s3_flattens_transparency_on_white(monkeypatch):
+    monkeypatch.setattr(app, "BUCKET", "test-bucket")
+    captured = {}
+
+    class DummyS3:
+        def upload_fileobj(self, fileobj, bucket, key, ExtraArgs=None):
+            captured["data"] = fileobj.read()
+
+    monkeypatch.setattr(app, "_s3", lambda: DummyS3())
+
+    image_bytes = BytesIO()
+    image = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+    for x in range(14, 27):
+        for y in range(14, 27):
+            image.putpixel((x, y), (220, 20, 20, 255))
+    image.save(image_bytes, format="PNG")
+    image_bytes.seek(0)
+
+    fs = FileStorage(
+        stream=image_bytes,
+        filename="transparent.png",
+        content_type="image/png",
+    )
+    url = app.upload_to_s3(fs, "transparent.png", folder="products")
+
+    assert url.endswith("/products/transparent.jpg")
+    with Image.open(BytesIO(captured["data"])) as saved:
+        corner = saved.getpixel((0, 0))
+        center = saved.getpixel((20, 20))
+        assert all(channel >= 245 for channel in corner)
+        assert center[0] > center[1] + 100
 
 
 def test_upload_to_s3_falls_back_when_client_fails(tmp_path, monkeypatch):

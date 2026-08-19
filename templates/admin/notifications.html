@@ -7,9 +7,14 @@
       <h1 class="h3 mb-1">Notificacoes do admin</h1>
       <p class="text-muted mb-0">Eventos operacionais que precisam de atencao ou acompanhamento.</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('painel_admin.index') }}">
-      <i class="fas fa-arrow-left me-1"></i> Painel
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-primary" href="{{ url_for('admin_protocol_proposals') }}">
+        <i class="fas fa-notes-medical me-1"></i> Sugestões clínicas
+      </a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('painel_admin.index') }}">
+        <i class="fas fa-arrow-left me-1"></i> Painel
+      </a>
+    </div>
   </div>
 
   <form class="row g-2 align-items-end mb-4" method="get">

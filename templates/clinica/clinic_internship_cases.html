@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block page_title %}Casos do estágio — {{ student.name }}{% endblock %}
+{% block main %}
+<div class="container py-4" style="max-width: 760px;">
+  <h1 class="h4">Casos autorizados para {{ student.name }}</h1>
+  <p class="text-muted">O estudante verá somente os pacientes marcados abaixo.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for animal in animals %}
+    <div class="form-check border-bottom py-2">
+      <input class="form-check-input" type="checkbox" name="animal_ids" value="{{ animal.id }}" id="animal-{{ animal.id }}" {% if animal.id in assigned %}checked{% endif %}>
+      <label class="form-check-label" for="animal-{{ animal.id }}">{{ animal.name }}</label>
+    </div>
+    {% else %}<p class="text-muted">A clínica ainda não possui pacientes cadastrados.</p>{% endfor %}
+    <button class="btn btn-primary rounded-pill mt-4" type="submit">Salvar casos autorizados</button>
+  </form>
+</div>
+{% endblock %}

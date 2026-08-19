@@ -1,14 +1,28 @@
-<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <title>{{ error.code }} - {{ error.name }}</title>
-  </head>
-  <body>
-    <main>
-      <h1>{{ error.code }} - {{ error.name }}</h1>
-      <p>{{ error.description }}</p>
-      <p>Request ID: {{ g.request_id }}</p>
-    </main>
-  </body>
-</html>
+{% extends "layout.html" %}
+
+{% set error_copy = {
+  400: ("Não foi possível processar esta solicitação", "Confira os dados e tente novamente."),
+  401: ("Entre para continuar", "Esta área precisa de uma conta PetOrlândia."),
+  403: ("Acesso não permitido", "Sua conta não tem permissão para abrir esta área."),
+  404: ("Esta página não foi encontrada", "O endereço pode ter mudado ou não existe mais."),
+  405: ("Ação não permitida", "Volte à tela anterior e tente pelo botão disponível nela."),
+  429: ("Muitas tentativas em pouco tempo", "Aguarde alguns instantes antes de tentar novamente.")
+} %}
+{% set copy = error_copy.get(error.code, ("Não conseguimos abrir esta página", "Tente novamente ou fale com o suporte.")) %}
+
+{% block page_title %}{{ error.code }} — {{ copy[0] }} | PetOrlândia{% endblock %}
+{% block meta_description %}{{ copy[1] }}{% endblock %}
+{% block head %}<meta name="robots" content="noindex,follow">{% endblock %}
+
+{% block main %}
+<section class="error-page" aria-labelledby="error-title">
+  <span class="error-page__code">{{ error.code }}</span>
+  <h1 id="error-title">{{ copy[0] }}</h1>
+  <p>{{ copy[1] }}</p>
+  <div class="error-page__actions">
+    <a class="btn btn-primary" href="{{ url_for('index') }}">Voltar ao início</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('support') }}">Falar com o suporte</a>
+  </div>
+  <p class="error-page__reference">Código de referência: {{ g.request_id }}</p>
+</section>
+{% endblock %}

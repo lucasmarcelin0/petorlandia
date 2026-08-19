@@ -239,6 +239,16 @@ class Product(db.Model):
     casa_de_racao_id = db.Column(db.Integer, db.ForeignKey('casa_de_racao.id', ondelete='SET NULL'), nullable=True, index=True)
     # 'active' = visível na loja, 'inactive' = oculto pelo dono, 'pending' = aguardando aprovação
     status = db.Column(db.String(20), default='active', nullable=False)
+    # Produto de demonstração/teste: continua acessível ao admin, mas não conta
+    # como catálogo real e nunca aparece na vitrine pública. É o que permite
+    # abrir a loja sozinha assim que o primeiro produto de verdade for
+    # cadastrado (ver services/offer_availability.py).
+    is_demo = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    # A recorrencia e uma oferta separada da compra avulsa e precisa ser
+    # ativada conscientemente pelo vendedor.
+    subscription_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    subscription_discount_percent = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    subscription_shipping_fee = db.Column(db.Numeric(10, 2), nullable=False, default=0)
 
     clinica = db.relationship('Clinica', backref=db.backref('produtos_loja', lazy='dynamic'))
     inventory_item = db.relationship('ClinicInventoryItem', backref=db.backref('produto_loja', uselist=False))
@@ -261,25 +271,37 @@ class Product(db.Model):
 
     @staticmethod
     def public_price_from_base(value):
-        """Preço público a partir do preço recebido pelo lojista."""
+        """Preço público com take rate real, sem degraus artificiais.
+
+        Se a taxa é 10% do GMV, o repasse representa 90% do preço final:
+        ``preço = repasse / 0,90``. Arredondamos apenas em centavos para não
+        transformar itens baratos em taxas efetivas de 20%–35%.
+        """
         if value is None:
             return None
         base = Decimal(str(value))
         if base <= 0:
             return base.quantize(Decimal("0.01"))
-        gross = base * Decimal("1.10")
-        step = Decimal("5")
-        steps = (gross / step).to_integral_value(rounding=ROUND_CEILING)
-        return (steps * step).quantize(Decimal("0.01"))
+        try:
+            from flask import current_app, has_app_context
+            configured = (
+                current_app.config.get('MERCADOPAGO_MARKETPLACE_FEE_PERCENT', 10)
+                if has_app_context()
+                else 10
+            )
+        except RuntimeError:
+            configured = 10
+        take_rate = max(Decimal("0"), min(Decimal(str(configured)), Decimal("95"))) / Decimal("100")
+        return (base / (Decimal("1") - take_rate)).quantize(Decimal("0.01"))
 
     @property
     def preco_publico(self):
         """Preço único exibido ao tutor, com a taxa da plataforma embutida.
 
         ``price`` é o valor que o lojista recebe. O preço público é
-        ``price`` + 10%, arredondado PARA CIMA ao próximo múltiplo de
-        R$ 5 — mesma regra de vacinas e serviços profissionais. A taxa
-        nunca aparece separada para o comprador.
+        ``price`` é o repasse líquido definido pelo lojista. A taxa da
+        plataforma é calculada como percentual do preço final e informada
+        antes da publicação.
         """
         return self.public_price_from_base(self.price)
 
@@ -321,6 +343,25 @@ class Product(db.Model):
         if prices:
             return max(prices)
         return self.preco_publico
+
+    @property
+    def subscription_discount(self):
+        value = Decimal(str(self.subscription_discount_percent or 0))
+        return max(Decimal("0"), min(value, Decimal("50")))
+
+    def subscription_price_from_public(self, value):
+        """Return the recurring price after the seller-configured discount."""
+        public = Decimal(str(value or 0))
+        multiplier = Decimal("1") - (self.subscription_discount / Decimal("100"))
+        return (public * multiplier).quantize(Decimal("0.01"))
+
+    @property
+    def subscription_price_min(self):
+        return self.subscription_price_from_public(self.public_price_min)
+
+    @property
+    def subscription_price_max(self):
+        return self.subscription_price_from_public(self.public_price_max)
 
     @property
     def variant_count_label(self):
@@ -421,6 +462,9 @@ class Order(db.Model):
     received_at = db.Column(db.DateTime(timezone=True), nullable=True)
     # Último lembrete pedindo a confirmação de recebimento (evita spam diário).
     receipt_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Lembrete de carrinho abandonado. Enviado uma única vez por carrinho:
+    # recuperação de venda que vira insistência deixa de ser recuperação.
+    abandoned_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship(
         'User',
@@ -460,7 +504,13 @@ class OrderItem(db.Model):
 
     item_name   = db.Column(db.String(100), nullable=False)
     quantity    = db.Column(db.Integer, nullable=False, default=1)
-    unit_price  = db.Column(db.Numeric(10, 2), nullable=True)   # NOVO 👈
+    unit_price  = db.Column(db.Numeric(10, 2), nullable=True)
+    # Snapshot financeiro: o produto pode mudar depois da compra, mas repasse
+    # e margem históricos não podem ser recalculados com o preço novo.
+    seller_unit_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    platform_fee_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    seller_type = db.Column(db.String(20), nullable=True)
+    seller_id = db.Column(db.Integer, nullable=True)
 
     def __str__(self):
         return f"{self.product.name if self.product else self.item_name} x{self.quantity}"

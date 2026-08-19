@@ -1,11 +1,14 @@
 """Views do domínio clinica_routes (migrado do app.py)."""
 from flask import Blueprint
+import io
+import json
 import uuid
+import zipfile
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from extensions import db, mail
-from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
 from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
@@ -18,6 +21,7 @@ from models import (
     ClinicHours,
     ClinicInventoryItem,
     ClinicInventoryMovement,
+    ClinicInternshipCase,
     ClinicStaff,
     Clinica,
     Consulta,
@@ -29,6 +33,7 @@ from models import (
     Product,
     StorePaymentAccount,
     User,
+    Vacina,
     VetClinicInvite,
     VetSchedule,
     Veterinario,
@@ -36,6 +41,8 @@ from models import (
 from repositories import AppointmentRepository
 from services.fiscal.nfse_service import create_nfse_draft_from_orcamento
 from services.mercadopago_oauth import MercadoPagoOAuthError, build_authorization_start
+from services.clinic_value import ALLOWED_PERIODS, build_clinic_value_report
+from services.product_analytics import track_event
 from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload, selectinload
 from template_filters import normalize_phone
@@ -103,6 +110,105 @@ def ensure_clinic_access(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.ensure_clinic_access.
     import app as app_module
     return app_module.ensure_clinic_access(*args, **kwargs)
+
+
+def _export_json_value(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return str(value)
+
+
+def _export_model_rows(rows):
+    result = []
+    for row in rows:
+        result.append({
+            column.name: _export_json_value(getattr(row, column.name))
+            for column in row.__table__.columns
+        })
+    return result
+
+
+@bp.route('/clinica/<int:clinica_id>/exportar-dados')
+@login_required
+def export_clinic_data(clinica_id):
+    """Exportação portável da operação clínica, restrita ao dono/admin."""
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+
+    animals = Animal.query.filter_by(clinica_id=clinica.id).all()
+    animal_ids = [animal.id for animal in animals]
+    appointments = Appointment.query.filter_by(clinica_id=clinica.id).all()
+    consultas = Consulta.query.filter_by(clinica_id=clinica.id).all()
+    orcamentos = Orcamento.query.filter_by(clinica_id=clinica.id).all()
+    orcamento_ids = [orcamento.id for orcamento in orcamentos]
+    vacinas = (
+        Vacina.query.filter(Vacina.animal_id.in_(animal_ids)).all()
+        if animal_ids
+        else []
+    )
+    orcamento_itens = (
+        OrcamentoItem.query.filter(OrcamentoItem.orcamento_id.in_(orcamento_ids)).all()
+        if orcamento_ids
+        else []
+    )
+    tutor_ids = sorted({
+        animal.user_id for animal in animals if getattr(animal, 'user_id', None)
+    })
+    tutores = User.query.filter(User.id.in_(tutor_ids)).all() if tutor_ids else []
+
+    files = {
+        'clinica.json': [{
+            'id': clinica.id,
+            'nome': clinica.nome,
+            'status': clinica.status,
+            'cnpj': clinica.cnpj,
+            'endereco': clinica.endereco,
+            'telefone': clinica.telefone,
+            'email': clinica.email,
+            'created_at': _export_json_value(clinica.created_at),
+        }],
+        'tutores.json': [{
+            'id': user.id,
+            'nome': user.name,
+            'email': user.email,
+            'telefone': user.phone,
+            'cpf': user.cpf,
+        } for user in tutores],
+        'pacientes.json': _export_model_rows(animals),
+        'agendamentos.json': _export_model_rows(appointments),
+        'consultas.json': _export_model_rows(consultas),
+        'vacinas.json': _export_model_rows(vacinas),
+        'orcamentos.json': _export_model_rows(orcamentos),
+        'orcamento_itens.json': _export_model_rows(orcamento_itens),
+    }
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr(
+            'LEIA-ME.txt',
+            'Exportação PetOrlândia em JSON UTF-8. '
+            'Cada arquivo representa uma parte da operação da clínica. '
+            'Guarde este arquivo em local seguro: ele contém dados pessoais e clínicos.',
+        )
+        for filename, payload in files.items():
+            bundle.writestr(
+                filename,
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            )
+    archive.seek(0)
+    return send_file(
+        archive,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'petorlandia-clinica-{clinica.id}-dados.zip',
+        max_age=0,
+    )
 
 
 def is_veterinarian(*args, **kwargs):
@@ -407,6 +513,39 @@ def clinic_mercadopago_direct_save(clinica_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
 
 
+@bp.route("/clinica/<int:clinica_id>/valor")
+@login_required
+def clinic_value(clinica_id):
+    """Show value recorded in PetOrlândia without claiming causal ROI."""
+
+    if _is_admin():
+        clinica = Clinica.query.get_or_404(clinica_id)
+    else:
+        clinica = (
+            clinicas_do_usuario()
+            .filter(Clinica.id == clinica_id)
+            .first_or_404()
+        )
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+
+    period_days = request.args.get("periodo", 30, type=int)
+    if period_days not in ALLOWED_PERIODS:
+        period_days = 30
+    report = build_clinic_value_report(clinica.id, period_days)
+    track_event(
+        "clinic_value_viewed",
+        feature="clinic_value",
+        stage=str(period_days),
+    )
+    return render_template(
+        "clinica/clinic_value.html",
+        clinica=clinica,
+        report=report,
+        allowed_periods=ALLOWED_PERIODS,
+    )
+
+
 @bp.route("/clinica/<int:clinica_id>", methods=["GET", "POST"])
 @login_required
 def clinic_detail(clinica_id):
@@ -495,7 +634,14 @@ def clinic_detail(clinica_id):
             if staff:
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
+                is_intern = getattr(user, 'worker', None) == 'estudante'
+                staff = ClinicStaff(
+                    clinic_id=clinica.id,
+                    user_id=user.id,
+                    is_intern=is_intern,
+                    internship_started_at=utcnow() if is_intern else None,
+                    internship_supervisor_id=current_user.id if is_intern and has_veterinarian_profile(current_user) else None,
+                )
                 db.session.add(staff)
                 user.clinica_id = clinica.id
                 if getattr(user, 'veterinario', None):
@@ -699,6 +845,9 @@ def clinic_detail(clinica_id):
                 abort(403)
             form.populate_obj(s)
             s.user_id = s.user.id
+            if s.is_intern and not s.internship_supervisor_id and has_veterinarian_profile(current_user):
+                s.internship_supervisor_id = current_user.id
+                s.internship_started_at = s.internship_started_at or utcnow()
             db.session.add(s)
             # Atualiza visão de agenda do colaborador
             new_view = form.appointments_view.data or None
@@ -1658,6 +1807,9 @@ def clinic_loja_produtos(clinica_id):
             image_url=image_url,
             category=(form.category.data or None),
             mp_category_id=(form.mp_category_id.data or 'others').strip(),
+            subscription_enabled=bool(form.subscription_enabled.data),
+            subscription_discount_percent=form.subscription_discount_percent.data or Decimal('0'),
+            subscription_shipping_fee=form.subscription_shipping_fee.data or Decimal('0'),
             status='active',
         )
         db.session.add(product)
@@ -1687,6 +1839,9 @@ def clinic_produto_editar(clinica_id, product_id):
         product.price = float(form.price.data)
         product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        product.subscription_enabled = bool(form.subscription_enabled.data)
+        product.subscription_discount_percent = form.subscription_discount_percent.data or Decimal('0')
+        product.subscription_shipping_fee = form.subscription_shipping_fee.data or Decimal('0')
         if form.image_upload.data:
             file = form.image_upload.data
             url = upload_to_s3(file, secure_filename(file.filename), folder='products')
@@ -1713,6 +1868,8 @@ def clinic_produto_toggle(clinica_id, product_id):
     db.session.commit()
     state = 'ativado' if product.status == 'active' else 'desativado'
     flash(f'Produto {state} na loja.', 'success')
+    if request.form.get('return_to') == 'edit':
+        return redirect(url_for('clinic_produto_editar', clinica_id=clinica.id, product_id=product.id))
     return redirect(url_for('clinic_loja_produtos', clinica_id=clinica.id))
 
 
@@ -2229,7 +2386,14 @@ def clinic_staff(clinica_id):
                     return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
+                is_intern = getattr(user, 'worker', None) == 'estudante'
+                staff = ClinicStaff(
+                    clinic_id=clinic.id,
+                    user_id=user.id,
+                    is_intern=is_intern,
+                    internship_started_at=utcnow() if is_intern else None,
+                    internship_supervisor_id=current_user.id if is_intern and has_veterinarian_profile(current_user) else None,
+                )
                 db.session.add(staff)
                 user.clinica_id = clinic.id
                 if has_veterinarian_profile(user):
@@ -2303,6 +2467,9 @@ def clinic_staff_permissions(clinica_id, user_id):
     if form.validate_on_submit():
         form.populate_obj(staff)
         staff.user_id = user_id
+        if staff.is_intern and not staff.internship_supervisor_id and has_veterinarian_profile(current_user):
+            staff.internship_supervisor_id = current_user.id
+            staff.internship_started_at = staff.internship_started_at or utcnow()
         db.session.add(staff)
         user.clinica_id = clinic.id
         db.session.add(user)
@@ -2316,6 +2483,49 @@ def clinic_staff_permissions(clinica_id, user_id):
         html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
         return jsonify(success=True, html=html)
     return render_template('clinica/clinic_staff_permissions.html', form=form, clinic=clinic)
+
+
+@bp.route('/clinica/<int:clinica_id>/estagio/<int:user_id>/casos', methods=['GET', 'POST'])
+@login_required
+def clinic_internship_cases(clinica_id, user_id):
+    """Owner-controlled assignment of real patients to an intern."""
+    clinic = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinic.owner_id):
+        abort(403)
+    student = User.query.get_or_404(user_id)
+    staff = ClinicStaff.query.filter_by(
+        clinic_id=clinic.id, user_id=student.id, is_intern=True
+    ).first_or_404()
+    animals = Animal.query.filter_by(clinica_id=clinic.id).filter(Animal.removido_em.is_(None)).order_by(Animal.name).all()
+    if request.method == 'POST':
+        selected_ids = {int(value) for value in request.form.getlist('animal_ids') if value.isdigit()}
+        current = ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=student.id, revoked_at=None
+        ).all()
+        for case in current:
+            if case.animal_id not in selected_ids:
+                case.revoked_at = utcnow()
+        existing = {case.animal_id for case in current}
+        for animal in animals:
+            if animal.id in selected_ids and animal.id not in existing:
+                db.session.add(ClinicInternshipCase(
+                    clinic_id=clinic.id,
+                    intern_user_id=student.id,
+                    animal_id=animal.id,
+                    assigned_by_id=current_user.id,
+                ))
+        db.session.commit()
+        flash('Casos do estágio atualizados.', 'success')
+        return redirect(url_for('clinic_staff', clinica_id=clinic.id))
+    assigned = {
+        case.animal_id for case in ClinicInternshipCase.query.filter_by(
+            clinic_id=clinic.id, intern_user_id=student.id, revoked_at=None
+        ).all()
+    }
+    return render_template(
+        'clinica/clinic_internship_cases.html',
+        clinic=clinic, student=student, staff=staff, animals=animals, assigned=assigned,
+    )
 
 
 @bp.route("/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove", methods=["POST"])

@@ -1,5 +1,7 @@
 """Navigation ordering for users who operate on behalf of the platform."""
 
+from pathlib import Path
+
 from extensions import db
 from models import User, Veterinario
 
@@ -65,3 +67,58 @@ def test_delivery_area_precedes_personal_navigation(client, app):
     navbar = _navbar_markup(client.get('/'))
 
     assert navbar.index('fa-truck') < navbar.index('fa-home')
+
+
+def test_admin_nav_uses_wide_breakpoint_and_flexible_shell(client, app):
+    with app.app_context():
+        user = User(
+            name='Administrador',
+            email='admin-nav@example.test',
+            password_hash='x',
+            role='admin',
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    page = client.get('/').get_data(as_text=True)
+
+    assert 'navbar-expand-xxl navbar--admin' in page
+    assert 'clinic.css?v=20260802-mobile-navbar2' in page
+
+
+def test_authenticated_navbar_keeps_mobile_logout_at_top_of_account_menu(client, app):
+    with app.app_context():
+        user = User(
+            name='Pessoa no celular',
+            email='mobile-logout@example.test',
+            password_hash='x',
+        )
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    page = client.get('/').get_data(as_text=True)
+
+    account_start = page.index('nav-item dropdown nav-account')
+    account_end = page.index('</ul>', account_start)
+    account_menu = page[account_start:account_end]
+
+    assert 'nav-account__logout-mobile' in account_menu
+    assert 'nav-account__logout-desktop' in account_menu
+    assert account_menu.index('nav-account__logout-mobile') < account_menu.index('Meu perfil')
+    assert account_menu.count('href="/logout"') == 2
+
+
+def test_mobile_navbar_css_limits_menu_to_visible_viewport():
+    css = (Path(__file__).parents[1] / 'static' / 'css' / 'clinic.css').read_text(encoding='utf-8')
+
+    assert 'max-height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top));' in css
+    assert 'overflow-y: auto;' in css
+    assert 'overscroll-behavior: contain;' in css
+    assert 'calc(1rem + env(safe-area-inset-bottom))' in css
+    assert '.nav-account__logout-mobile' in css
+    assert 'flex: 0 0 100%;' in css
+    assert 'width: 100%;' in css

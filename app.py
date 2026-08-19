@@ -191,6 +191,7 @@ from security.crypto import (
     encrypt_bytes,
     encrypt_text,
 )
+from security.csv_safe import safe_csv_writer
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -217,10 +218,13 @@ app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
 _resolved_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
 if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_uri):
     engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
-    engine_opts.setdefault("pool_size", 5)
-    engine_opts.setdefault("max_overflow", 10)
+    engine_opts.setdefault("pool_size", int(os.getenv("DB_POOL_SIZE", "5")))
+    engine_opts.setdefault("max_overflow", int(os.getenv("DB_MAX_OVERFLOW", "2")))
+    engine_opts.setdefault("pool_timeout", int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "5")))
     connect_args = dict(engine_opts.get("connect_args", {}))
-    connect_args.setdefault("connect_timeout", 10)
+    connect_args.setdefault(
+        "connect_timeout", int(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "4"))
+    )
     engine_opts["connect_args"] = connect_args
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 elif _resolved_uri and _resolved_uri.startswith("sqlite"):
@@ -288,6 +292,7 @@ from extensions import (
     babel,
     csrf,
     limiter,
+    compress,
     configure_logging,
 )
 from flask_login import login_user, logout_user, current_user, login_required
@@ -304,14 +309,39 @@ db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
 mail.init_app(app)
 login.init_app(app)
+if str(app.config.get("SESSION_TYPE", "")).lower() == "redis":
+    from redis import Redis
+
+    redis_url = app.config.get("REDIS_URL")
+    if not redis_url:
+        raise RuntimeError("SESSION_TYPE=redis exige REDIS_URL")
+    app.config["SESSION_REDIS"] = Redis.from_url(
+        redis_url,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        health_check_interval=30,
+    )
 if str(app.config.get("SESSION_TYPE", "")).lower() == "sqlalchemy":
     # Compartilha a conexão principal em vez de criar uma segunda instância
     # SQLAlchemy. Isso torna sessões persistentes entre dynos e deploys.
     app.config["SESSION_SQLALCHEMY"] = db
 session_ext.init_app(app)
+
+# Static files bypass Flask's session and database machinery. This prevents a
+# transient database timeout from blocking CSS/JS needed by the checkout.
+if os.getenv("DYNO") or os.getenv("SERVE_STATIC_WITH_WHITENOISE") == "1":
+    from whitenoise import WhiteNoise
+
+    app.wsgi_app = WhiteNoise(
+        app.wsgi_app,
+        root=str(PROJECT_ROOT / "static"),
+        prefix="static/",
+        max_age=3600,
+    )
 babel.init_app(app)
 csrf.init_app(app)
 limiter.init_app(app)
+compress.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 configure_logging(app)
 
@@ -694,7 +724,16 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
             file.stream.seek(0)
             image = Image.open(file.stream)
             image = ImageOps.exif_transpose(image)  # baixa o EXIF: pixels já saem na orientação certa
-            image = image.convert("RGB")
+            # JPEG does not support alpha. A direct RGBA-to-RGB conversion
+            # turns transparent product backgrounds black, so flatten them on
+            # the neutral white background used by the catalog.
+            if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+                foreground = image.convert("RGBA")
+                background = Image.new("RGBA", foreground.size, "white")
+                background.alpha_composite(foreground)
+                image = background.convert("RGB")
+            else:
+                image = image.convert("RGB")
             image.thumbnail((1280, 1280))
             buffer = BytesIO()
             image.save(buffer, format="JPEG", optimize=True, quality=85)
@@ -841,6 +880,15 @@ nim_session_rooms: Dict[str, str] = {}
 nim_session_players: Dict[str, int] = {}
 nim_room_members: Dict[str, set[str]] = defaultdict(set)
 nim_room_players: Dict[str, dict[int, str]] = defaultdict(dict)
+
+# A videochamada usa um namespace próprio para não misturar presença e sinais
+# WebRTC com as partidas do Desafio de Palitos. Apenas metadados efêmeros ficam
+# no servidor; áudio, vídeo e compartilhamento de tela trafegam entre os pares.
+CALL_NAMESPACE = "/chamada"
+call_session_rooms: Dict[str, str] = {}
+call_session_players: Dict[str, int] = {}
+call_room_members: Dict[str, set[str]] = defaultdict(set)
+call_room_players: Dict[str, dict[int, str]] = defaultdict(dict)
 
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
@@ -1449,6 +1497,134 @@ def nim_disconnect():  # pragma: no cover - exercised via browser
         leave_room(room)
 
 
+def _call_room_from_request() -> str:
+    room = (request.args.get("sala", "") or request.args.get("room", "") or "").strip()
+    sanitized = "".join(ch for ch in room if ch.isalnum() or ch in {"_", "-"})
+    return sanitized[:48].upper() or "SALA-A-DOIS"
+
+
+@socketio.on("connect", namespace=CALL_NAMESPACE)
+def call_connect():  # pragma: no cover - integration tested with Socket.IO client
+    room = _call_room_from_request()
+    members = call_room_members[room]
+    if len(members) >= 2:
+        emit(
+            "room_full",
+            {"message": "Esta sala já tem duas pessoas.", "room": room},
+        )
+        disconnect()
+        return
+
+    players = call_room_players[room]
+    for seat, occupant in list(players.items()):
+        if occupant not in members:
+            players.pop(seat, None)
+
+    seat = next((candidate for candidate in (1, 2) if not players.get(candidate)), 1)
+    call_session_rooms[request.sid] = room
+    call_session_players[request.sid] = seat
+    players[seat] = request.sid
+    members.add(request.sid)
+    join_room(room)
+
+    emit(
+        "room_state",
+        {
+            "room": room,
+            "participants": len(members),
+            "seat": seat,
+            "initiator": seat == 1,
+        },
+    )
+    emit("peer_joined", {"participants": len(members)}, room=room, include_self=False)
+    emit("presence", {"participants": len(members)}, room=room)
+
+
+@socketio.on("webrtc_signal", namespace=CALL_NAMESPACE)
+def call_webrtc_signal(data):  # pragma: no cover - payload relay tested below
+    room = call_session_rooms.get(request.sid)
+    if not room or not isinstance(data, dict):
+        return
+
+    safe_payload = None
+    description = data.get("description")
+    candidate = data.get("candidate")
+    if isinstance(description, dict):
+        description_type = str(description.get("type", ""))[:12]
+        sdp = str(description.get("sdp", ""))[:120_000]
+        if description_type in {"offer", "answer", "rollback"}:
+            safe_payload = {
+                "description": {"type": description_type, "sdp": sdp},
+            }
+    elif isinstance(candidate, dict):
+        raw_candidate = str(candidate.get("candidate", ""))[:4_096]
+        safe_payload = {
+            "candidate": {
+                "candidate": raw_candidate,
+                "sdpMid": str(candidate.get("sdpMid", ""))[:128] or None,
+                "sdpMLineIndex": candidate.get("sdpMLineIndex"),
+                "usernameFragment": str(candidate.get("usernameFragment", ""))[:256] or None,
+            },
+        }
+
+    if safe_payload:
+        emit("webrtc_signal", safe_payload, room=room, include_self=False)
+
+
+@socketio.on("screen_share_state", namespace=CALL_NAMESPACE)
+def call_screen_share_state(data):
+    room = call_session_rooms.get(request.sid)
+    if not room or not isinstance(data, dict):
+        return
+    emit(
+        "screen_share_state",
+        {"active": data.get("active") is True},
+        room=room,
+        include_self=False,
+    )
+
+
+@socketio.on("chat_message", namespace=CALL_NAMESPACE)
+def call_chat_message(data):
+    room = call_session_rooms.get(request.sid)
+    seat = call_session_players.get(request.sid)
+    if not room or seat not in {1, 2} or not isinstance(data, dict):
+        return
+
+    message = " ".join(str(data.get("message", "")).split())[:500]
+    if not message:
+        return
+
+    emit(
+        "chat_message",
+        {"message": message, "sender": seat},
+        room=room,
+    )
+
+
+@socketio.on("disconnect", namespace=CALL_NAMESPACE)
+def call_disconnect():  # pragma: no cover - integration tested with Socket.IO client
+    room = call_session_rooms.pop(request.sid, None)
+    seat = call_session_players.pop(request.sid, None)
+    if not room:
+        return
+
+    members = call_room_members.get(room)
+    if members:
+        members.discard(request.sid)
+    players = call_room_players.get(room)
+    if players and players.get(seat) == request.sid:
+        players.pop(seat, None)
+    leave_room(room)
+
+    remaining = len(members or ())
+    emit("peer_left", {"participants": remaining}, room=room)
+    emit("presence", {"participants": remaining}, room=room)
+    if not remaining:
+        call_room_members.pop(room, None)
+        call_room_players.pop(room, None)
+
+
 def local_date_range_to_utc(start_dt, end_dt):
     """Convert local date/datetime boundaries to UTC-aware values."""
 
@@ -1507,14 +1683,28 @@ def find_users_by_phone(phone: str | None, *, exclude_user_id: int | None = None
     return matches
 
 
-def find_user_by_login_identifier(identifier: str | None) -> tuple[User | None, str | None]:
-    """Resolve a login identifier as email or phone."""
+def find_user_by_login_identifier(
+    identifier: str | None,
+    password: str | None = None,
+) -> tuple[User | None, str | None]:
+    """Resolve a login identifier as email or phone.
+
+    Quando o mesmo celular pertence a mais de uma conta (campanhas PMO criam uma
+    conta por família e várias famílias dividem o telefone), a senha desempata:
+    entra a única conta cuja senha confere. Sem isso a pessoa fica sem saída,
+    porque o e-mail sugerido é provisório (``@petorlandia.local``) e ela não o
+    conhece.
+    """
     normalized_email = normalize_email(identifier)
     if normalized_email and "@" in normalized_email:
         return User.query.filter(func.lower(User.email) == normalized_email).first(), None
 
     phone_matches = find_users_by_phone(identifier)
     if len(phone_matches) > 1:
+        if password:
+            by_password = [user for user in phone_matches if user.check_password(password)]
+            if len(by_password) == 1:
+                return by_password[0], None
         return None, "Há mais de uma conta com este celular. Entre com seu e-mail por enquanto."
     if phone_matches:
         return phone_matches[0], None
@@ -1908,12 +2098,28 @@ def _vet_public_service_notes(vet, selected_city=None):
 def _is_public_veterinarian(vet):
     profile_type = _normalize_public_text(getattr(vet, 'public_profile_type', None) or 'profissional')
     membership = getattr(vet, 'membership', None)
+    user = getattr(vet, 'user', None)
+    name_key = _normalize_public_text(getattr(user, 'name', None))
+    email_key = _normalize_public_text(getattr(user, 'email', None))
+    crmv_digits = ''.join(ch for ch in str(getattr(vet, 'crmv', '') or '') if ch.isdigit())
+    placeholder_tokens = {
+        'teste', 'test', 'testeteesste', 'demo', 'exemplo', 'sample',
+    }
+    has_placeholder_identity = (
+        not name_key
+        or any(token in name_key.split() for token in placeholder_tokens)
+        or any(token in email_key for token in ('@teste.', '@test.', '@example.', '@exemplo.'))
+        or not crmv_digits
+        or int(crmv_digits or '0') == 0
+    )
     return (
         bool(getattr(vet, 'public_visible', True))
         and profile_type == 'profissional'
         # Estagiário nunca é ofertado publicamente como veterinário.
         and bool(getattr(vet, 'pode_assinar', True))
         and bool(membership and membership.is_active())
+        # Um cadastro incompleto ou de teste nunca pode virar prova pública.
+        and not has_placeholder_identity
     )
 
 
@@ -1974,7 +2180,10 @@ def _professional_service_query(*, audience=None, service_type=None, city=None, 
             query = query.filter(ProfessionalService.service_type.in_(list(service_type)))
         else:
             query = query.filter(ProfessionalService.service_type == service_type)
-    services = query.all()
+    services = [
+        service for service in query.all()
+        if _is_public_veterinarian(service.veterinario)
+    ]
     if audience:
         services = [service for service in services if _service_visible_for_audience(service, audience)]
     if city:
@@ -2686,6 +2895,26 @@ def _get_veterinarian_membership_price() -> Decimal:
     return VeterinarianSettings.membership_price_amount()
 
 
+def _get_veterinarian_membership_annual_price() -> Decimal:
+    """Return the annual membership price, falling back to 10 monthly charges.
+
+    A tela de assinatura e o checkout precisam concordar: quando cada um usava
+    o seu próprio fallback, remover ``VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE`` do
+    ambiente fazia a tela anunciar um preço que o checkout recusava como
+    'Plano indisponível'. Um valor explícito e não positivo é preservado, já
+    que desligar o ciclo anual é uma decisão legítima de operação.
+    """
+
+    monthly = _get_veterinarian_membership_price()
+    configured = current_app.config.get('VETERINARIAN_MEMBERSHIP_ANNUAL_PRICE')
+    if configured is None or configured == '':
+        return (monthly * 10).quantize(Decimal('0.01'))
+    try:
+        return Decimal(str(configured)).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        return (monthly * 10).quantize(Decimal('0.01'))
+
+
 def _format_brl_price(value) -> str | None:
     if value is None:
         return None
@@ -2748,11 +2977,14 @@ def _sync_veterinarian_membership_payment(payment):
 
     membership.last_payment_id = payment.id
     if payment.status == PaymentStatus.COMPLETED:
+        from services.membership_conversion import mark_converted
+
         cycle_days = _membership_cycle_days(payment)
         now = utcnow()
         start_from = membership.paid_until if membership.paid_until and membership.paid_until > now else now
         membership.paid_until = start_from + timedelta(days=cycle_days)
         membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
+        mark_converted(membership)
     db.session.add(membership)
 
 
@@ -2867,6 +3099,8 @@ def _registrar_ultimo_login(sender, user, **extra):
 
 
 login.login_view = "login_view"
+login.login_message = "Entre na sua conta ou crie uma conta gratuita para continuar."
+login.login_message_category = "info"
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 def _ensure_registration_flow_schema() -> None:
@@ -8625,6 +8859,186 @@ def enviar_lembretes_fim_trial() -> None:
         )
 
 
+#: Dias depois do fim da avaliação em que tentamos trazer de volta quem não
+#: converteu. Dois toques: um enquanto a decisão é recente, outro depois de a
+#: pessoa sentir falta do sistema. Além disso vira insistência.
+WINBACK_OFFSETS = (3, 10)
+
+
+def enviar_winback_pos_trial() -> None:
+    """Job diário: reabre a conversa com quem terminou a avaliação sem assinar.
+
+    É o lead mais qualificado que existe — conheceu o produto por semanas e
+    cadastrou pacientes reais. Até aqui a régua terminava no último dia do
+    teste e essa pessoa nunca mais ouvia falar da gente.
+    """
+    from models import VeterinarianMembership
+    from services.notifications import notify_user
+
+    with app.app_context():
+        base_url = _notification_base_url()
+        hoje = now_in_brazil().date()
+        enviados = 0
+
+        memberships = (
+            VeterinarianMembership.query
+            .filter(VeterinarianMembership.trial_ends_at.isnot(None))
+            .filter(VeterinarianMembership.converted_at.is_(None))
+            .all()
+        )
+
+        for membership in memberships:
+            # Quem assinou depois, ou está com pagamento configurado, não é
+            # alvo de win-back.
+            if membership.has_valid_payment() or membership.has_payment_method():
+                continue
+
+            trial_end = VeterinarianMembership._as_timezone_aware(membership.trial_ends_at)
+            if trial_end is None:
+                continue
+
+            dias_desde_fim = (hoje - coerce_to_brazil_tz(trial_end).date()).days
+            if dias_desde_fim not in WINBACK_OFFSETS:
+                continue
+
+            vet = getattr(membership, 'veterinario', None)
+            user = getattr(vet, 'user', None)
+            if user is None:
+                continue
+
+            primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+            link = f'{base_url}/veterinario/assinatura'
+            preco = _format_reais(_get_veterinarian_membership_price())
+
+            if dias_desde_fim == WINBACK_OFFSETS[0]:
+                assunto = 'Seus dados continuam aqui — PetOrlândia'
+                corpo = (
+                    f'Olá {primeiro_nome}! Sua avaliação terminou há alguns dias e as '
+                    'ferramentas profissionais estão pausadas.\n\n'
+                    'Nada foi apagado: agenda, prontuários, histórico e a carteira de '
+                    'vacinas dos seus pacientes continuam guardados exatamente como '
+                    'você deixou.\n\n'
+                    f'Para voltar a usar, é {preco} por mês por veterinário, sem '
+                    f'fidelidade:\n{link}'
+                )
+            else:
+                assunto = 'Podemos ajudar a decidir? — PetOrlândia'
+                corpo = (
+                    f'Olá {primeiro_nome}! Não quero insistir — esta é a última mensagem '
+                    'sobre a sua avaliação.\n\n'
+                    'Se faltou tempo para testar direito, a gente refaz a avaliação e '
+                    'configura o sistema junto com você, sem custo: importamos sua '
+                    'lista de clientes e deixamos a agenda pronta em uma conversa de '
+                    '30 minutos.\n\n'
+                    f'Se preferir seguir sozinho, seus dados continuam aqui:\n{link}'
+                )
+
+            notify_user(user, assunto, corpo, kind='trial_winback')
+            enviados += 1
+
+        db.session.commit()
+        current_app.logger.info(
+            '[Trial] Mensagens de retomada pós-avaliação enviadas: %s', enviados
+        )
+
+
+#: Horas de carrinho parado antes do lembrete. Curto o bastante para a compra
+#: ainda fazer sentido, longo o bastante para não atropelar quem só pausou.
+ABANDONED_CART_HOURS = 24
+
+
+def enviar_lembretes_carrinho_abandonado() -> None:
+    """Job diário: lembra quem montou um carrinho e não concluiu o pagamento.
+
+    Um único toque por carrinho. O lembrete leva de volta ao carrinho já
+    montado — não pede para começar de novo.
+    """
+    from models import Order, Payment, PaymentStatus
+    from services.notifications import notify_user
+
+    with app.app_context():
+        base_url = _notification_base_url()
+        agora = utcnow()
+        limite = agora - timedelta(hours=ABANDONED_CART_HOURS)
+        enviados = 0
+        abandoned_events = []
+
+        candidatos = (
+            Order.query
+            .filter(Order.abandoned_reminder_at.is_(None))
+            .filter(Order.created_at.isnot(None))
+            .filter(Order.created_at <= limite)
+            .filter(Order.user_id.isnot(None))
+            .order_by(Order.created_at)
+            .limit(200)
+            .all()
+        )
+
+        for order in candidatos:
+            if not order.items:
+                continue
+
+            pago = (
+                Payment.query
+                .filter_by(order_id=order.id, status=PaymentStatus.COMPLETED)
+                .first()
+            )
+            if pago:
+                continue
+
+            user = order.user
+            if user is None:
+                order.abandoned_reminder_at = agora
+                continue
+
+            primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+            itens = ', '.join(
+                (item.item_name or (item.product.name if item.product else 'item'))
+                for item in order.items[:3]
+            )
+            restantes = max(0, len(order.items) - 3)
+            if restantes:
+                itens += f' e mais {restantes} item{"ns" if restantes > 1 else ""}'
+
+            notify_user(
+                user,
+                'Seu carrinho ainda está guardado — PetOrlândia',
+                (
+                    f'Olá {primeiro_nome}! Você deixou {itens} no carrinho e o pagamento '
+                    'não foi concluído.\n\n'
+                    'Está tudo lá, com o mesmo preço. É só abrir e finalizar:\n'
+                    f'{base_url}/carrinho\n\n'
+                    'Se desistiu, ignore esta mensagem — não vamos insistir.'
+                ),
+                kind='cart_abandoned',
+            )
+            order.abandoned_reminder_at = agora
+            abandoned_events.append({
+                'user_id': order.user_id,
+                'amount': float(sum(
+                    Decimal(str(item.unit_price or 0)) * int(item.quantity or 0)
+                    for item in order.items
+                )),
+                'items': sum(int(item.quantity or 0) for item in order.items),
+            })
+            enviados += 1
+
+        db.session.commit()
+        # Mede o abandono depois de salvar o estado primário. A telemetria usa
+        # commit próprio e jamais pode decidir se o lembrete foi ou não enviado.
+        from services.product_analytics import track_event
+
+        for payload in abandoned_events:
+            track_event(
+                'checkout_abandoned',
+                source_path='/carrinho',
+                **payload,
+            )
+        current_app.logger.info(
+            '[Loja] Lembretes de carrinho abandonado enviados: %s', enviados
+        )
+
+
 def _run_financial_snapshot_job() -> None:
     """Daily hook executed by APScheduler to refresh monthly snapshots."""
 
@@ -8643,6 +9057,44 @@ def _run_mercadopago_oauth_renewal_job() -> None:
                 result.checked,
                 result.renewed,
                 result.failed,
+            )
+
+
+def _run_veterinarian_billing_reconciliation_job() -> None:
+    """Reconcile membership state and invoices missed by webhooks."""
+
+    with app.app_context():
+        if not current_app.config.get(
+            "VETERINARIAN_BILLING_RECONCILIATION_ENABLED", True
+        ):
+            return
+        from services.veterinarian_billing import (
+            MercadoPagoSubscriptionClient,
+            reconcile_membership_billing,
+        )
+
+        try:
+            client = MercadoPagoSubscriptionClient(
+                current_app.config.get("MERCADOPAGO_ACCESS_TOKEN", "")
+            )
+            result = reconcile_membership_billing(
+                client,
+                limit=int(
+                    current_app.config.get(
+                        "VETERINARIAN_BILLING_RECONCILIATION_LIMIT", 250
+                    )
+                ),
+            )
+            log = (
+                current_app.logger.warning
+                if result["failures"]
+                else current_app.logger.info
+            )
+            log("Mercado Pago membership reconciliation: %s", result)
+        except Exception:  # noqa: BLE001 - scheduler must remain alive
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha na reconciliação de assinaturas profissionais do Mercado Pago"
             )
 
 
@@ -9160,28 +9612,22 @@ def _onboarding_seller_percent():
 
 
 def _onboarding_payout_from_final(price):
-    """Repasse estimado a partir de um preço de vitrine desejado (÷ 1,10).
-
-    O preço de vitrine real será ``_onboarding_final_from_payout`` do valor
-    retornado (pode arredondar para cima até o múltiplo de R$ 5).
-    """
+    """Repasse a partir do preço final e do take rate configurado."""
     if price is None:
         return None
-    return (Decimal(price) / Decimal('1.10')).quantize(Decimal('0.01'))
+    fee_percent, _seller_percent = _onboarding_seller_percent()
+    seller_share = (Decimal('100') - fee_percent) / Decimal('100')
+    return (Decimal(price) * seller_share).quantize(Decimal('0.01'))
 
 
 def _onboarding_final_from_payout(payout):
-    """Preço de vitrine: repasse + 10%, arredondado ao próximo múltiplo de R$5.
-
-    Mesma regra de ``Product.preco_publico`` — o lojista recebe o valor
-    integral que definiu; a taxa fica embutida no preço exibido.
-    """
+    """Preço de vitrine calculado pela regra única de marketplace."""
     if payout is None:
         return None
     amount = Decimal(payout)
     if amount <= 0:
         return None
-    return public_price_from_professional_price(amount)
+    return Product.public_price_from_base(amount)
 
 
 def _onboarding_prefill_email(user_email):
@@ -10145,7 +10591,7 @@ def _build_veterinarian_activity_report(veterinario, start_date, end_date):
 
 def _export_veterinarian_activity_csv(veterinario, activities, start_date, end_date):
     output = StringIO()
-    writer = csv.writer(output)
+    writer = safe_csv_writer(output)
     writer.writerow([
         'Veterinario',
         'CRMV',
@@ -10320,8 +10766,8 @@ def _render_vet_public_profile(veterinario):
 
 
 
-def _resolve_record_panel(args, listing_params=(), default='create'):
-    raw_panel = (args.get('panel') or '').strip().lower()
+def _resolve_record_panel(args, listing_params=(), default='create', param='panel'):
+    raw_panel = (args.get(param) or '').strip().lower()
     create_values = {'create', 'form', 'new', 'novo', 'cadastro'}
     list_values = {'list', 'listing', 'records', 'cadastrados', 'listagem'}
 
@@ -11414,7 +11860,7 @@ def _build_missing_tutor_geocodes():
 
 def _export_data_share_logs_csv(logs):
     output = StringIO()
-    writer = csv.writer(output)
+    writer = safe_csv_writer(output)
     writer.writerow([
         'ID',
         'Data',
@@ -11720,13 +12166,13 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
-def _normalize_role_scope(scope_value, *, allow_global):
-    """Normalize list/dashboard scope defensively by role capabilities."""
+def _normalize_role_scope(scope_value, *, allow_full_scope):
+    """Normalize list scope without granting access beyond the caller's clinics."""
 
     normalized = (scope_value or '').strip().lower()
     if normalized not in {'all', 'mine'}:
-        return 'all' if allow_global else 'mine'
-    if normalized == 'all' and not allow_global:
+        return 'all' if allow_full_scope else 'mine'
+    if normalized == 'all' and not allow_full_scope:
         return 'mine'
     return normalized
 
@@ -11747,9 +12193,17 @@ def _get_recent_animais(
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or (getattr(current_user, 'id', None))
     clinic_ids = _normalize_clinic_ids(clinic_id)
+    can_view_clinic_scope = bool(
+        clinic_ids
+        and viewer
+        and has_professional_access(viewer)
+    )
+    resolved_scope = _normalize_role_scope(
+        scope,
+        allow_full_scope=is_admin or can_view_clinic_scope,
+    )
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
@@ -11909,9 +12363,17 @@ def _get_recent_tutores(
 
     viewer = current_user if current_user.is_authenticated else None
     is_admin = bool(viewer and getattr(viewer, 'role', None) == 'admin')
-    resolved_scope = _normalize_role_scope(scope, allow_global=is_admin)
     effective_user_id = user_id or getattr(current_user, 'id', None)
     clinic_ids = _normalize_clinic_ids(clinic_id)
+    can_view_clinic_scope = bool(
+        clinic_ids
+        and viewer
+        and has_professional_access(viewer)
+    )
+    resolved_scope = _normalize_role_scope(
+        scope,
+        allow_full_scope=is_admin or can_view_clinic_scope,
+    )
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
@@ -12110,6 +12572,23 @@ def _reprice_order_items(order):
         if item.unit_price is None or _money_decimal(item.unit_price) != current:
             item.unit_price = current
             changed = True
+        seller_amount = _money_decimal(product.price)
+        platform_fee = max(Decimal("0.00"), current - seller_amount)
+        seller_type = 'casa_de_racao' if product.casa_de_racao_id else 'clinica' if product.clinica_id else None
+        seller_id = product.casa_de_racao_id or product.clinica_id
+        if (
+            item.seller_unit_amount is None
+            or _money_decimal(item.seller_unit_amount) != seller_amount
+            or item.platform_fee_amount is None
+            or _money_decimal(item.platform_fee_amount) != platform_fee
+            or item.seller_type != seller_type
+            or item.seller_id != seller_id
+        ):
+            item.seller_unit_amount = seller_amount
+            item.platform_fee_amount = platform_fee
+            item.seller_type = seller_type
+            item.seller_id = seller_id
+            changed = True
     if changed:
         db.session.commit()
     return changed
@@ -12137,7 +12616,11 @@ def _order_vendor_shipping(order):
         unit_price = _money_decimal(item.unit_price if item.unit_price is not None else (product.preco_publico if product else 0))
         line_total = unit_price * int(item.quantity or 0)
         products_total += line_total
-        seller_unit = _money_decimal(product.price if product else 0)
+        seller_unit = _money_decimal(
+            item.seller_unit_amount
+            if item.seller_unit_amount is not None
+            else (product.price if product else 0)
+        )
         seller_products_total += seller_unit * int(item.quantity or 0)
         casa_id = product.casa_de_racao_id if product and product.casa_de_racao_id else None
         clinica_id = product.clinica_id if product and product.clinica_id else None
@@ -12278,7 +12761,13 @@ from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categoria: str = ''):
+def _build_loja_query(
+    search_term: str,
+    filtro: str,
+    vendedor: str = '',
+    categoria: str = '',
+    include_demo: bool = False,
+):
     from sqlalchemy import and_
     query = (
         Product.query
@@ -12291,6 +12780,12 @@ def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categor
             )
         )
     )
+
+    # Produto de demonstração fica fora da vitrine: quem chega pela busca não
+    # pode encontrar "Teste produto 1" sob a promessa de sortimento. O admin
+    # continua enxergando para conseguir manter o cadastro.
+    if not include_demo:
+        query = query.filter(Product.is_demo.is_(False))
 
     if search_term:
         like = f"%{search_term}%"
@@ -12326,33 +12821,62 @@ def _build_loja_query(search_term: str, filtro: str, vendedor: str = '', categor
     return query
 
 
-def _get_vendedores_ativos():
+def _get_vendedores_ativos(include_demo: bool = False):
     """Retorna lista de dicts {key, nome, logo_url} de todos os vendedores com produtos ativos."""
     from models import Clinica as ClinicaModel
     vendedores = []
-    clinicas = (
+    clinicas_query = (
         ClinicaModel.query
         .join(Product, Product.clinica_id == ClinicaModel.id)
         .filter(Product.status == 'active')
-        .distinct()
-        .order_by(ClinicaModel.nome)
-        .all()
     )
+    if not include_demo:
+        clinicas_query = clinicas_query.filter(Product.is_demo.is_(False))
+    clinicas = clinicas_query.distinct().order_by(ClinicaModel.nome).all()
     for c in clinicas:
         vendedores.append({'key': f'c_{c.id}', 'nome': c.nome, 'logo_url': c.logo_url})
 
-    casas = (
+    casas_query = (
         CasaDeRacao.query
         .join(Product, Product.casa_de_racao_id == CasaDeRacao.id)
         .filter(Product.status == 'active', CasaDeRacao.status == 'ativa')
-        .distinct()
-        .order_by(CasaDeRacao.nome)
-        .all()
     )
+    if not include_demo:
+        casas_query = casas_query.filter(Product.is_demo.is_(False))
+    casas = casas_query.distinct().order_by(CasaDeRacao.nome).all()
     for r in casas:
         vendedores.append({'key': f'r_{r.id}', 'nome': r.nome, 'logo_url': r.logo_url})
 
     return vendedores
+
+
+def _get_catalog_categories(vendedor: str = '', include_demo: bool = False):
+    """Categorias que têm ao menos um produto visível na vitrine atual.
+
+    Exibir seis chips vazios em um catálogo pequeno comunica falta de oferta.
+    O cadastro continua oferecendo todas as categorias; a vitrine mostra só as
+    que levam a algum produto real.
+    """
+    query = _build_loja_query(
+        '',
+        'all',
+        vendedor=vendedor,
+        include_demo=include_demo,
+    )
+    rows = (
+        query
+        .order_by(None)
+        .with_entities(Product.category)
+        .filter(Product.category.isnot(None), Product.category != '')
+        .distinct()
+        .all()
+    )
+    visible = {row[0] for row in rows}
+    return [
+        category
+        for category in get_active_product_categories()
+        if category.slug in visible
+    ]
 
 
 
@@ -13186,12 +13710,14 @@ from blueprints.consulta import (  # noqa: E402,F401
     alterar_medicamento,
     alterar_status_tratamento,
     aplicar_sugestao_clinica,
+    arquivar_proposta_protocolo_clinico,
     appointment_close,
     ativar_acompanhamento_tratamento,
     atualizar_bloco_exames,
     atualizar_bloco_orcamento,
     atualizar_bloco_prescricao,
     atualizar_protocolo_clinico_inline,
+    atualizar_proposta_protocolo_clinico,
     atualizar_realizacao_exames,
     buscar_apresentacoes,
     buscar_exames,
@@ -13202,6 +13728,7 @@ from blueprints.consulta import (  # noqa: E402,F401
     criar_exame_modelo,
     criar_medicamento,
     criar_prescricao,
+    criar_proposta_protocolo_clinico,
     criar_protocolo_clinico_inline,
     criar_servico_clinica,
     deletar_bloco_exames,
@@ -13231,6 +13758,7 @@ from blueprints.consulta import (  # noqa: E402,F401
     imprimir_orcamento_padrao,
     iniciar_retorno,
     listar_medicamentos_favoritos,
+    listar_propostas_protocolo_clinico,
     marcar_administracao_tratamento,
     marcar_item_tratamento_comprado,
     medicamentos_frequentes,
@@ -13555,6 +14083,8 @@ from blueprints.admin import (  # noqa: E402,F401
     admin_notification_mark_read,
     admin_notification_resolve,
     admin_notifications,
+    admin_protocol_proposals,
+    admin_start_protocol_proposal_review,
     admin_parcerias,
     admin_promote_delivery,
     admin_promote_parceiro,

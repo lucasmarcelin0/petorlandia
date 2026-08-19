@@ -1049,6 +1049,84 @@
     color: #b91c1c;
   }
 
+  .pmo-add-animal {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px dashed #94a3b8;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 1.1rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pmo-add-animal__btn:hover {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #14532d;
+  }
+
+  .pmo-add-animal__form {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+  }
+
+  .pmo-add-animal__input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
+  }
+
+  .pmo-add-animal__species {
+    display: flex;
+    gap: 6px;
+  }
+
+  .pmo-add-animal__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pmo-add-animal__chip.is-active {
+    border-color: #16a34a;
+    background: #dcfce7;
+    color: #14532d;
+    font-weight: 600;
+  }
+
   .pmo-video-modal {
     position: fixed;
     inset: 0;
@@ -1169,6 +1247,9 @@
       <button type="button" class="btn btn-primary" id="pmo-sync" data-sync-url="{{ url_for('vacina_pmo_sync') }}">
         <i class="fas fa-rotate me-1"></i> Sincronizar planilha
       </button>
+      <a href="{{ source_sheet_url }}" class="btn btn-outline-success" target="_blank" rel="noopener">
+        <i class="fas fa-table me-1"></i> Abrir planilha de origem
+      </a>
       <button type="button" class="btn btn-outline-primary" id="pmo-create-day" data-create-url="{{ url_for('vacina_pmo_criar_dia') }}">
         <i class="fas fa-calendar-plus me-1"></i> Criar dia de vacinação
       </button>
@@ -1183,7 +1264,7 @@
 
   <div class="d-flex flex-wrap gap-2 justify-content-end mb-3">
     <button type="button" class="btn btn-success" id="pmo-video-generate">
-      <i class="fas fa-video me-1"></i> Video do dia
+      <i class="fas fa-video me-1"></i> Vídeo do dia
     </button>
   </div>
 
@@ -1438,14 +1519,14 @@
       <span class="pmo-photo-option__icon"><i class="fas fa-camera" aria-hidden="true"></i></span>
       <span>
         <span class="pmo-photo-option__label">Tirar foto agora</span>
-        <span class="pmo-photo-option__hint">Abre a camera do aparelho</span>
+        <span class="pmo-photo-option__hint">Abre a câmera do aparelho</span>
       </span>
     </button>
     <button type="button" class="pmo-photo-option pmo-photo-option--gallery" data-action="photo-source-gallery">
       <span class="pmo-photo-option__icon"><i class="fas fa-images" aria-hidden="true"></i></span>
       <span>
         <span class="pmo-photo-option__label">Escolher da galeria</span>
-        <span class="pmo-photo-option__hint">Usa uma foto ja tirada no aparelho</span>
+        <span class="pmo-photo-option__hint">Usa uma foto já tirada no aparelho</span>
       </span>
     </button>
     <button type="button" class="pmo-photo-sheet__cancel" data-action="photo-sheet-close">Cancelar</button>
@@ -1454,14 +1535,14 @@
 
 <div class="pmo-camera-modal" id="pmo-camera-modal" hidden role="dialog" aria-modal="true" aria-labelledby="pmo-camera-title">
   <div class="pmo-camera-modal__top">
-    <button type="button" class="pmo-camera-modal__icon-btn" data-action="camera-close" aria-label="Fechar camera"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    <button type="button" class="pmo-camera-modal__icon-btn" data-action="camera-close" aria-label="Fechar câmera"><i class="fas fa-xmark" aria-hidden="true"></i></button>
     <span class="pmo-camera-modal__title" id="pmo-camera-title">Foto do animal</span>
-    <button type="button" class="pmo-camera-modal__icon-btn" id="pmo-camera-flip" aria-label="Trocar de camera"><i class="fas fa-camera-rotate" aria-hidden="true"></i></button>
+    <button type="button" class="pmo-camera-modal__icon-btn" id="pmo-camera-flip" aria-label="Trocar de câmera"><i class="fas fa-camera-rotate" aria-hidden="true"></i></button>
   </div>
   <div class="pmo-camera-stage">
     <video id="pmo-camera-video" playsinline muted autoplay></video>
-    <img id="pmo-camera-preview" alt="Previa da foto" hidden>
-    <p class="pmo-camera-status" id="pmo-camera-status">Abrindo a camera...</p>
+    <img id="pmo-camera-preview" alt="Prévia da foto" hidden>
+    <p class="pmo-camera-status" id="pmo-camera-status">Abrindo a câmera...</p>
   </div>
   <div class="pmo-camera-bar" id="pmo-camera-bar-live">
     <span class="pmo-camera-bar__side"></span>
@@ -1483,8 +1564,8 @@
   <div class="pmo-video-modal__content">
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
-        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Video do dia</h5>
-        <div class="text-muted small">Gera um .webm com as fotos dos animais vacinados visiveis nos filtros atuais.</div>
+        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Vídeo do dia</h5>
+        <div class="text-muted small">Gera um .mp4 (compatível com WhatsApp) com as fotos dos animais vacinados visíveis nos filtros atuais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
     </div>
@@ -1492,9 +1573,9 @@
     <div class="pmo-video-status" id="pmo-video-status">Pronto para gerar.</div>
     <div class="pmo-video-actions">
       <button type="button" class="btn btn-success" id="pmo-video-start">
-        <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar video
+        <i class="fas fa-wand-magic-sparkles me-1"></i> Gerar vídeo
       </button>
-      <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.webm" aria-disabled="true">
+      <a class="btn btn-outline-primary disabled" id="pmo-video-download" download="animais-vacinados-pmo.mp4" aria-disabled="true">
         <i class="fas fa-download me-1"></i> Baixar
       </a>
       <button type="button" class="btn btn-outline-secondary" data-action="video-modal-close">Fechar</button>
@@ -1800,6 +1881,8 @@
   const videoDownload = document.getElementById('pmo-video-download');
   const videoStatus = document.getElementById('pmo-video-status');
   let videoObjectUrl = '';
+  const municipalLogoSrc = {{ url_for('static', filename='sim_portal/assets/brasao-orlandia.png') | tojson }};
+  let municipalLogoImage = null;
 
   function setVideoStatus(message) {
     if (videoStatus) videoStatus.textContent = message;
@@ -1865,7 +1948,7 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Nao foi possivel carregar uma das fotos do video.'));
+      img.onerror = () => reject(new Error('Não foi possível carregar uma das fotos do vídeo.'));
       img.src = src;
     });
   }
@@ -1990,7 +2073,7 @@
     ctx.font = '600 28px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(item.species === 'gato' ? 'Gato vacinado' : 'Cao vacinado', x + w / 2, y + h - 28);
+    ctx.fillText(item.species === 'gato' ? 'Gato vacinado' : 'Cão vacinado', x + w / 2, y + h - 28);
     ctx.restore();
   }
 
@@ -2054,11 +2137,15 @@
   }
 
   function drawVideoBackground(ctx, canvas) {
-    ctx.fillStyle = '#f8fafc';
+    // Cores extraídas do brasão: azul, vermelho e dourado, sem alterar a
+    // altura total de 260 px do cabeçalho.
+    ctx.fillStyle = '#f8f6ef';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#0f766e';
-    ctx.fillRect(0, 0, canvas.width, 250);
-    ctx.fillStyle = '#134e4a';
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillRect(0, 0, canvas.width, 240);
+    ctx.fillStyle = '#d3232a';
+    ctx.fillRect(0, 240, canvas.width, 10);
+    ctx.fillStyle = '#f2c230';
     ctx.fillRect(0, 250, canvas.width, 10);
   }
 
@@ -2066,73 +2153,126 @@
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    fitCenterText(ctx, title, canvas.width / 2, 104, canvas.width - 100, 60, 900);
+    // Mantém o cabeçalho com 260 px. A proporção original e o centramento
+    // vertical evitam que o brasão fique achatado ou deslocado.
+    if (municipalLogoImage) {
+      const logoHeight = 104;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      const logoX = canvas.width - logoWidth - 42;
+      const logoY = (240 - logoHeight) / 2;
+      ctx.drawImage(municipalLogoImage, logoX, logoY, logoWidth, logoHeight);
+    }
+    fitCenterText(ctx, title, canvas.width / 2 - 36, 104, canvas.width - 210, 60, 900);
     ctx.font = '600 34px Arial, sans-serif';
-    ctx.fillText(subtitle, canvas.width / 2, 172);
+    ctx.fillText(subtitle, canvas.width / 2 - 36, 172);
   }
 
   function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados pela Prefeitura', `Orlandia - ${videoDateLabel()}`);
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
     const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
-    ctx.fillStyle = '#334155';
+    ctx.fillStyle = '#1f3f8f';
     ctx.font = '600 24px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`Campanha municipal de vacinacao antirrabica - ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 68);
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function drawIntro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados hoje', `Prefeitura de Orlandia - ${videoDateLabel()}`);
-    ctx.fillStyle = '#0f172a';
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
+    ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
-    fitCenterText(ctx, `${count} animal${count === 1 ? '' : 'is'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
+    fitCenterText(ctx, `${count} ${count === 1 ? 'animal' : 'animais'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
     ctx.font = '600 38px Arial, sans-serif';
-    ctx.fillStyle = '#475569';
-    ctx.fillText('Campanha municipal de vacinacao antirrabica', canvas.width / 2, 930);
+    ctx.fillStyle = '#b5222a';
+    ctx.fillText('Vacinação antirrábica de rotina', canvas.width / 2, 930);
+    ctx.font = '600 32px Arial, sans-serif';
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function drawOutro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Obrigado pela participacao', `Prefeitura de Orlandia - ${videoDateLabel()}`);
-    ctx.fillStyle = '#0f172a';
+    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', videoDateLabel());
+    ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
-    fitCenterText(ctx, 'Vacina em dia protege o animal, a familia e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
+    fitCenterText(ctx, 'Vacina em dia protege o animal, a família e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
     ctx.font = '600 32px Arial, sans-serif';
-    ctx.fillStyle = '#475569';
-    ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste video`, canvas.width / 2, 950);
+    ctx.fillStyle = '#b5222a';
+    ctx.fillText(`${count} registro${count === 1 ? '' : 's'} com foto neste vídeo`, canvas.width / 2, 950);
+    ctx.fillStyle = '#1f3f8f';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function holdCanvasFrame(drawFn, durationMs) {
-    const frameMs = 1000 / 30;
-    const started = performance.now();
-    while (performance.now() - started < durationMs) {
-      drawFn();
-      await delay(frameMs);
+  function nextCaptureTick() {
+    // requestAnimationFrame acompanha o compositor e rende ~3x mais quadros que
+    // setTimeout, que o Chrome estrangula (chega a 1 tique por segundo quando a
+    // aba perde o foco). Com a aba oculta o rAF para de disparar, então o
+    // setTimeout fica como rede de segurança para o loop não travar.
+    if (document.visibilityState === 'visible' && typeof window.requestAnimationFrame === 'function') {
+      return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
     }
+    return delay(1000 / 30);
   }
 
+  async function holdCanvasFrame(drawFn, durationMs, captureTrack) {
+    const started = performance.now();
+    let frames = 0;
+    // Mesmo com os timers estrangulados cada trecho precisa render pelo menos
+    // dois quadros, senão o slide pode não aparecer no arquivo final.
+    while (performance.now() - started < durationMs || frames < 2) {
+      drawFn();
+      // Alguns navegadores não incluem atualizações de um canvas oculto na
+      // captura automática. Solicitar o frame explicitamente mantém a duração
+      // e a imagem do WebM corretas.
+      captureTrack?.requestFrame?.();
+      frames += 1;
+      await nextCaptureTick();
+    }
+    return frames;
+  }
+
+  // O WhatsApp recusa WebM ("formato incompatível"): aceita MP4/H.264. Por isso
+  // o MP4 vem primeiro e o WebM fica só como último recurso para navegadores
+  // antigos — nesse caso o usuário é avisado de que o envio pode falhar.
+  const VIDEO_FORMAT_CANDIDATES = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp8',
+    'video/webm;codecs=vp9',
+    'video/webm',
+  ];
+
   function mediaRecorderMimeType() {
-    const options = [
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm',
-    ];
-    return options.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+    return VIDEO_FORMAT_CANDIDATES.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+  }
+
+  // A extensão tem que sair do que o navegador realmente gravou, nunca de um
+  // literal: o MediaRecorder normaliza o codec pedido (avc1.42E01E virou
+  // avc1.420028 em 1080x1920) e pode ignorar o container solicitado. Um .webm
+  // renomeado para .mp4 é recusado pelo WhatsApp do mesmo jeito.
+  function videoContainerMime(recorder, requestedMime) {
+    const raw = recorder?.mimeType || requestedMime || 'video/webm';
+    return raw.split(';')[0].trim() || 'video/webm';
+  }
+
+  function videoFileExtension(containerMime) {
+    return containerMime.includes('mp4') ? 'mp4' : 'webm';
   }
 
   async function generateVaccinationVideo() {
     if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-      throw new Error('Este navegador nao consegue gerar video automaticamente. Tente pelo Chrome ou Edge.');
+      throw new Error('Este navegador não consegue gerar vídeo automaticamente. Tente pelo Chrome ou Edge.');
     }
     const items = collectVaccinatedVideoItems();
     if (!items.length) {
-      throw new Error('Nao ha animais vacinados com foto nos filtros atuais.');
+      throw new Error('Não há animais vacinados com foto nos filtros atuais.');
     }
 
     clearGeneratedVideo();
@@ -2140,8 +2280,14 @@
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
+    try {
+      municipalLogoImage = await loadVideoImage(municipalLogoSrc);
+    } catch (error) {
+      municipalLogoImage = null;
+    }
     const chunks = [];
     const stream = canvas.captureStream(30);
+    const captureTrack = stream.getVideoTracks()[0];
     const mimeType = mediaRecorderMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     recorder.ondataavailable = (event) => {
@@ -2153,31 +2299,78 @@
 
     const groups = [];
     for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
-    recorder.start();
-    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600);
+    // Emitir blocos durante a gravação deixa o WebM finalizável também em
+    // navegadores que não entregam todo o conteúdo quando stop() é imediato.
+    recorder.start(500);
+    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600, captureTrack);
     for (let i = 0; i < groups.length; i += 1) {
       setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
       const group = groups[i];
       const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
       const focuses = images.map((img) => estimatePetFocus(img));
       setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800);
+      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800, captureTrack);
     }
-    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300);
+    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300, captureTrack);
     recorder.stop();
-    stream.getTracks().forEach((track) => track.stop());
     await stopped;
+    stream.getTracks().forEach((track) => track.stop());
 
-    const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+    const containerMime = videoContainerMime(recorder, mimeType);
+    const extension = videoFileExtension(containerMime);
+    const blob = new Blob(chunks, { type: containerMime });
+    if (blob.size < 1024) {
+      throw new Error('Não foi possível finalizar o vídeo. Gere novamente em uma aba ativa do navegador.');
+    }
+
     videoObjectUrl = URL.createObjectURL(blob);
-    videoPreview.src = videoObjectUrl;
-    videoPreview.hidden = false;
-    videoPreview.load();
+    // O download é liberado assim que o arquivo existe. Ele não pode depender
+    // do preview: quando a reprodução falha o vídeo continua válido e o
+    // usuário precisa conseguir baixá-lo mesmo assim.
     videoDownload.href = videoObjectUrl;
-    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.webm`;
+    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.${extension}`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
-    setVideoStatus(`Video pronto com ${items.length} animal${items.length === 1 ? '' : 'is'}.`);
+
+    const totalLabel = `${items.length} ${items.length === 1 ? 'animal' : 'animais'}`;
+    const played = await previewGeneratedVideo();
+    const base = played
+      ? `Vídeo pronto com ${totalLabel}.`
+      : `Vídeo pronto com ${totalLabel}. A prévia não abriu neste navegador — use "Baixar".`;
+    setVideoStatus(extension === 'mp4'
+      ? `${base} Arquivo .mp4, pronto para enviar no WhatsApp.`
+      : `${base} Este navegador só gerou .webm, que o WhatsApp recusa — atualize o Chrome ou o Edge para sair em .mp4.`);
+  }
+
+  // Resolve com `true` quando o navegador conseguiu carregar a prévia e com
+  // `false` quando não conseguiu. Nunca rejeita: falha de preview não invalida
+  // o vídeo gerado.
+  function previewGeneratedVideo() {
+    if (!videoPreview || !videoObjectUrl) return Promise.resolve(false);
+    videoPreview.muted = true;
+    videoPreview.playsInline = true;
+    videoPreview.preload = 'auto';
+    videoPreview.src = videoObjectUrl;
+    videoPreview.hidden = false;
+    return new Promise((resolve) => {
+      const timeout = window.setTimeout(() => finish(false), 10000);
+      let settled = false;
+      function finish(ok) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        videoPreview.onloadeddata = null;
+        videoPreview.onerror = null;
+        if (!ok) videoPreview.hidden = true;
+        resolve(ok);
+      }
+      videoPreview.onloadeddata = () => finish(true);
+      videoPreview.onerror = () => finish(false);
+      videoPreview.load();
+    }).then(async (ok) => {
+      if (ok) await videoPreview.play().catch(() => {});
+      return ok;
+    });
   }
 
   if (videoModal) {
@@ -2451,6 +2644,15 @@
     return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
   }
 
+  // Guarda qual aba está aberta E de que dia ela é. A data é o que permite, na
+  // próxima abertura, carregar as visitas antes da lista de abas sem correr o
+  // risco de mostrar o dia anterior.
+  function rememberSelectedSheet() {
+    if (!sheetEl.value) return;
+    localStorage.setItem('pmo_sheet_gid', sheetEl.value);
+    localStorage.setItem('pmo_sheet_date', sheetEl.selectedOptions[0]?.dataset.date || '');
+  }
+
   function currentSheetDate() {
     const configured = sheetEl.dataset.today || '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(configured)) return configured;
@@ -2622,7 +2824,7 @@
       renderSheetOptions('', toSelect);
       if (toSelect) {
         sheetEl.value = toSelect;
-        localStorage.setItem('pmo_sheet_gid', toSelect);
+        rememberSelectedSheet();
         updatePrintLinks();
       }
       sheetInfoEl.textContent = todaySheet
@@ -2759,9 +2961,17 @@
     });
   }
 
-  async function loadSavedState(useSelectedSheet = false) {
+  // Na abertura o painel dispara duas cargas de estado em paralelo (a "adiantada",
+  // pelo gid guardado no aparelho, e a que confirma a aba do dia). A resposta de
+  // uma carga antiga nunca pode sobrescrever a mais nova.
+  let stateLoadSeq = 0;
+
+  async function loadSavedState(useSelectedSheet = false, { sheetGid = '' } = {}) {
+    const seq = ++stateLoadSeq;
     const params = new URLSearchParams();
-    if (useSelectedSheet) {
+    if (sheetGid) {
+      params.set('sheet_gid', sheetGid);
+    } else if (useSelectedSheet) {
       if (sheetEl.value) params.set('sheet_gid', sheetEl.value);
       const title = sheetEl.selectedOptions[0]?.dataset.title || '';
       if (title) params.set('sheet_title', title);
@@ -2773,9 +2983,10 @@
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || 'Não foi possível carregar o estado salvo.');
       }
+      if (seq !== stateLoadSeq) return state.rows.length;
       if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
         sheetEl.value = payload.sheet_gid;
-        localStorage.setItem('pmo_sheet_gid', payload.sheet_gid);
+        rememberSelectedSheet();
       }
       state.rows = normalizeSyncedRows(payload.rows || []);
       render();
@@ -3069,6 +3280,33 @@
     }
   }
 
+  async function addAnimal(row, name, species) {
+    if (!row.visitId) {
+      throw new Error('Sincronize a aba antes de incluir animais.');
+    }
+    const response = await fetch(`/vacina-pmo/visit/${row.visitId}/animal`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      body: JSON.stringify({ name, species }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível incluir o animal.');
+    }
+    if (payload.row) {
+      const updated = normalizeSyncedRows([payload.row])[0];
+      const index = state.rows.findIndex((item) => item.id === updated.id);
+      if (index >= 0) state.rows[index] = updated;
+      hydrateQueuedPhotos();
+      return updated;
+    }
+    return null;
+  }
+
   const lossesTimers = new Map();
 
   async function saveLosses(row, losses) {
@@ -3274,6 +3512,35 @@
     `;
   }
 
+  function renderAddAnimal(row) {
+    if (row.addingAnimal) {
+      return `
+        <div class="pmo-add-animal">
+          <form class="pmo-add-animal__form" data-action="animal-add-form" autocomplete="off">
+            <input type="text" class="pmo-add-animal__input" data-action="animal-add-input" maxlength="100"
+              placeholder="Nome do animal" aria-label="Nome do animal que apareceu na hora">
+            <div class="pmo-add-animal__species" role="group" aria-label="Espécie do animal">
+              <button type="button" class="pmo-add-animal__chip is-active" data-action="animal-add-species" data-species="cao"><i class="fas fa-dog"></i>Cão</button>
+              <button type="button" class="pmo-add-animal__chip" data-action="animal-add-species" data-species="gato"><i class="fas fa-cat"></i>Gato</button>
+            </div>
+            <div class="pmo-add-animal__actions">
+              <button type="submit" class="btn btn-sm btn-primary">Adicionar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-action="animal-add-cancel">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+    return `
+      <div class="pmo-add-animal">
+        <div class="pmo-add-animal__actions">
+          <button type="button" class="pmo-add-animal__btn" data-action="animal-add" title="Incluir um animal que apareceu na hora (vai para a planilha)" aria-label="Incluir animal">+</button>
+          <span class="text-muted small"><i class="fas fa-paw"></i> animal</span>
+        </div>
+      </div>
+    `;
+  }
+
   function renderNote(row) {
     if (row.editingNote) {
       return `
@@ -3376,6 +3643,7 @@
         ${progress.total ? `<div class="pmo-progress" role="progressbar" aria-valuenow="${progress.done}" aria-valuemin="0" aria-valuemax="${progress.total}" aria-label="Animais vacinados nesta visita"><div class="pmo-progress__bar" data-status="${row.status}" style="width:${progress.pct}%"></div></div>` : ''}
         <div class="pmo-animal-list">
           ${renderAnimalControls(row)}
+          ${renderAddAnimal(row)}
           ${renderLosses(row)}
           ${renderNote(row)}
         </div>
@@ -3587,7 +3855,7 @@
     });
 
     tbody.innerHTML = prepared.map((row) => {
-      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderLosses(row)}${renderNote(row)}</div>`;
+      const animals = `<div class="pmo-animal-list">${renderAnimalControls(row)}${renderAddAnimal(row)}${renderLosses(row)}${renderNote(row)}</div>`;
       const wa1 = row.phone1 ? buildMessage(row, row.phone1) : '';
       const wa2 = row.phone2 ? buildMessage(row, row.phone2) : '';
       return `
@@ -3736,10 +4004,29 @@
       }
       return;
     }
+    if (action === 'animal-add-species') {
+      // Troca a espécie sem re-renderizar para não perder o nome já digitado.
+      actionEl.closest('.pmo-add-animal__species')?.querySelectorAll('.pmo-add-animal__chip')
+        .forEach((chip) => chip.classList.toggle('is-active', chip === actionEl));
+      return;
+    }
     const findFreshRow = () => rowEl.classList.contains('pmo-visit-card')
       ? cardsEl.querySelector(`[data-id="${row.id}"]`)
       : tbody.querySelector(`tr[data-id="${row.id}"]`);
-    if (action === 'attended-edit') {
+    if (action === 'animal-add') {
+      if (!row.visitId) {
+        window.showAppToast ? window.showAppToast('Sincronize a aba antes de incluir animais.', 'warning') : alert('Sincronize a aba antes de incluir animais.');
+        return;
+      }
+      state.rows.forEach((other) => { if (other !== row) other.addingAnimal = false; });
+      row.addingAnimal = true;
+      render();
+      const input = findFreshRow()?.querySelector('[data-action="animal-add-input"]');
+      if (input) input.focus();
+    } else if (action === 'animal-add-cancel') {
+      row.addingAnimal = false;
+      render();
+    } else if (action === 'attended-edit') {
       state.rows.forEach((other) => { if (other !== row) other.editingAttendedBy = false; });
       row.editingAttendedBy = true;
       render();
@@ -3769,7 +4056,38 @@
   });
 
   listPanel.addEventListener('submit', (event) => {
-    if (event.target.dataset.action === 'animal-name-form') {
+    if (event.target.dataset.action === 'animal-add-form') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      const input = event.target.querySelector('[data-action="animal-add-input"]');
+      if (!row || !input) return;
+      const name = input.value.trim();
+      if (!name) {
+        window.showAppToast ? window.showAppToast('Digite o nome do animal.', 'warning') : alert('Digite o nome do animal.');
+        input.focus();
+        return;
+      }
+      const species = event.target.querySelector('.pmo-add-animal__chip.is-active')?.dataset.species || 'cao';
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>';
+      }
+      addAnimal(row, name, species)
+        .then(() => {
+          row.addingAnimal = false;
+          render();
+          window.showAppToast ? window.showAppToast(`${name} incluído nesta visita.`, 'success') : null;
+        })
+        .catch((error) => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Adicionar';
+          }
+          window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        });
+    } else if (event.target.dataset.action === 'animal-name-form') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
@@ -3807,7 +4125,15 @@
   });
 
   listPanel.addEventListener('keydown', (event) => {
-    if (event.target.dataset.action === 'animal-name-input' && event.key === 'Escape') {
+    if (event.target.dataset.action === 'animal-add-input' && event.key === 'Escape') {
+      event.preventDefault();
+      const rowEl = event.target.closest('[data-id]');
+      const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
+      if (row) {
+        row.addingAnimal = false;
+        render();
+      }
+    } else if (event.target.dataset.action === 'animal-name-input' && event.key === 'Escape') {
       event.preventDefault();
       const rowEl = event.target.closest('[data-id]');
       const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
@@ -3886,7 +4212,7 @@
   evalScopeDayBtn?.addEventListener('click', () => setEvalScope('day'));
   evalScopeAllBtn?.addEventListener('click', () => setEvalScope('all'));
   sheetEl.addEventListener('change', () => {
-    if (sheetEl.value) localStorage.setItem('pmo_sheet_gid', sheetEl.value);
+    rememberSelectedSheet();
     updatePrintLinks();
     const date = sheetEl.selectedOptions[0]?.dataset.date || '';
     sheetInfoEl.textContent = /^\d{4}-\d{2}-\d{2}$/.test(date)
@@ -3898,8 +4224,26 @@
     sheetSearchEl.addEventListener('input', () => renderSheetOptions(sheetSearchEl.value));
   }
 
-  // Abre já na aba de hoje (a selecionada), não na última aba salva.
-  loadSheets().then(() => loadSelectedSheet({ syncWhenEmpty: true }));
+  // A lista de abas vem da API do Google e trava de 0,5s a vários segundos (pior
+  // com o processo frio, logo depois de um deploy). As visitas não esperam mais
+  // por ela: quando o aparelho já tem a aba de HOJE guardada, o estado salvo é
+  // buscado em paralelo e os cards aparecem em ~150ms. A lista, quando chega, só
+  // confirma a aba — se for outra, recarrega o estado dela.
+  const bootGid = localStorage.getItem('pmo_sheet_date') === currentSheetDate()
+    ? (localStorage.getItem('pmo_sheet_gid') || '')
+    : '';
+  const bootRows = bootGid ? loadSavedState(false, { sheetGid: bootGid }) : null;
+  loadSheets().then(async () => {
+    const selected = sheetEl.value || '';
+    if (!bootGid || (selected && selected !== bootGid)) {
+      await loadSelectedSheet({ syncWhenEmpty: true });
+      return;
+    }
+    if ((await bootRows) === 0 && selected) {
+      sheetInfoEl.textContent = 'A aba ainda não estava carregada. Sincronizando automaticamente...';
+      await syncSheet('pmo-sync-inline', { silent: true });
+    }
+  });
   render();
 })();
 </script>

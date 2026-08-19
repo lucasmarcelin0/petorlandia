@@ -14,7 +14,7 @@ from __future__ import annotations
 import time as _time_module
 from types import SimpleNamespace
 
-from flask import current_app, session
+from flask import current_app, request, session
 from flask_login import current_user
 
 from extensions import db
@@ -155,10 +155,23 @@ def inject_admin_action_notifications():
                 .limit(5)
                 .all()
             )
+            # O cache sobrevive ao teardown da request, mas instâncias ORM não:
+            # na navegação seguinte elas ficam detached e qualquer template que
+            # acesse note.url/title pode derrubar a página inteira. Guarde
+            # somente valores simples e independentes da sessão SQLAlchemy.
+            recent_payload = [
+                {
+                    'url': note.url,
+                    'title': note.title,
+                    'event_type': note.event_type,
+                    'created_at': note.created_at,
+                }
+                for note in recent
+            ]
             payload = dict(
                 admin_action_count=open_count,
                 admin_action_unread_count=unread_count,
-                admin_action_recent=recent,
+                admin_action_recent=recent_payload,
             )
             _set_cached_context(current_user.id, 'admin_action_notifications', payload)
             return payload
@@ -282,6 +295,7 @@ def inject_veterinarian_membership_context():
             is_active_veterinarian=False,
             has_veterinarian_profile_flag=False,
             current_veterinarian_membership=None,
+            is_veterinarian_continuity_mode=False,
         )
 
     has_profile = has_veterinarian_profile(current_user)
@@ -294,6 +308,9 @@ def inject_veterinarian_membership_context():
         has_veterinarian_profile_flag=has_profile,
         has_professional_access=has_professional_access(current_user),
         current_veterinarian_membership=membership,
+        is_veterinarian_continuity_mode=bool(
+            has_profile and membership and not membership.is_active()
+        ),
     )
 
 
@@ -399,27 +416,106 @@ def inject_public_contact():
 
 
 def inject_site_flags():
-    """Injeta feature flags do banco no contexto de todos os templates."""
+    """Injeta feature flags do banco no contexto de todos os templates.
+
+    A flag manual só consegue *esconder* uma oferta, nunca revelar uma vitrine
+    vazia: mesmo publicada pelo admin, a loja continua em "em breve" enquanto
+    não houver um produto real cadastrado, e volta a abrir sozinha no instante
+    em que houver (ver services/offer_availability.py). O mesmo vale para o
+    plano de saúde e para banho e tosa.
+
+    O admin é exceção — precisa alcançar a tela para cadastrar a primeira
+    oferta, e continua com o toggle manual à disposição.
+    """
     from models.base import SiteFlag
+    from services.offer_availability import (
+        grooming_is_public,
+        health_plan_is_public,
+        store_is_public,
+    )
+
+    is_admin = (
+        getattr(current_user, 'is_authenticated', False)
+        and isinstance(getattr(current_user, 'role', None), str)
+        and current_user.role.lower() == 'admin'
+    )
+
     try:
-        flags = {
-            'loja_em_breve': SiteFlag.get('loja_em_breve', default=True),
-            'plano_saude_em_breve': SiteFlag.get('plano_saude_em_breve', default=True),
-        }
+        loja_manual = SiteFlag.get('loja_em_breve', default=True)
+        saude_manual = SiteFlag.get('plano_saude_em_breve', default=True)
+        sem_catalogo = not store_is_public()
+        sem_plano_saude = not health_plan_is_public()
+        sem_banho_tosa = not grooming_is_public()
     except Exception:
         db.session.rollback()
-        flags = {'loja_em_breve': True, 'plano_saude_em_breve': True}
+        loja_manual = saude_manual = True
+        sem_catalogo = sem_plano_saude = sem_banho_tosa = True
+
+    flags = {
+        'loja_em_breve': loja_manual or (sem_catalogo and not is_admin),
+        'plano_saude_em_breve': saude_manual or (sem_plano_saude and not is_admin),
+        'banho_tosa_em_breve': sem_banho_tosa and not is_admin,
+        # Cru, sem a exceção de admin: quem decide o que vai para o sitemap e
+        # para o público não pode enxergar diferente por estar logado.
+        'loja_publica': not (loja_manual or sem_catalogo),
+    }
     return dict(site_flags=flags)
 
 
-def inject_mp_public_key():
-    """Disponibiliza a chave pública do Mercado Pago para os templates."""
-    return dict(MERCADOPAGO_PUBLIC_KEY=current_app.config.get("MERCADOPAGO_PUBLIC_KEY"))
+#: Rotas cuja intencao e vender o sistema de gestao. Fora delas o visitante
+#: e tratado como tutor — que e a maioria de quem chega por busca organica,
+#: por link de carteirinha ou por indicacao de servico.
+#: Guardado sem o prefixo de blueprint: as mesmas rotas estao registradas
+#: nas duas formas ('precos' e 'site_routes.precos'), entao comparar pelo
+#: sufixo e o unico jeito estavel. '/veterinarios' fica de fora de proposito
+#: — e o diretorio publico onde o tutor procura profissional, nao venda.
+_BUSINESS_ENDPOINTS = frozenset({
+    'parceiro_clinica_landing',
+    'precos',
+})
+
+
+def inject_public_audience():
+    """Diz ao layout se o visitante esta numa area B2B ou B2C.
+
+    O botao de acao da navbar muda com isso: em area de clinica ele oferece o
+    teste do sistema; em qualquer outro lugar oferece a conta gratuita de
+    tutor. Sem isso, um tutor que vem da carteirinha do pet clica em "Testar
+    gratis" e cai na area de gestao de clinica, achando que o site inteiro e
+    um software pago.
+    """
+
+    endpoint = (request.endpoint or '') if request else ''
+    return dict(is_business_context=endpoint.rsplit('.', 1)[-1] in _BUSINESS_ENDPOINTS)
+
+
+def inject_ga_events():
+    """Expõe a fila de eventos do GA4 para o layout.
+
+    Injeta a função, não a lista: assim a fila só é consumida quando o
+    ``layout.html`` realmente renderiza. Um fragmento HTML devolvido por AJAX
+    não pode drenar eventos que ninguém vai disparar.
+    """
+    from services.product_analytics import pop_ga_events
+
+    return dict(ga_pending_events=pop_ga_events)
 
 
 def inject_default_pickup_address():
     """Exposes DEFAULT_PICKUP_ADDRESS config to templates."""
     return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
+
+
+def inject_activation_progress():
+    """Faixa de ativação: acompanha a clínica até ela completar os passos."""
+    from services.activation import activation_progress
+
+    try:
+        progress = activation_progress(current_user)
+    except Exception:  # noqa: BLE001 — nunca derrubar o layout por um lembrete
+        db.session.rollback()
+        progress = None
+    return dict(activation_progress=progress)
 
 
 _PROCESSORS = (
@@ -437,8 +533,10 @@ _PROCESSORS = (
     inject_whatsapp_helpers,
     inject_public_contact,
     inject_site_flags,
-    inject_mp_public_key,
+    inject_public_audience,
+    inject_ga_events,
     inject_default_pickup_address,
+    inject_activation_progress,
 )
 
 

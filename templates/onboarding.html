@@ -15,6 +15,34 @@
     </p>
   </header>
 
+  {% if activation_steps %}
+  {% set completed_steps = activation_steps|selectattr('done')|list|length %}
+  {% set activation_percent = ((completed_steps / (activation_steps|length)) * 100)|round|int %}
+  <section class="activation-checklist" aria-labelledby="activation-title">
+    <div class="activation-checklist__header">
+      <div>
+        <span class="onboarding-kicker">Sua ativação</span>
+        <h2 id="activation-title">{{ completed_steps }} de {{ activation_steps|length }} passos concluídos</h2>
+      </div>
+      <strong aria-label="{{ activation_percent }} por cento concluído">{{ activation_percent }}%</strong>
+    </div>
+    <div class="progress" role="progressbar" aria-valuenow="{{ activation_percent }}" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar bg-success" style="width: {{ activation_percent }}%"></div>
+    </div>
+    <ol class="activation-checklist__steps">
+      {% for step in activation_steps %}
+      <li class="{% if step.done %}is-done{% endif %}">
+        <i class="fa-solid {{ 'fa-circle-check' if step.done else 'fa-circle' }}" aria-hidden="true"></i>
+        <span>{{ step.label }}{% if step.optional %} <small>(recomendado antes do fim do teste)</small>{% endif %}</span>
+        {% if not step.done and loop.first == false %}
+        <a href="{{ step.url }}" data-cta="onboarding_next_step">{{ step.cta }}</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
   <div class="onboarding-grid">
 
     <article class="onboarding-card onboarding-card--primary">
@@ -24,7 +52,7 @@
       <h2>Tenho uma clínica veterinária</h2>
       <p>
         Cadastre a clínica e ative agenda, prontuário, vacinas e financeiro.
-        São {{ trial_days }} dias grátis, com a primeira cobrança só no {{ trial_days + 1 }}º dia.
+        São {{ trial_days }} dias grátis, sem cartão para começar.
       </p>
       <a href="{{ url_for('minha_clinica') }}" class="onboarding-cta"
          data-cta="onboarding_clinica">
@@ -74,8 +102,9 @@
   <section class="onboarding-note">
     <h2>Seus {{ trial_days }} dias de avaliação já começaram</h2>
     <p>
-      Você tem acesso completo às ferramentas profissionais. Avisamos por e-mail
-      antes de a avaliação terminar — não cobramos nada sem você decidir.
+      Você tem acesso completo às ferramentas profissionais. Não cobramos durante
+      a avaliação e avisamos por e-mail antes do fim. Configure o pagamento apenas
+      quando decidir continuar; sem ele, o acesso profissional pausa e nada é apagado.
       <a href="{{ url_for('veterinarian_membership') }}">Ver minha assinatura</a>
     </p>
   </section>

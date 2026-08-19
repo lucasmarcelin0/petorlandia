@@ -461,6 +461,10 @@ def _practical_presentation_options(suggestion: dict[str, Any], mode: str) -> li
 
         if quantity is None or quantity <= 0:
             continue
+        if not _presentation_delivers_unit(ap, practical_unit):
+            # Ex.: regra em gotas caindo numa pomada. Antes isso virava
+            # "8 gotas — 50 g pomada" na receita do tutor.
+            continue
         rounded = _round_quantity(quantity, practical_unit)
         if rounded <= 0:
             continue
@@ -482,6 +486,126 @@ def _practical_presentation_options(suggestion: dict[str, Any], mode: str) -> li
         return []
     candidates.sort(key=lambda item: (item["score"], item["quantity"]))
     return [_practical_payload(candidate) for candidate in candidates]
+
+
+_NUMERO_POR_EXTENSO = {
+    1: "um", 2: "dois", 3: "tres", 4: "quatro", 5: "cinco", 6: "seis",
+    7: "sete", 8: "oito", 9: "nove", 10: "dez", 11: "onze", 12: "doze",
+    14: "quatorze", 15: "quinze", 20: "vinte", 21: "vinte e um",
+    24: "vinte e quatro", 28: "vinte e oito", 30: "trinta",
+}
+
+
+def _com_extenso(valor: int) -> str:
+    """Devolve "12 (doze)" — formato pedido para a receita do tutor."""
+    extenso = _NUMERO_POR_EXTENSO.get(valor)
+    return f"{valor} ({extenso})" if extenso else str(valor)
+
+
+#: Unidades que descrevem a *forma de entrega*, não a quantidade de princípio
+#: ativo. Só fazem sentido se a apresentação realmente entregar aquilo.
+_UNIDADES_DE_ENTREGA = {"gota", "comprimido", "pipeta", "ml"}
+
+
+def _presentation_delivers_unit(ap: dict[str, Any], expected_unit: str) -> bool:
+    """A apresentação entrega mesmo essa unidade?
+
+    Sem esta checagem, uma regra de dose em gotas era colada em qualquer
+    apresentação do medicamento. Foi assim que um shampoo de 500 mL apareceu
+    na tela como "8 gotas — 50 g pomada - Furanil® Pomada": a dose vinha de uma
+    regra em gotas e a apresentação escolhida era uma pomada.
+    """
+    alvo = _normalize(expected_unit)
+    if alvo not in _UNIDADES_DE_ENTREGA:
+        return True
+    pratica = _normalize(ap.get("unidade_pratica"))
+    if pratica:
+        return alvo in pratica or pratica in alvo
+    forma = _normalize(ap.get("forma"))
+    return alvo in forma if forma else False
+
+
+#: Instruções padronizadas por forma tópica. Estas formas não têm "dose" no
+#: sentido numérico: quantificá-las produz texto sem sentido clínico.
+#:
+#: Todo número que o tutor precisa seguir vai por extenso entre parênteses —
+#: preferência do veterinário, para não restar dúvida na leitura da receita.
+_INSTRUCAO_SHAMPOO = (
+    f"Realizar {_com_extenso(1)} banho por semana. Aplicar o shampoo sobre a "
+    f"pelagem umedecida, massagear e deixar agir por {_com_extenso(10)} minutos. "
+    f"Enxaguar e repetir o procedimento, deixando agir por mais "
+    f"{_com_extenso(10)} minutos antes do enxágue final."
+)
+
+
+def _instrucao_pomada(intervalo_horas: int = 12, dias: int = 10) -> str:
+    return (
+        "Aplicar uma camada fina sobre a área afetada de "
+        f"{_com_extenso(intervalo_horas)} em {_com_extenso(intervalo_horas)} horas "
+        f"por {_com_extenso(dias)} dias."
+    )
+
+
+def _forma_topica_padronizada(item, suggestion: dict[str, Any] | None = None) -> str | None:
+    """Texto pronto para formas em que dose numérica não faz sentido.
+
+    Precisa decidir a partir do item apenas, porque roda ANTES das checagens de
+    bulário: a pomada do relato não tem regra de dose estruturada e saía cedo
+    em "Sem dose estruturada", enquanto o shampoo ficava preso em "escolha uma
+    apresentação". Nenhuma dessas formas depende de dose ou apresentação.
+
+    O nome da pomada não contém "pomada" ("Cetoconazol 20mg/g + Dipropionato de
+    Betametasona..."), por isso o texto de dose do protocolo ("aplicar uma
+    camada fina") também conta como sinal.
+    """
+    suggestion = suggestion or {}
+    apresentacoes = suggestion.get("apresentacoes") or []
+    alvo = " ".join(
+        _normalize(valor)
+        for valor in (
+            getattr(item, "nome_exibicao", None),
+            getattr(item, "dosagem_texto", None),
+            suggestion.get("forma"),
+            apresentacoes[0].get("forma") if apresentacoes else None,
+        )
+        if valor
+    )
+    if "shampoo" in alvo or "xampu" in alvo:
+        return _INSTRUCAO_SHAMPOO
+    if any(token in alvo for token in (
+        "pomada", "creme", "unguento", "gel dermatologico", "camada fina",
+    )):
+        return _instrucao_pomada()
+    return None
+
+
+def _plano_topico_padronizado(base: dict[str, Any], fallback_draft: dict[str, Any], instrucao: str) -> dict[str, Any]:
+    """Fecha o plano de uma forma tópica, sem exigir dose nem apresentação."""
+    fallback_draft.update({
+        "dosagem": instrucao,
+        "frequencia": "",
+        "duracao": "",
+        "texto": instrucao,
+        "use_weight_based_dose": False,
+    })
+    base.update({
+        "status": READY,
+        "status_label": "Pronto para revisar",
+        "calculation": {
+            "dose_calculada": "",
+            "dose_pratica": instrucao,
+            "dose_faixa": "",
+            "frequencia": "",
+            "duracao": "",
+            "posologia_pratica": instrucao,
+            "posologia_tecnica": instrucao,
+            "apresentacao_pratica": None,
+            "apresentacao_opcoes": [],
+            "apresentacao_opcao_selecionada": None,
+        },
+        "messages": [],
+    })
+    return base
 
 
 def _is_topical_textual_suggestion(suggestion: dict[str, Any]) -> bool:
@@ -590,6 +714,14 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         "messages": [],
     }
 
+    # Shampoo, pomada e afins não têm dose numérica: a instrução É o
+    # procedimento. Resolver aqui, antes das checagens de bulário/peso, porque
+    # elas travavam justamente estes casos ("Sem dose estruturada" na pomada,
+    # "escolha uma apresentação" no shampoo) sem que nada disso fosse relevante.
+    instrucao_topica = _forma_topica_padronizada(item)
+    if instrucao_topica:
+        return _plano_topico_padronizado(base, fallback_draft, instrucao_topica)
+
     if not med:
         status = MANUAL if base["dose_protocolo"] else BLOCKED
         base.update({
@@ -665,7 +797,19 @@ def _build_medication_plan(item, consulta, session) -> dict[str, Any]:
         duration = _normalize_textual_duration(duration)
     calculated_dose = _format_dose_value(suggestion, mode)
     final_dose = practical["dose_text"] if practical else (protocol_dose_text or calculated_dose)
-    practical_posology = " ".join(part for part in [final_dose, frequency, duration] if part) if practical else ""
+
+    # Formas tópicas já foram resolvidas no início da função.
+    # Simparic: dose única, sem intervalo na receita do tutor.
+    if _normalize(getattr(item, "nome_exibicao", None)) == "simparic":
+        final_dose = f"Fornecer {_com_extenso(1)} comprimido"
+        frequency = ""
+        duration = ""
+
+    practical_posology = (
+        " ".join(part for part in [final_dose, frequency, duration] if part)
+        if practical
+        else ""
+    )
     technical_posology = " ".join(part for part in [calculated_dose, frequency, duration] if part)
     final_name = base["nome"]
 

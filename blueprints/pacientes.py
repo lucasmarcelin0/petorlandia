@@ -2,6 +2,7 @@
 import qrcode
 from flask import Blueprint
 import os, re, secrets, unicodedata, uuid
+from urllib.parse import quote
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -40,7 +41,10 @@ from models import (
     VacinaModelo,
     Veterinario,
 )
+from models.usuarios import build_placeholder_email
 from services.animal_search import search_animals
+from services.pet_growth import build_pet_opportunities
+from services.product_analytics import track_event
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased, joinedload, selectinload
 from time_utils import BR_TZ, utcnow
@@ -379,6 +383,36 @@ def list_animals():
     show_all = _is_admin() and request.args.get('show_all') == '1'
     name_query = request.args.get('name')
     tutor_name_query = (request.args.get('tutor_name') or '').strip()
+    tutor_search_query = (request.args.get('tutor_search') or '').strip()
+    is_admin_user = _is_admin()
+    admin_tutor_query = (tutor_search_query or tutor_name_query) if is_admin_user else ''
+
+    def admin_tutor_filters(term):
+        """Busca administrativa por dados do tutor, inclusive CPF sem máscara."""
+        like_term = f"%{term}%"
+        filters = [
+            User.name.ilike(like_term),
+            User.email.ilike(like_term),
+            User.cpf.ilike(like_term),
+            User.rg.ilike(like_term),
+            User.phone.ilike(like_term),
+            User.phone2.ilike(like_term),
+            User.address.ilike(like_term),
+        ]
+        digits = re.sub(r'\D', '', term)
+        if digits:
+            normalized_like = f"%{digits}%"
+            for column, punctuation in (
+                (User.cpf, ['.', '-', '/', ' ']),
+                (User.rg, ['.', '-', '/', ' ']),
+                (User.phone, ['(', ')', '-', ' ']),
+                (User.phone2, ['(', ')', '-', ' ']),
+            ):
+                normalized_column = column
+                for char in punctuation:
+                    normalized_column = func.replace(normalized_column, char, '')
+                filters.append(normalized_column.ilike(normalized_like))
+        return filters
 
     # Base query: ignora animais removidos e sem responsável cadastrado
     query = Animal.query.filter(Animal.removido_em.is_(None), Animal.user_id.isnot(None))
@@ -396,7 +430,6 @@ def list_animals():
         query = query.filter_by(modo=modo)
     else:
         # Admins can see all animals without filtering
-        is_admin_user = _is_admin()
         vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
@@ -442,7 +475,29 @@ def list_animals():
         query = query.filter(Animal.age.ilike(f"{age}%"))
     if name_query:
         query = query.filter(Animal.name.ilike(f"%{name_query}%"))
-    if tutor_name_query:
+    tutor_results = None
+    if is_admin_user and admin_tutor_query:
+        tutor_filters = admin_tutor_filters(admin_tutor_query)
+        query = query.join(User, Animal.user_id == User.id)
+        query = query.filter(or_(*tutor_filters))
+        matched_tutors = (
+            User.query
+            .options(selectinload(User.animals))
+            .filter(or_(*tutor_filters))
+            .order_by(func.lower(User.name))
+            .limit(30)
+            .all()
+        )
+        tutor_results = [
+            {
+                'tutor': tutor,
+                'animal_count': sum(
+                    1 for animal in tutor.animals if not getattr(animal, 'removido_em', None)
+                ),
+            }
+            for tutor in matched_tutors
+        ]
+    elif tutor_name_query:
         query = query.join(User, Animal.user_id == User.id).filter(
             User.name.ilike(f"%{tutor_name_query}%")
         )
@@ -481,14 +536,16 @@ def list_animals():
         age=age,
         name=name_query,
         tutor_name=tutor_name_query,
+        tutor_search=tutor_search_query if is_admin_user else '',
+        tutor_results=tutor_results,
         pmo_dates=pmo_dates,
-        is_admin=_is_admin(),
+        is_admin=is_admin_user,
         show_all=show_all,
         scope=scope,
     )
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_template('animais/_animals_grid.html', **context)
+        html = render_template('animais/_animals_content.html', **context)
         return jsonify(
             {
                 'html': html,
@@ -916,12 +973,24 @@ def ficha_animal(animal_id):
 
     events_url = url_for('ficha_animal', animal_id=animal.id, section='events')
     history_url = url_for('ficha_animal', animal_id=animal.id, section='history')
+    pet_opportunities = []
+    health_card_whatsapp_url = None
+    if animal.user_id == current_user.id:
+        pet_opportunities = build_pet_opportunities(animal)
+        if animal.public_token:
+            card_url = url_for(
+                'carteirinha_publica', token=animal.public_token, _external=True
+            )
+            message = f'Carteirinha digital de {animal.name}: {card_url}'
+            health_card_whatsapp_url = f'https://wa.me/?text={quote(message)}'
     return render_template(
         'animais/ficha_animal.html',
         animal=animal,
         tutor=tutor,
         events_url=events_url,
         history_url=history_url,
+        pet_opportunities=pet_opportunities,
+        health_card_whatsapp_url=health_card_whatsapp_url,
     )
 
 
@@ -1272,7 +1341,7 @@ def buscar_tutores():
         detalhes = [
             valor
             for valor in [
-                tutor.email,
+                None if getattr(tutor, 'email_is_placeholder', False) else tutor.email,
                 tutor.phone,
                 f"CPF: {tutor.cpf}" if tutor.cpf else '',
                 f"RG: {tutor.rg}" if tutor.rg else '',
@@ -1285,7 +1354,8 @@ def buscar_tutores():
             {
                 'id': tutor.id,
                 'name': tutor.name,
-                'email': tutor.email,
+                'email': None if getattr(tutor, 'email_is_placeholder', False) else tutor.email,
+                'email_is_placeholder': bool(getattr(tutor, 'email_is_placeholder', False)),
                 'cpf': tutor.cpf,
                 'rg': tutor.rg,
                 'phone': tutor.phone,
@@ -1327,6 +1397,22 @@ def tutor_detail(tutor_id):
     return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
 
+def _find_user_by_cpf(cpf: str | None) -> User | None:
+    """Localiza um tutor pelo CPF ignorando a máscara.
+
+    O mesmo documento aparece como ``123.456.789-00`` e ``12345678900`` conforme
+    a tela que cadastrou. Comparar a string crua deixava passar a duplicata, que
+    só estourava no commit como IntegrityError.
+    """
+    digits = re.sub(r'\D', '', cpf or '')
+    if not digits:
+        return None
+    normalized_column = User.cpf
+    for char in ('.', '-', '/', ' '):
+        normalized_column = func.replace(normalized_column, char, '')
+    return User.query.filter(normalized_column == digits).first()
+
+
 @bp.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
@@ -1354,36 +1440,51 @@ def tutores():
     # Criação de novo tutor
     if request.method == 'POST':
         wants_json = 'application/json' in request.headers.get('Accept', '')
-        name = request.form.get('tutor_name') or request.form.get('name')
-        email = request.form.get('tutor_email') or request.form.get('email')
+        name = (request.form.get('tutor_name') or request.form.get('name') or '').strip()
+        email = (request.form.get('tutor_email') or request.form.get('email') or '').strip().lower()
+        email_is_placeholder = not email
 
-        if not name or not email:
-            message = 'Nome e e‑mail são obrigatórios.'
+        if not name:
+            message = 'Informe o nome do tutor.'
             if wants_json:
-                return jsonify(success=False, message=message, category='warning')
+                return jsonify(success=False, message=message, category='warning'), 400
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
-        if User.query.filter_by(email=email).first():
+        if email_is_placeholder:
+            email = build_placeholder_email()
+        # Comparação sem caixa: contas antigas foram gravadas com a caixa que o
+        # usuário digitou, então filter_by(email=...) deixava passar duplicatas
+        # que só diferem em maiúsculas.
+        if User.query.filter(func.lower(User.email) == email.lower()).first():
             message = 'Já existe um tutor com esse e‑mail.'
             if wants_json:
-                return jsonify(success=False, message=message, category='warning')
+                return jsonify(success=False, message=message, category='warning'), 409
+            flash(message, 'warning')
+            return redirect(url_for('tutores'))
+
+        cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
+        if cpf and _find_user_by_cpf(cpf):
+            message = 'CPF já cadastrado para outro tutor.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='warning'), 409
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
         novo = User(
-            name=name.strip(),
-            email=email.strip(),
+            name=name,
+            email=email,
+            email_is_placeholder=email_is_placeholder,
             role='adotante',  # padrão inicial
             clinica_id=current_user_clinic_id(),
             added_by=current_user,
             is_private=True,
         )
-        novo.set_password('123456789')  # ⚠️ Sugestão: depois trocar por um token de convite
+        novo.set_password(secrets.token_urlsafe(32))
 
         # Campos opcionais
         novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
-        novo.cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
+        novo.cpf = cpf
         novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
         novo.address = None
 
@@ -1408,6 +1509,7 @@ def tutores():
         cidade = request.form.get('cidade')
         estado = request.form.get('estado')
 
+        has_address = any((value or '').strip() for value in (cep, rua, numero, complemento, bairro, cidade, estado))
         required_address_labels = {
             'rua': 'Rua',
             'cidade': 'Cidade',
@@ -1419,27 +1521,25 @@ def tutores():
             if not (request.form.get(key) or '').strip()
         ]
 
-        if required_missing:
+        if has_address and required_missing:
             message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(required_missing) + '.'
             if wants_json:
                 return jsonify(success=False, message=message, category='warning'), 400
             flash(message, 'warning')
             return redirect(url_for('tutores'))
 
-        endereco = Endereco(
-            cep=cep,
-            rua=rua,
-            numero=numero,
-            complemento=complemento,
-            bairro=bairro,
-            cidade=cidade,
-            estado=estado
-        )
-        if not _update_coordinates_from_request(endereco):
-            _geocode_endereco(endereco)
-        db.session.add(endereco)
-        db.session.flush()
-        novo.endereco_id = endereco.id
+        if has_address:
+            endereco = Endereco(
+                cep=cep, rua=rua, numero=numero, complemento=complemento,
+                bairro=bairro, cidade=cidade, estado=estado,
+            )
+            cep_digits = ''.join(char for char in (cep or '') if char.isdigit())
+            has_complete_cep = len(cep_digits) == 8 and cep_digits != '00000000'
+            if not _update_coordinates_from_request(endereco) and has_complete_cep:
+                _geocode_endereco(endereco)
+            db.session.add(endereco)
+            db.session.flush()
+            novo.endereco_id = endereco.id
 
         # Foto
         if 'image' in request.files and request.files['image'].filename:
@@ -1450,9 +1550,21 @@ def tutores():
             novo.profile_photo = f"/static/uploads/{filename}"
 
         db.session.add(novo)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Erro ao cadastrar tutor')
+            message = 'Não foi possível cadastrar o tutor. Revise os dados e tente novamente.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='danger'), 500
+            flash(message, 'danger')
+            return redirect(url_for('tutores'))
 
-        if request.accept_mimetypes.accept_json:
+        # Mesmo critério dos ramos de erro acima. ``accept_mimetypes.accept_json``
+        # é verdadeiro para o ``*/*`` que todo navegador manda, então o submit
+        # normal (sem fetch) recebia o JSON cru na tela em vez do redirect.
+        if wants_json:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
             tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
@@ -1480,6 +1592,7 @@ def tutores():
                 compact=True,
             )
             return jsonify(
+                success=True,
                 message='Tutor criado com sucesso!',
                 category='success',
                 html=html,
@@ -1487,7 +1600,8 @@ def tutores():
                     'id': novo.id,
                     'name': novo.name or f'Tutor #{novo.id}',
                     'display_name': novo.name or f'Tutor #{novo.id}',
-                    'email': novo.email,
+                    'email': None if novo.email_is_placeholder else novo.email,
+                    'email_is_placeholder': bool(novo.email_is_placeholder),
                     'phone': novo.phone,
                     'cpf': novo.cpf,
                     'profile_photo': novo.profile_photo,
@@ -1687,6 +1801,11 @@ def update_tutor(user_id):
         value = request.form.get(field)
         if value:
             setattr(user, field, value)
+
+    # Observações: diferente dos campos acima, aceita ficar vazio — é assim que
+    # a clínica apaga uma anotação que não vale mais.
+    if 'observacoes' in request.form:
+        user.observacoes = (request.form.get('observacoes') or '').strip() or None
 
     # CPF precisa ser único
     cpf_val = request.form.get('cpf')
@@ -3120,6 +3239,7 @@ def carteirinha_ativar(animal_id):
     if not animal.public_token:
         animal.public_token = secrets.token_urlsafe(20)[:32]
         db.session.commit()
+        track_event('health_card_activated', feature='health_card')
     flash('Carteirinha digital ativada! Compartilhe o link com quem cuida do seu pet.', 'success')
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -3133,6 +3253,7 @@ def carteirinha_desativar(animal_id):
     if animal.public_token:
         animal.public_token = None
         db.session.commit()
+        track_event('health_card_deactivated', feature='health_card')
     flash('Carteirinha digital desativada. O link antigo deixou de funcionar.', 'info')
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -3228,6 +3349,8 @@ def carteirinha_publica(token):
     if animal.owner and animal.owner.name:
         tutor_nome = animal.owner.name.split()[0]
 
+    track_event('health_card_viewed', feature='health_card', channel='public')
+
     return render_template(
         'animais/carteirinha_publica.html',
         animal=animal,
@@ -3238,6 +3361,7 @@ def carteirinha_publica(token):
         ultima_vermifugacao=ultima_vermifugacao,
         tutor_nome=tutor_nome,
         hoje=date.today(),
+        signup_url=url_for('register', audience='tutor'),
     )
 
 

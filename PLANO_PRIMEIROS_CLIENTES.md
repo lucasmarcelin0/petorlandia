@@ -124,7 +124,7 @@ Poste **3 vídeos curtos** (pode ser pelo celular, sem edição):
 > Grave a tela do sistema por 60 segundos mostrando a agenda, o prontuário e os lembretes de cuidado. Sem falar muito, só mostre.
 
 **Vídeo 3 — "Para quem é"**
-> "Se você tem uma clínica veterinária em Orlândia ou na região e ainda controla tudo no papel ou no WhatsApp, isso é para você. 30 dias grátis, sem cartão."
+> "Se você tem uma clínica veterinária em Orlândia ou na região e ainda controla tudo no papel ou no WhatsApp, isso é para você. São 30 dias grátis, sem cartão para começar. Você configura o pagamento apenas quando decidir continuar."
 
 Na bio do Instagram coloque: **"Sistema de gestão para clínicas veterinárias | Orlândia-SP | 30 dias grátis"** + link do sistema.
 

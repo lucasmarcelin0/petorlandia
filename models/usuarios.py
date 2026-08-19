@@ -18,6 +18,21 @@ from decimal import Decimal, ROUND_CEILING
 import unicodedata
 import enum
 import uuid
+PLACEHOLDER_EMAIL_DOMAIN = 'nao-informado.petorlandia.invalid'
+# A campanha PMO cria a conta a partir da planilha, onde o e-mail não é
+# coletado, e usa pmo-<telefone>@petorlandia.local como identificador interno.
+# É tão pouco entregável quanto o domínio acima, então conta como placeholder.
+PMO_PROVISIONAL_EMAIL_DOMAIN = 'petorlandia.local'
+PLACEHOLDER_EMAIL_DOMAINS = (PLACEHOLDER_EMAIL_DOMAIN, PMO_PROVISIONAL_EMAIL_DOMAIN)
+
+def build_placeholder_email():
+    return f'tutor-sem-email-{uuid.uuid4().hex}@{PLACEHOLDER_EMAIL_DOMAIN}'
+
+def is_placeholder_email(value):
+    if not isinstance(value, str):
+        return False
+    lowered = value.lower()
+    return any(lowered.endswith(f'@{domain}') for domain in PLACEHOLDER_EMAIL_DOMAINS)
 from sqlalchemy import Enum, event, func, case, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
@@ -99,6 +114,13 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    email_is_placeholder = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    # Marca contas criadas internamente para teste. Sem isso elas se misturam aos
+    # tutores reais nas auditorias (ex.: telefones duplicados) e nos relatórios.
+    is_test_account = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false(), index=True
+    )
+    test_label = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='adotante', nullable=True)
 
@@ -113,6 +135,11 @@ class User(UserMixin, db.Model):
     address = db.Column(db.String(200))
     endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'), nullable=True)
     endereco = db.relationship('Endereco', backref='usuarios')
+    # Texto livre da clínica sobre o tutor. Guarda também os endereços
+    # anteriores: o modelo tem uma única vaga de endereço, mas existe tutor com
+    # mais de um (animais que vivem em locais diferentes), e trocar o endereço
+    # sem registrar o antigo apagaria a informação.
+    observacoes = db.Column(db.Text, nullable=True)
 
 
 
@@ -444,7 +471,9 @@ class Veterinario(db.Model):
     )
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
     public_profile_type = db.Column(db.String(20), nullable=False, default='profissional')
-    public_visible = db.Column(db.Boolean, nullable=False, default=True)
+    # Publicação é uma decisão explícita do administrador. Um cadastro novo
+    # nunca deve virar prova pública apenas por ter preenchido um CRMV.
+    public_visible = db.Column(db.Boolean, nullable=False, default=False)
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
     supervisor = db.relationship(
@@ -617,6 +646,12 @@ class VeterinarianMembership(db.Model):
     #: provedor confirma que a renovação ficou ativa.
     preapproval_id = db.Column(db.String(64), nullable=True)
     payment_method_set_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Primeira cobrança efetivamente paga — a conversão da avaliação. Fica
+    #: separada de ``conversion_processed_at`` porque o efeito colateral da
+    #: conversão (evento de funil e crédito de indicação) precisa acontecer
+    #: fora da transação que gravou a cobrança, e exatamente uma vez.
+    converted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    conversion_processed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     veterinario = db.relationship(
         'Veterinario',
@@ -773,6 +808,7 @@ def _create_veterinarian_membership(mapper, connection, target):
         return
 
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+    trial_days += _referral_trial_bonus_days(connection, target.user_id)
     now = utcnow()
     membership_row = connection.execute(
         VeterinarianMembership.__table__.select().where(
@@ -787,6 +823,29 @@ def _create_veterinarian_membership(mapper, connection, target):
                 trial_ends_at=now + timedelta(days=trial_days),
             )
         )
+
+
+def _referral_trial_bonus_days(connection, user_id) -> int:
+    """Dias extras de avaliação para quem entrou por um link de indicação.
+
+    A avaliação nasce aqui, então é aqui que o bônus precisa ser somado. A
+    consulta usa a mesma ``connection`` do insert: estamos dentro de um hook
+    ``after_insert`` e a sessão ORM não pode emitir consultas próprias.
+    """
+    if not user_id:
+        return 0
+    try:
+        from models.petsitter import ReferralSignup
+        from services.membership_conversion import REFERRED_TRIAL_BONUS_DAYS
+
+        row = connection.execute(
+            ReferralSignup.__table__.select().where(
+                ReferralSignup.referred_user_id == user_id
+            )
+        ).first()
+        return REFERRED_TRIAL_BONUS_DAYS if row is not None else 0
+    except Exception:  # noqa: BLE001 — bônus nunca impede criar a assinatura
+        return 0
 
 
 event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)

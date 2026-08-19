@@ -155,7 +155,9 @@
                 name="{{ form.animal_id.name }}"
                 class="{{ animal_select_classes }}"
                 data-appointment-animal-select
+                required
               >
+                <option value="" selected disabled>Selecione o animal</option>
                 {% if not animal_options %}
                   <option value="" selected disabled>Sem animais disponíveis</option>
                 {% endif %}
@@ -189,8 +191,11 @@
 
           <div class="row g-3 mt-2">
             <div class="col-md-6">
-              {{ form.date.label(class="form-label fw-semibold") }}
-              {{ form.date(class="form-control", type="date") }}
+              {# A data é exibida em pt-BR; o value técnico do input date
+                 permanece ISO (aaaa-mm-dd) para a API, sem ambiguidade. #}
+              {{ form.date.label('Data (dd/mm/aaaa)', class="form-label fw-semibold") }}
+              {{ form.date(class="form-control", type="date", lang="pt-BR") }}
+              <div class="form-text">Escolha o dia desejado para atualizar os horários disponíveis.</div>
             </div>
             <div class="col-md-6">
               {{ form.time.label(class="form-label fw-semibold") }}
@@ -1349,20 +1354,19 @@ document.addEventListener('DOMContentLoaded', () => {
         setScheduleSummaryMessage('Nenhum horário disponível para o período selecionado.');
         return;
       }
+      const selectedDate = normalizeIsoDate(dateField && dateField.value);
+      const selectedDay = days.find((day) => normalizeIsoDate(day && day.date) === selectedDate);
       const period = schedulePeriodFilter ? schedulePeriodFilter.value : 'all';
-      for (const day of days) {
-        const normalizedDate = normalizeIsoDate(day.date);
-        if (!normalizedDate) {
-          continue;
-        }
-        const availableSlots = filterSlotsByPeriod(Array.isArray(day.available) ? day.available : [], period);
-        if (availableSlots.length) {
-          const label = formatDateLabel(normalizedDate, { variant: 'long', includeWeekday: true }) || normalizedDate;
-          setScheduleSummaryMessage(`Próximo horário livre: ${label} às ${availableSlots[0]}`);
-          return;
-        }
+      const availableSlots = filterSlotsByPeriod(
+        Array.isArray(selectedDay && selectedDay.available) ? selectedDay.available : [],
+        period
+      );
+      const label = formatDateLabel(selectedDate, { variant: 'long', includeWeekday: true }) || selectedDate;
+      if (selectedDay && availableSlots.length) {
+        setScheduleSummaryMessage(`${availableSlots.length} horário(s) disponível(is) em ${label}.`);
+        return;
       }
-      setScheduleSummaryMessage('Nenhum horário disponível para o período selecionado.');
+      setScheduleSummaryMessage(`Nenhum horário disponível em ${label || 'a data selecionada'}.`);
     }
 
     function updateScheduleWeekLabel(days) {
@@ -2032,6 +2036,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* Persistir aba ativa quando muda */
+    // Fallback acessível quando o bundle Bootstrap não terminou de carregar.
+    // Mantém a agenda utilizável mesmo se a inicialização automática falhar.
+    sectionTabsEl.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-bs-target]');
+      if (!btn || !sectionTabsEl.contains(btn)) return;
+      const targetId = btn.getAttribute('data-bs-target');
+      const target = targetId ? document.querySelector(targetId) : null;
+      if (!target) return;
+      window.setTimeout(() => {
+        const active = sectionTabsEl.querySelector('.nav-link.active');
+        if (active !== btn) {
+          sectionTabsEl.querySelectorAll('.nav-link').forEach((item) => {
+            item.classList.toggle('active', item === btn);
+            item.setAttribute('aria-selected', item === btn ? 'true' : 'false');
+          });
+        }
+        document.querySelectorAll('#appointmentsSectionContent > .tab-pane').forEach((pane) => {
+          const isTarget = pane === target;
+          pane.classList.toggle('active', isTarget);
+          pane.classList.toggle('show', isTarget);
+          pane.hidden = !isTarget;
+        });
+      }, 0);
+    });
+
     sectionTabsEl.addEventListener('shown.bs.tab', (event) => {
       const target = event.target && event.target.getAttribute('data-bs-target');
       if (!target) {
@@ -2045,6 +2074,18 @@ document.addEventListener('DOMContentLoaded', () => {
         /* ignore */
       }
     });
+
+    // Garante estado inicial consistente mesmo sem Bootstrap.
+    const initialButton = sectionTabsEl.querySelector('.nav-link.active') || sectionTabsEl.querySelector('[data-bs-target]');
+    if (initialButton) {
+      const initialTarget = document.querySelector(initialButton.getAttribute('data-bs-target'));
+      document.querySelectorAll('#appointmentsSectionContent > .tab-pane').forEach((pane) => {
+        const isTarget = pane === initialTarget;
+        pane.classList.toggle('active', isTarget);
+        pane.classList.toggle('show', isTarget);
+        pane.hidden = !isTarget;
+      });
+    }
   })();
 });
 </script>

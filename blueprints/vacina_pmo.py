@@ -286,9 +286,15 @@ def vacina_pmo():
     # datetime resolvido via módulo app em tempo de request: testes congelam a
     # data com monkeypatch de app.datetime (contrato do antigo lazy_view).
     import app as app_module
+    from services.vacina_pmo_service import DEFAULT_SHEET_URL
 
     today = app_module.datetime.now(BR_TZ).date().isoformat()
-    return render_template('vacina_pmo/dashboard.html', today=today)
+    source_sheet_url = os.getenv('PMO_VACCINE_SHEET_URL', DEFAULT_SHEET_URL)
+    return render_template(
+        'vacina_pmo/dashboard.html',
+        today=today,
+        source_sheet_url=source_sheet_url,
+    )
 
 
 @bp.route('/vacina-pmo/c/<token>', methods=['GET', 'POST'])
@@ -415,8 +421,19 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
             next_booster_date=next_booster_date,
         )
 
+    # Mesma porta de entrada do certificado da campanha: quando a visita ja
+    # tem tutor cadastrado o link cai direto no primeiro acesso dele.
+    first_access_url = url_for('first_access', next=request.path, _external=True)
+    if getattr(visit, 'tutor_user', None):
+        first_access_url = _first_access_url_for_user(
+            visit.tutor_user,
+            next_url=request.path,
+            _external=True,
+        )
+
     return render_template(
         'vacina_pmo/public_pet_card.html',
+        first_access_url=first_access_url,
         visit=visit,
         token=token,
         pmo_animal=pmo_animal,
@@ -523,13 +540,17 @@ def vacina_pmo_status_webhook():
             'message': 'Uma sincronização de status já está em andamento.',
         })
 
+    # A thread não herda o contexto da request: current_app lá dentro levanta
+    # RuntimeError e o log nunca saía — nem o de sucesso nem o do except.
+    app_obj = current_app._get_current_object()
+
     def _job():
         try:
             from scripts.sync_pmo_full_status import run_pmo_full_sync
             result = run_pmo_full_sync(apply=True, skip_sheet_sync=False)
-            current_app.logger.info('[PMO webhook] Sincronização de status concluída: %s', result)
+            app_obj.logger.info('[PMO webhook] Sincronização de status concluída: %s', result)
         except Exception:
-            current_app.logger.exception('[PMO webhook] Falha na sincronização de status')
+            app_obj.logger.exception('[PMO webhook] Falha na sincronização de status')
         finally:
             _pmo_status_sync_lock.release()
 
@@ -927,6 +948,27 @@ def vacina_pmo_visit_attended_by(visit_id):
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
         current_app.logger.exception("Falha ao salvar 'atendido por' Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
+@bp.route('/vacina-pmo/visit/<int:visit_id>/animal', methods=['POST'])
+@login_required
+def vacina_pmo_visit_add_animal(visit_id):
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    try:
+        from services.vacina_pmo_service import add_vacina_pmo_visit_animal
+
+        payload = request.get_json(silent=True) or {}
+        row = add_vacina_pmo_visit_animal(
+            visit_id, payload.get('name'), payload.get('species')
+        )
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao adicionar animal Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
@@ -1358,4 +1400,3 @@ def castracao_pmo_solicitar():
         historico=historico,
         success_token=success_token,
     )
-

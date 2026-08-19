@@ -275,17 +275,41 @@ def partner_invite_onboarding(token):
         usuario = current_user if current_user.is_authenticated else None
         normalized_phone = normalize_phone(values['telefone'])
 
+        # A aprovação de candidatura já cria a conta (com senha aleatória) antes
+        # de mandar este convite. Sem adotar essa conta aqui, o candidato batia
+        # em "e-mail já tem conta" e ficava preso: ele nunca recebeu senha para
+        # "entrar primeiro". O token chegou no e-mail do convite, então serve de
+        # prova de posse do endereço — mesmo nível de um link de redefinição.
+        #
+        # A adoção é amarrada ao invite.email de propósito. Se olhasse o e-mail
+        # digitado no formulário, quem tivesse um convite válido poderia digitar
+        # o endereço de outra pessoa e trocar a senha da conta dela.
+        convite_email = normalize_email(invite.email) or ''
+        conta_do_convite = None
+        if usuario is None and convite_email and values['email'] == convite_email:
+            conta_do_convite = User.query.filter(
+                func.lower(User.email) == convite_email
+            ).first()
+
         if usuario is None:
             if len(values['nome']) < 2:
                 errors.append('Informe seu nome completo.')
             if not values['email'] or '@' not in values['email']:
                 errors.append('Informe um e-mail válido.')
-            elif User.query.filter(func.lower(User.email) == values['email']).first():
+            elif (
+                conta_do_convite is None
+                and User.query.filter(func.lower(User.email) == values['email']).first()
+            ):
                 errors.append('Este e-mail já tem conta. Entre primeiro e abra o link do convite de novo.')
             if not normalized_phone:
                 errors.append('Informe o celular com DDD.')
-            elif find_users_by_phone(normalized_phone):
-                errors.append('Este celular já pertence a outra conta.')
+            else:
+                donos_do_telefone = [
+                    outro for outro in find_users_by_phone(normalized_phone)
+                    if conta_do_convite is None or outro.id != conta_do_convite.id
+                ]
+                if donos_do_telefone:
+                    errors.append('Este celular já pertence a outra conta.')
             if len(password) < 8:
                 errors.append('Crie uma senha com pelo menos 8 caracteres.')
             if password != password_confirmation:
@@ -312,7 +336,15 @@ def partner_invite_onboarding(token):
                     errors.append('Este CRMV já está cadastrado.')
 
         if not errors:
-            if usuario is None:
+            if usuario is None and conta_do_convite is not None:
+                # Conta pré-criada pela aprovação: o convite define a senha que
+                # ela nunca teve e completa os dados que o candidato informou.
+                usuario = conta_do_convite
+                usuario.name = values['nome'] or usuario.name
+                usuario.phone = normalized_phone or usuario.phone
+                usuario.set_password(password)
+                db.session.flush()
+            elif usuario is None:
                 usuario = User(
                     name=values['nome'],
                     email=values['email'],

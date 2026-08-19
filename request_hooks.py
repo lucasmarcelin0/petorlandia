@@ -39,29 +39,54 @@ def _set_request_id_header(response):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        if request.path == "/surpresa/sala-a-dois.html":
+            response.headers.setdefault(
+                "Permissions-Policy",
+                "camera=(self), microphone=(self), display-capture=(self), geolocation=(self)",
+            )
+        else:
+            response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
             # jsdelivr precisa estar em font-src: o CSS do bootstrap-icons vem
             # de la e referencia a fonte no mesmo host. Sem isso a fonte era
             # bloqueada e todo icone `bi-*` virava um retangulo vazio.
-            "img-src 'self' data: https:; "
+            # blob: e obrigatorio: a foto recem-tirada no PMO so existe como
+            # object URL ate o upload terminar, e o video do dia e montado em
+            # canvas e exibido/baixado como blob. Sem isso o Chrome rejeita a
+            # midia com "Media load rejected by URL safety check".
+            "img-src 'self' data: blob: https:; "
+            "media-src 'self' data: blob:; "
             "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com; "
-            "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com; "
-            "form-action 'self' https://chatgpt.com https://chat.openai.com",
+            "connect-src 'self' https://www.petorlandia.com.br https://chatgpt.com https://chat.openai.com "
+            "https://www.google-analytics.com https://region1.google-analytics.com; "
+            "form-action 'self' https://chatgpt.com https://chat.openai.com "
+            "https://www.mercadopago.com.br",
         )
         if request.is_secure or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-    if request.endpoint == "static":
+    if request.path == "/service-worker.js":
+        # Um worker antigo continua controlando todas as páginas autenticadas;
+        # nunca permita que autenticação ou defaults de estáticos reintroduzam
+        # cache prolongado nessa resposta.
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif request.endpoint == "static":
         if request.args.get("v"):
             max_age = int(current_app.config.get("SEND_FILE_VERSIONED_MAX_AGE", 31536000))
             response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"
         else:
             max_age = int(current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 3600))
             response.headers["Cache-Control"] = f"public, max-age={max_age}"
+    elif response.status_code >= 400:
+        response.headers["Cache-Control"] = "no-store"
+    elif current_user.is_authenticated:
+        # Páginas autenticadas podem conter dados pessoais e clínicos.
+        response.headers["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -164,7 +189,7 @@ def handle_csrf_error(err):
     # Uma falha de CSRF pode acontecer após muito tempo com o formulário
     # aberto ou durante uma troca de sessão. Para HTML, devolvemos a pessoa ao
     # próprio formulário em vez de expor uma página técnica "400 Bad Request".
-    redirect_target = request.path
+    redirect_target = None
     if request.referrer:
         parsed_referrer = urlsplit(request.referrer)
         if (
@@ -174,6 +199,15 @@ def handle_csrf_error(err):
             redirect_target = urlunsplit(
                 ("", "", parsed_referrer.path or request.path, parsed_referrer.query, "")
             )
+
+    if redirect_target is None:
+        # Sem referrer utilizável, cair em request.path só funciona se a rota
+        # atender GET. Em rotas POST-only (ex.: /animal/<id>/deletar) o 303
+        # levava a um GET que devolvia "405 Method Not Allowed" — troca uma
+        # página técnica por outra, escondendo o aviso de sessão atualizada.
+        rule_methods = getattr(request.url_rule, "methods", None) or set()
+        redirect_target = request.path if "GET" in rule_methods else "/"
+
     return redirect(redirect_target, code=303)
 
 

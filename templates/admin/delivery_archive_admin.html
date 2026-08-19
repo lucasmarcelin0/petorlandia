@@ -16,6 +16,7 @@
         <div class="d-flex flex-wrap gap-1 mt-2 mt-md-0">
           <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary">Ver detalhes</a>
           <form action="{{ url_for('admin_unarchive_delivery', req_id=r.id) }}" method="post" class="js-admin-delivery-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline-secondary" title="Desarquivar">Desarquivar</button>
           </form>
         </div>

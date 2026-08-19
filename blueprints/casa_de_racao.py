@@ -385,6 +385,9 @@ def casa_de_racao_dashboard(casa_id):
                     image_url=image_url,
                     category=(product_form.category.data or None),
                     mp_category_id=(product_form.mp_category_id.data or 'others').strip(),
+                    subscription_enabled=bool(product_form.subscription_enabled.data),
+                    subscription_discount_percent=product_form.subscription_discount_percent.data or Decimal('0'),
+                    subscription_shipping_fee=product_form.subscription_shipping_fee.data or Decimal('0'),
                     status='active',
                 )
                 db.session.add(product)
@@ -698,6 +701,9 @@ def casa_de_racao_produtos(casa_id):
             image_url=image_url,
             category=(form.category.data or None),
             mp_category_id=(form.mp_category_id.data or 'others').strip(),
+            subscription_enabled=bool(form.subscription_enabled.data),
+            subscription_discount_percent=form.subscription_discount_percent.data or Decimal('0'),
+            subscription_shipping_fee=form.subscription_shipping_fee.data or Decimal('0'),
             status='active',
         )
         db.session.add(product)
@@ -724,6 +730,9 @@ def casa_produto_editar(casa_id, product_id):
         product.stock = form.stock.data or 0
         product.category = form.category.data or None
         product.mp_category_id = (form.mp_category_id.data or 'others').strip()
+        product.subscription_enabled = bool(form.subscription_enabled.data)
+        product.subscription_discount_percent = form.subscription_discount_percent.data or Decimal('0')
+        product.subscription_shipping_fee = form.subscription_shipping_fee.data or Decimal('0')
         _sync_variants_from_request(product)
         if form.image_upload.data:
             file = form.image_upload.data

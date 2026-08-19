@@ -64,11 +64,14 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
-    SESSION_TYPE = os.environ.get("SESSION_TYPE", "filesystem")
+    REDIS_URL = _env_optional("REDIS_URL")
+    SESSION_TYPE = os.environ.get("SESSION_TYPE") or (
+        "redis" if REDIS_URL else "filesystem"
+    )
     SESSION_PERMANENT = True
-    # No Heroku, SESSION_TYPE=sqlalchemy evita que logins sejam perdidos a
-    # cada deploy. A instância SQLAlchemy é injetada em app.py depois do
-    # db.init_app(), quando a extensão já pode usar o banco configurado.
+    # Redis é preferível no Heroku para não consumir conexões PostgreSQL em
+    # toda requisição. SESSION_TYPE=sqlalchemy continua suportado durante a
+    # transição; a instância é injetada em app.py após db.init_app().
     SESSION_SQLALCHEMY_TABLE = os.environ.get(
         "SESSION_SQLALCHEMY_TABLE", "web_sessions"
     )
@@ -82,6 +85,7 @@ class Config:
     SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+    SESSION_KEY_PREFIX = os.environ.get("SESSION_KEY_PREFIX", "petorlandia:session:")
     WTF_CSRF_TIME_LIMIT = int(os.environ.get("WTF_CSRF_TIME_LIMIT", "3600"))
     FORCE_HTTPS = _env_bool("FORCE_HTTPS", True)
     SECURITY_HEADERS_ENABLED = _env_bool("SECURITY_HEADERS_ENABLED", True)
@@ -123,6 +127,17 @@ class Config:
     _STATIC_CACHE_DEFAULT = "3600" if _env_bool("FLASK_DEBUG", False) else "604800"
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", _STATIC_CACHE_DEFAULT))
     SEND_FILE_VERSIONED_MAX_AGE = int(os.environ.get("SEND_FILE_VERSIONED_MAX_AGE", "31536000"))
+    COMPRESS_MIMETYPES = (
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "application/json",
+        "application/xml",
+        "image/svg+xml",
+    )
+    COMPRESS_MIN_SIZE = int(os.environ.get("COMPRESS_MIN_SIZE", "1024"))
+    COMPRESS_LEVEL = int(os.environ.get("COMPRESS_LEVEL", "6"))
 
     # Performance: disable template auto-reload unless in debug mode
     TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
@@ -135,8 +150,24 @@ class Config:
     MAIL_USERNAME = _env_optional("MAIL_USERNAME")
     MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
     _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")
-    SUPPORT_EMAIL = _env_optional("SUPPORT_EMAIL") or _mail_sender_email
-    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE")
+    # Canais públicos de suporte. Os padrões abaixo foram autorizados pelo
+    # fundador e evitam que a página pública exiba placeholders quando uma
+    # variável de ambiente for esquecida. Em produção ainda preferimos definir
+    # explicitamente SUPPORT_EMAIL/SUPPORT_PHONE.
+    SUPPORT_EMAIL = (
+        _env_optional("SUPPORT_EMAIL")
+        or _mail_sender_email
+        or "lukemarki3@gmail.com"
+    )
+    SUPPORT_PHONE = _env_optional("SUPPORT_PHONE") or "31 99950-5748"
+    # Prova social pública exige validação humana: `status=ativa` representa
+    # aprovação técnica e inclui cadastros de teste. Apenas clínicas listadas
+    # aqui entram no número "usando o sistema".
+    PUBLIC_STATS_CLINIC_IDS = tuple(
+        int(raw_id.strip())
+        for raw_id in os.environ.get("PUBLIC_STATS_CLINIC_IDS", "").split(",")
+        if raw_id.strip().isdigit()
+    )
     MAIL_DEFAULT_SENDER = (
         (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
         if _mail_sender_email
@@ -165,16 +196,25 @@ class Config:
     MERCADOPAGO_OAUTH_REDIRECT_URI = _env_optional("MERCADOPAGO_OAUTH_REDIRECT_URI")
     MERCADOPAGO_OAUTH_USE_PKCE = _env_bool("MERCADOPAGO_OAUTH_USE_PKCE", True)
     MERCADOPAGO_MARKETPLACE_FEE_PERCENT = float(
-        os.environ.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT", "0")
+        os.environ.get("MERCADOPAGO_MARKETPLACE_FEE_PERCENT", "10")
     )
 
     # Integração DICOM (Orthanc → PetOrlândia). Sem o token o webhook fica desativado.
     ORTHANC_WEBHOOK_TOKEN = _env_optional("ORTHANC_WEBHOOK_TOKEN")
 
     # Opções adicionais de integração com o Mercado Pago
+    # Parcelas oferecidas no Checkout Pro da loja. O comprador brasileiro
+    # decide pela parcela nessa faixa de ticket; o repasse ao lojista não muda.
+    MERCADOPAGO_MAX_INSTALLMENTS = int(os.environ.get("MERCADOPAGO_MAX_INSTALLMENTS", "6"))
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
     MERCADOPAGO_NOTIFICATION_URL = os.environ.get("MERCADOPAGO_NOTIFICATION_URL")
+    VETERINARIAN_BILLING_RECONCILIATION_ENABLED = _env_bool(
+        "VETERINARIAN_BILLING_RECONCILIATION_ENABLED", True
+    )
+    VETERINARIAN_BILLING_RECONCILIATION_LIMIT = int(
+        os.environ.get("VETERINARIAN_BILLING_RECONCILIATION_LIMIT", "250")
+    )
 
     # URLs gerados com ``url_for(..., _external=True)`` agora usam HTTPS por padrão,
     # garantindo que endpoints como o webhook do Mercado Pago sejam aceitos.

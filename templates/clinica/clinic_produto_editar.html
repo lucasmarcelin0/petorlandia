@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/product_media.html' import product_media %}
 {% block main %}
 <div class="container mt-4" style="max-width: 640px;">
 
@@ -22,7 +23,8 @@
 
         <div class="mb-3">
           {{ form.description.label(class="form-label fw-semibold") }}
-          {{ form.description(class="form-control", rows=4) }}
+          {{ form.description(class="form-control product-description-input", rows=14, data_autogrow="true", placeholder="Fórmula, indicações, modo de usar, precauções…") }}
+          <div class="form-text">As quebras de linha que você usar aqui aparecem iguais na página do produto.</div>
         </div>
 
         <div class="mb-3">
@@ -45,15 +47,13 @@
           {{ form.mp_category_id(class="form-control", placeholder="Ex: food, health, pet_supplies") }}
         </div>
 
+        {% with subscription_form=form %}{% include 'loja/_subscription_product_fields.html' %}{% endwith %}
+
         <div class="mb-3">
           {{ form.image_upload.label(class="form-label fw-semibold") }}
           {% if product.image_url %}
           <div class="mb-2">
-            {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" class="img-thumbnail" style="max-height:120px;" alt="{{ product.name }}">
-            {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" class="img-thumbnail" style="max-height:120px;" alt="{{ product.name }}">
-            {% endif %}
+            {{ product_media(product, 'editor') }}
           </div>
           {% endif %}
           {{ form.image_upload(class="form-control") }}
@@ -67,6 +67,32 @@
           — gerenciado na aba de estoque da clínica.</span>
         </div>
         {% endif %}
+
+        <div class="border rounded-3 p-3 mb-4 bg-light-subtle">
+          <div class="d-flex align-items-start justify-content-between gap-3">
+            <div>
+              <div class="fw-semibold mb-1">Visibilidade na loja</div>
+              {% if product.status == 'active' %}
+              <div class="small text-success"><i class="fa-solid fa-circle-check me-1"></i>Ativo — aparece para os clientes na loja.</div>
+              {% else %}
+              <div class="small text-secondary"><i class="fa-solid fa-eye-slash me-1"></i>Inativo — fica oculto para os clientes, mas permanece no seu catálogo.</div>
+              {% endif %}
+            </div>
+            <form method="post" action="{{ url_for('clinic_produto_toggle', clinica_id=clinica.id, product_id=product.id) }}" class="flex-shrink-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_to" value="edit">
+              {% if product.status == 'active' %}
+              <button type="submit" class="btn btn-outline-warning btn-sm" aria-label="Inativar produto">
+                <i class="fa-solid fa-eye-slash me-1"></i>Inativar
+              </button>
+              {% else %}
+              <button type="submit" class="btn btn-success btn-sm" aria-label="Ativar produto">
+                <i class="fa-solid fa-eye me-1"></i>Ativar
+              </button>
+              {% endif %}
+            </form>
+          </div>
+        </div>
 
         <div class="d-grid">
           {{ form.submit(class="btn btn-primary") }}

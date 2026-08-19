@@ -1,6 +1,7 @@
 <!-- templates/partials/animal_register_form.html -->
 <form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return handleSubmit(this);" data-sync="true" class="js-animal-form">
     {{ form.hidden_tag() if form else '' }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
     {% if not tutor %}
@@ -189,12 +190,8 @@
       if (!validarTutor()) {
         return false;
       }
-      const submitBtn = form.querySelector('button[type="submit"]');
-      if (submitBtn) {
-        submitBtn.dataset.original = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Salvando...';
-      }
+      // O data-sync controla o estado visual e a requisição. Não altere o
+      // botão aqui: em caso de erro ele precisa restaurar o texto original.
       return true;
     }
   </script>
