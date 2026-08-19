@@ -5,6 +5,12 @@ from models import User
 
 
 def test_anonymous_navigation_balances_login_and_registration(client):
+    """Entrar e criar conta continuam lado a lado, com o mesmo peso visual.
+
+    O rótulo da ação de cadastro segue a área: na home o visitante é tratado
+    como tutor, então a oferta é a conta gratuita — não o teste do sistema de
+    gestão, que só faz sentido para quem chegou pela porta da clínica.
+    """
     response = client.get("/")
     html = response.get_data(as_text=True)
 
@@ -13,7 +19,16 @@ def test_anonymous_navigation_balances_login_and_registration(client):
     assert "nav-link--auth nav-link--login" in html
     assert "nav-link--auth nav-link--trial" in html
     assert "Entrar em uma conta existente" in html
-    assert "Criar uma conta e testar grátis" in html
+    assert "Criar uma conta gratuita de tutor" in html
+
+
+def test_business_area_keeps_the_clinic_trial_offer(client):
+    """Na porta da clínica a oferta volta a ser o teste do sistema."""
+    html = client.get("/parceiros/clinica").get_data(as_text=True)
+
+    assert "Criar uma conta de clínica e testar grátis" in html
+    assert "cta_nav_trial" in html
+    assert "Criar uma conta gratuita de tutor" not in html
 
 
 def test_auth_actions_stay_outside_the_collapsed_menu(client):
