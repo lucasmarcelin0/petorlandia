@@ -167,3 +167,19 @@
     padding: 0 .7rem;
   }
 }
+
+/* Selo "grátis" ao lado de "Para tutores": quem chega pelo Google precisa
+   ver, sem clicar, que existe um caminho sem custo para ele. */
+.nav-badge-free {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e7f5ec;
+  color: #146c43;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  vertical-align: middle;
+}

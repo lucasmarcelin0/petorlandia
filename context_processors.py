@@ -14,7 +14,7 @@ from __future__ import annotations
 import time as _time_module
 from types import SimpleNamespace
 
-from flask import current_app, session
+from flask import current_app, request, session
 from flask_login import current_user
 
 from extensions import db
@@ -462,6 +462,33 @@ def inject_site_flags():
     return dict(site_flags=flags)
 
 
+#: Rotas cuja intencao e vender o sistema de gestao. Fora delas o visitante
+#: e tratado como tutor — que e a maioria de quem chega por busca organica,
+#: por link de carteirinha ou por indicacao de servico.
+#: Guardado sem o prefixo de blueprint: as mesmas rotas estao registradas
+#: nas duas formas ('precos' e 'site_routes.precos'), entao comparar pelo
+#: sufixo e o unico jeito estavel. '/veterinarios' fica de fora de proposito
+#: — e o diretorio publico onde o tutor procura profissional, nao venda.
+_BUSINESS_ENDPOINTS = frozenset({
+    'parceiro_clinica_landing',
+    'precos',
+})
+
+
+def inject_public_audience():
+    """Diz ao layout se o visitante esta numa area B2B ou B2C.
+
+    O botao de acao da navbar muda com isso: em area de clinica ele oferece o
+    teste do sistema; em qualquer outro lugar oferece a conta gratuita de
+    tutor. Sem isso, um tutor que vem da carteirinha do pet clica em "Testar
+    gratis" e cai na area de gestao de clinica, achando que o site inteiro e
+    um software pago.
+    """
+
+    endpoint = (request.endpoint or '') if request else ''
+    return dict(is_business_context=endpoint.rsplit('.', 1)[-1] in _BUSINESS_ENDPOINTS)
+
+
 def inject_ga_events():
     """Expõe a fila de eventos do GA4 para o layout.
 
@@ -506,6 +533,7 @@ _PROCESSORS = (
     inject_whatsapp_helpers,
     inject_public_contact,
     inject_site_flags,
+    inject_public_audience,
     inject_ga_events,
     inject_default_pickup_address,
     inject_activation_progress,

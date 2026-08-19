@@ -421,8 +421,19 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
             next_booster_date=next_booster_date,
         )
 
+    # Mesma porta de entrada do certificado da campanha: quando a visita ja
+    # tem tutor cadastrado o link cai direto no primeiro acesso dele.
+    first_access_url = url_for('first_access', next=request.path, _external=True)
+    if getattr(visit, 'tutor_user', None):
+        first_access_url = _first_access_url_for_user(
+            visit.tutor_user,
+            next_url=request.path,
+            _external=True,
+        )
+
     return render_template(
         'vacina_pmo/public_pet_card.html',
+        first_access_url=first_access_url,
         visit=visit,
         token=token,
         pmo_animal=pmo_animal,

@@ -146,6 +146,35 @@ def reset_password(token):
     return render_template('auth/reset_password.html', form=form)
 
 
+def _first_access_welcome(invite, token_user=None, user=None):
+    """Contexto humano da tela de primeiro acesso.
+
+    Quem chega aqui veio de um link de consulta, receita, tratamento ou
+    carteirinha — nunca do zero. Nomear a pessoa, o pet e a clinica que
+    enviou transforma um formulario anonimo em continuacao de uma conversa
+    que ja comecou. Todo campo e opcional: sem contexto, a tela apenas
+    perde os detalhes, nunca quebra.
+    """
+
+    def _clean(value):
+        return (value or '').strip() or None
+
+    def _first_name(full_name):
+        name = _clean(full_name)
+        return name.split()[0] if name else None
+
+    tutor = getattr(invite, 'tutor', None) or token_user or user
+    animal = getattr(invite, 'animal', None)
+    clinica = getattr(invite, 'clinica', None)
+
+    return {
+        'tutor_name': _first_name(getattr(tutor, 'name', None)),
+        'pet_name': _clean(getattr(animal, 'name', None)),
+        'clinic_name': _clean(getattr(clinica, 'nome', None)),
+        'message': _clean(getattr(invite, 'message', None)),
+    }
+
+
 @bp.route("/primeiro-acesso", methods=['GET', 'POST'])
 @csrf.exempt
 @limiter.limit("10 per minute", methods=["POST"])
@@ -166,11 +195,11 @@ def first_access():
         matches = find_users_by_phone(form.phone.data)
         if len(matches) > 1:
             flash('Há mais de uma conta com este celular. Entre com seu e-mail ou fale com a clínica.', 'warning')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
         user = matches[0] if matches else None
         if not user or not _first_access_user_allowed(user, invite, token_user):
             flash('Não encontramos um primeiro acesso ativo para este celular.', 'danger')
-            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '')
+            return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.form.get('next') or '', welcome=_first_access_welcome(invite, token_user))
 
         session['first_access_user_id'] = user.id
         session['first_access_invite_token'] = token if invite else ''
@@ -181,7 +210,7 @@ def first_access():
         session['first_access_next'] = _first_access_next_url(invite)
         return redirect(url_for('first_access_password'))
 
-    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '')
+    return render_template('auth/first_access_phone.html', form=form, invite=invite, token=token, next_url=request.args.get('next') or '', welcome=_first_access_welcome(invite, token_user))
 
 
 @bp.route("/primeiro-acesso/senha", methods=['GET', 'POST'])
@@ -219,7 +248,7 @@ def first_access_password():
             ).first()
             if existing:
                 form.email.errors.append('Este e-mail já pertence a outra conta.')
-                return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+                return render_template('auth/first_access_password.html', form=form, user=user, invite=invite, welcome=_first_access_welcome(invite, token_user, user))
             user.email = normalized_email
 
         user.set_password(form.password.data)
@@ -236,7 +265,7 @@ def first_access_password():
         flash('Senha cadastrada com sucesso. Você já está conectado.', 'success')
         return redirect(next_url)
 
-    return render_template('auth/first_access_password.html', form=form, user=user, invite=invite)
+    return render_template('auth/first_access_password.html', form=form, user=user, invite=invite, welcome=_first_access_welcome(invite, token_user, user))
 
 
 @bp.route("/register", methods=['GET', 'POST'])

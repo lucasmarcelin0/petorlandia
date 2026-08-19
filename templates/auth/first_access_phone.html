@@ -2,12 +2,36 @@
 {% from 'components/form_macros.html' import render_field, render_submit %}
 
 {% block main %}
-<div class="container d-flex justify-content-center align-items-center mt-5">
-    <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 480px;">
-        <h1 class="mb-3 text-center h3">Primeiro acesso</h1>
-        <p class="text-muted text-center mb-4">
-            Entre com o celular cadastrado para criar sua senha de acesso.
-        </p>
+<div class="container d-flex justify-content-center align-items-start mt-4 mt-md-5 mb-5">
+    <div class="card shadow-lg p-4 rounded-4 first-access-card" style="width: 100%; max-width: 480px;">
+
+        <div class="text-center mb-4">
+            <span class="first-access-mark" aria-hidden="true"><i class="fas fa-paw"></i></span>
+            {% if welcome and welcome.tutor_name %}
+                <h1 class="h3 mt-3 mb-2">Olá, {{ welcome.tutor_name }}!</h1>
+            {% else %}
+                <h1 class="h3 mt-3 mb-2">Bem-vindo à PetOrlândia</h1>
+            {% endif %}
+
+            <p class="text-muted mb-0">
+                {% if welcome and welcome.pet_name and welcome.clinic_name %}
+                    {{ welcome.clinic_name }} preparou o acesso de <strong>{{ welcome.pet_name }}</strong> para você.
+                {% elif welcome and welcome.pet_name %}
+                    O histórico de <strong>{{ welcome.pet_name }}</strong> já está esperando por você.
+                {% elif welcome and welcome.clinic_name %}
+                    {{ welcome.clinic_name }} preparou seu acesso.
+                {% else %}
+                    Seu acesso já está preparado — falta só criar uma senha.
+                {% endif %}
+            </p>
+        </div>
+
+        {% if welcome and welcome.message %}
+            <div class="first-access-note mb-4">
+                <i class="fas fa-comment-dots me-2" aria-hidden="true"></i>{{ welcome.message }}
+            </div>
+        {% endif %}
+
         <form method="POST" action="{{ url_for('first_access') }}" data-no-whatsapp>
             {{ form.hidden_tag() }}
             {% if token %}
@@ -17,11 +41,60 @@
                 <input type="hidden" name="next" value="{{ next_url }}">
             {% endif %}
             {{ render_field(form.phone, classes='form-control rounded-pill', placeholder='Celular com DDD') }}
+            <p class="text-muted small text-center mt-1 mb-3">
+                Use o mesmo celular que você informou no atendimento.
+            </p>
             {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
         </form>
-        <div class="text-center mt-3">
+
+        <ul class="first-access-reassure list-unstyled mt-4 mb-0">
+            <li><i class="fas fa-heart" aria-hidden="true"></i> Gratuito para tutores, sem cartão.</li>
+            <li><i class="fas fa-lock" aria-hidden="true"></i> Os dados do seu pet são seus.</li>
+            <li><i class="fas fa-bell" aria-hidden="true"></i> Avisamos quando o reforço estiver perto.</li>
+        </ul>
+
+        <div class="text-center mt-4">
             <a href="{{ url_for('login_view', next=next_url) if next_url else url_for('login_view') }}" class="text-decoration-none">Já tenho senha</a>
         </div>
     </div>
 </div>
+
+<style>
+  .first-access-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    background: #e7f5ec;
+    color: #198754;
+    font-size: 1.4rem;
+  }
+
+  .first-access-note {
+    background: #f8fafc;
+    border-left: 3px solid #0d6efd;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    color: #334155;
+  }
+
+  .first-access-reassure li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #64748b;
+    padding: 3px 0;
+  }
+
+  .first-access-reassure i {
+    color: #198754;
+    width: 16px;
+    text-align: center;
+    flex: 0 0 auto;
+  }
+</style>
 {% endblock %}

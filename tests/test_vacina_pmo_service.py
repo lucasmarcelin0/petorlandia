@@ -939,6 +939,14 @@ def test_pmo_public_pet_card_is_tutor_friendly(app, client, monkeypatch):
     assert b"https://www.youtube.com/embed/abcDEF12345" not in response.data
     assert b"Abrir ficha clinica" not in response.data
 
+    # O momento mais quente da campanha: o tutor acabou de receber a
+    # carteirinha do proprio pet. Antes nao havia convite nenhum aqui.
+    body = response.get_data(as_text=True)
+    assert "Quer ser avisado do reforço de Lua?" in body
+    assert "Criar minha conta grátis" in body
+    assert "Gratuito para tutores, sem cartão." in body
+    assert "/primeiro-acesso" in body
+
     pdf_response = client.get(f"/vacina-pmo/c/{token}/pet/{pmo_animal_id}?format=pdf")
     assert pdf_response.status_code == 200
     assert pdf_response.mimetype == "application/pdf"
