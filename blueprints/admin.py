@@ -258,8 +258,13 @@ def admin_notifications():
         .order_by(AdminActionNotification.event_type.asc())
         .all()
     ]
-    return render_template(
-        'admin/notifications.html',
+    template_name = (
+        'admin/_notifications_panel.html'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        else 'admin/notifications.html'
+    )
+    rendered = render_template(
+        template_name,
         notifications=pagination.items,
         pagination=pagination,
         status=status,
@@ -267,6 +272,9 @@ def admin_notifications():
         priority=priority,
         event_types=event_types,
     )
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(html=rendered, url=request.full_path.rstrip('?'))
+    return rendered
 
 
 @bp.route("/admin/notificacoes/<int:notification_id>/ler", methods=["POST"])
@@ -283,6 +291,8 @@ def admin_notification_mark_read(notification_id):
         note.read_at = now_in_brazil()
         db.session.commit()
         _invalidate_admin_action_cache(current_user.id)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(message='Notificação marcada como lida.', category='success')
     return redirect(request.referrer or url_for('admin_notifications'))
 
 
@@ -302,6 +312,8 @@ def admin_notification_resolve(notification_id):
         note.resolved_by_id = current_user.id
         db.session.commit()
         _invalidate_admin_action_cache(current_user.id)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(message='Notificação resolvida.', category='success')
     return redirect(request.referrer or url_for('admin_notifications'))
 
 

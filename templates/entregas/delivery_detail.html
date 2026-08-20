@@ -3,13 +3,14 @@
 {% block main %}
 <div class="container py-4"
      data-delivery-detail
+     data-show-internal-ids="{{ 'true' if role == 'admin' else 'false' }}"
      data-status-url="{{ url_for('delivery_detail', req_id=req.id) }}"
      data-poll-interval="15000">
 
   {# ========== Barra de resumo ========== #}
   <div class="alert alert-light shadow-sm border d-flex justify-content-between align-items-center mb-4">
     <div>
-      <strong>Pedido #{{ req.order_id }}</strong> —
+      <strong>{% if role in ['admin', 'worker'] %}Pedido #{{ req.order_id }}{% else %}Compra {{ order.public_reference }}{% endif %}</strong> —
       {{ items|length }} item{{ 's' if items|length > 1 else '' }} —
       <span class="text-success fw-bold">R$ {{ '%.2f' | format(total) }}</span>
     </div>
@@ -67,7 +68,7 @@
     <h5 class="card-title">🧑‍💼 Comprador</h5>
 
     <p class="mb-1 fw-bold">
-      {{ buyer.name }} (ID {{ buyer.id }})
+      {{ buyer.name }}{% if role == 'admin' %} (ID {{ buyer.id }}){% endif %}
     </p>
 
     {% if buyer.email %}
@@ -106,7 +107,19 @@
         {% endfor %}
       </div>
       <hr>
-      <p class="text-end fw-bold fs-5 text-success mb-0">💰 Total: R$ {{ '%.2f' | format(total) }}</p>
+      <div class="ms-auto" style="max-width: 360px;">
+        <div class="d-flex justify-content-between text-muted">
+          <span>Subtotal dos produtos</span><span>R$ {{ '%.2f' | format(products_total) }}</span>
+        </div>
+        {% if shipping_total > 0 %}
+        <div class="d-flex justify-content-between text-muted">
+          <span>Frete</span><span>R$ {{ '%.2f' | format(shipping_total) }}</span>
+        </div>
+        {% endif %}
+        <p class="d-flex justify-content-between fw-bold fs-5 text-success mb-0 mt-1">
+          <span>💰 Total pago</span><span>R$ {{ '%.2f' | format(total) }}</span>
+        </p>
+      </div>
     </div>
   </div>
 
@@ -135,7 +148,7 @@
     <div class="card-body">
       <h5 class="card-title">🚚 Entregador</h5>
       {% if delivery_worker %}
-        <p class="mb-1 fw-bold" data-worker-name>{{ delivery_worker.name }} (ID {{ delivery_worker.id }})</p>
+        <p class="mb-1 fw-bold" data-worker-name>{{ delivery_worker.name }}{% if role == 'admin' %} (ID {{ delivery_worker.id }}){% endif %}</p>
         {% if delivery_worker.email %}<p class="mb-0 text-muted" data-worker-email>📧 {{ delivery_worker.email }}</p>{% else %}<p class="mb-0 text-muted" data-worker-email></p>{% endif %}
       {% else %}
         <p class="mb-0 text-muted" data-worker-empty>Nenhum entregador atribuído.</p>

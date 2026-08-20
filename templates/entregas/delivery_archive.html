@@ -7,7 +7,13 @@
       {% set ord = r.order %}
       <li class="list-group-item d-flex justify-content-between flex-column flex-md-row align-items-start align-items-md-center">
         <div class="me-3">
-          <div class="fw-semibold">Pedido #{{ r.order_id }}</div>
+          <div class="fw-semibold">
+            {% if current_user.worker == 'delivery' or (current_user.role or '')|lower == 'admin' %}
+              Pedido #{{ r.order_id }}
+            {% else %}
+              Compra {{ ord.public_reference }}
+            {% endif %}
+          </div>
           <div class="small text-muted">
             <div>Status: {{ r.status }}</div>
             {% if ord and ord.user %}<div>Cliente: {{ ord.user.name }}</div>{% endif %}

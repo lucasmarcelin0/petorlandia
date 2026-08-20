@@ -41,7 +41,9 @@
 </script>
 <div class="container py-4">
 
-  <h2 class="fw-bold mb-4">🚚 Minhas Entregas</h2>
+  <h2 class="fw-bold mb-4">
+    {% if (current_user.role or '')|lower == 'admin' %}🚚 Pedidos de entrega{% else %}🚚 Minhas Entregas{% endif %}
+  </h2>
 
   <div id="delivery-feedback" class="mb-3" aria-live="polite"></div>
 

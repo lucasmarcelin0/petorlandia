@@ -7,18 +7,6 @@
 {% block main %}
 <div class="container my-4">
 
-  <h4 class="mb-3">Produtos em estoque</h4>
-  <ul class="list-group shadow-sm mb-5">
-    {% for p in products %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{ p.name }}
-        <span class="badge bg-secondary rounded-pill">{{ p.stock }}</span>
-      </li>
-    {% else %}
-      <li class="list-group-item text-muted">Nenhum produto cadastrado.</li>
-    {% endfor %}
-  </ul>
-
 {% macro lista(reqs, pagination, page_var, titulo, cls_badge, lbl_badge, status_key, open_page, progress_page, completed_page, canceled_page) %}
   <h4 class="mt-4 {{ cls_badge }}">{{ titulo }}</h4>
   <ul class="list-group shadow-sm mb-4" data-delivery-list="{{ status_key }}">
@@ -135,6 +123,29 @@
       <i class="fab fa-whatsapp me-1"></i> Pesquisa com tutores
     </a>
   </div>
+
+  <section class="mt-4" aria-labelledby="products-heading">
+    <div class="text-center">
+      <button class="btn btn-outline-primary" type="button"
+              data-bs-toggle="collapse" data-bs-target="#products-stock"
+              aria-expanded="false" aria-controls="products-stock">
+        <i class="fas fa-boxes-stacked me-1"></i> Ver produtos em estoque
+      </button>
+    </div>
+    <div class="collapse mt-3" id="products-stock">
+      <h4 class="mb-3" id="products-heading">Produtos em estoque</h4>
+      <ul class="list-group shadow-sm">
+        {% for p in products %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ p.name }}
+            <span class="badge bg-secondary rounded-pill">{{ p.stock }}</span>
+          </li>
+        {% else %}
+          <li class="list-group-item text-muted">Nenhum produto cadastrado.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
 
 </div>
 {% endblock %}

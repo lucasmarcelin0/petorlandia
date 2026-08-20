@@ -15,7 +15,7 @@
     <table class="table align-middle">
       <thead>
         <tr>
-          <th>Nº pedido</th>
+          <th>Referência</th>
           <th>Data</th>
           <th>Valor</th>
           <th>Status</th>
@@ -25,7 +25,7 @@
       <tbody>
         {% for o in orders %}
         <tr>
-          <td>{{ o.id }}</td>
+          <td>{{ o.public_reference }}</td>
           <td>{{ o.created_at|format_datetime_brazil('%d/%m/%Y') }}</td>
           <td>R$ {{ '%.2f'|format(((o.payment.__dict__.get('amount') if o.payment else None) or o.total_value())) }}</td>
           <td>
@@ -36,7 +36,7 @@
           </td>
           <td>
             <div class="d-flex flex-wrap gap-1 justify-content-end">
-              <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes do pedido {{ o.id }}">
+              <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes da compra {{ o.public_reference }}">
                 <i class="bi bi-search"></i> Detalhes
               </a>
               {% if status == 'COMPLETED' %}
@@ -47,7 +47,7 @@
                 {% else %}
                 <form method="post" action="{{ url_for('confirmar_recebimento_pedido', order_id=o.id) }}" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-success" aria-label="Confirmar recebimento do pedido {{ o.id }}">
+                  <button type="submit" class="btn btn-sm btn-success" aria-label="Confirmar recebimento da compra {{ o.public_reference }}">
                     <i class="bi bi-box-seam"></i> Recebi o pedido
                   </button>
                 </form>

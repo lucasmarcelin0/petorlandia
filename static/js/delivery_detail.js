@@ -55,7 +55,7 @@ function ensureEmptyWorkerParagraph(section) {
   return emptyEl;
 }
 
-function updateWorker(section, worker) {
+function updateWorker(section, worker, showInternalIds = false) {
   if (!section) {
     return;
   }
@@ -66,7 +66,7 @@ function updateWorker(section, worker) {
   if (worker) {
     if (nameEl) {
       nameEl.classList.remove(HIDDEN_CLASS);
-      nameEl.textContent = `${worker.name} (ID ${worker.id})`;
+      nameEl.textContent = showInternalIds ? `${worker.name} (ID ${worker.id})` : worker.name;
     }
     if (emailEl) {
       emailEl.classList.remove(HIDDEN_CLASS);
@@ -206,6 +206,7 @@ function initDeliveryDetail() {
   const badge = root.querySelector('[data-status-badge]');
   const timelineContainer = root.querySelector('[data-timeline]');
   const workerSection = root.querySelector('[data-worker-section]');
+  const showInternalIds = root.dataset.showInternalIds === 'true';
 
   async function refresh() {
     if (!statusUrl) {
@@ -226,7 +227,7 @@ function initDeliveryDetail() {
       }
       updateStatusBadge(badge, data.status_label, data.badge_class);
       updateTimeline(timelineContainer, data.timeline);
-      updateWorker(workerSection, data.worker);
+      updateWorker(workerSection, data.worker, showInternalIds);
     } catch (error) {
       updateStatusBadge(badge, 'Erro ao atualizar', 'bg-danger');
     }

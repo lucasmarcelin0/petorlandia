@@ -6,7 +6,7 @@
 
       <div class="me-3">
         <h6 class="mb-1 fw-semibold">
-          Pedido #{{ req.order_id }}
+          {% if is_delivery_operator %}Pedido #{{ req.order_id }}{% else %}Compra {{ ord.public_reference }}{% endif %}
           {% if req.status == 'pendente'      %}<span class="badge bg-warning text-dark ms-2">Pendente</span>{% endif %}
           {% if req.status == 'em_andamento'  %}<span class="badge bg-info  text-dark ms-2">Em andamento</span>{% endif %}
           {% if req.status == 'concluida'     %}<span class="badge bg-success         ms-2">Concluído</span>{% endif %}
@@ -29,7 +29,7 @@
         </div>
       </div>
 
-      {% if current_user.worker == 'delivery' %}
+      {% if is_delivery_operator %}
         {% if req.status == 'pendente' %}
           <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -60,7 +60,7 @@
 
 <div class="accordion" id="accordionEntregas">
 
-  {% if current_user.worker == 'delivery' %}
+  {% if is_delivery_operator %}
     <div class="accordion-item">
       <h2 class="accordion-header" id="headPend">
         <button class="accordion-button" type="button"

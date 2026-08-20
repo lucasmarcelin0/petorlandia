@@ -8642,7 +8642,7 @@ def _concluir_entrega_efeitos(delivery) -> None:
         tutor,
         'Seu pedido chegou? Confirme o recebimento — PetOrlândia',
         (
-            f'Olá {tutor.name}! A entrega do pedido #{order.id} foi concluída.\n\n'
+            f'Olá {tutor.name}! A entrega da sua compra {order.public_reference} foi concluída.\n\n'
             'Se está tudo certo, confirme o recebimento em Minhas atividades → Compras:\n'
             f'{base_url}/minhas_compras\n\n'
             'A confirmação garante a segurança da sua compra e libera o repasse '
@@ -8689,7 +8689,7 @@ def enviar_lembretes_recebimento() -> None:
                 tutor,
                 'Recebeu seu pedido? Confirme para nós — PetOrlândia',
                 (
-                    f'Olá {tutor.name}! Você já recebeu o pedido #{pedido.id}?\n\n'
+                    f'Olá {tutor.name}! Você já recebeu a compra {pedido.public_reference}?\n\n'
                     'Confirme o recebimento em Minhas atividades → Compras:\n'
                     f'{base_url}/minhas_compras\n\n'
                     'Se ainda não chegou ou houve algum problema, responda este '
@@ -11631,8 +11631,11 @@ def _delivery_context_for_current_user():
                 .selectinload(Order.user)
             ))
 
-    # -------------------------------------------------------- ENTREGADOR
-    if current_user.worker == "delivery":
+    role = (getattr(current_user, 'role', '') or '').lower()
+    is_delivery_operator = current_user.worker == "delivery" or role == "admin"
+
+    # -------------------------------------------------------- ENTREGADOR / ADMIN
+    if is_delivery_operator:
         # Entregadores só veem entregas da plataforma (não as do próprio vendedor)
         base = base.filter(DeliveryRequest.tipo_entrega == 'plataforma')
 
@@ -11675,6 +11678,7 @@ def _delivery_context_for_current_user():
         done=done,
         canceled=canceled,
         available_total=available_total,
+        is_delivery_operator=is_delivery_operator,
     )
 
     counts = {

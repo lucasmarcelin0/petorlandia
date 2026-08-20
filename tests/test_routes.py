@@ -3388,13 +3388,13 @@ def test_delivery_requests_hide_archived(monkeypatch, app):
 
         resp = client.get('/delivery_requests')
         html = resp.get_data(as_text=True)
-        assert 'Pedido\xa0#1' in html
-        assert 'Pedido\xa0#2' not in html
+        assert order1.public_reference in html
+        assert order2.public_reference not in html
 
         resp = client.get('/delivery_archive')
         html = resp.get_data(as_text=True)
-        assert 'Pedido #2' in html
-        assert 'Pedido #1' not in html
+        assert order2.public_reference in html
+        assert order1.public_reference not in html
 
 
 

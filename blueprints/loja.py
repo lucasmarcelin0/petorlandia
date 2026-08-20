@@ -145,6 +145,85 @@ def _checkout_max_installments() -> int:
     return max(1, min(configured, 12))
 
 
+def _money_label(value) -> str:
+    amount = Decimal(str(value or 0)).quantize(Decimal('0.01'))
+    return f'R$ {amount:.2f}'.replace('.', ',')
+
+
+def _order_customer_totals(order):
+    """Return only customer-facing snapshots; never use the seller payout."""
+    products_total = Decimal(str(order.total_value() or 0)).quantize(Decimal('0.01'))
+    payment_amount = getattr(getattr(order, 'payment', None), 'amount', None)
+    total_paid = Decimal(str(payment_amount)).quantize(Decimal('0.01')) if payment_amount is not None else products_total
+    shipping_total = max(Decimal('0.00'), total_paid - products_total)
+    return products_total, shipping_total, total_paid
+
+
+def _order_paid_admin_body(order, payment) -> str:
+    """Operational purchase summary for admins, including private financial data."""
+    buyer = order.user
+    products_total, shipping_total, total_paid = _order_customer_totals(order)
+    seller_total = sum(
+        (
+            Decimal(str(item.seller_unit_amount)) * int(item.quantity or 0)
+            if item.seller_unit_amount is not None
+            else Decimal(str(getattr(item.product, 'price', 0) or 0)) * int(item.quantity or 0)
+        )
+        for item in order.items
+    ).quantize(Decimal('0.01'))
+    platform_products = max(Decimal('0.00'), products_total - seller_total)
+
+    method = getattr(payment, 'method', None)
+    method_label = getattr(method, 'value', None) or getattr(method, 'name', None) or 'Não informado'
+    created_at = format_datetime_brazil(order.created_at, '%d/%m/%Y %H:%M') if order.created_at else 'Não informado'
+    address = (order.shipping_address or '').strip() or 'Não informado'
+
+    item_lines = []
+    for item in order.items:
+        unit_price = Decimal(str(
+            item.unit_price
+            if item.unit_price is not None
+            else (item.product.preco_publico if item.product else 0)
+        )).quantize(Decimal('0.01'))
+        line_total = (unit_price * int(item.quantity or 0)).quantize(Decimal('0.01'))
+        item_lines.append(
+            f'- {item.item_name}: {item.quantity} x {_money_label(unit_price)} = {_money_label(line_total)}'
+        )
+
+    shipping = _order_vendor_shipping(order)
+    delivery_lines = [
+        (
+            f'- {store["name"]}: {_money_label(store["freight"])} · '
+            f'Entrega {"própria" if store["modo_entrega"] == "propria" else "pela plataforma"}'
+        )
+        for store in shipping['stores']
+    ] or ['- Vendedor não identificado no cadastro do produto']
+
+    return '\n'.join([
+        f'Pedido interno: #{order.id}',
+        f'Referência do cliente: {order.public_reference}',
+        f'Compra confirmada em: {created_at}',
+        '',
+        f'Cliente: {buyer.name if buyer else "Não informado"}',
+        f'E-mail: {buyer.email if buyer and buyer.email else "Não informado"}',
+        f'Telefone: {buyer.phone if buyer and buyer.phone else "Não informado"}',
+        f'Endereço de entrega: {address}',
+        '',
+        f'Pagamento: {method_label}',
+        f'Produtos cobrados: {_money_label(products_total)}',
+        f'Frete cobrado: {_money_label(shipping_total)}',
+        f'Total pago: {_money_label(total_paid)}',
+        f'Repasse dos produtos: {_money_label(seller_total)}',
+        f'Margem da plataforma nos produtos: {_money_label(platform_products)}',
+        '',
+        'Itens:',
+        *item_lines,
+        '',
+        'Entrega por vendedor:',
+        *delivery_lines,
+    ])
+
+
 def mp_sdk(*args, **kwargs):
     import app as app_module
 
@@ -702,7 +781,7 @@ def worker_delivery_detail(req_id):
 @login_required
 def accept_delivery(req_id):
     try:
-        if current_user.worker != 'delivery':
+        if current_user.worker != 'delivery' and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = (
             DeliveryRequest.query
@@ -726,7 +805,10 @@ def accept_delivery(req_id):
             response_data = {
                 'message': 'Entrega aceita.',
                 'category': 'success',
-                'redirect': url_for('worker_delivery_detail', req_id=req.id),
+                'redirect': url_for(
+                    'admin_delivery_detail' if _is_admin() else 'worker_delivery_detail',
+                    req_id=req.id,
+                ),
                 'html': html,
                 'counts': counts,
             }
@@ -746,7 +828,7 @@ def accept_delivery(req_id):
 @login_required
 def complete_delivery(req_id):
     try:
-        if current_user.worker != 'delivery':
+        if current_user.worker != 'delivery' and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
@@ -774,7 +856,7 @@ def complete_delivery(req_id):
 @login_required
 def cancel_delivery(req_id):
     try:
-        if current_user.worker != 'delivery':
+        if current_user.worker != 'delivery' and not _is_admin():
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
         if req.worker_id != current_user.id:
@@ -842,7 +924,7 @@ def delivery_detail(req_id):
     order = req.order
     buyer = order.user
     items = order.items
-    total = sum(i.quantity * i.product.price for i in items if i.product)
+    products_total, shipping_total, total = _order_customer_totals(order)
 
     if _is_admin():
         role = "admin"
@@ -897,10 +979,11 @@ def delivery_detail(req_id):
         worker_data = None
         if req.worker:
             worker_data = {
-                'id': req.worker.id,
                 'name': req.worker.name,
                 'email': req.worker.email,
             }
+            if role == 'admin':
+                worker_data['id'] = req.worker.id
         return jsonify({
             'success': True,
             'status': req.status,
@@ -920,6 +1003,8 @@ def delivery_detail(req_id):
         buyer=buyer,
         delivery_worker=req.worker,
         total=total,
+        products_total=products_total,
+        shipping_total=shipping_total,
         role=role,
         status_label=label,
         status_badge_class=badge_class,
@@ -2514,24 +2599,21 @@ def notificacoes_mercado_pago():
                         # avisa o admin. Roda só na 1ª notificação (o guard de
                         # DeliveryRequest acima evita duplicar em retries).
                         comprador = order.user
+                        _products_total, _shipping_total, paid_total = _order_customer_totals(order)
                         if comprador:
                             registrar_feedback_solicitacao(
                                 comprador,
                                 (
-                                    f"Pagamento confirmado! Seu pedido #{order.id} "
-                                    f"(R$ {order.total_value():.2f}) já está em preparação "
+                                    f"Pagamento confirmado! Sua compra {order.public_reference}, "
+                                    f"no total de {_money_label(paid_total)}, já está em preparação "
                                     f"e você será avisado sobre a entrega."
                                 ),
                                 kind='order_paid',
                             )
+                        admin_body = _order_paid_admin_body(order, pay)
                         avisar_admin_nova_solicitacao(
-                            f'Pedido #{order.id} pago',
-                            (
-                                f'Cliente: {comprador.name if comprador else "?"} '
-                                f'({comprador.email if comprador else "?"})\n'
-                                f'Valor: R$ {order.total_value():.2f}\n'
-                                f'Itens: ' + ', '.join(f'{i.item_name} x{i.quantity}' for i in order.items)
-                            ),
+                            f'Compra {order.public_reference} confirmada (pedido interno #{order.id})',
+                            admin_body,
                         )
 
                     # Decrementa estoque das clínicas para produtos vinculados
@@ -2540,18 +2622,13 @@ def notificacoes_mercado_pago():
 
                         comprador = order.user
                         queue_admin_action_notification(
-                            title=f'Pedido pago #{order.id}',
-                            body=(
-                                f'Cliente: {comprador.name if comprador else "?"} '
-                                f'({comprador.email if comprador else "?"})\n'
-                                f'Valor: R$ {order.total_value():.2f}\n'
-                                f'Itens: ' + ', '.join(f'{i.item_name} x{i.quantity}' for i in order.items)
-                            ),
+                            title=f'Compra confirmada · {order.public_reference}',
+                            body=_order_paid_admin_body(order, pay),
                             event_type='order.paid',
                             entity_type='order',
                             entity_id=order.id,
                             priority='high',
-                            url=url_for('delivery_overview', _external=True),
+                            url=url_for('pedido_detail', order_id=order.id, _external=True),
                             idempotency_key=f'order-paid:{order.id}',
                         )
                         for oi in order.items:
@@ -2688,10 +2765,11 @@ def edit_order_address(order_id):
 
 
 @bp.route("/payment_status/<int:payment_id>", methods=["GET"])
+@login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
 
-    if current_user.is_authenticated and payment.user_id != current_user.id:
+    if payment.user_id != current_user.id and not _is_admin():
         abort(403)
 
     result  = request.args.get("status") or payment.status.name.lower()
@@ -2817,7 +2895,7 @@ def pedido_detail(order_id):
     items = order.items
     buyer = order.user
     delivery_worker = req.worker if req else None
-    total = sum(i.quantity * i.product.price for i in items if i.product)
+    products_total, shipping_total, total = _order_customer_totals(order)
 
     if is_admin_user:
         role = "admin"
@@ -2827,6 +2905,13 @@ def pedido_detail(order_id):
         role = "buyer"
     else:
         abort(403)
+
+    status_label, status_badge_class = {
+        'pendente': ('Pendente', 'bg-warning text-dark'),
+        'em_andamento': ('Em andamento', 'bg-info text-dark'),
+        'concluida': ('Concluída', 'bg-success'),
+        'cancelada': ('Cancelada', 'bg-danger'),
+    }.get(getattr(req, 'status', ''), ('Aguardando entrega', 'bg-secondary'))
 
     form = CheckoutForm()
     edit_address_url = url_for("edit_order_address", order_id=order.id)
@@ -2844,10 +2929,14 @@ def pedido_detail(order_id):
         buyer=buyer,
         delivery_worker=delivery_worker,
         total=total,
+        products_total=products_total,
+        shipping_total=shipping_total,
         role=role,
         form=form,
         edit_address_url=edit_address_url,
         cancel_url=cancel_url,
+        status_label=status_label,
+        status_badge_class=status_badge_class,
     )
 
 

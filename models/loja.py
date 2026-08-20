@@ -12,6 +12,8 @@ from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
 import json
+import hashlib
+import hmac
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_CEILING
 import unicodedata
@@ -484,6 +486,20 @@ class Order(db.Model):
             elif item.product:
                 total += float(item.product.preco_publico or 0) * item.quantity
         return total
+
+    @property
+    def public_reference(self):
+        """Referência estável para o comprador sem expor o ID sequencial."""
+        try:
+            secret = current_app.config.get('SECRET_KEY') or 'petorlandia-public-order'
+        except RuntimeError:
+            secret = 'petorlandia-public-order'
+        digest = hmac.new(
+            str(secret).encode('utf-8'),
+            f'order:{self.id}'.encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()[:8].upper()
+        return f'PET-{digest[:4]}-{digest[4:]}'
 
     def __str__(self):
         nome_usuario = self.user.name if self.user else "Usuário desconhecido"

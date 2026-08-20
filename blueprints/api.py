@@ -563,7 +563,8 @@ def share_request_detail(token):
 def api_delivery_counts():
     """Return delivery counts for the current user."""
     base = DeliveryRequest.query.filter_by(archived=False)
-    if current_user.worker == "delivery":
+    role = (getattr(current_user, 'role', '') or '').lower()
+    if current_user.worker == "delivery" or role == "admin":
         base = base.filter(DeliveryRequest.tipo_entrega == 'plataforma')
         available_total = base.filter_by(status="pendente").count()
         doing = base.filter_by(worker_id=current_user.id,
@@ -588,9 +589,11 @@ def api_delivery_counts():
 
 
 @bp.route("/api/payment_status/<int:payment_id>", methods=["GET"])
+@login_required
 def api_payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    if current_user.is_authenticated and payment.user_id != current_user.id:
+    role = (getattr(current_user, 'role', '') or '').lower()
+    if payment.user_id != current_user.id and role != 'admin':
         abort(403)
     return jsonify(status=payment.status.name)
 
