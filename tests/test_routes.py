@@ -605,6 +605,34 @@ def test_reset_password_request_page(app):
     assert response.status_code == 200
 
 
+def test_first_access_for_prescription_uses_tutor_social_preview(app):
+    client = app.test_client()
+
+    response = client.get(
+        '/primeiro-acesso?next=/bloco_prescricao/123/imprimir'
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'Sua receita veterinária está disponível | PetOrlândia' in html
+    assert 'og-receita-tutor.png' in html
+    assert 'content="1731"' in html
+    assert 'content="909"' in html
+    assert 'Sua clínica veterinária inteira em um lugar só' not in html
+
+
+def test_first_access_without_prescription_keeps_default_social_preview(app):
+    client = app.test_client()
+
+    response = client.get('/primeiro-acesso')
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'Primeiro acesso | PetOrlândia' in html
+    assert 'og-petorlandia.png' in html
+    assert 'og-receita-tutor.png' not in html
+
+
 def test_first_access_by_phone_sets_password_and_logs_user_in(app):
     client = app.test_client()
 

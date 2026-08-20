@@ -1,6 +1,20 @@
 {% extends "layout.html" %}
 {% from 'components/form_macros.html' import render_field, render_submit %}
 
+{# O primeiro link da mensagem de receita é este primeiro acesso. O WhatsApp
+   lê as metatags daqui antes de o tutor se autenticar; por isso a arte precisa
+   falar com o tutor, sem reutilizar a campanha comercial para clínicas. #}
+{% set prescription_share = next_url and '/bloco_prescricao/' in next_url and '/imprimir' in next_url %}
+{% if prescription_share %}
+    {% set og_image = 'img/og-receita-tutor.png' %}
+    {% set og_image_width = 1731 %}
+    {% set og_image_height = 909 %}
+{% endif %}
+
+{% block page_title %}{% if prescription_share %}Sua receita veterinária está disponível | PetOrlândia{% else %}Primeiro acesso | PetOrlândia{% endif %}{% endblock %}
+{% block meta_description %}{% if prescription_share %}Acesse com segurança as orientações, os medicamentos e o acompanhamento do seu pet.{% else %}Crie sua senha para acessar a PetOrlândia com segurança.{% endif %}{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
 {% block main %}
 <div class="container d-flex justify-content-center align-items-start mt-4 mt-md-5 mb-5">
     <div class="card shadow-lg p-4 rounded-4 first-access-card" style="width: 100%; max-width: 480px;">
