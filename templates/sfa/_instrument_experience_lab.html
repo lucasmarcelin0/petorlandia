@@ -1,0 +1,389 @@
+<section id="sfa-instrument-lab" class="sfa-lab mt-5" aria-labelledby="sfa-lab-title">
+  <div class="sfa-lab__hero">
+    <div>
+      <div class="sfa-lab__eyebrow">Laboratório de utilidade do instrumento</div>
+      <h4 id="sfa-lab-title" class="mb-2">Da experiência do participante a uma decisão da Vigilância</h4>
+      <p class="mb-0">
+        Teste a versão enxuta de T0, T10 e T30 e veja o que uma coorte sintética de 50 participantes
+        permitiria observar antes de alterar os formulários reais.
+      </p>
+    </div>
+    <div class="sfa-lab__status" role="note">
+      <i class="fas fa-flask me-2" aria-hidden="true"></i>
+      Simulação local: nada é gravado ou enviado
+    </div>
+  </div>
+
+  <div class="sfa-lab__nav" role="tablist" aria-label="Modulos do laboratorio">
+    <button type="button" class="sfa-lab__nav-btn is-active" role="tab" aria-selected="true"
+            aria-controls="sfa-lab-participant" id="sfa-lab-tab-participant" data-lab-view="participant">
+      <span>1</span> Responder como participante
+    </button>
+    <button type="button" class="sfa-lab__nav-btn" role="tab" aria-selected="false"
+            aria-controls="sfa-lab-cohort" id="sfa-lab-tab-cohort" data-lab-view="cohort">
+      <span>2</span> Simular 50 respostas
+    </button>
+    <button type="button" class="sfa-lab__nav-btn" role="tab" aria-selected="false"
+            aria-controls="sfa-lab-utility" id="sfa-lab-tab-utility" data-lab-view="utility">
+      <span>3</span> Julgar a utilidade
+    </button>
+  </div>
+
+  <div id="sfa-lab-announcer" class="visually-hidden" aria-live="polite"></div>
+
+  <div id="sfa-lab-participant" class="sfa-lab__panel" role="tabpanel"
+       aria-labelledby="sfa-lab-tab-participant" data-lab-panel="participant">
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <div class="sfa-lab__card">
+          <div class="sfa-lab__identity">
+            <div class="flex-grow-1">
+              <label class="form-label fw-semibold" for="sfa-lab-name">Nome usado somente nesta demonstração</label>
+              <input id="sfa-lab-name" type="text" class="form-control" value="Ana Martins"
+                     maxlength="80" autocomplete="off">
+            </div>
+            <div class="sfa-lab__imported">
+              <i class="fas fa-link me-1" aria-hidden="true"></i>
+              SINAN, GAL e prontuário vinculados nos bastidores
+            </div>
+          </div>
+
+          <div class="sfa-lab__stage-nav" role="group" aria-label="Etapa simulada">
+            <button type="button" class="is-active" data-stage="t0">T0 <small>inicio</small></button>
+            <button type="button" data-stage="t10">T10 <small>10 dias</small></button>
+            <button type="button" data-stage="t30">T30 <small>30 dias</small></button>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center gap-3 mb-2">
+            <div>
+              <div id="sfa-lab-greeting" class="sfa-lab__greeting"></div>
+              <div id="sfa-lab-stage-purpose" class="text-muted small"></div>
+            </div>
+            <span id="sfa-lab-time" class="sfa-lab__time"></span>
+          </div>
+          <div class="progress sfa-lab__progress mb-4" role="progressbar" aria-label="Progresso da etapa"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="sfa-lab-progress" class="progress-bar" style="width:0%"></div>
+          </div>
+          <div id="sfa-lab-validation" class="alert alert-danger py-2 small" role="alert" hidden></div>
+
+          <form id="sfa-lab-form" novalidate>
+            <div id="sfa-lab-form-host"></div>
+          </form>
+
+          <div class="sfa-lab__form-actions">
+            <button type="button" class="btn btn-outline-secondary" id="sfa-lab-reset">
+              <i class="fas fa-rotate-left me-1" aria-hidden="true"></i> Limpar etapa
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="sfa-lab-example">
+              <i class="fas fa-wand-magic-sparkles me-1" aria-hidden="true"></i> Preencher exemplo
+            </button>
+            <button type="button" class="btn btn-primary" id="sfa-lab-next">
+              Ir para T10 <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <aside class="sfa-lab__card sfa-lab__summary-card" aria-labelledby="sfa-lab-summary-title">
+          <div class="sfa-lab__eyebrow">Leitura do desenho</div>
+          <h5 id="sfa-lab-summary-title">O que esta etapa acrescenta</h5>
+          <div id="sfa-lab-stage-summary"></div>
+          <hr>
+          <h6>Dados que não pedimos de novo</h6>
+          <div id="sfa-lab-imported-fields" class="sfa-lab__chips"></div>
+          <p class="small text-muted mt-3 mb-0">
+            Os campos condicionais só aparecem quando uma resposta pode gerar investigação, orientação ou interpretação.
+          </p>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div id="sfa-lab-cohort" class="sfa-lab__panel" role="tabpanel" hidden
+       aria-labelledby="sfa-lab-tab-cohort" data-lab-panel="cohort">
+    <div class="sfa-lab__card mb-4">
+      <div class="row g-3 align-items-end">
+        <div class="col-lg-8">
+          <label for="sfa-lab-scenario" class="form-label fw-semibold">Cenário sintético</label>
+          <select id="sfa-lab-scenario" class="form-select">
+            <option value="detectable">A — Exposicoes coletivas detectaveis</option>
+            <option value="sporadic">B — Casos predominantemente dispersos</option>
+            <option value="attrition">C — Sinal real com perda de seguimento</option>
+          </select>
+          <div id="sfa-lab-scenario-description" class="form-text"></div>
+        </div>
+        <div class="col-lg-4 d-grid">
+          <button type="button" class="btn btn-primary" id="sfa-lab-run-cohort">
+            <i class="fas fa-play me-1" aria-hidden="true"></i> Recalcular 50 participantes
+          </button>
+        </div>
+      </div>
+      <div class="alert alert-info sfa-lab__simulation-note mt-3 mb-0" role="note">
+        <strong>Dados inteiramente sintéticos.</strong> Servem para testar lógica, carga de preenchimento e perguntas de pesquisa;
+        não estimam a realidade de Orlândia. A coorte não usa o que você digitou no módulo anterior. Para manter a simulação
+        reproduzível, as exposições equivalentes já foram codificadas após uma revisão humana fictícia — a correspondência de texto livre não é testada aqui.
+      </div>
+    </div>
+
+    <div id="sfa-lab-kpis" class="row g-3 mb-4" aria-label="Indicadores da coorte sintetica"></div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-xl-7">
+        <div class="sfa-lab__card h-100">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <div>
+              <div class="sfa-lab__eyebrow">Contribuição incremental</div>
+              <h5 class="mb-1">O que se torna visível além do SINAN</h5>
+              <p class="small text-muted mb-0">Comparação descritiva dentro do mesmo cenário sintético.</p>
+            </div>
+            <span class="sfa-lab__badge">SINAN segue como base</span>
+          </div>
+          <div id="sfa-lab-counterfactual"></div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="sfa-lab__card h-100">
+          <div class="sfa-lab__eyebrow">Seguimento</div>
+          <h5 class="mb-1">Respostas disponíveis por etapa</h5>
+          <p class="small text-muted">O denominador aparece em todas as taxas.</p>
+          <div id="sfa-lab-followup"></div>
+          <p class="small text-muted mb-0 mt-3">As taxas são premissas do cenário, não resultados observados do estudo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-xl-5">
+        <div class="sfa-lab__card h-100">
+          <div class="sfa-lab__eyebrow">One Health</div>
+          <h5>Domínios dos vínculos relatados</h5>
+          <div id="sfa-lab-domains"></div>
+          <p class="small text-muted mb-0 mt-3">Categorias podem coexistir no caso real; aqui cada registro sintético tem um domínio principal.</p>
+        </div>
+      </div>
+      <div class="col-xl-7">
+        <div class="sfa-lab__card h-100">
+          <div class="sfa-lab__eyebrow">Fila operacional simulada</div>
+          <h5>Sinais que mereceriam verificação humana</h5>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Vínculo candidato</th>
+                  <th>Casos</th>
+                  <th>Etapa</th>
+                  <th>Situação</th>
+                  <th>Próximo passo sugerido</th>
+                </tr>
+              </thead>
+              <tbody id="sfa-lab-signals"></tbody>
+            </table>
+          </div>
+          <div id="sfa-lab-no-signals" class="sfa-lab__empty" hidden>Nenhum vínculo específico atingiu a regra de triagem neste cenário.</div>
+        </div>
+      </div>
+    </div>
+
+    <details class="sfa-lab__card sfa-lab__data-preview mb-4">
+      <summary>
+        <span>
+          <span class="sfa-lab__eyebrow">Matriz analítica</span>
+          <strong>Ver como as 50 linhas de informação poderiam ser trabalhadas</strong>
+        </span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+      </summary>
+      <p class="small text-muted mt-3">
+        Abaixo aparecem identificadores fictícios e uma amostra das primeiras 10 linhas. No estudo real, a análise usaria códigos,
+        dados importados e respostas vinculadas, com acesso controlado.
+      </p>
+      <div id="sfa-lab-data-summary" class="sfa-lab__chips mb-3"></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Início</th>
+              <th>Território/local</th>
+              <th>Vínculo específico</th>
+              <th>T10</th>
+              <th>T30</th>
+              <th>Comunicação diagnóstica</th>
+            </tr>
+          </thead>
+          <tbody id="sfa-lab-data-rows"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <div class="sfa-lab__card mb-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <div class="sfa-lab__eyebrow">Camada administrativa separada</div>
+          <h5 class="mb-1">Registro sintético de decisões da Vigilância</h5>
+          <p class="small text-muted mb-0">
+            Sugestões automáticas não contam. Só entram no indicador decisões com ID, data, estado, evidência e contribuição do relatório explicitamente registradas.
+          </p>
+        </div>
+        <span class="sfa-lab__badge">modelo de dados</span>
+      </div>
+      <div id="sfa-lab-secondary-metrics" class="sfa-lab__chips mb-3"></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Sinal</th>
+              <th>Decisão registrada</th>
+              <th>Dia / estado</th>
+              <th>Contribuição do relatório</th>
+              <th>Alcance</th>
+            </tr>
+          </thead>
+          <tbody id="sfa-lab-decisions"></tbody>
+        </table>
+      </div>
+      <div id="sfa-lab-no-decisions" class="sfa-lab__empty" hidden>Nenhuma decisão administrativa foi registrada neste cenário.</div>
+    </div>
+
+    <div class="sfa-lab__card mb-4">
+      <div class="row g-4">
+        <div class="col-lg-5">
+          <div class="sfa-lab__eyebrow">Teste de retirada</div>
+          <h5>Qual família de perguntas realmente sustenta o sinal?</h5>
+          <p class="small text-muted mb-0">
+            Desmarque informações e recalcule a capacidade de reconhecer, tornar acionável e encerrar os vínculos deste cenário.
+            Isso ajuda a retirar perguntas que não mudam nenhuma decisão.
+          </p>
+        </div>
+        <div class="col-lg-4">
+          <div class="sfa-lab__ablation-controls" aria-label="Informações mantidas no instrumento">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sfa-lab-keep-exposure" data-ablation="exposure" checked>
+              <label class="form-check-label" for="sfa-lab-keep-exposure">Exposição específica</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sfa-lab-keep-place" data-ablation="place" checked>
+              <label class="form-check-label" for="sfa-lab-keep-place">Local identificável</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sfa-lab-keep-date" data-ablation="date" checked>
+              <label class="form-check-label" for="sfa-lab-keep-date">Data ou período</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sfa-lab-keep-active" data-ablation="active" checked>
+              <label class="form-check-label" for="sfa-lab-keep-active">Fonte ainda ativa</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sfa-lab-keep-followup" data-ablation="followup" checked>
+              <label class="form-check-label" for="sfa-lab-keep-followup">Seguimento T10/T30</label>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-3">
+          <div id="sfa-lab-ablation-result" class="sfa-lab__ablation-result" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sfa-lab__card">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-6">
+          <div class="sfa-lab__eyebrow">Precisão com n = 50</div>
+          <h5>Explore a incerteza de uma proporção</h5>
+          <p class="text-muted small">
+            Escolha um estimando e quantos dos 50 participantes apresentariam o resultado. O intervalo de 95% de Wilson mostra por que esta amostra
+            é adequada para um piloto de utilidade, mas limitada para estimar prevalências com grande precisão.
+          </p>
+          <label for="sfa-lab-precision-outcome" class="form-label">Resultado explorado</label>
+          <select id="sfa-lab-precision-outcome" class="form-select form-select-sm mb-3">
+            <option value="completaram o T30">Participantes que completaram o T30</option>
+            <option value="forneceram um vínculo específico">Participantes que forneceram vínculo específico</option>
+            <option value="tiveram divergência diagnóstica">Participantes com divergência diagnóstica</option>
+          </select>
+          <label for="sfa-lab-events" class="form-label">Participantes com o resultado: <strong id="sfa-lab-events-value">10</strong>/50</label>
+          <input id="sfa-lab-events" class="form-range" type="range" min="0" max="50" value="10">
+        </div>
+        <div class="col-lg-6">
+          <div id="sfa-lab-precision" class="sfa-lab__precision" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sfa-lab-utility" class="sfa-lab__panel" role="tabpanel" hidden
+       aria-labelledby="sfa-lab-tab-utility" data-lab-panel="utility">
+    <div class="row g-4">
+      <div class="col-xl-7">
+        <div class="sfa-lab__card h-100">
+          <div class="sfa-lab__eyebrow">Pergunta central do piloto</div>
+          <h5>O mínimo acrescentado transforma casos isolados em exposições coletivas acionáveis?</h5>
+          <div class="sfa-lab__answer-grid mt-4">
+            <article>
+              <i class="fas fa-user-clock" aria-hidden="true"></i>
+              <h6>Viabilidade</h6>
+              <p>Tempo, abandono, campos incompletos e carga por etapa.</p>
+            </article>
+            <article>
+              <i class="fas fa-people-group" aria-hidden="true"></i>
+              <h6>Vínculo coletivo</h6>
+              <p>Quem compartilhou produto, animal, lugar, atividade ou evento — e quando.</p>
+            </article>
+            <article>
+              <i class="fas fa-bell" aria-hidden="true"></i>
+              <h6>Acionabilidade</h6>
+              <p>Quantos sinais geraram verificação, orientação ou outra decisão concreta.</p>
+            </article>
+            <article>
+              <i class="fas fa-comments" aria-hidden="true"></i>
+              <h6>Comunicação diagnóstica</h6>
+              <p>Divergência entre o que a pessoa entendeu e o que os sistemas registraram.</p>
+            </article>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="sfa-lab__card h-100">
+          <div class="sfa-lab__eyebrow">Limite de interpretacao</div>
+          <h5>O que 50 respostas não demonstram sozinhas</h5>
+          <ul class="sfa-lab__limits">
+            <li>Prevalência etiológica precisa na população.</li>
+            <li>Diagnóstico ou acurácia sem referência laboratorial.</li>
+            <li>Causalidade entre uma exposição e a doença.</li>
+            <li>Casos evitados depois de uma ação.</li>
+            <li>Sensibilidade e especificidade do sinal sem validação independente.</li>
+            <li>Correspondência automática confiável entre diferentes descrições de texto livre.</li>
+            <li>Contagem única de coadoecidos apenas relatados, que podem se repetir entre entrevistas.</li>
+            <li>Intervalos populacionais válidos quando participantes pertencem ao mesmo agrupamento ou vêm de amostra de conveniência.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="sfa-lab__card mt-4">
+      <div class="sfa-lab__eyebrow">Criterio de continuidade</div>
+          <h5>Quando este piloto justificaria ampliar a pesquisa?</h5>
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <div class="sfa-lab__decision">
+            <strong>O instrumento e leve</strong>
+            <span>T0 mediano curto e boa conclusao de T10/T30.</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="sfa-lab__decision">
+            <strong>O dado extra muda a leitura</strong>
+            <span>Aparecem vínculos específicos que não seriam recuperados dos sistemas.</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="sfa-lab__decision">
+            <strong>O sinal muda a prática</strong>
+            <span>A Vigilância registra verificações e decisões concretas decorrentes do relatório.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -53,6 +53,15 @@ def test_sfa_review_links_and_qrcode_render(client):
     assert b"/sfa/revisao/graficos" in response.data
     assert b"Ver resumo" in response.data
     assert b"/sfa/revisao/resumo?kind=t0" in response.data
+    assert b'id="sfa-instrument-lab"' in response.data
+    assert b'id="sfa-lab-form-host"' in response.data
+    assert b'id="sfa-lab-kpis"' in response.data
+    assert b'id="sfa-lab-ablation-result"' in response.data
+    assert b'id="sfa-lab-data-rows"' in response.data
+    assert b'id="sfa-lab-decisions"' in response.data
+    assert b"sfa_instrument_lab.css?v=20260824" in response.data
+    assert b"sfa_instrument_lab.js?v=20260824" in response.data
+    assert "nada é gravado ou enviado".encode() in response.data
 
     response = client.get("/sfa/revisao/qrcode/t0.png")
     assert response.status_code == 200
