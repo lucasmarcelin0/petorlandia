@@ -16,10 +16,10 @@ def test_sfa_review_form_records_question_feedback(app, client):
             "reviewer_name": "Ana Revisora",
             "reviewer_email": "ana@example.com",
             "reviewer_profile": "profissional de saude",
-            "necessity__nome": "Essencial",
-            "redundancy__nome": "Nao parece redundante",
-            "clarity__nome": "Clara",
-            "comment__nome": "Pergunta clara e necessaria.",
+            "necessity__outras_pessoas_com_sintomas": "Essencial",
+            "redundancy__outras_pessoas_com_sintomas": "Nao parece redundante",
+            "clarity__outras_pessoas_com_sintomas": "Clara",
+            "comment__outras_pessoas_com_sintomas": "Pergunta clara e necessaria.",
             "overall_comment": "Formulario objetivo.",
         },
     )
@@ -32,9 +32,13 @@ def test_sfa_review_form_records_question_feedback(app, client):
         assert review.kind == "t0"
         assert review.reviewer_name == "Ana Revisora"
         assert payload["reviewer"]["overall_comment"] == "Formulario objetivo."
-        nome = next(question for question in payload["questions"] if question["key"] == "nome")
-        assert nome["necessity"] == "Essencial"
-        assert nome["comment"] == "Pergunta clara e necessaria."
+        cluster = next(
+            question
+            for question in payload["questions"]
+            if question["key"] == "outras_pessoas_com_sintomas"
+        )
+        assert cluster["necessity"] == "Essencial"
+        assert cluster["comment"] == "Pergunta clara e necessaria."
 
     response = client.get("/sfa/revisao/resumo")
     assert response.status_code == 200
@@ -83,23 +87,25 @@ def test_sfa_chart_review_records_feedback(app, client):
     assert b"Revisao colaborativa dos graficos" in response.data
     assert b"Resumo visual atual" in response.data
     assert b"Perguntas reais usadas neste bloco" in response.data
-    assert b"Sintomas principais no inicio" in response.data
-    assert b"Contato animal nos 15 dias antes dos sintomas" in response.data
+    assert b"Vinculos coletivos e novas pistas" in response.data
+    assert b"Exposicoes One Health" in response.data
+    assert b"Houve contato animal" in response.data
     assert b"Caes" in response.data
     assert b"Gatos" in response.data
     assert b"Leite cru/queijo nao pasteurizado" in response.data
+    assert b"Sintomas principais no inicio" not in response.data
 
     response = client.post(
         "/sfa/revisao/graficos",
         data={
             "reviewer_name": "Bruno",
-            "usefulness__cards_principais": "Util",
-            "chart_clarity__cards_principais": "Precisa melhorar",
-            "chart_redundancy__cards_principais": "Nao parece redundante",
-            "chart_comment__cards_principais": "Explicar melhor a leitura rapida.",
-            "question_need__sintomas_exposicoes__t0__exposicao_animal": "Essencial",
-            "question_reuse__sintomas_exposicoes__t0__exposicao_animal": "Manter como esta",
-            "question_comment__sintomas_exposicoes__t0__exposicao_animal": "As especies precisam aparecer.",
+            "usefulness__one_health": "Util",
+            "chart_clarity__one_health": "Precisa melhorar",
+            "chart_redundancy__one_health": "Nao parece redundante",
+            "chart_comment__one_health": "Explicar melhor a leitura rapida.",
+            "question_need__one_health__t0__exposicao_animal": "Essencial",
+            "question_reuse__one_health__t0__exposicao_animal": "Manter como esta",
+            "question_comment__one_health__t0__exposicao_animal": "As especies precisam aparecer.",
         },
     )
     assert response.status_code == 200
@@ -108,10 +114,9 @@ def test_sfa_chart_review_records_feedback(app, client):
         review = SfaInstrumentReview.query.one()
         payload = json.loads(review.payload_json)
         assert review.kind == "graficos"
-        resumo = next(chart for chart in payload["charts"] if chart["key"] == "cards_principais")
-        assert resumo["clarity"] == "Precisa melhorar"
-        assert resumo["comment"] == "Explicar melhor a leitura rapida."
-        exposicoes = next(chart for chart in payload["charts"] if chart["key"] == "sintomas_exposicoes")
+        exposicoes = next(chart for chart in payload["charts"] if chart["key"] == "one_health")
+        assert exposicoes["clarity"] == "Precisa melhorar"
+        assert exposicoes["comment"] == "Explicar melhor a leitura rapida."
         animal = next(question for question in exposicoes["questions"] if question["key"] == "exposicao_animal")
         assert animal["graph_need"] == "Essencial"
         assert animal["comment"] == "As especies precisam aparecer."

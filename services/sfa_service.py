@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import copy
+import hashlib
 import io
 import json
 import logging
@@ -45,6 +46,8 @@ DEFAULT_FORM_SCHEMA_FILES = {
     "t10": "config/sfa_t10_form.json",
     "t30": "config/sfa_t30_form.json",
 }
+SFA_INSTRUMENT_HISTORY_ROOT = PROJECT_ROOT / "config" / "sfa_instrument_history"
+SFA_INSTRUMENT_HISTORY_MANIFEST = SFA_INSTRUMENT_HISTORY_ROOT / "manifest.json"
 DEFAULT_T0_FORM_SCHEMA_FILE = DEFAULT_FORM_SCHEMA_FILES["t0"]
 SUPPORTED_T0_FIELD_TYPES = {
     "text",
@@ -405,12 +408,223 @@ def carregar_t30_form_schema() -> dict:
     return carregar_form_schema("t30")
 
 
+def _carregar_manifesto_historico_instrumentos() -> dict:
+    with SFA_INSTRUMENT_HISTORY_MANIFEST.open("r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("versions"), list):
+        raise ValueError("Manifesto do historico de instrumentos invalido.")
+    return manifest
+
+
+def _entrada_versao_historico_instrumentos(version_id: str) -> dict:
+    requested = str(version_id or "").strip()
+    if not requested:
+        raise ValueError("Informe a versao do instrumento.")
+
+    manifest = _carregar_manifesto_historico_instrumentos()
+    for version in manifest["versions"]:
+        if isinstance(version, dict) and str(version.get("id") or "").strip() == requested:
+            return copy.deepcopy(version)
+    raise ValueError("Versao de instrumento nao encontrada no manifesto.")
+
+
+def carregar_schema_historico_instrumento(version_id: str, form_stage: str) -> dict:
+    """Carrega somente schemas explicitamente allowlisted no manifesto historico."""
+    stage = _normalize_form_stage(form_stage)
+    version = _entrada_versao_historico_instrumentos(version_id)
+    stages = version.get("stages")
+    stage_entry = stages.get(stage) if isinstance(stages, dict) else None
+    if not isinstance(stage_entry, dict):
+        raise ValueError("Etapa nao disponivel nesta versao do instrumento.")
+
+    relative_file = Path(str(stage_entry.get("file") or "").strip())
+    if not relative_file.as_posix() or relative_file.is_absolute():
+        raise ValueError("Arquivo historico invalido no manifesto.")
+
+    history_root = SFA_INSTRUMENT_HISTORY_ROOT.resolve()
+    schema_path = (history_root / relative_file).resolve()
+    try:
+        schema_path.relative_to(history_root)
+    except ValueError as exc:
+        raise ValueError("Arquivo historico fora do diretorio permitido.") from exc
+
+    expected_hash = str(stage_entry.get("sha256") or "").strip().lower()
+    if expected_hash:
+        actual_hash = hashlib.sha256(schema_path.read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            raise ValueError("O arquivo historico foi alterado e falhou na verificacao de integridade.")
+
+    with schema_path.open("r", encoding="utf-8") as handle:
+        schema = json.load(handle)
+    if not isinstance(schema, dict):
+        raise ValueError("Schema historico invalido.")
+
+    schema["_path"] = str(schema_path)
+    schema["_stage"] = stage
+    schema["_instrument_version"] = str(version.get("id") or "")
+    schema["_history_label"] = str(version.get("label") or version.get("id") or "")
+    schema["_readonly"] = True
+    return schema
+
+
+def listar_historico_instrumentos() -> list[dict[str, object]]:
+    """Lista versoes arquivadas com contagens calculadas dos arquivos verificados."""
+    manifest = _carregar_manifesto_historico_instrumentos()
+    versions: list[dict[str, object]] = []
+
+    for raw_version in manifest["versions"]:
+        if not isinstance(raw_version, dict):
+            continue
+        version_id = str(raw_version.get("id") or "").strip()
+        if not version_id:
+            continue
+
+        stage_summaries: dict[str, dict[str, object]] = {}
+        for stage in ("t0", "t10", "t30"):
+            stages = raw_version.get("stages")
+            if not isinstance(stages, dict) or stage not in stages:
+                continue
+            schema = carregar_schema_historico_instrumento(version_id, stage)
+            stage_summaries[stage] = {
+                "label": stage.upper(),
+                "title": str(schema.get("title") or stage.upper()),
+                "field_count": sum(1 for _ in iterar_campos_form(schema)),
+                "section_count": len(schema.get("sections", [])),
+            }
+
+        versions.append(
+            {
+                "id": version_id,
+                "label": str(raw_version.get("label") or version_id),
+                "status": str(raw_version.get("status") or "archived"),
+                "archived_at": str(raw_version.get("archived_at") or ""),
+                "description": str(raw_version.get("description") or ""),
+                "stages": stage_summaries,
+            }
+        )
+
+    return versions
+
+
+LEGACY_INSTRUMENT_VERSION = "legacy-2026-08-24"
+
+
+def versao_instrumento_payload(payload: Optional[dict[str, object]]) -> str:
+    version = str((payload or {}).get("_instrument_version") or "").strip()
+    return version or LEGACY_INSTRUMENT_VERSION
+
+
+def carregar_schema_para_payload(form_stage: str, payload: Optional[dict[str, object]]) -> dict:
+    """Seleciona o schema que realmente originou a resposta armazenada."""
+    stage = _normalize_form_stage(form_stage)
+    version = versao_instrumento_payload(payload)
+    active = carregar_form_schema(stage)
+    active_version = str(active.get("instrument_version") or "").strip()
+    if active_version and version == active_version:
+        return active
+    try:
+        return carregar_schema_historico_instrumento(version, stage)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        log.warning(
+            "Schema %s/%s nao encontrado; usando instrumento ativo para visualizacao.",
+            version,
+            stage,
+        )
+        return active
+
+
+def _schemas_exportacao_por_stage(form_stage: str) -> list[dict]:
+    stage = _normalize_form_stage(form_stage)
+    schemas = [carregar_form_schema(stage)]
+    try:
+        for version in listar_historico_instrumentos():
+            if stage in version.get("stages", {}):
+                schemas.append(carregar_schema_historico_instrumento(version["id"], stage))
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        log.exception("Nao foi possivel incluir todo o historico no CSV SFA.")
+    return schemas
+
+
 def _schema_t0_sem_metadados(schema: dict) -> dict:
     return {
         key: value
         for key, value in dict(schema or {}).items()
         if not str(key).startswith("_")
     }
+
+
+_VISIBLE_IF_OPERATORS = {
+    "equals",
+    "eq",
+    "not_equals",
+    "neq",
+    "in",
+    "selected_any",
+    "contains_any",
+    "selected_any_except",
+    "nonempty",
+    "present",
+    "absent",
+    "positive",
+}
+_VISIBLE_IF_SOURCES = {"current", "prior", "latest_prior", "t0", "t10"}
+
+
+def _erros_regra_visibilidade_schema(
+    rule: object,
+    known_keys: set[str],
+    location: str,
+) -> list[str]:
+    if not isinstance(rule, dict):
+        return [f"{location}: visible_if deve ser um objeto."]
+
+    if "const" in rule:
+        return [] if isinstance(rule.get("const"), bool) else [f"{location}: const deve ser booleano."]
+    if "all" in rule or "any" in rule:
+        composite = "all" if "all" in rule else "any"
+        items = rule.get(composite)
+        if not isinstance(items, list) or not items:
+            return [f"{location}: {composite} deve conter ao menos uma regra."]
+        errors: list[str] = []
+        for index, item in enumerate(items, start=1):
+            errors.extend(
+                _erros_regra_visibilidade_schema(
+                    item,
+                    known_keys,
+                    f"{location}.{composite}[{index}]",
+                )
+            )
+        return errors
+    if "not" in rule:
+        return _erros_regra_visibilidade_schema(
+            rule.get("not"), known_keys, f"{location}.not"
+        )
+
+    # Regras legadas permanecem aceitas para leitura/edicao segura.
+    if isinstance(rule.get("current_positive"), dict):
+        key = str(rule["current_positive"].get("key") or "").strip()
+        return [] if key in known_keys else [f"{location}: chave atual desconhecida ({key})."]
+    if isinstance(rule.get("no_prior_positive"), dict):
+        return []
+
+    source = normalizar_nome_chave(rule.get("source") or "current")
+    key = str(rule.get("key") or rule.get("field") or "").strip()
+    operator = normalizar_nome_chave(
+        rule.get("operator") or rule.get("op") or ""
+    ).replace(" ", "_")
+    errors = []
+    if source not in _VISIBLE_IF_SOURCES:
+        errors.append(f"{location}: fonte de condicao invalida ({source}).")
+    if not key:
+        errors.append(f"{location}: informe key na condicao.")
+    elif source == "current" and key not in known_keys:
+        errors.append(f"{location}: chave atual desconhecida ({key}).")
+    if operator not in _VISIBLE_IF_OPERATORS:
+        errors.append(f"{location}: operador invalido ({operator}).")
+    if operator in {"in", "selected_any_except"} and not isinstance(rule.get("values"), list):
+        errors.append(f"{location}: o operador {operator} exige values em lista.")
+    return errors
 
 
 def validar_t0_form_schema(schema: dict) -> list[str]:
@@ -492,6 +706,35 @@ def validar_t0_form_schema(schema: dict) -> list[str]:
                             f"{', '.join(selected_redundant)}."
                         )
 
+            if field_type == "number":
+                minimum = field.get("min")
+                maximum = field.get("max")
+                try:
+                    if minimum not in (None, "") and maximum not in (None, ""):
+                        if Decimal(str(minimum)) > Decimal(str(maximum)):
+                            errors.append(
+                                f"Secao {section_index}, campo {key or field_index}: min nao pode superar max."
+                            )
+                except Exception:
+                    errors.append(
+                        f"Secao {section_index}, campo {key or field_index}: limites numericos invalidos."
+                    )
+
+    for section_index, section in enumerate(sections, start=1):
+        if not isinstance(section, dict):
+            continue
+        for field_index, field in enumerate(section.get("fields", []), start=1):
+            if not isinstance(field, dict) or "visible_if" not in field:
+                continue
+            key = str(field.get("key") or field_index)
+            errors.extend(
+                _erros_regra_visibilidade_schema(
+                    field.get("visible_if"),
+                    seen_keys,
+                    f"Secao {section_index}, campo {key}",
+                )
+            )
+
     return errors
 
 
@@ -568,9 +811,9 @@ def _buscar_valor_respostas_anteriores(paciente, key: str) -> object:
     respostas_t10 = list(getattr(paciente, "respostas_t10", []) or [])
 
     if respostas_t30:
-        staged_responses.extend(reversed(respostas_t30))
+        staged_responses.extend(sorted(respostas_t30, key=_chave_ordem_resposta, reverse=True))
     if respostas_t10:
-        staged_responses.extend(reversed(respostas_t10))
+        staged_responses.extend(sorted(respostas_t10, key=_chave_ordem_resposta, reverse=True))
 
     resposta_t0 = getattr(paciente, "resposta_t0", None)
     if resposta_t0:
@@ -591,6 +834,202 @@ def _resposta_positiva(value: object) -> bool:
     return normalizar_nome_chave(value).startswith("sim")
 
 
+def _valores_regra(value: object) -> list[object]:
+    if isinstance(value, (list, tuple, set)):
+        return [item for item in value if item not in (None, "")]
+    return [] if value in (None, "") else [value]
+
+
+def _tem_valor_regra(value: object) -> bool:
+    return bool(_valores_regra(value))
+
+
+def _valores_iguais_regra(left: object, right: object) -> bool:
+    expected = normalizar_nome_chave(right)
+    return any(normalizar_nome_chave(item) == expected for item in _valores_regra(left))
+
+
+def _valores_intersectam_regra(left: object, expected_values: object) -> bool:
+    expected = {
+        normalizar_nome_chave(item)
+        for item in _valores_regra(expected_values)
+    }
+    return any(normalizar_nome_chave(item) in expected for item in _valores_regra(left))
+
+
+def _avaliar_operador_visibilidade(rule: dict, value: object) -> bool:
+    operator = normalizar_nome_chave(
+        rule.get("operator") or rule.get("op") or "equals"
+    ).replace(" ", "_")
+
+    if operator in {"equals", "eq"}:
+        return _valores_iguais_regra(value, rule.get("value"))
+    if operator in {"not_equals", "neq"}:
+        return not _valores_iguais_regra(value, rule.get("value"))
+    if operator == "in":
+        return _valores_intersectam_regra(value, rule.get("values") or [])
+    if operator in {"selected_any", "contains_any"}:
+        options = rule.get("values") or []
+        return (
+            _valores_intersectam_regra(value, options)
+            if _valores_regra(options)
+            else _tem_valor_regra(value)
+        )
+    if operator == "selected_any_except":
+        excluded = {
+            normalizar_nome_chave(item)
+            for item in _valores_regra(rule.get("values") or [])
+        }
+        return any(
+            normalizar_nome_chave(item) not in excluded
+            for item in _valores_regra(value)
+        )
+    if operator in {"nonempty", "present"}:
+        return _tem_valor_regra(value)
+    if operator == "absent":
+        return not _tem_valor_regra(value)
+    if operator == "positive":
+        return _resposta_positiva(value)
+    return False
+
+
+def _avaliar_regra_visibilidade(
+    rule: object,
+    current_values: Optional[dict[str, object]] = None,
+    prior_payloads: Optional[list[dict[str, object]]] = None,
+) -> bool:
+    """Avalia a DSL declarativa de exibicao, sem executar codigo do schema."""
+    if not isinstance(rule, dict):
+        return True
+
+    if "const" in rule:
+        return bool(rule.get("const"))
+    if isinstance(rule.get("all"), list):
+        return all(
+            _avaliar_regra_visibilidade(item, current_values, prior_payloads)
+            for item in rule["all"]
+        )
+    if isinstance(rule.get("any"), list):
+        return any(
+            _avaliar_regra_visibilidade(item, current_values, prior_payloads)
+            for item in rule["any"]
+        )
+    if isinstance(rule.get("not"), dict):
+        return not _avaliar_regra_visibilidade(
+            rule["not"], current_values, prior_payloads
+        )
+
+    # Compatibilidade com a DSL anterior.
+    current_positive = rule.get("current_positive")
+    if isinstance(current_positive, dict):
+        key = str(current_positive.get("key") or "").strip()
+        current_ok = not key or _resposta_positiva((current_values or {}).get(key))
+    else:
+        current_ok = True
+
+    no_prior_positive = rule.get("no_prior_positive")
+    if isinstance(no_prior_positive, dict):
+        keys = no_prior_positive.get("keys") or no_prior_positive.get("key") or []
+        if isinstance(keys, str):
+            keys = [keys]
+        prior_ok = not any(
+            _resposta_positiva(payload.get(str(key)))
+            for payload in (prior_payloads or [])
+            for key in keys
+        )
+    else:
+        prior_ok = True
+
+    if isinstance(current_positive, dict) or isinstance(no_prior_positive, dict):
+        return current_ok and prior_ok
+
+    key = str(rule.get("key") or rule.get("field") or "").strip()
+    if not key:
+        return True
+    source = normalizar_nome_chave(rule.get("source") or "current")
+    if source in {"prior", "latest_prior", "t0", "t10"}:
+        payloads = list(prior_payloads or [])
+        if source == "latest_prior":
+            payloads = payloads[-1:]
+        elif source in {"t0", "t10"}:
+            payloads = [
+                payload for payload in payloads
+                if str(payload.get("_submitted_stage") or "").strip().lower() == source
+                or (source == "t0" and payload is payloads[0])
+            ]
+        return any(
+            _avaliar_operador_visibilidade(rule, payload.get(key))
+            for payload in payloads
+        )
+    if source != "current":
+        return False
+    return _avaliar_operador_visibilidade(rule, (current_values or {}).get(key))
+
+
+def _simplificar_regra_visibilidade(rule: object) -> object:
+    if not isinstance(rule, dict):
+        return rule
+    if isinstance(rule.get("all"), list):
+        items = [_simplificar_regra_visibilidade(item) for item in rule["all"]]
+        if any(isinstance(item, dict) and item.get("const") is False for item in items):
+            return {"const": False}
+        items = [item for item in items if not (isinstance(item, dict) and item.get("const") is True)]
+        if not items:
+            return {"const": True}
+        return items[0] if len(items) == 1 else {"all": items}
+    if isinstance(rule.get("any"), list):
+        items = [_simplificar_regra_visibilidade(item) for item in rule["any"]]
+        if any(isinstance(item, dict) and item.get("const") is True for item in items):
+            return {"const": True}
+        items = [item for item in items if not (isinstance(item, dict) and item.get("const") is False)]
+        if not items:
+            return {"const": False}
+        return items[0] if len(items) == 1 else {"any": items}
+    if isinstance(rule.get("not"), dict):
+        item = _simplificar_regra_visibilidade(rule["not"])
+        if isinstance(item, dict) and "const" in item:
+            return {"const": not bool(item.get("const"))}
+        return {"not": item}
+    return rule
+
+
+def _resolver_regra_visibilidade_para_cliente(
+    rule: object,
+    prior_payloads: list[dict[str, object]],
+) -> object:
+    if not isinstance(rule, dict):
+        return rule
+    if isinstance(rule.get("all"), list):
+        return _simplificar_regra_visibilidade({
+            "all": [
+                _resolver_regra_visibilidade_para_cliente(item, prior_payloads)
+                for item in rule["all"]
+            ]
+        })
+    if isinstance(rule.get("any"), list):
+        return _simplificar_regra_visibilidade({
+            "any": [
+                _resolver_regra_visibilidade_para_cliente(item, prior_payloads)
+                for item in rule["any"]
+            ]
+        })
+    if isinstance(rule.get("not"), dict):
+        return _simplificar_regra_visibilidade({
+            "not": _resolver_regra_visibilidade_para_cliente(rule["not"], prior_payloads)
+        })
+
+    if isinstance(rule.get("no_prior_positive"), dict):
+        return {
+            "const": _avaliar_regra_visibilidade(rule, {}, prior_payloads)
+        }
+    source = normalizar_nome_chave(rule.get("source") or "current")
+    if source in {"prior", "latest_prior", "t0", "t10"}:
+        return {
+            "const": _avaliar_regra_visibilidade(rule, {}, prior_payloads)
+        }
+    return copy.deepcopy(rule)
+
+
 def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, object]]:
     if not paciente:
         return []
@@ -605,62 +1044,66 @@ def _payloads_anteriores_por_stage(paciente, form_stage: str) -> list[dict[str, 
 
     if stage == "t30":
         respostas_t10 = list(getattr(paciente, "respostas_t10", []) or [])
+        respostas_t10.sort(key=_chave_ordem_resposta)
         payloads.extend(_carregar_payload_resposta(resposta) for resposta in respostas_t10)
 
     return [payload for payload in payloads if payload]
 
 
-def _campo_visivel_para_stage(field: dict, paciente, form_stage: str) -> bool:
-    rule = field.get("visible_if")
-    if not isinstance(rule, dict):
-        return True
-
-    no_prior_positive = rule.get("no_prior_positive")
-    if isinstance(no_prior_positive, dict):
-        keys = no_prior_positive.get("keys") or no_prior_positive.get("key")
-        if isinstance(keys, str):
-            keys = [keys]
-        if isinstance(keys, list) and keys:
-            normalized_keys = [str(key or "").strip() for key in keys if str(key or "").strip()]
-            for payload in _payloads_anteriores_por_stage(paciente, form_stage):
-                for key in normalized_keys:
-                    if _resposta_positiva(payload.get(key)):
-                        return False
-    return True
-
-
 def filtrar_form_schema_condicional(schema: dict, paciente, form_stage: str) -> dict:
     filtered = copy.deepcopy(schema or {})
+    prior_payloads = _payloads_anteriores_por_stage(paciente, form_stage)
     sections = []
 
     for section in filtered.get("sections", []):
         if not isinstance(section, dict):
             continue
-        fields = [
-            field
-            for field in section.get("fields", [])
-            if isinstance(field, dict) and _campo_visivel_para_stage(field, paciente, form_stage)
-        ]
+        fields = []
+        for field in section.get("fields", []):
+            if not isinstance(field, dict):
+                continue
+            if isinstance(field.get("visible_if"), dict):
+                prepared = _resolver_regra_visibilidade_para_cliente(
+                    field["visible_if"], prior_payloads
+                )
+                if isinstance(prepared, dict) and prepared.get("const") is False:
+                    continue
+                if isinstance(prepared, dict) and prepared.get("const") is True:
+                    field.pop("visible_if", None)
+                else:
+                    field["visible_if"] = prepared
+            fields.append(field)
         section["fields"] = fields
-        sections.append(section)
+        if fields:
+            sections.append(section)
 
     filtered["sections"] = sections
     return filtered
 
 
-def _campo_visivel_por_resposta_atual(field: dict, dados: dict[str, object]) -> bool:
-    rule = field.get("visible_if")
-    if not isinstance(rule, dict):
-        return True
+def _campo_visivel_por_resposta_atual(
+    field: dict,
+    dados: dict[str, object],
+    prior_payloads: Optional[list[dict[str, object]]] = None,
+) -> bool:
+    return _avaliar_regra_visibilidade(
+        field.get("visible_if"),
+        dados,
+        prior_payloads or [],
+    )
 
-    current_positive = rule.get("current_positive")
-    if not isinstance(current_positive, dict):
-        return True
 
-    key = str(current_positive.get("key") or "").strip()
-    if not key:
-        return True
-    return _resposta_positiva(dados.get(key))
+def _chave_ordem_resposta(resposta) -> tuple[float, int]:
+    timestamp = getattr(resposta, "timestamp", None)
+    try:
+        timestamp_value = float(timestamp.timestamp())
+    except (AttributeError, OSError, OverflowError, TypeError, ValueError):
+        timestamp_value = 0.0
+    try:
+        response_id = int(getattr(resposta, "id", 0) or 0)
+    except (TypeError, ValueError):
+        response_id = 0
+    return timestamp_value, response_id
 
 
 def obter_resposta_formulario(paciente, form_stage: str):
@@ -670,7 +1113,7 @@ def obter_resposta_formulario(paciente, form_stage: str):
 
     attr_name = "respostas_t10" if stage == "t10" else "respostas_t30"
     respostas = list(getattr(paciente, attr_name, []) or [])
-    return respostas[-1] if respostas else None
+    return max(respostas, key=_chave_ordem_resposta) if respostas else None
 
 
 def obter_payload_formulario(paciente, form_stage: str) -> tuple[object, dict[str, object]]:
@@ -755,8 +1198,8 @@ def montar_visao_resposta_formulario(
     schema: Optional[dict] = None,
 ) -> dict:
     stage = _normalize_form_stage(form_stage)
-    schema = schema or carregar_form_schema(stage)
     payload = _carregar_payload_resposta(resposta)
+    schema = schema or carregar_schema_para_payload(stage, payload)
 
     sections: list[dict[str, object]] = []
     answered_total = 0
@@ -805,6 +1248,7 @@ def montar_visao_resposta_formulario(
     return {
         "stage": stage,
         "title": schema.get("title") or stage.upper(),
+        "instrument_version": versao_instrumento_payload(payload),
         "submitted_at": submitted_at or "Nao informado",
         "sections": sections,
         "answered": answered_total,
@@ -853,17 +1297,27 @@ def _colunas_fixas_exportacao() -> list[str]:
     ]
 
 
-def _colunas_formulario_exportacao(form_stage: str, schema: Optional[dict] = None) -> list[str]:
+def _colunas_formulario_exportacao(form_stage: str, schema: Optional[object] = None) -> list[str]:
     stage = _normalize_form_stage(form_stage)
-    schema = schema or carregar_form_schema(stage)
-    return [f"{stage}__{field['key']}" for field in iterar_campos_form(schema)]
+    schema_entries = schema or _schemas_exportacao_por_stage(stage)
+    if isinstance(schema_entries, dict):
+        schema_entries = [schema_entries]
+    columns: list[str] = []
+    seen: set[str] = set()
+    for schema_entry in schema_entries:
+        for field in iterar_campos_form(schema_entry):
+            column = f"{stage}__{field['key']}"
+            if column not in seen:
+                seen.add(column)
+                columns.append(column)
+    return columns
 
 
 def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict]] = None) -> dict[str, str]:
     schemas = schemas or {
-        "t0": carregar_t0_form_schema(),
-        "t10": carregar_t10_form_schema(),
-        "t30": carregar_t30_form_schema(),
+        "t0": _schemas_exportacao_por_stage("t0"),
+        "t10": _schemas_exportacao_por_stage("t10"),
+        "t30": _schemas_exportacao_por_stage("t30"),
     }
 
     row = {
@@ -874,8 +1328,11 @@ def montar_linha_exportacao_analitica(paciente, schemas: Optional[dict[str, dict
     for stage in ("t0", "t10", "t30"):
         resposta, payload = obter_payload_formulario(paciente, stage)
         row[f"{stage}__respondido_em"] = _serializar_valor_csv(getattr(resposta, "timestamp", ""))
-        for field in iterar_campos_form(schemas[stage]):
-            row[f"{stage}__{field['key']}"] = _serializar_valor_csv(payload.get(field["key"]))
+        row[f"{stage}__instrument_version"] = versao_instrumento_payload(payload) if resposta else ""
+        stage_schemas = schemas[stage] if isinstance(schemas[stage], list) else [schemas[stage]]
+        for stage_schema in stage_schemas:
+            for field in iterar_campos_form(stage_schema):
+                row[f"{stage}__{field['key']}"] = _serializar_valor_csv(payload.get(field["key"]))
 
     return row
 
@@ -1422,13 +1879,14 @@ def gerar_csv_exportacao_cadastro(pacientes) -> str:
 
 def gerar_csv_exportacao_analitica(pacientes) -> str:
     schemas = {
-        "t0": carregar_t0_form_schema(),
-        "t10": carregar_t10_form_schema(),
-        "t30": carregar_t30_form_schema(),
+        "t0": _schemas_exportacao_por_stage("t0"),
+        "t10": _schemas_exportacao_por_stage("t10"),
+        "t30": _schemas_exportacao_por_stage("t30"),
     }
     fieldnames = (
         _colunas_fixas_exportacao()
         + [f"{stage}__respondido_em" for stage in ("t0", "t10", "t30")]
+        + [f"{stage}__instrument_version" for stage in ("t0", "t10", "t30")]
         + _colunas_formulario_exportacao("t0", schemas["t0"])
         + _colunas_formulario_exportacao("t10", schemas["t10"])
         + _colunas_formulario_exportacao("t30", schemas["t30"])
@@ -1470,6 +1928,72 @@ def construir_valores_iniciais_t30(paciente, schema: dict) -> dict[str, object]:
     return construir_valores_iniciais_form(paciente, schema)
 
 
+def montar_contexto_importado_formulario(paciente) -> dict[str, object]:
+    """Monta um snapshot enxuto do cadastro/SINAN sem expor campos no formulario."""
+    context: dict[str, object] = {
+        "ficha_sinan": str(getattr(paciente, "ficha_sinan", "") or "").strip(),
+        "data_nascimento": str(getattr(paciente, "data_nascimento", "") or "").strip(),
+        "bairro": str(getattr(paciente, "bairro", "") or "").strip(),
+    }
+    try:
+        from models.sfa import SfaSinanLog
+
+        log_sinan = None
+        id_estudo = str(getattr(paciente, "id_estudo", "") or "").strip()
+        ficha = str(getattr(paciente, "ficha_sinan", "") or "").strip()
+        if id_estudo:
+            log_sinan = (
+                SfaSinanLog.query
+                .filter_by(id_estudo_vinculado=id_estudo)
+                .order_by(SfaSinanLog.timestamp_importacao.desc(), SfaSinanLog.id.desc())
+                .first()
+            )
+        if log_sinan is None and ficha:
+            log_sinan = (
+                SfaSinanLog.query
+                .filter_by(ficha_sinan=ficha)
+                .order_by(SfaSinanLog.timestamp_importacao.desc(), SfaSinanLog.id.desc())
+                .first()
+            )
+        if log_sinan is not None:
+            context.update(
+                {
+                    "data_inicio_sintomas": str(log_sinan.data_inicio_sintomas or "").strip(),
+                    "tipo_exame": str(log_sinan.tipo_exame or "").strip(),
+                    "resultado_exame": str(log_sinan.resultado or "").strip(),
+                }
+            )
+    except Exception:
+        # Testes unitarios e bases ainda sem a tabela SINAN devem continuar operacionais.
+        log.debug("Contexto SINAN indisponivel para %s", getattr(paciente, "id_estudo", ""))
+
+    return {key: value for key, value in context.items() if value not in (None, "", [])}
+
+
+def _opcao_nenhuma(value: object) -> bool:
+    normalized = normalizar_nome_chave(value)
+    return (
+        normalized.startswith("nenhum")
+        or normalized.startswith("nenhuma")
+        or normalized == "nao sei"
+    )
+
+
+def _decimal_campo(value: object) -> Optional[Decimal]:
+    text = str(value or "").strip().replace(",", ".")
+    if not text:
+        return None
+    try:
+        parsed = Decimal(text)
+    except Exception:
+        return None
+    return parsed if parsed.is_finite() else None
+
+
+def _decimal_ou_zero(value: object) -> Decimal:
+    return _decimal_campo(value) or Decimal("0")
+
+
 def coletar_resposta_nativa(
     form_stage: str,
     schema: dict,
@@ -1479,8 +2003,12 @@ def coletar_resposta_nativa(
     stage = _normalize_form_stage(form_stage)
     dados: dict[str, object] = {}
     errors: dict[str, str] = {}
+    fields = list(iterar_campos_form(schema))
+    prior_payloads = _payloads_anteriores_por_stage(paciente, stage)
 
-    for field in iterar_campos_form(schema):
+    # Primeira passagem: coleta tudo. Assim uma condicao nunca depende da ordem
+    # visual dos campos no schema.
+    for field in fields:
         key = field["key"]
         field_type = field.get("type", "text")
         if field_type == "checkboxes":
@@ -1488,15 +2016,66 @@ def coletar_resposta_nativa(
         else:
             value = str(form_data.get(key) or "").strip()
             if field_type == "date" and value:
-                value = formatar_data(parse_data(value))
+                parsed_date = parse_data(value)
+                if parsed_date is None:
+                    errors[key] = "Data invalida."
+                else:
+                    value = formatar_data(parsed_date)
 
         dados[key] = value
-        if not _campo_visivel_por_resposta_atual(field, dados):
+
+    # Segunda passagem: visibilidade, limpeza de valores ocultos e validacao.
+    for field in fields:
+        key = field["key"]
+        field_type = field.get("type", "text")
+        value = dados.get(key)
+        if not _campo_visivel_por_resposta_atual(field, dados, prior_payloads):
             dados[key] = [] if field_type == "checkboxes" else ""
+            errors.pop(key, None)
             continue
 
         if field.get("required") and not value:
             errors[key] = "Campo obrigatorio."
+
+        if field_type in {"select", "radio", "checkboxes"}:
+            allowed = {str(option) for option in field.get("options", [])}
+            submitted = value if isinstance(value, list) else _valores_regra(value)
+            if any(str(item) not in allowed for item in submitted):
+                errors[key] = "Opcao de resposta invalida."
+            if field_type == "checkboxes" and isinstance(value, list):
+                has_none = any(_opcao_nenhuma(item) for item in value)
+                has_positive = any(not _opcao_nenhuma(item) for item in value)
+                if has_none and has_positive:
+                    errors[key] = "Escolha 'nenhuma' ou as exposicoes informadas, nao ambas."
+
+        if field_type == "number" and value not in (None, ""):
+            number = _decimal_campo(value)
+            if number is None:
+                errors[key] = "Informe um numero valido."
+            else:
+                minimum = _decimal_campo(field.get("min"))
+                maximum = _decimal_campo(field.get("max"))
+                step = _decimal_campo(field.get("step"))
+                if minimum is not None and number < minimum:
+                    errors[key] = f"O valor minimo e {field.get('min')}."
+                if maximum is not None and number > maximum:
+                    errors[key] = f"O valor maximo e {field.get('max')}."
+                step_base = minimum or Decimal("0")
+                if step is not None and step > 0 and (number - step_base) % step != 0:
+                    errors[key] = f"Use incrementos de {field.get('step')}."
+                elif step == Decimal("1"):
+                    dados[key] = str(int(number))
+
+    for exposed_key, sick_key in (
+        ("exposed_count", "sick_count"),
+        ("numero_expostos", "numero_adoecidos"),
+        ("quantas_pessoas_expostas", "quantas_pessoas_adoeceram"),
+        ("exposicao_alimentar_expostos", "exposicao_alimentar_doentes"),
+    ):
+        exposed = _decimal_campo(dados.get(exposed_key))
+        sick = _decimal_campo(dados.get(sick_key))
+        if exposed is not None and sick is not None and sick > exposed:
+            errors[sick_key] = "O numero de pessoas que adoeceram nao pode superar o de expostas."
 
     dados["token_acesso"] = paciente.token_acesso or ""
     dados["id_estudo"] = paciente.id_estudo or ""
@@ -1506,6 +2085,14 @@ def coletar_resposta_nativa(
         dados["nome"] = paciente.nome or ""
     if not dados.get("data_nascimento"):
         dados["data_nascimento"] = paciente.data_nascimento or ""
+    imported_context = montar_contexto_importado_formulario(paciente)
+    if not dados.get("data_inicio_sintomas") and imported_context.get("data_inicio_sintomas"):
+        dados["data_inicio_sintomas"] = imported_context["data_inicio_sintomas"]
+    dados["_imported_context"] = imported_context
+    dados["_instrument_version"] = str(
+        schema.get("instrument_version") or "unversioned"
+    ).strip()
+    dados["_submitted_stage"] = stage
     dados["_origem"] = f"native_{stage}_form"
     if stage == "t0":
         dados = normalizar_payload_t0_exposicoes(dados)
@@ -2097,30 +2684,8 @@ def resumo_dados_teste_sfa() -> dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
-# Geração de URL do Web App Flask (substitui doGet do GAS)
+# URLs nativas do instrumento essencial
 # ---------------------------------------------------------------------------
-
-def gerar_url_t0(id_estudo: str, token_acesso: str = "", debug: bool = False) -> str:
-    """Gera a URL personalizada para o participante acessar o formulário T0."""
-    try:
-        if token_acesso:
-            url = url_for("sfa_routes.redirect_t0", token=token_acesso, _external=True)
-        else:
-            url = url_for("sfa_routes.redirect_t0", token=id_estudo, _external=True)
-        if debug:
-            url += "?debug=1"
-        return url
-    except RuntimeError:
-        # Fora do contexto Flask (ex: job agendado)
-        base = os.getenv("SFA_WEBAPP_URL", "")
-        if not base:
-            return ""
-        chave = f"tk={quote(token_acesso)}" if token_acesso else f"id={quote(id_estudo)}"
-        return f"{base}/sfa/p?{chave}" + ("&debug=1" if debug else "")
-
-
-# URLs nativas por etapa. Mantemos as configuracoes legadas acima apenas para
-# compatibilidade, mas os links operacionais devem usar as funcoes abaixo.
 def _gerar_url_etapa(
     form_stage: str,
     id_estudo: str,
@@ -2182,11 +2747,11 @@ def msg_convite_t0(nome: str, id_estudo: str, token_acesso: str = "") -> str:
         f"Aqui e {NOME_PESQUISADOR}, pesquisador da Secretaria de Saude de Orlandia.\n\n"
         "Voce foi registrado(a) recentemente com suspeita de dengue. "
         "Gostariamos de convida-lo(a) a participar de uma pesquisa cientifica "
-        "sobre diagnostico de arboviroses no municipio.\n\n"
+        "sobre sindromes febris e exposicoes que podem estar sendo compartilhadas no municipio.\n\n"
         "Informacoes importantes:\n"
         "- Participacao voluntaria\n"
         "- Apenas 3 entrevistas rapidas (hoje, em 10 e em 30 dias)\n"
-        "- A pesquisa ajuda a melhorar o diagnostico de dengue em Orlandia\n\n"
+        "- Suas respostas podem ajudar a Vigilancia a reconhecer situacoes e proteger outras pessoas\n\n"
         f"Codigo do participante: {id_estudo}\n\n"
         "Se topar participar, acesse o link abaixo. Seus dados ja estao preenchidos:\n"
         f"{link}\n\n"
@@ -2214,7 +2779,7 @@ def msg_lembrete_t10(nome: str, id_estudo: str, token_acesso: str = "") -> str:
     link = gerar_url_t10(id_estudo, token_acesso)
     return (
         f"Ola, {n}.\n\n"
-        f"Aqui e {NOME_PESQUISADOR}, da pesquisa de arboviroses de Orlandia.\n\n"
+        f"Aqui e {NOME_PESQUISADOR}, da pesquisa sobre sindromes febris de Orlandia.\n\n"
         "Ja se passaram cerca de 10 dias e chegou o momento do acompanhamento T10.\n\n"
         f"Codigo do participante: {id_estudo}\n"
         f"Acesse e responda:\n{link}\n\n"
@@ -2227,7 +2792,7 @@ def msg_lembrete_t30(nome: str, id_estudo: str, token_acesso: str = "") -> str:
     link = gerar_url_t30(id_estudo, token_acesso)
     return (
         f"Ola, {n}.\n\n"
-        f"Aqui e {NOME_PESQUISADOR}, da pesquisa de arboviroses de Orlandia.\n\n"
+        f"Aqui e {NOME_PESQUISADOR}, da pesquisa sobre sindromes febris de Orlandia.\n\n"
         "Chegamos ao final do seu acompanhamento de 30 dias.\n\n"
         f"Codigo do participante: {id_estudo}\n"
         "Seus dados ja estao preenchidos. Acesse e responda:\n"
@@ -2595,7 +3160,14 @@ def _lookup_form_value(row: list, header_lookup: dict[str, int], aliases: list[s
 
 
 def _safe_int(value: object) -> int:
-    digits = re.sub(r"[^\d-]", "", str(value or ""))
+    raw = str(value or "").strip()
+    try:
+        parsed = Decimal(raw.replace(",", "."))
+        if parsed.is_finite():
+            return int(parsed)
+    except Exception:
+        pass
+    digits = re.sub(r"[^\d-]", "", raw)
     if not digits:
         return 0
     try:
@@ -2994,9 +3566,9 @@ def on_submit_t0(dados: dict) -> dict:
         data_nascimento=data_nasc,
         tipo_residencia=dados.get("tipo_residencia", ""),
         data_inicio_sintomas=dados.get("data_inicio_sintomas", ""),
-        dias_incap=int(dados.get("dias_incap") or 0),
+        dias_incap=_safe_int(dados.get("dias_incap")),
         internacao=dados.get("internacao", ""),
-        custo_total=Decimal(str(dados.get("custo_total") or 0).replace(",", ".")),
+        custo_total=_decimal_ou_zero(dados.get("custo_total")),
         ausencia_familiar=dados.get("ausencia_familiar", ""),
         dados_json=json.dumps(dados, ensure_ascii=False),
     )
@@ -3029,11 +3601,11 @@ def on_submit_t10(dados: dict) -> dict:
 
     resposta = SfaRespostaT10(
         id_estudo=id_estudo,
-        dias_incap_novos=int(dados.get("dias_incap_novos") or 0),
-        custo_remedios=Decimal(str(dados.get("custo_remedios") or 0).replace(",", ".")),
-        custo_consultas=Decimal(str(dados.get("custo_consultas") or 0).replace(",", ".")),
-        custo_transporte=Decimal(str(dados.get("custo_transporte") or 0).replace(",", ".")),
-        custo_outros=Decimal(str(dados.get("custo_outros") or 0).replace(",", ".")),
+        dias_incap_novos=_safe_int(dados.get("dias_incap_novos")),
+        custo_remedios=_decimal_ou_zero(dados.get("custo_remedios")),
+        custo_consultas=_decimal_ou_zero(dados.get("custo_consultas")),
+        custo_transporte=_decimal_ou_zero(dados.get("custo_transporte")),
+        custo_outros=_decimal_ou_zero(dados.get("custo_outros")),
         dados_json=json.dumps(dados, ensure_ascii=False),
     )
     db.session.add(resposta)
@@ -3059,18 +3631,19 @@ def on_submit_t30(dados: dict) -> dict:
                              id_estudo=id_estudo)
         return {"ok": False, "erro": "Paciente não encontrado"}
 
-    paciente.status_t10 = "T10_Completo"  # garante consistência
+    if not list(getattr(paciente, "respostas_t10", []) or []):
+        paciente.status_t10 = "T10_Nao_respondido"
     paciente.status_t30 = "T30_Completo"
     paciente.status_geral = "COMPLETO"
     atualizar_operacional_paciente(paciente)
 
     resposta = SfaRespostaT30(
         id_estudo=id_estudo,
-        dias_incap_novos=int(dados.get("dias_incap_novos") or 0),
-        custo_remedios=Decimal(str(dados.get("custo_remedios") or 0).replace(",", ".")),
-        custo_consultas=Decimal(str(dados.get("custo_consultas") or 0).replace(",", ".")),
-        custo_transporte=Decimal(str(dados.get("custo_transporte") or 0).replace(",", ".")),
-        custo_outros=Decimal(str(dados.get("custo_outros") or 0).replace(",", ".")),
+        dias_incap_novos=_safe_int(dados.get("dias_incap_novos")),
+        custo_remedios=_decimal_ou_zero(dados.get("custo_remedios")),
+        custo_consultas=_decimal_ou_zero(dados.get("custo_consultas")),
+        custo_transporte=_decimal_ou_zero(dados.get("custo_transporte")),
+        custo_outros=_decimal_ou_zero(dados.get("custo_outros")),
         dados_json=json.dumps(dados, ensure_ascii=False),
     )
     db.session.add(resposta)
@@ -3388,12 +3961,11 @@ def stats_painel(mes_inicio_sintomas: str = "") -> dict:
 
 def rodar_rotina_diaria(app) -> dict:
     """
-    Executa sincronizar_sinan + sincronizar_respostas_t0 + verificar_seguimento dentro do app context.
+    Executa sincronizar_sinan + verificar_seguimento dentro do app context.
     Chamado pelo APScheduler.
     """
     with app.app_context():
         resultado_sinan = sincronizar_sinan()
-        resultado_t0 = sincronizar_respostas_t0()
         resultado_seg = verificar_seguimento()
         log.info("Rotina diária SFA concluída: %s", {**resultado_sinan, **resultado_seg})
-        return {**resultado_sinan, **resultado_t0, **resultado_seg}
+        return {**resultado_sinan, **resultado_seg}

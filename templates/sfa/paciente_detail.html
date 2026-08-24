@@ -154,6 +154,7 @@
         <div>
           <i class="{{ form.icon }} me-2"></i>{{ form.stage_label }} - {{ form.title }}
           <span class="badge bg-{{ form.badge_class }} ms-2">{{ form.answered }}/{{ form.total }} campos</span>
+          <span class="badge bg-light text-dark ms-1">{{ form.instrument_version }}</span>
         </div>
         <div class="small text-muted">Registrado em {{ form.submitted_at }}</div>
       </div>
@@ -296,6 +297,10 @@
         <a href="{{ url_t0 }}" target="_blank" class="btn btn-sm btn-outline-primary">
           <i class="fas fa-external-link-alt me-1"></i>Abrir T0
         </a>
+        <a href="{{ url_for('sfa_routes.paciente_form_qrcode', id_estudo=p.id_estudo, stage='t0') }}"
+           target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">
+          <i class="fas fa-qrcode me-1"></i>QR T0
+        </a>
         {% endif %}
         {% if url_t0_debug %}
         <a href="{{ url_t0_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
@@ -306,6 +311,10 @@
         <a href="{{ url_t10 }}" target="_blank" class="btn btn-sm btn-outline-primary">
           <i class="fas fa-external-link-alt me-1"></i>Abrir T10
         </a>
+        <a href="{{ url_for('sfa_routes.paciente_form_qrcode', id_estudo=p.id_estudo, stage='t10') }}"
+           target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">
+          <i class="fas fa-qrcode me-1"></i>QR T10
+        </a>
         {% endif %}
         {% if url_t10_debug %}
         <a href="{{ url_t10_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
@@ -315,6 +324,10 @@
         {% if url_t30 %}
         <a href="{{ url_t30 }}" target="_blank" class="btn btn-sm btn-outline-primary">
           <i class="fas fa-external-link-alt me-1"></i>Abrir T30
+        </a>
+        <a href="{{ url_for('sfa_routes.paciente_form_qrcode', id_estudo=p.id_estudo, stage='t30') }}"
+           target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">
+          <i class="fas fa-qrcode me-1"></i>QR T30
         </a>
         {% endif %}
         {% if url_t30_debug %}

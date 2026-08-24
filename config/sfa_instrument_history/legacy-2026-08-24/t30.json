@@ -1,0 +1,317 @@
+{
+  "title": "T30 Atualizacao Forms Codex - SFA Orlandia",
+  "subtitle": "Acompanhamento final padronizado para medir recuperacao, funcionalidade, sequelas e custo em 30 dias.",
+  "submit_label": "Enviar acompanhamento T30",
+  "sections": [
+    {
+      "title": "Secao 1: Identificacao",
+      "description": "Confirmacao para vinculo da resposta.",
+      "fields": [
+        {
+          "key": "cpf",
+          "label": "CPF",
+          "type": "text",
+          "required": false,
+          "prefill": "cpf"
+        },
+        {
+          "key": "nome",
+          "label": "Nome completo",
+          "type": "text",
+          "required": false,
+          "prefill": "nome"
+        }
+      ]
+    },
+    {
+      "title": "Secao 2: Desfecho clinico final",
+      "description": "Estado final e sequelas apos 30 dias.",
+      "fields": [
+        {
+          "key": "estado_saude_final",
+          "label": "Como voce se sente hoje comparado a antes da doenca?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "100% recuperado - como antes da doenca",
+            "90-99% recuperado - diferencas minimas",
+            "70-89% recuperado - sequelas leves",
+            "50-69% recuperado - sequelas moderadas",
+            "Menos de 50% recuperado - limitacoes importantes",
+            "Ainda doente - sem melhora significativa"
+          ]
+        },
+        {
+          "key": "sequelas_atuais",
+          "label": "Sequelas atuais (marque todas)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Artralgia persistente",
+            "Fadiga cronica",
+            "Dor muscular residual",
+            "Problemas de memoria/concentracao",
+            "Ansiedade ou tristeza relacionada a doenca",
+            "Problemas de sono",
+            "Nenhuma sequela atual"
+          ]
+        },
+        {
+          "key": "sintomas_persistentes",
+          "label": "Sintomas persistentes hoje (marque todos)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Febre alta (>38,5 C)",
+            "Dor forte atras dos olhos",
+            "Dores musculares intensas",
+            "Dores nas articulacoes (juntas)",
+            "Manchas vermelhas na pele",
+            "Coceira no corpo",
+            "Cansaco extremo/fadiga",
+            "Dor de cabeca forte",
+            "Nausea/vomitos",
+            "Nenhum sintoma persistente"
+          ]
+        },
+        {
+          "key": "sinais_alerta",
+          "label": "Sinais de alerta desde a ultima entrevista",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Sangramento (nariz, gengiva, pele)",
+            "Urina muito escura",
+            "Olhos ou pele amarelados",
+            "Vomitos persistentes",
+            "Dor abdominal intensa",
+            "Confusao mental/tontura",
+            "Falta de ar",
+            "Nenhum sinal de alerta"
+          ]
+        },
+        {
+          "key": "dor_articular_intensidade",
+          "label": "Dor articular hoje (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "fadiga_intensidade",
+          "label": "Fadiga/cansaco hoje (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "impacto_atividades",
+          "label": "Impacto atual nas atividades",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nenhum",
+            "Leve - incomoda, mas nao limita",
+            "Moderado - limita algumas atividades",
+            "Importante - impede varias atividades",
+            "Incapacitante - impede atividades basicas"
+          ]
+        },
+        {
+          "key": "retorno_atividades_normais",
+          "label": "Quando voltou as atividades habituais?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "No mesmo dia ou em 1 dia",
+            "Em 2 a 3 dias",
+            "Em 4 a 7 dias",
+            "Em 8 a 14 dias",
+            "Em 15 a 30 dias",
+            "Depois de 30 dias",
+            "Voltei parcialmente, mas ainda nao totalmente",
+            "Ainda nao voltei"
+          ]
+        },
+        {
+          "key": "diagnostico_medico",
+          "label": "O medico chegou a algum diagnostico?",
+          "type": "radio",
+          "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            }
+          },
+          "options": [
+            "Nao",
+            "Sim",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual foi o diagnostico informado pelo medico?",
+          "type": "select",
+          "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            },
+            "current_positive": {
+              "key": "diagnostico_medico"
+            }
+          },
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Secao 3: Impacto funcional e economico final",
+      "description": "Valores acumulados dos 30 dias desde o inicio dos sintomas.",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "Total acumulado de dias completamente incapacitado desde o inicio",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 1
+        },
+        {
+          "key": "custo_remedios",
+          "label": "Medicamentos acumulados (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_consultas",
+          "label": "Consultas/exames acumulados (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_transporte",
+          "label": "Transporte acumulado (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_internacao",
+          "label": "Internacao acumulada (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_outros",
+          "label": "Outros gastos acumulados (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "perda_renda_estimada",
+          "label": "Perda estimada de renda acumulada (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "impacto_emocional_familiar",
+          "label": "Impacto emocional/familiar duradouro",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nenhum impacto duradouro",
+            "Leve estresse familiar",
+            "Conflitos temporarios",
+            "Problemas financeiros significativos",
+            "Ansiedade/tristeza persistente",
+            "Outro impacto importante"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Secao 4: Encerramento",
+      "description": "Perguntas qualitativas finais, mantidas fora do painel quantitativo principal.",
+      "fields": [
+        {
+          "key": "avaliacao_atendimento_saude",
+          "label": "Como avalia o atendimento de saude que recebeu?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Excelente",
+            "Bom",
+            "Regular",
+            "Ruim",
+            "Pessimo",
+            "Nao utilizei servicos"
+          ]
+        },
+        {
+          "key": "participaria_outro_estudo",
+          "label": "Participaria de outro estudo de saude como este?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Sim, com certeza",
+            "Sim, talvez",
+            "Nao tenho certeza",
+            "Nao",
+            "Nao, mas sugeriria melhorias"
+          ]
+        },
+        {
+          "key": "conselho_outras_pessoas",
+          "label": "Conselho a outras pessoas com sintomas similares (opcional)",
+          "type": "textarea",
+          "required": false
+        },
+        {
+          "key": "observacoes_finais",
+          "label": "Observacoes finais (opcional)",
+          "type": "textarea",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

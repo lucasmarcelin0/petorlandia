@@ -55,101 +55,82 @@ def native_t0_app(monkeypatch):
 
 def _payload_t0():
     return {
-        "cpf": "12345678900",
-        "ficha_sinan": "3032976",
-        "nome": "Maria Teste",
-        "data_nascimento": "2000-01-01",
-        "endereco": "Rua Exemplo, 123",
-        "tipo_residencia": "Casa urbana",
-        "diagnostico_dengue_previo": "Nao",
-        "condicoes_previas": ["Nenhuma das acima"],
-        "sexo_biologico": "Feminino",
-        "grau_escolaridade": "Ensino medio completo",
-        "vacinas_12_meses": ["Nenhuma"],
-        "ocupacao_principal": "Estudante",
-        "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
-        "exposicao_animal": ["Nenhum contato animal relevante"],
-        "exposicao_alimentar": ["Nenhuma dessas"],
-        "outras_pessoas_com_sintomas": "Nao sei",
-        "data_inicio_sintomas": "2026-03-18",
-        "teve_febre": "Sim",
-        "intensidade_febre": "4",
-        "sintomas_principais": ["Cansaco extremo/fadiga"],
-        "sinais_alerta": ["Nenhum sinal de alerta"],
-        "dor_articular_intensidade": "4",
-        "fadiga_intensidade": "5",
-        "impacto_atividades": "Moderado - limita algumas atividades",
-        "dias_incap": "2",
-        "internacao": "Nao",
-        "diagnostico_medico": "Nao",
-        "custo_remedios": "8.50",
-        "custo_consultas": "0",
-        "custo_transporte": "7.25",
-        "custo_outros": "0",
-        "custo_total": "15.75",
-        "ausencia_familiar": "Nao",
+        "respondent_role": "A propria pessoa",
+        # Valores enviados para campos ocultos devem ser descartados no servidor.
+        "respondent_name": "VALOR INJETADO",
         "aceite_tcle": [sfa_service.T0_CONSENT_ACCEPTED],
-        "observacoes_finais": "Teste automatizado",
+        "outras_pessoas_com_sintomas": "Nao",
+        "outras_pessoas_quantidade": "8",
+        "vinculo_compartilhado": ["Evento"],
+        "vinculo_local": "Local injetado",
+        "vinculo_data_periodo": "Ontem",
+        "vinculo_exposicao_suspeita": "Produto injetado",
+        "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
+        "exposicao_ambiental_detalhe": "Detalhe injetado",
+        "exposicao_ambiental_outros_doentes": "Sim",
+        "exposicao_animal": ["Nenhum contato animal relevante"],
+        "exposicao_animal_detalhe": "Animal injetado",
+        "exposicao_animal_outros_doentes": "Sim",
+        "exposicao_alimentar": ["Nenhuma dessas"],
+        "exposicao_alimentar_item": "Alimento injetado",
+        "exposicao_alimentar_origem": "Origem injetada",
+        "fonte_ainda_ativa": "Sim",
+        "outras_pessoas_ainda_expostas": "Sim",
+        "diagnostico_medico": "Nao",
+        "diagnostico_medico_qual": "Dengue",
+        "diagnostico_medico_status": "Confirmacao",
+        "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
+        "dias_incap": "2",
+        "houve_gasto": "Nao",
+        "custo_total": "999.99",
+        "ausencia_familiar": "Nao",
+        "dias_cuidador": "5",
     }
 
 
 def _payload_t10():
     return {
-        "cpf": "12345678900",
-        "nome": "Maria Teste",
-        "data_entrevista_t10": "2026-03-23",
-        "classificacao_melhora": "Melhorando - Sintomas leves, em recuperacao",
-        "percentual_recuperacao": "70-89% recuperado - sequelas leves",
-        "sintomas_persistentes": ["Cansaco extremo/fadiga", "Dor de cabeca forte"],
-        "sinais_alerta": ["Nenhum sinal de alerta"],
-        "dor_articular_intensidade": "3",
-        "fadiga_intensidade": "5",
-        "impacto_atividades": "Moderado - limita algumas atividades",
-        "retornou_servico_saude": "Sim",
-        "quantas_vezes_retornou": "2",
-        "motivo_retorno_servico": ["Consulta de retorno/monitoramento", "Realizacao de exames"],
-        "internacao_t10": "Nao",
-        "diagnostico_medico": "Exames pendentes",
+        "classificacao_melhora": "Melhorando",
+        "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
+        "retornou_servico_saude": "Nao",
+        "diagnostico_medico": "Nao",
+        "diagnostico_medico_qual": "Dengue",
+        "diagnostico_medico_status": "Confirmacao",
+        "novos_casos_semelhantes": "Nao",
+        "novos_casos_quantidade": "4",
+        "novos_casos_local_periodo": "Local injetado",
+        "nova_pista_exposicao": "Nao",
+        "nova_pista_detalhe": "Pista injetada",
+        "fonte_ainda_ativa": "Sim",
+        "outras_pessoas_ainda_expostas": "Sim",
         "dias_incap_novos": "3",
-        "ausencia_familiar": "Nao, ninguem mais precisa faltar",
-        "custo_remedios": "10.50",
-        "custo_consultas": "20.00",
-        "custo_transporte": "5.25",
-        "custo_internacao": "0",
-        "custo_outros": "2.00",
-        "perda_renda_estimada": "80.00",
-        "renda_familiar_afetada": "Sim, reducao temporaria da renda",
-        "retorno_atividades_previsao": "Em 1 semana ou menos",
-        "observacoes_finais": "Melhorando aos poucos",
+        "houve_novos_gastos": "Nao",
+        "custo_outros": "250.00",
+        "perda_renda": "Nao",
     }
 
 
 def _payload_t30():
     return {
-        "cpf": "12345678900",
-        "nome": "Maria Teste",
-        "estado_saude_final": "90-99% recuperado - diferencas minimas",
-        "sequelas_atuais": ["Fadiga cronica", "Dor muscular residual"],
-        "sintomas_persistentes": ["Cansaco extremo/fadiga"],
-        "sinais_alerta": ["Nenhum sinal de alerta"],
-        "dor_articular_intensidade": "2",
-        "fadiga_intensidade": "3",
-        "impacto_atividades": "Leve - incomoda, mas nao limita",
-        "dias_incap_novos": "1",
-        "retorno_atividades_normais": "Em 4 a 7 dias",
-        "diagnostico_medico": "Sim",
+        "estado_saude_final": "Quase recuperado(a) - diferencas minimas",
+        "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
+        "retorno_atividades_normais": "Retorno completo",
+        "diagnostico_medico": "Nao",
         "diagnostico_medico_qual": "Dengue",
-        "custo_remedios": "0",
-        "custo_consultas": "0",
-        "custo_transporte": "3.50",
-        "custo_internacao": "0",
-        "perda_renda_estimada": "120.00",
-        "custo_outros": "0",
-        "impacto_emocional_familiar": "Leve estresse familiar",
-        "conselho_outras_pessoas": "Procure atendimento cedo e descanse bastante.",
-        "avaliacao_atendimento_saude": "Bom",
-        "participaria_outro_estudo": "Sim, com certeza",
-        "observacoes_finais": "Recuperado",
+        "diagnostico_medico_status": "Confirmacao",
+        "novos_casos_semelhantes": "Nao",
+        "novos_casos_quantidade": "3",
+        "novos_casos_local_periodo": "Local injetado",
+        "nova_informacao_fonte": "Nao",
+        "nova_informacao_fonte_detalhe": "Informacao injetada",
+        "fonte_ainda_ativa": "Sim",
+        "outras_pessoas_ainda_expostas": "Sim",
+        "orientacao_ou_acao_percebida": "Sim",
+        "novos_casos_apos_acao": "Sim",
+        "dias_incap_novos": "1",
+        "houve_novos_gastos": "Nao",
+        "custo_outros": "300.00",
+        "perda_renda": "Nao",
     }
 
 
@@ -161,16 +142,19 @@ def test_public_native_t0_get_renderiza_formulario(native_t0_app):
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert "T0 Atualizacao Forms Codex - SFA Orlandia" in html
-    assert "Maria Teste" in html
-    assert 'name="data_inicio_sintomas"' in html
-    assert 'name="ficha_sinan"' in html
-    assert 'readonly aria-readonly="true"' in html
+    assert "T0 - Exposicoes coletivas e prevencao" in html
+    assert "Ola, Maria Teste." in html
+    assert "Seus dados cadastrais ja estao vinculados nos bastidores." in html
+    assert 'name="cpf"' not in html
+    assert 'name="nome"' not in html
+    assert 'name="ficha_sinan"' not in html
+    assert 'name="data_nascimento"' not in html
+    assert 'name="data_inicio_sintomas"' not in html
     assert "TCLE_SFA_Orlandia_v1.docx" in html
-    assert "sera usado como assinatura" in html
+    assert "nome completo vinculado a este convite sera usado como assinatura" in html
 
 
-def test_public_native_followup_get_prefill_de_t0(native_t0_app):
+def test_public_native_followup_reusa_identidade_sem_repetir_inputs(native_t0_app):
     app, paciente, _schema_holder = native_t0_app
     paciente.resposta_t0 = SimpleNamespace(
         dados_json=json.dumps(
@@ -186,8 +170,11 @@ def test_public_native_followup_get_prefill_de_t0(native_t0_app):
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'value="12345678900"' in html
-    assert 'value="Maria Teste T0"' in html
+    assert "Ola, Maria Teste." in html
+    assert "T10 - Novas pistas e permanencia da fonte" in html
+    assert 'name="cpf"' not in html
+    assert 'name="nome"' not in html
+    assert "Maria Teste T0" not in html
 
 
 def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -217,12 +204,18 @@ def test_public_native_t0_post_envia_payload_e_mostra_sucesso(native_t0_app, mon
     assert captured["token_acesso"] == "token-abc"
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t0_form"
-    assert captured["condicoes_previas"] == ["Nenhuma das acima"]
-    assert captured["sintomas_principais"] == ["Cansaco extremo/fadiga"]
+    assert captured["_instrument_version"] == "collective-v2"
     assert captured["aceite_tcle"] == [sfa_service.T0_CONSENT_ACCEPTED]
     assert captured["consentimento_ip"] == "203.0.113.9"
     assert captured["consentimento_user_agent"] == "pytest-native-t0"
-    assert captured["data_inicio_sintomas"] == "18/03/2026"
+    assert captured["nome"] == "Maria Teste"
+    assert captured["ficha_sinan"] == "3032976"
+    assert captured["respondent_name"] == ""
+    assert captured["outras_pessoas_quantidade"] == ""
+    assert captured["exposicao_ambiental_detalhe"] == ""
+    assert captured["diagnostico_medico_qual"] == ""
+    assert captured["custo_total"] == ""
+    assert captured["dias_cuidador"] == ""
 
 
 def test_public_native_t0_get_apos_resposta_mostra_confirmacao(native_t0_app):
@@ -269,8 +262,8 @@ def test_tcle_signatures_page_renderiza_lista(native_t0_app, monkeypatch):
 @pytest.mark.parametrize(
     ("url", "expected_title"),
     [
-        ("/sfa/p/token-abc/t10", "T10 Atualizacao Forms Codex - SFA Orlandia"),
-        ("/sfa/p/token-abc/t30", "T30 Atualizacao Forms Codex - SFA Orlandia"),
+        ("/sfa/p/token-abc/t10", "T10 - Novas pistas e permanencia da fonte"),
+        ("/sfa/p/token-abc/t30", "T30 - Encerramento do risco coletivo"),
     ],
 )
 def test_public_native_followups_get_renderiza_formulario(native_t0_app, url, expected_title):
@@ -303,8 +296,13 @@ def test_public_native_t10_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t10_form"
+    assert captured["_instrument_version"] == "collective-v2"
     assert captured["dias_incap_novos"] == "3"
-    assert captured["sintomas_persistentes"] == ["Cansaco extremo/fadiga", "Dor de cabeca forte"]
+    assert captured["diagnostico_medico_qual"] == ""
+    assert captured["novos_casos_quantidade"] == ""
+    assert captured["nova_pista_detalhe"] == ""
+    assert captured["fonte_ainda_ativa"] == ""
+    assert captured["custo_outros"] == ""
 
 
 def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, monkeypatch):
@@ -326,11 +324,14 @@ def test_public_native_t30_post_envia_payload_e_mostra_sucesso(native_t0_app, mo
     assert "Obrigado pela sua participacao" in html
     assert captured["id_estudo"] == "SFA-910"
     assert captured["_origem"] == "native_t30_form"
-    assert captured["custo_transporte"] == "3.50"
-    assert captured["sequelas_atuais"] == [
-        "Fadiga cronica",
-        "Dor muscular residual",
-    ]
+    assert captured["_instrument_version"] == "collective-v2"
+    assert captured["estado_saude_final"] == "Quase recuperado(a) - diferencas minimas"
+    assert captured["diagnostico_medico_qual"] == ""
+    assert captured["novos_casos_quantidade"] == ""
+    assert captured["nova_informacao_fonte_detalhe"] == ""
+    assert captured["orientacao_ou_acao_percebida"] == ""
+    assert captured["novos_casos_apos_acao"] == ""
+    assert captured["custo_outros"] == ""
 
 
 @pytest.mark.parametrize(

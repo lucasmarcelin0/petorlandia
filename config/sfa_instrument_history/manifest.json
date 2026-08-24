@@ -1,0 +1,29 @@
+{
+  "manifest_version": 1,
+  "versions": [
+    {
+      "id": "legacy-2026-08-24",
+      "label": "Instrumentos anteriores - arquivados em 24/08/2026",
+      "status": "archived",
+      "archived_at": "2026-08-24",
+      "description": "Copia imutavel dos formularios que antecederam o instrumento essencial voltado a exposicoes coletivas acionaveis.",
+      "stages": {
+        "t0": {
+          "file": "legacy-2026-08-24/t0.json",
+          "field_count": 36,
+          "sha256": "95b13c9b6d0c9efd64d6b9cc5ad6068e9f061645d56881d13813e08761e632a4"
+        },
+        "t10": {
+          "file": "legacy-2026-08-24/t10.json",
+          "field_count": 25,
+          "sha256": "91006f71646615a05aa161ea40c63ee4a2b36e243e1fda8c7981b34b68a2d56a"
+        },
+        "t30": {
+          "file": "legacy-2026-08-24/t30.json",
+          "field_count": 24,
+          "sha256": "73fbc02f30f001bfb099b66126ad276b3f36e089233bc36c8825b3656845abbd"
+        }
+      }
+    }
+  ]
+}

@@ -1,179 +1,61 @@
 {
-  "title": "T10 Atualizacao Forms Codex - SFA Orlandia",
-  "subtitle": "Acompanhamento padronizado de 10 dias, com escalas comparaveis ao T30.",
+  "instrument_version": "collective-v2",
+  "title": "T10 - Novas pistas e permanencia da fonte",
+  "subtitle": "Atualizacao breve para descobrir novos casos, novas pistas e se uma possivel fonte continua ativa.",
   "submit_label": "Enviar acompanhamento T10",
   "sections": [
     {
-      "title": "Secao 1: Identificacao",
-      "description": "Confirmacao para vinculo da resposta.",
-      "fields": [
-        {
-          "key": "cpf",
-          "label": "CPF",
-          "type": "text",
-          "required": false,
-          "prefill": "cpf"
-        },
-        {
-          "key": "nome",
-          "label": "Nome completo",
-          "type": "text",
-          "required": false,
-          "prefill": "nome"
-        },
-        {
-          "key": "data_entrevista_t10",
-          "label": "Data desta entrevista (T10)",
-          "type": "date",
-          "required": true
-        }
-      ]
-    },
-    {
-      "title": "Secao 2: Evolucao clinica",
-      "description": "Estado de saude e sintomas persistentes.",
+      "title": "Evolucao e seguranca",
+      "description": "Perguntamos apenas o que mudou desde o T0; identificacao e atendimentos municipais continuam vinculados nos bastidores.",
       "fields": [
         {
           "key": "classificacao_melhora",
-          "label": "Como classifica sua melhora desde o T0?",
+          "label": "Como voce esta desde o T0?",
           "type": "radio",
           "required": true,
           "options": [
-            "Curado(a) - sem sintomas",
-            "Melhorando - sintomas leves",
-            "Estavel - sem piora nem melhora",
-            "Piorando - sintomas persistem ou pioraram",
-            "Recaida - melhorei e piorei novamente"
+            "Recuperado(a)",
+            "Melhorando",
+            "Sem mudanca",
+            "Piorando",
+            "Melhorei e depois piorei"
           ]
         },
         {
-          "key": "percentual_recuperacao",
-          "label": "Quanto sente que recuperou em relacao ao estado antes da doenca?",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "100% recuperado - como antes da doenca",
-            "90-99% recuperado - diferencas minimas",
-            "70-89% recuperado - sequelas leves",
-            "50-69% recuperado - sequelas moderadas",
-            "Menos de 50% recuperado - limitacoes importantes",
-            "Ainda doente - sem melhora significativa"
-          ]
-        },
-        {
-          "key": "sintomas_persistentes",
-          "label": "Sintomas persistentes hoje (marque todos)",
+          "key": "sinais_alerta_atuais",
+          "label": "Voce apresenta agora algum destes sinais?",
           "type": "checkboxes",
           "required": true,
+          "help_text": "Esta pergunta serve apenas para orientar nova avaliacao. Em emergencia, procure atendimento presencial ou ligue 192.",
           "options": [
-            "Febre alta (>38,5 C)",
-            "Dor forte atras dos olhos",
-            "Dores musculares intensas",
-            "Dores nas articulacoes (juntas)",
-            "Manchas vermelhas na pele",
-            "Coceira no corpo",
-            "Cansaco extremo/fadiga",
-            "Dor de cabeca forte",
-            "Nausea/vomitos",
-            "Nenhum sintoma persistente"
-          ]
-        },
-        {
-          "key": "sinais_alerta",
-          "label": "Sinais de alerta desde a ultima entrevista",
-          "type": "checkboxes",
-          "required": true,
-          "options": [
-            "Sangramento (nariz, gengiva, pele)",
-            "Urina muito escura",
-            "Olhos ou pele amarelados",
-            "Vomitos persistentes",
-            "Dor abdominal intensa",
-            "Confusao mental/tontura",
-            "Falta de ar",
-            "Nenhum sinal de alerta"
-          ]
-        },
-        {
-          "key": "dor_articular_intensidade",
-          "label": "Dor articular hoje (1 a 5)",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5"
-          ]
-        },
-        {
-          "key": "fadiga_intensidade",
-          "label": "Fadiga/cansaco hoje (1 a 5)",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5"
-          ]
-        },
-        {
-          "key": "impacto_atividades",
-          "label": "Impacto atual nas atividades",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "Nenhum",
-            "Leve - incomoda, mas nao limita",
-            "Moderado - limita algumas atividades",
-            "Importante - impede varias atividades",
-            "Incapacitante - impede atividades basicas"
+            "Falta de ar importante",
+            "Desmaio ou confusao",
+            "Sangramento importante",
+            "Piora intensa ou preocupacao urgente",
+            "Nenhum destes sinais agora"
           ]
         },
         {
           "key": "retornou_servico_saude",
-          "label": "Precisou retornar a servico de saude desde o T0?",
+          "label": "Desde o T0, houve atendimento fora da rede municipal de Orlandia ou algum atendimento que possa nao estar no prontuario?",
           "type": "radio",
           "required": true,
           "options": [
             "Nao",
             "Sim"
           ]
-        },
-        {
-          "key": "quantas_vezes_retornou",
-          "label": "Quantas vezes retornou?",
-          "type": "number",
-          "required": false,
-          "min": 0,
-          "step": 1
-        },
-        {
-          "key": "internacao_t10",
-          "label": "Foi internado(a) desde o T0?",
-          "type": "radio",
-          "required": true,
-          "options": [
-            "Nao",
-            "Sim"
-          ]
-        },
+        }
+      ]
+    },
+    {
+      "title": "Atualizacao diagnostica",
+      "description": "Comparamos o que a pessoa entendeu com os registros disponiveis, sem tratar essa resposta como confirmacao laboratorial.",
+      "fields": [
         {
           "key": "diagnostico_medico",
-          "label": "O medico chegou a algum diagnostico?",
+          "label": "Depois do T0, recebeu informacao nova sobre algum diagnostico ou suspeita?",
           "type": "radio",
           "required": true,
-          "visible_if": {
-            "no_prior_positive": {
-              "keys": [
-                "diagnostico_medico",
-                "diagnostico_definitivo"
-              ]
-            }
-          },
           "options": [
             "Nao",
             "Sim",
@@ -182,124 +64,324 @@
           ]
         },
         {
+          "key": "diagnostico_medico_status",
+          "label": "Essa nova informacao foi apresentada como:",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Suspeita",
+            "Confirmacao",
+            "Descarte de uma suspeita anterior",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "source": "current",
+            "key": "diagnostico_medico",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
           "key": "diagnostico_medico_qual",
-          "label": "Qual foi o diagnostico informado pelo medico?",
+          "label": "Qual diagnostico ou suspeita foi informado agora?",
           "type": "select",
           "required": true,
-          "visible_if": {
-            "no_prior_positive": {
-              "keys": [
-                "diagnostico_medico",
-                "diagnostico_definitivo"
-              ]
-            },
-            "current_positive": {
-              "key": "diagnostico_medico"
-            }
-          },
           "options": [
             "Dengue",
             "Chikungunya",
             "Zika",
+            "Virose ou sindrome viral indefinida",
             "Outra arbovirose",
             "Outra sindrome febril",
             "Outro"
-          ]
+          ],
+          "visible_if": {
+            "all": [
+              {
+                "source": "current",
+                "key": "diagnostico_medico",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "diagnostico_medico_status",
+                "operator": "nonempty"
+              },
+              {
+                "source": "current",
+                "key": "diagnostico_medico_status",
+                "operator": "not_equals",
+                "value": "Descarte de uma suspeita anterior"
+              }
+            ]
+          }
         }
       ]
     },
     {
-      "title": "Secao 3: Impacto funcional e economico acumulado",
-      "description": "Valores acumulados desde o inicio dos sintomas ate hoje.",
+      "title": "Novos vinculos e permanencia da fonte",
+      "description": "Estas respostas ajudam a transformar uma pista individual em um sinal verificavel.",
       "fields": [
         {
-          "key": "dias_incap_novos",
-          "label": "Total acumulado de dias completamente incapacitado desde o inicio",
-          "type": "number",
-          "required": true,
-          "min": 0,
-          "step": 1
-        },
-        {
-          "key": "custo_remedios",
-          "label": "Medicamentos acumulados (R$)",
-          "type": "number",
-          "required": true,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "custo_consultas",
-          "label": "Consultas/exames acumulados (R$)",
-          "type": "number",
-          "required": true,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "custo_transporte",
-          "label": "Transporte acumulado (R$)",
-          "type": "number",
-          "required": true,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "custo_internacao",
-          "label": "Internacao acumulada (R$)",
-          "type": "number",
-          "required": false,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "custo_outros",
-          "label": "Outros gastos acumulados (R$)",
-          "type": "number",
-          "required": false,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "perda_renda_estimada",
-          "label": "Perda estimada de renda acumulada (R$)",
-          "type": "number",
-          "required": false,
-          "min": 0,
-          "step": 0.01
-        },
-        {
-          "key": "renda_familiar_afetada",
-          "label": "A renda familiar foi afetada?",
+          "key": "novos_casos_semelhantes",
+          "label": "Depois do T0, voce soube de outra pessoa com sintomas parecidos?",
           "type": "radio",
           "required": true,
           "options": [
             "Nao",
-            "Sim, reducao temporaria",
-            "Sim, perda de trabalho temporaria",
-            "Sim, uso de economias/reservas",
-            "Sim, outros impactos financeiros"
+            "Sim",
+            "Nao sei"
           ]
         },
         {
-          "key": "retorno_atividades_previsao",
-          "label": "Quando espera retomar 100% das atividades?",
+          "key": "novos_casos_quantidade",
+          "label": "Aproximadamente quantas novas pessoas adoeceram?",
+          "type": "number",
+          "required": true,
+          "min": 1,
+          "max": 99,
+          "step": 1,
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "novos_casos_local_periodo",
+          "label": "Onde e quando essas pessoas adoeceram?",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Local + data ou periodo aproximado",
+          "visible_if": {
+            "source": "current",
+            "key": "novos_casos_semelhantes",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "nova_pista_exposicao",
+          "label": "Surgiu alguma nova pista sobre alimento, produto, agua, animal, lugar, trabalho, evento ou atividade?",
           "type": "radio",
           "required": true,
           "options": [
-            "Ja retomei todas",
-            "Em 1 semana ou menos",
-            "Em 2-4 semanas",
-            "Mais de 1 mes",
-            "Nao consigo prever",
-            "Acho que terei limitacoes permanentes"
+            "Nao",
+            "Sim",
+            "Nao sei"
           ]
         },
         {
-          "key": "observacoes_finais",
-          "label": "Observacoes importantes (opcional)",
+          "key": "nova_pista_detalhe",
+          "label": "Qual foi a nova pista?",
           "type": "textarea",
-          "required": false
+          "required": true,
+          "help_text": "Inclua o que, onde e quando; marca, origem ou especie quando houver.",
+          "visible_if": {
+            "source": "current",
+            "key": "nova_pista_exposicao",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "fonte_ainda_ativa",
+          "label": "A possivel fonte ou situacao ainda existe?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_pista_exposicao",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        },
+        {
+          "key": "outras_pessoas_ainda_expostas",
+          "label": "Outras pessoas ainda podem estar expostas?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ],
+          "visible_if": {
+            "any": [
+              {
+                "source": "current",
+                "key": "novos_casos_semelhantes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "current",
+                "key": "nova_pista_exposicao",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "outras_pessoas_com_sintomas",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_ambiental_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_animal_outros_doentes",
+                "operator": "equals",
+                "value": "Sim"
+              },
+              {
+                "source": "prior",
+                "key": "exposicao_alimentar",
+                "operator": "selected_any",
+                "values": [
+                  "Outras pessoas que consumiram tambem adoeceram"
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "nonempty"
+                  },
+                  {
+                    "source": "prior",
+                    "key": "vinculo_exposicao_suspeita",
+                    "operator": "not_equals",
+                    "value": "Nao sei"
+                  }
+                ]
+              },
+              {
+                "source": "prior",
+                "key": "outra_exposicao_suspeita",
+                "operator": "nonempty"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Carga adicional desde o T0",
+      "description": "Nao repita os valores do T0; informe somente o que ocorreu depois daquele contato.",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "Quantos dias adicionais ficou completamente sem suas atividades desde o T0?",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 30,
+          "step": 1
+        },
+        {
+          "key": "houve_novos_gastos",
+          "label": "Houve novos gastos desde o T0?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "custo_outros",
+          "label": "Valor total aproximado dos novos gastos (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "max": 99999,
+          "step": 0.01,
+          "visible_if": {
+            "source": "current",
+            "key": "houve_novos_gastos",
+            "operator": "equals",
+            "value": "Sim"
+          }
+        },
+        {
+          "key": "perda_renda",
+          "label": "Houve perda de renda desde o T0?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim",
+            "Nao sei"
+          ]
         }
       ]
     }

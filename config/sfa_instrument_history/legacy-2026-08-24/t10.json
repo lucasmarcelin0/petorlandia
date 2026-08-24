@@ -1,0 +1,307 @@
+{
+  "title": "T10 Atualizacao Forms Codex - SFA Orlandia",
+  "subtitle": "Acompanhamento padronizado de 10 dias, com escalas comparaveis ao T30.",
+  "submit_label": "Enviar acompanhamento T10",
+  "sections": [
+    {
+      "title": "Secao 1: Identificacao",
+      "description": "Confirmacao para vinculo da resposta.",
+      "fields": [
+        {
+          "key": "cpf",
+          "label": "CPF",
+          "type": "text",
+          "required": false,
+          "prefill": "cpf"
+        },
+        {
+          "key": "nome",
+          "label": "Nome completo",
+          "type": "text",
+          "required": false,
+          "prefill": "nome"
+        },
+        {
+          "key": "data_entrevista_t10",
+          "label": "Data desta entrevista (T10)",
+          "type": "date",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "Secao 2: Evolucao clinica",
+      "description": "Estado de saude e sintomas persistentes.",
+      "fields": [
+        {
+          "key": "classificacao_melhora",
+          "label": "Como classifica sua melhora desde o T0?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Curado(a) - sem sintomas",
+            "Melhorando - sintomas leves",
+            "Estavel - sem piora nem melhora",
+            "Piorando - sintomas persistem ou pioraram",
+            "Recaida - melhorei e piorei novamente"
+          ]
+        },
+        {
+          "key": "percentual_recuperacao",
+          "label": "Quanto sente que recuperou em relacao ao estado antes da doenca?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "100% recuperado - como antes da doenca",
+            "90-99% recuperado - diferencas minimas",
+            "70-89% recuperado - sequelas leves",
+            "50-69% recuperado - sequelas moderadas",
+            "Menos de 50% recuperado - limitacoes importantes",
+            "Ainda doente - sem melhora significativa"
+          ]
+        },
+        {
+          "key": "sintomas_persistentes",
+          "label": "Sintomas persistentes hoje (marque todos)",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Febre alta (>38,5 C)",
+            "Dor forte atras dos olhos",
+            "Dores musculares intensas",
+            "Dores nas articulacoes (juntas)",
+            "Manchas vermelhas na pele",
+            "Coceira no corpo",
+            "Cansaco extremo/fadiga",
+            "Dor de cabeca forte",
+            "Nausea/vomitos",
+            "Nenhum sintoma persistente"
+          ]
+        },
+        {
+          "key": "sinais_alerta",
+          "label": "Sinais de alerta desde a ultima entrevista",
+          "type": "checkboxes",
+          "required": true,
+          "options": [
+            "Sangramento (nariz, gengiva, pele)",
+            "Urina muito escura",
+            "Olhos ou pele amarelados",
+            "Vomitos persistentes",
+            "Dor abdominal intensa",
+            "Confusao mental/tontura",
+            "Falta de ar",
+            "Nenhum sinal de alerta"
+          ]
+        },
+        {
+          "key": "dor_articular_intensidade",
+          "label": "Dor articular hoje (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "fadiga_intensidade",
+          "label": "Fadiga/cansaco hoje (1 a 5)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "key": "impacto_atividades",
+          "label": "Impacto atual nas atividades",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nenhum",
+            "Leve - incomoda, mas nao limita",
+            "Moderado - limita algumas atividades",
+            "Importante - impede varias atividades",
+            "Incapacitante - impede atividades basicas"
+          ]
+        },
+        {
+          "key": "retornou_servico_saude",
+          "label": "Precisou retornar a servico de saude desde o T0?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "quantas_vezes_retornou",
+          "label": "Quantas vezes retornou?",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 1
+        },
+        {
+          "key": "internacao_t10",
+          "label": "Foi internado(a) desde o T0?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim"
+          ]
+        },
+        {
+          "key": "diagnostico_medico",
+          "label": "O medico chegou a algum diagnostico?",
+          "type": "radio",
+          "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            }
+          },
+          "options": [
+            "Nao",
+            "Sim",
+            "Exames pendentes",
+            "Nao entendi o resultado"
+          ]
+        },
+        {
+          "key": "diagnostico_medico_qual",
+          "label": "Qual foi o diagnostico informado pelo medico?",
+          "type": "select",
+          "required": true,
+          "visible_if": {
+            "no_prior_positive": {
+              "keys": [
+                "diagnostico_medico",
+                "diagnostico_definitivo"
+              ]
+            },
+            "current_positive": {
+              "key": "diagnostico_medico"
+            }
+          },
+          "options": [
+            "Dengue",
+            "Chikungunya",
+            "Zika",
+            "Outra arbovirose",
+            "Outra sindrome febril",
+            "Outro"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Secao 3: Impacto funcional e economico acumulado",
+      "description": "Valores acumulados desde o inicio dos sintomas ate hoje.",
+      "fields": [
+        {
+          "key": "dias_incap_novos",
+          "label": "Total acumulado de dias completamente incapacitado desde o inicio",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 1
+        },
+        {
+          "key": "custo_remedios",
+          "label": "Medicamentos acumulados (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_consultas",
+          "label": "Consultas/exames acumulados (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_transporte",
+          "label": "Transporte acumulado (R$)",
+          "type": "number",
+          "required": true,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_internacao",
+          "label": "Internacao acumulada (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "custo_outros",
+          "label": "Outros gastos acumulados (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "perda_renda_estimada",
+          "label": "Perda estimada de renda acumulada (R$)",
+          "type": "number",
+          "required": false,
+          "min": 0,
+          "step": 0.01
+        },
+        {
+          "key": "renda_familiar_afetada",
+          "label": "A renda familiar foi afetada?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Nao",
+            "Sim, reducao temporaria",
+            "Sim, perda de trabalho temporaria",
+            "Sim, uso de economias/reservas",
+            "Sim, outros impactos financeiros"
+          ]
+        },
+        {
+          "key": "retorno_atividades_previsao",
+          "label": "Quando espera retomar 100% das atividades?",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "Ja retomei todas",
+            "Em 1 semana ou menos",
+            "Em 2-4 semanas",
+            "Mais de 1 mes",
+            "Nao consigo prever",
+            "Acho que terei limitacoes permanentes"
+          ]
+        },
+        {
+          "key": "observacoes_finais",
+          "label": "Observacoes importantes (opcional)",
+          "type": "textarea",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

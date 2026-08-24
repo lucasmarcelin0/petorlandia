@@ -1,0 +1,156 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Historico de instrumentos - SFA Orlandia{% endblock %}
+{% block page_title %}Historico de instrumentos{% endblock %}
+
+{% block head %}
+<style>
+  .history-shell { max-width: 1120px; }
+  .history-readonly {
+    border-left: 4px solid var(--sfa-teal);
+    background: var(--sfa-teal-light);
+  }
+  .history-stage-nav .btn.active {
+    background: var(--sfa-teal);
+    border-color: var(--sfa-teal);
+    color: #fff;
+  }
+  .history-question {
+    border: 1px solid #e1e6e9;
+    border-radius: .6rem;
+    padding: .85rem 1rem;
+    background: #fff;
+  }
+  .history-question + .history-question { margin-top: .65rem; }
+  .history-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .history-options { margin: .55rem 0 0; padding-left: 1.2rem; }
+  .history-condition code { white-space: normal; word-break: break-word; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="history-shell mx-auto">
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+    <div>
+      <h1 class="h4 mb-1">Perguntas de versoes anteriores</h1>
+      <p class="text-muted mb-0">
+        Consulte como os instrumentos eram estruturados sem reativa-los no fluxo dos participantes.
+      </p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sfa_routes.revisao_links') }}">
+      <i class="fas fa-flask me-1"></i> Abrir revisao e testes
+    </a>
+  </div>
+
+  <div class="alert history-readonly d-flex gap-2 align-items-start" role="note">
+    <i class="fas fa-lock mt-1" aria-hidden="true"></i>
+    <div>
+      <strong>Arquivo somente para consulta.</strong>
+      Estes formularios nao recebem respostas, nao geram links para participantes e nao alteram o instrumento atual.
+    </div>
+  </div>
+
+  {% if not versions %}
+  <div class="card shadow-sm">
+    <div class="card-body text-muted">Nenhuma versao arquivada foi encontrada.</div>
+  </div>
+  {% else %}
+    {% if versions|length > 1 %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Versoes arquivadas</div>
+      <div class="list-group list-group-flush">
+        {% for version in versions %}
+        <a class="list-group-item list-group-item-action {% if selected_version and selected_version.id == version.id %}active{% endif %}"
+           href="{{ url_for('sfa_routes.historico_instrumentos', versao=version.id, etapa='t0') }}">
+          <span class="fw-semibold">{{ version.label }}</span>
+          {% if version.archived_at %}<small class="ms-2">{{ version.archived_at }}</small>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+          <div>
+            <div class="text-uppercase text-muted small fw-semibold">Versao arquivada</div>
+            <h2 class="h5 mb-1">{{ selected_version.label }}</h2>
+            {% if selected_version.description %}
+            <p class="text-muted mb-0">{{ selected_version.description }}</p>
+            {% endif %}
+          </div>
+          <span class="badge text-bg-secondary">{{ selected_version.id }}</span>
+        </div>
+        <div class="history-stage-nav btn-group mt-3" role="group" aria-label="Etapa do instrumento arquivado">
+          {% for stage, summary in selected_version.stages.items() %}
+          <a class="btn btn-outline-primary {% if selected_stage == stage %}active{% endif %}"
+             href="{{ url_for('sfa_routes.historico_instrumentos', versao=selected_version.id, etapa=stage) }}"
+             {% if selected_stage == stage %}aria-current="page"{% endif %}>
+            {{ summary.label }}
+            <span class="badge {% if selected_stage == stage %}text-bg-light{% else %}text-bg-secondary{% endif %} ms-1">
+              {{ summary.field_count }}
+            </span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if schema %}
+    <div class="mb-3">
+      <h2 class="h4 mb-1">{{ schema.title }}</h2>
+      {% if schema.subtitle %}<p class="text-muted mb-0">{{ schema.subtitle }}</p>{% endif %}
+    </div>
+
+    {% for section in schema.sections %}
+    <section class="card shadow-sm mb-3" aria-labelledby="history-section-{{ loop.index }}">
+      <div class="card-header">
+        <h3 class="h6 mb-0" id="history-section-{{ loop.index }}">{{ section.title }}</h3>
+        {% if section.description %}<p class="small text-muted mt-1 mb-0">{{ section.description }}</p>{% endif %}
+      </div>
+      <div class="card-body">
+        {% for field in section.fields %}
+        <article class="history-question">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+              <div class="fw-semibold">{{ field.label }}</div>
+              <div class="small text-muted history-key">{{ field.key }}</div>
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+              <span class="badge text-bg-light border">{{ field.type or 'text' }}</span>
+              {% if field.required %}
+              <span class="badge text-bg-warning">Obrigatoria</span>
+              {% else %}
+              <span class="badge text-bg-secondary">Opcional</span>
+              {% endif %}
+              {% if field.readonly %}<span class="badge text-bg-info">Importada</span>{% endif %}
+            </div>
+          </div>
+
+          {% if field.help_text %}<p class="small text-muted mt-2 mb-0">{{ field.help_text }}</p>{% endif %}
+
+          {% if field.options %}
+          <details class="mt-2">
+            <summary class="small fw-semibold">Ver {{ field.options|length }} opcoes</summary>
+            <ul class="history-options small">
+              {% for option in field.options %}<li>{{ option }}</li>{% endfor %}
+            </ul>
+          </details>
+          {% endif %}
+
+          {% if field.visible_if %}
+          <div class="history-condition small mt-2">
+            <span class="fw-semibold">Exibicao condicional:</span>
+            <code>{{ field.visible_if | tojson }}</code>
+          </div>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

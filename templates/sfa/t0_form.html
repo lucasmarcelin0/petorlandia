@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ form_name or schema.title }}</title>
+  <script>document.documentElement.classList.add("sfa-js");</script>
   <style>
     :root {
       --sfa-ink: #17313a;
@@ -147,6 +148,10 @@
 
     .field.full {
       grid-column: 1 / -1;
+    }
+
+    .sfa-js .field[data-visible-if]:not([data-condition-ready="true"]) {
+      display: none;
     }
 
     label.field-label {
@@ -335,17 +340,16 @@
   <div class="wrap">
     <section class="hero">
       <div class="kicker">{{ form_name or "Estudo SFA Orlandia" }}</div>
-      <h1>{{ schema.title }}</h1>
-      <p>{{ schema.subtitle }}</p>
+      <h1>Ola, {{ paciente.nome or "participante" }}.</h1>
+      <p><strong>{{ schema.title }}</strong><br>{{ schema.subtitle }}</p>
       <div class="meta">
-        <div class="meta-chip"><strong>Participante:</strong> {{ paciente.nome or "Nao identificado" }}</div>
-        <div class="meta-chip"><strong>Codigo:</strong> {{ paciente.id_estudo }}</div>
         <div class="meta-chip"><strong>Etapa:</strong> {{ (form_stage or "t0").upper() }}</div>
+        <div class="meta-chip">Seus dados cadastrais ja estao vinculados nos bastidores.</div>
       </div>
     </section>
 
     {% if errors.get("__all__") %}
-    <section class="alert">{{ errors["__all__"] }}</section>
+    <section class="alert" role="alert" aria-live="assertive">{{ errors["__all__"] }}</section>
     {% endif %}
 
     <form method="POST" novalidate>
@@ -393,7 +397,7 @@
                 Baixar TCLE completo
               </a>
               <p style="margin-top: 0.8rem;">
-                Ao marcar o aceite, o nome completo preenchido acima sera usado como assinatura do seu consentimento.
+                Ao marcar o aceite, o nome completo vinculado a este convite sera usado como assinatura do seu consentimento.
               </p>
             </div>
             {% endif %}
@@ -413,7 +417,7 @@
             <div class="choices">
               {% for option in field.options %}
               <label class="choice">
-                <input type="radio" name="{{ field.key }}" value="{{ option }}" {% if current == option %}checked{% endif %}>
+                <input type="radio" name="{{ field.key }}" value="{{ option }}" {% if current == option %}checked{% endif %} {% if field.required and loop.first %}required{% endif %}>
                 <span>{{ option }}</span>
               </label>
               {% endfor %}
@@ -439,6 +443,7 @@
               {% if field.required %}required{% endif %}
               {% if field.readonly %}readonly aria-readonly="true"{% endif %}
               {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+              {% if field.max is defined %}max="{{ field.max }}"{% endif %}
               {% if field.step is defined %}step="{{ field.step }}"{% endif %}
             >
             {% endif %}
@@ -458,77 +463,6 @@
       </div>
     </form>
   </div>
-  <script>
-    const isPositiveAnswer = (value) => String(value || "").trim().toLowerCase().startsWith("sim");
-    const fieldSelector = (name) => '[name="' + String(name || "").replace(/"/g, '\\"') + '"]';
-
-    const currentFieldValue = (name) => {
-      const checked = document.querySelector('input' + fieldSelector(name) + ':checked');
-      if (checked) return checked.value;
-      const field = document.querySelector(fieldSelector(name));
-      return field ? field.value : "";
-    };
-
-    const updateConditionalFields = () => {
-      document.querySelectorAll("[data-visible-if]").forEach((container) => {
-        let rule = {};
-        try {
-          rule = JSON.parse(container.dataset.visibleIf || "{}");
-        } catch (_error) {
-          rule = {};
-        }
-
-        const currentPositive = rule.current_positive;
-        if (!currentPositive || !currentPositive.key) return;
-
-        const visible = isPositiveAnswer(currentFieldValue(currentPositive.key));
-        container.hidden = !visible;
-        container.querySelectorAll("input, select, textarea").forEach((field) => {
-          if (!visible) {
-            if (field.type === "checkbox" || field.type === "radio") {
-              field.checked = false;
-            } else {
-              field.value = "";
-            }
-          }
-          if (field.dataset.conditionalRequired === "true") {
-            field.required = visible;
-          }
-        });
-      });
-    };
-
-    document.querySelectorAll("[data-visible-if]").forEach((container) => {
-      container.querySelectorAll("input[required], select[required], textarea[required]").forEach((field) => {
-        field.dataset.conditionalRequired = "true";
-      });
-    });
-
-    document.addEventListener("change", updateConditionalFields);
-    updateConditionalFields();
-
-    document.querySelectorAll(".choices").forEach((group) => {
-      const boxes = Array.from(group.querySelectorAll('input[type="checkbox"]'));
-      if (!boxes.length) return;
-
-      const isNoneOption = (value) => {
-        const normalized = String(value || "").trim().toLowerCase();
-        return normalized.startsWith("nenhum") || normalized.startsWith("nenhuma");
-      };
-
-      boxes.forEach((box) => {
-        box.addEventListener("change", () => {
-          if (!box.checked) return;
-          const selectedNone = isNoneOption(box.value);
-          boxes.forEach((other) => {
-            if (other === box) return;
-            if (selectedNone || isNoneOption(other.value)) {
-              other.checked = false;
-            }
-          });
-        });
-      });
-    });
-  </script>
+  <script src="{{ url_for('static', filename='js/sfa_form_conditions.js') }}?v=20260824a"></script>
 </body>
 </html>

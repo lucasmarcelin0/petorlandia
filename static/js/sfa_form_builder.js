@@ -50,6 +50,7 @@
       prefill: "",
       default: resolvedType === "number" ? 0 : "",
       min: resolvedType === "number" ? 0 : "",
+      max: "",
       step: resolvedType === "number" ? 1 : "",
       options: CHOICE_TYPES.has(resolvedType) ? ["Opcao 1", "Opcao 2"] : [],
     };
@@ -93,6 +94,7 @@
     const prefill = String(rawField?.prefill || "").trim();
     const defaultValue = valueOrEmpty(rawField?.default);
     const min = valueOrEmpty(rawField?.min);
+    const max = valueOrEmpty(rawField?.max);
     const step = valueOrEmpty(rawField?.step);
 
     if (helpText) field.help_text = helpText;
@@ -100,6 +102,7 @@
     if (prefill) field.prefill = prefill;
     if (defaultValue !== "") field.default = type === "number" ? parseMaybeNumber(defaultValue) : defaultValue;
     if (min !== "") field.min = parseMaybeNumber(min);
+    if (max !== "") field.max = parseMaybeNumber(max);
     if (step !== "") field.step = parseMaybeNumber(step);
     if (rawField?.visible_if && typeof rawField.visible_if === "object" && !Array.isArray(rawField.visible_if)) {
       field.visible_if = JSON.parse(JSON.stringify(rawField.visible_if));
@@ -117,6 +120,7 @@
 
   function sanitizeSchema(rawSchema) {
     const schema = {
+      instrument_version: String(rawSchema?.instrument_version || "").trim(),
       title: String(rawSchema?.title || "").trim(),
       subtitle: String(rawSchema?.subtitle || "").trim(),
       submit_label: String(rawSchema?.submit_label || "").trim(),
@@ -146,6 +150,7 @@
 
   function serializeState() {
     const schema = {
+      instrument_version: String(state.instrument_version || "").trim(),
       title: String(state.title || "").trim(),
       subtitle: String(state.subtitle || "").trim(),
       submit_label: String(state.submit_label || "").trim(),
@@ -166,6 +171,7 @@
           const prefill = String(field.prefill || "").trim();
           const defaultValue = valueOrEmpty(field.default);
           const min = valueOrEmpty(field.min);
+          const max = valueOrEmpty(field.max);
           const step = valueOrEmpty(field.step);
 
           if (helpText) normalized.help_text = helpText;
@@ -173,6 +179,7 @@
           if (prefill) normalized.prefill = prefill;
           if (defaultValue !== "") normalized.default = field.type === "number" ? parseMaybeNumber(defaultValue) : defaultValue;
           if (min !== "") normalized.min = parseMaybeNumber(min);
+          if (max !== "") normalized.max = parseMaybeNumber(max);
           if (step !== "") normalized.step = parseMaybeNumber(step);
           if (field.visible_if && typeof field.visible_if === "object" && !Array.isArray(field.visible_if)) {
             normalized.visible_if = JSON.parse(JSON.stringify(field.visible_if));

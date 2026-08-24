@@ -9,9 +9,9 @@ Rotas:
   GET  /sfa/paciente/<id>       → Detalhe do paciente
   POST /sfa/paciente/<id>/whatsapp → Marca status WhatsApp
   GET  /sfa/p/<token>           → Redirect para formulário T0 (substitui doGet do GAS)
-  POST /sfa/webhook/t0          → Recebe submissão T0 do Google Forms
-  POST /sfa/webhook/t10         → Recebe submissão T10
-  POST /sfa/webhook/t30         → Recebe submissão T30
+  POST /sfa/webhook/t0          → Compatibilidade legada desativada (410)
+  POST /sfa/webhook/t10         → Compatibilidade legada desativada (410)
+  POST /sfa/webhook/t30         → Compatibilidade legada desativada (410)
   POST /sfa/sync                → Dispara sincronização SINAN manualmente
   POST /sfa/rotina              → Roda todas as rotinas (verificar_seguimento etc.)
 """
@@ -1466,130 +1466,113 @@ def _review_question_refs(*refs: tuple[str, str, str]) -> list[dict[str, object]
 def _chart_review_sections(dashboard_testes: dict) -> list[dict[str, object]]:
     return [
         {
-            "key": "cards_principais",
-            "title": "Cards principais do painel",
-            "description": "Mostram tamanho do lote, grupos, dias incapacitantes, custo medio e recuperacao final.",
-            "review_prompt": "Os cards contam rapidamente a historia do lote ou faltam indicadores mais uteis?",
-            "items": [card.get("label") for card in dashboard_testes.get("research_cards", [])],
+            "key": "vinculos_coletivos",
+            "title": "Vinculos coletivos e novas pistas",
+            "description": "Mostra quantas pessoas acrescentaram informacao que nao esta no SINAN e quantos sinais podem ser verificados.",
+            "review_prompt": "Este bloco permite reconhecer rapidamente uma exposicao coletiva potencialmente acionavel?",
+            "items": [
+                "Outros doentes na mesma epoca",
+                "Novos casos no T10/T30",
+                "Nova pista ou informacao sobre a fonte",
+            ],
             "questions": _review_question_refs(
-                ("cadastro", "grupo", "separa Grupo A e Grupo B"),
-                ("t0", "dias_incap", "calcula dias incapacitantes iniciais"),
-                ("t30", "dias_incap_novos", "calcula dias incapacitantes acumulados"),
-                ("t30", "estado_saude_final", "define recuperacao alta no T30"),
-                ("t30", "custo_remedios", "entra no custo medio final"),
-                ("t30", "custo_consultas", "entra no custo medio final"),
-                ("t30", "custo_transporte", "entra no custo medio final"),
-                ("t30", "custo_outros", "entra no custo medio final"),
+                ("t0", "outras_pessoas_com_sintomas", "abre a investigacao de coadoecimento"),
+                ("t0", "vinculo_compartilhado", "descreve o que o grupo compartilhou"),
+                ("t0", "vinculo_local", "localiza o possivel vinculo"),
+                ("t0", "vinculo_data_periodo", "delimita a janela temporal"),
+                ("t0", "vinculo_exposicao_suspeita", "registra a hipotese inicial"),
+                ("t10", "novos_casos_semelhantes", "atualiza novos casos"),
+                ("t10", "nova_pista_exposicao", "registra pista surgida depois do T0"),
+                ("t30", "novos_casos_semelhantes", "verifica novos casos no fechamento"),
+                ("t30", "nova_informacao_fonte", "registra nova informacao sobre a fonte"),
             ),
         },
         {
-            "key": "linha_tempo",
-            "title": "Linha do tempo T0/T10/T30",
-            "description": "Calcula quantos dias se passaram entre inicio dos sintomas e cada acompanhamento.",
-            "review_prompt": "Essa linha do tempo ajuda a entender se o acompanhamento esta acontecendo no momento certo?",
-            "items": [item.get("label") for item in dashboard_testes.get("timeline_cards", [])],
+            "key": "acionabilidade",
+            "title": "Permanencia da fonte e possibilidade de acao",
+            "description": "Prioriza sinais nos quais a fonte ainda existe ou outras pessoas continuam expostas.",
+            "review_prompt": "As respostas distinguem bem uma pista interessante de uma situacao que merece verificacao da Vigilancia?",
+            "items": ["Fonte ainda ativa", "Pessoas ainda expostas", "Orientacao ou acao percebida"],
             "questions": _review_question_refs(
-                ("t0", "data_inicio_sintomas", "marca o inicio da doenca"),
-                ("cadastro", "data_t0", "calcula dias ate T0"),
-                ("cadastro", "data_t10", "calcula dias ate T10"),
-                ("cadastro", "data_t30", "calcula dias ate T30"),
+                ("t0", "fonte_ainda_ativa", "prioriza a verificacao inicial"),
+                ("t0", "outras_pessoas_ainda_expostas", "indica risco atual para terceiros"),
+                ("t10", "fonte_ainda_ativa", "reavalia a permanencia da fonte"),
+                ("t10", "outras_pessoas_ainda_expostas", "reavalia pessoas em risco"),
+                ("t30", "fonte_ainda_ativa", "encerra ou mantem o alerta"),
+                ("t30", "outras_pessoas_ainda_expostas", "verifica exposicao residual"),
+                ("t30", "orientacao_ou_acao_percebida", "confere a percepcao do participante, sem contar como decisao administrativa"),
+                ("t30", "novos_casos_apos_acao", "descreve casos posteriores sem inferir causalidade"),
             ),
         },
         {
-            "key": "custos_t30",
-            "title": "Custos medios no T30",
-            "description": "Resume os gastos acumulados por categoria no fechamento de 30 dias.",
-            "review_prompt": "As categorias de custo sao suficientes para explicar o impacto economico?",
-            "items": [item.get("label") for item in dashboard_testes.get("cost_breakdown", [])],
+            "key": "one_health",
+            "title": "Exposicoes One Health",
+            "description": "Organiza ambiente, animais, alimentos, agua e produtos sem repetir dados clinicos do SINAN.",
+            "review_prompt": "Os tres portais capturam o minimo necessario para reconhecer fonte, lugar e periodo?",
+            "items": ["Ambiental", "Animal", "Alimentar, hidrica ou produto"],
             "questions": _review_question_refs(
-                ("t30", "custo_remedios", "medicamentos"),
-                ("t30", "custo_consultas", "consultas e exames"),
-                ("t30", "custo_transporte", "transporte"),
-                ("t30", "custo_outros", "outros gastos"),
+                ("t0", "exposicao_ambiental", "porta ambiental"),
+                ("t0", "exposicao_ambiental_detalhe", "local, periodo e situacao"),
+                ("t0", "exposicao_ambiental_outros_doentes", "procura coadoecimento"),
+                ("t0", "exposicao_animal", "porta animal"),
+                ("t0", "exposicao_animal_detalhe", "especie, evento, local e periodo"),
+                ("t0", "exposicao_animal_outros_doentes", "liga pessoas e animais"),
+                ("t0", "exposicao_alimentar", "porta alimentar, hidrica ou produto"),
+                ("t0", "exposicao_alimentar_item", "identifica o item"),
+                ("t0", "exposicao_alimentar_origem", "identifica marca, origem ou local"),
+                ("t0", "exposicao_alimentar_expostos", "estima pessoas expostas"),
+                ("t0", "exposicao_alimentar_doentes", "estima pessoas que adoeceram"),
             ),
         },
         {
-            "key": "comparacao_grupos",
-            "title": "Comparacao entre grupos",
-            "description": "Diferencas entre Grupo A e Grupo B, sintomas discriminantes e recuperacao.",
-            "review_prompt": "A comparacao A/B ajuda no diagnostico diferencial ou precisa de outro recorte?",
-            "items": [row.get("metric") for row in dashboard_testes.get("group_comparison", [])],
+            "key": "diagnostico_comunicado",
+            "title": "Informacao diagnostica comunicada",
+            "description": "Compara o que a pessoa entendeu com os resultados e sistemas disponiveis, sem produzir diagnostico por IA.",
+            "review_prompt": "Este bloco identifica divergencia, pendencia e falha de comunicacao de forma clara?",
+            "items": ["Informado", "Pendente", "Nao compreendido", "Suspeita ou confirmacao"],
             "questions": _review_question_refs(
-                ("cadastro", "grupo", "define os grupos comparados"),
-                ("t30", "custo_remedios", "compoe custo final medio"),
-                ("t30", "custo_consultas", "compoe custo final medio"),
-                ("t30", "custo_transporte", "compoe custo final medio"),
-                ("t30", "custo_outros", "compoe custo final medio"),
-                ("t30", "dias_incap_novos", "compara incapacidade acumulada"),
-                ("t30", "estado_saude_final", "compara recuperacao alta"),
+                ("t0", "diagnostico_medico", "linha de base do que foi comunicado"),
+                ("t0", "diagnostico_medico_qual", "diagnostico ou suspeita entendida"),
+                ("t0", "diagnostico_medico_status", "suspeita ou confirmacao"),
+                ("t10", "diagnostico_medico", "mudanca desde o T0"),
+                ("t10", "diagnostico_medico_qual", "nova informacao entendida"),
+                ("t30", "diagnostico_medico", "mudanca final"),
+                ("t30", "diagnostico_medico_qual", "informacao final entendida"),
             ),
         },
         {
-            "key": "sintomas_exposicoes",
-            "title": "Sintomas e exposicoes no T0",
-            "description": "Mostra sintomas principais e exposicoes animal, ambiental e alimentar, com recorte por grupo.",
-            "review_prompt": "As perguntas de sintomas, animais, ambiente e alimentacao capturam exposicoes realmente relevantes?",
-            "items": [item.get("label") for item in dashboard_testes.get("symptom_prevalence", [])[:8]],
+            "key": "carga_complementar",
+            "title": "Carga complementar enxuta",
+            "description": "Mantem apenas dias sem atividade, gasto total incremental, cuidador e perda de renda declarada.",
+            "review_prompt": "Essas medidas acrescentam valor sem desviar o foco da prevencao coletiva?",
+            "items": ["Dias sem atividade", "Gasto total", "Cuidador", "Perda de renda"],
             "questions": _review_question_refs(
-                ("t0", "sintomas_principais", "prevalencia de sintomas e sintomas discriminantes"),
-                ("t0", "exposicao_animal", "contato animal"),
-                ("t0", "exposicao_ambiental", "risco ambiental"),
-                ("t0", "exposicao_alimentar", "risco alimentar/hidrico"),
-                ("t0", "contato_agua_suja", "reforca risco ambiental"),
-                ("t0", "contato_carrapato_mata", "reforca risco ambiental e animal"),
-                ("t0", "atividades_recentes", "reforca risco ambiental"),
-                ("t0", "tipo_residencia", "ajuda a inferir moradia rural"),
-                ("t0", "ocupacao_principal", "ajuda a inferir ocupacao agropecuaria"),
+                ("t0", "dias_incap", "carga inicial"),
+                ("t0", "custo_total", "gasto total inicial"),
+                ("t0", "ausencia_familiar", "necessidade de cuidador"),
+                ("t0", "dias_cuidador", "dias do cuidador"),
+                ("t10", "dias_incap_novos", "dias adicionais"),
+                ("t10", "custo_outros", "gasto total adicional"),
+                ("t10", "perda_renda", "perda de renda declarada"),
+                ("t30", "dias_incap_novos", "dias adicionais finais"),
+                ("t30", "custo_outros", "gasto total adicional final"),
+                ("t30", "perda_renda", "nova perda de renda declarada"),
             ),
         },
         {
-            "key": "perfil_demografico",
-            "title": "Perfil demografico",
-            "description": "Distribui participantes por sexo biologico, faixa etaria, ocupacao e bairro.",
-            "review_prompt": "Esse perfil ajuda a interpretar risco e recuperacao ou esta apenas descrevendo a amostra?",
-            "items": [chart.get("title") for chart in dashboard_testes.get("demographic_distributions", [])],
+            "key": "seguimento",
+            "title": "Seguimento e seguranca",
+            "description": "Acompanha mudancas essenciais e sinais que orientam nova avaliacao, sem repetir a ficha clinica.",
+            "review_prompt": "O seguimento esta curto e seguro para o participante?",
+            "items": ["Evolucao T10", "Retorno funcional T30", "Sinais de seguranca"],
             "questions": _review_question_refs(
-                ("t0", "sexo_biologico", "distribuicao por sexo e recuperacao por segmento"),
-                ("cadastro", "data_nascimento", "calcula faixa etaria"),
-                ("t0", "ocupacao_principal", "distribuicao por ocupacao"),
-                ("cadastro", "bairro", "distribuicao por bairro"),
-            ),
-        },
-        {
-            "key": "recuperacao_clusters",
-            "title": "Recuperacao, retorno e clusters",
-            "description": "Resume recuperacao alta, retorno as atividades, custo por retorno e padroes de evolucao.",
-            "review_prompt": "Esses padroes ajudam a transformar respostas em hipoteses de pesquisa?",
-            "items": [item.get("title") for item in dashboard_testes.get("hypothesis_cards", [])],
-            "questions": _review_question_refs(
-                ("t0", "data_inicio_sintomas", "base temporal para melhora/fechamento"),
-                ("t10", "classificacao_melhora", "identifica melhora intermediaria"),
-                ("t30", "estado_saude_final", "classifica recuperacao final"),
-                ("t30", "retorno_atividades_normais", "mede retorno funcional"),
-                ("t30", "dias_incap_novos", "mede limitacao funcional acumulada"),
-                ("t30", "custo_remedios", "compoe custo por retorno"),
-                ("t30", "custo_consultas", "compoe custo por retorno"),
-                ("t30", "custo_transporte", "compoe custo por retorno"),
-                ("t30", "custo_outros", "compoe custo por retorno"),
-            ),
-        },
-        {
-            "key": "perguntas_distribuicao",
-            "title": "Perguntas com distribuicao de respostas",
-            "description": "Tabelas por pergunta, com total e recorte por grupo.",
-            "review_prompt": "Quais distribuicoes merecem virar grafico principal e quais podem ficar apenas como apoio?",
-            "items": [chart.get("title") for chart in dashboard_testes.get("distributions", [])[:10]],
-            "questions": _review_question_refs(
-                ("t10", "classificacao_melhora", "evolucao percebida no T10"),
-                ("t30", "estado_saude_final", "estado final no T30"),
-                ("t30", "retorno_atividades_normais", "retorno as atividades"),
-                ("t0", "tipo_residencia", "tipo de residencia"),
-                ("t0", "exposicao_animal", "contato com animais"),
-                ("t0", "exposicao_ambiental", "riscos ambientais"),
-                ("t0", "exposicao_alimentar", "riscos alimentares"),
-                ("t0", "contato_agua_suja", "dominio ambiental"),
-                ("t0", "contato_carrapato_mata", "dominio ambiental/animal"),
-                ("cadastro", "bairro", "bairros do lote"),
+                ("t0", "sinais_alerta_atuais", "orienta procura de atendimento"),
+                ("t10", "classificacao_melhora", "evolucao intermediaria"),
+                ("t10", "sinais_alerta_atuais", "seguranca no seguimento"),
+                ("t10", "retornou_servico_saude", "captura atendimento fora da rede visivel"),
+                ("t30", "estado_saude_final", "estado complementar no fechamento"),
+                ("t30", "retorno_atividades_normais", "retorno funcional"),
+                ("t30", "sinais_alerta_atuais", "seguranca no fechamento"),
             ),
         },
     ]
@@ -1763,6 +1746,55 @@ def formularios_print():
         "sfa/print_form_questions.html",
         formularios=_formularios_impressao_sfa(),
         generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@bp.get("/instrumentos/historico")
+@require_sfa_internal_access
+def historico_instrumentos():
+    from services.sfa_service import (
+        carregar_schema_historico_instrumento,
+        listar_historico_instrumentos,
+    )
+
+    versions = listar_historico_instrumentos()
+    if not versions:
+        return render_template(
+            "sfa/instrument_history.html",
+            versions=[],
+            selected_version=None,
+            selected_stage="t0",
+            schema=None,
+        )
+
+    version_id = str(request.args.get("versao") or versions[0]["id"]).strip()
+    selected_version = next(
+        (version for version in versions if version["id"] == version_id),
+        None,
+    )
+    if selected_version is None:
+        abort(404)
+
+    selected_stage = str(request.args.get("etapa") or "t0").strip().lower()
+    if selected_stage not in selected_version["stages"]:
+        abort(404)
+
+    try:
+        schema = carregar_schema_historico_instrumento(version_id, selected_stage)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        current_app.logger.exception(
+            "Falha ao carregar instrumento historico %s/%s",
+            version_id,
+            selected_stage,
+        )
+        abort(500)
+
+    return render_template(
+        "sfa/instrument_history.html",
+        versions=versions,
+        selected_version=selected_version,
+        selected_stage=selected_stage,
+        schema=schema,
     )
 
 
@@ -1959,29 +1991,35 @@ def paciente_detail(id_estudo: str):
         link_whatsapp, normalizar_telefone,
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30,
         gerar_url_t0, gerar_url_t10, gerar_url_t30,
-        carregar_t0_form_schema, carregar_t10_form_schema, carregar_t30_form_schema,
         montar_visao_resposta_formulario, obter_resposta_formulario,
     )
 
     def _format_currency(value) -> str:
         if value in (None, ""):
             return "Nao informado"
-        return f"R$ {float(value):.2f}"
-
-    def _format_timestamp(value) -> str:
-        text = str(value or "").strip()
-        if not text:
+        try:
+            return f"R$ {float(str(value).replace(',', '.')):.2f}"
+        except (TypeError, ValueError):
             return "Nao informado"
-        try:
-            return date.fromisoformat(text).strftime("%d/%m/%Y")
-        except ValueError:
-            pass
-        try:
-            from datetime import datetime
 
-            return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%d/%m/%Y %H:%M")
-        except ValueError:
-            return text
+    def _summary_currency(stage, instrument_version, payload, resposta) -> str:
+        if stage == "t0":
+            candidates = [payload.get("custo_total"), getattr(resposta, "custo_total", "")]
+        elif instrument_version == "collective-v2":
+            # No instrumento essencial, custo_outros representa o gasto total
+            # incremental. A propriedade do modelo permanece como fallback
+            # para respostas persistidas antes desta leitura versionada.
+            candidates = [payload.get("custo_outros"), getattr(resposta, "custo_total", "")]
+        else:
+            # Instrumentos arquivados tinham custos separados; o modelo soma
+            # essas categorias na propriedade custo_total.
+            candidates = [getattr(resposta, "custo_total", ""), payload.get("custo_outros")]
+
+        for value in candidates:
+            formatted = _format_currency(value)
+            if formatted != "Nao informado":
+                return formatted
+        return "Nao informado"
 
     def _compact_summary(items):
         return [
@@ -2010,11 +2048,6 @@ def paciente_detail(id_estudo: str):
     url_t30 = gerar_url_t30(p.id_estudo, p.token_acesso or "")
     url_t30_debug = gerar_url_t30(p.id_estudo, p.token_acesso or "", debug=True)
 
-    schemas = {
-        "t0": carregar_t0_form_schema(),
-        "t10": carregar_t10_form_schema(),
-        "t30": carregar_t30_form_schema(),
-    }
     response_views = []
 
     for stage, stage_label, icon, badge_class in [
@@ -2026,36 +2059,39 @@ def paciente_detail(id_estudo: str):
         if not resposta:
             continue
 
-        view = montar_visao_resposta_formulario(stage, resposta, schema=schemas[stage])
+        view = montar_visao_resposta_formulario(stage, resposta)
         payload = view["payload"]
+        instrument_version = str(view.get("instrument_version") or "")
+        summary_cost = _summary_currency(stage, instrument_version, payload, resposta)
 
         if stage == "t0":
             summary = _compact_summary(
                 [
-                    ("Inicio sintomas", payload.get("data_inicio_sintomas") or getattr(resposta, "data_inicio_sintomas", "")),
-                    ("Tipo de moradia", payload.get("tipo_residencia") or getattr(resposta, "tipo_residencia", "")),
-                    ("Dias incapacitado", payload.get("dias_incap") or getattr(resposta, "dias_incap", "")),
-                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
-                    ("TCLE assinado por", payload.get("tcle_assinado_por")),
-                    ("TCLE registrado em", _format_timestamp(payload.get("consentimento_registrado_em"))),
+                    ("Outros doentes", payload.get("outras_pessoas_com_sintomas")),
+                    ("Fonte ainda ativa", payload.get("fonte_ainda_ativa")),
+                    ("Dias sem atividades", payload.get("dias_incap") or getattr(resposta, "dias_incap", "")),
+                    ("Gasto total", summary_cost),
                 ]
             )
         elif stage == "t10":
             summary = _compact_summary(
                 [
                     ("Evolucao", payload.get("classificacao_melhora")),
-                    ("Dias incapacitado", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
-                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
-                    ("Previsao retorno", payload.get("retorno_atividades_previsao")),
+                    ("Novos casos semelhantes", payload.get("novos_casos_semelhantes")),
+                    ("Fonte ainda ativa", payload.get("fonte_ainda_ativa")),
+                    ("Dias adicionais sem atividades", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
+                    ("Gasto adicional", summary_cost),
                 ]
             )
         else:
             summary = _compact_summary(
                 [
                     ("Estado final", payload.get("estado_saude_final")),
-                    ("Dias incapacitado", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
-                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
-                    ("Quando voltou as atividades", payload.get("retorno_atividades_normais")),
+                    ("Novos casos semelhantes", payload.get("novos_casos_semelhantes")),
+                    ("Fonte ainda ativa", payload.get("fonte_ainda_ativa")),
+                    ("Orientacao ou acao percebida", payload.get("orientacao_ou_acao_percebida")),
+                    ("Dias adicionais sem atividades", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
+                    ("Gasto adicional", summary_cost),
                 ]
             )
 
@@ -2080,6 +2116,45 @@ def paciente_detail(id_estudo: str):
                            url_t10_debug=url_t10_debug,
                            url_t30=url_t30,
                            url_t30_debug=url_t30_debug)
+
+
+@bp.get("/paciente/<id_estudo>/qrcode/<stage>.png")
+@require_sfa_internal_access
+def paciente_form_qrcode(id_estudo: str, stage: str):
+    import qrcode
+
+    from models.sfa import SfaPaciente
+    from services.sfa_service import gerar_url_t0, gerar_url_t10, gerar_url_t30
+
+    stage_key = str(stage or "").strip().lower()
+    url_builders = {
+        "t0": gerar_url_t0,
+        "t10": gerar_url_t10,
+        "t30": gerar_url_t30,
+    }
+    url_builder = url_builders.get(stage_key)
+    if url_builder is None:
+        abort(404)
+
+    paciente = SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
+    target_url = url_builder(
+        paciente.id_estudo,
+        paciente.token_acesso or "",
+    )
+    if not target_url:
+        abort(404)
+
+    image = qrcode.make(target_url)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    response = send_file(
+        buffer,
+        mimetype="image/png",
+        download_name=f"sfa_{stage_key}_{paciente.id}.png",
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -2439,10 +2514,12 @@ def t30_form_config():
 def webhook_t0():
     if not _verificar_webhook_secret():
         abort(403)
-    from services.sfa_service import on_submit_t0
-    dados = request.get_json(force=True) or {}
-    resultado = on_submit_t0(dados)
-    return jsonify(resultado), 200 if resultado.get("ok") else 400
+    return jsonify({
+        "ok": False,
+        "error": "legacy_form_disabled",
+        "stage": "t0",
+        "message": "O formulario legado foi desativado. Use o formulario essencial do participante.",
+    }), 410
 
 
 @bp.route("/webhook/t10", methods=["POST"])
@@ -2450,10 +2527,12 @@ def webhook_t0():
 def webhook_t10():
     if not _verificar_webhook_secret():
         abort(403)
-    from services.sfa_service import on_submit_t10
-    dados = request.get_json(force=True) or {}
-    resultado = on_submit_t10(dados)
-    return jsonify(resultado), 200 if resultado.get("ok") else 400
+    return jsonify({
+        "ok": False,
+        "error": "legacy_form_disabled",
+        "stage": "t10",
+        "message": "O formulario legado foi desativado. Use o formulario essencial do participante.",
+    }), 410
 
 
 @bp.route("/webhook/t30", methods=["POST"])
@@ -2461,10 +2540,12 @@ def webhook_t10():
 def webhook_t30():
     if not _verificar_webhook_secret():
         abort(403)
-    from services.sfa_service import on_submit_t30
-    dados = request.get_json(force=True) or {}
-    resultado = on_submit_t30(dados)
-    return jsonify(resultado), 200 if resultado.get("ok") else 400
+    return jsonify({
+        "ok": False,
+        "error": "legacy_form_disabled",
+        "stage": "t30",
+        "message": "O formulario legado foi desativado. Use o formulario essencial do participante.",
+    }), 410
 
 
 # ---------------------------------------------------------------------------
@@ -2477,22 +2558,14 @@ def sync_sinan():
     """Dispara sincronização SINAN manualmente."""
     if not _verificar_token_admin():
         abort(403)
-    from services.sfa_service import sincronizar_respostas_t0, sincronizar_sinan
+    from services.sfa_service import sincronizar_sinan
     resultado = sincronizar_sinan()
-    resultado_t0 = sincronizar_respostas_t0()
-    detalhes = [
-        detalhe
-        for detalhe in [resultado.get("mensagem"), resultado_t0.get("mensagem")]
-        if detalhe
-    ]
     flash(
-        f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s). "
-        f"T0: {resultado_t0['importados']} importada(s), {resultado_t0['ignorados']} ignorada(s), "
-        f"{resultado_t0['erros']} erro(s).",
+        f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s).",
         "info",
     )
-    if detalhes:
-        flash(" | ".join(detalhes), "warning")
+    if resultado.get("mensagem"):
+        flash(resultado["mensagem"], "warning")
     return redirect(url_for("sfa_routes.dashboard"))
 
 
@@ -2502,12 +2575,11 @@ def rodar_rotina():
     """Roda verificação de seguimento e atualiza operacional."""
     if not _verificar_token_admin():
         abort(403)
-    from services.sfa_service import sincronizar_respostas_t0, verificar_seguimento
+    from services.sfa_service import verificar_seguimento
     from models.sfa import SfaPaciente
     from extensions import db
     from services.sfa_service import atualizar_operacional_paciente
 
-    resultado_t0 = sincronizar_respostas_t0()
     resultado = verificar_seguimento()
     # Atualiza campos operacionais de todos os pacientes
     for p in SfaPaciente.query.all():
@@ -2516,10 +2588,7 @@ def rodar_rotina():
 
     flash(
         f"Rotina concluída: {len(resultado['atrasados_t10'])} T10 atrasados, "
-        f"{len(resultado['atrasados_t30'])} T30 atrasados, "
-        f"{resultado_t0['importados']} T0 importada(s).",
+        f"{len(resultado['atrasados_t30'])} T30 atrasados.",
         "info"
     )
-    if resultado_t0.get("mensagem"):
-        flash(resultado_t0["mensagem"], "warning")
     return redirect(url_for("sfa_routes.dashboard"))

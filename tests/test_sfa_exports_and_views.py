@@ -6,12 +6,12 @@ from types import SimpleNamespace
 
 from services.sfa_service import (
     carregar_t10_form_schema,
+    gerar_csv_assinaturas_tcle,
     gerar_csv_exportacao_analitica,
     gerar_csv_exportacao_cadastro,
-    gerar_csv_assinaturas_tcle,
     montar_analise_respostas,
-    montar_visao_resposta_formulario,
     montar_registro_assinatura_tcle,
+    montar_visao_resposta_formulario,
 )
 
 
@@ -51,25 +51,35 @@ def _fake_patient():
         updated_at=datetime(2026, 3, 23, 11, 0, 0),
         resposta_t0=_fake_response(
             {
-                "cpf": "12345678900",
-                "ficha_sinan": "3032976",
-                "nome": "Lucilene Alves da Silva",
-                "aceite_tcle": ["Confirmo que li o TCLE e aceito participar voluntariamente do estudo."],
+                "_instrument_version": "collective-v2",
+                "_submitted_stage": "t0",
+                "respondent_role": "A propria pessoa",
+                "aceite_tcle": [
+                    "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
+                ],
                 "tcle_assinado_por": "Lucilene Alves da Silva",
                 "consentimento_registrado_em": "2026-03-18T11:43:54Z",
-                "tipo_residencia": "Casa urbana",
                 "data_inicio_sintomas": "11/03/2026",
+                "outras_pessoas_com_sintomas": "Nao",
+                "exposicao_animal": ["Nenhum contato animal relevante"],
+                "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
+                "exposicao_alimentar": ["Nenhuma dessas"],
+                "diagnostico_medico": "Nao",
                 "dias_incap": "2",
+                "houve_gasto": "Nao",
             }
         ),
         respostas_t10=[
             _fake_response(
                 {
-                    "cpf": "12345678900",
-                    "nome": "Lucilene Alves da Silva",
-                    "classificacao_melhora": "Melhorando - Sintomas leves, em recuperacao",
-                    "sintomas_persistentes": ["Cansaco extremo/fadiga", "Dor de cabeca"],
+                    "_instrument_version": "collective-v2",
+                    "_submitted_stage": "t10",
+                    "classificacao_melhora": "Melhorando",
+                    "sinais_alerta_atuais": ["Nenhum destes sinais agora"],
+                    "novos_casos_semelhantes": "Nao",
                     "dias_incap_novos": "3",
+                    "houve_novos_gastos": "Sim",
+                    "custo_outros": "18.50",
                 }
             )
         ],
@@ -80,24 +90,30 @@ def _fake_patient():
 def test_montar_visao_resposta_formulario_agrupar_campos_e_listas():
     response = _fake_response(
         {
-            "cpf": "12345678900",
-            "classificacao_melhora": "Melhorando - Sintomas leves, em recuperacao",
-            "sintomas_persistentes": ["Cansaco extremo/fadiga", "Dor de cabeca"],
+            "_instrument_version": "collective-v2",
+            "classificacao_melhora": "Melhorando",
+            "sinais_alerta_atuais": [
+                "Falta de ar importante",
+                "Sangramento importante",
+            ],
         }
     )
 
-    view = montar_visao_resposta_formulario("t10", response, schema=carregar_t10_form_schema())
+    view = montar_visao_resposta_formulario(
+        "t10", response, schema=carregar_t10_form_schema()
+    )
 
     assert view["stage"] == "t10"
+    assert view["instrument_version"] == "collective-v2"
     assert view["submitted_at"] == "23/03/2026 10:30"
-    sintomas_field = next(
+    alertas_field = next(
         field
         for section in view["sections"]
         for field in section["fields"]
-        if field["key"] == "sintomas_persistentes"
+        if field["key"] == "sinais_alerta_atuais"
     )
-    assert sintomas_field["value"] == "Cansaco extremo/fadiga | Dor de cabeca"
-    assert sintomas_field["has_value"] is True
+    assert alertas_field["value"] == "Falta de ar importante | Sangramento importante"
+    assert alertas_field["has_value"] is True
 
 
 def test_gerar_csv_exportacao_cadastro_inclui_colunas_operacionais():
@@ -109,14 +125,17 @@ def test_gerar_csv_exportacao_cadastro_inclui_colunas_operacionais():
     assert rows[0]["proxima_acao"] == "Aguardar T10"
 
 
-def test_gerar_csv_exportacao_analitica_achata_respostas():
+def test_gerar_csv_exportacao_analitica_achata_instrumento_atual_sem_repetir_importados():
     csv_text = gerar_csv_exportacao_analitica([_fake_patient()])
     rows = list(csv.DictReader(io.StringIO(csv_text)))
 
     assert rows[0]["id_estudo"] == "SFA-123"
-    assert rows[0]["t0__cpf"] == "12345678900"
-    assert rows[0]["t10__classificacao_melhora"] == "Melhorando - Sintomas leves, em recuperacao"
-    assert rows[0]["t10__sintomas_persistentes"] == "Cansaco extremo/fadiga | Dor de cabeca"
+    assert rows[0]["t0__instrument_version"] == "collective-v2"
+    assert rows[0]["t10__instrument_version"] == "collective-v2"
+    assert rows[0]["t0__respondent_role"] == "A propria pessoa"
+    assert rows[0].get("t0__cpf", "") == ""
+    assert rows[0]["t10__classificacao_melhora"] == "Melhorando"
+    assert rows[0]["t10__custo_outros"] == "18.50"
 
 
 def _chart_value(chart, label):
@@ -124,28 +143,26 @@ def _chart_value(chart, label):
     return values.get(label, 0)
 
 
-def test_montar_analise_respostas_agrega_riscos_e_dias_da_doenca():
+def test_montar_analise_respostas_agrega_exposicoes_coletivas_e_dias_da_doenca():
     paciente_exposto = SimpleNamespace(
         id_estudo="SFA-201",
         nome="Paciente Exposto",
         resposta_t0=_fake_response(
             {
+                "_instrument_version": "collective-v2",
                 "data_inicio_sintomas": "2026-03-01",
-                "contato_animais": ["Caes ou gatos domesticos", "Gado, porcos ou galinhas"],
-                "consumo_recente": ["Leite cru ou queijo nao pasteurizado"],
-                "contato_agua_suja": "Sim",
-                "contato_carrapato_mata": "Nao",
-                "tipo_residencia": "Casa rural",
-                "ocupacao_principal": "Agricultura/pecuaria",
-                "atividades_recentes": ["Trabalho em area rural/chacara"],
+                "outras_pessoas_com_sintomas": "Sim",
+                "exposicao_animal": ["Caes", "Carrapato"],
+                "exposicao_alimentar": ["Leite cru/queijo nao pasteurizado"],
+                "exposicao_ambiental": [
+                    "Agua suja/lama/enchente",
+                    "Area rural/chacara",
+                ],
             },
             when=datetime(2026, 3, 3, 9, 0, 0),
         ),
         respostas_t10=[
-            _fake_response(
-                {"data_entrevista_t10": "2026-03-12"},
-                when=datetime(2026, 3, 12, 9, 0, 0),
-            )
+            _fake_response({}, when=datetime(2026, 3, 12, 9, 0, 0))
         ],
         respostas_t30=[
             _fake_response({}, when=datetime(2026, 3, 31, 9, 0, 0))
@@ -156,12 +173,12 @@ def test_montar_analise_respostas_agrega_riscos_e_dias_da_doenca():
         nome="Paciente Sem Risco",
         resposta_t0=_fake_response(
             {
+                "_instrument_version": "collective-v2",
                 "data_inicio_sintomas": "01/03/2026",
-                "contato_animais": ["Nenhum contato com animais"],
-                "consumo_recente": ["Nenhum desses"],
-                "contato_agua_suja": "Nao",
-                "contato_carrapato_mata": "Nao",
-                "atividades_recentes": ["Nenhuma dessas atividades"],
+                "outras_pessoas_com_sintomas": "Nao",
+                "exposicao_animal": ["Nenhum contato animal relevante"],
+                "exposicao_alimentar": ["Nenhuma dessas"],
+                "exposicao_ambiental": ["Nenhuma exposicao ambiental"],
             },
             when=datetime(2026, 3, 20, 9, 0, 0),
         ),
@@ -178,13 +195,22 @@ def test_montar_analise_respostas_agrega_riscos_e_dias_da_doenca():
     assert kpis["Risco ambiental"] == 1
     assert kpis["Risco alimentar"] == 1
     assert _chart_value(analise["charts"]["animal"], "Caes") == 1
-    assert _chart_value(analise["charts"]["animal"], "Gatos") == 1
-    assert _chart_value(analise["charts"]["animal"], "Gado/porcos/galinhas") == 1
-    assert _chart_value(analise["charts"]["animal"], "Caes ou gatos domesticos") == 0
-    assert _chart_value(analise["charts"]["food"], "Leite cru/queijo nao pasteurizado") == 1
-    assert _chart_value(analise["charts"]["environmental"], "Agua suja/lama/enchente") == 1
+    assert _chart_value(analise["charts"]["animal"], "Carrapato") == 1
+    assert _chart_value(
+        analise["charts"]["food"], "Leite cru/queijo nao pasteurizado"
+    ) == 1
+    assert _chart_value(
+        analise["charts"]["environmental"], "Agua suja/lama/enchente"
+    ) == 1
+    assert _chart_value(
+        analise["charts"]["environmental"], "Area rural/chacara"
+    ) == 1
 
-    t0_dataset = next(dataset for dataset in analise["charts"]["timing"]["datasets"] if dataset["label"] == "T0")
+    t0_dataset = next(
+        dataset
+        for dataset in analise["charts"]["timing"]["datasets"]
+        if dataset["label"] == "T0"
+    )
     labels = analise["charts"]["timing"]["labels"]
     assert t0_dataset["data"][labels.index("D0-D2")] == 1
     assert t0_dataset["data"][labels.index("D15-D30")] == 1
@@ -197,7 +223,9 @@ def test_montar_registro_assinatura_tcle_extrai_nome_e_metadados():
         {
             "nome": "Lucilene Alves da Silva",
             "ficha_sinan": "3032976",
-            "aceite_tcle": ["Confirmo que li o TCLE e aceito participar voluntariamente do estudo."],
+            "aceite_tcle": [
+                "Confirmo que li o TCLE e aceito participar voluntariamente do estudo."
+            ],
             "tcle_assinado_por": "Lucilene Alves da Silva",
             "consentimento_registrado_em": "2026-03-18T11:43:54Z",
             "consentimento_ip": "203.0.113.9",
