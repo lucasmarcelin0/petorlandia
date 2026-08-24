@@ -1,18 +1,18 @@
 {% extends "sfa/base.html" %}
 
-{% block title %}Revisao dos instrumentos{% endblock %}
-{% block page_title %}Revisao dos instrumentos{% endblock %}
+{% block title %}Revisão dos instrumentos{% endblock %}
+{% block page_title %}Revisão dos instrumentos{% endblock %}
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_instrument_lab.css') }}?v=20260824">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sfa_instrument_lab.css') }}?v=20260824b">
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h4 class="mb-1">Links publicos para colaboradores</h4>
-    <p class="text-muted mb-0">Compartilhe os links ou QR codes para receber avaliacoes dos formularios e dos graficos.</p>
+    <h4 class="mb-1">Links públicos para colaboradores</h4>
+    <p class="text-muted mb-0">Compartilhe os links ou QR codes para receber avaliações dos formulários e dos gráficos vigentes.</p>
   </div>
   <a class="btn btn-outline-primary" href="{{ url_for('sfa_routes.revisao_resumo') }}">
     <i class="fas fa-list-check me-1"></i> Ver compilado
@@ -28,7 +28,7 @@
           <img src="{{ item.qr_url }}" alt="QR code {{ item.label }}" width="128" height="128" class="border rounded p-1 bg-white">
           <div class="flex-grow-1">
             <h5 class="mb-2">{{ item.label }}</h5>
-            <p class="text-muted small mb-2">Link publico de revisao colaborativa.</p>
+            <p class="text-muted small mb-2">Link público de revisão colaborativa do instrumento vigente.</p>
             <input class="form-control form-control-sm mb-2" value="{{ item.url }}" readonly onclick="this.select()">
             <a class="btn btn-sm btn-primary" href="{{ item.url }}" target="_blank" rel="noopener">
               Abrir link
@@ -52,5 +52,5 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='js/sfa_instrument_lab.js') }}?v=20260824" defer></script>
+<script src="{{ url_for('static', filename='js/sfa_instrument_lab.js') }}?v=20260824b" defer></script>
 {% endblock %}

@@ -53,23 +53,12 @@
         {
           title: 'Possível vínculo coletivo', icon: 'fa-people-group', questions: [
             question('similar_cases', 'Você soube de outra pessoa com febre ou sintomas parecidos perto da mesma época?', 'radio', ['Não', 'Sim', 'Não sei']),
-            question('similar_count', 'Aproximadamente quantas pessoas?', 'number', [], {
-              conditional: true, showWhen: (a) => a.similar_cases === 'Sim', min: 1, max: 99
-            }),
             question('shared_setting', 'O que essas pessoas podem ter compartilhado?', 'checkboxes', [
               'Casa', 'Vizinhança', 'Trabalho', 'Escola', 'Serviço de saúde', 'Refeição ou alimento',
               'Evento', 'Viagem ou transporte', 'Atividade com animais', 'Outro'
             ], { conditional: true, showWhen: (a) => a.similar_cases === 'Sim' }),
-            question('cluster_where', 'Onde ocorreu esse possível vínculo?', 'text', [], {
-              conditional: true, showWhen: (a) => a.similar_cases === 'Sim',
-              placeholder: 'Nome do local, estabelecimento, propriedade ou referência'
-            }),
             question('cluster_timing', 'Os sintomas das outras pessoas começaram quando?', 'radio', ['Antes dos seus', 'Na mesma época', 'Depois dos seus', 'Não sei'], {
               conditional: true, showWhen: (a) => a.similar_cases === 'Sim'
-            }),
-            question('cluster_suspected', 'Qual exposição em comum você suspeita?', 'text', [], {
-              conditional: true, showWhen: (a) => a.similar_cases === 'Sim',
-              placeholder: 'Produto, alimento, animal, local, atividade ou evento'
             })
           ]
         },
@@ -79,16 +68,7 @@
               'Água suja, lama, enchente ou esgoto', 'Rio, córrego, pesca ou natação', 'Mata, trilha, pasto ou camping',
               'Chácara, fazenda ou área rural', 'Muitos mosquitos, carrapatos ou outros vetores',
               'Viagem ou permanência em outro município', 'Nenhuma destas situações'
-            ], { exclusive: ['Nenhuma destas situações'] }),
-            question('environment_detail', 'Onde e em qual data ou período?', 'text', [], {
-              conditional: true,
-              showWhen: (a) => hasPositiveSelection(a.environment, 'Nenhuma destas situações'),
-              placeholder: 'Local + data aproximada'
-            }),
-            question('environment_others', 'Outras pessoas expostas nesse local também adoeceram?', 'radio', ['Não', 'Sim', 'Não sei'], {
-              conditional: true,
-              showWhen: (a) => hasPositiveSelection(a.environment, 'Nenhuma destas situações')
-            })
+            ], { exclusive: ['Nenhuma destas situações'] })
           ]
         },
         {
@@ -102,14 +82,10 @@
               help: 'Contato rotineiro com cão ou gato saudável, sozinho, não precisa ser marcado.',
               exclusive: ['Nenhum evento animal relevante']
             }),
-            question('animal_detail', 'Qual animal, o que ocorreu, onde e quando?', 'textarea', [], {
+            question('animal_detail', 'Qual animal e qual evento ocorreu?', 'textarea', [], {
               conditional: true,
               showWhen: (a) => hasPositiveSelection(a.animal, 'Nenhum evento animal relevante'),
-              placeholder: 'Espécie + evento + local + data aproximada'
-            }),
-            question('animal_others', 'Outros animais ou pessoas ligados ao evento adoeceram?', 'radio', ['Não', 'Sim', 'Não sei'], {
-              conditional: true,
-              showWhen: (a) => hasPositiveSelection(a.animal, 'Nenhum evento animal relevante')
+              placeholder: 'Ex.: cães da propriedade com doença incomum; retirada de carrapato'
             })
           ]
         },
@@ -120,20 +96,36 @@
               'Água sem tratamento', 'Refeição em evento, estabelecimento ou ambulante',
               'Alimento ou produto com aspecto suspeito', 'Outras pessoas que consumiram também adoeceram',
               'Nenhuma destas exposições'
-            ], { exclusive: ['Nenhuma destas exposições'] }),
-            question('food_item', 'Qual alimento, água ou produto?', 'text', [], {
-              conditional: true, showWhen: (a) => hasPositiveSelection(a.food, 'Nenhuma destas exposições'),
-              placeholder: 'Nome específico do item'
+            ], { exclusive: ['Nenhuma destas exposições'] })
+          ]
+        },
+        {
+          title: 'Detalhe mínimo para verificar a pista', icon: 'fa-location-crosshairs', questions: [
+            question('exposure_specific', 'O que exatamente pode ter sido compartilhado?', 'text', [], {
+              conditional: true, showWhen: hasT0CollectiveDoor,
+              placeholder: 'Alimento, produto, água, animal, local, atividade ou evento específico'
             }),
-            question('food_origin', 'Marca, produtor, origem ou local de compra/consumo', 'text', [], {
-              conditional: true, showWhen: (a) => hasPositiveSelection(a.food, 'Nenhuma destas exposições')
+            question('exposure_source', 'Qual foi a fonte, marca, estabelecimento ou local?', 'text', [], {
+              conditional: true, showWhen: hasT0CollectiveDoor,
+              placeholder: 'Nome que permita localizar e verificar a pista'
             }),
-            question('food_date', 'Data aproximada do consumo ou contato', 'date', [], {
-              conditional: true, showWhen: (a) => hasPositiveSelection(a.food, 'Nenhuma destas exposições')
+            question('exposure_period', 'Qual foi a data ou o período aproximado da exposição?', 'text', [], {
+              conditional: true, showWhen: hasT0CollectiveDoor,
+              placeholder: 'Ex.: almoço de 21/08; entre 18 e 20/08'
             }),
-            question('food_people', 'Quantas pessoas consumiram e quantas adoeceram?', 'text', [], {
-              conditional: true, showWhen: (a) => hasPositiveSelection(a.food, 'Nenhuma destas exposições'),
-              placeholder: 'Ex.: 8 consumiram; 4 adoeceram'
+            question('exposed_count', 'Quantas pessoas podem ter sido expostas?', 'number', [], {
+              conditional: true, showWhen: hasT0CollectiveDoor, min: 1, max: 999,
+              help: 'Informe uma estimativa; essa contagem não identifica pessoas únicas.'
+            }),
+            question('sick_count', 'Entre elas, quantas pessoas adoeceram?', 'number', [], {
+              conditional: true, showWhen: hasT0CollectiveDoor, min: 1, max: 999,
+              help: 'Inclua você; relatos serão mantidos separados dos participantes diretamente observados.'
+            }),
+            question('source_active_t0', 'A possível fonte ou situação ainda existe?', 'radio', ['Não', 'Sim', 'Não sei'], {
+              conditional: true, showWhen: hasT0CollectiveDoor
+            }),
+            question('others_still_exposed_t0', 'Outras pessoas ainda podem estar expostas?', 'radio', ['Não', 'Sim', 'Não sei'], {
+              conditional: true, showWhen: hasT0CollectiveDoor
             })
           ]
         },
@@ -258,10 +250,7 @@
             question('additional_expense', 'Total aproximado dos novos gastos (R$)', 'number', [], {
               conditional: true, showWhen: (a) => a.additional_expense_any === 'Sim', min: 0, max: 99999, step: '0.01'
             }),
-            question('lost_income_any', 'Houve perda de renda desde o T0?', 'radio', ['Não', 'Sim']),
-            question('lost_income', 'Valor aproximado da perda de renda (R$)', 'number', [], {
-              conditional: true, showWhen: (a) => a.lost_income_any === 'Sim', min: 0, max: 99999, step: '0.01'
-            })
+            question('lost_income_any', 'Houve perda de renda desde o T0?', 'radio', ['Não', 'Sim'])
           ]
         }
       ]
@@ -347,10 +336,7 @@
             question('additional_expense', 'Total aproximado dos novos gastos (R$)', 'number', [], {
               conditional: true, showWhen: (a) => a.additional_expense_any === 'Sim', min: 0, max: 99999, step: '0.01'
             }),
-            question('lost_income_any', 'Houve nova perda de renda desde o último contato?', 'radio', ['Não', 'Sim']),
-            question('lost_income', 'Valor aproximado da nova perda de renda (R$)', 'number', [], {
-              conditional: true, showWhen: (a) => a.lost_income_any === 'Sim', min: 0, max: 99999, step: '0.01'
-            })
+            question('lost_income_any', 'Houve nova perda de renda desde o último contato?', 'radio', ['Não', 'Sim'])
           ]
         }
       ]
@@ -361,13 +347,12 @@
     t0: {
       respondent_role: 'A própria pessoa',
       consent: ['Li o TCLE e aceito participar voluntariamente.'],
-      similar_cases: 'Sim', similar_count: '3', shared_setting: ['Refeição ou alimento'],
-      cluster_where: 'Feira Central de Orlândia', cluster_timing: 'Na mesma época',
-      cluster_suspected: 'Queijo fresco comprado na mesma banca',
+      similar_cases: 'Sim', shared_setting: ['Refeição ou alimento'], cluster_timing: 'Na mesma época',
       environment: ['Nenhuma destas situações'], animal: ['Nenhum evento animal relevante'],
       food: ['Leite cru ou queijo sem inspeção', 'Outras pessoas que consumiram também adoeceram'],
-      food_item: 'Queijo fresco', food_origin: 'Banca da Feira Central', food_date: '2026-08-21',
-      food_people: '7 consumiram; 4 adoeceram', extra_symptoms: ['Diarreia'],
+      exposure_specific: 'Queijo fresco', exposure_source: 'Banca da Feira Central',
+      exposure_period: 'Manhã de 21/08/2026', exposed_count: '7', sick_count: '4',
+      source_active_t0: 'Sim', others_still_exposed_t0: 'Sim', extra_symptoms: ['Diarreia'],
       understood_diagnosis: 'Virose ou síndrome viral indefinida', diagnosis_status: 'Suspeita',
       safety: [noCurrentDanger], days_unable: '3', expense_any: 'Sim', expense_total: '75',
       caregiver_stop: 'Não', open_exposure: ''
@@ -394,11 +379,20 @@
     answers: { t0: {}, t10: {}, t30: {} },
     stageStartedAt: { t0: Date.now() },
     cohort: null,
-    signals: []
+    signals: [],
+    currentScenarioKey: 'detectable',
+    reviewOverrides: {}
   };
 
   function hasPositiveSelection(value, negativeLabel) {
     return Array.isArray(value) && value.length > 0 && !value.includes(negativeLabel);
+  }
+
+  function hasT0CollectiveDoor(answers) {
+    return answers.similar_cases === 'Sim'
+      || hasPositiveSelection(answers.environment, 'Nenhuma destas situações')
+      || hasPositiveSelection(answers.animal, 'Nenhum evento animal relevante')
+      || hasPositiveSelection(answers.food, 'Nenhuma destas exposições');
   }
 
   function priorT0ExposureMentioned() {
@@ -724,12 +718,14 @@
       description: 'Três vínculos específicos coexistem; dois não seriam nomeáveis apenas com os campos importados. O seguimento informa fonte ativa e ação percebida.',
       t10Count: 43,
       t30Count: 38,
+      ial: { eligible: 36, collected: 31, valid: 29, positive: 12 },
       clusters: [
         {
           key: 'food:queijo-feira-central', label: 'Queijo fresco — Feira Central', domain: 'Alimento/água/produto',
           size: 7, onsetStart: 3, onsetSpan: 4, location: 'Feira Central', potentialExposed: 24,
           sinanVisible: false, active: true, sourceStateT30: 'Aparentemente interrompida',
-          action: true, postActionCases: false, discoverAt: 'T0', windowDays: 7,
+          action: true, postActionCases: false, discoverAt: 'T0', windowDays: 7, reviewStatus: 'accepted',
+          matchReason: 'Mesmo alimento, mesma banca e inícios dentro de quatro dias.', confidence: 0.96,
           decisions: [
             simulatedDecision('D-SIM-001', 'Inspeção do ponto de venda', 8, 'Executada', 'Vigilância Sanitária', 'Principal', ['T0: item/origem', 'T10: fonte ativa'], ['exposure', 'place', 'date', 'followup'], 7),
             simulatedDecision('D-SIM-002', 'Orientação aos coexpostos', 9, 'Executada', 'Vigilância Epidemiológica', 'Principal', ['T0: coadoecidos', 'T10: pessoas expostas'], ['exposure', 'place', 'followup', 'active'], 18),
@@ -740,7 +736,8 @@
           key: 'animal:fazenda-santa-clara', label: 'Carrapatos — Fazenda Santa Clara', domain: 'Animal/rural',
           size: 5, onsetStart: 11, onsetSpan: 4, location: 'Fazenda Santa Clara', potentialExposed: 9,
           sinanVisible: false, active: true, sourceStateT30: 'Desconhecida',
-          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14,
+          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14, reviewStatus: 'accepted',
+          matchReason: 'Mesma propriedade, mesmo evento com carrapatos e janela compatível.', confidence: 0.91,
           decisions: [
             simulatedDecision('D-SIM-004', 'Articulação para verificação One Health', 16, 'Registrada', 'Vigilância Epidemiológica', 'Contributiva', ['T0: evento animal e propriedade'], ['exposure', 'place'], 5)
           ]
@@ -749,7 +746,8 @@
           key: 'event:escola-aurora', label: 'Evento — Escola Municipal Aurora', domain: 'Trabalho/escola/evento',
           size: 4, onsetStart: 20, onsetSpan: 3, location: 'Escola Municipal Aurora', potentialExposed: 18,
           sinanVisible: true, active: false, sourceStateT30: 'Aparentemente interrompida',
-          action: true, postActionCases: false, discoverAt: 'T10', windowDays: 7,
+          action: true, postActionCases: false, discoverAt: 'T10', windowDays: 7, reviewStatus: 'accepted',
+          matchReason: 'Mesma instituição e mesmo evento informados no T10.', confidence: 0.94,
           decisions: [
             simulatedDecision('D-SIM-005', 'Contato com a instituição', 24, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['SINAN: tempo/território', 'T10: evento específico'], ['exposure', 'place', 'followup'], 4),
             simulatedDecision('D-SIM-006', 'Orientação ao grupo exposto', 25, 'Executada', 'Vigilância Epidemiológica', 'Contributiva', ['T10: instituição e coexpostos'], ['exposure', 'place', 'followup'], 18)
@@ -761,18 +759,21 @@
       description: 'Exposições variadas e pouco específicas, sem duas pessoas diretamente ligadas à mesma fonte. O resultado honesto é não abrir uma fila artificial de sinais.',
       t10Count: 42,
       t30Count: 37,
+      ial: { eligible: 34, collected: 28, valid: 26, positive: 8 },
       clusters: []
     },
     attrition: {
       description: 'Dois vínculos surgem no T0, mas apenas 29 pessoas respondem ao T10 e 20 ao T30. A detecção permanece; urgência e encerramento ficam incompletos.',
       t10Count: 29,
       t30Count: 20,
+      ial: { eligible: 35, collected: 25, valid: 22, positive: 7 },
       clusters: [
         {
           key: 'water:corrego-bebedouro', label: 'Água — córrego próximo ao bebedouro', domain: 'Ambiente/água',
           size: 6, onsetStart: 6, onsetSpan: 4, location: 'Zona rural norte', potentialExposed: 15,
           sinanVisible: false, active: true, sourceStateT30: 'Desconhecida',
           action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14,
+          matchReason: 'Mesmo córrego e período de exposição; seguimento incompleto.', confidence: 0.84,
           decisions: []
         },
         {
@@ -780,7 +781,78 @@
           size: 4, onsetStart: 18, onsetSpan: 3, location: 'Centro comunitário', potentialExposed: 30,
           sinanVisible: true, active: null, sourceStateT30: 'Desconhecida',
           action: false, postActionCases: null, discoverAt: 'T0', windowDays: 7,
+          matchReason: 'Mesmo evento e inícios em três dias; fonte ainda pouco específica.', confidence: 0.76,
           decisions: []
+        }
+      ]
+    },
+    semantic: {
+      description: 'Seis participantes descrevem a mesma exposição com grafias diferentes. A normalização apenas sugere a correspondência; a validação continua humana.',
+      t10Count: 45,
+      t30Count: 41,
+      ial: { eligible: 37, collected: 33, valid: 31, positive: 13 },
+      clusters: [
+        {
+          key: 'food:queijo-minas-banca-primavera', normalizedKey: 'food:queijo-minas-banca-primavera',
+          label: 'Queijo Minas — Banca Primavera', normalizedLabel: 'Queijo Minas da Banca Primavera',
+          domain: 'Alimento/água/produto', size: 6, onsetStart: 5, onsetSpan: 4,
+          location: 'Banca Primavera — Feira Central', potentialExposed: 21,
+          sinanVisible: false, active: true, sourceStateT30: 'Desconhecida',
+          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 7,
+          matchReason: '“queijo minas”, “queijo fresco” e “queijo da banca Primavera”; local e período coincidem.',
+          confidence: 0.92,
+          variants: [
+            { key: 'raw:queijo-minas-primavera', label: 'queijo minas da Primavera' },
+            { key: 'raw:queijo-fresco-feira', label: 'queijo fresco da feira' },
+            { key: 'raw:queijo-banca-primavera', label: 'queijo comprado na banca Primavera' }
+          ],
+          decisions: [
+            simulatedDecision('D-SIM-SEM-001', 'Verificação da banca e origem do produto', 11, 'Registrada', 'Vigilância Sanitária', 'Principal', ['T0: descrições normalizadas', 'T0: fonte e período'], ['exposure', 'place', 'date'], 6)
+          ]
+        }
+      ]
+    },
+    falsefriends: {
+      description: 'Expressões parecidas escondem duas fontes e dois locais distintos. O sistema deve mostrar a dúvida para rejeição humana, não fundir casos automaticamente.',
+      t10Count: 44,
+      t30Count: 39,
+      ial: { eligible: 33, collected: 29, valid: 27, positive: 9 },
+      clusters: [
+        {
+          key: 'candidate:lanche-primavera', normalizedKey: 'candidate:lanche-primavera',
+          label: '“Lanche Primavera”', normalizedLabel: 'Lanche Primavera (fonte ainda ambígua)',
+          domain: 'Alimento/água/produto', size: 4, onsetStart: 9, onsetSpan: 3,
+          location: 'Fontes distintas', potentialExposed: 27,
+          sinanVisible: false, active: null, sourceStateT30: 'Desconhecida',
+          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 7,
+          matchReason: 'O nome é parecido, mas os relatos apontam estabelecimentos e bairros diferentes.',
+          confidence: 0.46,
+          variants: [
+            { key: 'raw:lanche-primavera-norte', label: 'lanche Primavera', location: 'Centro Comunitário Norte' },
+            { key: 'raw:combo-primavera-sul', label: 'combo primavera', location: 'Escola Municipal Sul' }
+          ],
+          decisions: []
+        }
+      ]
+    },
+    onehealth: {
+      description: 'Um evento de adoecimento animal e exposição humana na mesma propriedade permanece ativo. A fila explicita a articulação One Health sem inferir etiologia.',
+      t10Count: 46,
+      t30Count: 42,
+      ial: { eligible: 39, collected: 35, valid: 32, positive: 10 },
+      clusters: [
+        {
+          key: 'animal:abortos-sitio-boa-esperanca', label: 'Abortos em caprinos — Sítio Boa Esperança',
+          normalizedLabel: 'Evento reprodutivo animal — Sítio Boa Esperança', domain: 'Animal/rural',
+          size: 5, onsetStart: 12, onsetSpan: 5, location: 'Sítio Boa Esperança', potentialExposed: 12,
+          sinanVisible: false, active: true, sourceStateT30: 'Ainda ativa',
+          action: false, postActionCases: null, discoverAt: 'T0', windowDays: 14,
+          matchReason: 'Mesma propriedade, contato com parto/placenta e evento animal incomum no mesmo período.',
+          confidence: 0.9,
+          decisions: [
+            simulatedDecision('D-SIM-OH-001', 'Verificação conjunta na propriedade', 18, 'Em andamento', 'Vigilância Epidemiológica e serviço veterinário', 'Principal', ['T0: espécie/evento', 'T0: fonte ativa e coexpostos'], ['exposure', 'place', 'date', 'active'], 5),
+            simulatedDecision('D-SIM-OH-002', 'Orientação preventiva aos expostos', 19, 'Registrada', 'Vigilância Epidemiológica', 'Contributiva', ['T0: pessoas ainda expostas'], ['exposure', 'place', 'active'], 12)
+          ]
         }
       ]
     }
@@ -788,6 +860,12 @@
 
   function responseSelected(index, count, salt) {
     return ((index * 17 + salt) % 50) < count;
+  }
+
+  function deterministicSubset(indexes, count, salt) {
+    return indexes.slice()
+      .sort((a, b) => ((((a + 1) * 31) + salt) % 101) - ((((b + 1) * 31) + salt) % 101))
+      .slice(0, Math.min(count, indexes.length));
   }
 
   function buildSyntheticCohort(scenarioKey) {
@@ -811,10 +889,22 @@
       .slice()
       .sort((a, b) => (((a * 23) + 13) % 101) - (((b * 23) + 13) % 101))
       .slice(0, scenario.t30Count));
+    const ialPlan = Object.assign({ eligible: 35, collected: 30, valid: 28, positive: 9 }, scenario.ial || {});
+    const ialEligibleIndexes = deterministicSubset(participantIndexes, ialPlan.eligible, 5);
+    const ialCollectedIndexes = deterministicSubset(ialEligibleIndexes, ialPlan.collected, 17);
+    const ialValidIndexes = deterministicSubset(ialCollectedIndexes, ialPlan.valid, 29);
+    const ialPositiveIndexes = deterministicSubset(ialValidIndexes, ialPlan.positive, 41);
+    const ialEligibleSet = new Set(ialEligibleIndexes);
+    const ialCollectedSet = new Set(ialCollectedIndexes);
+    const ialValidSet = new Set(ialValidIndexes);
+    const ialPositiveSet = new Set(ialPositiveIndexes);
 
     return Array.from({ length: 50 }, (_, index) => {
       const assigned = assignments.get(index);
       const cluster = assigned ? assigned.cluster : null;
+      const variant = cluster && Array.isArray(cluster.variants) && cluster.variants.length
+        ? cluster.variants[assigned.within % cluster.variants.length]
+        : null;
       const t10Responded = t10Set.has(index);
       const t30Responded = t30Set.has(index);
       const recordedDiagnosis = diagnoses[index % diagnoses.length];
@@ -822,17 +912,27 @@
         ? (recordedDiagnosis === 'Dengue' ? 'Virose/indefinida' : 'Dengue')
         : recordedDiagnosis;
       const hasBroadExposure = !cluster && index % 8 === 0;
+      const exposurePlace = cluster ? ((variant && variant.location) || cluster.location) : null;
+      const exposureDateKnown = Boolean(cluster && cluster.dateKnown !== false);
+      const linkComplete = Boolean(cluster && exposurePlace && exposureDateKnown
+        && (cluster.completeLinks === undefined || assigned.within < cluster.completeLinks));
+      const ialValidResult = ialValidSet.has(index);
+      const ialEtiologyPositive = ialPositiveSet.has(index);
 
       return {
         id: `P${String(index + 1).padStart(3, '0')}`,
         onsetDay: cluster ? cluster.onsetStart + (assigned.within % cluster.onsetSpan) : 1 + ((index * 7) % 30),
-        neighborhood: cluster ? cluster.location : neighborhoods[index % neighborhoods.length],
-        exposureKey: cluster ? cluster.key : (hasBroadExposure ? `broad:${index}` : null),
-        exposureLabel: cluster ? cluster.label : (hasBroadExposure ? 'Exposição inespecífica isolada' : null),
+        neighborhood: cluster ? exposurePlace : neighborhoods[index % neighborhoods.length],
+        exposureKey: cluster ? ((variant && variant.key) || cluster.key) : (hasBroadExposure ? `broad:${index}` : null),
+        normalizedExposureKey: cluster ? (cluster.normalizedKey || cluster.key) : null,
+        exposureLabel: cluster ? ((variant && variant.label) || cluster.label) : (hasBroadExposure ? 'Exposição inespecífica isolada' : null),
+        normalizedExposureLabel: cluster ? (cluster.normalizedLabel || cluster.label) : null,
         exposureDomain: cluster ? cluster.domain : (hasBroadExposure ? broadDomains[index % broadDomains.length] : null),
         specificity: cluster ? 'specific' : (hasBroadExposure ? 'broad' : 'none'),
-        exposurePlace: cluster ? cluster.location : null,
-        exposureDateKnown: Boolean(cluster),
+        exposurePlace,
+        exposureDateKnown,
+        linkComplete,
+        hasNewInformation: Boolean(cluster || hasBroadExposure),
         reportedOthers: cluster ? 1 + (index % 3) : (index % 11 === 0 ? 1 : 0),
         t10Responded,
         t30Responded,
@@ -843,8 +943,17 @@
         decisions: cluster ? (cluster.decisions || []) : [],
         discoverAt: cluster ? cluster.discoverAt : null,
         windowDays: cluster ? (cluster.windowDays || 7) : 7,
+        defaultReviewStatus: cluster ? (cluster.reviewStatus || 'pending') : 'pending',
+        matchReason: cluster ? cluster.matchReason : null,
+        matchConfidence: cluster && Number.isFinite(cluster.confidence) ? cluster.confidence : 0.5,
         sinanVisible: Boolean(cluster && cluster.sinanVisible),
         potentialExposed: cluster ? cluster.potentialExposed : 0,
+        ialEligible: ialEligibleSet.has(index),
+        ialSampleCollected: ialCollectedSet.has(index),
+        ialValidResult,
+        ialEtiologyPositive,
+        ialEtiology: ialEtiologyPositive ? (index % 4 === 0 ? 'Chikungunya' : 'Dengue') : null,
+        ialStratum: ialValidResult ? (ialEtiologyPositive ? 'Etiologia detectada' : 'Sem etiologia detectada') : 'Sem resultado válido',
         recordedDiagnosis,
         understoodDiagnosis,
         daysUnable: 1 + ((index * 3) % 7),
@@ -853,15 +962,17 @@
     });
   }
 
-  function buildSignals(records) {
+  function buildSignals(records, reviewOverrides) {
+    const overrides = reviewOverrides || {};
     const grouped = new Map();
     records.forEach((record) => {
       if (!record.exposureKey || record.specificity !== 'specific') return;
-      if (!grouped.has(record.exposureKey)) grouped.set(record.exposureKey, []);
-      grouped.get(record.exposureKey).push(record);
+      const groupingKey = record.normalizedExposureKey || record.exposureKey;
+      if (!grouped.has(groupingKey)) grouped.set(groupingKey, []);
+      grouped.get(groupingKey).push(record);
     });
 
-    return Array.from(grouped.values()).map((group) => {
+    return Array.from(grouped.entries()).map(([groupingKey, group]) => {
       const configuredStage = group[0].discoverAt || 'T0';
       const available = group.filter((record) => configuredStage === 'T0'
         || (configuredStage === 'T10' && record.t10Responded)
@@ -891,6 +1002,13 @@
           : (t30States.includes('Aparentemente interrompida') ? 'Aparentemente interrompida' : 'Desconhecida'));
       const action = group.some((record) => record.actionObservedT30);
       const noPostActionCases = action && group.some((record) => record.postActionCases === false);
+      const locations = new Set(available.map((record) => String(record.exposurePlace || '').trim().toLocaleLowerCase('pt-BR')).filter(Boolean));
+      const sourceConsistent = locations.size <= 1;
+      const linkCompleteCases = available.filter((record) => record.linkComplete !== false
+        && record.exposurePlace && record.exposureDateKnown).length;
+      const actionable = linkCompleteCases > 0 && sourceConsistent;
+      const candidateStatus = overrides[groupingKey] || first.defaultReviewStatus || 'pending';
+      const reviewStatus = ['pending', 'accepted', 'rejected'].includes(candidateStatus) ? candidateStatus : 'pending';
       let status = 'Revisar';
       let statusClass = 'is-review';
       if (finalSourceState === 'Aparentemente interrompida') {
@@ -909,8 +1027,9 @@
       }
 
       return {
-        key: first.exposureKey,
-        label: first.exposureLabel,
+        key: groupingKey,
+        label: first.normalizedExposureLabel || first.exposureLabel,
+        normalizedLabel: first.normalizedExposureLabel || first.exposureLabel,
         domain: first.exposureDomain,
         directCases: available.length,
         baseDirectCases: first.sinanVisible ? group.length : 0,
@@ -926,7 +1045,12 @@
         finalSourceState,
         action,
         noPostActionCases,
-        actionable: Boolean(first.exposurePlace) && available.every((record) => record.exposureDateKnown),
+        actionable,
+        linkCompleteCases,
+        sourceConsistent,
+        reviewStatus,
+        matchReason: first.matchReason || `Mesma descrição específica, local compatível e início dentro de ${windowDays} dias.`,
+        confidence: clamp(Number(first.matchConfidence) || 0.5, 0, 1),
         evidenceStrength: available.length >= 2 ? 'A — vínculo direto' : 'B — coadoecido relatado',
         windowDays,
         earliestOnsetDay: ordered[0].onsetDay,
@@ -948,28 +1072,218 @@
     return steps[domain] || 'Revisar vínculo, tempo e local';
   }
 
+  function reviewOverridesFor(scenarioKey) {
+    return state.reviewOverrides[scenarioKey] || {};
+  }
+
+  function setSignalReview(signalKey, reviewStatus, scenarioKey) {
+    if (!['pending', 'accepted', 'rejected'].includes(reviewStatus)) {
+      throw new Error(`Situação de revisão inválida: ${reviewStatus}`);
+    }
+    const selectedScenario = scenarioKey || state.currentScenarioKey || 'detectable';
+    if (!state.reviewOverrides[selectedScenario]) state.reviewOverrides[selectedScenario] = {};
+    state.reviewOverrides[selectedScenario][signalKey] = reviewStatus;
+    return reviewStatus;
+  }
+
+  function acceptSignal(signalKey, scenarioKey) {
+    return setSignalReview(signalKey, 'accepted', scenarioKey);
+  }
+
+  function rejectSignal(signalKey, scenarioKey) {
+    return setSignalReview(signalKey, 'rejected', scenarioKey);
+  }
+
+  function buildFunnel(records, signals) {
+    const acceptedSignals = signals.filter((signal) => signal.reviewStatus === 'accepted');
+    const actionableSignals = acceptedSignals.filter((signal) => signal.actionable);
+    return [
+      { key: 'cohort', label: 'Participantes no T0', value: records.length, denominator: records.length, unit: 'pessoas' },
+      { key: 'new-information', label: 'Informação nova além dos importados', value: records.filter((record) => record.hasNewInformation).length, denominator: records.length, unit: 'pessoas' },
+      { key: 'complete-links', label: 'Participantes com vínculo minimamente completo', value: records.filter((record) => record.linkComplete).length, denominator: records.length, unit: 'pessoas' },
+      { key: 'candidate-signals', label: 'Sinais únicos candidatos', value: signals.length, denominator: null, unit: 'sinais' },
+      { key: 'validated-signals', label: 'Sinais aceitos na revisão humana', value: acceptedSignals.length, denominator: signals.length, unit: 'sinais' },
+      { key: 'actionable-signals', label: 'Sinais aceitos e acionáveis', value: actionableSignals.length, denominator: acceptedSignals.length, unit: 'sinais' },
+      { key: 'decisions', label: 'Decisões concretas registradas', value: registeredDecisions(signals).length, denominator: actionableSignals.length, unit: 'decisões', primary: true }
+    ];
+  }
+
+  function buildIalSummary(records) {
+    const eligible = records.filter((record) => record.ialEligible);
+    const collected = eligible.filter((record) => record.ialSampleCollected);
+    const valid = collected.filter((record) => record.ialValidResult);
+    const positive = valid.filter((record) => record.ialEtiologyPositive);
+    return [
+      { key: 'eligible', label: 'Elegíveis no fluxo disponível', value: eligible.length, denominator: records.length },
+      { key: 'collected', label: 'Amostras coletadas', value: collected.length, denominator: eligible.length },
+      { key: 'valid', label: 'Resultados válidos', value: valid.length, denominator: collected.length },
+      { key: 'yield', label: 'Etiologia detectada', value: positive.length, denominator: valid.length, stratifier: true }
+    ];
+  }
+
   function renderCohort() {
     const scenarioKey = byId('sfa-lab-scenario').value;
     const scenario = scenarioDefinitions[scenarioKey];
+    state.currentScenarioKey = scenarioKey;
     state.cohort = buildSyntheticCohort(scenarioKey);
-    state.signals = buildSignals(state.cohort);
+    state.signals = buildSignals(state.cohort, reviewOverridesFor(scenarioKey));
     byId('sfa-lab-scenario-description').textContent = scenario.description;
 
+    renderFunnel(state.cohort, state.signals);
     renderKpis(state.cohort, state.signals);
     renderCounterfactual(state.cohort, state.signals);
     renderFollowup(state.cohort);
     renderDomains(state.cohort);
     renderSignals(state.signals);
+    renderAiReview(state.signals);
+    renderIal(state.cohort);
     renderDataPreview(state.cohort);
     renderDecisionRegistry(state.cohort, state.signals);
     renderAblation();
+    renderQuestionUtility();
     syncPrecisionToCohort();
   }
 
   function registeredDecisions(signals) {
-    return signals.flatMap((signal) => (signal.decisions || [])
+    return signals
+      .filter((signal) => signal.reviewStatus === 'accepted' && signal.actionable)
+      .flatMap((signal) => (signal.decisions || [])
       .filter((decision) => decision.attributedToReport)
       .map((decision) => Object.assign({ signalKey: signal.key, signalLabel: signal.label, earliestOnsetDay: signal.earliestOnsetDay }, decision)));
+  }
+
+  function renderFunnel(records, signals) {
+    const host = byId('sfa-lab-funnel');
+    if (!host) return;
+    host.innerHTML = buildFunnel(records, signals).map((step) => {
+      const denominator = step.denominator > 0 ? ` de ${step.denominator}` : '';
+      return `<div class="sfa-lab__funnel-step ${step.primary ? 'is-primary' : ''}">
+        <strong>${step.value}${denominator}</strong>
+        <span>${escapeHtml(step.label)} · ${escapeHtml(step.unit)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderAiReview(signals) {
+    const body = byId('sfa-lab-ai-review');
+    if (!body) return;
+    const empty = byId('sfa-lab-ai-review-empty');
+    if (!signals.length) {
+      body.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    const reviewLabels = { pending: 'Pendente', accepted: 'Aceito', rejected: 'Rejeitado' };
+    body.innerHTML = signals.map((signal) => `<tr>
+      <td><strong>${escapeHtml(signal.normalizedLabel)}</strong>
+        <div class="small text-muted">${signal.directCases} participante(s) diretamente observado(s)${signal.reportedOthers ? `; até ${signal.reportedOthers} coadoecido(s) apenas relatado(s)` : ''}</div>
+      </td>
+      <td class="small">${escapeHtml(signal.matchReason)}
+        ${signal.sourceConsistent ? '' : '<div class="text-danger mt-1">Fontes/locais conflitantes: não acionável sem esclarecimento.</div>'}
+      </td>
+      <td><strong>${Math.round(signal.confidence * 100)}%</strong><div class="small text-muted">sem inferência diagnóstica</div></td>
+      <td>
+        <span class="sfa-lab__review-status is-${escapeHtml(signal.reviewStatus)}">${escapeHtml(reviewLabels[signal.reviewStatus])}</span>
+        <div class="d-flex flex-wrap gap-1 mt-2">
+          <button type="button" class="btn btn-outline-success btn-sm" data-sfa-review-action="accepted" data-signal-key="${escapeHtml(signal.key)}" aria-pressed="${signal.reviewStatus === 'accepted'}">Aceitar</button>
+          <button type="button" class="btn btn-outline-danger btn-sm" data-sfa-review-action="rejected" data-signal-key="${escapeHtml(signal.key)}" aria-pressed="${signal.reviewStatus === 'rejected'}">Rejeitar</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  }
+
+  function renderIal(records) {
+    const host = byId('sfa-lab-ial');
+    if (!host) return;
+    host.innerHTML = buildIalSummary(records).map((step) => {
+      const rate = step.denominator > 0 ? percent(step.value, step.denominator) : 0;
+      return `<div class="sfa-lab__ial-step">
+        <strong>${step.value}/${step.denominator}</strong>
+        <span>${escapeHtml(step.label)} (${rate}%)${step.stratifier ? ' · estratificador, não desfecho primário' : ''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  const coreUtilityQuestions = new Set([
+    'similar_cases', 'shared_setting', 'cluster_timing', 'environment', 'animal', 'animal_detail', 'food',
+    'exposure_specific', 'exposure_source', 'exposure_period', 'exposed_count', 'sick_count',
+    'source_active_t0', 'others_still_exposed_t0', 'new_similar', 'new_similar_detail',
+    'new_common_exposure', 'new_exposure_info', 'new_exposure_detail', 'source_active', 'others_exposed',
+    'source_new_info', 'source_new_detail', 'guidance_action', 'cases_after_action',
+    'understood_diagnosis', 'diagnosis_status', 'diagnosis_update', 'diagnosis_now', 'diagnosis_final'
+  ]);
+  const ethicalUtilityQuestions = new Set(['respondent_role', 'respondent_name', 'consent']);
+
+  function syntheticAnswer(stageKey, item) {
+    const value = (exampleAnswers[stageKey] || {})[item.id];
+    if (Array.isArray(value)) return value.join('; ');
+    if (value !== undefined && value !== null && String(value).trim()) return String(value);
+    return item.conditional ? 'Não exibida neste percurso' : 'Resposta sintética variável';
+  }
+
+  function utilityClassification(item) {
+    if (ethicalUtilityQuestions.has(item.id)) {
+      return { label: 'Ética / respondente', modifier: 'is-safety', impact: 'Perde consentimento ou identificação de quem forneceu a informação.' };
+    }
+    if (item.safety) {
+      return { label: 'Segurança', modifier: 'is-safety', impact: 'Perde a orientação imediata diante de sinal de alarme.' };
+    }
+    if (coreUtilityQuestions.has(item.id)) {
+      return { label: item.conditional ? 'Núcleo condicional' : 'Núcleo', modifier: 'is-core', impact: 'Reduz a capacidade de localizar, validar ou agir sobre a exposição coletiva.' };
+    }
+    if (item.conditional) {
+      return { label: 'Condicional', modifier: 'is-conditional', impact: 'Perde detalhe apenas quando a pergunta-gatilho é positiva.' };
+    }
+    return { label: 'Manter', modifier: 'is-core', impact: 'Reduz contexto, seguimento ou interpretação do episódio.' };
+  }
+
+  function buildQuestionUtility() {
+    const rows = [];
+    Object.entries(stages).forEach(([stageKey, stage]) => {
+      stage.imported.forEach((importedLabel) => {
+        rows.push({
+          stage: stage.label,
+          question: importedLabel,
+          role: 'Importar / não perguntar',
+          roleModifier: 'is-imported',
+          imported: true,
+          seconds: 0,
+          syntheticResponse: 'Preenchido nos bastidores',
+          impact: 'Se perguntado novamente, aumenta tempo e redundância sem acrescentar informação.'
+        });
+      });
+      stage.sections.forEach((section) => {
+        section.questions.forEach((item) => {
+          const classification = utilityClassification(item);
+          rows.push({
+            stage: stage.label,
+            question: item.label,
+            role: classification.label,
+            roleModifier: classification.modifier,
+            imported: false,
+            seconds: item.seconds || 12,
+            syntheticResponse: syntheticAnswer(stageKey, item),
+            impact: classification.impact
+          });
+        });
+      });
+    });
+    return rows;
+  }
+
+  function renderQuestionUtility() {
+    const body = byId('sfa-lab-question-utility');
+    if (!body) return;
+    body.innerHTML = buildQuestionUtility().map((row) => `<tr>
+      <td><strong>${escapeHtml(row.stage)}</strong></td>
+      <td>${escapeHtml(row.question)}</td>
+      <td><span class="sfa-lab__utility-role ${escapeHtml(row.roleModifier)}">${escapeHtml(row.role)}</span></td>
+      <td>${row.imported ? 'Sim — SINAN/GAL/prontuário' : 'Não — complemento'}</td>
+      <td class="small">${escapeHtml(row.syntheticResponse)}</td>
+      <td>${row.seconds ? `${row.seconds} s` : '0 s'}</td>
+      <td class="small">${escapeHtml(row.impact)}</td>
+    </tr>`).join('');
   }
 
   function renderKpis(records, signals) {
@@ -1068,14 +1382,17 @@
     }
     noSignals.hidden = true;
     body.innerHTML = signals.map((signal) => {
-      const decisions = signal.decisions.filter((decision) => decision.attributedToReport);
+      const decisions = signal.reviewStatus === 'accepted' && signal.actionable
+        ? signal.decisions.filter((decision) => decision.attributedToReport)
+        : [];
       return `<tr>
       <td><strong>${escapeHtml(signal.label)}</strong><div class="small text-muted">${escapeHtml(signal.domain)} · ${escapeHtml(signal.evidenceStrength)}</div></td>
       <td>${signal.directCases}${signal.reportedOthers
         ? `<div class="small text-muted">+ maior relato de ${signal.reportedOthers} coadoecido(s), sem deduplicação</div>`
         : ''}</td>
       <td>${escapeHtml(signal.stage)}<div class="small text-muted">cobertura ${escapeHtml(signal.stageCoverage)} · janela de triagem ${signal.windowDays} dias</div></td>
-      <td><span class="sfa-lab__signal-status ${signal.statusClass}">${escapeHtml(signal.status)}</span></td>
+      <td><span class="sfa-lab__signal-status ${signal.statusClass}">${escapeHtml(signal.status)}</span>
+        <div class="small text-muted mt-1">revisão: ${escapeHtml(signal.reviewStatus)}</div></td>
       <td class="small">${escapeHtml(signal.nextStep)}
         <div class="text-muted mt-1">${decisions.length
           ? `<strong>Decisões sintéticas registradas:</strong> ${decisions.map((decision) => escapeHtml(`${decision.id} — ${decision.label}`)).join('; ')}`
@@ -1096,6 +1413,7 @@
       specificity: kept.exposure ? record.specificity : 'none',
       exposurePlace: kept.place ? record.exposurePlace : null,
       exposureDateKnown: kept.date ? record.exposureDateKnown : false,
+      linkComplete: Boolean(record.linkComplete && kept.exposure && kept.place && kept.date),
       sourceActiveT10: kept.active ? record.sourceActiveT10 : null,
       sourceStateT30: kept.active ? record.sourceStateT30 : null,
       t10Responded: kept.followup ? record.t10Responded : false,
@@ -1103,7 +1421,7 @@
       actionObservedT30: kept.followup ? record.actionObservedT30 : false,
       postActionCases: kept.followup ? record.postActionCases : null
     }));
-    const recalculatedSignals = buildSignals(ablatedRecords);
+    const recalculatedSignals = buildSignals(ablatedRecords, reviewOverridesFor(state.currentScenarioKey));
     const recognizable = recalculatedSignals.length;
     const actionable = recalculatedSignals.filter((signal) => signal.actionable).length;
     const urgent = recalculatedSignals.filter((signal) => signal.actionable && signal.active).length;
@@ -1233,6 +1551,23 @@
       <p class="small text-muted mb-0 mt-2">A largura do intervalo é de ${(highPct - lowPct).toFixed(1)} pontos percentuais. O cálculo supõe observações independentes; não deve ser usado como inferência populacional para amostra de conveniência ou participantes do mesmo agrupamento.</p>`;
   }
 
+  globalThis.__sfaLabModel = {
+    stages,
+    exampleAnswers,
+    scenarioDefinitions,
+    buildSyntheticCohort,
+    buildSignals,
+    registeredDecisions,
+    buildFunnel,
+    buildIalSummary,
+    buildQuestionUtility,
+    setSignalReview,
+    acceptSignal,
+    rejectSignal,
+    reviewOverridesFor,
+    wilsonInterval
+  };
+
   const labTabs = Array.from(root.querySelectorAll('[data-lab-view]'));
   labTabs.forEach((button, index) => {
     button.addEventListener('click', () => switchView(button.dataset.labView));
@@ -1272,6 +1607,15 @@
   });
   byId('sfa-lab-run-cohort').addEventListener('click', renderCohort);
   byId('sfa-lab-scenario').addEventListener('change', renderCohort);
+  root.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-sfa-review-action][data-signal-key]');
+    if (!button) return;
+    setSignalReview(button.dataset.signalKey, button.dataset.sfaReviewAction, state.currentScenarioKey);
+    renderCohort();
+    byId('sfa-lab-announcer').textContent = button.dataset.sfaReviewAction === 'accepted'
+      ? 'Correspondência aceita pela revisão humana simulada.'
+      : 'Correspondência rejeitada pela revisão humana simulada.';
+  });
   byId('sfa-lab-events').addEventListener('input', renderPrecision);
   byId('sfa-lab-precision-outcome').addEventListener('change', syncPrecisionToCohort);
   root.querySelectorAll('[data-ablation]').forEach((input) => {

@@ -10,7 +10,7 @@
     </div>
     <div class="sfa-lab__status" role="note">
       <i class="fas fa-flask me-2" aria-hidden="true"></i>
-      Simulação local: nada é gravado ou enviado
+      Área segura de revisão: nada é gravado e os formulários reais não são alterados
     </div>
   </div>
 
@@ -108,9 +108,12 @@
         <div class="col-lg-8">
           <label for="sfa-lab-scenario" class="form-label fw-semibold">Cenário sintético</label>
           <select id="sfa-lab-scenario" class="form-select">
-            <option value="detectable">A — Exposicoes coletivas detectaveis</option>
+            <option value="detectable">A — Exposições coletivas detectáveis</option>
             <option value="sporadic">B — Casos predominantemente dispersos</option>
             <option value="attrition">C — Sinal real com perda de seguimento</option>
+            <option value="semantic">D — Mesma exposição descrita de formas diferentes</option>
+            <option value="falsefriends">E — Termos parecidos, fontes diferentes</option>
+            <option value="onehealth">F — Evento animal One Health ainda ativo</option>
           </select>
           <div id="sfa-lab-scenario-description" class="form-text"></div>
         </div>
@@ -125,6 +128,20 @@
         não estimam a realidade de Orlândia. A coorte não usa o que você digitou no módulo anterior. Para manter a simulação
         reproduzível, as exposições equivalentes já foram codificadas após uma revisão humana fictícia — a correspondência de texto livre não é testada aqui.
       </div>
+    </div>
+
+    <div class="sfa-lab__card mb-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <div class="sfa-lab__eyebrow">Desfecho operacional</div>
+          <h5 class="mb-1">Da informação mínima à decisão documentada</h5>
+          <p class="small text-muted mb-0">
+            Cada degrau mantém seu próprio denominador. Coincidência, sugestão automática e decisão administrativa não são tratadas como a mesma coisa.
+          </p>
+        </div>
+        <span class="sfa-lab__badge">funil n = 50</span>
+      </div>
+      <div id="sfa-lab-funnel" class="sfa-lab__funnel" aria-live="polite"></div>
     </div>
 
     <div id="sfa-lab-kpis" class="row g-3 mb-4" aria-label="Indicadores da coorte sintetica"></div>
@@ -182,6 +199,52 @@
             </table>
           </div>
           <div id="sfa-lab-no-signals" class="sfa-lab__empty" hidden>Nenhum vínculo específico atingiu a regra de triagem neste cenário.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sfa-lab__card mb-4">
+      <div class="row g-4">
+        <div class="col-xl-4">
+          <div class="sfa-lab__eyebrow">IA assistiva, não diagnóstica</div>
+          <h5>Fila de correspondências para revisão humana</h5>
+          <p class="small text-muted mb-3">
+            A automação apenas normaliza descrições, aponta semelhanças e mostra campos ausentes. Uma pessoa responsável precisa aceitar ou rejeitar cada vínculo.
+          </p>
+          <div class="alert alert-warning py-2 small mb-0" role="note">
+            Nenhuma sugestão confirma causa, envia alerta a terceiros ou conta como decisão da Vigilância.
+          </div>
+        </div>
+        <div class="col-xl-8">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Sugestão</th>
+                  <th>Por que agrupou</th>
+                  <th>Confiança</th>
+                  <th>Revisão humana</th>
+                </tr>
+              </thead>
+              <tbody id="sfa-lab-ai-review"></tbody>
+            </table>
+          </div>
+          <div id="sfa-lab-ai-review-empty" class="sfa-lab__empty" hidden>Nenhuma correspondência candidata neste cenário.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sfa-lab__card mb-4">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-5">
+          <div class="sfa-lab__eyebrow">Etiologia como estratificador</div>
+          <h5>Fluxos já disponíveis no IAL</h5>
+          <p class="small text-muted mb-0">
+            Elegibilidade, coleta e rendimento aparecem separadamente. O painel não presume exames além dos fluxos estaduais nem usa resultado laboratorial como condição para reconhecer uma exposição coletiva.
+          </p>
+        </div>
+        <div class="col-lg-7">
+          <div id="sfa-lab-ial" class="sfa-lab__ial" aria-live="polite"></div>
         </div>
       </div>
     </div>
@@ -358,6 +421,35 @@
             <li>Intervalos populacionais válidos quando participantes pertencem ao mesmo agrupamento ou vêm de amostra de conveniência.</li>
           </ul>
         </div>
+      </div>
+    </div>
+
+    <div class="sfa-lab__card mt-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <div class="sfa-lab__eyebrow">Auditoria do instrumento</div>
+          <h5 class="mb-1">Utilidade pergunta a pergunta</h5>
+          <p class="small text-muted mb-0">
+            Esta tabela classifica cada campo; o teste de retirada acima recalcula o efeito das famílias críticas no cenário sintético. Tempos e respostas são premissas de teste, não resultados do estudo.
+          </p>
+        </div>
+        <span class="sfa-lab__badge">manter · condicionar · importar · retirar</span>
+      </div>
+      <div class="table-responsive sfa-lab__utility-table-wrap">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Etapa</th>
+              <th>Pergunta</th>
+              <th>Papel</th>
+              <th>Já disponível?</th>
+              <th>No percurso de teste</th>
+              <th>Tempo</th>
+              <th>Se retirar</th>
+            </tr>
+          </thead>
+          <tbody id="sfa-lab-question-utility"></tbody>
+        </table>
       </div>
     </div>
 
