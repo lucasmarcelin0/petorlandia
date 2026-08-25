@@ -125,8 +125,11 @@ def test_cadastra_a_casa_na_planilha_e_no_banco(app, planilha):
     with app.test_request_context():
         linha = create_vacina_pmo_visit(_payload())
 
-    assert len(planilha.updates) == 1, "a planilha precisa receber a linha"
+    # Duas escritas: a casa (A..K) e, depois, a observação com a linha de
+    # registro que o cadastro acrescenta.
+    assert len(planilha.updates) == 2, [u["range"] for u in planilha.updates]
     escrita = planilha.updates[0]
+    assert planilha.updates[1]["range"].startswith("'25/08/2026'!K")
     valores = escrita["body"]["values"][0]
     assert valores[0] == "Marina Alves Prado"
     assert valores[1:5] == ["Rua 12", "480", "Fundos", "Centro"]
@@ -332,7 +335,6 @@ def test_nao_desloca_as_casas_que_ja_estavam_na_aba(app, planilha):
     with app.test_request_context():
         create_vacina_pmo_visit(_payload())
 
-    assert len(planilha.updates) == 1
     intervalo = planilha.updates[0]["range"]
     assert ":K" in intervalo, "escreve só as colunas da casa"
     # Nenhuma operacao de insercao de linha foi pedida.
@@ -357,3 +359,46 @@ def test_recusa_quando_o_banco_ja_tem_casa_naquela_linha(app, planilha):
             create_vacina_pmo_visit(_payload())
 
     assert not planilha.updates
+
+
+def test_disputa_pela_vaga_vira_recado_e_nao_erro_de_banco(app, planilha, monkeypatch):
+    """O sync automatico roda a cada 10 min e pode ocupar a vaga no meio do caminho.
+
+    Antes, isso chegava na tela como UniqueViolation do Postgres. Agora vira
+    uma frase que o vacinador entende, e a proxima tentativa pega outra vaga.
+    """
+    from sqlalchemy.exc import IntegrityError
+    import services.vacina_pmo_service as s
+
+    commit_original = db.session.commit
+    disparos = {"n": 0}
+
+    def commit_que_colide():
+        disparos["n"] += 1
+        if disparos["n"] == 1:
+            raise IntegrityError("INSERT", {}, Exception("uq_pmo_vaccination_visit_sheet_row"))
+        return commit_original()
+
+    monkeypatch.setattr(db.session, "commit", commit_que_colide)
+
+    with app.test_request_context():
+        with pytest.raises(ValueError, match="ocupada enquanto você preenchia"):
+            create_vacina_pmo_visit(_payload())
+
+    monkeypatch.undo()
+    assert PmoVaccinationVisit.query.filter_by(tutor_name="Marina Alves Prado").count() == 0
+
+
+def test_observacao_do_cadastro_vai_para_a_planilha(app, planilha, monkeypatch):
+    """A linha "cadastrada durante a rota" e acrescentada depois da 1a gravacao."""
+    import services.vacina_pmo_service as s
+
+    enviados = []
+    monkeypatch.setattr(s, "write_note_to_sheet", lambda visit: enviados.append(visit.note))
+
+    with app.test_request_context():
+        create_vacina_pmo_visit(_payload())
+
+    assert len(enviados) == 1
+    assert "cadastrada durante a rota" in enviados[0]
+    assert "Cachorro bravo" in enviados[0]

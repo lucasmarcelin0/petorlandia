@@ -28,6 +28,7 @@ from models import (
     Vacina,
 )
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -3298,7 +3299,22 @@ def create_vacina_pmo_visit(payload: dict[str, Any]) -> dict[str, Any]:
     )
     _ensure_visit_public_token(visit)
     _ensure_visit_records(visit)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Entre a escolha da vaga e a gravacao, o sync automatico (a cada 10
+        # minutos) ou outro vacinador pode ter registrado a mesma linha. Isso
+        # e disputa por uma vaga, nao defeito: devolve recado em vez do erro
+        # cru do banco, e a proxima tentativa pega outra vaga.
+        db.session.rollback()
+        raise ValueError(
+            f"A linha {source_row} da aba foi ocupada enquanto você preenchia "
+            "o cadastro. Os dados já estão na planilha — sincronize a aba para "
+            "trazer a casa para a tela."
+        ) from None
+    # A observacao ganhou a linha de registro depois da gravacao inicial; sem
+    # este envio a planilha ficaria so com o texto digitado.
+    write_note_to_sheet(visit)
     return _serialize_visit(visit)
 
 
