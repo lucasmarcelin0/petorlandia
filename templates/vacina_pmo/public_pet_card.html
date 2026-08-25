@@ -469,7 +469,7 @@
           <p class="subtitle">Comprovante digital da campanha municipal de vacinação antirrábica.</p>
         </div>
         <div class="seal">
-          {% if effective_status == 'vacinado' %}
+          {% if protegido %}
             Vacina<br>em dia
           {% else %}
             Acompanhar<br>status
@@ -479,7 +479,7 @@
 
       <div class="content">
         <div class="status">
-          <span class="pill {{ '' if effective_status == 'vacinado' else 'pending' }}">
+          <span class="pill {{ '' if protegido else 'pending' }}">
             {{ status_context.label }}
           </span>
           <span class="subtitle">
@@ -489,8 +489,13 @@
 
         <div class="details">
           <div class="detail-card" aria-label="Proximo reforco">
-            <span class="label">Aplicação</span>
-            <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
+            {% if effective_status == 'imunizado' and pmo_animal.immune_since %}
+              <span class="label">Vacina anterior</span>
+              <span class="value">{{ pmo_animal.immune_since.strftime('%d/%m/%Y') }}</span>
+            {% else %}
+              <span class="label">Aplicação</span>
+              <span class="value">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</span>
+            {% endif %}
           </div>
           <div class="detail-card">
             <span class="label">Vacina</span>
@@ -566,7 +571,7 @@
                 <div class="datebox">{{ visit.vaccine_date.strftime('%d/%m/%Y') if visit.vaccine_date else visit.sheet_title }}</div>
                 <div>
                   <strong>Registro da campanha</strong>
-                  <div class="subtitle" style="font-size:.95rem;">Status atual: {{ effective_status|capitalize }}.</div>
+                  <div class="subtitle" style="font-size:.95rem;">{{ status_context.label }}.</div>
                 </div>
               </div>
             {% endif %}

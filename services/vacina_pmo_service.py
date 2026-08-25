@@ -2932,7 +2932,37 @@ def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
     return _serialize_visit(animal.visit)
 
 
-def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, Any]:
+def _pmo_parse_immune_since(value: Any, reference: date) -> date:
+    """Data da dose informada à mão, quando o sistema não tem o registro.
+
+    O vacinador está com a carteirinha de papel na frente e sabe a data; o
+    sistema não. Aceitar o que ele lê é melhor do que obrigá-lo a aplicar uma
+    dose desnecessária — desde que a data resista às três perguntas óbvias.
+    """
+    texto = _normalize_text(value)
+    if not texto:
+        raise ValueError("Informe a data da vacina anterior.")
+    for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
+        try:
+            informada = datetime.strptime(texto, formato).date()
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValueError("Data inválida. Use o formato dd/mm/aaaa.")
+    if informada > reference:
+        raise ValueError("A data da vacina anterior não pode estar no futuro.")
+    if (reference - informada).days >= PMO_IMMUNITY_DAYS:
+        raise ValueError(
+            "Essa dose tem mais de um ano e não protege mais. "
+            "O animal precisa ser vacinado."
+        )
+    return informada
+
+
+def update_vacina_pmo_animal_status(
+    animal_id: int, status: str, immune_since: Any = None
+) -> dict[str, Any]:
     allowed = {"pendente", "vacinado", PMO_STATUS_ALREADY_IMMUNE,
                "ausente", "remarcar", "recusou"}
     if status not in allowed:
@@ -2941,19 +2971,23 @@ def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, An
     animal.status = status
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
     if status == PMO_STATUS_ALREADY_IMMUNE:
-        # A data vem do histórico, não do relógio: é a dose que já existia.
-        # Sem ela o desfecho não se sustenta, então o status é recusado.
-        anterior = (
-            build_previous_immunity_index([animal.visit])
-            .get(animal.visit_id, {})
-            .get(animal.id)
-        )
-        if not anterior or not anterior.get("immune"):
-            raise ValueError(
-                "Só é possível marcar como já imunizado quando existe uma dose "
-                "registrada no último ano para este animal."
+        # A data vem do histórico ou da carteirinha que o tutor mostrou — nunca
+        # do relógio. Sem uma das duas o desfecho não se sustenta.
+        referencia = _pmo_visit_reference_date(animal.visit) or now_in_brazil().date()
+        if immune_since:
+            animal.immune_since = _pmo_parse_immune_since(immune_since, referencia)
+        else:
+            anterior = (
+                build_previous_immunity_index([animal.visit])
+                .get(animal.visit_id, {})
+                .get(animal.id)
             )
-        animal.immune_since = date.fromisoformat(anterior["date"])
+            if not anterior or not anterior.get("immune"):
+                raise ValueError(
+                    "Não há dose registrada no último ano para este animal. "
+                    "Informe a data da vacina anterior para marcar como já imunizado."
+                )
+            animal.immune_since = date.fromisoformat(anterior["date"])
     else:
         animal.immune_since = None
     _append_visit_note(animal.visit, _status_note_line(animal, status))

@@ -413,3 +413,130 @@ def test_observacao_registra_o_motivo_para_quem_ler_a_planilha(app, monkeypatch)
 
     assert "ja imunizado, sem dose" in (hoje.note or "")
     assert "20/01/2026" in (hoje.note or "")
+
+
+# --------------------------------------------------------------------------
+# Data informada à mão, quando o sistema não tem o registro
+# --------------------------------------------------------------------------
+
+def _marcar_imunizado_com_data(app, monkeypatch, animal_id, data):
+    from services import vacina_pmo_service as servico
+
+    for nome in ("write_vaccinated_counts_to_sheet", "write_note_to_sheet",
+                 "write_tutor_name_color_to_sheet", "write_attended_by_to_sheet"):
+        monkeypatch.setattr(servico, nome, lambda *a, **k: False)
+    with app.test_request_context():
+        return update_vacina_pmo_animal_status(
+            animal_id, PMO_STATUS_ALREADY_IMMUNE, immune_since=data
+        )
+
+
+@pytest.mark.parametrize("digitada", ["10/03/2026", "2026-03-10", "10/03/26"])
+def test_aceita_a_data_da_carteirinha_de_papel(app, monkeypatch, digitada):
+    """Sem registro no sistema, vale o que o tutor mostra na carteirinha."""
+    hoje = _visita("25/08/2026", vaccine_date=date(2026, 8, 25),
+                   animais=[("Chico", "pendente")])
+    db.session.commit()
+
+    _marcar_imunizado_com_data(app, monkeypatch, hoje.animals[0].id, digitada)
+
+    assert hoje.animals[0].status == PMO_STATUS_ALREADY_IMMUNE
+    assert hoje.animals[0].immune_since == date(2026, 3, 10)
+    assert hoje.animals[0].vaccinated_at is None
+    assert _count_vaccinated_by_species(hoje) == (0, 0)
+
+
+def test_data_no_futuro_e_recusada(app, monkeypatch):
+    hoje = _visita("25/08/2026", vaccine_date=date(2026, 8, 25),
+                   animais=[("Chico", "pendente")])
+    db.session.commit()
+
+    with pytest.raises(ValueError, match="futuro"):
+        _marcar_imunizado_com_data(app, monkeypatch, hoje.animals[0].id, "10/12/2026")
+
+
+def test_data_de_mais_de_um_ano_e_recusada(app, monkeypatch):
+    hoje = _visita("25/08/2026", vaccine_date=date(2026, 8, 25),
+                   animais=[("Chico", "pendente")])
+    db.session.commit()
+
+    with pytest.raises(ValueError, match="mais de um ano"):
+        _marcar_imunizado_com_data(app, monkeypatch, hoje.animals[0].id, "01/01/2025")
+
+
+def test_texto_que_nao_e_data_e_recusado(app, monkeypatch):
+    hoje = _visita("25/08/2026", vaccine_date=date(2026, 8, 25),
+                   animais=[("Chico", "pendente")])
+    db.session.commit()
+
+    with pytest.raises(ValueError, match="Data inválida"):
+        _marcar_imunizado_com_data(app, monkeypatch, hoje.animals[0].id, "ano passado")
+
+
+def test_data_digitada_vence_o_historico(app, monkeypatch):
+    """O vacinador está na porta olhando o documento; ele desempata."""
+    _visita("20/01/2026", vaccine_date=date(2026, 1, 20), animais=[("Mia", "vacinado")])
+    hoje = _visita("25/08/2026", row=3, vaccine_date=date(2026, 8, 25),
+                   animais=[("Mia", "pendente")])
+    db.session.commit()
+
+    _marcar_imunizado_com_data(app, monkeypatch, hoje.animals[0].id, "05/06/2026")
+    assert hoje.animals[0].immune_since == date(2026, 6, 5)
+
+
+# --------------------------------------------------------------------------
+# Carteirinha do tutor
+# --------------------------------------------------------------------------
+
+def test_carteirinha_mostra_protegido_e_ate_quando(app, client, monkeypatch):
+    from services import vacina_pmo_service as servico
+
+    _visita("20/01/2026", vaccine_date=date(2026, 1, 20), animais=[("Mia", "vacinado")])
+    hoje = _visita("25/08/2026", row=3, vaccine_date=date(2026, 8, 25),
+                   animais=[("Mia", "pendente")])
+    db.session.commit()
+    _marcar_imunizado(app, monkeypatch, hoje.animals[0].id)
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    resposta = client.get(f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Já imunizado" in html, "o selo não pode dizer 'pendente'"
+    assert "Vacinação pendente" not in html
+    assert "20/01/2026" in html, "mostra a vacina que protege"
+    assert "20/01/2027" in html, "mostra até quando protege"
+    assert 'class="pill pending"' not in html
+
+
+def test_carteirinha_do_vacinado_normal_nao_muda(app, client, monkeypatch):
+    from services import vacina_pmo_service as servico
+
+    hoje = _visita("25/08/2026", vaccine_date=date(2026, 8, 25),
+                   animais=[("Chico", "vacinado")])
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    resposta = client.get(f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}")
+    html = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Vacinado" in html
+    assert "25/08/2027" in html, "reforço um ano depois da dose desta visita"
+
+
+def test_certificado_da_casa_nao_marca_imunizado_como_pendente(app, client, monkeypatch):
+    from services import vacina_pmo_service as servico
+
+    _visita("20/01/2026", vaccine_date=date(2026, 1, 20), animais=[("Mia", "vacinado")])
+    hoje = _visita("25/08/2026", row=3, vaccine_date=date(2026, 8, 25),
+                   animais=[("Mia", "pendente")])
+    db.session.commit()
+    _marcar_imunizado(app, monkeypatch, hoje.animals[0].id)
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    html = client.get(f"/vacina-pmo/c/{hoje.public_token}").get_data(as_text=True)
+    assert "Já imunizado" in html
+    assert 'class="badge pending"' not in html

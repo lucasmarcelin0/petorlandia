@@ -2792,8 +2792,9 @@
   function inferVisitStatus(animals) {
     if (!animals.length) return 'pendente';
     const statuses = animals.map((animal) => animal.status);
-    if (statuses.every((status) => status === 'vacinado')) return 'vacinado';
-    if (statuses.some((status) => status === 'vacinado')) return 'parcial';
+    // Espelho de infer_visit_status no servidor: ja imunizado tambem fecha.
+    if (statuses.every((status) => PMO_DONE_STATUSES.includes(status))) return 'vacinado';
+    if (statuses.some((status) => PMO_DONE_STATUSES.includes(status))) return 'parcial';
     if (statuses.every((status) => status === 'ausente')) return 'ausente';
     if (statuses.every((status) => status === 'recusou')) return 'recusou';
     if (statuses.some((status) => status === 'remarcar')) return 'remarcar';
@@ -3063,7 +3064,7 @@
     }
   }
 
-  async function saveAnimalStatus(animal, status) {
+  async function saveAnimalStatus(animal, status, immuneSince) {
     if (!animal.id) return;
     const response = await fetch(`/vacina-pmo/animal/${animal.id}/status`, {
       method: 'POST',
@@ -3072,7 +3073,7 @@
         'Content-Type': 'application/json',
         'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
       },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, immuneSince: immuneSince || '' }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.success) {
@@ -3653,13 +3654,32 @@
     recusou: 'recusou',
   };
 
-  // "já imunizado" só existe quando há uma dose no último ano para oferecer —
-  // e continua na lista se o animal já estiver assim, para dar como desfazer.
-  function statusOptionsFor(animal) {
-    const base = ['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'];
-    const previous = animal && animal.previousVaccination;
-    const elegivel = (previous && previous.immune) || animal.status === 'imunizado';
-    return elegivel ? ['pendente', 'vacinado', 'imunizado', 'ausente', 'remarcar', 'recusou'] : base;
+  // "já imunizado" está sempre disponível: quando o sistema não conhece a dose
+  // anterior, ele pergunta a data ao vacinador em vez de esconder a opção.
+  function statusOptionsFor() {
+    return ['pendente', 'vacinado', 'imunizado', 'ausente', 'remarcar', 'recusou'];
+  }
+
+  // Pede a data da vacina anterior quando o sistema não tem o registro. O
+  // servidor revalida tudo; aqui a checagem é só para não fazer o vacinador
+  // esperar uma ida ao servidor por um erro de digitação.
+  function askImmuneSince(animal) {
+    const nome = animal.name || 'este animal';
+    const digitado = window.prompt(
+      `Qual a data da vacina antirrábica anterior de ${nome}?\n`
+      + 'Use dd/mm/aaaa — está na carteirinha do tutor.',
+      animal.immuneSinceLabel || ''
+    );
+    const texto = (digitado || '').trim();
+    if (!texto) return '';
+    const partes = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!partes) {
+      window.showAppToast
+        ? window.showAppToast('Data inválida. Use dd/mm/aaaa.', 'danger')
+        : alert('Data inválida. Use dd/mm/aaaa.');
+      return '';
+    }
+    return texto;
   }
 
   // A antirrábica é anual. Quando a casa é reinscrita, o vacinador precisa ver
@@ -4040,11 +4060,25 @@
     if (event.target.dataset.action === 'animal-status') {
       const animal = row.animals[Number(event.target.dataset.animalIndex)];
       if (animal) {
-        animal.status = event.target.value;
-        event.target.dataset.status = event.target.value;
+        const anterior = animal.status;
+        const novo = event.target.value;
+        let immuneSince = '';
+        if (novo === 'imunizado' && !(animal.previousVaccination || {}).immune) {
+          // O sistema não tem o registro, mas o tutor está com a carteirinha
+          // na mão. Perguntar é melhor do que aplicar uma dose desnecessária.
+          immuneSince = askImmuneSince(animal);
+          if (!immuneSince) {
+            event.target.value = anterior;
+            render();
+            return;
+          }
+        }
+        animal.status = novo;
+        event.target.dataset.status = novo;
         try {
-          await saveAnimalStatus(animal, event.target.value);
+          await saveAnimalStatus(animal, novo, immuneSince);
         } catch (error) {
+          animal.status = anterior;
           window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
         }
       }

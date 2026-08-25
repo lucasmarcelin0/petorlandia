@@ -564,7 +564,7 @@
                   <div class="label">{{ 'Cão' if animal.species == 'cao' else 'Gato' }}</div>
                 </div>
               </div>
-              <span class="badge {{ '' if animal.status == 'vacinado' else 'pending' }}">
+              <span class="badge {{ '' if animal.status in protected_statuses else 'pending' }}">
                 {{ status_labels.get(animal.status, animal.status|capitalize) }}
               </span>
               <a class="button secondary animal-action" href="{{ url_for('vacina_pmo_public_pet', token=token, pmo_animal_id=animal.id) }}" style="min-height:34px;padding:6px 10px;">Ver carteirinha</a>

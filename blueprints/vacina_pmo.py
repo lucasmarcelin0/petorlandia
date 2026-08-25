@@ -22,6 +22,7 @@ from app import (  # noqa: E402
     _pmo_booster_countdown_label,
     _pmo_doses_compile_lock,
     _pmo_protocol_label,
+    _pmo_protected_statuses,
     _pmo_status_context,
     _pmo_status_labels,
     _pmo_status_sync_lock,
@@ -373,6 +374,7 @@ def vacina_pmo_public(token):
         educational_video=get_pmo_educational_video(),
         primary_pet_card_url=primary_pet_card_url,
         status_labels=status_labels,
+        protected_statuses=_pmo_protected_statuses(),
         protocol_label=_pmo_protocol_label(visit),
     )
 
@@ -415,10 +417,16 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
     if campaign_vaccine and campaign_vaccine.aplicada:
         effective_status = "vacinado"
     status_context = _pmo_status_context(effective_status)
+    protegido = effective_status in _pmo_protected_statuses()
 
     next_booster_date = None
     if campaign_vaccine and campaign_vaccine.proxima_dose:
         next_booster_date = campaign_vaccine.proxima_dose
+    elif pmo_animal.immune_since and effective_status == 'imunizado':
+        # Nao houve dose nesta visita: o relogio do reforco continua correndo a
+        # partir da vacina antiga, senao a carteirinha prometeria protecao que
+        # o animal nao tem.
+        next_booster_date = pmo_animal.immune_since + relativedelta(years=1)
     elif visit.vaccine_date and effective_status == "vacinado":
         next_booster_date = visit.vaccine_date + relativedelta(years=1)
     booster_days_remaining = None
@@ -457,6 +465,7 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
         campaign_vaccine=campaign_vaccine,
         effective_status=effective_status,
         status_context=status_context,
+        protegido=protegido,
         next_booster_date=next_booster_date,
         booster_days_remaining=booster_days_remaining,
         booster_countdown_label=booster_countdown_label,
@@ -804,8 +813,16 @@ def vacina_pmo_animal_status(animal_id):
         from services.vacina_pmo_service import update_vacina_pmo_animal_status
 
         payload = request.get_json(silent=True) or {}
-        row = update_vacina_pmo_animal_status(animal_id, (payload.get('status') or '').strip())
+        row = update_vacina_pmo_animal_status(
+            animal_id,
+            (payload.get('status') or '').strip(),
+            immune_since=(payload.get('immuneSince') or '').strip() or None,
+        )
         return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        # Regra de negocio (data invalida, sem dose anterior): a mensagem e
+        # para o vacinador ler na tela, nao um erro de servidor.
+        return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
         current_app.logger.exception("Falha ao salvar status de animal Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500

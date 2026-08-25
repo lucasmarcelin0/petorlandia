@@ -3285,10 +3285,22 @@ def _pmo_protocol_label(visit):
     return f"PMO-{year}-{getattr(visit, 'id', 0):04d}"
 
 
+def _pmo_protected_statuses():
+    """Desfechos em que o animal esta protegido contra a raiva.
+
+    Vem do servico para que a carteirinha e a tela do vacinador nunca
+    discordem sobre quem ainda precisa de dose.
+    """
+    from services.vacina_pmo_service import PMO_DONE_STATUSES
+
+    return set(PMO_DONE_STATUSES)
+
+
 def _pmo_status_labels():
     return {
         'pendente': 'Vacinação pendente',
         'vacinado': 'Vacinado',
+        'imunizado': 'Já imunizado',
         'ausente': 'Morador ausente',
         'remarcar': 'Remarcar visita',
         'recusou': 'Vacina recusada',
@@ -3300,6 +3312,8 @@ def _pmo_status_context(status):
     labels = _pmo_status_labels()
     messages = {
         'vacinado': 'Dose registrada. Guarde este comprovante e acompanhe a data do reforco anual.',
+        'imunizado': ('Este pet ja estava protegido por uma vacina anterior, entao nao '
+                      'recebeu nova dose nesta visita. Acompanhe a data do reforco anual.'),
         'pendente': 'A equipe ainda vai confirmar ou realizar a visita. Mantenha o telefone atualizado.',
         'ausente': 'A equipe esteve no endereco, mas nao encontrou o morador. Aguarde contato para nova orientacao.',
         'remarcar': 'Ha uma solicitacao de remarcacao. A equipe devera combinar uma nova tentativa.',
