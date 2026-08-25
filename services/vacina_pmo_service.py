@@ -3113,6 +3113,152 @@ def _pmo_sort_visit_animals(visit: PmoVaccinationVisit) -> None:
         animal.position = position
 
 
+def _pmo_new_visit_sheet_row(payload: dict[str, Any], animals: list[dict[str, str]],
+                             shift: str, note: str) -> list[str]:
+    """Linha na ordem das colunas A..K da aba do dia, mais data (Q) e turno (R)."""
+    nomes = ", ".join(item["name"] for item in animals)
+    caes = sum(1 for item in animals if item["species"] == "cao")
+    gatos = sum(1 for item in animals if item["species"] == "gato")
+    linha = [""] * 18
+    linha[0] = _normalize_text(payload.get("tutor"))
+    linha[1] = _normalize_text(payload.get("street"))
+    linha[2] = _normalize_text(payload.get("number"))
+    linha[3] = _normalize_text(payload.get("complement"))
+    linha[4] = _normalize_text(payload.get("neighborhood"))
+    linha[5] = _normalize_text(payload.get("phone1"))
+    linha[6] = _normalize_text(payload.get("phone2"))
+    linha[7] = str(caes)
+    linha[8] = str(gatos)
+    linha[9] = nomes
+    linha[10] = note
+    linha[17] = shift
+    return linha
+
+
+def _pmo_appended_row_number(response: dict[str, Any]) -> int:
+    """Numero da linha que o Sheets acabou de criar, lido do intervalo devolvido."""
+    intervalo = str(
+        (response or {}).get("updates", {}).get("updatedRange") or ""
+    )
+    encontrado = re.search(r"![A-Z]+(\d+)", intervalo)
+    if not encontrado:
+        raise RuntimeError(
+            "A planilha aceitou a linha mas não informou onde ela ficou. "
+            "Confira a aba antes de cadastrar de novo."
+        )
+    return int(encontrado.group(1))
+
+
+def create_vacina_pmo_visit(payload: dict[str, Any]) -> dict[str, Any]:
+    """Cadastra uma casa que apareceu durante a rota.
+
+    A planilha é a fonte de verdade da aba do dia: o sync apaga toda visita
+    cujo ``source_row`` sumiu de lá. Por isso a linha é gravada na planilha
+    PRIMEIRO e o registro local só nasce com o número de linha que o Sheets
+    devolveu — se a gravação falhar, nada é criado e o vacinador tenta de novo,
+    em vez de ficar com um cadastro que some no próximo sync.
+    """
+    tutor = _normalize_text(payload.get("tutor"))
+    if not tutor:
+        raise ValueError("Informe o nome do tutor.")
+
+    animais: list[dict[str, str]] = []
+    vistos: set[str] = set()
+    for bruto in payload.get("animals") or []:
+        nome = _normalize_text((bruto or {}).get("name"))
+        if not nome:
+            continue
+        especie = _strip_accents(_normalize_text((bruto or {}).get("species"))).lower()
+        if especie not in {"cao", "gato"}:
+            raise ValueError(f"Escolha se {nome} é cão ou gato.")
+        chave = _strip_accents(nome).casefold()
+        if chave in vistos:
+            raise ValueError(f"O animal {nome} foi informado duas vezes.")
+        vistos.add(chave)
+        animais.append({"name": _validate_pmo_animal_name(nome), "species": especie})
+    if not animais:
+        raise ValueError("Informe pelo menos um animal, com nome e espécie.")
+    if len(animais) > PMO_VISIT_ANIMALS_MAX:
+        raise ValueError(f"São no máximo {PMO_VISIT_ANIMALS_MAX} animais por casa.")
+
+    phone1 = _normalize_phone(payload.get("phone1"))
+    phone2 = _normalize_phone(payload.get("phone2"))
+    endereco = ", ".join(
+        parte for parte in (
+            _normalize_text(payload.get("street")),
+            _normalize_text(payload.get("number")),
+            _normalize_text(payload.get("complement")),
+            _normalize_text(payload.get("neighborhood")),
+        ) if parte
+    )
+    if not phone1 and not phone2 and not endereco:
+        raise ValueError("Informe pelo menos o endereço ou um telefone.")
+
+    sheet_gid = _normalize_text(payload.get("sheet_gid"))
+    if not sheet_gid:
+        raise ValueError("Selecione a aba do dia antes de cadastrar.")
+
+    sheet_url = os.getenv("PMO_VACCINE_SHEET_URL", DEFAULT_SHEET_URL)
+    spreadsheet_id = _extract_google_sheet_id(sheet_url)
+    if not spreadsheet_id:
+        raise RuntimeError("URL/ID da planilha PMO inválido.")
+
+    service = _get_sheets_service_rw()
+    sheet_title = _resolve_sheet_title_by_gid(service, spreadsheet_id, sheet_gid)
+
+    shift = _normalize_shift(payload.get("shift"))
+    note = _normalize_note_line(payload.get("note"))
+    resposta = (
+        service.spreadsheets()
+        .values()
+        .append(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A:R",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [_pmo_new_visit_sheet_row(payload, animais, shift, note)]},
+        )
+        .execute()
+    )
+    source_row = _pmo_appended_row_number(resposta)
+
+    visit = PmoVaccinationVisit(
+        spreadsheet_id=spreadsheet_id,
+        sheet_gid=sheet_gid,
+        sheet_title=sheet_title,
+        source_row=source_row,
+        tutor_name=tutor,
+        address=endereco,
+        phone1=phone1,
+        phone2=phone2,
+        dogs=sum(1 for item in animais if item["species"] == "cao"),
+        cats=sum(1 for item in animais if item["species"] == "gato"),
+        vaccine_date=_parse_date_object(sheet_title),
+        shift=shift,
+        note=note,
+        password=_password(),
+    )
+    db.session.add(visit)
+    db.session.flush()
+    for posicao, item in enumerate(animais, start=1):
+        db.session.add(PmoVaccinationAnimal(
+            visit=visit,
+            position=posicao,
+            name=item["name"],
+            species=item["species"],
+            status="pendente",
+        ))
+    db.session.flush()
+    _append_visit_note(
+        visit,
+        f"{_pmo_event_time_label()} - casa cadastrada durante a rota.",
+    )
+    _ensure_visit_public_token(visit)
+    _ensure_visit_records(visit)
+    db.session.commit()
+    return _serialize_visit(visit)
+
+
 def add_vacina_pmo_visit_animal(visit_id: int, name: Any, species: Any) -> dict[str, Any]:
     """Inclui um animal que apareceu na hora da visita (tutor trouxe mais um).
 

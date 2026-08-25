@@ -983,6 +983,24 @@ def vacina_pmo_visit_attended_by(visit_id):
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
+@bp.route('/vacina-pmo/visit', methods=['POST'])
+@login_required
+def vacina_pmo_visit_create():
+    if current_user.role not in ('admin', 'vacinador'):
+        abort(403)
+    try:
+        from services.vacina_pmo_service import create_vacina_pmo_visit
+
+        row = create_vacina_pmo_visit(request.get_json(silent=True) or {})
+        return jsonify({'success': True, 'row': row})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao cadastrar casa Vacina PMO")
+        return jsonify({'success': False, 'message': str(exc)}), 500
+
+
 @bp.route('/vacina-pmo/visit/<int:visit_id>/animal', methods=['POST'])
 @login_required
 def vacina_pmo_visit_add_animal(visit_id):

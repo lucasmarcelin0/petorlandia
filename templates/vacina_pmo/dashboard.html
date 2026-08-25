@@ -873,6 +873,73 @@
     color: #475569;
   }
 
+  /* Cadastro de casa nova: mesma linguagem do "+ animal" que ja existe. */
+  .pmo-new-visit {
+    display: flex;
+    justify-content: center;
+    padding: 0.9rem 0.5rem;
+  }
+
+  .pmo-new-visit__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px dashed #94a3b8;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 999px;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    /* Alvo de toque confortavel no celular. */
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .pmo-new-visit__btn:hover,
+  .pmo-new-visit__btn:focus-visible {
+    border-color: #2563eb;
+    color: #1d4ed8;
+  }
+
+  .pmo-new-visit__btn i {
+    font-size: 0.95rem;
+  }
+
+  .pmo-nv-animals {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .pmo-nv-animal {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .pmo-nv-animal input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pmo-nv-animal select {
+    flex: 0 0 7.5rem;
+  }
+
+  @media (max-width: 420px) {
+    .pmo-nv-animal {
+      flex-wrap: wrap;
+    }
+
+    .pmo-nv-animal input {
+      flex: 1 1 100%;
+    }
+
+    .pmo-nv-animal select {
+      flex: 1 1 auto;
+    }
+  }
+
   .pmo-immunity-flag {
     display: inline-flex;
     align-items: center;
@@ -1542,6 +1609,83 @@
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-primary" id="pmo-create-day-confirm">
           <i class="fas fa-calendar-plus me-1"></i> Criar aba
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cadastro de casa nova durante a rota. Em telas pequenas o modal ocupa a
+     tela inteira: o vacinador digita de pe, com uma mao, no celular. -->
+<div class="modal fade" id="pmo-new-visit-modal" tabindex="-1" aria-labelledby="pmo-new-visit-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pmo-new-visit-title"><i class="fas fa-house-medical me-2"></i>Cadastrar casa na rota</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="pmo-new-visit-form" autocomplete="off" novalidate>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label" for="pmo-nv-tutor">Nome do tutor <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="pmo-nv-tutor" name="tutor" maxlength="255" required
+                     autocapitalize="words" enterkeyhint="next">
+            </div>
+            <div class="col-12 col-md-8">
+              <label class="form-label" for="pmo-nv-street">Rua / avenida</label>
+              <input type="text" class="form-control" id="pmo-nv-street" name="street" maxlength="200" autocapitalize="words">
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label" for="pmo-nv-number">Número</label>
+              <input type="text" class="form-control" id="pmo-nv-number" name="number" maxlength="20" inputmode="numeric">
+            </div>
+            <div class="col-6 col-md-6">
+              <label class="form-label" for="pmo-nv-complement">Complemento</label>
+              <input type="text" class="form-control" id="pmo-nv-complement" name="complement" maxlength="120">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="pmo-nv-neighborhood">Bairro</label>
+              <input type="text" class="form-control" id="pmo-nv-neighborhood" name="neighborhood" maxlength="120" autocapitalize="words">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="pmo-nv-phone1">Telefone</label>
+              <input type="tel" class="form-control" id="pmo-nv-phone1" name="phone1" maxlength="32" inputmode="tel">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="pmo-nv-phone2">Telefone 2 (recado)</label>
+              <input type="tel" class="form-control" id="pmo-nv-phone2" name="phone2" maxlength="32" inputmode="tel">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="pmo-nv-shift">Turno</label>
+              <select class="form-select" id="pmo-nv-shift" name="shift">
+                <option value="">Não informado</option>
+                <option value="Manhã">Manhã</option>
+                <option value="Tarde">Tarde</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="pmo-nv-note">Observação</label>
+              <input type="text" class="form-control" id="pmo-nv-note" name="note" maxlength="500">
+            </div>
+          </div>
+
+          <hr class="my-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label mb-0">Animais <span class="text-danger">*</span></label>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="pmo-nv-add-animal">
+              <i class="fas fa-plus me-1"></i> Animal
+            </button>
+          </div>
+          <div id="pmo-nv-animals" class="pmo-nv-animals"></div>
+          <div class="form-text">O endereço ou um telefone é obrigatório, além do nome do tutor e de pelo menos um animal.</div>
+          <div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="pmo-nv-error" role="alert"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="pmo-nv-submit">
+          <i class="fas fa-check me-1"></i> Cadastrar casa
         </button>
       </div>
     </div>
@@ -3995,13 +4139,26 @@
     return normalizeText(String(value || '').replace(/<[^>]+>/g, ' '));
   }
 
+  // Rodape da lista com o "+" de casa nova. Aparece tambem quando o filtro nao
+  // devolve nada: e justamente quando a casa que bateu a porta nao esta la.
+  function newVisitFooter() {
+    return `
+      <div class="pmo-new-visit">
+        <button type="button" class="pmo-new-visit__btn" data-action="new-visit">
+          <i class="fas fa-plus" aria-hidden="true"></i>
+          <i class="fas fa-house-medical" aria-hidden="true"></i>
+          Cadastrar casa na rota
+        </button>
+      </div>`;
+  }
+
   function render() {
     renderStats(state.rows);
     renderEvaluationScope();
     const visible = state.rows.filter(rowMatchesFilters);
     if (!visible.length) {
-      tbody.innerHTML = '<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div></td></tr>';
-      cardsEl.innerHTML = '<div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>';
+      tbody.innerHTML = `<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>${newVisitFooter()}</td></tr>`;
+      cardsEl.innerHTML = `<div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>${newVisitFooter()}`;
       return;
     }
 
@@ -4031,9 +4188,146 @@
           <td class="pmo-note"><div class="pmo-note-text ${row.note ? '' : 'is-empty'}">${row.note ? escapeHtml(row.note) : 'Sem observações.'}</div></td>
         </tr>
       `;
-    }).join('');
-    cardsEl.innerHTML = prepared.map(renderMobileCard).join('');
+    }).join('')
+      + `<tr><td colspan="11">${newVisitFooter()}</td></tr>`;
+    cardsEl.innerHTML = prepared.map(renderMobileCard).join('') + newVisitFooter();
   }
+
+  // --- Cadastro de casa nova durante a rota -------------------------------
+  const newVisitModalEl = document.getElementById('pmo-new-visit-modal');
+  const newVisitFormEl = document.getElementById('pmo-new-visit-form');
+  const newVisitAnimalsEl = document.getElementById('pmo-nv-animals');
+  const newVisitErrorEl = document.getElementById('pmo-nv-error');
+  const newVisitSubmitEl = document.getElementById('pmo-nv-submit');
+  let newVisitModal = null;
+
+  function newVisitAnimalRow() {
+    const linha = document.createElement('div');
+    linha.className = 'pmo-nv-animal';
+    linha.innerHTML = `
+      <input type="text" class="form-control" data-nv="animal-name" maxlength="100"
+             placeholder="Nome do animal" aria-label="Nome do animal" autocapitalize="words">
+      <select class="form-select" data-nv="animal-species" aria-label="Espécie">
+        <option value="cao">Cão</option>
+        <option value="gato">Gato</option>
+      </select>
+      <button type="button" class="btn btn-outline-secondary" data-nv="animal-remove"
+              aria-label="Remover este animal"><i class="fas fa-trash"></i></button>`;
+    return linha;
+  }
+
+  function addNewVisitAnimal({ focus = false } = {}) {
+    const linha = newVisitAnimalRow();
+    newVisitAnimalsEl.appendChild(linha);
+    if (focus) linha.querySelector('[data-nv="animal-name"]')?.focus();
+  }
+
+  function showNewVisitError(message) {
+    newVisitErrorEl.textContent = message;
+    newVisitErrorEl.classList.toggle('d-none', !message);
+  }
+
+  function openNewVisitModal() {
+    if (!sheetEl.value) {
+      const aviso = 'Selecione a aba do dia antes de cadastrar uma casa.';
+      window.showAppToast ? window.showAppToast(aviso, 'danger') : alert(aviso);
+      return;
+    }
+    newVisitFormEl.reset();
+    newVisitAnimalsEl.innerHTML = '';
+    addNewVisitAnimal();
+    showNewVisitError('');
+    newVisitModal = newVisitModal || new bootstrap.Modal(newVisitModalEl);
+    newVisitModal.show();
+  }
+
+  function collectNewVisit() {
+    const valor = (id) => (document.getElementById(id)?.value || '').trim();
+    const animals = [...newVisitAnimalsEl.querySelectorAll('.pmo-nv-animal')]
+      .map((linha) => ({
+        name: (linha.querySelector('[data-nv="animal-name"]')?.value || '').trim(),
+        species: linha.querySelector('[data-nv="animal-species"]')?.value || 'cao',
+      }))
+      .filter((item) => item.name);
+    return {
+      sheet_gid: sheetEl.value,
+      tutor: valor('pmo-nv-tutor'),
+      street: valor('pmo-nv-street'),
+      number: valor('pmo-nv-number'),
+      complement: valor('pmo-nv-complement'),
+      neighborhood: valor('pmo-nv-neighborhood'),
+      phone1: valor('pmo-nv-phone1'),
+      phone2: valor('pmo-nv-phone2'),
+      shift: valor('pmo-nv-shift'),
+      note: valor('pmo-nv-note'),
+      animals,
+    };
+  }
+
+  async function submitNewVisit() {
+    const payload = collectNewVisit();
+    // Checagem local so para nao fazer o vacinador esperar a ida ao servidor;
+    // a validacao que vale continua sendo a de la.
+    if (!payload.tutor) {
+      showNewVisitError('Informe o nome do tutor.');
+      document.getElementById('pmo-nv-tutor')?.focus();
+      return;
+    }
+    if (!payload.animals.length) {
+      showNewVisitError('Informe pelo menos um animal.');
+      return;
+    }
+    showNewVisitError('');
+    newVisitSubmitEl.disabled = true;
+    const rotuloOriginal = newVisitSubmitEl.innerHTML;
+    newVisitSubmitEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Gravando...';
+    try {
+      const response = await fetch('/vacina-pmo/visit', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify(payload),
+      });
+      const resultado = await response.json().catch(() => ({}));
+      if (!response.ok || !resultado.success) {
+        throw new Error(resultado.message || 'Não foi possível cadastrar a casa.');
+      }
+      const nova = normalizeSyncedRows([resultado.row])[0];
+      state.rows.push(nova);
+      render();
+      newVisitModal?.hide();
+      const aviso = `Casa de ${nova.tutor} cadastrada na aba do dia.`;
+      window.showAppToast ? window.showAppToast(aviso, 'success') : alert(aviso);
+      document.querySelector(`[data-id="${nova.id}"]`)?.scrollIntoView({ block: 'center' });
+    } catch (error) {
+      showNewVisitError(error.message);
+    } finally {
+      newVisitSubmitEl.disabled = false;
+      newVisitSubmitEl.innerHTML = rotuloOriginal;
+    }
+  }
+
+  document.getElementById('pmo-nv-add-animal')?.addEventListener('click', () => {
+    addNewVisitAnimal({ focus: true });
+  });
+  newVisitAnimalsEl?.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-nv="animal-remove"]')) return;
+    const linhas = newVisitAnimalsEl.querySelectorAll('.pmo-nv-animal');
+    if (linhas.length <= 1) {
+      // Sempre sobra uma linha: sem animal nao existe visita.
+      newVisitAnimalsEl.querySelector('[data-nv="animal-name"]').value = '';
+      return;
+    }
+    event.target.closest('.pmo-nv-animal').remove();
+  });
+  newVisitSubmitEl?.addEventListener('click', submitNewVisit);
+  newVisitFormEl?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitNewVisit();
+  });
 
   function exportRows() {
     const header = ['status_visita', 'tutor', 'endereco', 'animais_vacinados', 'animais_pendentes', 'caes_previstos', 'gatos_previstos', 'data', 'turno', 'telefone_1', 'whatsapp_1', 'telefone_2', 'whatsapp_2', 'senha_provisoria', 'observacao'];
@@ -4142,6 +4436,12 @@
   }
 
   listPanel.addEventListener('click', (event) => {
+    // O "+" de casa nova fica no rodape da lista, fora de qualquer linha:
+    // precisa ser tratado antes do early return que exige [data-id].
+    if (event.target.closest('[data-action="new-visit"]')) {
+      openNewVisitModal();
+      return;
+    }
     const rowEl = event.target.closest('[data-id]');
     const row = state.rows.find((item) => item.id === rowEl?.dataset.id);
     if (!row) return;
