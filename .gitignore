@@ -3,6 +3,7 @@ venv/
 env/
 .venv
 .venv-codex/
+.venv-ci/
 *.egg-info/
 
 # Python
