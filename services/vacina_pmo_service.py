@@ -3114,39 +3114,61 @@ def _pmo_sort_visit_animals(visit: PmoVaccinationVisit) -> None:
 
 
 def _pmo_new_visit_sheet_row(payload: dict[str, Any], animals: list[dict[str, str]],
-                             shift: str, note: str) -> list[str]:
-    """Linha na ordem das colunas A..K da aba do dia, mais data (Q) e turno (R)."""
+                             note: str) -> list[str]:
+    """Colunas A..K da casa. Data (Q) e turno (R) são do modelo e não se tocam."""
     nomes = ", ".join(item["name"] for item in animals)
     caes = sum(1 for item in animals if item["species"] == "cao")
     gatos = sum(1 for item in animals if item["species"] == "gato")
-    linha = [""] * 18
-    linha[0] = _normalize_text(payload.get("tutor"))
-    linha[1] = _normalize_text(payload.get("street"))
-    linha[2] = _normalize_text(payload.get("number"))
-    linha[3] = _normalize_text(payload.get("complement"))
-    linha[4] = _normalize_text(payload.get("neighborhood"))
-    linha[5] = _normalize_text(payload.get("phone1"))
-    linha[6] = _normalize_text(payload.get("phone2"))
-    linha[7] = str(caes)
-    linha[8] = str(gatos)
-    linha[9] = nomes
-    linha[10] = note
-    linha[17] = shift
-    return linha
+    return [
+        _normalize_text(payload.get("tutor")),
+        _normalize_text(payload.get("street")),
+        _normalize_text(payload.get("number")),
+        _normalize_text(payload.get("complement")),
+        _normalize_text(payload.get("neighborhood")),
+        _normalize_text(payload.get("phone1")),
+        _normalize_text(payload.get("phone2")),
+        str(caes),
+        str(gatos),
+        nomes,
+        note,
+    ]
 
 
-def _pmo_appended_row_number(response: dict[str, Any]) -> int:
-    """Numero da linha que o Sheets acabou de criar, lido do intervalo devolvido."""
-    intervalo = str(
-        (response or {}).get("updates", {}).get("updatedRange") or ""
+def _pmo_free_slot_row(values: list[list[Any]], shift: str) -> int:
+    """Primeira vaga livre do turno pedido dentro da aba do dia.
+
+    A aba não é uma tabela simples: ela é a cópia do modelo, com um bloco de
+    manhã, um de tarde, cabeçalho repetido e linhas de totais no meio. Cada
+    vaga já vem com a data (Q) e o turno (R) preenchidos pelo modelo.
+
+    Por isso não dá para usar ``values().append``: o Sheets tenta adivinhar
+    onde a tabela termina, erra nesse layout e insere no topo do bloco —
+    empurrando todas as casas para baixo e invalidando o ``source_row`` de
+    quem já estava lá. Aqui a vaga é escolhida explicitamente e escrita com
+    ``update``, sem deslocar ninguém.
+
+    Uma vaga é uma linha que tem data e turno do modelo, e está vazia tanto
+    nos dados da casa (A..K) quanto nas colunas de execução (L..O) — estas
+    últimas separam a vaga de uma linha de totais, que também tem data.
+    """
+    alvo = _normalize_shift(shift)
+    for indice, linha in enumerate(values, start=1):
+        def celula(coluna: int) -> str:
+            return _normalize_text(linha[coluna] if coluna < len(linha) else "")
+
+        if any(celula(coluna) for coluna in range(0, 11)):
+            continue  # a casa já está preenchida
+        if any(celula(coluna) for coluna in range(11, 15)):
+            continue  # linha de totais/resumo: tem data, mas não é vaga
+        if not _parse_date_object(celula(16)):
+            continue  # sem data do modelo não é uma vaga de casa
+        if alvo and _normalize_shift(celula(17)) != alvo:
+            continue
+        return indice
+    raise ValueError(
+        f"A aba do dia não tem vaga livre no turno {alvo or 'selecionado'}. "
+        "Acrescente uma linha na planilha ou escolha o outro turno."
     )
-    encontrado = re.search(r"![A-Z]+(\d+)", intervalo)
-    if not encontrado:
-        raise RuntimeError(
-            "A planilha aceitou a linha mas não informou onde ela ficou. "
-            "Confira a aba antes de cadastrar de novo."
-        )
-    return int(encontrado.group(1))
 
 
 def create_vacina_pmo_visit(payload: dict[str, Any]) -> dict[str, Any]:
@@ -3208,19 +3230,40 @@ def create_vacina_pmo_visit(payload: dict[str, Any]) -> dict[str, Any]:
 
     shift = _normalize_shift(payload.get("shift"))
     note = _normalize_note_line(payload.get("note"))
-    resposta = (
+
+    atuais = (
         service.spreadsheets()
         .values()
-        .append(
+        .get(spreadsheetId=spreadsheet_id, range=f"'{sheet_title}'!A:R")
+        .execute()
+        .get("values", [])
+    )
+    source_row = _pmo_free_slot_row(atuais, shift)
+
+    ocupada = PmoVaccinationVisit.query.filter_by(
+        spreadsheet_id=spreadsheet_id, sheet_gid=sheet_gid, source_row=source_row
+    ).first()
+    if ocupada:
+        # A planilha diz vaga livre e o banco diz ocupada: sincronize antes de
+        # gravar, senão a casa nova sobrescreveria a de outra pessoa.
+        raise ValueError(
+            f"A linha {source_row} da aba já está registrada para "
+            f"{ocupada.tutor_name}. Sincronize a aba e tente de novo."
+        )
+
+    # Só as colunas da casa (A..K). Data e turno já vêm do modelo do dia e não
+    # podem ser reescritos — é o que mantém a vaga coerente com o resto da aba.
+    (
+        service.spreadsheets()
+        .values()
+        .update(
             spreadsheetId=spreadsheet_id,
-            range=f"'{sheet_title}'!A:R",
+            range=f"'{sheet_title}'!A{source_row}:K{source_row}",
             valueInputOption="USER_ENTERED",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [_pmo_new_visit_sheet_row(payload, animais, shift, note)]},
+            body={"values": [_pmo_new_visit_sheet_row(payload, animais, note)]},
         )
         .execute()
     )
-    source_row = _pmo_appended_row_number(resposta)
 
     visit = PmoVaccinationVisit(
         spreadsheet_id=spreadsheet_id,
