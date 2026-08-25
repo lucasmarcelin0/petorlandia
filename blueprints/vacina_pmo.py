@@ -414,19 +414,23 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
             campaign_vaccine = vaccine
 
     effective_status = pmo_animal.status
-    if campaign_vaccine and campaign_vaccine.aplicada:
+    ja_imunizado = pmo_animal.status == 'imunizado'
+    if campaign_vaccine and campaign_vaccine.aplicada and not ja_imunizado:
+        # Quem foi dispensado por ja estar protegido nao vira "vacinado" pela
+        # existencia de uma dose antiga: e justamente essa dose antiga que
+        # manda no relogio do reforco.
         effective_status = "vacinado"
     status_context = _pmo_status_context(effective_status)
     protegido = effective_status in _pmo_protected_statuses()
 
     next_booster_date = None
-    if campaign_vaccine and campaign_vaccine.proxima_dose:
-        next_booster_date = campaign_vaccine.proxima_dose
-    elif pmo_animal.immune_since and effective_status == 'imunizado':
+    if ja_imunizado and pmo_animal.immune_since:
         # Nao houve dose nesta visita: o relogio do reforco continua correndo a
         # partir da vacina antiga, senao a carteirinha prometeria protecao que
         # o animal nao tem.
         next_booster_date = pmo_animal.immune_since + relativedelta(years=1)
+    elif campaign_vaccine and campaign_vaccine.proxima_dose:
+        next_booster_date = campaign_vaccine.proxima_dose
     elif visit.vaccine_date and effective_status == "vacinado":
         next_booster_date = visit.vaccine_date + relativedelta(years=1)
     booster_days_remaining = None

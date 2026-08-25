@@ -27,7 +27,7 @@ from models import (
     User,
     Vacina,
 )
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from services.sfa_service import (
     _extract_google_sheet_id,
@@ -1331,9 +1331,19 @@ def _ensure_real_animal(pmo_animal: PmoVaccinationAnimal) -> None:
     if pmo_animal.animal_id or not visit.tutor_user_id:
         return
 
+    # O mesmo tutor pode ter cadastros repetidos do mesmo bicho (digitação
+    # diferente entre campanhas, corrida entre o sync e a tela). Escolher com
+    # ``.first()`` sem ordem fazia o vínculo pular de um para outro a cada
+    # religação — e a foto que estava no cadastro antigo "sumia" da
+    # carteirinha. A ordem abaixo é estável: primeiro quem tem foto, depois o
+    # cadastro mais antigo, que é o que acumula histórico.
     candidate = (
         Animal.query.filter_by(user_id=visit.tutor_user_id)
         .filter(func.lower(Animal.name) == pmo_animal.name.lower())
+        .order_by(
+            case((Animal.image.isnot(None), 0), else_=1),
+            Animal.id.asc(),
+        )
         .first()
     )
     if candidate:
@@ -1865,6 +1875,17 @@ PMO_DOSE_STATUSES = ("vacinado",)
 # impressa e para o selo da casa. Dose gasta é outra pergunta, respondida
 # apenas por ``PMO_DOSE_STATUSES``.
 PMO_DONE_STATUSES = ("vacinado", PMO_STATUS_ALREADY_IMMUNE)
+
+
+def _pmo_visit_has_field_record(visit: PmoVaccinationVisit) -> bool:
+    """A visita guarda trabalho que aconteceu na porta do morador?
+
+    Vacina aplicada ou animal dispensado por já estar imunizado são fatos do
+    campo, não dados da planilha. Serve de trava contra apagar por engano.
+    """
+    return any(
+        (animal.status or "") in PMO_DONE_STATUSES for animal in (visit.animals or [])
+    )
 
 
 def _pmo_animal_slug(value: Any) -> str:
@@ -2604,6 +2625,14 @@ def persist_vacina_pmo_rows(
                 .all()
             )
             for stale_visit in stale:
+                if _pmo_visit_has_field_record(stale_visit):
+                    # Aqui houve trabalho de campo: animal vacinado ou
+                    # dispensado por imunidade. Uma linha que mudou de lugar na
+                    # planilha não pode apagar isso — junto iriam o status, a
+                    # carteirinha do tutor e o vínculo com a foto do animal.
+                    # Some da lista do dia, mas o registro fica.
+                    stale_visit.source_row = -abs(stale_visit.id)
+                    continue
                 db.session.delete(stale_visit)
 
     db.session.commit()

@@ -540,3 +540,49 @@ def test_certificado_da_casa_nao_marca_imunizado_como_pendente(app, client, monk
     html = client.get(f"/vacina-pmo/c/{hoje.public_token}").get_data(as_text=True)
     assert "Já imunizado" in html
     assert 'class="badge pending"' not in html
+
+
+def test_dose_antiga_nao_empurra_o_reforco_do_imunizado(app, client, monkeypatch):
+    """Bug encontrado em produção: a carteirinha da Lupe prometia 5 meses a mais.
+
+    O animal marcado como já imunizado tem uma vacina antiga registrada. A rota
+    tratava a existência dessa vacina como "vacinado nesta visita" e contava o
+    reforço a partir do dia da visita — cinco meses de proteção que ele não tem.
+    """
+    from datetime import datetime as _dt
+
+    from models import Animal, Species, User, Vacina
+    from services import vacina_pmo_service as servico
+
+    tutor = User(name="Tutora Lupe", email="lupe@example.com", phone="")
+    tutor.set_password("PMOA3333")
+    especie = Species(name="Cachorro")
+    db.session.add_all([tutor, especie])
+    db.session.flush()
+    animal = Animal(name="Lupe", user_id=tutor.id, species=especie, status="ativo")
+    db.session.add(animal)
+    db.session.flush()
+    # A dose de campanha do ano passado, sem data de reforço registrada.
+    db.session.add(Vacina(
+        animal_id=animal.id, nome="Vacina Antirrábica", tipo="Campanha PMO",
+        aplicada=True, aplicada_em=date(2026, 1, 20), criada_em=_dt(2026, 1, 20, 9, 0),
+    ))
+
+    _visita("20/01/2026", vaccine_date=date(2026, 1, 20), animais=[("Lupe", "vacinado")])
+    hoje = _visita("25/08/2026", row=3, vaccine_date=date(2026, 8, 25),
+                   animais=[("Lupe", "pendente")])
+    hoje.animals[0].animal_id = animal.id
+    db.session.commit()
+    _marcar_imunizado(app, monkeypatch, hoje.animals[0].id)
+    servico._ensure_visit_public_token(hoje)
+    db.session.commit()
+
+    html = client.get(
+        f"/vacina-pmo/c/{hoje.public_token}/pet/{hoje.animals[0].id}"
+    ).get_data(as_text=True)
+
+    assert "20/01/2027" in html, "o reforço conta a partir da vacina de verdade"
+    assert "25/08/2027" not in html, (
+        "a visita sem dose não pode empurrar o vencimento um ano para frente"
+    )
+    assert "Vacinação pendente" not in html
