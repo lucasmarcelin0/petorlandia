@@ -115,6 +115,7 @@ body {
 
 .header img {
   max-height: 72px;
+  max-width: 100%;
   width: auto;
 }
 
@@ -301,7 +302,7 @@ body {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 28px;
 }
@@ -477,7 +478,7 @@ tr:nth-child(even) td {
 
 .signature-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 28px;
   margin-top: 56px;
 }
@@ -625,6 +626,50 @@ footer span + span::before {
 
   .header--exam-portal {
     flex-direction: column;
+  }
+
+  /* O cabeçalho A4 (dois slots de logo fixos + informações lado a lado)
+     nunca cabe em telas estreitas: os logos ficam na primeira linha e as
+     informações da clínica descem para a segunda, em largura total. */
+  .header:not(.header--exam-portal) {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .header:not(.header--exam-portal) .header-logo {
+    flex: 0 0 96px;
+  }
+
+  .header:not(.header--exam-portal) .header-info {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .header-info {
+    overflow-wrap: anywhere;
+  }
+
+  .document {
+    padding: 24px 18px;
+  }
+
+  .signature-block .signature {
+    min-width: min(260px, 100%);
+  }
+
+  /* Tabelas largas (orçamentos, exames) rolam dentro do próprio bloco
+     em vez de alargar a página inteira. */
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Rede de segurança: mesmo que algum conteúdo futuro estoure a largura,
+     a página nunca ganha rolagem horizontal no celular. */
+  html,
+  body {
+    overflow-x: clip;
   }
 
   .header-info--clinic-first {
