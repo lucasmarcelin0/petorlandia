@@ -60,7 +60,7 @@ def process_pending_conversions() -> int:
 
     processed = 0
     for membership in pending:
-        user = getattr(getattr(membership, 'veterinario', None), 'user', None)
+        user = membership.user
         try:
             track_event(
                 'trial_converted',

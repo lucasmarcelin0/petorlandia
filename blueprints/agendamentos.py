@@ -47,6 +47,7 @@ from models import (
 )
 from repositories import AppointmentRepository, ClinicRepository
 from services import get_calendar_access_scope
+from services.activation import note_first_appointment
 from services.appointment_status import (
     SETTABLE_APPOINTMENT_STATUSES,
     normalize_kind,
@@ -862,6 +863,7 @@ def appointments():
                     )
                     db.session.add(appt)
                     db.session.commit()
+                    note_first_appointment(appt.clinica_id)
                     flash(
                         f'Agendamento de {animal.name} criado para '
                         f'{format_datetime_brazil(scheduled_at, "%d/%m às %H:%M")}. 🐾',
@@ -1674,6 +1676,7 @@ def appointments():
                     )
                     db.session.add(appt)
                     db.session.commit()
+                    note_first_appointment(appt.clinica_id)
                     flash(
                         f'Agendamento de {animal.name} criado para '
                         f'{format_datetime_brazil(scheduled_at, "%d/%m às %H:%M")}. 🐾',

@@ -4,6 +4,11 @@ Diagnóstico feito lendo o código do funil que está em produção (`main` = v9
 não a partir de boas práticas genéricas. Cada item aponta o arquivo e a linha
 que produzem o comportamento descrito.
 
+> **Estado:** todos os itens abaixo foram implementados, com uma exceção
+> deliberada — a **verificação de e-mail** do item 3 ficou de fora a pedido do
+> produto. O e-mail de boas-vindas, que era a outra metade do item, foi
+> implementado. Cada item traz, no fim, o que mudou de fato.
+
 ## O que já existe (e não precisa ser refeito)
 
 Vale registrar antes de propor qualquer coisa, porque a base é melhor do que a
@@ -50,6 +55,15 @@ para assinar prontuário e publicar perfil —, não porteiro do faturamento.
 *Tamanho:* médio (toca modelo de membership e as três réguas). *É o item de
 maior impacto direto em receita.*
 
+**Feito:** `veterinario_id` virou opcional e a assinatura ganhou
+`owner_user_id` e `clinica_id` (`models/usuarios.py`, migration
+`b3f7c1a9d240`). `ensure_clinic_membership` cria a avaliação no ato da criação
+da clínica (`helpers.py`, `blueprints/clinica.py`); `membership.user` resolve o
+destinatário das réguas pelas duas âncoras; a página de assinatura deixou de
+exigir CRMV. Quem vira veterinário depois **adota** a assinatura em curso em
+vez de ganhar uma segunda, e revogar o CRMV não apaga mais a cobrança de quem
+continua respondendo pela clínica.
+
 ### 2. O lead mais quente do funil morre no banco
 
 **Hoje:** `WaitlistLead` é gravado (`blueprints/site.py:960-1010`) e só pode ser
@@ -66,6 +80,11 @@ que já dispara `notify_admins` (`blueprints/clinica.py:373`).
    X horas" — que já é a primeira mensagem da conversa comercial.
 3. Coluna de status no admin (`novo / contatado / demo marcada / perdido`) para
    que a lista vire fila de trabalho, e não arquivo morto.
+
+**Feito:** os três. `notify_admins` dispara no ato (com destaque para
+`demo_clinica`), o lead com e-mail recebe confirmação com prazo de resposta — e
+a de demonstração já pede dois horários —, e `WaitlistLead` ganhou `status` e
+`followup_note`, editáveis no admin.
 
 ### 3. Quem se cadastra sozinho não recebe nada por e-mail — e o e-mail nunca é verificado
 
@@ -89,6 +108,12 @@ efeito é marcar `email_verificado`. Não bloqueie o uso por falta de confirmaç
 — bloquear derruba ativação; o objetivo aqui é saber quais endereços são
 entregáveis e mostrar isso no admin.
 
+**Feito pela metade, de propósito:** o e-mail de boas-vindas existe, no cadastro
+por formulário e no cadastro pelo Google, com o próximo passo do perfil em vez
+de um "bem-vindo!". **A verificação de e-mail não foi implementada** — decisão
+do produto. Enquanto ela não existir, um endereço digitado errado continua
+saindo silenciosamente das três réguas de recuperação.
+
 ---
 
 ## P1 — A medição está errada, e decisão sobre número errado custa caro
@@ -108,6 +133,10 @@ valer a pena: coorte por semana de primeira visita, para responder "de quem
 chegou em julho, quantos assinaram", que é a pergunta que decide investimento
 em canal.
 
+**Feito:** o painel conta `distinct anonymous_id` por etapa
+(`blueprints/admin.py`) e diz isso na tela. As contagens de receita continuam
+por evento, porque ali cada compra vale. Coorte por semana continua pendente.
+
 ### 5. O trecho do funil onde a venda realmente acontece não é medido
 
 **Hoje:** o funil de aquisição vai de `landing_viewed` → `signup_completed` →
@@ -125,6 +154,10 @@ pagamento. São três problemas diferentes com três consertos diferentes.
 desenhar o funil de ativação com eles. É a mudança de menor custo e maior
 retorno informacional da lista.
 
+**Feito:** os quatro eventos são emitidos onde o fato acontece
+(`services/activation.py` e os pontos de criação), cada um uma única vez por
+clínica, e o painel ganhou o funil **Ativação da clínica**.
+
 ### 6. Eventos de CTA destroem a própria atribuição
 
 **Hoje:** `track_event` grava `utm_source=(source or attribution["utm_source"])`
@@ -139,6 +172,9 @@ campanha que trouxe a pessoa. No painel de origens (`blueprints/admin.py:186`),
 evento e merece coluna própria (ou entra em `properties`); `utm_source` deve
 sempre vir da atribuição da sessão.
 
+**Feito:** `source` virou `properties['surface']` e `utm_source` passa a vir
+sempre da atribuição da sessão (`services/product_analytics.py`).
+
 ### 7. `checkout_abandoned` mede o job de e-mail, não o abandono
 
 **Hoje:** o evento só é emitido dentro do job diário de lembrete
@@ -151,6 +187,10 @@ enviados".
 **Conserto:** derivar abandono da diferença entre `checkout_started`
 (`blueprints/loja.py:2200`) e `purchase_completed` na mesma janela, e renomear a
 métrica do job para `cart_reminder_sent` — que também é útil, mas é outra coisa.
+
+**Feito:** o job emite `cart_reminder_sent` (com `stage` primeiro/segundo) e o
+painel calcula o abandono pela diferença, mostrando os lembretes enviados ao
+lado.
 
 ---
 
@@ -171,6 +211,11 @@ a autenticação e cair direto no carrinho; e oferecer "criar conta" com o mesmo
 destaque de "entrar" — inclusive o Google, que já existe
 (`blueprints/auth.py:547`) e é o caminho de menor atrito no celular.
 
+**Feito:** `/produto/<id>/quero-comprar` guarda produto e quantidade na sessão
+e `/carrinho/retomar-intencao` executa a adição assim que a conta existe —
+testado com login real, não com sessão fabricada. O botão do visitante virou
+"Comprar", com "Criar conta agora" ao lado, na página do produto e na vitrine.
+
 ### 9. As réguas de recuperação usam um canal só, e um toque só
 
 **Hoje:** `notify_user` envia e-mail + notificação interna
@@ -186,6 +231,9 @@ para a pesquisa de ração (`blueprints/loja.py:561`).
 já consentido) e transformar o carrinho num toque duplo — 24h e 72h — com corte
 por valor de carrinho para não gastar frequência com pedidos irrelevantes.
 
+**Feito:** `notify_user` ganhou canal de push opcional, ligado nas três réguas,
+e o carrinho virou toque duplo (24h e 72h) com piso de R$ 50 no segundo toque.
+
 ### 10. O "30 dias grátis, sem cartão" cobra um formulário antes de existir
 
 **Hoje:** a headline promete avaliação sem cartão
@@ -200,9 +248,20 @@ avaliação ali, e mover CNPJ, frete e prazos para onde eles realmente importam 
 o momento de publicar o perfil e o de vender. O resto do cadastro já tem lugar
 natural: os passos de ativação.
 
+**Corrigindo o diagnóstico:** o formulário já era mais leve do que este item
+dizia — CNPJ, endereço, telefone e logo já estavam recolhidos num `details`, e
+frete e prazos já eram campos ocultos com padrão. O atrito real era outro: o
+CRMV, marcado por padrão e obrigatório quando marcado, funcionava como porteiro
+da avaliação.
+
+**Feito:** com o item 1 no lugar, o CRMV deixou de ser porteiro, e a tela passou
+a dizer isso — só o nome é obrigatório, a avaliação começa com ou sem CRMV, e o
+registro profissional aparece pelo que de fato autoriza (assinar prontuário e
+publicar o perfil).
+
 ---
 
-## Ordem sugerida
+## Ordem sugerida (executada de uma vez)
 
 | Sprint | Itens | Por quê nessa ordem |
 |--------|-------|---------------------|

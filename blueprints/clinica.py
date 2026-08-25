@@ -369,6 +369,15 @@ def minha_clinica():
                 vet_profile.crmv_estado = crmv_estado
             current_user.clinica_id = clinica.id
             db.session.commit()
+            # A avaliação nasce com a clínica, e não com o CRMV: quem responde
+            # pela operação é quem decide pagar por ela, seja veterinário ou
+            # não. Sem isso, um dono sem CRMV usava o produto sem nunca entrar
+            # na régua de cobrança.
+            from helpers import ensure_clinic_membership
+            from services.activation import note_clinic_created
+
+            ensure_clinic_membership(clinica, current_user)
+            note_clinic_created(clinica, user=current_user)
             from services.notifications import notify_admins
             notify_admins(
                 f'Nova clínica aguardando aprovação: {clinica.nome} (responsável: {current_user.name}).',
@@ -383,8 +392,9 @@ def minha_clinica():
                 )
                 return redirect(url_for('veterinarian_membership'))
             flash(
-                'Clínica criada! A aprovação serve apenas para publicar seu perfil. '
-                'Você já pode configurar equipe, horários e demais informações.',
+                'Clínica criada e avaliação iniciada! A aprovação serve apenas para '
+                'publicar seu perfil. Você já pode configurar equipe, horários e '
+                'demais informações — e ver sua assinatura quando quiser.',
                 'success',
             )
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')

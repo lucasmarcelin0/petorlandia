@@ -537,14 +537,96 @@ def test_carrinho_abandonado_lembra_uma_vez_so(app, monkeypatch):
 
         app_module.enviar_lembretes_carrinho_abandonado()
         assert len(enviados) == 1
-        evento = ProductEvent.query.filter_by(event_name='checkout_abandoned').one()
+        # O evento diz o que ele é: lembrete enviado. O abandono real é a
+        # diferença entre checkout iniciado e compra aprovada, e não o alcance
+        # deste job.
+        evento = ProductEvent.query.filter_by(event_name='cart_reminder_sent').one()
         assert evento.user_id == user.id
         assert evento.properties['amount'] == 100.0
         assert evento.properties['items'] == 1
+        assert evento.properties['stage'] == 'primeiro'
 
+        # Segundo toque só depois de 72h: rodar o job de novo no mesmo dia não
+        # manda nada.
         app_module.enviar_lembretes_carrinho_abandonado()
         assert len(enviados) == 1
-        assert ProductEvent.query.filter_by(event_name='checkout_abandoned').count() == 1
+        assert ProductEvent.query.filter_by(event_name='cart_reminder_sent').count() == 1
+
+
+def test_carrinho_abandonado_tem_segundo_toque_depois_de_72h(app, monkeypatch):
+    import app as app_module
+
+    enviados = []
+    monkeypatch.setattr(
+        'services.notifications.notify_user',
+        lambda user, assunto, corpo, **kw: enviados.append(assunto),
+    )
+
+    with app.app_context():
+        user = _user(name='Indecisa')
+        product = _product()
+        order = Order(
+            user_id=user.id,
+            created_at=utcnow() - timedelta(hours=80),
+            abandoned_reminder_at=utcnow() - timedelta(hours=56),
+        )
+        db.session.add(order)
+        db.session.commit()
+        db.session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            quantity=1,
+            unit_price=100,
+        ))
+        db.session.commit()
+
+        app_module.enviar_lembretes_carrinho_abandonado()
+
+        assert len(enviados) == 1
+        evento = ProductEvent.query.filter_by(event_name='cart_reminder_sent').one()
+        assert evento.properties['stage'] == 'segundo'
+        assert order.abandoned_reminder_2_at is not None
+
+        # E para por aí: dois toques é a régua inteira.
+        app_module.enviar_lembretes_carrinho_abandonado()
+        assert len(enviados) == 1
+
+
+def test_segundo_toque_ignora_carrinho_pequeno(app, monkeypatch):
+    """Frequência é recurso escasso: carrinho de R$ 12 recebe um toque só."""
+
+    import app as app_module
+
+    enviados = []
+    monkeypatch.setattr(
+        'services.notifications.notify_user',
+        lambda user, assunto, corpo, **kw: enviados.append(assunto),
+    )
+
+    with app.app_context():
+        user = _user(name='Carrinho pequeno')
+        product = _product()
+        order = Order(
+            user_id=user.id,
+            created_at=utcnow() - timedelta(hours=80),
+            abandoned_reminder_at=utcnow() - timedelta(hours=56),
+        )
+        db.session.add(order)
+        db.session.commit()
+        db.session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            quantity=1,
+            unit_price=12,
+        ))
+        db.session.commit()
+
+        app_module.enviar_lembretes_carrinho_abandonado()
+
+        assert enviados == []
+        assert order.abandoned_reminder_2_at is not None
 
 
 def test_carrinho_recente_nao_recebe_lembrete(app, monkeypatch):
@@ -682,8 +764,11 @@ def test_produto_publico_tem_seo_especifico_e_dados_estruturados(app, client):
     assert '"@type": "Product"' in body
     assert '"priceCurrency": "BRL"' in body
     assert 'https://schema.org/InStock' in body
-    assert 'Entrar para comprar' in body
-    assert 'O produto continua aqui depois do acesso.' in body
+    # Visitante sem conta compra pelo mesmo botão de quem tem: a intenção fica
+    # guardada e o item entra no carrinho sozinho depois do acesso.
+    assert f'/produto/{product_id}/quero-comprar' in body
+    assert 'Criar conta agora' in body
+    assert 'o item vai junto, com a quantidade escolhida' in body
 
 
 def test_carrinho_vai_direto_ao_pagamento_sem_tela_intermediaria(app, client):

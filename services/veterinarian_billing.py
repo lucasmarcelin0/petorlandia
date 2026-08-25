@@ -264,9 +264,17 @@ def sync_preapproval_payload(payload: dict):
         subscription.authorized_at = subscription.authorized_at or utcnow()
         if not subscription.superseded_at:
             membership.preapproval_id = provider_id[:64]
+            # Último marco de ativação antes da receita. Emitido só na
+            # transição — o sync roda a cada reconciliação e repetiria o
+            # evento a cada passagem.
+            first_time = membership.payment_method_set_at is None
             membership.payment_method_set_at = (
                 membership.payment_method_set_at or utcnow()
             )
+            if first_time:
+                from services.activation import note_payment_method_added
+
+                note_payment_method_added(membership)
     elif status == "canceled":
         if membership.preapproval_id == provider_id:
             membership.preapproval_id = None

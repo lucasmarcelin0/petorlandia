@@ -465,6 +465,9 @@ class Order(db.Model):
     # Lembrete de carrinho abandonado. Enviado uma única vez por carrinho:
     # recuperação de venda que vira insistência deixa de ser recuperação.
     abandoned_reminder_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Segundo toque do lembrete de carrinho. Um lembrete só alcança quem
+    #: estava disponível naquele dia; o segundo, 72h depois, alcança o resto.
+    abandoned_reminder_2_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     user = db.relationship(
         'User',

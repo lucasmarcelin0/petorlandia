@@ -1685,6 +1685,77 @@ def _pode_ver_prescricao(bloco) -> bool:
         return False
 
 
+#: Intenção de compra guardada enquanto o visitante passa pelo login.
+_PENDING_CART_KEY = "pending_cart_item"
+
+
+@bp.route("/produto/<int:product_id>/quero-comprar", methods=["GET"])
+def intencao_compra(product_id):
+    """Guarda o que a pessoa quis comprar antes de mandá-la ao acesso.
+
+    Sem isto, o visitante clicava em comprar, entrava, voltava para a página do
+    produto e tinha de clicar de novo — a quantidade escolhida se perdia no
+    caminho. Quem desiste aí desiste depois de já ter decidido comprar.
+    """
+
+    product = Product.query.get_or_404(product_id)
+    if product.status != 'active':
+        flash("Este produto não está disponível no momento.", "warning")
+        return redirect(url_for("produto_detail", product_id=product.id))
+
+    try:
+        quantity = max(1, min(10, int(request.args.get("quantity", 1))))
+    except (TypeError, ValueError):
+        quantity = 1
+
+    if current_user.is_authenticated:
+        order = _ensure_current_order()
+        _upsert_cart_item(order, product, quantity)
+        db.session.commit()
+        track_event(
+            'add_to_cart',
+            category=product.category,
+            amount=float(product.preco_publico or 0) * quantity,
+            items=quantity,
+        )
+        return redirect(url_for("ver_carrinho"))
+
+    session[_PENDING_CART_KEY] = {"product_id": product.id, "quantity": quantity}
+    track_event('store_purchase_intent', category=product.category, items=quantity)
+    flash("Falta só o acesso. Guardamos o item para você.", "info")
+    return redirect(url_for("login_view", next=url_for("aplicar_intencao_compra")))
+
+
+@bp.route("/carrinho/retomar-intencao", methods=["GET"])
+@login_required
+def aplicar_intencao_compra():
+    """Executa a compra pretendida assim que a conta existe."""
+
+    pending = session.pop(_PENDING_CART_KEY, None) or {}
+    product = Product.query.get(pending.get("product_id")) if pending else None
+    if product is None:
+        return redirect(url_for("loja"))
+
+    quantity = pending.get("quantity") or 1
+    try:
+        quantity = max(1, min(10, int(quantity)))
+    except (TypeError, ValueError):
+        quantity = 1
+
+    order = _ensure_current_order()
+    _upsert_cart_item(order, product, quantity)
+    db.session.commit()
+    track_event(
+        'add_to_cart',
+        category=product.category,
+        amount=float(product.preco_publico or 0) * quantity,
+        items=quantity,
+        surface='intencao_preservada',
+    )
+    flash(f"{product.name} continua no seu carrinho.", "success")
+    return redirect(url_for("ver_carrinho"))
+
+
 @bp.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):

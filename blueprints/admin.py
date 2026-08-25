@@ -96,24 +96,38 @@ def product_analytics_dashboard():
         'onboarding_viewed',
         'onboarding_progress_viewed',
         'pricing_viewed',
+        'clinic_created',
+        'first_patient_created',
+        'first_appointment_created',
+        'payment_method_added',
         'catalog_viewed',
         'add_to_cart',
         'checkout_started',
-        'checkout_abandoned',
+        'cart_reminder_sent',
         'purchase_completed',
         'payment_failed',
         'subscription_started',
         'trial_converted',
         'service_requested',
+        'waitlist_joined',
     )
+    # Pessoas, não eventos. Contar linhas fazia ``landing_viewed`` crescer a
+    # cada revisita da mesma pessoa enquanto ``signup_completed`` acontece uma
+    # vez por conta: a taxa exibida ficava sistematicamente menor que a real, e
+    # piorava justamente quando a landing passava a trazer gente de volta.
     rows = (
-        db.session.query(ProductEvent.event_name, func.count(ProductEvent.id))
+        db.session.query(
+            ProductEvent.event_name,
+            func.count(func.distinct(ProductEvent.anonymous_id)),
+            func.count(ProductEvent.id),
+        )
         .filter(ProductEvent.created_at >= since)
         .filter(ProductEvent.event_name.in_(event_names))
         .group_by(ProductEvent.event_name)
         .all()
     )
-    counts = dict(rows)
+    counts = {name: people for name, people, _total in rows}
+    event_totals = {name: total for name, _people, total in rows}
 
     def rate(outcome, base):
         denominator = counts.get(base, 0)
@@ -122,7 +136,7 @@ def product_analytics_dashboard():
         return round(counts.get(outcome, 0) * 100 / denominator, 1)
 
     acquisition_funnel = (
-        ('Visitas à página inicial', counts.get('landing_viewed', 0), None),
+        ('Visitantes da página inicial', counts.get('landing_viewed', 0), None),
         (
             'Cadastros concluídos',
             counts.get('signup_completed', 0),
@@ -139,8 +153,35 @@ def product_analytics_dashboard():
             rate('trial_converted', 'signup_completed'),
         ),
     )
+    # O trecho onde a venda realmente acontece. Antes ele existia como semanas
+    # de trabalho sem nenhum evento: um trial que não convertia podia ter
+    # morrido em três lugares diferentes, e os três apareciam como o mesmo
+    # número.
+    activation_funnel = (
+        ('Cadastros concluídos', counts.get('signup_completed', 0), None),
+        (
+            'Clínicas criadas',
+            counts.get('clinic_created', 0),
+            rate('clinic_created', 'signup_completed'),
+        ),
+        (
+            'Primeiro paciente',
+            counts.get('first_patient_created', 0),
+            rate('first_patient_created', 'clinic_created'),
+        ),
+        (
+            'Primeiro agendamento',
+            counts.get('first_appointment_created', 0),
+            rate('first_appointment_created', 'first_patient_created'),
+        ),
+        (
+            'Renovação configurada',
+            counts.get('payment_method_added', 0),
+            rate('payment_method_added', 'first_appointment_created'),
+        ),
+    )
     commerce_funnel = (
-        ('Visitas à loja', counts.get('catalog_viewed', 0), None),
+        ('Visitantes da loja', counts.get('catalog_viewed', 0), None),
         (
             'Adições ao carrinho',
             counts.get('add_to_cart', 0),
@@ -179,9 +220,17 @@ def product_analytics_dashboard():
     revenue_summary = {
         'approved_amount': amount_for('purchase_completed'),
         'failed_amount': amount_for('payment_failed'),
-        'abandoned': counts.get('checkout_abandoned', 0),
+        # Abandono medido pela diferença entre iniciar e concluir, e não pelo
+        # job de lembrete: o job só alcança quem tem e-mail utilizável e cabe
+        # no lote do dia, então o número dele era o teto do próprio job.
+        'abandoned': max(
+            0,
+            counts.get('checkout_started', 0) - counts.get('purchase_completed', 0),
+        ),
+        'cart_reminders_sent': event_totals.get('cart_reminder_sent', 0),
         'subscriptions_started': counts.get('subscription_started', 0),
         'services_requested': counts.get('service_requested', 0),
+        'waitlist_leads': counts.get('waitlist_joined', 0),
     }
     sources = (
         db.session.query(
@@ -203,7 +252,9 @@ def product_analytics_dashboard():
     return render_template(
         'admin/product_analytics.html',
         acquisition_funnel=acquisition_funnel,
+        activation_funnel=activation_funnel,
         commerce_funnel=commerce_funnel,
+        event_totals=event_totals,
         revenue_summary=revenue_summary,
         counts=counts,
         sources=sources,

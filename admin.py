@@ -743,25 +743,45 @@ class WaitlistLeadAdmin(MyModelView):
     """
 
     can_create = False
-    can_edit = False
+    # Edição liberada só para o acompanhamento: a lista precisa virar fila de
+    # trabalho, com quem já foi procurado e o que ficou combinado. Contato,
+    # funcionalidade e datas continuam sendo o que o visitante enviou.
+    can_edit = True
     column_default_sort = ('created_at', True)
 
-    column_list = ('feature', 'contact', 'city', 'user', 'created_at', 'notified_at')
+    column_list = (
+        'feature', 'contact', 'city', 'status_label', 'user', 'created_at',
+        'notified_at', 'followup_note',
+    )
     column_labels = {
         'feature': 'Funcionalidade',
         'contact': 'Contato',
         'city': 'Cidade',
+        'status_label': 'Situação',
         'user': 'Usuário',
         'created_at': 'Entrou em',
         'notified_at': 'Avisado em',
+        'status': 'Situação',
+        'followup_note': 'Anotação do contato',
     }
-    column_filters = ('feature', 'created_at', 'notified_at')
-    column_searchable_list = ('contact', 'city')
+    column_filters = ('feature', 'status', 'created_at', 'notified_at')
+    column_searchable_list = ('contact', 'city', 'followup_note')
+    form_columns = ('status', 'followup_note')
+    form_choices = {
+        'status': [
+            (value, label)
+            for value, label in WaitlistLead.STATUS_LABELS.items()
+        ]
+    }
 
 
 class VeterinarianMembershipAdmin(MyModelView):
     column_list = (
         'veterinario',
+        # A assinatura pode nascer da clínica, e não do CRMV: sem estas duas
+        # colunas, a linha do responsável aparecia vazia no painel.
+        'owner',
+        'clinica',
         'status_label',
         'started_at',
         'trial_ends_at',
@@ -772,6 +792,8 @@ class VeterinarianMembershipAdmin(MyModelView):
 
     column_labels = {
         'veterinario': 'Veterinário',
+        'owner': 'Responsável',
+        'clinica': 'Clínica',
         'status_label': 'Status',
         'started_at': 'Início',
         'trial_ends_at': 'Fim do Teste',

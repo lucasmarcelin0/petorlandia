@@ -10,6 +10,7 @@
       <span class="text-uppercase text-muted small fw-semibold">Aquisição, ativação e receita</span>
       <h1 id="analytics-title" class="h3 mb-1">Funil do produto</h1>
       <p class="text-muted mb-0">Do primeiro acesso ao dinheiro aprovado, sem conteúdo clínico ou texto digitado pelo usuário.</p>
+      <p class="text-muted small mb-0">As etapas contam <strong>pessoas</strong> (visitantes distintos), não cliques: é o que torna as conversões comparáveis entre si.</p>
     </div>
     <div class="btn-group" role="group" aria-label="Período do painel">
       {% for days in (7, 30, 90) %}
@@ -27,7 +28,7 @@
         <div class="card-body">
           <span class="small text-muted d-block">Receita aprovada</span>
           <strong class="fs-3 d-block text-success">{{ revenue_summary.approved_amount | currency_br }}</strong>
-          <span class="small text-muted">{{ counts.get('purchase_completed', 0) }} compra(s)</span>
+          <span class="small text-muted">{{ event_totals.get('purchase_completed', 0) }} compra(s)</span>
         </div>
       </div>
     </div>
@@ -36,7 +37,7 @@
         <div class="card-body">
           <span class="small text-muted d-block">Valor em pagamentos falhos</span>
           <strong class="fs-3 d-block text-danger">{{ revenue_summary.failed_amount | currency_br }}</strong>
-          <span class="small text-muted">{{ counts.get('payment_failed', 0) }} falha(s)</span>
+          <span class="small text-muted">{{ event_totals.get('payment_failed', 0) }} falha(s)</span>
         </div>
       </div>
     </div>
@@ -52,9 +53,18 @@
     <div class="col-6 col-xl">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <span class="small text-muted d-block">Carrinhos recuperáveis</span>
+          <span class="small text-muted d-block">Checkouts abandonados</span>
           <strong class="fs-3 d-block text-warning">{{ revenue_summary.abandoned }}</strong>
-          <span class="small text-muted">lembretes enviados</span>
+          <span class="small text-muted">iniciados sem compra · {{ revenue_summary.cart_reminders_sent }} lembrete(s) enviado(s)</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <span class="small text-muted d-block">Leads na lista de espera</span>
+          <strong class="fs-3 d-block text-primary">{{ revenue_summary.waitlist_leads }}</strong>
+          <span class="small text-muted">fila de contato no admin</span>
         </div>
       </div>
     </div>
@@ -70,7 +80,7 @@
   </div>
 
   <div class="row g-4">
-    {% for title, funnel in [('Aquisição de clínicas', acquisition_funnel), ('Conversão da loja', commerce_funnel)] %}
+    {% for title, funnel in [('Aquisição de clínicas', acquisition_funnel), ('Ativação da clínica', activation_funnel), ('Conversão da loja', commerce_funnel)] %}
     <div class="col-lg-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">

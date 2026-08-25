@@ -59,12 +59,12 @@
             </div>
           </form>
           {% else %}
-          {# Visitante sem conta: o botão diz a verdade e volta para o produto
-             depois do login, em vez de falhar em silêncio. #}
-          <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
+          {# Visitante sem conta: o item fica guardado e entra no carrinho
+             sozinho depois do acesso, em vez de exigir um segundo clique. #}
+          <a href="{{ url_for('intencao_compra', product_id=product.id) }}"
              class="add-to-cart-btn d-flex align-items-center justify-content-center text-decoration-none"
-             data-cta="product_login_to_buy">
-            <i class="fa-solid fa-cart-plus me-1"></i> Entrar para comprar
+             data-cta="store_grid_buy_intent">
+            <i class="fa-solid fa-cart-plus me-1"></i> Adicionar
           </a>
           {% endif %}
         </div>

@@ -116,11 +116,20 @@
               <button type="submit" class="btn btn-primary flex-grow-1">Adicionar ao carrinho</button>
             </form>
             {% else %}
-            <a href="{{ url_for('login_view', next=url_for('produto_detail', product_id=product.id)) }}"
-               class="btn btn-primary w-100" data-cta="product_detail_login_to_buy">
-              Entrar para comprar
-            </a>
-            <div class="small text-muted mt-2">O produto continua aqui depois do acesso.</div>
+            <form action="{{ url_for('intencao_compra', product_id=product.id) }}" method="get"
+                  class="d-flex align-items-center gap-2">
+              <input type="number" name="quantity" value="1" min="1" max="10"
+                     class="form-control" style="max-width:78px" aria-label="Quantidade">
+              <button type="submit" class="btn btn-primary flex-grow-1" data-cta="store_buy_intent">
+                Comprar
+              </button>
+            </form>
+            <div class="small text-muted mt-2">
+              Você cria a conta (ou entra) no passo seguinte — o item vai junto, com a quantidade escolhida.
+            </div>
+            <a class="small d-inline-block mt-1"
+               href="{{ url_for('register', next=url_for('aplicar_intencao_compra')) }}"
+               data-cta="store_register_to_buy">Criar conta agora</a>
             {% endif %}
           </section>
         </div>
@@ -137,8 +146,13 @@
             <p class="small mb-2"><strong>Cobrança automática recorrente.</strong> Você escolhe a frequência antes de autorizar.</p>
             <p class="small text-muted">Frete de {{ product.subscription_shipping_fee | currency_br }} por entrega. Sem fidelidade e com cancelamento digital.</p>
             <a href="{{ url_for('racao_assinar', product_id=product.id) if current_user.is_authenticated else url_for('login_view', next=url_for('racao_assinar', product_id=product.id)) }}" class="btn btn-success w-100">
-              {{ 'Configurar assinatura' if current_user.is_authenticated else 'Entrar para assinar' }} <i class="fa-solid fa-arrow-right ms-1"></i>
+              {{ 'Configurar assinatura' if current_user.is_authenticated else 'Assinar' }} <i class="fa-solid fa-arrow-right ms-1"></i>
             </a>
+            {% if not current_user.is_authenticated %}
+            <a class="small d-inline-block mt-2"
+               href="{{ url_for('register', next=url_for('racao_assinar', product_id=product.id)) }}"
+               data-cta="store_register_to_subscribe">Ainda não tem conta? Criar agora</a>
+            {% endif %}
           </section>
         </div>
         {% endif %}

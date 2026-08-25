@@ -631,11 +631,31 @@ class VeterinarianMembership(db.Model):
     __tablename__ = 'veterinarian_membership'
 
     id = db.Column(db.Integer, primary_key=True)
+    #: Anexo histórico da assinatura. Continua sendo o vínculo de quem tem
+    #: CRMV, mas deixou de ser obrigatório: a avaliação e a cobrança nascem da
+    #: clínica, e quem responde por ela nem sempre é veterinário. Enquanto
+    #: isto era NOT NULL, o dono sem CRMV usava o produto sem nunca entrar na
+    #: régua de cobrança.
     veterinario_id = db.Column(
         db.Integer,
         db.ForeignKey('veterinario.id', ondelete='CASCADE'),
-        nullable=False,
+        nullable=True,
         unique=True,
+    )
+    #: Responsável pela assinatura quando ela não nasce de um CRMV.
+    owner_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    #: Clínica que originou a avaliação, quando houve uma.
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
     )
     started_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     trial_ends_at = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -657,7 +677,24 @@ class VeterinarianMembership(db.Model):
         'Veterinario',
         backref=db.backref('membership', cascade='all, delete-orphan', uselist=False),
     )
+    owner = db.relationship(
+        'User',
+        foreign_keys=[owner_user_id],
+        backref=db.backref('owned_membership', uselist=False),
+    )
+    clinica = db.relationship('Clinica', foreign_keys=[clinica_id])
     last_payment = db.relationship('Payment', foreign_keys=[last_payment_id])
+
+    @property
+    def user(self):
+        """Pessoa que recebe as mensagens e configura o pagamento.
+
+        As réguas (fim de avaliação, win-back) precisam de alguém para avisar,
+        e esse alguém pode chegar por dois caminhos: o CRMV ou a clínica.
+        """
+
+        vet_user = getattr(getattr(self, 'veterinario', None), 'user', None)
+        return vet_user or self.owner
 
     def _now(self):
         return utcnow()
@@ -723,9 +760,13 @@ class VeterinarianMembership(db.Model):
         )
 
     def remaining_trial_days(self) -> int:
-        if not self.trial_ends_at:
+        # Mesma normalização das demais leituras de data: um banco que devolve
+        # o valor sem fuso (SQLite, dumps antigos) quebrava a subtração e
+        # derrubava a página de assinatura com 500.
+        trial_end = self._as_timezone_aware(self.trial_ends_at)
+        if not trial_end:
             return 0
-        delta = self.trial_ends_at - self._now()
+        delta = trial_end - self._now()
         return max(math.ceil(delta.total_seconds() / 86400), 0)
 
     @property

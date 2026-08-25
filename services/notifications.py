@@ -182,8 +182,27 @@ def notify_admins(texto, *, kind, url=None):
     )
 
 
-def notify_user(user, subject, body, *, kind):
-    """Notify a user by email and record a legacy Notification row."""
+def notify_contact(email, subject, body) -> bool:
+    """Envia e-mail para um contato que ainda não é usuário.
+
+    É o caso do lead da lista de espera: ele deixou um e-mail antes de existir
+    conta. Sem isto, o único retorno de quem levantou a mão era o silêncio.
+    """
+
+    address = (email or '').strip()
+    if not address or '@' not in address:
+        return False
+    return _send_email([address], subject, body)
+
+
+def notify_user(user, subject, body, *, kind, push_url=None, push_body=None):
+    """Notify a user by email and record a legacy Notification row.
+
+    ``push_url`` liga o web push para esta mensagem. As réguas de receita —
+    fim de avaliação, win-back e carrinho — nasceram só com e-mail, enquanto o
+    push já entregava lembrete de vacina e consulta. É o mesmo canal, já
+    consentido, com custo marginal zero e entrega imediata.
+    """
 
     if user is None:
         return
@@ -191,3 +210,16 @@ def notify_user(user, subject, body, *, kind):
     if email and not email.endswith('@convite.petorlandia.local'):
         _send_email([email], subject, body)
     _add_notification(user.id, body, kind=kind)
+    if push_url:
+        try:
+            from services.push import push_to_user
+
+            push_to_user(
+                user.id,
+                subject[:60],
+                (push_body or body).strip().split('\n')[0][:120],
+                url=push_url,
+                tag=kind,
+            )
+        except Exception:  # noqa: BLE001 - push nunca decide o envio principal
+            current_app.logger.warning('Falha ao enviar push "%s"', kind, exc_info=True)
