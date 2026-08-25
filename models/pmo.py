@@ -114,6 +114,11 @@ class PmoVaccinationAnimal(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id', ondelete='SET NULL'), nullable=True, index=True)
     vaccine_id = db.Column(db.Integer, db.ForeignKey('vacina.id', ondelete='SET NULL'), nullable=True, index=True)
     vaccinated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Data da dose ANTERIOR que dispensou a aplicacao nesta visita. Fica fora de
+    # vaccinated_at de proposito: aquele campo significa "dose aplicada aqui" e
+    # alimenta a contagem de doses. Carimba-lo sem vacina adiantaria o relogio
+    # da protecao em um ano sem que nada tivesse sido aplicado.
+    immune_since = db.Column(db.Date, nullable=True)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
     animal = db.relationship('Animal', foreign_keys=[animal_id])

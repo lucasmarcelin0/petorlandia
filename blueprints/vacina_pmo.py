@@ -50,7 +50,9 @@ _PMO_STATUS_LOG_RE = re.compile(
     re.IGNORECASE,
 )
 _PMO_TIME_PREFIX_RE = re.compile(r'^(?:E\s*-\s*)?\d{1,2}:\d{2}\s*-\s*')
-_PMO_DONE_STATUSES = ('vacinado',)
+# Desfechos que encerram o animal na visita. Vem do servico para que a folha
+# impressa e a tela nunca discordem sobre o que e 'nada pendente'.
+from services.vacina_pmo_service import PMO_DONE_STATUSES as _PMO_DONE_STATUSES
 
 
 def _pmo_note_livre(note):
@@ -167,7 +169,13 @@ def _pmo_vacinados_anteriores(visits, sheet_title):
 
 
 def _build_pmo_print_rows(visits, sheet_title):
+    from services.vacina_pmo_service import build_previous_immunity_index
+
     historico = _pmo_vacinados_anteriores(visits, sheet_title)
+    # Dose anterior dos animais que ESTAO na lista de hoje. O historico acima
+    # cobre so os que ficaram de fora dela, entao sem isto o animal reinscrito
+    # sai no papel como se nunca tivesse tomado a vacina.
+    imunidade = build_previous_immunity_index(visits)
     rows = []
     primeira_ocorrencia = {}
 
@@ -175,6 +183,12 @@ def _build_pmo_print_rows(visits, sheet_title):
         nome, instrucao = _pmo_split_tutor(visita.tutor_name)
         pendentes = [a for a in visita.animals if a.status not in _PMO_DONE_STATUSES]
         vacinados = [a for a in visita.animals if a.status in _PMO_DONE_STATUSES]
+        doses_previas = imunidade.get(visita.id, {})
+        protegidos = {
+            animal.id: doses_previas[animal.id]
+            for animal in pendentes
+            if doses_previas.get(animal.id, {}).get('immune')
+        }
 
         chave = _pmo_tutor_key(visita)
         duplicada_de = primeira_ocorrencia.get(chave)
@@ -189,6 +203,7 @@ def _build_pmo_print_rows(visits, sheet_title):
             'pendentes': pendentes,
             'vacinados': vacinados,
             'anteriores': historico.get(visita.id, []),
+            'protegidos': protegidos,
             'duplicada_de': duplicada_de,
         })
     return rows

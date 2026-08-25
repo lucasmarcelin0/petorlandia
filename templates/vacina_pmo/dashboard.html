@@ -837,6 +837,57 @@
     font-size: 0.76rem;
   }
 
+  .pmo-animal-immunity {
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    max-width: 22rem;
+    padding: 0.28rem 0.5rem;
+    border-radius: 0.4rem;
+    border: 1px solid transparent;
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .pmo-animal-immunity i {
+    margin-top: 0.15rem;
+    flex: 0 0 auto;
+  }
+
+  .pmo-animal-immunity--ok {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+  }
+
+  .pmo-animal-immunity--check {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+  }
+
+  .pmo-animal-immunity--due {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #475569;
+  }
+
+  .pmo-immunity-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   .pmo-empty {
     min-height: 260px;
     display: grid;
@@ -2768,6 +2819,9 @@
         status: animal.status || 'pendente',
         imageUrl: animal.imageUrl || '',
         imageProxyUrl: animal.imageProxyUrl || '',
+        previousVaccination: animal.previousVaccination || null,
+        immuneSince: animal.immuneSince || '',
+        immuneSinceLabel: animal.immuneSinceLabel || '',
       })) : [],
       note: row.note || '',
       date: row.date || '',
@@ -3590,6 +3644,87 @@
     return `<button type="button" class="btn btn-sm btn-outline-primary pmo-animal-photo-btn" data-action="animal-photo" data-animal-index="${index}" title="Adicionar foto: tirar agora ou escolher da galeria" aria-label="Adicionar foto de ${escapeHtml(animal.name)}"><i class="fas fa-camera"></i></button>`;
   }
 
+  const STATUS_LABELS = {
+    pendente: 'pendente',
+    vacinado: 'vacinado',
+    imunizado: 'já imunizado (sem dose)',
+    ausente: 'ausente',
+    remarcar: 'remarcar',
+    recusou: 'recusou',
+  };
+
+  // "já imunizado" só existe quando há uma dose no último ano para oferecer —
+  // e continua na lista se o animal já estiver assim, para dar como desfazer.
+  function statusOptionsFor(animal) {
+    const base = ['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'];
+    const previous = animal && animal.previousVaccination;
+    const elegivel = (previous && previous.immune) || animal.status === 'imunizado';
+    return elegivel ? ['pendente', 'vacinado', 'imunizado', 'ausente', 'remarcar', 'recusou'] : base;
+  }
+
+  // A antirrábica é anual. Quando a casa é reinscrita, o vacinador precisa ver
+  // na própria linha do animal que a dose já foi aplicada — e em que dia — para
+  // não repetir. O aviso informa; quem decide o status continua sendo ele.
+  function renderPreviousVaccination(animal) {
+    if (animal && animal.status === 'imunizado') {
+      const desde = animal.immuneSinceLabel || (animal.previousVaccination || {}).dateLabel || '';
+      return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
+        <i class="fas fa-check" aria-hidden="true"></i>
+        Não precisou de dose${desde ? ` — protegido pela vacina de <strong>${escapeHtml(desde)}</strong>` : ''}
+      </div>`;
+    }
+    const previous = animal && animal.previousVaccination;
+    if (!previous || !previous.dateLabel) {
+      return '';
+    }
+    if (previous.immune) {
+      if (previous.match === 'aproximado') {
+        return `<div class="pmo-animal-immunity pmo-animal-immunity--check">
+          <i class="fas fa-circle-question" aria-hidden="true"></i>
+          Confira: <strong>${escapeHtml(previous.matchedName)}</strong> foi vacinado em
+          ${escapeHtml(previous.dateLabel)}. É o mesmo animal?
+        </div>`;
+      }
+      return `<div class="pmo-animal-immunity pmo-animal-immunity--ok">
+        <i class="fas fa-shield-halved" aria-hidden="true"></i>
+        Já vacinado em <strong>${escapeHtml(previous.dateLabel)}</strong> ·
+        protegido até ${escapeHtml(previous.protectedUntilLabel)}
+      </div>`;
+    }
+    return `<div class="pmo-animal-immunity pmo-animal-immunity--due">
+      <i class="fas fa-rotate-right" aria-hidden="true"></i>
+      Última dose em ${escapeHtml(previous.dateLabel)} — vencida, aplicar
+    </div>`;
+  }
+
+  // Só conta quem ainda não teve desfecho: quem já foi marcado como vacinado
+  // ou como já imunizado saiu da fila e não precisa mais de aviso.
+  const PMO_DONE_STATUSES = ['vacinado', 'imunizado'];
+
+  function immuneAnimals(row) {
+    return (row.animals || []).filter((animal) => (
+      animal.previousVaccination
+      && animal.previousVaccination.immune
+      && !PMO_DONE_STATUSES.includes(animal.status)
+    ));
+  }
+
+  // Aviso no cabeçalho da casa: o vacinador precisa saber antes de sacar a
+  // dose, não só ao rolar até a linha do animal.
+  function renderImmunityFlag(row) {
+    const protegidos = immuneAnimals(row);
+    if (!protegidos.length) {
+      return '';
+    }
+    const nomes = protegidos.map((animal) => animal.name).filter(Boolean).join(', ');
+    const rotulo = protegidos.length === 1
+      ? '1 já protegido'
+      : `${protegidos.length} já protegidos`;
+    return `<span class="pmo-immunity-flag" title="${escapeHtml(nomes)} com dose no último ano">
+      <i class="fas fa-shield-halved" aria-hidden="true"></i>${escapeHtml(rotulo)}
+    </span>`;
+  }
+
   function renderAnimalControls(row) {
     if (!row.animals.length) {
       return '<span class="text-muted">Nomes não informados</span>';
@@ -3605,10 +3740,11 @@
             <button type="button" class="pmo-animal-name pmo-animal-name--editable" data-action="animal-name-edit" data-animal-index="${index}" title="Clique para corrigir o nome">${escapeHtml(animal.name)} <i class="fas fa-pen pmo-animal-name__icon" aria-hidden="true"></i></button>
           `}
           <div class="pmo-animal-species">${animal.species === 'cao' ? 'Cão' : 'Gato'}</div>
+          ${renderPreviousVaccination(animal)}
         </div>
         <div class="pmo-animal-status">
           <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
-            ${['pendente', 'vacinado', 'ausente', 'remarcar', 'recusou'].map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+            ${statusOptionsFor(animal).map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${STATUS_LABELS[status] || status}</option>`).join('')}
           </select>
           ${renderAnimalPhotoControl(animal, index)}
           <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="camera" data-animal-index="${index}" hidden>
@@ -3627,7 +3763,7 @@
       <article class="pmo-visit-card" data-id="${row.id}" data-status="${row.status}">
         <div class="pmo-card-head">
           <div class="pmo-card-headmain">
-            <div class="pmo-card-title">${escapeHtml(row.tutor)}</div>
+            <div class="pmo-card-title">${escapeHtml(row.tutor)}${renderImmunityFlag(row)}</div>
             <div class="pmo-card-address">${renderAddress(row, true)}</div>
             ${renderAttendedBy(row)}
           </div>
@@ -3863,7 +3999,7 @@
           <td>
             <span class="badge text-bg-${row.status === 'vacinado' ? 'success' : row.status === 'parcial' ? 'warning' : row.status === 'pendente' ? 'secondary' : 'light'} border">${row.status}</span>
           </td>
-          <td><strong>${escapeHtml(row.tutor)}</strong>${renderAttendedBy(row)}</td>
+          <td><strong>${escapeHtml(row.tutor)}</strong>${renderImmunityFlag(row)}${renderAttendedBy(row)}</td>
           <td class="pmo-address">${renderAddress(row)}</td>
           <td>${animals}</td>
           <td>${row.dogs}</td>

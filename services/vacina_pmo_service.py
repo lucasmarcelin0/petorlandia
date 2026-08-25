@@ -197,11 +197,14 @@ def _status_note_line(animal: PmoVaccinationAnimal, status: str) -> str:
     labels = {
         "pendente": "pendente",
         "vacinado": "vacinado",
+        "imunizado": "ja imunizado, sem dose",
         "ausente": "ausente",
         "remarcar": "remarcar",
         "recusou": "recusou",
     }
     label = labels.get(status, status)
+    if status == PMO_STATUS_ALREADY_IMMUNE and animal.immune_since:
+        label = f"{label} (dose de {animal.immune_since.strftime('%d/%m/%Y')})"
     return f"{_pmo_event_time_label()} - {animal.name}: {label}."
 
 
@@ -1809,9 +1812,11 @@ def infer_visit_status(animals: list[dict[str, Any]] | list[PmoVaccinationAnimal
         animal.get("status", "pendente") if isinstance(animal, dict) else (animal.status or "pendente")
         for animal in animals
     ]
-    if all(status == "vacinado" for status in statuses):
+    # Casa resolvida é casa sem pendência: quem já estava imunizado conta para
+    # fechar a visita, mesmo sem dose aplicada nela.
+    if all(status in PMO_DONE_STATUSES for status in statuses):
         return "vacinado"
-    if any(status == "vacinado" for status in statuses):
+    if any(status in PMO_DONE_STATUSES for status in statuses):
         return "parcial"
     if all(status == "ausente" for status in statuses):
         return "ausente"
@@ -1833,9 +1838,235 @@ def get_vacina_pmo_evaluation_payload(visit: PmoVaccinationVisit) -> dict[str, A
     }
 
 
-def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Imunidade já conquistada
+#
+# A antirrábica é anual. Quando a mesma casa é reinscrita — encaixe, remarcação
+# ou cadastro novo feito pelo tutor — o vacinador chega sem saber que parte dos
+# animais tomou a dose há poucos meses. O índice abaixo responde, para cada
+# animal da lista do dia, se ele já tem dose registrada dentro da janela e
+# quando ela foi aplicada.
+# ---------------------------------------------------------------------------
+
+PMO_IMMUNITY_DAYS = 365
+
+# Desfecho de quem chegou na visita já protegido por uma dose anterior. Fica
+# separado de "vacinado" porque aquele status é a fonte da contagem de doses:
+# somar este ali inflaria o consumo do frasco e a cobertura da campanha, e
+# ainda carimbaria uma data de aplicação que nunca existiu.
+PMO_STATUS_ALREADY_IMMUNE = "imunizado"
+
+# Uma dose saiu do frasco. É o que conta consumo, cobertura e o que vai para as
+# colunas de vacinados da planilha.
+PMO_DOSE_STATUSES = ("vacinado",)
+
+# Desfechos que encerram o animal na visita — para "nada pendente" na folha
+# impressa e para o selo da casa. Dose gasta é outra pergunta, respondida
+# apenas por ``PMO_DOSE_STATUSES``.
+PMO_DONE_STATUSES = ("vacinado", PMO_STATUS_ALREADY_IMMUNE)
+
+
+def _pmo_animal_slug(value: Any) -> str:
+    text = _strip_accents(_normalize_text(value)).lower()
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _pmo_address_slug(value: Any) -> str:
+    text = _strip_accents(_normalize_text(value)).lower()
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _pmo_visit_phones(visit: PmoVaccinationVisit) -> set[str]:
+    return {
+        phone
+        for phone in (_normalize_phone(visit.phone1), _normalize_phone(visit.phone2))
+        if phone
+    }
+
+
+def _pmo_same_household(left: PmoVaccinationVisit, right: PmoVaccinationVisit) -> bool:
+    """Mesma casa entre duas listas diferentes.
+
+    Preferir falso negativo a falso positivo, como no resto do módulo: deixar
+    de avisar custa uma dose a mais; avisar errado faria o vacinador pular um
+    animal que nunca foi vacinado.
+    """
+    if _pmo_visit_phones(left) & _pmo_visit_phones(right):
+        return True
+    if not _same_person_name(left.tutor_name, right.tutor_name):
+        return False
+    left_address = _pmo_address_slug(left.address)
+    right_address = _pmo_address_slug(right.address)
+    return bool(left_address) and left_address == right_address
+
+
+def _pmo_close_slugs(left: str, right: str) -> bool:
+    """Nomes quase iguais: um caractere de diferença em nomes de 4+ letras.
+
+    "Lipe" numa lista e "Lupe" na seguinte é a mesma cadela redigitada. Nomes
+    curtos ficam de fora porque "Bob"/"Bib" seriam colapsados sem necessidade.
+    """
+    if not left or not right or left == right:
+        return False
+    if min(len(left), len(right)) < 4 or abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(1 for a, b in zip(left, right) if a != b) == 1
+    menor, maior = (left, right) if len(left) < len(right) else (right, left)
+    for corte in range(len(maior)):
+        if maior[:corte] + maior[corte + 1:] == menor:
+            return True
+    return False
+
+
+def _pmo_visit_reference_date(visit: PmoVaccinationVisit) -> date | None:
+    if visit.vaccine_date:
+        return visit.vaccine_date
+    try:
+        return datetime.strptime(_normalize_text(visit.sheet_title), "%d/%m/%Y").date()
+    except (TypeError, ValueError):
+        pass
+    return visit.requested_date
+
+
+def _pmo_dose_date(animal: PmoVaccinationAnimal, visit: PmoVaccinationVisit) -> date | None:
+    """Dia em que a dose que protege este animal foi aplicada.
+
+    Para quem foi marcado como já imunizado, a data válida é a da dose antiga
+    registrada em ``immune_since`` — nunca a data da visita, onde nada foi
+    aplicado. Sem isso, cada visita empurraria a proteção um ano para frente.
+    """
+    if animal.status == PMO_STATUS_ALREADY_IMMUNE:
+        return animal.immune_since
+    if animal.vaccinated_at:
+        return animal.vaccinated_at.date()
+    return _pmo_visit_reference_date(visit)
+
+
+def _pmo_previous_doses(visits: list[PmoVaccinationVisit]) -> list[dict[str, Any]]:
+    """Doses já aplicadas fora das listas informadas, para o mesmo conjunto de casas."""
+    if not visits:
+        return []
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
+
+    ids_atuais = {visit.id for visit in visits if visit.id}
+    filtros = []
+    telefones = sorted({p for visit in visits for p in (visit.phone1, visit.phone2) if p})
+    nomes = sorted({visit.tutor_name for visit in visits if visit.tutor_name})
+    if telefones:
+        filtros.append(PmoVaccinationVisit.phone1.in_(telefones))
+        filtros.append(PmoVaccinationVisit.phone2.in_(telefones))
+    if nomes:
+        filtros.append(PmoVaccinationVisit.tutor_name.in_(nomes))
+    if not filtros:
+        return []
+
+    anteriores = (
+        PmoVaccinationVisit.query.options(joinedload(PmoVaccinationVisit.animals))
+        .filter(or_(*filtros))
+        .all()
+    )
+    doses = []
+    for visita in anteriores:
+        if visita.id in ids_atuais:
+            continue
+        for animal in visita.animals:
+            # "Já imunizado" também entra: ele carrega a data da dose antiga e
+            # mantém a corrente de proteção viva entre campanhas.
+            if animal.status not in PMO_DONE_STATUSES:
+                continue
+            aplicada_em = _pmo_dose_date(animal, visita)
+            if not aplicada_em:
+                continue
+            doses.append({
+                "visit": visita,
+                "animal_id": animal.animal_id,
+                "name": animal.name or "",
+                "slug": _pmo_animal_slug(animal.name),
+                "species": animal.species,
+                "date": aplicada_em,
+                "sheet_title": visita.sheet_title or "",
+            })
+    return doses
+
+
+def _pmo_immunity_payload(dose: dict[str, Any], match: str, reference: date) -> dict[str, Any]:
+    aplicada_em = dose["date"]
+    dias = (reference - aplicada_em).days
+    protegido_ate = aplicada_em + timedelta(days=PMO_IMMUNITY_DAYS)
+    return {
+        "date": aplicada_em.isoformat(),
+        "dateLabel": aplicada_em.strftime("%d/%m/%Y"),
+        "protectedUntil": protegido_ate.isoformat(),
+        "protectedUntilLabel": protegido_ate.strftime("%d/%m/%Y"),
+        "daysAgo": dias,
+        "immune": 0 <= dias < PMO_IMMUNITY_DAYS,
+        "match": match,
+        "matchedName": dose["name"],
+        "sheetTitle": dose["sheet_title"],
+    }
+
+
+def build_previous_immunity_index(
+    visits: list[PmoVaccinationVisit],
+) -> dict[int, dict[int, dict[str, Any]]]:
+    """``{visit_id: {animal_id: dados da dose anterior}}``.
+
+    A comparação é feita em três níveis, do mais forte para o mais fraco:
+    mesmo cadastro de animal, mesmo nome, e nome com uma letra de diferença.
+    Só o terceiro nível é marcado como aproximado, para que a tela possa pedir
+    conferência em vez de afirmar.
+    """
+    doses = _pmo_previous_doses(visits)
+    if not doses:
+        return {}
+
+    indice: dict[int, dict[int, dict[str, Any]]] = {}
+    for visita in visits:
+        referencia = _pmo_visit_reference_date(visita) or now_in_brazil().date()
+        candidatas = [
+            dose for dose in doses
+            if dose["date"] <= referencia and _pmo_same_household(visita, dose["visit"])
+        ]
+        if not candidatas:
+            continue
+        candidatas.sort(key=lambda dose: dose["date"], reverse=True)
+        por_animal: dict[int, dict[str, Any]] = {}
+        for animal in visita.animals:
+            slug = _pmo_animal_slug(animal.name)
+            escolhida = None
+            grau = ""
+            for dose in candidatas:
+                if animal.animal_id and dose["animal_id"] == animal.animal_id:
+                    escolhida, grau = dose, "cadastro"
+                    break
+                if slug and dose["slug"] == slug:
+                    escolhida, grau = dose, "exato"
+                    break
+                if not escolhida and _pmo_close_slugs(slug, dose["slug"]):
+                    escolhida, grau = dose, "aproximado"
+            if escolhida:
+                por_animal[animal.id] = _pmo_immunity_payload(escolhida, grau, referencia)
+        if por_animal:
+            indice[visita.id] = por_animal
+    return indice
+
+
+def _serialize_visit(
+    visit: PmoVaccinationVisit,
+    immunity: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """``immunity`` já calculado em lote; quando omitido, calcula só desta visita.
+
+    O padrão precisa calcular: as rotas que devolvem uma visita só (mudar
+    status, renomear animal, incluir animal) substituem a linha na tela, e sem
+    isso o aviso de dose anterior sumiria no primeiro toque do vacinador.
+    """
     _ensure_visit_public_token(visit)
     evaluation = get_vacina_pmo_evaluation_payload(visit)
+    if immunity is None:
+        immunity = build_previous_immunity_index([visit]).get(visit.id, {})
     public_url = ""
     if has_request_context():
         public_url = url_for("vacina_pmo_public", token=visit.public_token, _external=True)
@@ -1852,6 +2083,11 @@ def _serialize_visit(visit: PmoVaccinationVisit) -> dict[str, Any]:
                 url_for("vacina_pmo_animal_photo_src", animal_id=animal.id)
                 if has_request_context() and animal.animal and animal.animal.image
                 else ""
+            ),
+            "previousVaccination": immunity.get(animal.id),
+            "immuneSince": animal.immune_since.isoformat() if animal.immune_since else "",
+            "immuneSinceLabel": (
+                animal.immune_since.strftime("%d/%m/%Y") if animal.immune_since else ""
             ),
         }
         for animal in visit.animals
@@ -1923,8 +2159,12 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
         _ensure_visit_records(visit)
     if visits:
         db.session.commit()
+    imunidade = build_previous_immunity_index(visits)
     return {
-        "rows": [_serialize_visit(visit) for visit in visits],
+        "rows": [
+            _serialize_visit(visit, imunidade.get(visit.id))
+            for visit in visits
+        ],
         "sheet_gid": sheet_gid or (latest.sheet_gid if latest else ""),
         "sheet_title": sheet_title or (latest.sheet_title if latest else ""),
         "spreadsheet_id": visits[0].spreadsheet_id if visits else "",
@@ -2366,7 +2606,8 @@ def persist_vacina_pmo_rows(
                 db.session.delete(stale_visit)
 
     db.session.commit()
-    return [_serialize_visit(visit) for visit in saved]
+    imunidade = build_previous_immunity_index(saved)
+    return [_serialize_visit(visit, imunidade.get(visit.id, {})) for visit in saved]
 
 
 def _count_vaccinated_by_species(visit: PmoVaccinationVisit) -> tuple[int, int]:
@@ -2488,9 +2729,10 @@ def _visit_status_color_key(visit: PmoVaccinationVisit) -> str | None:
         return "recusou"
     if any(status == "ausente" for status in statuses):
         return "ausente"
-    if all(status == "vacinado" for status in statuses):
+    # Mesma regra do selo: ja imunizado fecha o animal, mesmo sem dose.
+    if all(status in PMO_DONE_STATUSES for status in statuses):
         return "vacinado"
-    if any(status == "vacinado" for status in statuses):
+    if any(status in PMO_DONE_STATUSES for status in statuses):
         return "parcial"
     return None
 
@@ -2691,12 +2933,29 @@ def update_vacina_pmo_animal_name(animal_id: int, name: str) -> dict[str, Any]:
 
 
 def update_vacina_pmo_animal_status(animal_id: int, status: str) -> dict[str, Any]:
-    allowed = {"pendente", "vacinado", "ausente", "remarcar", "recusou"}
+    allowed = {"pendente", "vacinado", PMO_STATUS_ALREADY_IMMUNE,
+               "ausente", "remarcar", "recusou"}
     if status not in allowed:
         raise ValueError("Status inválido.")
     animal = PmoVaccinationAnimal.query.get_or_404(animal_id)
     animal.status = status
     animal.vaccinated_at = utcnow() if status == "vacinado" else None
+    if status == PMO_STATUS_ALREADY_IMMUNE:
+        # A data vem do histórico, não do relógio: é a dose que já existia.
+        # Sem ela o desfecho não se sustenta, então o status é recusado.
+        anterior = (
+            build_previous_immunity_index([animal.visit])
+            .get(animal.visit_id, {})
+            .get(animal.id)
+        )
+        if not anterior or not anterior.get("immune"):
+            raise ValueError(
+                "Só é possível marcar como já imunizado quando existe uma dose "
+                "registrada no último ano para este animal."
+            )
+        animal.immune_since = date.fromisoformat(anterior["date"])
+    else:
+        animal.immune_since = None
     _append_visit_note(animal.visit, _status_note_line(animal, status))
     _ensure_real_animal(animal)
     _ensure_pmo_vaccine_record(animal)
@@ -2732,7 +2991,10 @@ def _attended_by_sheet_value(visit: PmoVaccinationVisit) -> str:
     """
     if visit.attended_by:
         return visit.attended_by
-    attended_statuses = {"vacinado", "recusou", "remarcar"}
+    # Alguem abriu a porta: marcar como ja imunizado tambem exige
+    # atendimento presencial.
+    attended_statuses = {"vacinado", PMO_STATUS_ALREADY_IMMUNE,
+                         "recusou", "remarcar"}
     if any((animal.status or "") in attended_statuses for animal in visit.animals):
         return visit.tutor_name or ""
     return ""
