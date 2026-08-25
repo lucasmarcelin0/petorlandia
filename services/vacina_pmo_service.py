@@ -1589,6 +1589,7 @@ def _ensure_pmo_vaccine_record(pmo_animal: PmoVaccinationAnimal) -> None:
 
 def _ensure_visit_records(visit: PmoVaccinationVisit) -> None:
     _ensure_tutor_account(visit)
+    _remember_visit_token(visit)
     for pmo_animal in visit.animals:
         _ensure_real_animal(pmo_animal)
         _ensure_pmo_vaccine_record(pmo_animal)
@@ -3413,12 +3414,46 @@ def update_vacina_pmo_visit_losses(visit_id: int, losses: Any) -> dict[str, Any]
 
 
 def get_vacina_pmo_public_visit(token: str) -> PmoVaccinationVisit | None:
+    """Carteirinha pelo link, aceitando também os links já entregues antes.
+
+    O ``public_token`` muda quando a visita é recriada — foi o que aconteceu
+    quando duas linhas indevidas empurraram a aba e o sync apagou e refez os
+    registros. O tutor, porém, já tinha o link antigo no WhatsApp, enviado em
+    nome da Prefeitura. Endereço publicado não pode virar 404, então o link
+    antigo continua abrindo a carteirinha da mesma casa.
+    """
+    from models import PmoVaccinationVisitToken
+
     visit = PmoVaccinationVisit.query.filter_by(public_token=token).first()
+    if not visit:
+        antigo = PmoVaccinationVisitToken.query.filter_by(token=token).first()
+        visit = antigo.visit if antigo else None
     if visit:
         _ensure_visit_public_token(visit)
+        _remember_visit_token(visit)
         _ensure_visit_records(visit)
         db.session.commit()
     return visit
+
+
+def _remember_visit_token(visit: PmoVaccinationVisit) -> None:
+    """Guarda o link atual para que ele nunca deixe de funcionar."""
+    from models import PmoVaccinationVisitToken
+
+    if not visit.public_token:
+        return
+    if not visit.id:
+        db.session.flush()
+    if not visit.id:
+        return
+    ja_existe = PmoVaccinationVisitToken.query.filter_by(
+        token=visit.public_token
+    ).first()
+    if ja_existe:
+        return
+    db.session.add(PmoVaccinationVisitToken(
+        visit_id=visit.id, token=visit.public_token
+    ))
 
 
 def _validate_optional_rating(value: Any, label: str) -> int | None:

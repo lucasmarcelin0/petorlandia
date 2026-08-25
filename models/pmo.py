@@ -125,6 +125,38 @@ class PmoVaccinationAnimal(db.Model):
     vaccine = db.relationship('Vacina', foreign_keys=[vaccine_id])
 
 
+class PmoVaccinationVisitToken(db.Model):
+    """Link de carteirinha que ja foi entregue ao morador e precisa continuar valendo.
+
+    O ``public_token`` da visita muda quando o registro e recriado (linha que
+    mudou de lugar na planilha, por exemplo). O tutor, porem, ja recebeu o link
+    antigo por WhatsApp: e um endereco publicado por a Prefeitura, nao um
+    identificador interno. Cada token ja usado fica guardado aqui e continua
+    abrindo a carteirinha da casa.
+    """
+
+    __tablename__ = 'pmo_vaccination_visit_token'
+
+    id = db.Column(db.Integer, primary_key=True)
+    visit_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pmo_vaccination_visit.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    token = db.Column(db.String(96), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    # O cascade no ORM apaga os tokens junto com a visita. Sem ele o ORM tenta
+    # anular visit_id, que e NOT NULL. Nao usar ``passive_deletes`` de
+    # proposito: assim o comportamento e o mesmo no Postgres e no SQLite dos
+    # testes, em vez de depender do ON DELETE CASCADE do banco.
+    visit = db.relationship(
+        'PmoVaccinationVisit',
+        backref=db.backref('historical_tokens', cascade='all, delete-orphan'),
+    )
+
+
 class PmoCastrationRequest(db.Model):
     __tablename__ = 'pmo_castration_request'
     __table_args__ = (

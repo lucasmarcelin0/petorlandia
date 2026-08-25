@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carteirinha — Vacinação Antirrábica de Orlândia</title>
+  <style>
+    :root {
+      --verde: #1f7a4d;
+      --verde-escuro: #145c39;
+      --tinta: #16302a;
+      --tinta-2: #4a635c;
+      --linha: #d6e2dc;
+      --fundo: #f2f7f4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--fundo);
+      color: var(--tinta);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .cartao {
+      background: #fff;
+      border: 1px solid var(--linha);
+      border-radius: 16px;
+      box-shadow: 0 12px 32px -20px rgba(22, 48, 42, .4);
+      max-width: 34rem;
+      width: 100%;
+      padding: 28px 24px 26px;
+    }
+    .marca {
+      font-size: .78rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--verde);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    h1 { font-size: 1.45rem; line-height: 1.25; margin: 0 0 12px; }
+    p { margin: 0 0 14px; color: var(--tinta-2); }
+    p strong { color: var(--tinta); }
+    .passos {
+      background: var(--fundo);
+      border: 1px solid var(--linha);
+      border-radius: 12px;
+      padding: 16px 18px 16px 34px;
+      margin: 18px 0 20px;
+    }
+    .passos li { margin-bottom: 8px; color: var(--tinta-2); }
+    .passos li:last-child { margin-bottom: 0; }
+    .acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+    .botao {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid var(--verde);
+      background: var(--verde);
+      color: #fff;
+      flex: 1 1 12rem;
+    }
+    .botao.secundario { background: #fff; color: var(--verde-escuro); }
+    .rodape {
+      margin-top: 22px;
+      padding-top: 14px;
+      border-top: 1px solid var(--linha);
+      font-size: .85rem;
+      color: var(--tinta-2);
+    }
+  </style>
+</head>
+<body>
+  <main class="cartao">
+    <div class="marca">Prefeitura de Orlândia · Vacinação Antirrábica</div>
+    <h1>Este link mudou de endereço</h1>
+    <p>
+      A vacinação do seu animal <strong>continua registrada</strong> — o que mudou foi
+      só o endereço desta página. Nada foi perdido.
+    </p>
+
+    <ol class="passos">
+      <li>Entre com o celular que você informou no cadastro da campanha.</li>
+      <li>Toque em <strong>Primeiro acesso</strong> e crie a sua senha.</li>
+      <li>A carteirinha digital fica salva na sua conta, com a data do reforço.</li>
+    </ol>
+
+    <div class="acoes">
+      <a class="botao" href="{{ url_for('first_access') }}">Acessar minha conta</a>
+      <a class="botao secundario" href="{{ url_for('index') }}">Ir para o início</a>
+    </div>
+
+    <div class="rodape">
+      Se preferir, fale com a equipe da campanha pelo mesmo WhatsApp que enviou o
+      link e peça o endereço atualizado da carteirinha.
+    </div>
+  </main>
+</body>
+</html>

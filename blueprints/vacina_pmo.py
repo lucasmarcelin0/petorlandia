@@ -325,7 +325,10 @@ def vacina_pmo_public(token):
 
     visit = get_vacina_pmo_public_visit(token)
     if not visit:
-        abort(404)
+        # Este link foi publicado pela Prefeitura e esta no WhatsApp do morador.
+        # Um 404 seco faz a pessoa achar que perdeu a carteirinha; a pagina de
+        # recuperacao explica e oferece o caminho pelo telefone.
+        return render_template('vacina_pmo/public_link_expirado.html'), 404
 
     evaluation_saved = False
     evaluation_error = ""
@@ -385,11 +388,12 @@ def vacina_pmo_public_pet(token, pmo_animal_id):
 
     visit = get_vacina_pmo_public_visit(token)
     if not visit:
-        abort(404)
+        return render_template('vacina_pmo/public_link_expirado.html'), 404
 
     pmo_animal = next((item for item in visit.animals if item.id == pmo_animal_id), None)
     if not pmo_animal:
-        abort(404)
+        # O link do pet tambem foi entregue ao morador; mesmo tratamento.
+        return render_template('vacina_pmo/public_link_expirado.html'), 404
 
     animal = db.session.get(Animal, pmo_animal.animal_id) if pmo_animal.animal_id else None
     vaccines = []
