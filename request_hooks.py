@@ -21,7 +21,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
-from flask_wtf.csrf import CSRFError
+from flask_wtf.csrf import CSRFError, generate_csrf
 from werkzeug.exceptions import HTTPException, NotFound
 
 from extensions import db
@@ -211,6 +211,25 @@ def handle_csrf_error(err):
     return redirect(redirect_target, code=303)
 
 
+def _fresh_csrf_token_response():
+    """Entrega um token novo sem obrigar a pessoa a recarregar a tela.
+
+    Telas operacionais ficam abertas durante horas. O token assinado do HTML
+    vence antes da sessao do usuario; este endpoint permite que o wrapper de
+    ``fetch`` renove somente o token e repita a acao original uma vez.
+    """
+    response = jsonify(
+        {
+            "success": True,
+            "csrf_token": generate_csrf(),
+            "authenticated": bool(current_user.is_authenticated),
+        }
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 def handle_unhandled_exception(err):
     current_app.logger.exception(
         "unhandled_error",
@@ -250,6 +269,12 @@ def register_request_hooks(app):
     app.after_request(_set_request_id_header)
     app.add_url_rule("/live", endpoint="health_live", view_func=lambda: _health_response(False), methods=["GET"])
     app.add_url_rule("/ready", endpoint="health_ready", view_func=lambda: _health_response(True), methods=["GET"])
+    app.add_url_rule(
+        "/csrf-token",
+        endpoint="fresh_csrf_token",
+        view_func=_fresh_csrf_token_response,
+        methods=["GET"],
+    )
     app.register_error_handler(HTTPException, handle_http_exception)
     app.register_error_handler(CSRFError, handle_csrf_error)
     app.register_error_handler(Exception, handle_unhandled_exception)

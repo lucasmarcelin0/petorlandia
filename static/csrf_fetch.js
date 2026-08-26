@@ -17,16 +17,27 @@
  *  - nunca sobrescreve um X-CSRFToken que o call site ja definiu;
  *  - le o token do <meta name="csrf-token"> no momento da requisicao, para
  *    pegar o valor renovado se a pagina tiver atualizado a meta.
+ *  - se o token venceu enquanto a tela ficou aberta, busca um token novo e
+ *    repete a requisicao uma unica vez (sem perder o formulario/foto).
  */
 (function () {
   'use strict';
 
   var MUTATING = /^(POST|PUT|PATCH|DELETE)$/i;
   var HEADER = 'X-CSRFToken';
+  var REFRESH_URL = '/csrf-token';
+  var refreshPromise = null;
 
   function currentToken() {
     var meta = document.querySelector('meta[name="csrf-token"]');
     return (meta && meta.content) || '';
+  }
+
+  function updateToken(token) {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && token) {
+      meta.content = token;
+    }
   }
 
   function isSameOrigin(url) {
@@ -43,26 +54,61 @@
   // --- fetch ---------------------------------------------------------------
   var nativeFetch = window.fetch;
   if (typeof nativeFetch === 'function') {
-    window.fetch = function (resource, init) {
+    function isCsrfFailure(response) {
+      if (!response || Number(response.status) !== 400 || typeof response.clone !== 'function') {
+        return Promise.resolve(false);
+      }
+      return response.clone().json().then(function (payload) {
+        return Boolean(
+          payload && (
+            payload.error === 'CSRF token missing or invalid' ||
+            (payload.errors && payload.errors.csrf_token)
+          )
+        );
+      }).catch(function () {
+        return false;
+      });
+    }
+
+    function refreshCsrfToken() {
+      if (!refreshPromise) {
+        refreshPromise = nativeFetch.call(window, REFRESH_URL, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+        }).then(function (response) {
+          if (!response || !response.ok) {
+            throw new Error('Nao foi possivel renovar o token CSRF.');
+          }
+          return response.json();
+        }).then(function (payload) {
+          var token = payload && payload.csrf_token;
+          if (!token) {
+            throw new Error('Resposta de renovacao CSRF sem token.');
+          }
+          updateToken(token);
+          return token;
+        }).finally(function () {
+          refreshPromise = null;
+        });
+      }
+      return refreshPromise;
+    }
+
+    function requestOptions(resource, init, forceFreshToken) {
       var options = init || {};
       var isRequest = typeof Request !== 'undefined' && resource instanceof Request;
-      var url = isRequest ? resource.url : resource;
       var method = options.method || (isRequest ? resource.method : 'GET') || 'GET';
-
-      if (!MUTATING.test(method) || !isSameOrigin(url)) {
-        return nativeFetch.call(this, resource, init);
-      }
-
       var token = currentToken();
-      if (!token) {
-        return nativeFetch.call(this, resource, init);
+      if (!MUTATING.test(method) || !isSameOrigin(isRequest ? resource.url : resource) || !token) {
+        return { options: init, mutating: false };
       }
 
-      // Headers pode vir como Headers, array de pares ou objeto simples.
       var headers = new Headers(
         options.headers || (isRequest ? resource.headers : undefined) || {}
       );
-      if (!headers.has(HEADER)) {
+      if (forceFreshToken || !headers.has(HEADER)) {
         headers.set(HEADER, token);
       }
 
@@ -74,10 +120,40 @@
       }
       nextInit.headers = headers;
       if (!nextInit.method && isRequest) {
-        // Preserva o metodo quando ele vinha so do Request.
         nextInit.method = method;
       }
-      return nativeFetch.call(this, resource, nextInit);
+      return { options: nextInit, mutating: true };
+    }
+
+    window.fetch = function (resource, init) {
+      var options = init || {};
+      var isRequest = typeof Request !== 'undefined' && resource instanceof Request;
+      var url = isRequest ? resource.url : resource;
+      var method = options.method || (isRequest ? resource.method : 'GET') || 'GET';
+
+      if (!MUTATING.test(method) || !isSameOrigin(url)) {
+        return nativeFetch.call(this, resource, init);
+      }
+
+      var first = requestOptions(resource, init, false);
+      var retryResource = (
+        isRequest && typeof resource.clone === 'function'
+      ) ? resource.clone() : resource;
+      var canRetry = !isRequest || retryResource !== resource;
+
+      return nativeFetch.call(this, resource, first.options).then(function (response) {
+        return isCsrfFailure(response).then(function (failed) {
+          if (!failed || !canRetry) return response;
+          return refreshCsrfToken().then(function () {
+            var retry = requestOptions(retryResource, init, true);
+            return nativeFetch.call(window, retryResource, retry.options);
+          }).catch(function () {
+            // Mantem a resposta original: o call site continua recebendo o
+            // erro real caso a sessao tenha acabado por completo.
+            return response;
+          });
+        });
+      });
     };
     window.fetch.__csrfWrapped = true;
   }

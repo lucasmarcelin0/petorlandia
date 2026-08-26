@@ -309,6 +309,11 @@
     color: #1e293b;
   }
 
+  .pmo-status-select[data-saving="true"] {
+    cursor: wait;
+    opacity: 0.72;
+  }
+
   .pmo-note {
     max-width: 320px;
   }
@@ -1050,6 +1055,42 @@
       line-height: 1.25;
       max-height: 2.6rem;
       overflow: hidden;
+    }
+  }
+
+  /* Aparelhos estreitos usados na rota (inclusive tela dividida). Cada acao
+     ganha sua propria linha para o seletor e a camera nunca serem espremidos
+     para fora do cartao. */
+  @media (max-width: 360px) {
+    .pmo-cards {
+      padding: 6px;
+    }
+
+    .pmo-visit-card {
+      padding: 10px 8px 10px 9px;
+      border-left-width: 4px;
+    }
+
+    .pmo-card-head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pmo-status-badge {
+      justify-self: start;
+    }
+
+    .pmo-animal-item {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+
+    .pmo-animal-status {
+      grid-template-columns: minmax(0, 1fr) 44px;
+    }
+
+    .pmo-card-actions .btn {
+      flex-basis: 100%;
+      min-width: 0;
     }
   }
 
@@ -2717,6 +2758,8 @@
   // Escopo do painel de avaliações: 'day' (aba atual) ou 'all' (todas as abas).
   const evalState = { scope: 'day', allRows: null, loading: false };
   const state = { rows: [] };
+  let stateMutationSeq = 0;
+  const statusUpdates = new Set();
   const PHOTO_QUEUE_DB = 'petorlandia-pmo-photo-queue';
   const PHOTO_QUEUE_STORE = 'photos';
   const photoQueue = {
@@ -2767,12 +2810,24 @@
     });
   }
 
-  async function deleteQueuedPhoto(animalId) {
+  async function deleteQueuedPhoto(animalId, expectedUpdatedAt) {
     const db = await openPhotoQueueDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(PHOTO_QUEUE_STORE, 'readwrite');
-      tx.objectStore(PHOTO_QUEUE_STORE).delete(Number(animalId));
-      tx.oncomplete = () => resolve();
+      const store = tx.objectStore(PHOTO_QUEUE_STORE);
+      const request = store.get(Number(animalId));
+      let removed = false;
+      request.onsuccess = () => {
+        const current = request.result;
+        // Outra foto pode ter sido tirada enquanto esta estava subindo. Nunca
+        // apaga a mais nova quando o envio antigo termina depois.
+        if (current && Number(current.updatedAt) === Number(expectedUpdatedAt)) {
+          store.delete(Number(animalId));
+          removed = true;
+        }
+      };
+      request.onerror = () => reject(request.error || new Error('Nao foi possivel conferir a foto pendente.'));
+      tx.oncomplete = () => resolve(removed);
       tx.onerror = () => reject(tx.error || new Error('Nao foi possivel limpar a foto pendente.'));
     });
   }
@@ -2989,6 +3044,33 @@
     }));
   }
 
+  function replaceStateRow(updated) {
+    if (!updated) return null;
+    const index = state.rows.findIndex((item) => item.id === updated.id);
+    if (index < 0) return null;
+    const previous = state.rows[index];
+    const previousAnimals = new Map(
+      (previous.animals || []).map((animal) => [Number(animal.id), animal])
+    );
+    (updated.animals || []).forEach((animal) => {
+      const oldAnimal = previousAnimals.get(Number(animal.id));
+      if (!oldAnimal) return;
+      // Respostas de status/nome substituem o cartao inteiro. A foto pode
+      // estar subindo ao mesmo tempo e so existir no aparelho; leva esse
+      // estado transitorio para o novo objeto para ela nao piscar nem sumir.
+      ['pendingImageUrl', 'photoUploadState', 'photoUploadUpdatedAt'].forEach((key) => {
+        if (oldAnimal[key] !== undefined) animal[key] = oldAnimal[key];
+      });
+    });
+    ['addingAnimal', 'editingNote', 'editingAttendedBy', 'editingAnimalNameIndex']
+      .forEach((key) => {
+        if (previous[key] !== undefined) updated[key] = previous[key];
+      });
+    state.rows[index] = updated;
+    stateMutationSeq += 1;
+    return updated;
+  }
+
   async function loadSheets() {
     try {
       const response = await fetch(sheetEl.dataset.sheetsUrl, {
@@ -3167,6 +3249,7 @@
 
   async function loadSavedState(useSelectedSheet = false, { sheetGid = '' } = {}) {
     const seq = ++stateLoadSeq;
+    const mutationSeq = stateMutationSeq;
     const params = new URLSearchParams();
     if (sheetGid) {
       params.set('sheet_gid', sheetGid);
@@ -3182,7 +3265,7 @@
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || 'Não foi possível carregar o estado salvo.');
       }
-      if (seq !== stateLoadSeq) return state.rows.length;
+      if (seq !== stateLoadSeq || mutationSeq !== stateMutationSeq) return state.rows.length;
       if (payload.sheet_gid && [...sheetEl.options].some((option) => option.value === payload.sheet_gid)) {
         sheetEl.value = payload.sheet_gid;
         rememberSelectedSheet();
@@ -3225,8 +3308,7 @@
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
       hydrateQueuedPhotos();
       return updated;
     }
@@ -3304,10 +3386,12 @@
           : 'Não foi possível salvar a foto.';
         throw new Error(payload.message || fallback);
       }
-      animal.animalId = payload.animal_id || animal.animalId;
-      if (payload.image_url) animal.imageUrl = payload.image_url;
-      const msg = 'Foto do animal salva com sucesso!';
-      window.showAppToast ? window.showAppToast(msg, 'success') : null;
+      // A resposta pode chegar depois de outra acao ter substituido o cartao
+      // (por exemplo, marcar "vacinado"). Atualiza sempre o objeto que ainda
+      // vive no estado atual, nao a referencia antiga capturada no inicio.
+      const currentAnimal = findAnimalById(animal.id) || animal;
+      currentAnimal.animalId = payload.animal_id || currentAnimal.animalId;
+      if (payload.image_url) currentAnimal.imageUrl = payload.image_url;
       return payload;
     } catch (error) {
       if (error && error.name === 'AbortError') {
@@ -3335,9 +3419,14 @@
     render();
     try {
       const payload = await uploadAnimalPhoto(animal, record.file, null);
-      await deleteQueuedPhoto(animalId);
-      clearAnimalQueuedPhoto(animalId);
-      if (payload.image_url) animal.imageUrl = payload.image_url;
+      const removed = await deleteQueuedPhoto(animalId, record.updatedAt);
+      const currentAnimal = findAnimalById(animalId);
+      if (currentAnimal && payload.image_url) currentAnimal.imageUrl = payload.image_url;
+      if (removed) {
+        clearAnimalQueuedPhoto(animalId);
+        const msg = 'Foto do animal salva com sucesso!';
+        window.showAppToast ? window.showAppToast(msg, 'success') : null;
+      }
       render();
     } catch (error) {
       const currentAnimal = findAnimalById(animalId);
@@ -3346,6 +3435,9 @@
       console.warn('Foto PMO pendente para reenvio', error);
     } finally {
       photoQueue.processing.delete(animalId);
+      // Se uma segunda foto substituiu a primeira durante o envio, ela ficou
+      // na fila e comeca agora. O primeiro envio nunca a apaga.
+      window.setTimeout(processQueuedPhotos, 0);
     }
   }
 
@@ -3397,6 +3489,7 @@
       updatedAt: Date.now(),
     };
     await saveQueuedPhoto(record);
+    stateMutationSeq += 1;
     setAnimalQueuedPhoto(record, 'uploading');
     render();
     uploadQueuedPhoto(record);
@@ -3421,8 +3514,7 @@
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
       hydrateQueuedPhotos();
       return updated;
     }
@@ -3448,8 +3540,7 @@
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
       return updated;
     }
     return null;
@@ -3474,8 +3565,7 @@
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
     }
   }
 
@@ -3498,8 +3588,7 @@
     }
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
       hydrateQueuedPhotos();
       return updated;
     }
@@ -3527,8 +3616,7 @@
     }
     if (payload.row && !lossesTimers.has(row.id)) {
       const updated = normalizeSyncedRows([payload.row])[0];
-      const index = state.rows.findIndex((item) => item.id === updated.id);
-      if (index >= 0) state.rows[index] = updated;
+      replaceStateRow(updated);
     }
   }
 
@@ -4354,6 +4442,11 @@
     if (event.target.dataset.action === 'animal-status') {
       const animal = row.animals[Number(event.target.dataset.animalIndex)];
       if (animal) {
+        const animalId = Number(animal.id);
+        if (animalId && statusUpdates.has(animalId)) {
+          event.target.value = animal.status;
+          return;
+        }
         const anterior = animal.status;
         const novo = event.target.value;
         let immuneSince = '';
@@ -4367,13 +4460,23 @@
             return;
           }
         }
+        stateMutationSeq += 1;
         animal.status = novo;
         event.target.dataset.status = novo;
+        event.target.dataset.saving = 'true';
+        event.target.disabled = true;
+        if (animalId) statusUpdates.add(animalId);
         try {
           await saveAnimalStatus(animal, novo, immuneSince);
         } catch (error) {
           animal.status = anterior;
           window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
+        } finally {
+          if (animalId) statusUpdates.delete(animalId);
+          if (event.target.isConnected) {
+            event.target.disabled = false;
+            delete event.target.dataset.saving;
+          }
         }
       }
       row.status = inferVisitStatus(row.animals);

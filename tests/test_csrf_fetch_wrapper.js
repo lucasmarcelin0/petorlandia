@@ -32,6 +32,7 @@ function check(name, condition, detail) {
 function buildEnv(options) {
   const opts = options || {};
   const metaContent = 'metaToken' in opts ? opts.metaToken : TOKEN;
+  const meta = metaContent === null ? null : { content: metaContent };
   const calls = [];
   const xhrCalls = [];
 
@@ -49,8 +50,8 @@ function buildEnv(options) {
     },
     document: {
       querySelector(selector) {
-        if (selector === 'meta[name="csrf-token"]' && metaContent !== null) {
-          return { content: metaContent };
+        if (selector === 'meta[name="csrf-token"]' && meta) {
+          return meta;
         }
         return null;
       },
@@ -59,6 +60,9 @@ function buildEnv(options) {
       location: { href: 'https://app.example.com/pagina', origin: 'https://app.example.com' },
       fetch(resource, init) {
         calls.push({ resource, init });
+        if (typeof opts.fetchHandler === 'function') {
+          return Promise.resolve(opts.fetchHandler(resource, init, calls.length));
+        }
         return Promise.resolve({ ok: true });
       },
     },
@@ -93,7 +97,16 @@ function buildEnv(options) {
   const code = fs.readFileSync(WRAPPER, 'utf8');
   vm.runInContext(code, context);
 
-  return { sandbox, calls, xhrCalls };
+  return { sandbox, calls, xhrCalls, meta };
+}
+
+function jsonResponse(status, payload) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    clone() { return jsonResponse(status, payload); },
+    json() { return Promise.resolve(payload); },
+  };
 }
 
 function headerOf(init) {
@@ -251,10 +264,58 @@ function headerOf(init) {
   check('XHR header pre-existente preservado', xhr.headers['X-CSRFToken'] === 'do-call-site');
 })();
 
+/* ------------------------------------------------------- expiracao/retry --- */
+
+async function runAsyncTests() {
+  const env = buildEnv({
+    metaToken: 'token-vencido',
+    fetchHandler(resource, init, callNumber) {
+      if (callNumber === 1) {
+        return jsonResponse(400, {
+          error: 'CSRF token missing or invalid',
+          errors: { csrf_token: ['expirado'] },
+        });
+      }
+      if (String(resource) === '/csrf-token') {
+        return jsonResponse(200, { success: true, csrf_token: 'token-renovado' });
+      }
+      return jsonResponse(200, { success: true });
+    },
+  });
+
+  const response = await env.sandbox.window.fetch('/vacina-pmo/animal/7/status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': 'token-vencido',
+    },
+    body: '{"status":"vacinado"}',
+  });
+  check('token vencido e renovado sem recarregar', response.ok && env.calls.length === 3);
+  check('endpoint de renovacao chamado uma vez', String(env.calls[1].resource) === '/csrf-token');
+  check('meta recebe o token renovado', env.meta.content === 'token-renovado');
+  check(
+    'retry sobrescreve header vencido do call site',
+    headerOf(env.calls[2].init) === 'token-renovado'
+  );
+  check('retry preserva o corpo original', env.calls[2].init.body === '{"status":"vacinado"}');
+
+  const ordinary = buildEnv({
+    fetchHandler() { return jsonResponse(400, { message: 'regra de negocio' }); },
+  });
+  await ordinary.sandbox.window.fetch('/x', { method: 'POST', body: 'abc' });
+  check('erro 400 comum nao dispara retry', ordinary.calls.length === 1);
+}
+
 /* --------------------------------------------------------------- report --- */
 
-if (failures) {
-  console.error(`\n${failures} verificacao(oes) falharam, ${passes} passaram.`);
+runAsyncTests().then(function () {
+  if (failures) {
+    console.error(`\n${failures} verificacao(oes) falharam, ${passes} passaram.`);
+    process.exit(1);
+  }
+  console.log(`OK: ${passes} verificacoes do wrapper CSRF passaram.`);
+}).catch(function (error) {
+  console.error(error);
   process.exit(1);
-}
-console.log(`OK: ${passes} verificacoes do wrapper CSRF passaram.`);
+});

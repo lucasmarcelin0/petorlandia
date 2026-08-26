@@ -98,6 +98,20 @@ def test_rendered_page_ships_wrapper_and_meta(client, app):
     assert 'name="csrf-token"' in body
 
 
+def test_csrf_token_can_be_renewed_without_reloading_page(client, app):
+    """Tela operacional aberta por horas consegue renovar apenas o token."""
+    app.config["WTF_CSRF_ENABLED"] = True
+    app.config["SESSION_COOKIE_SECURE"] = False
+
+    response = client.get("/csrf-token", headers={"Accept": "application/json"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["csrf_token"]
+    assert response.headers["Cache-Control"].startswith("no-store")
+
+
 # --- nivel 2: contrato do servidor ------------------------------------------
 
 CSRF_ENDPOINTS = [
