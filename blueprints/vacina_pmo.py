@@ -729,7 +729,19 @@ def vacina_pmo_state():
     if current_user.role not in ('admin', 'vacinador'):
         abort(403)
     try:
-        from services.vacina_pmo_service import get_saved_vacina_pmo_rows
+        from services.vacina_pmo_service import get_saved_vacina_pmo_rows, get_vacina_pmo_video_items
+
+        video_period = (request.args.get('period') or '').strip().lower()
+        if video_period:
+            return jsonify(
+                {
+                    'success': True,
+                    **get_vacina_pmo_video_items(
+                        period=video_period,
+                        reference_date=(request.args.get('reference_date') or '').strip(),
+                    ),
+                }
+            )
 
         return jsonify(
             {
@@ -740,6 +752,8 @@ def vacina_pmo_state():
                 ),
             }
         )
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
         current_app.logger.exception("Falha ao carregar estado Vacina PMO")
         return jsonify({'success': False, 'message': str(exc)}), 500

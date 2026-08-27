@@ -66,3 +66,18 @@ def test_webm_fallback_warns_the_user(source):
     """Se o navegador so gerar WebM o usuario precisa saber antes de tentar
     enviar, em vez de descobrir no erro do WhatsApp."""
     assert 'WhatsApp recusa' in source
+
+
+def test_video_period_selector_keeps_day_and_adds_week_and_month(source):
+    scopes = re.findall(r'name="pmo-video-scope" value="(day|week|month)"', source)
+    assert scopes == ["day", "week", "month"]
+    assert "reference_date: selectedVideoReferenceDate()" in source
+    assert "period: scope" in source
+
+
+def test_week_and_month_use_a_distinct_rapid_30_fps_style(source):
+    assert "const VIDEO_CAPTURE_FPS = 30" in source
+    assert "drawRapidPetFrame" in source
+    assert "holdAnimatedCanvasFrame" in source
+    assert "RAPID_PHOTO_MIN_MS" in source
+    assert "RAPID_PHOTO_MAX_MS" in source

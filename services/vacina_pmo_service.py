@@ -29,6 +29,7 @@ from models import (
 )
 from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from services.sfa_service import (
     _extract_google_sheet_id,
     _get_sheets_service,
@@ -2191,6 +2192,79 @@ def get_saved_vacina_pmo_rows(*, sheet_gid: str = "", sheet_title: str = "") -> 
         "sheet_gid": sheet_gid or (latest.sheet_gid if latest else ""),
         "sheet_title": sheet_title or (latest.sheet_title if latest else ""),
         "spreadsheet_id": visits[0].spreadsheet_id if visits else "",
+    }
+
+
+def _vacina_pmo_video_period_bounds(period: str, reference_date: date) -> tuple[date, date]:
+    """Resolve o intervalo inclusivo usado pelo compilado de vídeo."""
+    normalized_period = (period or "").strip().lower()
+    if normalized_period == "week":
+        start = reference_date - timedelta(days=reference_date.weekday())
+        return start, start + timedelta(days=6)
+    if normalized_period == "month":
+        start = reference_date.replace(day=1)
+        next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        return start, next_month - timedelta(days=1)
+    raise ValueError("Período do vídeo inválido. Use semana ou mês.")
+
+
+def get_vacina_pmo_video_items(*, period: str, reference_date: str) -> dict[str, Any]:
+    """Lista somente os animais vacinados com foto no período solicitado.
+
+    O compilado parte dos registros já sincronizados da planilha. A resposta é
+    deliberadamente enxuta: não expõe telefone, endereço, senha ou avaliação.
+    """
+    try:
+        reference = date.fromisoformat((reference_date or "").strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Data de referência inválida para o vídeo.") from exc
+
+    normalized_period = (period or "").strip().lower()
+    start, end = _vacina_pmo_video_period_bounds(normalized_period, reference)
+    visits = (
+        PmoVaccinationVisit.query
+        .options(joinedload(PmoVaccinationVisit.animals).joinedload(PmoVaccinationAnimal.animal))
+        .filter(PmoVaccinationVisit.vaccine_date >= start)
+        .filter(PmoVaccinationVisit.vaccine_date <= end)
+        .order_by(
+            PmoVaccinationVisit.vaccine_date.asc(),
+            PmoVaccinationVisit.source_row.asc(),
+            PmoVaccinationVisit.id.asc(),
+        )
+        .all()
+    )
+
+    items = []
+    dates = set()
+    for visit in visits:
+        visit_date = visit.vaccine_date.isoformat() if visit.vaccine_date else ""
+        for animal in visit.animals:
+            image_url = animal.animal.image if animal.animal and animal.animal.image else ""
+            if animal.status != "vacinado" or not image_url:
+                continue
+            dates.add(visit_date)
+            items.append(
+                {
+                    "id": animal.id,
+                    "name": animal.name or "Animal",
+                    "species": animal.species or "cao",
+                    "date": visit_date,
+                    "imageUrl": image_url,
+                    "imageProxyUrl": (
+                        url_for("vacina_pmo_animal_photo_src", animal_id=animal.id)
+                        if has_request_context()
+                        else ""
+                    ),
+                }
+            )
+
+    return {
+        "period": normalized_period,
+        "reference_date": reference.isoformat(),
+        "date_start": start.isoformat(),
+        "date_end": end.isoformat(),
+        "dates_count": len(dates),
+        "items": items,
     }
 
 

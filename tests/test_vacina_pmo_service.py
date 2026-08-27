@@ -20,6 +20,7 @@ from services.vacina_pmo_service import (
     normalize_pmo_request_address,
     get_vacina_pmo_public_visit,
     get_saved_vacina_pmo_rows,
+    get_vacina_pmo_video_items,
     optimize_vacina_pmo_route,
     preview_vacina_pmo_route,
     parse_vacina_pmo_rows,
@@ -455,6 +456,73 @@ def test_pmo_sync_persists_and_preserves_animal_status(app):
     assert evaluated_state["rows"][0]["evaluationInformationRating"] == 3
     assert evaluated_state["rows"][0]["evaluationSurveyRating"] == 4
     assert evaluated_state["rows"][0]["evaluationComment"] == "Equipe atenciosa"
+
+
+def test_pmo_video_items_compile_week_and_month_without_private_visit_data(app):
+    def video_row(day, name, source_row):
+        return {
+            "id": f"video-{source_row}",
+            "status": "pendente",
+            "tutor": f"Tutor {name}",
+            "address": f"Rua do {name}, {source_row}",
+            "phone1": f"551699900{source_row:04d}",
+            "phone2": "",
+            "dogs": 1,
+            "cats": 0,
+            "animals": [{"name": name, "species": "cao", "status": "pendente"}],
+            "note": "",
+            "date": day,
+            "shift": "Manha",
+            "password": f"PMOV{source_row:04d}",
+            "certificateUrl": "",
+            "sourceRow": source_row,
+        }
+
+    cases = [
+        ("2026-08-24", "Lua", 101, "vacinado", True),
+        ("2026-08-30", "Babi", 102, "vacinado", True),
+        ("2026-08-31", "Thor", 103, "vacinado", True),
+        ("2026-08-26", "Nina", 104, "pendente", True),
+        ("2026-08-27", "Mel", 105, "vacinado", False),
+    ]
+
+    with app.app_context():
+        for day, name, source_row, status, has_photo in cases:
+            visit_payload = video_row(day, name, source_row)
+            persist_vacina_pmo_rows(
+                [visit_payload],
+                spreadsheet_id="video-period-test",
+                sheet_gid=f"video-{source_row}",
+                sheet_title=date.fromisoformat(day).strftime("%d/%m/%Y"),
+            )
+            visit = PmoVaccinationVisit.query.filter_by(
+                spreadsheet_id="video-period-test",
+                source_row=source_row,
+            ).one()
+            visit.animals[0].status = status
+            if has_photo:
+                visit.animals[0].animal.image = f"https://bucket.example/{name.lower()}.jpg"
+        db.session.commit()
+
+        with app.test_request_context():
+            week = get_vacina_pmo_video_items(period="week", reference_date="2026-08-27")
+            month = get_vacina_pmo_video_items(period="month", reference_date="2026-08-27")
+
+    assert week["date_start"] == "2026-08-24"
+    assert week["date_end"] == "2026-08-30"
+    assert week["dates_count"] == 2
+    assert [item["name"] for item in week["items"]] == ["Lua", "Babi"]
+    assert [item["name"] for item in month["items"]] == ["Lua", "Babi", "Thor"]
+    assert all("tutor" not in item and "phone" not in item and "address" not in item for item in month["items"])
+    assert all(item["imageProxyUrl"].startswith("/vacina-pmo/animal/") for item in month["items"])
+
+
+def test_pmo_video_items_reject_invalid_period_and_reference_date(app):
+    with app.app_context():
+        with pytest.raises(ValueError, match="Período"):
+            get_vacina_pmo_video_items(period="year", reference_date="2026-08-27")
+        with pytest.raises(ValueError, match="Data de referência"):
+            get_vacina_pmo_video_items(period="week", reference_date="27/08/2026")
 
 
 def _pmo_login(client, user_id):

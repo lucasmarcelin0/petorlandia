@@ -1339,6 +1339,82 @@
     font-size: 0.85rem;
   }
 
+  .pmo-video-scope-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+  }
+
+  .pmo-video-scope {
+    position: relative;
+    min-width: 0;
+  }
+
+  .pmo-video-scope input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pmo-video-scope__card {
+    display: flex;
+    min-height: 76px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #334155;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+
+  .pmo-video-scope__card strong {
+    font-size: .9rem;
+  }
+
+  .pmo-video-scope__card small {
+    color: #64748b;
+    font-size: .72rem;
+    line-height: 1.15;
+  }
+
+  .pmo-video-scope input:checked + .pmo-video-scope__card {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    color: #166534;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, .15);
+  }
+
+  .pmo-video-scope input:focus-visible + .pmo-video-scope__card {
+    outline: 3px solid rgba(37, 99, 235, .25);
+    outline-offset: 2px;
+  }
+
+  .pmo-video-period-note {
+    min-height: 38px;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: .8rem;
+    line-height: 1.3;
+  }
+
+  @media (max-width: 430px) {
+    .pmo-video-scope-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .pmo-video-scope__card {
+      min-height: 58px;
+    }
+  }
+
   .pmo-print-dd {
     position: relative;
   }
@@ -1423,7 +1499,7 @@
 
   <div class="d-flex flex-wrap gap-2 justify-content-end mb-3">
     <button type="button" class="btn btn-success" id="pmo-video-generate">
-      <i class="fas fa-video me-1"></i> Vídeo do dia
+      <i class="fas fa-video me-1"></i> Compilado de vacinados
     </button>
   </div>
 
@@ -1800,11 +1876,38 @@
   <div class="pmo-video-modal__content">
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
-        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Vídeo do dia</h5>
-        <div class="text-muted small">Gera um .mp4 (compatível com WhatsApp) com as fotos dos animais vacinados visíveis nos filtros atuais.</div>
+        <h5 class="mb-1"><i class="fas fa-video me-1"></i> Compilado dos vacinados</h5>
+        <div class="text-muted small">Escolha o período. Semana e mês ganham um estilo relâmpago exclusivo para redes sociais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
     </div>
+    <fieldset class="border-0 p-0 m-0" aria-label="Período do vídeo">
+      <legend class="visually-hidden">Período do vídeo</legend>
+      <div class="pmo-video-scope-grid">
+        <label class="pmo-video-scope">
+          <input type="radio" name="pmo-video-scope" value="day" checked>
+          <span class="pmo-video-scope__card">
+            <strong><i class="fas fa-sun me-1"></i>Dia</strong>
+            <small>Aba e filtros atuais</small>
+          </span>
+        </label>
+        <label class="pmo-video-scope">
+          <input type="radio" name="pmo-video-scope" value="week">
+          <span class="pmo-video-scope__card">
+            <strong><i class="fas fa-calendar-week me-1"></i>Semana</strong>
+            <small>Segunda a domingo</small>
+          </span>
+        </label>
+        <label class="pmo-video-scope">
+          <input type="radio" name="pmo-video-scope" value="month">
+          <span class="pmo-video-scope__card">
+            <strong><i class="fas fa-calendar-days me-1"></i>Mês</strong>
+            <small>Todas as datas do mês</small>
+          </span>
+        </label>
+      </div>
+    </fieldset>
+    <div class="pmo-video-period-note" id="pmo-video-period-note"></div>
     <video class="pmo-video-preview" id="pmo-video-preview" controls playsinline hidden></video>
     <div class="pmo-video-status" id="pmo-video-status">Pronto para gerar.</div>
     <div class="pmo-video-actions">
@@ -2116,7 +2219,11 @@
   const videoPreview = document.getElementById('pmo-video-preview');
   const videoDownload = document.getElementById('pmo-video-download');
   const videoStatus = document.getElementById('pmo-video-status');
+  const videoPeriodNote = document.getElementById('pmo-video-period-note');
+  const videoScopeEls = [...document.querySelectorAll('input[name="pmo-video-scope"]')];
   let videoObjectUrl = '';
+  let generatedVideoScope = 'day';
+  let generatedVideoMeta = {};
   const municipalLogoSrc = {{ url_for('static', filename='sim_portal/assets/brasao-orlandia.png') | tojson }};
   let municipalLogoImage = null;
 
@@ -2143,6 +2250,7 @@
     if (!videoModal) return;
     videoModal.hidden = false;
     setVideoStatus('Pronto para gerar.');
+    updateVideoPeriodNote();
   }
 
   function closeVideoModal() {
@@ -2156,7 +2264,74 @@
     return displayDate(selectedDate || rowDate || currentSheetDate());
   }
 
-  function selectedSheetTitleSlug() {
+  function selectedVideoScope() {
+    return videoScopeEls.find((input) => input.checked)?.value || 'day';
+  }
+
+  function selectedVideoReferenceDate() {
+    const selectedDate = sheetEl.selectedOptions[0]?.dataset.date || '';
+    const rowDate = state.rows.find((row) => row.date)?.date || '';
+    return selectedDate || rowDate || currentSheetDate();
+  }
+
+  function parseIsoDate(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+  }
+
+  function monthVideoLabel(referenceDate) {
+    const parsed = parseIsoDate(referenceDate);
+    if (!parsed) return 'Mês selecionado';
+    const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(parsed);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  function weekBounds(referenceDate) {
+    const parsed = parseIsoDate(referenceDate);
+    if (!parsed) return { start: referenceDate, end: referenceDate };
+    const mondayOffset = (parsed.getDay() + 6) % 7;
+    const start = new Date(parsed);
+    start.setDate(start.getDate() - mondayOffset);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const toIso = (dateValue) => {
+      const local = new Date(dateValue.getTime() - dateValue.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 10);
+    };
+    return { start: toIso(start), end: toIso(end) };
+  }
+
+  function videoPeriodLabel(scope = selectedVideoScope(), meta = {}) {
+    const referenceDate = meta.reference_date || selectedVideoReferenceDate();
+    if (scope === 'month') return monthVideoLabel(referenceDate);
+    if (scope === 'week') {
+      const bounds = meta.date_start && meta.date_end
+        ? { start: meta.date_start, end: meta.date_end }
+        : weekBounds(referenceDate);
+      return `Semana de ${displayDate(bounds.start)} a ${displayDate(bounds.end)}`;
+    }
+    return videoDateLabel();
+  }
+
+  function updateVideoPeriodNote() {
+    if (!videoPeriodNote) return;
+    const scope = selectedVideoScope();
+    if (scope === 'day') {
+      videoPeriodNote.innerHTML = `<strong>${escapeHtml(videoPeriodLabel(scope))}</strong> · usa somente os vacinados com foto visíveis nos filtros atuais.`;
+      return;
+    }
+    const cadence = scope === 'month' ? 'até 7 animais por segundo' : 'até 5 animais por segundo';
+    videoPeriodNote.innerHTML = `<strong>${escapeHtml(videoPeriodLabel(scope))}</strong> · reúne automaticamente os dias já sincronizados e cria uma sequência rápida com ${cadence}.`;
+  }
+
+  function selectedVideoFileSlug(scope = generatedVideoScope, meta = generatedVideoMeta) {
+    if (scope === 'month') return `mes-${String(meta.reference_date || selectedVideoReferenceDate()).slice(0, 7)}`;
+    if (scope === 'week') {
+      const bounds = meta.date_start && meta.date_end
+        ? { start: meta.date_start, end: meta.date_end }
+        : weekBounds(selectedVideoReferenceDate());
+      return `semana-${bounds.start}-a-${bounds.end}`;
+    }
     const label = videoDateLabel() || 'dia';
     return label.replace(/\D+/g, '-').replace(/^-|-$/g, '') || 'dia';
   }
@@ -2172,11 +2347,47 @@
           name: animal.name || 'Animal',
           species: animal.species || 'cao',
           tutor: row.tutor || '',
+          date: row.date || selectedVideoReferenceDate(),
           imageSrc,
         });
       });
     });
     return items;
+  }
+
+  async function loadVaccinatedVideoItems(scope) {
+    if (scope === 'day') {
+      return {
+        items: collectVaccinatedVideoItems(),
+        meta: {
+          period: 'day',
+          reference_date: selectedVideoReferenceDate(),
+          date_start: selectedVideoReferenceDate(),
+          date_end: selectedVideoReferenceDate(),
+        },
+      };
+    }
+
+    const params = new URLSearchParams({
+      period: scope,
+      reference_date: selectedVideoReferenceDate(),
+    });
+    const response = await fetch(`${sheetEl.dataset.stateUrl}?${params}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'Não foi possível reunir os animais do período.');
+    }
+    return {
+      items: (payload.items || []).map((item) => ({
+        name: item.name || 'Animal',
+        species: item.species || 'cao',
+        date: item.date || '',
+        imageSrc: item.imageProxyUrl || item.imageUrl || '',
+      })).filter((item) => item.imageSrc),
+      meta: payload,
+    };
   }
 
   function loadVideoImage(src) {
@@ -2441,6 +2652,155 @@
     ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, canvas.height - 68);
   }
 
+  const VIDEO_CAPTURE_FPS = 30;
+  const RAPID_PHOTO_MIN_MS = 140;
+  const RAPID_PHOTO_MAX_MS = 420;
+  const RAPID_BATCH_SIZE = 12;
+  const RAPID_ACCENTS = ['#f2c230', '#37d6c0', '#ff6b6b', '#80aaff'];
+
+  function drawAnimatedPetCover(ctx, img, canvas, focus, progress, direction) {
+    const baseScale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+    const scale = baseScale * (1.04 + progress * 0.1);
+    const sw = canvas.width / scale;
+    const sh = canvas.height / scale;
+    const driftX = direction * (progress - 0.5) * sw * 0.08;
+    const driftY = (progress - 0.5) * sh * 0.035;
+    const sx = clamp(img.naturalWidth * focus.x - sw / 2 + driftX, 0, img.naturalWidth - sw);
+    const sy = clamp(img.naturalHeight * focus.y - sh / 2 + driftY, 0, img.naturalHeight - sh);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  }
+
+  function drawRapidBrandMark(ctx, canvas, accent) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 20, 48, .84)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 42, 46, 670, 78, 39);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(88, 85, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 31px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(generatedVideoScope === 'month' ? 'VACINADOS DO MÊS' : 'VACINADOS DA SEMANA', 120, 85);
+    if (municipalLogoImage) {
+      const logoHeight = 74;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 42, 44, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawRapidIntro(ctx, canvas, items) {
+    const accent = RAPID_ACCENTS[0];
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#102c68');
+    gradient.addColorStop(.55, '#1f3f8f');
+    gradient.addColorStop(1, '#091936');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(242, 194, 48, .11)';
+    for (let i = -2; i < 8; i += 1) {
+      ctx.save();
+      ctx.translate(i * 190, 0);
+      ctx.rotate(-.28);
+      ctx.fillRect(0, -200, 88, canvas.height + 400);
+      ctx.restore();
+    }
+    drawRapidBrandMark(ctx, canvas, accent);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'UMA CIDADE', canvas.width / 2, 690, canvas.width - 110, 112, 900);
+    fitCenterText(ctx, 'QUE PROTEGE', canvas.width / 2, 810, canvas.width - 110, 112, 900);
+    ctx.fillStyle = accent;
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'ANIMAL VACINADO' : 'ANIMAIS VACINADOS'}`, canvas.width / 2, 1010, canvas.width - 120, 65, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.84)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1110, canvas.width - 130, 38, 700);
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Prepare-se: todos eles vão passar rapidinho por aqui.', canvas.width / 2, 1510);
+    ctx.fillStyle = accent;
+    ctx.fillRect(230, 1580, canvas.width - 460, 8);
+  }
+
+  function drawRapidPetFrame(ctx, canvas, item, img, focus, index, total, progress) {
+    const accent = RAPID_ACCENTS[index % RAPID_ACCENTS.length];
+    const direction = index % 2 === 0 ? 1 : -1;
+    drawAnimatedPetCover(ctx, img, canvas, focus, progress, direction);
+
+    const shade = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    shade.addColorStop(0, 'rgba(4, 13, 32, .58)');
+    shade.addColorStop(.42, 'rgba(4, 13, 32, 0)');
+    shade.addColorStop(.7, 'rgba(4, 13, 32, .15)');
+    shade.addColorStop(1, 'rgba(4, 13, 32, .9)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawRapidBrandMark(ctx, canvas, accent);
+    ctx.save();
+    ctx.fillStyle = accent;
+    ctx.fillRect(42, canvas.height - 350, 12, 235);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    fitCenterText(ctx, item.name || 'Animal', canvas.width / 2, canvas.height - 265, canvas.width - 150, 88, 900);
+    ctx.font = '700 31px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    const speciesLabel = item.species === 'gato' ? 'GATO VACINADO' : 'CÃO VACINADO';
+    const dateLabel = item.date ? ` · ${displayDate(item.date)}` : '';
+    ctx.fillText(`${speciesLabel}${dateLabel}`, canvas.width / 2, canvas.height - 180);
+    ctx.font = '800 27px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = accent;
+    ctx.fillText(`${String(index + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`, canvas.width - 48, canvas.height - 76);
+    ctx.restore();
+
+    if (progress < .17) {
+      ctx.fillStyle = `rgba(255,255,255,${(.17 - progress) * 1.9})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function videoItemSummary(items) {
+    const dogs = items.filter((item) => item.species !== 'gato').length;
+    const cats = items.length - dogs;
+    const days = new Set(items.map((item) => item.date).filter(Boolean)).size;
+    return { dogs, cats, days };
+  }
+
+  function drawRapidOutro(ctx, canvas, items) {
+    const summary = videoItemSummary(items);
+    ctx.fillStyle = '#091936';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const glow = ctx.createRadialGradient(canvas.width / 2, 760, 40, canvas.width / 2, 760, 720);
+    glow.addColorStop(0, 'rgba(55,214,192,.28)');
+    glow.addColorStop(1, 'rgba(55,214,192,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawRapidBrandMark(ctx, canvas, '#37d6c0');
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'PROTEÇÃO QUE', canvas.width / 2, 590, canvas.width - 100, 92, 900);
+    fitCenterText(ctx, 'SE MULTIPLICA', canvas.width / 2, 690, canvas.width - 100, 92, 900);
+    ctx.fillStyle = '#37d6c0';
+    fitCenterText(ctx, `${items.length} VIDAS PROTEGIDAS`, canvas.width / 2, 870, canvas.width - 120, 64, 900);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 43px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1010);
+    ctx.font = '600 33px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.fillText(`${summary.days} ${summary.days === 1 ? 'dia de vacinação' : 'dias de vacinação'} no compilado`, canvas.width / 2, 1080);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(210, 1170, canvas.width - 420, 9);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'Vacina em dia protege o animal, a família e toda Orlândia.', canvas.width / 2, 1350, canvas.width - 130, 42, 800);
+    ctx.font = '700 30px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.74)';
+    ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1560);
+  }
+
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -2466,6 +2826,19 @@
       // Alguns navegadores não incluem atualizações de um canvas oculto na
       // captura automática. Solicitar o frame explicitamente mantém a duração
       // e a imagem do WebM corretas.
+      captureTrack?.requestFrame?.();
+      frames += 1;
+      await nextCaptureTick();
+    }
+    return frames;
+  }
+
+  async function holdAnimatedCanvasFrame(drawFn, durationMs, captureTrack) {
+    const started = performance.now();
+    let frames = 0;
+    while (performance.now() - started < durationMs || frames < 2) {
+      const elapsed = performance.now() - started;
+      drawFn(clamp(elapsed / durationMs, 0, 1));
       captureTrack?.requestFrame?.();
       frames += 1;
       await nextCaptureTick();
@@ -2502,16 +2875,53 @@
     return containerMime.includes('mp4') ? 'mp4' : 'webm';
   }
 
+  async function loadRapidVideoBatch(items) {
+    const results = await Promise.allSettled(items.map(async (item) => ({
+      item,
+      image: await loadVideoImage(item.imageSrc),
+    })));
+    return results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
+  }
+
+  async function pauseRecorderWhile(recorder, callback) {
+    const canPause = recorder.state === 'recording' && typeof recorder.pause === 'function';
+    if (canPause) {
+      recorder.pause();
+      await delay(24);
+    }
+    try {
+      return await callback();
+    } finally {
+      if (canPause && recorder.state === 'paused') {
+        recorder.resume();
+        await delay(24);
+      }
+    }
+  }
+
+  function rapidPhotoDuration(itemsCount, scope) {
+    const targetDuration = scope === 'month' ? 26000 : 18000;
+    return Math.round(clamp(targetDuration / Math.max(1, itemsCount), RAPID_PHOTO_MIN_MS, RAPID_PHOTO_MAX_MS));
+  }
+
   async function generateVaccinationVideo() {
     if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
       throw new Error('Este navegador não consegue gerar vídeo automaticamente. Tente pelo Chrome ou Edge.');
     }
-    const items = collectVaccinatedVideoItems();
+    clearGeneratedVideo();
+    generatedVideoScope = selectedVideoScope();
+    setVideoStatus(generatedVideoScope === 'day'
+      ? 'Preparando as fotos do dia...'
+      : `Reunindo os vacinados de ${videoPeriodLabel(generatedVideoScope).toLowerCase()}...`);
+    const videoData = await loadVaccinatedVideoItems(generatedVideoScope);
+    const items = videoData.items;
+    generatedVideoMeta = videoData.meta || {};
     if (!items.length) {
-      throw new Error('Não há animais vacinados com foto nos filtros atuais.');
+      throw new Error(generatedVideoScope === 'day'
+        ? 'Não há animais vacinados com foto nos filtros atuais.'
+        : `Não há animais vacinados com foto em ${videoPeriodLabel(generatedVideoScope, generatedVideoMeta).toLowerCase()}. Sincronize as abas do período e tente novamente.`);
     }
 
-    clearGeneratedVideo();
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
@@ -2522,7 +2932,7 @@
       municipalLogoImage = null;
     }
     const chunks = [];
-    const stream = canvas.captureStream(30);
+    const stream = canvas.captureStream(VIDEO_CAPTURE_FPS);
     const captureTrack = stream.getVideoTracks()[0];
     const mimeType = mediaRecorderMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -2533,24 +2943,60 @@
       recorder.onstop = resolve;
     });
 
-    const groups = [];
-    for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
     // Emitir blocos durante a gravação deixa o WebM finalizável também em
     // navegadores que não entregam todo o conteúdo quando stop() é imediato.
-    recorder.start(500);
-    await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600, captureTrack);
-    for (let i = 0; i < groups.length; i += 1) {
-      setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
-      const group = groups[i];
-      const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
-      const focuses = images.map((img) => estimatePetFocus(img));
-      setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-      await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800, captureTrack);
+    let recordedItems = items;
+    try {
+      recorder.start(500);
+      if (generatedVideoScope === 'day') {
+        const groups = [];
+        for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
+        await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600, captureTrack);
+        for (let i = 0; i < groups.length; i += 1) {
+          setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
+          const group = groups[i];
+          const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
+          const focuses = images.map((img) => estimatePetFocus(img));
+          setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
+          await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800, captureTrack);
+        }
+        await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300, captureTrack);
+      } else {
+        const batches = [];
+        for (let i = 0; i < items.length; i += RAPID_BATCH_SIZE) batches.push(items.slice(i, i + RAPID_BATCH_SIZE));
+        const durationMs = rapidPhotoDuration(items.length, generatedVideoScope);
+        const successfulItems = [];
+        await holdCanvasFrame(() => drawRapidIntro(ctx, canvas, items), 1450, captureTrack);
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+          setVideoStatus(`Carregando lote ${batchIndex + 1}/${batches.length}...`);
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(batches[batchIndex]));
+          for (const pair of loaded) {
+            const itemIndex = items.indexOf(pair.item);
+            const focus = estimatePetFocus(pair.image);
+            successfulItems.push(pair.item);
+            if (successfulItems.length === 1 || successfulItems.length % 5 === 0 || successfulItems.length === items.length) {
+              setVideoStatus(`Montando sequência rápida: ${successfulItems.length}/${items.length} animais...`);
+            }
+            await holdAnimatedCanvasFrame(
+              (progress) => drawRapidPetFrame(ctx, canvas, pair.item, pair.image, focus, itemIndex, items.length, progress),
+              durationMs,
+              captureTrack,
+            );
+            pair.image.src = '';
+          }
+        }
+        if (!successfulItems.length) {
+          throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        }
+        recordedItems = successfulItems;
+        await holdCanvasFrame(() => drawRapidOutro(ctx, canvas, successfulItems), 1800, captureTrack);
+      }
+      recorder.stop();
+      await stopped;
+    } finally {
+      if (recorder.state !== 'inactive') recorder.stop();
+      stream.getTracks().forEach((track) => track.stop());
     }
-    await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300, captureTrack);
-    recorder.stop();
-    await stopped;
-    stream.getTracks().forEach((track) => track.stop());
 
     const containerMime = videoContainerMime(recorder, mimeType);
     const extension = videoFileExtension(containerMime);
@@ -2564,11 +3010,11 @@
     // do preview: quando a reprodução falha o vídeo continua válido e o
     // usuário precisa conseguir baixá-lo mesmo assim.
     videoDownload.href = videoObjectUrl;
-    videoDownload.download = `animais-vacinados-pmo-${selectedSheetTitleSlug()}.${extension}`;
+    videoDownload.download = `animais-vacinados-pmo-${selectedVideoFileSlug()}.${extension}`;
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
 
-    const totalLabel = `${items.length} ${items.length === 1 ? 'animal' : 'animais'}`;
+    const totalLabel = `${recordedItems.length} ${recordedItems.length === 1 ? 'animal' : 'animais'}`;
     const played = await previewGeneratedVideo();
     const base = played
       ? `Vídeo pronto com ${totalLabel}.`
@@ -2611,6 +3057,11 @@
 
   if (videoModal) {
     videoGenerateBtn?.addEventListener('click', () => openVideoModal());
+    videoScopeEls.forEach((input) => input.addEventListener('change', () => {
+      clearGeneratedVideo();
+      setVideoStatus('Pronto para gerar.');
+      updateVideoPeriodNote();
+    }));
     videoModal.addEventListener('click', (event) => {
       if (event.target.dataset.action === 'video-modal-close') closeVideoModal();
     });
