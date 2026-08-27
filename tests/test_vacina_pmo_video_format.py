@@ -75,9 +75,32 @@ def test_video_period_selector_keeps_day_and_adds_week_and_month(source):
     assert "period: scope" in source
 
 
-def test_week_and_month_use_a_distinct_rapid_30_fps_style(source):
+def test_video_styles_are_selectable_independently_from_the_period(source):
+    styles = re.findall(
+        r'name="pmo-video-style" value="(mosaic|rapid|cinematic|celebration)"',
+        source,
+    )
+    assert styles == ["mosaic", "rapid", "cinematic", "celebration"]
+    assert "generatedVideoStyle = selectedVideoStyle()" in source
+    assert "if (generatedVideoStyle === 'mosaic')" in source
+    assert "generatedVideoStyle === 'rapid'" in source
+    assert "generatedVideoStyle === 'cinematic'" in source
+
+
+def test_all_four_social_styles_keep_vertical_30_fps_rendering(source):
     assert "const VIDEO_CAPTURE_FPS = 30" in source
     assert "drawRapidPetFrame" in source
+    assert "drawCinematicPetFrame" in source
+    assert "drawCelebrationFrame" in source
     assert "holdAnimatedCanvasFrame" in source
     assert "RAPID_PHOTO_MIN_MS" in source
     assert "RAPID_PHOTO_MAX_MS" in source
+    assert "canvas.width = 1080" in source
+    assert "canvas.height = 1920" in source
+
+
+def test_new_styles_have_short_bounded_storyboards(source):
+    assert "const CINEMATIC_HIGHLIGHT_LIMIT = 16" in source
+    assert "cinematicPhotoDuration" in source
+    assert "celebrationSlideDuration" in source
+    assert "mosaicSlideDuration" in source

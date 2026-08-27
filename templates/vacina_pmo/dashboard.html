@@ -1308,12 +1308,12 @@
 
   .pmo-video-modal__content {
     position: relative;
-    width: min(94vw, 520px);
+    width: min(94vw, 660px);
     max-height: 92vh;
     overflow: auto;
     background: #fff;
-    border-radius: 12px;
-    padding: 14px;
+    border-radius: 18px;
+    padding: 18px;
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   }
 
@@ -1395,6 +1395,127 @@
     outline-offset: 2px;
   }
 
+  .pmo-video-section-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 14px 0 7px;
+    color: #334155;
+    font-size: .8rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .pmo-video-section-title__step {
+    display: inline-grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 50%;
+    background: #1f3f8f;
+    color: #fff;
+    font-size: .72rem;
+  }
+
+  .pmo-video-style-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pmo-video-style {
+    position: relative;
+    min-width: 0;
+  }
+
+  .pmo-video-style input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pmo-video-style__card {
+    position: relative;
+    display: grid;
+    min-height: 92px;
+    grid-template-columns: 38px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    overflow: hidden;
+    border: 1px solid #dbe3ee;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #fff, #f8fafc);
+    color: #334155;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+
+  .pmo-video-style__card::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--video-style-accent, #1f3f8f);
+    content: '';
+  }
+
+  .pmo-video-style__icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--video-style-accent, #1f3f8f) 13%, white);
+    color: var(--video-style-accent, #1f3f8f);
+    font-size: 1rem;
+  }
+
+  .pmo-video-style__copy {
+    min-width: 0;
+  }
+
+  .pmo-video-style__copy strong {
+    display: block;
+    padding-right: 34px;
+    color: #1e293b;
+    font-size: .88rem;
+  }
+
+  .pmo-video-style__copy small {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: .7rem;
+    line-height: 1.25;
+  }
+
+  .pmo-video-style__tag {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: .58rem;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .pmo-video-style input:checked + .pmo-video-style__card {
+    border-color: var(--video-style-accent, #16a34a);
+    background: color-mix(in srgb, var(--video-style-accent, #16a34a) 7%, white);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--video-style-accent, #16a34a) 18%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .pmo-video-style input:focus-visible + .pmo-video-style__card {
+    outline: 3px solid rgba(37, 99, 235, .25);
+    outline-offset: 2px;
+  }
+
   .pmo-video-period-note {
     min-height: 38px;
     padding: 9px 11px;
@@ -1406,7 +1527,8 @@
   }
 
   @media (max-width: 430px) {
-    .pmo-video-scope-grid {
+    .pmo-video-scope-grid,
+    .pmo-video-style-grid {
       grid-template-columns: 1fr;
     }
 
@@ -1877,12 +1999,12 @@
     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
       <div>
         <h5 class="mb-1"><i class="fas fa-video me-1"></i> Compilado dos vacinados</h5>
-        <div class="text-muted small">Escolha o período. Semana e mês ganham um estilo relâmpago exclusivo para redes sociais.</div>
+        <div class="text-muted small">Escolha o período e o estilo. Todos são verticais (9:16), curtos e pensados para redes sociais.</div>
       </div>
       <button type="button" class="btn-close" data-action="video-modal-close" aria-label="Fechar"></button>
     </div>
     <fieldset class="border-0 p-0 m-0" aria-label="Período do vídeo">
-      <legend class="visually-hidden">Período do vídeo</legend>
+      <legend class="pmo-video-section-title"><span class="pmo-video-section-title__step">1</span> Período</legend>
       <div class="pmo-video-scope-grid">
         <label class="pmo-video-scope">
           <input type="radio" name="pmo-video-scope" value="day" checked>
@@ -1903,6 +2025,55 @@
           <span class="pmo-video-scope__card">
             <strong><i class="fas fa-calendar-days me-1"></i>Mês</strong>
             <small>Todas as datas do mês</small>
+          </span>
+        </label>
+      </div>
+    </fieldset>
+    <fieldset class="border-0 p-0 m-0" aria-label="Estilo do vídeo">
+      <legend class="pmo-video-section-title"><span class="pmo-video-section-title__step">2</span> Estilo do vídeo</legend>
+      <div class="pmo-video-style-grid">
+        <label class="pmo-video-style" style="--video-style-accent:#1f3f8f">
+          <input type="radio" name="pmo-video-style" value="mosaic" checked>
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-th-large"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Mosaico oficial</strong>
+              <small>Até 6 fotos por tela, brasão e todos os animais.</small>
+            </span>
+            <span class="pmo-video-style__tag">Atual</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#f59e0b">
+          <input type="radio" name="pmo-video-style" value="rapid">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-bolt"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Relâmpago</strong>
+              <small>Tela cheia, cortes rápidos e todos os animais.</small>
+            </span>
+            <span class="pmo-video-style__tag">Atual</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#a855f7">
+          <input type="radio" name="pmo-video-style" value="cinematic">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-film"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Cinema</strong>
+              <small>Movimento suave e até 16 destaques em cerca de 15 s.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
+          </span>
+        </label>
+        <label class="pmo-video-style" style="--video-style-accent:#ec4899">
+          <input type="radio" name="pmo-video-style" value="celebration">
+          <span class="pmo-video-style__card">
+            <span class="pmo-video-style__icon"><i class="fas fa-star"></i></span>
+            <span class="pmo-video-style__copy">
+              <strong>Celebração</strong>
+              <small>Cards animados, cores vivas e todos os animais.</small>
+            </span>
+            <span class="pmo-video-style__tag">Novo</span>
           </span>
         </label>
       </div>
@@ -2221,11 +2392,33 @@
   const videoStatus = document.getElementById('pmo-video-status');
   const videoPeriodNote = document.getElementById('pmo-video-period-note');
   const videoScopeEls = [...document.querySelectorAll('input[name="pmo-video-scope"]')];
+  const videoStyleEls = [...document.querySelectorAll('input[name="pmo-video-style"]')];
   let videoObjectUrl = '';
   let generatedVideoScope = 'day';
+  let generatedVideoStyle = 'mosaic';
   let generatedVideoMeta = {};
+  let generatedVideoTotalItems = 0;
   const municipalLogoSrc = {{ url_for('static', filename='sim_portal/assets/brasao-orlandia.png') | tojson }};
   let municipalLogoImage = null;
+
+  const VIDEO_STYLE_DETAILS = {
+    mosaic: {
+      label: 'Mosaico oficial',
+      note: 'mostra todos em mosaicos de até 6 fotos e dura, em geral, de 6 a 20 segundos.',
+    },
+    rapid: {
+      label: 'Relâmpago',
+      note: 'mostra todos em tela cheia, com ritmo rápido e duração-alvo de até 22 segundos.',
+    },
+    cinematic: {
+      label: 'Cinema',
+      note: 'seleciona até 16 destaques, com movimento suave e duração próxima de 15 segundos.',
+    },
+    celebration: {
+      label: 'Celebração',
+      note: 'mostra todos em cards animados, com cores vivas e duração-alvo de até 18 segundos.',
+    },
+  };
 
   function setVideoStatus(message) {
     if (videoStatus) videoStatus.textContent = message;
@@ -2266,6 +2459,10 @@
 
   function selectedVideoScope() {
     return videoScopeEls.find((input) => input.checked)?.value || 'day';
+  }
+
+  function selectedVideoStyle() {
+    return videoStyleEls.find((input) => input.checked)?.value || 'mosaic';
   }
 
   function selectedVideoReferenceDate() {
@@ -2316,24 +2513,28 @@
   function updateVideoPeriodNote() {
     if (!videoPeriodNote) return;
     const scope = selectedVideoScope();
-    if (scope === 'day') {
-      videoPeriodNote.innerHTML = `<strong>${escapeHtml(videoPeriodLabel(scope))}</strong> · usa somente os vacinados com foto visíveis nos filtros atuais.`;
-      return;
-    }
-    const cadence = scope === 'month' ? 'até 7 animais por segundo' : 'até 5 animais por segundo';
-    videoPeriodNote.innerHTML = `<strong>${escapeHtml(videoPeriodLabel(scope))}</strong> · reúne automaticamente os dias já sincronizados e cria uma sequência rápida com ${cadence}.`;
+    const style = selectedVideoStyle();
+    const styleDetails = VIDEO_STYLE_DETAILS[style] || VIDEO_STYLE_DETAILS.mosaic;
+    const periodNote = scope === 'day'
+      ? 'usa somente os vacinados com foto visíveis nos filtros atuais.'
+      : 'reúne automaticamente os vacinados com foto dos dias já sincronizados.';
+    videoPeriodNote.innerHTML = `<strong>${escapeHtml(videoPeriodLabel(scope))}</strong> · ${periodNote}<br><strong>${escapeHtml(styleDetails.label)}</strong> · ${escapeHtml(styleDetails.note)}`;
   }
 
   function selectedVideoFileSlug(scope = generatedVideoScope, meta = generatedVideoMeta) {
-    if (scope === 'month') return `mes-${String(meta.reference_date || selectedVideoReferenceDate()).slice(0, 7)}`;
+    let periodSlug = '';
+    if (scope === 'month') periodSlug = `mes-${String(meta.reference_date || selectedVideoReferenceDate()).slice(0, 7)}`;
     if (scope === 'week') {
       const bounds = meta.date_start && meta.date_end
         ? { start: meta.date_start, end: meta.date_end }
         : weekBounds(selectedVideoReferenceDate());
-      return `semana-${bounds.start}-a-${bounds.end}`;
+      periodSlug = `semana-${bounds.start}-a-${bounds.end}`;
     }
-    const label = videoDateLabel() || 'dia';
-    return label.replace(/\D+/g, '-').replace(/^-|-$/g, '') || 'dia';
+    if (!periodSlug) {
+      const label = videoDateLabel() || 'dia';
+      periodSlug = label.replace(/\D+/g, '-').replace(/^-|-$/g, '') || 'dia';
+    }
+    return `${generatedVideoStyle}-${periodSlug}`;
   }
 
   function collectVaccinatedVideoItems() {
@@ -2610,13 +2811,18 @@
       ctx.drawImage(municipalLogoImage, logoX, logoY, logoWidth, logoHeight);
     }
     fitCenterText(ctx, title, canvas.width / 2 - 36, 104, canvas.width - 210, 60, 900);
-    ctx.font = '600 34px Arial, sans-serif';
-    ctx.fillText(subtitle, canvas.width / 2 - 36, 172);
+    fitCenterText(ctx, subtitle, canvas.width / 2 - 36, 172, canvas.width - 210, 34, 600);
+  }
+
+  function videoScopeBadge(scope = generatedVideoScope) {
+    if (scope === 'month') return 'VACINADOS DO MÊS';
+    if (scope === 'week') return 'VACINADOS DA SEMANA';
+    return 'VACINADOS DO DIA';
   }
 
   function drawSlide(ctx, canvas, group, images, focuses, slideIndex, totalSlides) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoPeriodLabel(generatedVideoScope, generatedVideoMeta));
     const rects = slideRects(images, canvas);
     group.forEach((item, index) => drawPhotoTile(ctx, item, images[index], rects[index], focuses[index]));
     ctx.fillStyle = '#1f3f8f';
@@ -2627,7 +2833,7 @@
 
   function drawIntro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoDateLabel());
+    drawVideoTitle(ctx, canvas, 'Animais vacinados', videoPeriodLabel(generatedVideoScope, generatedVideoMeta));
     ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
     fitCenterText(ctx, `${count} ${count === 1 ? 'animal' : 'animais'}`, canvas.width / 2, 850, canvas.width - 140, 84, 900);
@@ -2641,7 +2847,7 @@
 
   function drawOutro(ctx, canvas, count) {
     drawVideoBackground(ctx, canvas);
-    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', videoDateLabel());
+    drawVideoTitle(ctx, canvas, 'Obrigado pela participação', videoPeriodLabel(generatedVideoScope, generatedVideoMeta));
     ctx.fillStyle = '#1f3f8f';
     ctx.textAlign = 'center';
     fitCenterText(ctx, 'Vacina em dia protege o animal, a família e a cidade.', canvas.width / 2, 860, canvas.width - 140, 46, 800);
@@ -2653,10 +2859,13 @@
   }
 
   const VIDEO_CAPTURE_FPS = 30;
-  const RAPID_PHOTO_MIN_MS = 140;
+  const RAPID_PHOTO_MIN_MS = 90;
   const RAPID_PHOTO_MAX_MS = 420;
   const RAPID_BATCH_SIZE = 12;
   const RAPID_ACCENTS = ['#f2c230', '#37d6c0', '#ff6b6b', '#80aaff'];
+  const CINEMATIC_HIGHLIGHT_LIMIT = 16;
+  const CELEBRATION_GROUP_SIZE = 4;
+  const CELEBRATION_COLORS = ['#f2c230', '#37d6c0', '#ff6b6b', '#80aaff', '#f472b6'];
 
   function drawAnimatedPetCover(ctx, img, canvas, focus, progress, direction) {
     const baseScale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
@@ -2684,7 +2893,7 @@
     ctx.font = '800 31px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(generatedVideoScope === 'month' ? 'VACINADOS DO MÊS' : 'VACINADOS DA SEMANA', 120, 85);
+    ctx.fillText(videoScopeBadge(), 120, 85);
     if (municipalLogoImage) {
       const logoHeight = 74;
       const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
@@ -2801,6 +3010,286 @@
     ctx.fillText('Prefeitura Municipal de Orlândia', canvas.width / 2, 1560);
   }
 
+  function selectEvenlySpacedVideoItems(items, limit) {
+    if (items.length <= limit) return [...items];
+    if (limit <= 1) return [items[0]];
+    return Array.from({ length: limit }, (_, index) => {
+      const sourceIndex = Math.round(index * (items.length - 1) / (limit - 1));
+      return items[sourceIndex];
+    });
+  }
+
+  function drawCinematicBrand(ctx, canvas, eyebrow = 'CAMPANHA MUNICIPAL') {
+    ctx.save();
+    ctx.fillStyle = 'rgba(7, 13, 28, .68)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 48, 50, 590, 76, 38);
+    ctx.fill();
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(78, 83, 42, 5);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(eyebrow, 142, 88);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 48, 48, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawCinematicIntro(ctx, canvas, items) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#071326');
+    gradient.addColorStop(.52, '#172c4f');
+    gradient.addColorStop(1, '#090f1d');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const glow = ctx.createRadialGradient(canvas.width * .7, canvas.height * .32, 20, canvas.width * .7, canvas.height * .32, 760);
+    glow.addColorStop(0, 'rgba(242,194,48,.24)');
+    glow.addColorStop(1, 'rgba(242,194,48,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawCinematicBrand(ctx, canvas, 'HISTÓRIAS PROTEGIDAS');
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'CUIDADO QUE', canvas.width / 2, 680, canvas.width - 120, 102, 900);
+    fitCenterText(ctx, 'VIRA MEMÓRIA', canvas.width / 2, 790, canvas.width - 120, 102, 900);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(260, 900, canvas.width - 520, 8);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'VIDA PROTEGIDA' : 'VIDAS PROTEGIDAS'}`, canvas.width / 2, 1040, canvas.width - 130, 54, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.78)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1130, canvas.width - 150, 38, 600);
+    ctx.font = '600 31px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Um retrato de quem faz Orlândia mais protegida.', canvas.width / 2, 1515);
+  }
+
+  function drawCinematicPetFrame(ctx, canvas, item, img, focus, index, total, progress) {
+    const direction = index % 2 === 0 ? .55 : -.55;
+    drawAnimatedPetCover(ctx, img, canvas, focus, progress * .72, direction);
+    const vignette = ctx.createRadialGradient(canvas.width / 2, canvas.height * .42, 260, canvas.width / 2, canvas.height * .42, 1120);
+    vignette.addColorStop(0, 'rgba(5,10,22,0)');
+    vignette.addColorStop(1, 'rgba(5,10,22,.7)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const footer = ctx.createLinearGradient(0, canvas.height * .56, 0, canvas.height);
+    footer.addColorStop(0, 'rgba(5,10,22,0)');
+    footer.addColorStop(1, 'rgba(5,10,22,.94)');
+    ctx.fillStyle = footer;
+    ctx.fillRect(0, canvas.height * .52, canvas.width, canvas.height * .48);
+    drawCinematicBrand(ctx, canvas);
+    ctx.strokeStyle = 'rgba(242,194,48,.78)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(32, 32, canvas.width - 64, canvas.height - 64);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(72, canvas.height - 430, 128, 7);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, item.name || 'Animal', canvas.width / 2, canvas.height - 315, canvas.width - 130, 92, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = '700 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const speciesLabel = item.species === 'gato' ? 'GATO VACINADO' : 'CÃO VACINADO';
+    const dateLabel = item.date ? ` · ${displayDate(item.date)}` : '';
+    ctx.fillText(`${speciesLabel}${dateLabel}`, canvas.width / 2, canvas.height - 215);
+    ctx.fillStyle = '#f2c230';
+    ctx.font = '800 27px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${index + 1} / ${total}`, canvas.width - 72, canvas.height - 88);
+    if (progress < .16) {
+      ctx.fillStyle = `rgba(5,10,22,${(.16 - progress) * 3.6})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function drawCinematicOutro(ctx, canvas, items) {
+    const summary = videoItemSummary(items);
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#091326');
+    gradient.addColorStop(1, '#1c3154');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawCinematicBrand(ctx, canvas, 'PREFEITURA DE ORLÂNDIA');
+    ctx.fillStyle = '#f2c230';
+    ctx.font = '900 42px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('VACINA EM DIA', canvas.width / 2, 560);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'PROTEGE QUEM', canvas.width / 2, 710, canvas.width - 120, 86, 900);
+    fitCenterText(ctx, 'FAZ PARTE DA FAMÍLIA', canvas.width / 2, 805, canvas.width - 120, 86, 900);
+    ctx.fillStyle = '#f2c230';
+    fitCenterText(ctx, `${items.length} VIDAS PROTEGIDAS`, canvas.width / 2, 1030, canvas.width - 130, 61, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.font = '700 37px Arial, sans-serif';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 1120);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'Compartilhe essa proteção.', canvas.width / 2, 1430, canvas.width - 150, 48, 800);
+  }
+
+  function drawCelebrationBackground(ctx, canvas) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0f2d6a');
+    gradient.addColorStop(.5, '#1f3f8f');
+    gradient.addColorStop(1, '#32165a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,.055)';
+    ctx.beginPath();
+    ctx.arc(100, 300, 330, 0, Math.PI * 2);
+    ctx.arc(1030, 1450, 430, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawCelebrationConfetti(ctx, canvas, frameIndex, progress) {
+    ctx.save();
+    for (let i = 0; i < 34; i += 1) {
+      const color = CELEBRATION_COLORS[(i + frameIndex) % CELEBRATION_COLORS.length];
+      const x = (i * 137 + frameIndex * 73) % (canvas.width + 100) - 50;
+      const y = (i * 191 + frameIndex * 127 + progress * 430) % (canvas.height + 180) - 90;
+      ctx.translate(x, y);
+      ctx.rotate((i * .67) + progress * 2.4);
+      ctx.fillStyle = color;
+      if (i % 3 === 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-8, -4, 16, 8);
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    ctx.restore();
+  }
+
+  function drawCelebrationBrand(ctx, canvas) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,20,48,.78)';
+    ctx.beginPath();
+    addRoundedRect(ctx, 42, 42, 650, 80, 40);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 29px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('VACINAÇÃO ANTIRRÁBICA', 82, 83);
+    if (municipalLogoImage) {
+      const logoHeight = 78;
+      const logoWidth = logoHeight * (municipalLogoImage.naturalWidth / municipalLogoImage.naturalHeight);
+      ctx.drawImage(municipalLogoImage, canvas.width - logoWidth - 42, 43, logoWidth, logoHeight);
+    }
+    ctx.restore();
+  }
+
+  function drawCelebrationIntro(ctx, canvas, items, progress) {
+    drawCelebrationBackground(ctx, canvas);
+    drawCelebrationConfetti(ctx, canvas, 0, progress);
+    drawCelebrationBrand(ctx, canvas);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'ORLÂNDIA', canvas.width / 2, 650, canvas.width - 120, 126, 900);
+    ctx.fillStyle = '#f2c230';
+    fitCenterText(ctx, 'PROTEGE!', canvas.width / 2, 785, canvas.width - 120, 126, 900);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, `${items.length} ${items.length === 1 ? 'ANIMAL VACINADO' : 'ANIMAIS VACINADOS'}`, canvas.width / 2, 1030, canvas.width - 130, 58, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.84)';
+    fitCenterText(ctx, videoPeriodLabel(generatedVideoScope, generatedVideoMeta), canvas.width / 2, 1120, canvas.width - 150, 38, 700);
+    ctx.fillStyle = '#37d6c0';
+    ctx.beginPath();
+    addRoundedRect(ctx, 245, 1440, canvas.width - 490, 88, 44);
+    ctx.fill();
+    ctx.fillStyle = '#082038';
+    ctx.font = '900 31px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('DÊ O PLAY NA PROTEÇÃO', canvas.width / 2, 1484);
+  }
+
+  function celebrationSlots(count) {
+    if (count === 1) return [{ x: 115, y: 380, w: 850, h: 1120 }];
+    if (count === 2) return [
+      { x: 92, y: 330, w: 896, h: 590 },
+      { x: 92, y: 955, w: 896, h: 590 },
+    ];
+    if (count === 3) return [
+      { x: 55, y: 360, w: 470, h: 560 },
+      { x: 555, y: 360, w: 470, h: 560 },
+      { x: 210, y: 970, w: 660, h: 590 },
+    ];
+    return [
+      { x: 55, y: 330, w: 470, h: 565 },
+      { x: 555, y: 330, w: 470, h: 565 },
+      { x: 55, y: 940, w: 470, h: 565 },
+      { x: 555, y: 940, w: 470, h: 565 },
+    ];
+  }
+
+  function drawCelebrationTile(ctx, item, img, focus, rect, index, progress) {
+    const arrival = clamp((progress - index * .06) / .5, 0, 1);
+    const eased = 1 - Math.pow(1 - arrival, 3);
+    const tilt = (index % 2 === 0 ? -.028 : .028) * (1 - eased);
+    const scale = .82 + eased * .18;
+    ctx.save();
+    ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+    ctx.rotate(tilt);
+    ctx.scale(scale, scale);
+    const x = -rect.w / 2;
+    const y = -rect.h / 2;
+    ctx.shadowColor = 'rgba(5,12,35,.34)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 14;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    addRoundedRect(ctx, x, y, rect.w, rect.h, 28);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.save();
+    ctx.beginPath();
+    addRoundedRect(ctx, x + 12, y + 12, rect.w - 24, rect.h - 118, 20);
+    ctx.clip();
+    drawPetFaceCoverImage(ctx, img, x + 12, y + 12, rect.w - 24, rect.h - 118, focus);
+    ctx.restore();
+    ctx.fillStyle = CELEBRATION_COLORS[index % CELEBRATION_COLORS.length];
+    ctx.fillRect(x + 20, y + rect.h - 89, 10, 58);
+    ctx.fillStyle = '#17223a';
+    fitCenterText(ctx, item.name || 'Animal', 0, y + rect.h - 60, rect.w - 90, Math.min(50, rect.w / 9), 900);
+    ctx.restore();
+  }
+
+  function drawCelebrationFrame(ctx, canvas, group, images, focuses, slideIndex, totalSlides, progress) {
+    drawCelebrationBackground(ctx, canvas);
+    drawCelebrationConfetti(ctx, canvas, slideIndex + 1, progress);
+    drawCelebrationBrand(ctx, canvas);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, videoScopeBadge(), canvas.width / 2, 220, canvas.width - 110, 52, 900);
+    const slots = celebrationSlots(group.length);
+    group.forEach((item, index) => drawCelebrationTile(ctx, item, images[index], focuses[index], slots[index], index, progress));
+    ctx.fillStyle = 'rgba(255,255,255,.86)';
+    ctx.font = '800 27px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`PROTEÇÃO EM MOVIMENTO  ·  ${slideIndex + 1}/${totalSlides}`, canvas.width / 2, canvas.height - 88);
+  }
+
+  function drawCelebrationOutro(ctx, canvas, items, progress) {
+    const summary = videoItemSummary(items);
+    drawCelebrationBackground(ctx, canvas);
+    drawCelebrationConfetti(ctx, canvas, 91, progress);
+    drawCelebrationBrand(ctx, canvas);
+    ctx.fillStyle = '#f2c230';
+    fitCenterText(ctx, `${items.length} VIDAS`, canvas.width / 2, 650, canvas.width - 120, 116, 900);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'MAIS PROTEGIDAS', canvas.width / 2, 770, canvas.width - 120, 102, 900);
+    ctx.fillStyle = '#37d6c0';
+    ctx.font = '900 44px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${summary.dogs} cães  ·  ${summary.cats} gatos`, canvas.width / 2, 980);
+    ctx.fillStyle = '#fff';
+    fitCenterText(ctx, 'VACINAR É UM ATO DE AMOR', canvas.width / 2, 1270, canvas.width - 130, 58, 900);
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.font = '700 31px Arial, sans-serif';
+    ctx.fillText('Compartilhe e ajude essa proteção a chegar mais longe.', canvas.width / 2, 1370);
+  }
+
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -2900,8 +3389,20 @@
   }
 
   function rapidPhotoDuration(itemsCount, scope) {
-    const targetDuration = scope === 'month' ? 26000 : 18000;
+    const targetDuration = scope === 'month' ? 22000 : (scope === 'week' ? 18000 : 14000);
     return Math.round(clamp(targetDuration / Math.max(1, itemsCount), RAPID_PHOTO_MIN_MS, RAPID_PHOTO_MAX_MS));
+  }
+
+  function mosaicSlideDuration(groupCount) {
+    return Math.round(clamp(14000 / Math.max(1, groupCount), 320, 2400));
+  }
+
+  function cinematicPhotoDuration(itemsCount) {
+    return Math.round(clamp(10500 / Math.max(1, itemsCount), 520, 950));
+  }
+
+  function celebrationSlideDuration(groupCount) {
+    return Math.round(clamp(12000 / Math.max(1, groupCount), 280, 1050));
   }
 
   async function generateVaccinationVideo() {
@@ -2910,12 +3411,13 @@
     }
     clearGeneratedVideo();
     generatedVideoScope = selectedVideoScope();
-    setVideoStatus(generatedVideoScope === 'day'
-      ? 'Preparando as fotos do dia...'
-      : `Reunindo os vacinados de ${videoPeriodLabel(generatedVideoScope).toLowerCase()}...`);
+    generatedVideoStyle = selectedVideoStyle();
+    const selectedStyleDetails = VIDEO_STYLE_DETAILS[generatedVideoStyle] || VIDEO_STYLE_DETAILS.mosaic;
+    setVideoStatus(`Preparando o estilo ${selectedStyleDetails.label} para ${videoPeriodLabel(generatedVideoScope).toLowerCase()}...`);
     const videoData = await loadVaccinatedVideoItems(generatedVideoScope);
     const items = videoData.items;
     generatedVideoMeta = videoData.meta || {};
+    generatedVideoTotalItems = items.length;
     if (!items.length) {
       throw new Error(generatedVideoScope === 'day'
         ? 'Não há animais vacinados com foto nos filtros atuais.'
@@ -2948,20 +3450,28 @@
     let recordedItems = items;
     try {
       recorder.start(500);
-      if (generatedVideoScope === 'day') {
+      if (generatedVideoStyle === 'mosaic') {
         const groups = [];
         for (let i = 0; i < items.length; i += 6) groups.push(items.slice(i, i + 6));
-        await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1600, captureTrack);
+        const successfulItems = [];
+        const slideDurationMs = mosaicSlideDuration(groups.length);
+        await holdCanvasFrame(() => drawIntro(ctx, canvas, items.length), 1150, captureTrack);
         for (let i = 0; i < groups.length; i += 1) {
           setVideoStatus(`Carregando fotos ${i + 1}/${groups.length}...`);
-          const group = groups[i];
-          const images = await Promise.all(group.map((item) => loadVideoImage(item.imageSrc)));
-          const focuses = images.map((img) => estimatePetFocus(img));
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[i]));
+          if (!loaded.length) continue;
+          const group = loaded.map((pair) => pair.item);
+          const images = loaded.map((pair) => pair.image);
+          const focuses = images.map(estimatePetFocus);
+          successfulItems.push(...group);
           setVideoStatus(`Gravando slide ${i + 1}/${groups.length}...`);
-          await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), 2800, captureTrack);
+          await holdCanvasFrame(() => drawSlide(ctx, canvas, group, images, focuses, i, groups.length), slideDurationMs, captureTrack);
+          images.forEach((image) => { image.src = ''; });
         }
-        await holdCanvasFrame(() => drawOutro(ctx, canvas, items.length), 1300, captureTrack);
-      } else {
+        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        recordedItems = successfulItems;
+        await holdCanvasFrame(() => drawOutro(ctx, canvas, successfulItems.length), 1050, captureTrack);
+      } else if (generatedVideoStyle === 'rapid') {
         const batches = [];
         for (let i = 0; i < items.length; i += RAPID_BATCH_SIZE) batches.push(items.slice(i, i + RAPID_BATCH_SIZE));
         const durationMs = rapidPhotoDuration(items.length, generatedVideoScope);
@@ -2990,6 +3500,50 @@
         }
         recordedItems = successfulItems;
         await holdCanvasFrame(() => drawRapidOutro(ctx, canvas, successfulItems), 1800, captureTrack);
+      } else if (generatedVideoStyle === 'cinematic') {
+        const highlights = selectEvenlySpacedVideoItems(items, CINEMATIC_HIGHLIGHT_LIMIT);
+        await holdCanvasFrame(() => drawCinematicIntro(ctx, canvas, items), 1250, captureTrack);
+        setVideoStatus(`Selecionando ${highlights.length} destaques para o modo Cinema...`);
+        const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(highlights));
+        if (!loaded.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        const durationMs = cinematicPhotoDuration(loaded.length);
+        for (let index = 0; index < loaded.length; index += 1) {
+          const pair = loaded[index];
+          const focus = estimatePetFocus(pair.image);
+          setVideoStatus(`Montando cena ${index + 1}/${loaded.length}...`);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawCinematicPetFrame(ctx, canvas, pair.item, pair.image, focus, index, loaded.length, progress),
+            durationMs,
+            captureTrack,
+          );
+          pair.image.src = '';
+        }
+        recordedItems = loaded.map((pair) => pair.item);
+        await holdCanvasFrame(() => drawCinematicOutro(ctx, canvas, items), 1450, captureTrack);
+      } else {
+        const groups = [];
+        for (let i = 0; i < items.length; i += CELEBRATION_GROUP_SIZE) groups.push(items.slice(i, i + CELEBRATION_GROUP_SIZE));
+        const durationMs = celebrationSlideDuration(groups.length);
+        const successfulItems = [];
+        await holdAnimatedCanvasFrame((progress) => drawCelebrationIntro(ctx, canvas, items, progress), 1150, captureTrack);
+        for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+          setVideoStatus(`Preparando cards ${groupIndex + 1}/${groups.length}...`);
+          const loaded = await pauseRecorderWhile(recorder, () => loadRapidVideoBatch(groups[groupIndex]));
+          if (!loaded.length) continue;
+          const group = loaded.map((pair) => pair.item);
+          const images = loaded.map((pair) => pair.image);
+          const focuses = images.map(estimatePetFocus);
+          successfulItems.push(...group);
+          await holdAnimatedCanvasFrame(
+            (progress) => drawCelebrationFrame(ctx, canvas, group, images, focuses, groupIndex, groups.length, progress),
+            durationMs,
+            captureTrack,
+          );
+          images.forEach((image) => { image.src = ''; });
+        }
+        if (!successfulItems.length) throw new Error('As fotos do período não puderam ser carregadas. Tente novamente com a aba ativa.');
+        recordedItems = successfulItems;
+        await holdAnimatedCanvasFrame((progress) => drawCelebrationOutro(ctx, canvas, successfulItems, progress), 1350, captureTrack);
       }
       recorder.stop();
       await stopped;
@@ -3014,11 +3568,14 @@
     videoDownload.classList.remove('disabled');
     videoDownload.removeAttribute('aria-disabled');
 
-    const totalLabel = `${recordedItems.length} ${recordedItems.length === 1 ? 'animal' : 'animais'}`;
+    const totalLabel = `${generatedVideoTotalItems} ${generatedVideoTotalItems === 1 ? 'animal' : 'animais'}`;
+    const highlightsLabel = recordedItems.length < generatedVideoTotalItems
+      ? ` ${recordedItems.length} aparecem como destaques no modo Cinema.`
+      : '';
     const played = await previewGeneratedVideo();
     const base = played
-      ? `Vídeo pronto com ${totalLabel}.`
-      : `Vídeo pronto com ${totalLabel}. A prévia não abriu neste navegador — use "Baixar".`;
+      ? `Vídeo pronto com ${totalLabel}.${highlightsLabel}`
+      : `Vídeo pronto com ${totalLabel}.${highlightsLabel} A prévia não abriu neste navegador — use "Baixar".`;
     setVideoStatus(extension === 'mp4'
       ? `${base} Arquivo .mp4, pronto para enviar no WhatsApp.`
       : `${base} Este navegador só gerou .webm, que o WhatsApp recusa — atualize o Chrome ou o Edge para sair em .mp4.`);
@@ -3057,7 +3614,7 @@
 
   if (videoModal) {
     videoGenerateBtn?.addEventListener('click', () => openVideoModal());
-    videoScopeEls.forEach((input) => input.addEventListener('change', () => {
+    [...videoScopeEls, ...videoStyleEls].forEach((input) => input.addEventListener('change', () => {
       clearGeneratedVideo();
       setVideoStatus('Pronto para gerar.');
       updateVideoPeriodNote();
