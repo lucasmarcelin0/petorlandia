@@ -3251,3 +3251,108 @@ def test_frascos_ledger_flags_unlabeled_column_and_midhistory_expiry(app, monkey
     # 27/01 recomeça com frasco novo: 25 → 1 frasco exato, sobra 0.
     last = ledger["days"][-1]
     assert (last["fromLeftover"], last["vialsOpened"], last["leftover"]) == (0, 1, 0)
+
+
+def test_pmo_clean_address_fragment_noise_and_number_words():
+    from services.vacina_pmo_service import _pmo_clean_address_fragment
+
+    # Noise removal (casa fundos, portao, apto, etc.)
+    cleaned = _pmo_clean_address_fragment("Rua 1, 230, casa dos fundos (portao preto)")
+    assert "fundos" not in cleaned.lower()
+    assert "portao" not in cleaned.lower()
+    assert "Rua 1, 230" in cleaned
+
+    # Number words in street names
+    cleaned_num = _pmo_clean_address_fragment("Rua Vinte e Quatro, 110")
+    assert "Rua 24" in cleaned_num
+
+    cleaned_av = _pmo_clean_address_fragment("Av. Três, 500")
+    assert "Avenida 3" in cleaned_av
+
+
+def test_two_opt_route_refinement_untangles_crossing():
+    from services.vacina_pmo_service import _two_opt_route, _haversine_km
+
+    # Origin at (0, 0)
+    origin = (0.0, 0.0)
+
+    # 4 points arranged as a square: (0, 1), (1, 1), (0, 2), (1, 2)
+    # A crossed tour: origin -> (1, 2) -> (0, 1) -> (1, 1) -> (0, 2)
+    class FakeVisit:
+        def __init__(self, id_):
+            self.id = id_
+            self.source_row = id_
+
+    v1, p1 = FakeVisit(1), (1.0, 2.0)
+    v2, p2 = FakeVisit(2), (0.0, 1.0)
+    v3, p3 = FakeVisit(3), (1.0, 1.0)
+    v4, p4 = FakeVisit(4), (0.0, 2.0)
+
+    crossed_route = [(v1, p1), (v2, p2), (v3, p3), (v4, p4)]
+    initial_dist = _haversine_km(origin, p1) + _haversine_km(p1, p2) + _haversine_km(p2, p3) + _haversine_km(p3, p4)
+
+    refined = _two_opt_route(origin, crossed_route)
+    refined_dist = _haversine_km(origin, refined[0][1]) + sum(
+        _haversine_km(refined[i][1], refined[i + 1][1]) for i in range(len(refined) - 1)
+    )
+
+    assert refined_dist <= initial_dist
+
+
+def test_merge_ungeocoded_intelligently_clusters_by_bairro():
+    from services.vacina_pmo_service import _merge_ungeocoded_intelligently
+
+    class FakeVisit:
+        def __init__(self, id_, address):
+            self.id = id_
+            self.source_row = id_
+            self.address = address
+
+    # Geocoded route visits
+    g1 = FakeVisit(1, "Rua 1, 10, Centro")
+    g2 = FakeVisit(2, "Rua 2, 20, Centro")
+    g3 = FakeVisit(3, "Avenida 3, 30, Jardim Boa Vista")
+    g4 = FakeVisit(4, "Avenida 4, 40, Jardim Boa Vista")
+
+    # Unlocated visits: one in Centro, one in Jardim Boa Vista, one unknown
+    u1 = FakeVisit(5, "Rua sem numero, s/n, Centro")
+    u2 = FakeVisit(6, "Rua das Flores, s/n, Jardim Boa Vista")
+    u3 = FakeVisit(7, "Chacara Santa Luzia")
+
+    merged = _merge_ungeocoded_intelligently([g1, g2, g3, g4], [u1, u2, u3])
+    ids = [v.id for v in merged]
+
+    # u1 (Centro) should be placed right after the Centro cluster (after g2)
+    # u2 (Jardim Boa Vista) should be placed right after the Jardim Boa Vista cluster (after g4)
+    # u3 should be placed at the end
+    assert ids.index(5) == ids.index(2) + 1
+    assert ids.index(6) == ids.index(4) + 1
+    assert ids[-1] == 7
+
+
+def test_serialize_visit_and_preview_include_coordinates(app):
+    from services.vacina_pmo_service import _serialize_visit, _route_preview_item
+    from models.pmo import PmoVaccinationVisit
+
+    with app.app_context():
+        visit = PmoVaccinationVisit(
+            spreadsheet_id="sheet-1",
+            sheet_gid="123",
+            sheet_title="Dia 1",
+            source_row=2,
+            tutor_name="Maria Silva",
+            address="Rua 1, 100, Centro",
+            password="PMOA1234",
+            geocode_lat=-21.055,
+            geocode_lng=-47.888,
+        )
+
+        serialized = _serialize_visit(visit)
+        assert serialized["lat"] == -21.055
+        assert serialized["lng"] == -47.888
+        assert serialized["geocoded"] is True
+
+        preview_item = _route_preview_item(visit, (-21.055, -47.888), 1)
+        assert preview_item["lat"] == -21.055
+        assert preview_item["lng"] == -47.888
+        assert preview_item["located"] is True

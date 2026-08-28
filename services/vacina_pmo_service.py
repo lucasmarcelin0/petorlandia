@@ -335,14 +335,51 @@ def _pmo_address_parts(address: str) -> dict[str, str]:
     }
 
 
+_ORLANDIA_NUMBER_WORDS = {
+    "zero": "0", "um": "1", "uma": "1", "dois": "2", "duas": "2", "tres": "3", "três": "3",
+    "quatro": "4", "cinco": "5", "seis": "6", "sete": "7", "oito": "8", "nove": "9", "dez": "10",
+    "onze": "11", "doze": "12", "treze": "13", "quatorze": "14", "catorze": "14", "quinze": "15",
+    "dezesseis": "16", "dezessete": "17", "dezoito": "18", "dezenove": "19", "vinte": "20",
+    "vinte e um": "21", "vinte e dois": "22", "vinte e tres": "23", "vinte e três": "23",
+    "vinte e quatro": "24", "vinte e cinco": "25", "vinte e seis": "26", "vinte e sete": "27",
+    "vinte e oito": "28", "vinte e nove": "29", "trinta": "30",
+}
+
+
 def _pmo_clean_address_fragment(value: str) -> str:
     text = _normalize_text(value)
     text = re.sub(r"\([^)]*\)", " ", text)
     text = re.sub(r"\b(antigo|nova|novo)\b", " ", text, flags=re.IGNORECASE)
+    # Remove ruídos comuns de complementos que atrapalham o geocoder
+    text = re.sub(
+        r"\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|"
+        r"bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|"
+        r"casa\s+\d+|casa\s+[a-zA-Z]\b)\b",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"\s+-\s+", " ", text)
     text = re.sub(r"\bR\.\s*", "Rua ", text, flags=re.IGNORECASE)
     text = re.sub(r"\bAv\.\s*", "Avenida ", text, flags=re.IGNORECASE)
     text = re.sub(r"\bAl\.\s*", "Alameda ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bP[çc][a\.]\s*", "Praça ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bTv\.\s*", "Travessa ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bJd\.\s*", "Jardim ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bPq\.\s*", "Parque ", text, flags=re.IGNORECASE)
+
+    # Padroniza zeros à esquerda em ruas/avenidas de Orlândia (ex: Avenida 02 -> Avenida 2, Rua 09 -> Rua 9)
+    text = re.sub(r"\b(Rua|Avenida|Alameda|Travessa)\s+0+(\d+)\b", r"\1 \2", text, flags=re.IGNORECASE)
+    # Padroniza abreviações de Marginal
+    text = re.sub(r"\bAv\.?\s*marginal\s+di\.?\b", "Avenida Marginal Direita", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bAv\.?\s*marginal\s+es\.?\b", "Avenida Marginal Esquerda", text, flags=re.IGNORECASE)
+
+    # Padroniza nomes de ruas com números por extenso em Orlândia (ex: Rua Vinte e Quatro -> Rua 24)
+    for word, num in sorted(_ORLANDIA_NUMBER_WORDS.items(), key=lambda item: -len(item[0])):
+        text = re.sub(rf"\b(Rua|Avenida|Alameda|Praça|Travessa)\s+{word}\b", rf"\1 {num}", text, flags=re.IGNORECASE)
+
+    text = re.sub(r",\s*,+", ",", text)
+    text = re.sub(r",\s*$", "", text).strip(", ")
     return _normalize_text(text)
 
 
@@ -374,14 +411,11 @@ def _pmo_address_queries(address: str) -> list[str]:
     street = _pmo_clean_address_fragment(parts["rua"])
     number = _pmo_clean_address_fragment(parts["numero"])
     neighborhood = _pmo_clean_address_fragment(parts["bairro"])
-    street_no_number = _normalize_text(re.sub(r"\b\d+[A-Za-z]?\b", " ", street))
     city = "Orlândia, SP, Brasil"
     return _pmo_unique_queries([
         f"{normalized}, {city}",
         ", ".join(part for part in (street, number, neighborhood, city) if part),
         ", ".join(part for part in (street, number, city) if part),
-        ", ".join(part for part in (street_no_number, number, neighborhood, city) if part),
-        ", ".join(part for part in (street_no_number, neighborhood, city) if part),
         ", ".join(part for part in (street, neighborhood, city) if part),
         ", ".join(part for part in (neighborhood, city) if part),
     ])
@@ -597,22 +631,112 @@ def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 6371.0 * 2 * math.asin(math.sqrt(value))
 
 
+def _two_opt_route(
+    origin: tuple[float, float],
+    ordered_pairs: list[tuple[PmoVaccinationVisit, tuple[float, float]]],
+    max_iterations: int = 60,
+) -> list[tuple[PmoVaccinationVisit, tuple[float, float]]]:
+    """Refina a rota calculada por Nearest Neighbor eliminando cruzamentos de caminhos (2-opt)."""
+    if len(ordered_pairs) < 4:
+        return ordered_pairs
+
+    def _route_distance(route: list[tuple[PmoVaccinationVisit, tuple[float, float]]]) -> float:
+        total = _haversine_km(origin, route[0][1])
+        for i in range(len(route) - 1):
+            total += _haversine_km(route[i][1], route[i + 1][1])
+        return total
+
+    best = list(ordered_pairs)
+    best_dist = _route_distance(best)
+    improved = True
+    iteration = 0
+    n = len(best)
+
+    while improved and iteration < max_iterations:
+        improved = False
+        iteration += 1
+        for i in range(n - 1):
+            for j in range(i + 1, n):
+                new_route = best[:i] + best[i : j + 1][::-1] + best[j + 1 :]
+                new_dist = _route_distance(new_route)
+                if new_dist < best_dist - 0.001:
+                    best = new_route
+                    best_dist = new_dist
+                    improved = True
+                    break
+            if improved:
+                break
+    return best
+
+
 def _nearest_neighbor_route(
     origin: tuple[float, float],
     items: list[tuple[PmoVaccinationVisit, tuple[float, float]]],
 ) -> list[PmoVaccinationVisit]:
+    if not items:
+        return []
     remaining = items[:]
     current = origin
-    ordered: list[PmoVaccinationVisit] = []
+    ordered_pairs: list[tuple[PmoVaccinationVisit, tuple[float, float]]] = []
     while remaining:
-        next_index, (visit, coords) = min(
+        next_index, pair = min(
             enumerate(remaining),
             key=lambda item: (_haversine_km(current, item[1][1]), item[1][0].source_row or 0, item[1][0].id),
         )
-        ordered.append(visit)
-        current = coords
+        ordered_pairs.append(pair)
+        current = pair[1]
         remaining.pop(next_index)
-    return ordered
+
+    refined_pairs = _two_opt_route(origin, ordered_pairs)
+    return [visit for visit, _ in refined_pairs]
+
+
+def _pmo_extract_bairro_key(address: str) -> str:
+    """Extrai chave normalizada do bairro para agrupamento."""
+    parts = _pmo_address_parts(address)
+    bairro = _pmo_clean_address_fragment(parts.get("bairro") or "")
+    if not bairro:
+        m = re.search(
+            r"\b(jardim|jd\.?|centro|vila|pq\.?|parque|alto|alto da|bela|boa vista|siena|cidade alta|ouro verde)\b[^\n,]*",
+            address,
+            flags=re.IGNORECASE,
+        )
+        if m:
+            bairro = m.group(0)
+    return _strip_accents(_normalize_text(bairro)).lower()
+
+
+def _merge_ungeocoded_intelligently(
+    geocoded_ordered: list[PmoVaccinationVisit],
+    ungeocoded: list[PmoVaccinationVisit],
+) -> list[PmoVaccinationVisit]:
+    """Intercala visitas sem GPS junto a visitas do mesmo bairro na rota."""
+    if not ungeocoded:
+        return geocoded_ordered
+    if not geocoded_ordered:
+        return ungeocoded
+
+    result = list(geocoded_ordered)
+    bairro_last_idx: dict[str, int] = {}
+    for idx, visit in enumerate(result):
+        bkey = _pmo_extract_bairro_key(visit.address or "")
+        if bkey:
+            bairro_last_idx[bkey] = idx
+
+    unplaced: list[PmoVaccinationVisit] = []
+    for visit in ungeocoded:
+        bkey = _pmo_extract_bairro_key(visit.address or "")
+        if bkey and bkey in bairro_last_idx:
+            insert_idx = bairro_last_idx[bkey] + 1
+            result.insert(insert_idx, visit)
+            for k, v in list(bairro_last_idx.items()):
+                if v >= insert_idx:
+                    bairro_last_idx[k] = v + 1
+            bairro_last_idx[bkey] = insert_idx
+        else:
+            unplaced.append(visit)
+
+    return result + unplaced
 
 
 def _is_summary_or_header(row: list[Any]) -> bool:
@@ -2122,6 +2246,9 @@ def _serialize_visit(
         "status": infer_visit_status(animals),
         "tutor": visit.tutor_name,
         "address": visit.address or "",
+        "lat": visit.geocode_lat,
+        "lng": visit.geocode_lng,
+        "geocoded": bool(visit.geocode_lat is not None and visit.geocode_lng is not None),
         "phone1": visit.phone1 or "",
         "phone2": visit.phone2 or "",
         "dogs": visit.dogs or 0,
@@ -2298,6 +2425,8 @@ def get_all_vacina_pmo_evaluations() -> dict[str, Any]:
 
 
 def _route_preview_item(visit: PmoVaccinationVisit, coords: tuple[float, float] | None, order: int) -> dict[str, Any]:
+    lat = coords[0] if coords else visit.geocode_lat
+    lng = coords[1] if coords else visit.geocode_lng
     return {
         "visitId": visit.id,
         "sourceRow": visit.source_row,
@@ -2305,7 +2434,9 @@ def _route_preview_item(visit: PmoVaccinationVisit, coords: tuple[float, float] 
         "tutor": visit.tutor_name or "",
         "address": visit.address or "",
         "shift": visit.shift or "",
-        "located": bool(coords),
+        "located": bool(coords or (lat is not None and lng is not None)),
+        "lat": lat,
+        "lng": lng,
     }
 
 
@@ -2414,12 +2545,14 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
     except Exception:
         pass
     if not geocoded:
-        raise ValueError(
-            "Não foi possível localizar nenhum endereço deste turno rapidamente. "
-            "Confira se os endereços têm rua, número e bairro, e tente novamente em alguns instantes."
+        # Fallback gracioso: agrupa os endereços por bairro caso o GPS esteja temporariamente indisponível
+        optimized = sorted(
+            ungeocoded,
+            key=lambda v: (_pmo_extract_bairro_key(v.address or ""), v.source_row or 0, v.id),
         )
-
-    optimized = _nearest_neighbor_route(origin_coords, geocoded) + ungeocoded
+    else:
+        geocoded_ordered = _nearest_neighbor_route(origin_coords, geocoded)
+        optimized = _merge_ungeocoded_intelligently(geocoded_ordered, ungeocoded)
     return {
         "normalized_shift": normalized_shift,
         "spreadsheet_id": spreadsheet_id,

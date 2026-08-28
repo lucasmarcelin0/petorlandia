@@ -4141,15 +4141,33 @@
     return local.toISOString().slice(0, 10);
   }
 
+  function cleanAddressForSearch(address) {
+    let text = normalizeText(address);
+    if (!text) return '';
+    text = text.replace(/\([^)]*\)/g, ' ');
+    text = text.replace(/\b(casa\s+(dos?\s+)?fundos?|fundos?|sobrado|sobrado\s+fundos?|apto\b[^\s,]*|apartamento\b[^\s,]*|bloco\b[^\s,]*|port[aã]o\s+\w+|interfone\b[^\s,]*|pr[oó]x(imo)?\b.*|ao\s+lado\b.*|em\s+frente\b.*|casa\s+\d+|casa\s+[a-zA-Z]\b)\b/gi, ' ');
+    text = text.replace(/\s+-\s+/g, ' ');
+    text = text.replace(/\bR\.\s*/gi, 'Rua ');
+    text = text.replace(/\bAv\.\s*/gi, 'Avenida ');
+    text = text.replace(/\bP[çc][a\.]\s*/gi, 'Praça ');
+    return normalizeText(text);
+  }
+
   function googleMapsUrl(row) {
-    const destination = normalizeText(row.address);
+    if (row && typeof row.lat === 'number' && typeof row.lng === 'number' && !isNaN(row.lat) && !isNaN(row.lng)) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${row.lat},${row.lng}&travelmode=driving`;
+    }
+    const destination = cleanAddressForSearch(row.address);
     if (!destination) return '';
     const full = `${destination}, Orlândia, SP, Brasil`;
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(full)}&travelmode=driving`;
   }
 
   function wazeUrl(row) {
-    const destination = normalizeText(row.address);
+    if (row && typeof row.lat === 'number' && typeof row.lng === 'number' && !isNaN(row.lat) && !isNaN(row.lng)) {
+      return `https://waze.com/ul?ll=${row.lat},${row.lng}&navigate=yes`;
+    }
+    const destination = cleanAddressForSearch(row.address);
     if (!destination) return '';
     const full = `${destination}, Orlândia, SP`;
     return `https://waze.com/ul?q=${encodeURIComponent(full)}&navigate=yes`;
@@ -4159,14 +4177,19 @@
     const mapsUrl = googleMapsUrl(row);
     const waze = wazeUrl(row);
     const label = escapeHtml(row.address || 'Endereço não informado');
+    const hasGps = row && typeof row.lat === 'number' && typeof row.lng === 'number' && !isNaN(row.lat) && !isNaN(row.lng);
+    const gpsBadge = hasGps
+      ? `<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle ms-1" style="font-size:0.68rem; padding:0.12rem 0.35rem;" title="Localizado por GPS exato"><i class="fas fa-crosshairs me-1"></i>GPS</span>`
+      : `<span class="badge rounded-pill bg-light text-muted border ms-1" style="font-size:0.68rem; padding:0.12rem 0.35rem;" title="Navegação por busca nominal de endereço"><i class="fas fa-map-pin me-1"></i>Rua</span>`;
+
     const mapsLink = mapsUrl
-      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="Google Maps" aria-label="Abrir no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
+      ? `<a class="btn btn-sm btn-outline-primary ${compact ? 'pmo-map-link--compact' : ''}" href="${mapsUrl}" target="_blank" rel="noopener" title="${hasGps ? 'Abrir no Google Maps (GPS Exato)' : 'Abrir no Google Maps (Busca de Endereço)'}" aria-label="Abrir no Google Maps"><i class="fas fa-map-location-dot"></i></a>`
       : '';
     const wazeLink = waze
-      ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Waze" aria-label="Abrir no Waze"><i class="fas fa-route"></i></a>`
+      ? `<a class="btn btn-sm btn-outline-secondary ${compact ? 'pmo-map-link--compact' : ''}" href="${waze}" target="_blank" rel="noopener" title="Abrir no Waze" aria-label="Abrir no Waze"><i class="fas fa-route"></i></a>`
       : '';
     const textClass = compact ? '' : ' class="pmo-address-text"';
-    return `<div class="d-flex align-items-start gap-1 flex-wrap"><span${textClass}>${label}</span><span class="d-flex gap-1">${mapsLink}${wazeLink}</span></div>`;
+    return `<div class="d-flex align-items-start gap-1 flex-wrap"><span${textClass}>${label}</span>${gpsBadge}<span class="d-flex gap-1 ms-auto ms-sm-0">${mapsLink}${wazeLink}</span></div>`;
   }
 
   function makePassword(seed) {
