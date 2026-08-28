@@ -291,7 +291,20 @@ class TestColorContrast:
 
 class TestKeyboardNavigation:
     """Test keyboard accessibility."""
-    
+
+    def test_skip_to_content_link_present(self, client):
+        """Pages using layout should have a skip to main content link."""
+        response = client.get('/')
+        if response.status_code != 200:
+            return
+
+        soup = get_soup(response.data)
+        skip_link = soup.find('a', href='#main-content')
+        assert skip_link is not None, "Page should have a skip to main content link"
+        main_tag = soup.find('main')
+        assert main_tag is not None, "Page should have a main element"
+        assert main_tag.get('id') == 'main-content', "Main element should have id='main-content'"
+
     def test_interactive_elements_have_tabindex(self, client):
         """Interactive elements should be keyboard accessible."""
         response = client.get('/')

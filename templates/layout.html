@@ -318,6 +318,9 @@
    navegador. Sem isso, um dispositivo compartilhado entrega as preferências
    (e o termo de busca) de uma pessoa para a próxima que entrar. #}
 <body data-storage-scope="{{ current_user.id if current_user.is_authenticated else 'anon' }}">
+  <a href="#main-content" class="visually-hidden-focusable btn btn-primary position-absolute top-0 start-0 m-2" style="z-index: 1090;">
+    Pular para o conteúdo principal
+  </a>
   {% include 'partials/navbar.html' %}
 
   {% include 'partials/_activation_bar.html' %}
@@ -339,7 +342,7 @@
   {% endif %}
 
   <!-- Main Content -->
-  <main class="container">
+  <main id="main-content" class="container" tabindex="-1">
     {% block main %}
     {% endblock %}
   </main>
