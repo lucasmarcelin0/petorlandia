@@ -15,6 +15,30 @@
     padding: 16px;
   }
 
+  .pmo-connectivity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 12px;
+    padding: 9px 12px;
+    border: 1px solid #f2cc75;
+    border-radius: 9px;
+    background: #fff8e6;
+    color: #7c4a03;
+    font-size: .82rem;
+    font-weight: 650;
+  }
+
+  .pmo-connectivity[hidden] {
+    display: none;
+  }
+
+  .pmo-connectivity[data-state="syncing"] {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1e40af;
+  }
+
   .pmo-stat {
     min-height: 96px;
     border: 1px solid #e5e7eb;
@@ -413,6 +437,39 @@
   .pmo-animal-status .pmo-status-select {
     width: 100%;
     min-width: 0;
+  }
+
+  .pmo-status-control {
+    position: relative;
+    min-width: 0;
+  }
+
+  .pmo-status-control[data-sync-state] .pmo-status-select {
+    padding-right: 54px;
+  }
+
+  .pmo-status-sync {
+    position: absolute;
+    top: 50%;
+    right: 31px;
+    display: inline-grid;
+    width: 17px;
+    height: 17px;
+    place-items: center;
+    transform: translateY(-50%);
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 8px;
+    pointer-events: none;
+  }
+
+  .pmo-status-sync[data-state="uploading"] {
+    background: #2563eb;
+  }
+
+  .pmo-status-sync[data-state="error"] {
+    background: #dc3545;
   }
 
   .pmo-animal-photo-btn {
@@ -1651,6 +1708,8 @@
       </div>
     </div>
   </div>
+
+  <div class="pmo-connectivity" id="pmo-connectivity" role="status" aria-live="polite" hidden></div>
 
   <div class="row g-3 mb-3">
     <div class="col-6 col-lg-3">
@@ -3763,17 +3822,29 @@
   const evalResponsesEl = document.getElementById('pmo-eval-responses');
   const evalScopeDayBtn = document.getElementById('pmo-eval-scope-day');
   const evalScopeAllBtn = document.getElementById('pmo-eval-scope-all');
+  const connectivityEl = document.getElementById('pmo-connectivity');
   // Escopo do painel de avaliações: 'day' (aba atual) ou 'all' (todas as abas).
   const evalState = { scope: 'day', allRows: null, loading: false };
   const state = { rows: [] };
   let stateMutationSeq = 0;
-  const statusUpdates = new Set();
   const PHOTO_QUEUE_DB = 'petorlandia-pmo-photo-queue';
   const PHOTO_QUEUE_STORE = 'photos';
+  const STATUS_QUEUE_STORAGE_KEY = 'petorlandia-pmo-status-queue-v1:{{ current_user.id }}';
+  const QUEUE_RETRY_BASE_MS = 2500;
+  const QUEUE_RETRY_MAX_MS = 60000;
+  const PHOTO_UPLOAD_CONCURRENCY = 2;
+  const STATUS_UPLOAD_CONCURRENCY = 3;
   const photoQueue = {
     dbPromise: null,
     objectUrls: new Map(),
     processing: new Set(),
+  };
+  const statusQueue = {
+    processing: new Set(),
+  };
+  const localQueue = {
+    retryTimer: null,
+    retryAt: 0,
   };
   const evaluationMetrics = [
     ['evaluationRating', 'Satisfação geral'],
@@ -3850,6 +3921,90 @@
     });
   }
 
+  function queueRetryDelay(attempts) {
+    const exponent = Math.min(5, Math.max(0, Number(attempts) - 1));
+    const base = Math.min(QUEUE_RETRY_MAX_MS, QUEUE_RETRY_BASE_MS * (2 ** exponent));
+    return base + Math.floor(Math.random() * 700);
+  }
+
+  function deferredQueueRecord(record, error) {
+    const attempts = Number(record.attempts || 0) + 1;
+    return {
+      ...record,
+      attempts,
+      nextAttemptAt: Date.now() + queueRetryDelay(attempts),
+      lastError: String((error && error.message) || 'Falha temporaria de conexao').slice(0, 240),
+    };
+  }
+
+  async function deferQueuedPhoto(record, error) {
+    const db = await openPhotoQueueDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_QUEUE_STORE, 'readwrite');
+      const store = tx.objectStore(PHOTO_QUEUE_STORE);
+      const request = store.get(Number(record.animalId));
+      let deferred = null;
+      request.onsuccess = () => {
+        const current = request.result;
+        if (current && Number(current.updatedAt) === Number(record.updatedAt)) {
+          deferred = deferredQueueRecord(current, error);
+          store.put(deferred);
+        }
+      };
+      request.onerror = () => reject(request.error || new Error('Nao foi possivel atualizar a fila de fotos.'));
+      tx.oncomplete = () => resolve(deferred);
+      tx.onerror = () => reject(tx.error || new Error('Nao foi possivel adiar o envio da foto.'));
+    });
+  }
+
+  function readQueuedStatuses() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STATUS_QUEUE_STORAGE_KEY) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function writeQueuedStatuses(records) {
+    try {
+      localStorage.setItem(STATUS_QUEUE_STORAGE_KEY, JSON.stringify(records || {}));
+    } catch (_error) {
+      throw new Error('O navegador nao conseguiu guardar a alteracao neste aparelho. Mantenha a pagina aberta e tente novamente.');
+    }
+  }
+
+  function getQueuedStatuses() {
+    return Object.values(readQueuedStatuses());
+  }
+
+  function saveQueuedStatus(record) {
+    const records = readQueuedStatuses();
+    records[String(record.animalId)] = record;
+    writeQueuedStatuses(records);
+  }
+
+  function deleteQueuedStatus(animalId, expectedUpdatedAt) {
+    const records = readQueuedStatuses();
+    const key = String(Number(animalId));
+    const current = records[key];
+    if (!current || Number(current.updatedAt) !== Number(expectedUpdatedAt)) return false;
+    delete records[key];
+    writeQueuedStatuses(records);
+    return true;
+  }
+
+  function deferQueuedStatus(record, error) {
+    const records = readQueuedStatuses();
+    const key = String(Number(record.animalId));
+    const current = records[key];
+    if (!current || Number(current.updatedAt) !== Number(record.updatedAt)) return null;
+    const deferred = deferredQueueRecord(current, error);
+    records[key] = deferred;
+    writeQueuedStatuses(records);
+    return deferred;
+  }
+
   function findAnimalById(animalId) {
     const id = Number(animalId);
     for (const row of state.rows) {
@@ -3857,6 +4012,26 @@
       if (animal) return animal;
     }
     return null;
+  }
+
+  function setAnimalQueuedStatus(record, uploadState = 'pending') {
+    const animal = findAnimalById(record.animalId);
+    if (!animal) return null;
+    animal.status = record.status || animal.status;
+    animal.immuneSince = record.immuneSince || '';
+    animal.statusSaveState = uploadState;
+    animal.statusSaveUpdatedAt = Number(record.updatedAt) || Date.now();
+    animal.statusSaveError = record.lastError || '';
+    return animal;
+  }
+
+  function clearAnimalQueuedStatus(animalId, expectedUpdatedAt) {
+    const animal = findAnimalById(animalId);
+    if (!animal) return;
+    if (expectedUpdatedAt && Number(animal.statusSaveUpdatedAt) !== Number(expectedUpdatedAt)) return;
+    delete animal.statusSaveState;
+    delete animal.statusSaveUpdatedAt;
+    delete animal.statusSaveError;
   }
 
   function setAnimalQueuedPhoto(record, uploadState = 'pending') {
@@ -3883,6 +4058,53 @@
       delete animal.pendingImageUrl;
       delete animal.photoUploadState;
       delete animal.photoUploadUpdatedAt;
+    }
+  }
+
+  function scheduleLocalQueueProcessing(delayMs = 0) {
+    if (navigator.onLine === false || document.hidden) return;
+    const safeDelay = Math.max(0, Number(delayMs) || 0);
+    const targetAt = Date.now() + safeDelay;
+    if (localQueue.retryTimer && localQueue.retryAt <= targetAt) return;
+    if (localQueue.retryTimer) window.clearTimeout(localQueue.retryTimer);
+    localQueue.retryAt = targetAt;
+    localQueue.retryTimer = window.setTimeout(async () => {
+      localQueue.retryTimer = null;
+      localQueue.retryAt = 0;
+      if (navigator.onLine === false || document.hidden) {
+        refreshLocalQueueStatus();
+        return;
+      }
+      await Promise.allSettled([processQueuedPhotos(), processQueuedStatuses()]);
+      refreshLocalQueueStatus();
+    }, safeDelay);
+  }
+
+  function scheduleNextQueueAttempt(records) {
+    const future = (records || [])
+      .map((record) => Number(record.nextAttemptAt || 0))
+      .filter((timestamp) => timestamp > Date.now());
+    if (!future.length) return;
+    scheduleLocalQueueProcessing(Math.max(250, Math.min(...future) - Date.now()));
+  }
+
+  async function refreshLocalQueueStatus() {
+    if (!connectivityEl) return;
+    let photoCount = 0;
+    try {
+      photoCount = (await getQueuedPhotos()).length;
+    } catch (_error) {
+      photoCount = 0;
+    }
+    const statusCount = getQueuedStatuses().length;
+    const total = photoCount + statusCount;
+    const offline = navigator.onLine === false;
+    connectivityEl.hidden = !offline && total === 0;
+    connectivityEl.dataset.state = offline ? 'offline' : 'syncing';
+    if (offline) {
+      connectivityEl.innerHTML = `<i class="fas fa-cloud-arrow-up" aria-hidden="true"></i><span>Sem internet. ${total ? `${total} ${total === 1 ? 'alteração está salva' : 'alterações estão salvas'} neste aparelho e serão enviadas automaticamente.` : 'As próximas alterações serão guardadas neste aparelho.'}</span>`;
+    } else if (total) {
+      connectivityEl.innerHTML = `<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Sincronizando ${total} ${total === 1 ? 'alteração salva' : 'alterações salvas'} neste aparelho…</span>`;
     }
   }
 
@@ -4069,6 +4291,14 @@
       ['pendingImageUrl', 'photoUploadState', 'photoUploadUpdatedAt'].forEach((key) => {
         if (oldAnimal[key] !== undefined) animal[key] = oldAnimal[key];
       });
+      // Uma resposta antiga também não pode apagar a mudança de status mais
+      // nova que ainda está guardada no aparelho.
+      if (oldAnimal.statusSaveUpdatedAt !== undefined) {
+        animal.status = oldAnimal.status;
+        ['immuneSince', 'statusSaveState', 'statusSaveUpdatedAt', 'statusSaveError'].forEach((key) => {
+          if (oldAnimal[key] !== undefined) animal[key] = oldAnimal[key];
+        });
+      }
     });
     ['addingAnimal', 'editingNote', 'editingAttendedBy', 'editingAnimalNameIndex']
       .forEach((key) => {
@@ -4165,7 +4395,7 @@
       shiftEl.value = '';
       statusFilterEl.value = '';
       render();
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       sheetInfoEl.textContent = `Aba ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || ''} sincronizada e salva: ${state.rows.length} visitas.`;
       if (!silent) {
         const msg = forceAi
@@ -4280,7 +4510,7 @@
       }
       state.rows = normalizeSyncedRows(payload.rows || []);
       render();
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       if (state.rows.length) {
         sheetInfoEl.textContent = `Estado salvo carregado para ${payload.sheet_title || sheetEl.selectedOptions[0]?.dataset.title || 'a aba selecionada'}: ${state.rows.length} visitas.`;
       }
@@ -4299,28 +4529,34 @@
     }
   }
 
-  async function saveAnimalStatus(animal, status, immuneSince) {
-    if (!animal.id) return;
-    const response = await fetch(`/vacina-pmo/animal/${animal.id}/status`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
-      },
-      body: JSON.stringify({ status, immuneSince: immuneSince || '' }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.success) {
-      throw new Error(payload.message || 'Não foi possível salvar a alteração.');
+  async function saveAnimalStatus(animalId, status, immuneSince) {
+    if (!animalId) return null;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`/vacina-pmo/animal/${animalId}/status`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({ status, immuneSince: immuneSince || '' }),
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Não foi possível salvar a alteração.');
+      }
+      return payload;
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        throw new Error('A conexão demorou demais; a alteração continua salva neste aparelho.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    if (payload.row) {
-      const updated = normalizeSyncedRows([payload.row])[0];
-      replaceStateRow(updated);
-      hydrateQueuedPhotos();
-      return updated;
-    }
-    return null;
   }
 
   function canvasBlob(canvas, type, quality) {
@@ -4419,14 +4655,13 @@
   async function uploadQueuedPhoto(record) {
     const animalId = Number(record.animalId);
     if (!animalId || photoQueue.processing.has(animalId)) return;
-    const animal = findAnimalById(animalId);
-    if (!animal || !record.file) return;
+    if (!record.file) return;
 
     photoQueue.processing.add(animalId);
     setAnimalQueuedPhoto(record, 'uploading');
     render();
     try {
-      const payload = await uploadAnimalPhoto(animal, record.file, null);
+      const payload = await uploadAnimalPhoto(findAnimalById(animalId) || { id: animalId }, record.file, null);
       const removed = await deleteQueuedPhoto(animalId, record.updatedAt);
       const currentAnimal = findAnimalById(animalId);
       if (currentAnimal && payload.image_url) currentAnimal.imageUrl = payload.image_url;
@@ -4437,33 +4672,92 @@
       }
       render();
     } catch (error) {
+      await deferQueuedPhoto(record, error).catch(() => null);
       const currentAnimal = findAnimalById(animalId);
-      if (currentAnimal) currentAnimal.photoUploadState = 'pending';
+      if (currentAnimal) currentAnimal.photoUploadState = navigator.onLine === false ? 'pending' : 'error';
       render();
       console.warn('Foto PMO pendente para reenvio', error);
     } finally {
       photoQueue.processing.delete(animalId);
       // Se uma segunda foto substituiu a primeira durante o envio, ela ficou
-      // na fila e comeca agora. O primeiro envio nunca a apaga.
-      window.setTimeout(processQueuedPhotos, 0);
+      // na fila e comeca agora. Falhas reais respeitam o intervalo progressivo.
+      scheduleLocalQueueProcessing(0);
+      refreshLocalQueueStatus();
     }
   }
 
   async function processQueuedPhotos() {
+    if (navigator.onLine === false) return;
     try {
       const records = await getQueuedPhotos();
-      records.forEach((record) => {
-        if (findAnimalById(record.animalId)) uploadQueuedPhoto(record);
-      });
+      const now = Date.now();
+      const available = Math.max(0, PHOTO_UPLOAD_CONCURRENCY - photoQueue.processing.size);
+      records
+        .filter((record) => !photoQueue.processing.has(Number(record.animalId)))
+        .filter((record) => Number(record.nextAttemptAt || 0) <= now)
+        .sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))
+        .slice(0, available)
+        .forEach((record) => uploadQueuedPhoto(record));
+      scheduleNextQueueAttempt(records);
     } catch (error) {
       console.warn(error);
     }
   }
 
-  window.addEventListener('online', processQueuedPhotos);
-  window.addEventListener('focus', processQueuedPhotos);
+  async function uploadQueuedStatus(record) {
+    const animalId = Number(record.animalId);
+    if (!animalId || statusQueue.processing.has(animalId)) return;
+    statusQueue.processing.add(animalId);
+    setAnimalQueuedStatus(record, 'uploading');
+    render();
+    try {
+      const payload = await saveAnimalStatus(animalId, record.status, record.immuneSince || '');
+      const removed = deleteQueuedStatus(animalId, record.updatedAt);
+      if (removed) clearAnimalQueuedStatus(animalId, record.updatedAt);
+      if (payload && payload.row) {
+        const updated = normalizeSyncedRows([payload.row])[0];
+        replaceStateRow(updated);
+      }
+      render();
+    } catch (error) {
+      const deferred = deferQueuedStatus(record, error);
+      if (deferred) setAnimalQueuedStatus(deferred, navigator.onLine === false ? 'pending' : 'error');
+      render();
+      console.warn('Status PMO pendente para reenvio', error);
+    } finally {
+      statusQueue.processing.delete(animalId);
+      scheduleLocalQueueProcessing(0);
+      refreshLocalQueueStatus();
+    }
+  }
+
+  async function processQueuedStatuses() {
+    if (navigator.onLine === false) return;
+    const records = getQueuedStatuses();
+    const now = Date.now();
+    const available = Math.max(0, STATUS_UPLOAD_CONCURRENCY - statusQueue.processing.size);
+    records
+      .filter((record) => !statusQueue.processing.has(Number(record.animalId)))
+      .filter((record) => Number(record.nextAttemptAt || 0) <= now)
+      .sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))
+      .slice(0, available)
+      .forEach((record) => uploadQueuedStatus(record));
+    scheduleNextQueueAttempt(records);
+  }
+
+  window.addEventListener('online', () => {
+    refreshLocalQueueStatus();
+    scheduleLocalQueueProcessing(0);
+  });
+  window.addEventListener('offline', () => {
+    if (localQueue.retryTimer) window.clearTimeout(localQueue.retryTimer);
+    localQueue.retryTimer = null;
+    localQueue.retryAt = 0;
+    refreshLocalQueueStatus();
+  });
+  window.addEventListener('focus', () => scheduleLocalQueueProcessing(0));
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) processQueuedPhotos();
+    if (!document.hidden) scheduleLocalQueueProcessing(0);
   });
 
   async function hydrateQueuedPhotos() {
@@ -4471,14 +4765,40 @@
       const records = await getQueuedPhotos();
       let changed = false;
       records.forEach((record) => {
-        const uploadState = photoQueue.processing.has(Number(record.animalId)) ? 'uploading' : 'pending';
+        const uploadState = photoQueue.processing.has(Number(record.animalId))
+          ? 'uploading'
+          : (record.lastError ? 'error' : 'pending');
         if (setAnimalQueuedPhoto(record, uploadState)) changed = true;
       });
       if (changed) render();
-      processQueuedPhotos();
+      scheduleNextQueueAttempt(records);
     } catch (error) {
       console.warn(error);
     }
+  }
+
+  async function hydrateQueuedStatuses() {
+    const records = getQueuedStatuses();
+    let changed = false;
+    records.forEach((record) => {
+      const uploadState = statusQueue.processing.has(Number(record.animalId))
+        ? 'uploading'
+        : (record.lastError ? 'error' : 'pending');
+      const animal = setAnimalQueuedStatus(record, uploadState);
+      if (animal) changed = true;
+    });
+    if (changed) {
+      state.rows.forEach((row) => { row.status = inferVisitStatus(row.animals); });
+      stateMutationSeq += 1;
+      render();
+    }
+    scheduleNextQueueAttempt(records);
+  }
+
+  async function hydrateLocalQueues() {
+    await Promise.allSettled([hydrateQueuedPhotos(), hydrateQueuedStatuses()]);
+    refreshLocalQueueStatus();
+    scheduleLocalQueueProcessing(0);
   }
 
   async function queueAnimalPhotoUpload(animal, originalFile) {
@@ -4495,12 +4815,37 @@
       filename: file.name || `animal-${animal.id}.jpg`,
       type: file.type || 'image/jpeg',
       updatedAt: Date.now(),
+      attempts: 0,
+      nextAttemptAt: 0,
+      lastError: '',
     };
     await saveQueuedPhoto(record);
     stateMutationSeq += 1;
-    setAnimalQueuedPhoto(record, 'uploading');
+    setAnimalQueuedPhoto(record, navigator.onLine === false ? 'pending' : 'uploading');
     render();
-    uploadQueuedPhoto(record);
+    refreshLocalQueueStatus();
+    scheduleLocalQueueProcessing(0);
+  }
+
+  function queueAnimalStatusUpdate(animal, status, immuneSince) {
+    if (!animal.id) {
+      throw new Error('Sincronize a aba antes de alterar o status.');
+    }
+    const record = {
+      animalId: Number(animal.id),
+      status,
+      immuneSince: immuneSince || '',
+      updatedAt: Date.now(),
+      attempts: 0,
+      nextAttemptAt: 0,
+      lastError: '',
+    };
+    saveQueuedStatus(record);
+    stateMutationSeq += 1;
+    setAnimalQueuedStatus(record, navigator.onLine === false ? 'pending' : 'uploading');
+    render();
+    refreshLocalQueueStatus();
+    scheduleLocalQueueProcessing(0);
   }
 
   async function saveAnimalName(animal, name) {
@@ -4523,7 +4868,7 @@
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
       replaceStateRow(updated);
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       return updated;
     }
     return null;
@@ -4597,7 +4942,7 @@
     if (payload.row) {
       const updated = normalizeSyncedRows([payload.row])[0];
       replaceStateRow(updated);
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       return updated;
     }
     return null;
@@ -4716,7 +5061,7 @@
       shiftEl.value = selectedShift;
       statusFilterEl.value = '';
       render();
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       const missed = Number(payload.unlocated_count || 0);
       const suffix = missed ? ` ${missed} endereço${missed === 1 ? '' : 's'} ficou${missed === 1 ? '' : 'ram'} no final por falta de localização.` : '';
       sheetInfoEl.textContent = `Rota do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} otimizada na planilha.${suffix}`;
@@ -4744,7 +5089,7 @@
       state.rows = normalizeSyncedRows(payload.rows || []);
       shiftEl.value = selectedShift;
       render();
-      hydrateQueuedPhotos();
+      hydrateLocalQueues();
       sheetInfoEl.textContent = `Última otimização do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} desfeita.`;
       window.showAppToast ? window.showAppToast('Última otimização desfeita.', 'success') : alert('Última otimização desfeita.');
     } catch (error) {
@@ -4871,7 +5216,7 @@
       ? 'Foto guardada no aparelho e enviando'
       : (stateName === 'pending'
           ? 'Foto guardada no aparelho; sera reenviada automaticamente'
-          : (stateName === 'error' ? 'Foto guardada; toque para tentar trocar' : 'Ver foto, tirar outra ou escolher da galeria'));
+          : (stateName === 'error' ? 'Foto guardada no aparelho; nova tentativa automatica em instantes' : 'Ver foto, tirar outra ou escolher da galeria'));
 
     if (imageUrl) {
       return `
@@ -4898,6 +5243,25 @@
   // anterior, ele pergunta a data ao vacinador em vez de esconder a opção.
   function statusOptionsFor() {
     return ['pendente', 'vacinado', 'imunizado', 'ausente', 'remarcar', 'recusou'];
+  }
+
+  function renderAnimalStatusControl(animal, index) {
+    const syncState = animal.statusSaveState || '';
+    const syncTitle = syncState === 'uploading'
+      ? 'Alteração salva no aparelho e sincronizando'
+      : (syncState === 'error'
+          ? 'Alteração salva no aparelho; nova tentativa automática em instantes'
+          : 'Alteração salva no aparelho; aguardando conexão');
+    const syncIcon = syncState === 'uploading'
+      ? '<span class="spinner-border spinner-border-sm" aria-hidden="true" style="width:10px;height:10px;border-width:1px;"></span>'
+      : '<i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>';
+    return `
+      <div class="pmo-status-control" ${syncState ? `data-sync-state="${escapeHtml(syncState)}"` : ''}>
+        <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${escapeHtml(animal.status)}" ${syncState === 'uploading' ? 'aria-busy="true"' : ''}>
+          ${statusOptionsFor(animal).map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${STATUS_LABELS[status] || status}</option>`).join('')}
+        </select>
+        ${syncState ? `<span class="pmo-status-sync" data-state="${escapeHtml(syncState)}" title="${escapeHtml(syncTitle)}">${syncIcon}</span>` : ''}
+      </div>`;
   }
 
   // Pede a data da vacina anterior quando o sistema não tem o registro. O
@@ -5003,9 +5367,7 @@
           ${renderPreviousVaccination(animal)}
         </div>
         <div class="pmo-animal-status">
-          <select class="form-select form-select-sm pmo-status-select" data-action="animal-status" data-animal-index="${index}" data-status="${animal.status}">
-            ${statusOptionsFor(animal).map((status) => `<option value="${status}" ${animal.status === status ? 'selected' : ''}>${STATUS_LABELS[status] || status}</option>`).join('')}
-          </select>
+          ${renderAnimalStatusControl(animal, index)}
           ${renderAnimalPhotoControl(animal, index)}
           <input type="file" accept="image/*" capture="environment" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="camera" data-animal-index="${index}" hidden>
           <input type="file" accept="image/*" class="pmo-animal-photo-input" data-action="animal-photo-input" data-photo-source="gallery" data-animal-index="${index}" hidden>
@@ -5450,11 +5812,6 @@
     if (event.target.dataset.action === 'animal-status') {
       const animal = row.animals[Number(event.target.dataset.animalIndex)];
       if (animal) {
-        const animalId = Number(animal.id);
-        if (animalId && statusUpdates.has(animalId)) {
-          event.target.value = animal.status;
-          return;
-        }
         const anterior = animal.status;
         const novo = event.target.value;
         let immuneSince = '';
@@ -5468,23 +5825,15 @@
             return;
           }
         }
-        stateMutationSeq += 1;
         animal.status = novo;
         event.target.dataset.status = novo;
-        event.target.dataset.saving = 'true';
-        event.target.disabled = true;
-        if (animalId) statusUpdates.add(animalId);
         try {
-          await saveAnimalStatus(animal, novo, immuneSince);
+          queueAnimalStatusUpdate(animal, novo, immuneSince);
         } catch (error) {
           animal.status = anterior;
+          event.target.value = anterior;
+          event.target.dataset.status = anterior;
           window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
-        } finally {
-          if (animalId) statusUpdates.delete(animalId);
-          if (event.target.isConnected) {
-            event.target.disabled = false;
-            delete event.target.dataset.saving;
-          }
         }
       }
       row.status = inferVisitStatus(row.animals);
@@ -5826,6 +6175,7 @@
     }
   });
   render();
+  hydrateLocalQueues();
 })();
 </script>
 {% endblock %}
