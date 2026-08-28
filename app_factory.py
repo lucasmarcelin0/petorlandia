@@ -12,19 +12,17 @@ except ImportError:  # pragma: no cover - direct script/import mode
 def _load_configured_app() -> Flask:
     """Return the real Flask instance regardless of import aliasing."""
 
-    module_name = f"{__package__}.app" if __package__ else "app"
-    try:
-        app_module = importlib.import_module(module_name)
-    except ModuleNotFoundError:
-        app_module = importlib.import_module("app")
-
-    candidate = getattr(app_module, "app", app_module)
-    if isinstance(candidate, Flask):
-        return candidate
-
-    nested = getattr(candidate, "app", None)
-    if isinstance(nested, Flask):
-        return nested
+    for name in ["app.app", "app"]:
+        try:
+            app_module = importlib.import_module(name)
+            candidate = getattr(app_module, "app", app_module)
+            if isinstance(candidate, Flask):
+                return candidate
+            nested = getattr(candidate, "app", None)
+            if isinstance(nested, Flask):
+                return nested
+        except (ModuleNotFoundError, ImportError):
+            pass
 
     raise RuntimeError("Could not resolve Flask app instance")
 
