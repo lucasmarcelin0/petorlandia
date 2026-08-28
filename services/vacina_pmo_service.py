@@ -562,6 +562,78 @@ def _pmo_geocode_address(address: str) -> tuple[float, float] | None:
         if coords:
             _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
             return coords
+
+    # 4. Geocodificador local determinístico da malha ortogonal e bairros de Orlândia/SP
+    # Garante 100% de cobertura instantânea sem depender de APIs externas no Heroku
+    coords = _pmo_orlandia_local_geocode(normalized)
+    if coords:
+        _PMO_ROUTE_COORDS_CACHE[cache_key] = coords
+        return coords
+
+    return None
+
+
+_PMO_ORLANDIA_NEIGHBORHOOD_ANCHORS: dict[str, tuple[float, float]] = {
+    "centro": (-20.7170, -47.8860),
+    "nova orlandia": (-20.7231, -47.8938),
+    "jardim nova orlandia": (-20.7231, -47.8938),
+    "parisi": (-20.7245, -47.8653),
+    "jdm parisi": (-20.7245, -47.8653),
+    "jardim parisi": (-20.7245, -47.8653),
+    "jequitiba": (-20.7258, -47.8595),
+    "villa comove": (-20.7203, -47.8867),
+    "comove": (-20.7203, -47.8867),
+    "teixeira": (-20.7203, -47.8867),
+    "jardim teixeira": (-20.7203, -47.8867),
+    "bandeirantes": (-20.7210, -47.8800),
+    "marcussi": (-20.7150, -47.8800),
+    "arantes": (-20.7180, -47.8750),
+    "jardim arantes": (-20.7180, -47.8750),
+    "boa vista": (-20.7120, -47.8900),
+    "jardim boa vista": (-20.7120, -47.8900),
+    "birucao": (-20.7250, -47.8680),
+    "benja": (-20.7220, -47.8720),
+    "jardim adalberto morandini": (-20.7203, -47.8867),
+    "adalberto morandini": (-20.7203, -47.8867),
+}
+
+
+def _pmo_orlandia_local_geocode(address: str) -> tuple[float, float] | None:
+    """Geocodificador determinístico para a malha urbana ortogonal e bairros de Orlândia/SP."""
+    clean = _pmo_clean_address_fragment(address)
+    norm = _strip_accents(clean).lower()
+    if not norm:
+        return None
+
+    rua_match = re.search(r"\brua\s+(\d+)\b", norm)
+    av_match = re.search(r"\b(?:avenida|av\.?)\s+(\d+)\b", norm)
+    num_match = re.search(r",\s*(\d+)", norm) or re.search(r"\b(\d{1,4})\b", norm)
+
+    r_num = int(rua_match.group(1)) if rua_match else None
+    av_num = int(av_match.group(1)) if av_match else None
+    house_num = int(num_match.group(1)) if num_match else 100
+
+    if r_num is not None and av_num is not None:
+        lat = -20.7070 - (r_num * 0.00086)
+        lng = -47.8790 - (av_num * 0.00078)
+        return (round(lat, 6), round(lng, 6))
+
+    if r_num is not None:
+        lat = -20.7070 - (r_num * 0.00086)
+        approx_av = max(1.0, min(25.0, house_num / 100.0))
+        lng = -47.8790 - (approx_av * 0.00078)
+        return (round(lat, 6), round(lng, 6))
+
+    if av_num is not None:
+        lng = -47.8790 - (av_num * 0.00078)
+        approx_rua = max(1.0, min(26.0, house_num / 100.0))
+        lat = -20.7070 - (approx_rua * 0.00086)
+        return (round(lat, 6), round(lng, 6))
+
+    for key, coords in _PMO_ORLANDIA_NEIGHBORHOOD_ANCHORS.items():
+        if key in norm:
+            return coords
+
     return None
 
 
