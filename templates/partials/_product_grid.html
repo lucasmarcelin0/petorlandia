@@ -26,15 +26,18 @@
         <div class="mt-auto">
           <span class="h5 text-success fw-bold">R$ {{ '%.2f'|format(product.preco_publico or 0)|replace('.', ',') }}</span>
           {% if product.subscription_enabled %}
+          <span class="badge text-bg-success mb-1 ms-1">Compra + assinatura</span>
           <div class="small text-success fw-semibold mb-1">ou assinatura desde {{ product.subscription_price_min | currency_br }} por ciclo</div>
+          {% else %}
+          <span class="badge text-bg-primary mb-1 ms-1">Compra única</span>
           {% endif %}
 
           {% if product.clinica %}
-          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ product.clinica.nome }}</strong></div>
+          <div class="product-seller-badge product-seller-badge--clinic small text-muted mb-1"><i class="fa-solid fa-store product-seller-icon me-1"></i>Vendido por <strong class="product-seller-name">{{ product.clinica.nome }}</strong></div>
           {% elif product.casa_de_racao %}
-          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>{{ product.casa_de_racao.nome }}</strong></div>
+          <div class="product-seller-badge product-seller-badge--store small text-muted mb-1"><i class="fa-solid fa-store product-seller-icon me-1"></i>Vendido por <strong class="product-seller-name">{{ product.casa_de_racao.nome }}</strong></div>
           {% else %}
-          <div class="small text-muted mb-1"><i class="fa-solid fa-store me-1"></i>Vendido por <strong>PetOrlândia</strong></div>
+          <div class="product-seller-badge product-seller-badge--platform small text-muted mb-1"><i class="fa-solid fa-store product-seller-icon me-1"></i>Vendido por <strong class="product-seller-name">PetOrlândia</strong></div>
           {% endif %}
 
           <div class="text-muted small mb-2"><i class="fa-solid fa-truck-fast me-1"></i>entrega rápida</div>

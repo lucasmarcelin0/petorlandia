@@ -1,0 +1,3 @@
+## 2026-08-28 - Skip-to-content links for main layout accessibility
+**Learning:** In applications with extensive top navigation menus, keyboard and screen reader users must tab through every single navigation item on every page load to reach page content. Adding a visually-hidden skip link immediately inside `<body>` targeting the main content container (`<main id="main-content" tabindex="-1">`) satisfies WCAG 2.4.1 (Bypass Blocks).
+**Action:** Whenever creating or updating base HTML layout templates with top navigation headers, always ensure a skip-to-content link is present at the top of `<body>` pointing to the main element with `tabindex="-1"`.
