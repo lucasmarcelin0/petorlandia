@@ -40,6 +40,18 @@ ROLE_PERMISSION_MATRIX = {
         "fiscal_documents": {"view": False, "manage": False},
         "personal_data": {"view": True, "manage": False},
     },
+    # Estagiario nao e tutor nem staff pleno: opera o prontuario dos pacientes
+    # da clinica onde estagia, mas nao enxerga financeiro nem documento fiscal
+    # e nao gerencia orcamento. Assinatura continua sendo do supervisor --
+    # ver ``Veterinario.assinatura`` e ``ClinicStaff.can_print_signed_documents``.
+    "intern": {
+        "clinic": {"view": True, "manage": False},
+        "budget": {"view": True, "manage": False},
+        "consultation": {"view": True, "manage": True},
+        "financial": {"view": False, "manage": False},
+        "fiscal_documents": {"view": False, "manage": False},
+        "personal_data": {"view": True, "manage": False},
+    },
     "tutor": {
         "clinic": {"view": False, "manage": False},
         "budget": {"view": True, "manage": False},
@@ -123,6 +135,22 @@ def summarize_authz_denials(window_minutes: int = 5, top_n: int = 5) -> dict[str
     }
 
 
+def _has_active_internship(user: Any) -> bool:
+    """``True`` quando o usuario tem ao menos um estagio em vigor.
+
+    Checagem inline (e nao via ``helpers``) de proposito: ``authz`` e camada
+    baixa e importar ``helpers`` aqui fecharia um ciclo de import.
+    """
+
+    for staff in getattr(user, "clinic_roles", None) or []:
+        try:
+            if staff.internship_active:
+                return True
+        except Exception:  # noqa: BLE001 -- vinculo malformado nunca vira permissao
+            continue
+    return False
+
+
 def _user_roles(user: Any) -> set[str]:
     if not user:
         return set()
@@ -136,6 +164,9 @@ def _user_roles(user: Any) -> set[str]:
         roles.add("veterinario")
     if getattr(user, "clinicas", None):
         roles.add("owner")
+    # Sem isto o estagiario cai no papel "tutor" e leva 404 na propria clinica.
+    if _has_active_internship(user):
+        roles.add("intern")
     if not roles:
         roles.add("tutor")
     return roles

@@ -145,6 +145,18 @@ def is_veterinarian(*args, **kwargs):
     return app_module.is_veterinarian(*args, **kwargs)
 
 
+def can_start_consulta(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.can_start_consulta.
+    import app as app_module
+    return app_module.can_start_consulta(*args, **kwargs)
+
+
+def is_active_intern(*args, **kwargs):
+    # Late-binding: testes fazem monkeypatch de app.is_active_intern.
+    import app as app_module
+    return app_module.is_active_intern(*args, **kwargs)
+
+
 def mp_sdk(*args, **kwargs):
     # Late-binding: testes fazem monkeypatch de app.mp_sdk.
     import app as app_module
@@ -838,8 +850,7 @@ def find_linkable_appointment(animal_id, *, clinica_id=None, veterinario_id=None
 @bp.route('/consulta/<int:animal_id>')
 @login_required
 def consulta_direct(animal_id):
-    worker_role = getattr(current_user, 'worker', None)
-    if not (is_veterinarian(current_user) or worker_role == 'colaborador'):
+    if not can_start_consulta(current_user):
         abort(403)
 
     animal = get_animal_or_404(animal_id)
@@ -868,7 +879,11 @@ def consulta_direct(animal_id):
     edit_mode = False
 
     consulta = None
-    if is_veterinarian(current_user):
+    # Estagiario registra o atendimento como rascunho clinico: quem assina
+    # continua sendo o supervisor (ver ``Veterinario.assinatura``), entao abrir
+    # a consulta aqui nao cria ato veterinario em nome dele.
+    pode_registrar = is_veterinarian(current_user) or is_active_intern(current_user)
+    if pode_registrar:
         consulta_created = False
         appointment_updated = False
 
@@ -893,7 +908,7 @@ def consulta_direct(animal_id):
             if not consulta:
                 # Require clinic_id to create new consultas
                 if not clinica_id:
-                    flash('Não foi possível determinar a clínica. Verifique seu cadastro de veterinário.', 'danger')
+                    flash('Não foi possível determinar a clínica. Verifique seu vínculo com a clínica.', 'danger')
                     return redirect(url_for('index'))
                 consulta = Consulta(
                     animal_id=animal.id,
@@ -942,7 +957,7 @@ def consulta_direct(animal_id):
         consulta = None
 
     historico = []
-    if is_veterinarian(current_user) and clinica_id:
+    if pode_registrar and clinica_id:
         historico = (
             Consulta.query
             .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinica_id)

@@ -307,6 +307,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
+# Aviso de agendamento fica em gancho de sessao, nao em cada rota que cria
+# compromisso -- ver services/appointment_notifications.
+from services.appointment_notifications import register_appointment_notifications
+
+register_appointment_notifications(db)
 mail.init_app(app)
 login.init_app(app)
 if str(app.config.get("SESSION_TYPE", "")).lower() == "redis":
@@ -1788,6 +1793,9 @@ from helpers import (
     get_weekly_schedule,
     has_professional_access,
     grant_veterinarian_role,
+    internship_clinic_id,
+    is_active_intern,
+    can_start_consulta,
     is_parceiro,
     parceiro_required,
     group_appointments_by_day,
@@ -1869,7 +1877,10 @@ def current_user_clinic_id():
         return None
     if has_veterinarian_profile(current_user):
         return getattr(current_user.veterinario, 'clinica_id', None)
-    return current_user.clinica_id
+    # Estagiario nao tem perfil de veterinario e costuma ficar sem
+    # ``User.clinica_id``: o vinculo dele e o ``ClinicStaff`` do estagio. Sem
+    # este fallback ele abre a agenda mas nao consegue iniciar atendimento.
+    return current_user.clinica_id or internship_clinic_id(current_user)
 
 
 def _normalize_public_text(value):
@@ -2870,6 +2881,10 @@ def assinatura_de(alvo):
 
 
 app.jinja_env.globals['assinatura_de'] = assinatura_de
+# Templates nao devem remontar regra de permissao na mao: a agenda checava
+# ``worker`` diretamente e deixava de fora estagiario e veterinario legado.
+app.jinja_env.globals['can_start_consulta'] = can_start_consulta
+app.jinja_env.globals['is_active_intern'] = is_active_intern
 
 
 def _ensure_veterinarian_profile(form=None):

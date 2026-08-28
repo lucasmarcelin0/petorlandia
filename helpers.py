@@ -327,6 +327,77 @@ def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     return membership.is_active()
 
 
+def active_internship_staff(user=None):
+    """Vinculo de estagio ATIVO do usuario, ou ``None``.
+
+    Estagiario nao e um ``Veterinario``: o vinculo mora em ``ClinicStaff`` com
+    ``is_intern``. Um estagio vencido (``internship_ends_at`` no passado) nao
+    conta -- por isso a checagem passa por ``internship_active`` e nunca so por
+    ``is_intern``.
+    """
+
+    if user is None:
+        user = current_user if getattr(current_user, 'is_authenticated', False) else None
+
+    if not user:
+        return None
+
+    resolved_user = (
+        user._get_current_object()
+        if hasattr(user, '_get_current_object')
+        else user
+    )
+
+    for staff in getattr(resolved_user, 'clinic_roles', None) or []:
+        try:
+            if staff.internship_active:
+                return staff
+        except Exception:  # noqa: BLE001 -- vinculo malformado nunca derruba a pagina
+            continue
+    return None
+
+
+def is_active_intern(user=None) -> bool:
+    """``True`` quando o usuario tem estagio ativo em alguma clinica."""
+
+    return active_internship_staff(user) is not None
+
+
+def internship_clinic_id(user=None):
+    """Clinica do estagio ativo, ou ``None``.
+
+    ``User.clinica_id`` costuma vir vazio para estagiario -- o vinculo dele e o
+    ``ClinicStaff``. Sem isto o atendimento aberto por estagiario nao consegue
+    resolver a clinica e morre no ``flash`` de cadastro incompleto.
+    """
+
+    staff = active_internship_staff(user)
+    return getattr(staff, 'clinic_id', None) if staff else None
+
+
+def can_start_consulta(user=None) -> bool:
+    """Quem pode abrir um atendimento a partir da agenda.
+
+    Fonte unica para a rota e para o template: o flag da agenda checava
+    ``worker`` na mao, o que deixava de fora tanto o estagiario quanto o
+    veterinario legado que tem o perfil mas nao tem ``worker`` preenchido.
+    """
+
+    if user is None:
+        user = current_user if getattr(current_user, 'is_authenticated', False) else None
+
+    if not user:
+        return False
+
+    if (getattr(user, 'worker', None) or '').lower() == 'colaborador':
+        return True
+
+    if is_veterinarian(user):
+        return True
+
+    return is_active_intern(user)
+
+
 def is_parceiro(user=None) -> bool:
     """Return ``True`` when ``user`` is a registration partner (parceiro de cadastro)."""
 

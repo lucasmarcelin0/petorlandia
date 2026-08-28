@@ -18,60 +18,74 @@
   data-url-status="{{ url_for('update_appointment_status', appointment_id=0) }}"
   data-url-delete-appointment="{{ url_for('delete_appointment', appointment_id=0) }}"
   data-url-print-consulta="{{ url_for('imprimir_consulta', consulta_id=0) }}"
-  data-can-start-consulta="{{ 'true' if current_user.worker in ['veterinario', 'colaborador'] else 'false' }}"
+  data-can-start-consulta="{{ 'true' if can_start_consulta() else 'false' }}"
   data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador']) or current_user.role == 'admin' else 'false' }}"
 >
   <div class="row g-4 align-items-start">
     <div class="col-12">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <button type="button" class="btn btn-outline-primary btn-sm" data-prev-month aria-label="Mês anterior">
-                <i class="bi bi-chevron-left"></i>
+          <div class="tutor-calendar__toolbar">
+            <div class="tutor-calendar__period">
+              <button type="button" class="tutor-calendar__nav-btn" data-prev-month aria-label="Mês anterior">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
               </button>
-              <div>
-                <div class="fw-bold text-capitalize" data-month-label></div>
-                <div class="text-muted small" data-year-label></div>
+              <div class="tutor-calendar__period-label">
+                <span class="tutor-calendar__period-month text-capitalize" data-month-label></span>
+                <span class="tutor-calendar__period-year" data-year-label></span>
               </div>
-              <button type="button" class="btn btn-primary btn-sm" data-next-month aria-label="Próximo mês">
-                <i class="bi bi-chevron-right"></i>
+              <button type="button" class="tutor-calendar__nav-btn" data-next-month aria-label="Próximo mês">
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
               </button>
-              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2 w-100" role="group" aria-label="Alternar visualização">
-                <button type="button" class="btn btn-outline-secondary active" data-view-mode="month" aria-pressed="true">
-                  Mensal
+            </div>
+            <div class="tutor-calendar__toolbar-actions">
+              <div class="tutor-calendar__view-toggle" role="group" aria-label="Alternar visualização">
+                <button type="button" class="tutor-calendar__view-btn active" data-view-mode="month" aria-pressed="true">
+                  <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span>Mês</span>
                 </button>
-                <button type="button" class="btn btn-outline-secondary" data-view-mode="week" aria-pressed="false">
-                  Semanal
-                </button>
-                <button type="button" class="btn btn-outline-secondary" data-today>
-                  Hoje
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary d-flex align-items-center gap-1"
-                  data-calendar-summary-toggle
-                  data-show-label="{{ calendar_summary_toggle_show_label }}"
-                  data-hide-label="{{ calendar_summary_toggle_hide_label }}"
-                  aria-pressed="false"
-                >
-                  <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
-                  <span class="fw-semibold" aria-hidden="true">Profissional</span>
-                  <span class="visually-hidden" data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
+                <button type="button" class="tutor-calendar__view-btn" data-view-mode="week" aria-pressed="false">
+                  <i class="bi bi-calendar-week" aria-hidden="true"></i><span>Semana</span>
                 </button>
               </div>
+              <button type="button" class="tutor-calendar__ghost-btn" data-today>
+                <i class="bi bi-dot-circle" aria-hidden="true"></i><span>Hoje</span>
+              </button>
+              <button
+                type="button"
+                class="tutor-calendar__ghost-btn tutor-calendar__ghost-btn--summary"
+                data-calendar-summary-toggle
+                data-show-label="{{ calendar_summary_toggle_show_label }}"
+                data-hide-label="{{ calendar_summary_toggle_hide_label }}"
+                aria-pressed="false"
+              >
+                <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+                <span aria-hidden="true">Profissional</span>
+                <span class="visually-hidden" data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
+              </button>
             </div>
           </div>
-          <h3 class="h6 mb-3 mt-4">Filtros rápidos</h3>
-          <div class="tutor-calendar__filters d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary btn-sm active" data-filter="all">Todos</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="appointment">Consultas</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="exam">Exames</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="vaccine">Vacinas</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="grooming">Banho e Tosa</button>
+
+          <div class="tutor-calendar__filters" role="group" aria-label="Filtrar compromissos por tipo">
+            <button type="button" class="tutor-calendar__filter active" data-filter="all" aria-pressed="true">
+              <span class="tutor-calendar__filter-dot" data-dot="all" aria-hidden="true"></span>Todos
+            </button>
+            <button type="button" class="tutor-calendar__filter" data-filter="appointment" aria-pressed="false">
+              <span class="tutor-calendar__filter-dot" data-dot="appointment" aria-hidden="true"></span>Consultas
+            </button>
+            <button type="button" class="tutor-calendar__filter" data-filter="exam" aria-pressed="false">
+              <span class="tutor-calendar__filter-dot" data-dot="exam" aria-hidden="true"></span>Exames
+            </button>
+            <button type="button" class="tutor-calendar__filter" data-filter="vaccine" aria-pressed="false">
+              <span class="tutor-calendar__filter-dot" data-dot="vaccine" aria-hidden="true"></span>Vacinas
+            </button>
+            <button type="button" class="tutor-calendar__filter" data-filter="grooming" aria-pressed="false">
+              <span class="tutor-calendar__filter-dot" data-dot="grooming" aria-hidden="true"></span>Banho e Tosa
+            </button>
           </div>
-          <p class="text-muted small mb-4 mt-3">
-            Eventos sincronizados automaticamente com o FullCalendar. Escolha um dia para iniciar um novo agendamento.
+
+          <p class="tutor-calendar__hint">
+            <i class="bi bi-hand-index-thumb" aria-hidden="true"></i>
+            <span>Toque em um dia para ver os compromissos ou iniciar um novo agendamento.</span>
           </p>
           <div class="tutor-calendar__layout">
             <div class="tutor-calendar__schedule">
@@ -335,40 +349,6 @@
 #{{ component_id }} .tutor-calendar__pet-meta-item i {
   font-size: 0.85rem;
   opacity: 0.7;
-}
-
-#{{ component_id }} .tutor-calendar__filters .btn {
-  border-radius: 999px;
-}
-
-#{{ component_id }} .tutor-calendar__filters .btn.active {
-  background: var(--bs-primary);
-  color: #fff;
-  border-color: var(--bs-primary);
-}
-
-#{{ component_id }} .tutor-calendar__view-toggle .btn {
-  min-width: 88px;
-}
-
-#{{ component_id }} .tutor-calendar__view-toggle .btn.active {
-  background: var(--bs-primary);
-  color: #fff;
-  border-color: var(--bs-primary);
-}
-
-@media (max-width: 575.98px) {
-  #{{ component_id }} .tutor-calendar__view-toggle {
-    display: flex;
-    flex-wrap: wrap;
-    width: 100%;
-  }
-
-  #{{ component_id }} .tutor-calendar__view-toggle .btn {
-    flex: 1 1 48%;
-    min-width: 0;
-    text-align: center;
-  }
 }
 
 #{{ component_id }} .tutor-calendar__weekdays {
@@ -1451,6 +1431,596 @@
 
   #{{ component_id }} .tutor-calendar__day-detail-info {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Redesenho da agenda: densidade, hierarquia e responsividade
+   ============================================================ */
+
+#{{ component_id }}.tutor-calendar {
+  --tc-surface: var(--bs-body-bg, #fff);
+  --tc-surface-alt: #f8fafc;
+  --tc-border: rgba(148, 163, 184, 0.28);
+  --tc-border-strong: rgba(99, 102, 241, 0.45);
+  --tc-muted: #64748b;
+  --tc-ink: #0f172a;
+  --tc-appointment: #3b82f6;
+  --tc-exam: #8b5cf6;
+  --tc-vaccine: #eab308;
+  --tc-grooming: #ec4899;
+  --tc-completed: #16a34a;
+  --tc-canceled: #ef4444;
+}
+
+/* ---------- Barra de controles ---------- */
+#{{ component_id }} .tutor-calendar__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+#{{ component_id }} .tutor-calendar__period {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__nav-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  border: 1px solid var(--tc-border);
+  background: var(--tc-surface);
+  color: var(--tc-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#{{ component_id }} .tutor-calendar__nav-btn:hover,
+#{{ component_id }} .tutor-calendar__nav-btn:focus-visible {
+  color: var(--bs-primary);
+  border-color: var(--bs-primary);
+  background: rgba(13, 110, 253, 0.08);
+  outline: 0;
+}
+
+#{{ component_id }} .tutor-calendar__period-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+  min-width: 7.5rem;
+  padding: 0 0.25rem;
+}
+
+#{{ component_id }} .tutor-calendar__period-month {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--tc-ink);
+}
+
+#{{ component_id }} .tutor-calendar__period-year {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--tc-muted);
+}
+
+#{{ component_id }} .tutor-calendar__toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+#{{ component_id }} .tutor-calendar__view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+#{{ component_id }} .tutor-calendar__view-btn,
+#{{ component_id }} .tutor-calendar__ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.32rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tc-muted);
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#{{ component_id }} .tutor-calendar__view-btn {
+  border: 0;
+  background: transparent;
+}
+
+#{{ component_id }} .tutor-calendar__view-btn:hover {
+  color: var(--tc-ink);
+}
+
+#{{ component_id }} .tutor-calendar__view-btn.active {
+  background: var(--tc-surface);
+  color: var(--bs-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+#{{ component_id }} .tutor-calendar__ghost-btn {
+  border: 1px solid var(--tc-border);
+  background: var(--tc-surface);
+}
+
+#{{ component_id }} .tutor-calendar__ghost-btn:hover,
+#{{ component_id }} .tutor-calendar__ghost-btn:focus-visible {
+  color: var(--bs-primary);
+  border-color: var(--bs-primary);
+  outline: 0;
+}
+
+#{{ component_id }} .tutor-calendar__ghost-btn[aria-pressed="true"] {
+  color: var(--bs-primary);
+  border-color: var(--bs-primary);
+  background: rgba(13, 110, 253, 0.08);
+}
+
+/* ---------- Filtros por tipo ---------- */
+#{{ component_id }} .tutor-calendar__filters {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  margin-bottom: 0.5rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#{{ component_id }} .tutor-calendar__filters::-webkit-scrollbar {
+  display: none;
+}
+
+#{{ component_id }} .tutor-calendar__filter {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--tc-border);
+  background: var(--tc-surface);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--tc-muted);
+  white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+#{{ component_id }} .tutor-calendar__filter:hover {
+  border-color: var(--tc-border-strong);
+  color: var(--tc-ink);
+}
+
+#{{ component_id }} .tutor-calendar__filter.active {
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #fff;
+}
+
+#{{ component_id }} .tutor-calendar__filter-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+  background: var(--tc-muted);
+}
+
+#{{ component_id }} .tutor-calendar__filter-dot[data-dot="all"] { background: linear-gradient(135deg, var(--tc-appointment), var(--tc-grooming)); }
+#{{ component_id }} .tutor-calendar__filter-dot[data-dot="appointment"] { background: var(--tc-appointment); }
+#{{ component_id }} .tutor-calendar__filter-dot[data-dot="exam"] { background: var(--tc-exam); }
+#{{ component_id }} .tutor-calendar__filter-dot[data-dot="vaccine"] { background: var(--tc-vaccine); }
+#{{ component_id }} .tutor-calendar__filter-dot[data-dot="grooming"] { background: var(--tc-grooming); }
+
+#{{ component_id }} .tutor-calendar__filter.active .tutor-calendar__filter-dot {
+  background: #fff;
+}
+
+#{{ component_id }} .tutor-calendar__hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--tc-muted);
+}
+
+/* ---------- Grade do mes ---------- */
+#{{ component_id }} .tutor-calendar__weekdays {
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__weekdays > div {
+  padding: 0.15rem 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  color: var(--tc-muted);
+}
+
+#{{ component_id }} .tutor-calendar__days {
+  gap: 0.35rem;
+  grid-auto-rows: 1fr;
+}
+
+#{{ component_id }} .tutor-calendar__day {
+  min-height: 112px;
+  max-height: none;
+  border-radius: 12px;
+  padding: 0.4rem 0.4rem 0.45rem;
+  background: var(--tc-surface);
+  border: 1px solid var(--tc-border);
+  gap: 0.25rem;
+  overflow: hidden;
+}
+
+#{{ component_id }} .tutor-calendar__day:nth-child(7n + 1),
+#{{ component_id }} .tutor-calendar__day:nth-child(7n) {
+  background: var(--tc-surface-alt);
+}
+
+#{{ component_id }} .tutor-calendar__day:hover {
+  transform: none;
+  border-color: var(--tc-border-strong);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+#{{ component_id }} .tutor-calendar__day.is-outside {
+  opacity: 1;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+#{{ component_id }} .tutor-calendar__day.is-outside .tutor-calendar__date {
+  color: #cbd5e1;
+}
+
+#{{ component_id }} .tutor-calendar__day.is-today {
+  border-color: var(--bs-primary);
+  box-shadow: inset 0 0 0 1px var(--bs-primary);
+}
+
+#{{ component_id }} .tutor-calendar__day-header {
+  gap: 0.25rem;
+  min-height: 1.4rem;
+}
+
+#{{ component_id }} .tutor-calendar__date {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--tc-ink);
+}
+
+#{{ component_id }} .tutor-calendar__day.is-today .tutor-calendar__date {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  background: var(--bs-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+}
+
+#{{ component_id }} .tutor-calendar__date-count {
+  background: rgba(13, 110, 253, 0.12);
+  color: var(--bs-primary);
+  font-size: 0.62rem;
+  padding: 0.05rem 0.35rem;
+  min-width: 1.15rem;
+}
+
+/* ---------- Compromissos compactos na celula do mes ---------- */
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-list {
+  overflow: hidden;
+  padding-right: 0;
+  gap: 0.18rem;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.16rem 0.35rem;
+  border-radius: 6px;
+  border-width: 0;
+  border-left-width: 3px;
+  border-left-style: solid;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event:hover {
+  transform: none;
+  box-shadow: none;
+  filter: brightness(0.96);
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-header {
+  display: contents;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-status,
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-pet {
+  display: none;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-time {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  color: var(--tc-muted);
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#{{ component_id }} .tutor-calendar__event--exam {
+  border-left-color: rgba(139, 92, 246, 0.65);
+}
+
+#{{ component_id }} .tutor-calendar__event--vaccine {
+  border-left-color: rgba(234, 179, 8, 0.75);
+}
+
+#{{ component_id }} .tutor-calendar__day-more {
+  border: 0;
+  background: transparent;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+  text-align: left;
+  border-radius: 6px;
+}
+
+#{{ component_id }} .tutor-calendar__day-more:hover {
+  background: rgba(13, 110, 253, 0.08);
+}
+
+#{{ component_id }} .tutor-calendar__day-empty {
+  font-size: 0.7rem;
+  color: #cbd5e1;
+}
+
+/* ---------- Pontos de resumo (layout compacto) ---------- */
+#{{ component_id }} .tutor-calendar__day-dots {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+}
+
+#{{ component_id }} .tutor-calendar__day-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tc-appointment);
+}
+
+#{{ component_id }} .tutor-calendar__day-dot[data-type="exam"] { background: var(--tc-exam); }
+#{{ component_id }} .tutor-calendar__day-dot[data-type="vaccine"] { background: var(--tc-vaccine); }
+#{{ component_id }} .tutor-calendar__day-dot[data-type="grooming"] { background: var(--tc-grooming); }
+#{{ component_id }} .tutor-calendar__day-dot.is-completed { background: var(--tc-completed); }
+#{{ component_id }} .tutor-calendar__day-dot.is-canceled { background: var(--tc-canceled); }
+
+#{{ component_id }} .tutor-calendar__day-dots-more {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--tc-muted);
+  line-height: 1;
+}
+
+/* ---------- Faixas responsivas ---------- */
+@media (max-width: 1199.98px) {
+  #{{ component_id }} .tutor-calendar__day {
+    min-height: 96px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  #{{ component_id }} .tutor-calendar__toolbar {
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__toolbar-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  #{{ component_id }} .tutor-calendar__days {
+    gap: 0.25rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__weekdays {
+    gap: 0.25rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day {
+    min-height: 58px;
+    padding: 0.3rem 0.15rem;
+    border-radius: 10px;
+    justify-content: flex-start;
+    gap: 0.2rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-header {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    min-height: 0;
+    width: 100%;
+  }
+
+  #{{ component_id }} .tutor-calendar__date-count {
+    display: none;
+  }
+
+  #{{ component_id }} .tutor-calendar__day .tutor-calendar__event-list,
+  #{{ component_id }} .tutor-calendar__day-empty {
+    display: none;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-dots {
+    display: flex;
+  }
+
+  #{{ component_id }} .tutor-calendar__layout {
+    min-height: 340px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__period-label {
+    min-width: 6.5rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__view-btn span,
+  #{{ component_id }} .tutor-calendar__ghost-btn span:not(.visually-hidden) {
+    font-size: 0.75rem;
+  }
+}
+
+
+/* Dias de fora do mes: presentes, mas visualmente em segundo plano. */
+#{{ component_id }} .tutor-calendar__day.is-outside .tutor-calendar__event,
+#{{ component_id }} .tutor-calendar__day.is-outside .tutor-calendar__day-dot,
+#{{ component_id }} .tutor-calendar__day.is-outside .tutor-calendar__date-count {
+  opacity: 0.45;
+}
+
+#{{ component_id }} .tutor-calendar__day.is-outside:hover {
+  background: var(--tc-surface);
+  border-color: var(--tc-border-strong);
+}
+
+/* ---------- Densidade do chip pela largura da grade ----------
+   A coluna do calendario encolhe quando o painel "por profissional" esta
+   aberto, entao a media query de viewport nao serve: quem manda aqui e a
+   largura real da grade. */
+#{{ component_id }} .tutor-calendar__schedule {
+  container-type: inline-size;
+  container-name: tutor-calendar-grid;
+}
+
+@container tutor-calendar-grid (max-width: 820px) {
+  #{{ component_id }} .tutor-calendar__day .tutor-calendar__event {
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding: 0.2rem 0.3rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day .tutor-calendar__event-time {
+    flex: 1 0 100%;
+    font-size: 0.6rem;
+    line-height: 1.15;
+  }
+
+  #{{ component_id }} .tutor-calendar__day .tutor-calendar__event-title {
+    flex: 1 0 100%;
+    font-size: 0.68rem;
+    line-height: 1.2;
+  }
+}
+
+/* ---------- Detalhe do dia como folha inferior no celular ---------- */
+@media (max-width: 767.98px) {
+  #{{ component_id }} .tutor-calendar__day-detail-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1055;
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail-backdrop {
+    border-radius: 0;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail {
+    width: 100%;
+    margin: 0;
+    max-height: 88vh;
+    border-radius: 1.1rem 1.1rem 0 0;
+    padding: 1.5rem 1rem 1.5rem;
+    transform: translateY(100%) scale(1);
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail::before {
+    content: "";
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2.5rem;
+    height: 0.25rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.55);
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail-layer.is-open .tutor-calendar__day-detail {
+    transform: translateY(0) scale(1);
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail-controls {
+    top: 0.85rem;
+    right: 0.75rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  #{{ component_id }} .tutor-calendar__day-detail {
+    width: min(94%, 720px);
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  #{{ component_id }}.tutor-calendar {
+    --tc-surface-alt: rgba(148, 163, 184, 0.08);
+    --tc-ink: var(--bs-body-color, #e2e8f0);
+    --tc-muted: #94a3b8;
+  }
+
+  #{{ component_id }} .tutor-calendar__day.is-outside .tutor-calendar__date {
+    color: rgba(148, 163, 184, 0.6);
   }
 }
 </style>
@@ -3037,6 +3607,10 @@ document.addEventListener('DOMContentLoaded', function() {
       el.appendChild(petEl);
     }
 
+    el.title = [eventData.time || '--:--', eventData.title, petName, statusLabel]
+      .filter(Boolean)
+      .join(' · ');
+
     el.addEventListener('click', function(evt) {
       evt.stopPropagation();
       const dateKey = eventData.date || (eventData.start ? formatDateKey(eventData.start) : null);
@@ -4017,6 +4591,42 @@ document.addEventListener('DOMContentLoaded', function() {
     root.dispatchEvent(customEvent);
   }
 
+  const MONTH_CELL_MAX_EVENTS = 3;
+  const DAY_DOTS_MAX = 4;
+
+  function buildDayDotsElement(dayEvents) {
+    const dots = document.createElement('div');
+    dots.className = 'tutor-calendar__day-dots';
+    dots.setAttribute('aria-hidden', 'true');
+
+    dayEvents.slice(0, DAY_DOTS_MAX).forEach(function(eventData) {
+      const dot = document.createElement('span');
+      dot.className = 'tutor-calendar__day-dot';
+      dot.dataset.type = getEventBaseType(eventData) || 'appointment';
+      const raw = eventData && eventData.raw ? eventData.raw : {};
+      const ext = raw.extendedProps || {};
+      const statusKey = resolveStatusKey(
+        eventData.status || ext.status,
+        getEventBaseType(eventData) || 'appointment'
+      );
+      if (statusKey === 'completed') {
+        dot.classList.add('is-completed');
+      } else if (statusKey === 'canceled') {
+        dot.classList.add('is-canceled');
+      }
+      dots.appendChild(dot);
+    });
+
+    if (dayEvents.length > DAY_DOTS_MAX) {
+      const more = document.createElement('span');
+      more.className = 'tutor-calendar__day-dots-more';
+      more.textContent = '+' + (dayEvents.length - DAY_DOTS_MAX);
+      dots.appendChild(more);
+    }
+
+    return dots;
+  }
+
   function renderMonthView() {
     if (!calendarGrid) {
       return;
@@ -4076,18 +4686,32 @@ document.addEventListener('DOMContentLoaded', function() {
       const eventsWrapper = document.createElement('div');
       eventsWrapper.className = 'tutor-calendar__event-list';
 
-      dayEvents.forEach(function(eventData) {
+      dayEvents.slice(0, MONTH_CELL_MAX_EVENTS).forEach(function(eventData) {
         eventsWrapper.appendChild(buildEventElement(eventData));
       });
 
-      if (!dayEvents.length) {
+      const hiddenCount = totalCount - MONTH_CELL_MAX_EVENTS;
+      if (hiddenCount > 0) {
+        const moreBtn = document.createElement('button');
+        moreBtn.type = 'button';
+        moreBtn.className = 'tutor-calendar__day-more';
+        moreBtn.textContent = '+' + hiddenCount + ' mais';
+        moreBtn.setAttribute(
+          'aria-label',
+          'Ver mais ' + hiddenCount + (hiddenCount === 1 ? ' compromisso' : ' compromissos') + ' deste dia'
+        );
+        eventsWrapper.appendChild(moreBtn);
+      }
+
+      if (!totalCount) {
         const emptyMarker = document.createElement('div');
-        emptyMarker.className = 'text-muted small';
+        emptyMarker.className = 'tutor-calendar__day-empty';
         emptyMarker.textContent = '—';
         eventsWrapper.appendChild(emptyMarker);
       }
 
       cell.appendChild(eventsWrapper);
+      cell.appendChild(buildDayDotsElement(dayEvents));
 
       cell.addEventListener('click', function() {
         selectedDate = iso;
@@ -4540,12 +5164,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     currentViewMode = normalized;
     if (currentViewMode === 'week') {
-      viewDate = getStartOfWeek(viewDate);
+      viewDate = getStartOfWeek(resolveWeekAnchor(viewDate));
     } else {
       viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
     }
     updateViewModeButtons();
     renderCalendar();
+  }
+
+  // Ancora da visao semanal: prioriza o dia selecionado e depois hoje, desde que
+  // pertencam ao mes que esta na tela. Sem isso, sair do mes atual cai sempre na
+  // semana do dia 1, que costuma ser o mes anterior.
+  function resolveWeekAnchor(monthReference) {
+    const reference = monthReference instanceof Date ? monthReference : new Date();
+    const sameMonth = function(candidate) {
+      return candidate
+        && candidate.getFullYear() === reference.getFullYear()
+        && candidate.getMonth() === reference.getMonth();
+    };
+
+    const selected = selectedDate ? parseDateKey(selectedDate) : null;
+    if (sameMonth(selected)) {
+      return selected;
+    }
+
+    const now = new Date();
+    if (sameMonth(now)) {
+      return now;
+    }
+
+    return reference;
   }
 
   prevBtn && prevBtn.addEventListener('click', function() {
