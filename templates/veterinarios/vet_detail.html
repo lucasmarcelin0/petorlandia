@@ -231,15 +231,16 @@
                             data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
                             data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
                             data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}"
-                            data-vet-schedule-bound="true">
-                      <i class="fas fa-edit"></i>
+                            data-vet-schedule-bound="true"
+                            aria-label="Editar horário">
+                      <i class="fas fa-edit" aria-hidden="true"></i>
                     </button>
                     <form method="post"
                           action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}"
                           class="d-inline">
                       {{ schedule_form.csrf_token }}
-                      <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">
-                        <i class="fas fa-trash"></i>
+                      <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');" aria-label="Excluir horário">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
                       </button>
                     </form>
                   </div>
