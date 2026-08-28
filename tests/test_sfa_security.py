@@ -277,3 +277,41 @@ def test_sfa_rotina_diaria_preserva_sinan_e_seguimento_sem_sync_t0(app, monkeypa
         "atrasados_t10": ["SFA-10"],
         "atrasados_t30": ["SFA-30"],
     }
+
+
+def test_sfa_csv_exports_escape_formula_injection(app):
+    with app.app_context():
+        pacientes = [
+            SfaPaciente(
+                id_estudo="SFA-999",
+                nome="=HYPERLINK('http://evil.com')",
+                bairro="+BairroEvil",
+                endereco="-RuaEvil",
+                ficha_sinan="@12345",
+            )
+        ]
+        csv_cadastro = sfa_service.gerar_csv_exportacao_cadastro(pacientes)
+        assert "'=HYPERLINK('http://evil.com')" in csv_cadastro
+        assert "'+BairroEvil" in csv_cadastro
+        assert "'-RuaEvil" in csv_cadastro
+        assert "'@12345" in csv_cadastro
+
+        assinaturas = [
+            {
+                "assinado_em": "2026-08-28 10:00",
+                "id_estudo": "SFA-999",
+                "ficha_sinan": "@12345",
+                "participante": "=CMD('calc')",
+                "nome_assinatura": "+MaliciousSignature",
+                "data_nascimento": "2000-01-01",
+                "ip": "127.0.0.1",
+                "user_agent": "Mozilla",
+            }
+        ]
+        csv_tcle = sfa_service.gerar_csv_assinaturas_tcle(assinaturas)
+        assert "'=CMD('calc')" in csv_tcle
+        assert "'+MaliciousSignature" in csv_tcle
+        assert "'@12345" in csv_tcle
+
+        csv_analitico = sfa_service.gerar_csv_exportacao_analitica(pacientes)
+        assert "'=HYPERLINK('http://evil.com')" in csv_analitico

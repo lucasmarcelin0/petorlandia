@@ -33,6 +33,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
+
+from security.csv_safe import escape_csv_value, safe_csv_dict_writer
 from urllib.parse import parse_qs, quote, urlparse
 
 from extensions import db
@@ -1259,12 +1261,14 @@ def montar_visao_resposta_formulario(
 
 def _serializar_valor_csv(value: object) -> str:
     if isinstance(value, list):
-        return " | ".join(str(item).strip() for item in value if str(item or "").strip())
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if value is None:
-        return ""
-    return str(value)
+        val = " | ".join(str(item).strip() for item in value if str(item or "").strip())
+    elif isinstance(value, datetime):
+        val = value.isoformat()
+    elif value is None:
+        val = ""
+    else:
+        val = str(value)
+    return escape_csv_value(val)
 
 
 def _colunas_fixas_exportacao() -> list[str]:
@@ -1855,7 +1859,7 @@ def gerar_csv_assinaturas_tcle(assinaturas: Optional[list[dict[str, str]]] = Non
         "user_agent",
     ]
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for registro in registros:
         writer.writerow({field: _serializar_valor_csv(registro.get(field, "")) for field in fieldnames})
@@ -1865,7 +1869,7 @@ def gerar_csv_assinaturas_tcle(assinaturas: Optional[list[dict[str, str]]] = Non
 def gerar_csv_exportacao_cadastro(pacientes) -> str:
     output = io.StringIO(newline="")
     fieldnames = _colunas_fixas_exportacao()
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for paciente in pacientes:
         writer.writerow(
@@ -1893,7 +1897,7 @@ def gerar_csv_exportacao_analitica(pacientes) -> str:
     )
 
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer = safe_csv_dict_writer(output, fieldnames=fieldnames)
     writer.writeheader()
     for paciente in pacientes:
         writer.writerow(montar_linha_exportacao_analitica(paciente, schemas=schemas))
