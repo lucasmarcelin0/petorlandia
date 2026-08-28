@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 
 from app import app as flask_app, db
+from extensions import limiter
 from models import (
     AdministracaoRegistro,
     Animal,
@@ -35,6 +36,7 @@ def app():
         RATELIMIT_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
+    limiter.enabled = False
     yield flask_app
 
 
