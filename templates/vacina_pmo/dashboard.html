@@ -1794,6 +1794,10 @@
               data-undo-url="{{ url_for('vacina_pmo_route_undo') }}">
               <i class="fas fa-route me-1"></i> Otimizar rota
             </button>
+            <a class="btn btn-sm btn-success text-nowrap d-none" id="pmo-open-full-maps" target="_blank" rel="noopener"
+               title="Abrir rota completa com todas as paradas no Google Maps">
+              <i class="fas fa-map-location-dot me-1"></i> Rota no Maps
+            </a>
             <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="pmo-undo-route">
               <i class="fas fa-rotate-left me-1"></i> Desfazer
             </button>
@@ -3815,6 +3819,7 @@
   const optimizeRouteBtn = document.getElementById('pmo-optimize-route');
   const undoRouteBtn = document.getElementById('pmo-undo-route');
   const openNextRouteBtn = document.getElementById('pmo-open-next-route');
+  const openFullMapsBtn = document.getElementById('pmo-open-full-maps');
   const evalGridEl = document.getElementById('pmo-eval-grid');
   const evalSummaryEl = document.querySelector('[data-eval-summary]');
   const evalCommentsEl = document.getElementById('pmo-eval-comments');
@@ -5053,16 +5058,53 @@
 
   function routePreviewText(payload) {
     const rows = (payload.preview || []).slice(0, 30).map((item) => (
-      `${item.order}. ${item.tutor} - ${item.address}${item.located ? '' : ' (sem localização, fica no final)'}`
+      `${item.order}. ${item.tutor} - ${item.address}${item.located ? ' 📍' : ' 🏷️ (bairro)'}`
     ));
     const extra = (payload.preview || []).length > rows.length
       ? `\n... mais ${(payload.preview || []).length - rows.length} visitas`
       : '';
     const missed = Number(payload.unlocated_count || 0);
     const warning = missed
-      ? `\n\nAtenção: ${missed} endereço${missed === 1 ? '' : 's'} não foi localizado${missed === 1 ? '' : 's'} e ficará${missed === 1 ? '' : 'ão'} no final.`
+      ? `\n\nNota: ${missed} endereço${missed === 1 ? '' : 's'} sem GPS exato ${missed === 1 ? 'foi agrupado' : 'foram agrupados'} por bairro.`
       : '';
     return `Prévia da rota ${payload.shift === 'Manha' ? 'Manhã' : 'Tarde'}:\n\n${rows.join('\n')}${extra}${warning}\n\nAplicar esta ordem na planilha?`;
+  }
+
+  function buildFullGoogleMapsUrl(rows) {
+    if (!rows || rows.length === 0) return '';
+    const origin = '-20.7122478,-47.8838617';
+    const validRows = rows.filter((r) => r && (r.address || (typeof r.lat === 'number' && typeof r.lng === 'number')));
+    if (validRows.length === 0) return '';
+
+    const stops = validRows.map((r) => {
+      if (typeof r.lat === 'number' && typeof r.lng === 'number' && !isNaN(r.lat) && !isNaN(r.lng)) {
+        return `${r.lat},${r.lng}`;
+      }
+      return `${cleanAddressForSearch(r.address)}, Orlândia, SP, Brasil`;
+    });
+
+    if (stops.length === 1) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(stops[0])}&travelmode=driving`;
+    }
+
+    const destination = encodeURIComponent(stops[stops.length - 1]);
+    const intermediate = stops.slice(0, -1).slice(0, 9);
+    const waypoints = encodeURIComponent(intermediate.join('|'));
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+  }
+
+  function updateFullRouteMapsButton(explicitUrl = null) {
+    if (!openFullMapsBtn) return;
+    const selectedShift = normalizeShift(shiftEl.value);
+    const shiftRows = state.rows.filter((r) => !selectedShift || (['Manha', 'Tarde'].includes(selectedShift) && normalizeShift(r.shift) === selectedShift));
+    const url = explicitUrl || buildFullGoogleMapsUrl(shiftRows);
+    if (url && shiftRows.length > 0) {
+      openFullMapsBtn.href = url;
+      openFullMapsBtn.classList.remove('d-none');
+    } else {
+      openFullMapsBtn.href = '#';
+      openFullMapsBtn.classList.add('d-none');
+    }
   }
 
   async function optimizeRoute() {
@@ -5077,6 +5119,9 @@
     try {
       const body = routeRequestBody(selectedShift);
       const preview = await postJson(optimizeRouteBtn.dataset.previewUrl, body);
+      if (preview.google_maps_url) {
+        updateFullRouteMapsButton(preview.google_maps_url);
+      }
       if (!window.confirm(routePreviewText(preview))) return;
       optimizeRouteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Aplicando';
       const payload = await postJson(optimizeRouteBtn.dataset.routeUrl, body);
@@ -5085,10 +5130,13 @@
       statusFilterEl.value = '';
       render();
       hydrateLocalQueues();
+      if (payload.google_maps_url) {
+        updateFullRouteMapsButton(payload.google_maps_url);
+      }
       const missed = Number(payload.unlocated_count || 0);
-      const suffix = missed ? ` ${missed} endereço${missed === 1 ? '' : 's'} ficou${missed === 1 ? '' : 'ram'} no final por falta de localização.` : '';
+      const suffix = missed ? ` (${missed} agrupado${missed === 1 ? '' : 's'} por bairro)` : '';
       sheetInfoEl.textContent = `Rota do turno ${selectedShift === 'Manha' ? 'Manhã' : 'Tarde'} otimizada na planilha.${suffix}`;
-      window.showAppToast ? window.showAppToast(`Rota otimizada e salva na planilha.${suffix}`, missed ? 'warning' : 'success') : alert('Rota otimizada e salva na planilha.');
+      window.showAppToast ? window.showAppToast(`Rota otimizada! Clique em 'Rota no Maps' para abrir todas as paradas.`, 'success') : alert('Rota otimizada!');
     } catch (error) {
       window.showAppToast ? window.showAppToast(error.message, 'danger') : alert(error.message);
     } finally {
@@ -5636,6 +5684,7 @@
   function render() {
     renderStats(state.rows);
     renderEvaluationScope();
+    updateFullRouteMapsButton();
     const visible = state.rows.filter(rowMatchesFilters);
     if (!visible.length) {
       tbody.innerHTML = `<tr><td colspan="11"><div class="pmo-empty"><div><i class="fas fa-filter fa-2x mb-2 text-secondary"></i><div>Nenhuma linha para os filtros atuais.</div></div></div>${newVisitFooter()}</td></tr>`;

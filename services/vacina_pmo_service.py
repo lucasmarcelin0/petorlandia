@@ -2641,9 +2641,43 @@ def _pmo_route_context(*, sheet_gid: str = "", sheet_title: str = "", shift: str
     }
 
 
+def _pmo_build_full_google_maps_route_url(
+    origin_coords: tuple[float, float] | None,
+    optimized_visits: list[PmoVaccinationVisit],
+    coords_by_visit_id: dict[int, tuple[float, float]],
+) -> str:
+    """Gera link universal do Google Maps com paradas múltiplas sequenciadas."""
+    if not optimized_visits:
+        return ""
+    origin_str = (
+        f"{origin_coords[0]},{origin_coords[1]}"
+        if origin_coords
+        else "Vigilancia Sanitaria, Orlandia, SP, Brasil"
+    )
+    stops: list[str] = []
+    for v in optimized_visits:
+        c = coords_by_visit_id.get(v.id)
+        if c:
+            stops.append(f"{c[0]},{c[1]}")
+        else:
+            clean = _pmo_clean_address_fragment(v.address or "")
+            if clean:
+                stops.append(f"{clean}, Orlandia, SP, Brasil")
+    if not stops:
+        return ""
+    if len(stops) == 1:
+        return f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_str)}&destination={urllib.parse.quote(stops[0])}&travelmode=driving"
+    destination = urllib.parse.quote(stops[-1])
+    intermediate = stops[:-1][:9]
+    waypoints = urllib.parse.quote("|".join(intermediate))
+    return f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_str)}&destination={destination}&waypoints={waypoints}&travelmode=driving"
+
+
 def preview_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shift: str = "") -> dict[str, Any]:
     context = _pmo_route_context(sheet_gid=sheet_gid, sheet_title=sheet_title, shift=shift)
     coords_by_visit_id = context["coords_by_visit_id"]
+    origin_coords = _pmo_route_origin_coords()
+    maps_url = _pmo_build_full_google_maps_route_url(origin_coords, context["optimized"], coords_by_visit_id)
     return {
         "sheet_gid": context["sheet_gid"],
         "sheet_title": context["sheet_title"],
@@ -2653,6 +2687,7 @@ def preview_vacina_pmo_route(*, sheet_gid: str = "", sheet_title: str = "", shif
         "optimized_count": len(context["optimized"]),
         "unlocated_count": context["unlocated_count"],
         "geocoded_now": context["geocoded_now"],
+        "google_maps_url": maps_url,
         "preview": [
             _route_preview_item(visit, coords_by_visit_id.get(visit.id), index)
             for index, visit in enumerate(context["optimized"], start=1)
@@ -2676,6 +2711,7 @@ def optimize_vacina_pmo_route(
     selected = context["selected"]
     target_rows = context["target_rows"]
     optimized = context["optimized"]
+    coords_by_visit_id = context["coords_by_visit_id"]
 
     source_rows_by_visit_id = {
         visit.id: list(sheet_values[(visit.source_row or 1) - 1])
@@ -2715,6 +2751,8 @@ def optimize_vacina_pmo_route(
     )
 
     state = get_saved_vacina_pmo_rows(sheet_gid=resolved_gid, sheet_title=resolved_title)
+    origin_coords = _pmo_route_origin_coords()
+    maps_url = _pmo_build_full_google_maps_route_url(origin_coords, optimized, coords_by_visit_id)
     return {
         **state,
         "shift": context["normalized_shift"],
@@ -2722,6 +2760,7 @@ def optimize_vacina_pmo_route(
         "optimized_count": len(optimized),
         "unlocated_count": context["unlocated_count"],
         "geocoded_now": context["geocoded_now"],
+        "google_maps_url": maps_url,
         "backup_id": backup.id,
     }
 
