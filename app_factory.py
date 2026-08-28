@@ -1,5 +1,7 @@
 """Application factory for PetOrlandia."""
 import importlib
+import pathlib
+import sys
 
 from flask import Flask
 
@@ -12,19 +14,22 @@ except ImportError:  # pragma: no cover - direct script/import mode
 def _load_configured_app() -> Flask:
     """Return the real Flask instance regardless of import aliasing."""
 
-    module_name = f"{__package__}.app" if __package__ else "app"
-    try:
-        app_module = importlib.import_module(module_name)
-    except ModuleNotFoundError:
-        app_module = importlib.import_module("app")
+    for mod_name in ("petorlandia_app", "app"):
+        mod = sys.modules.get(mod_name)
+        if mod and hasattr(mod, "app") and isinstance(getattr(mod, "app"), Flask):
+            return mod.app
 
-    candidate = getattr(app_module, "app", app_module)
-    if isinstance(candidate, Flask):
-        return candidate
-
-    nested = getattr(candidate, "app", None)
-    if isinstance(nested, Flask):
-        return nested
+    project_root = pathlib.Path(__file__).resolve().parent
+    app_py_path = project_root / "app.py"
+    if app_py_path.exists():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("petorlandia_app", app_py_path)
+        app_module = importlib.util.module_from_spec(spec)
+        sys.modules.setdefault("petorlandia_app", app_module)
+        sys.modules["app"] = app_module
+        spec.loader.exec_module(app_module)
+        if isinstance(getattr(app_module, "app", None), Flask):
+            return app_module.app
 
     raise RuntimeError("Could not resolve Flask app instance")
 
