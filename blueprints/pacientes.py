@@ -2961,6 +2961,10 @@ def novo_animal():
         db.session.add(animal)
         db.session.commit()
 
+        from services.activation import note_first_patient
+
+        note_first_patient(animal.clinica_id)
+
         # Criação da consulta
         consulta = Consulta(
             animal_id=animal.id,

@@ -288,6 +288,48 @@ def first_access_password():
     return render_template('auth/first_access_password.html', form=form, user=user, invite=invite, welcome=_first_access_welcome(invite, token_user, user))
 
 
+def _send_welcome_email(user, *, audience=None) -> None:
+    """Primeira mensagem na caixa de entrada de quem se cadastrou sozinho.
+
+    Quem chegava por convite recebia acolhimento; quem se cadastrava por conta
+    própria não recebia nada. Fechada a aba, não sobrava nada puxando a pessoa
+    de volta — o onboarding só funciona para quem lembra de voltar.
+
+    Nunca derruba o cadastro: a conta já existe quando isto roda.
+    """
+
+    from services.notifications import notify_user
+
+    primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
+    base_url = os.environ.get('FRONTEND_URL', 'https://www.petorlandia.com.br').rstrip('/')
+
+    if audience == 'student':
+        assunto = 'Sua conta de estudante na PetOrlândia'
+        corpo = (
+            f'Olá {primeiro_nome}! Sua conta está pronta.\n\n'
+            'O próximo passo é a área de prática: casos simulados para treinar '
+            'raciocínio clínico sem risco para nenhum animal.\n\n'
+            f'{base_url}/estudantes/pratica\n\n'
+            'Equipe PetOrlândia'
+        )
+    else:
+        assunto = 'Bem-vindo à PetOrlândia — o primeiro passo leva 2 minutos'
+        corpo = (
+            f'Olá {primeiro_nome}! Sua conta está pronta.\n\n'
+            'O próximo passo depende do que você veio resolver:\n\n'
+            f'• Tem clínica? Cadastre a sua e comece a avaliação: {base_url}/minha-clinica\n'
+            f'• É tutor? Cadastre seu pet e o histórico dele fica com você: {base_url}/add-animal\n\n'
+            f'Se preferir escolher na tela: {base_url}/comecar\n\n'
+            'Qualquer dúvida, é só responder este e-mail.\n\n'
+            'Equipe PetOrlândia'
+        )
+
+    try:
+        notify_user(user, assunto, corpo, kind='welcome')
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning('Falha ao enviar e-mail de boas-vindas', exc_info=True)
+
+
 @bp.route("/register", methods=['GET', 'POST'])
 @limiter.limit("5 per minute", methods=["POST"])
 def register():
@@ -444,6 +486,7 @@ def register():
             channel=audience,
         )
         queue_ga_event('sign_up', method='email')
+        _send_welcome_email(user, audience=audience)
 
         # Cai no onboarding, não no sistema vazio: é ali que a pessoa dá o
         # primeiro passo em vez de olhar uma tela sem nada dela.
@@ -674,6 +717,7 @@ def google_callback():
         channel = 'student_google' if is_student_flow else 'google'
         track_event('signup_completed', role=getattr(user, 'role', None), channel=channel)
         queue_ga_event('sign_up', method='google')
+        _send_welcome_email(user, audience='student' if is_student_flow else None)
         flash('Conta criada com o Google. Bem-vindo!', 'success')
         if urlparse(sanitized_next).path == url_for('index'):
             sanitized_next = url_for('onboarding')

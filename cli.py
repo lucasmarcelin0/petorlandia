@@ -188,7 +188,65 @@ def reconcile_veterinarian_billing(limit):
         raise click.ClickException("A reconciliação terminou com falhas")
 
 
+@click.command('backfill-clinic-memberships')
+@click.option('--apply', is_flag=True, help='Executa. Sem esta opcao, apenas mostra a previa.')
+@click.option(
+    '--trial-days',
+    type=int,
+    default=None,
+    help='Dias de avaliacao para quem entrar agora. Padrao: o do ambiente.',
+)
+@with_appcontext
+def backfill_clinic_memberships(apply, trial_days):
+    """Cria assinatura para responsaveis de clinica que nunca tiveram uma.
+
+    Ate a virada da ancora, a avaliacao so nascia de um CRMV: quem criou a
+    clinica sem ser veterinario ficou sem nenhuma relacao comercial. Clinicas
+    novas ja nascem certas; as antigas so entram por aqui.
+
+    Comeca a avaliacao HOJE, e nao na data de criacao da clinica: cobrar
+    retroativamente quem nunca foi avisado seria pegar o cliente de surpresa.
+    Fica fora do release phase de proposito — quem decide quando essa conversa
+    comeca e uma pessoa, nao o deploy.
+    """
+    from helpers import ensure_clinic_membership
+    from models.usuarios import VeterinarianMembership
+
+    candidatas = (
+        Clinica.query
+        .filter(Clinica.owner_id.isnot(None))
+        .order_by(Clinica.id)
+        .all()
+    )
+
+    pendentes = []
+    for clinica in candidatas:
+        owner = User.query.get(clinica.owner_id)
+        if owner is None:
+            continue
+        veterinario = getattr(owner, 'veterinario', None)
+        if veterinario is not None and getattr(veterinario, 'membership', None):
+            continue
+        ja_tem = VeterinarianMembership.query.filter_by(owner_user_id=owner.id).first()
+        if ja_tem:
+            continue
+        pendentes.append((clinica, owner))
+
+    click.echo(f'{len(pendentes)} clinica(s) sem assinatura do responsavel.')
+    for clinica, owner in pendentes:
+        click.echo(f'  #{clinica.id} {clinica.nome} -> {owner.name} <{owner.email}>')
+
+    if not apply:
+        click.echo('Previa apenas. Execute novamente com --apply para criar.')
+        return
+
+    for clinica, owner in pendentes:
+        ensure_clinic_membership(clinica, owner, trial_days)
+    click.echo(f'{len(pendentes)} assinatura(s) criada(s).')
+
+
 def register_cli_commands(app):
+    app.cli.add_command(backfill_clinic_memberships)
     app.cli.add_command(classify_transactions_history)
     app.cli.add_command(cleanup_test_users)
     app.cli.add_command(reconcile_veterinarian_billing)

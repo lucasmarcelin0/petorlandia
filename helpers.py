@@ -211,6 +211,12 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
     trial_days = trial_days or _trial_days()
 
     if membership is None:
+        # Quem já tinha assinatura como responsável de clínica não ganha uma
+        # segunda ao virar veterinário: a avaliação em curso (e o pagamento,
+        # se houver) muda de âncora em vez de recomeçar do zero.
+        membership = _adopt_owner_membership(veterinario)
+
+    if membership is None:
         # Quem chegou por um link de indicação começa com avaliação estendida.
         # O bônus é aplicado na criação porque é aqui que a avaliação nasce —
         # o cadastro acontece antes de a pessoa virar veterinária.
@@ -224,6 +230,90 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
     else:
         membership.ensure_trial_dates(trial_days)
     return membership
+
+
+def _adopt_owner_membership(veterinario):
+    """Reaproveita a assinatura criada quando a pessoa era só dona da clínica."""
+
+    from models import VeterinarianMembership
+
+    user = getattr(veterinario, 'user', None)
+    user_id = getattr(user, 'id', None)
+    if not user_id:
+        return None
+
+    with db.session.no_autoflush:
+        membership = (
+            VeterinarianMembership.query
+            .filter_by(owner_user_id=user_id)
+            .filter(VeterinarianMembership.veterinario_id.is_(None))
+            .first()
+        )
+    if membership is None:
+        return None
+
+    membership.veterinario = veterinario
+    db.session.add(membership)
+    return membership
+
+
+def ensure_clinic_membership(clinica, user, trial_days: int | None = None):
+    """Garante avaliação e cobrança para quem responde por uma clínica.
+
+    A assinatura nascia só de um CRMV. Dono, recepção ou administrador que
+    criasse a clínica ficava com o sistema funcionando e sem nenhuma relação
+    comercial: sem avaliação, sem lembrete de fim de teste, sem win-back e com
+    403 na própria página de assinatura. Aqui a âncora passa a ser a clínica —
+    o CRMV volta a valer para o que ele de fato autoriza, assinar prontuário e
+    publicar perfil.
+    """
+
+    from models import VeterinarianMembership
+
+    if clinica is None or user is None:
+        return None
+
+    veterinario = getattr(user, 'veterinario', None)
+    if veterinario is not None:
+        membership = ensure_veterinarian_membership(veterinario, trial_days)
+        if membership is not None and hasattr(membership, 'clinica_id'):
+            membership.clinica_id = membership.clinica_id or clinica.id
+            db.session.commit()
+        return membership
+
+    user_id = getattr(user, 'id', None)
+    if not user_id:
+        return None
+
+    trial_days = trial_days or _trial_days()
+    with db.session.no_autoflush:
+        membership = (
+            VeterinarianMembership.query.filter_by(owner_user_id=user_id).first()
+        )
+    if membership is None:
+        membership = VeterinarianMembership(
+            owner_user_id=user_id,
+            clinica_id=clinica.id,
+            started_at=utcnow(),
+            trial_ends_at=utcnow() + timedelta(days=trial_days),
+        )
+        db.session.add(membership)
+    else:
+        membership.clinica_id = membership.clinica_id or clinica.id
+        membership.ensure_trial_dates(trial_days)
+    db.session.commit()
+    return membership
+
+
+def membership_for_user(user):
+    """Assinatura da pessoa, venha ela do CRMV ou da clínica."""
+
+    if not getattr(user, 'is_authenticated', True):
+        return None
+    veterinario = getattr(user, 'veterinario', None)
+    if veterinario is not None:
+        return ensure_veterinarian_membership(veterinario)
+    return getattr(user, 'owned_membership', None)
 
 
 def _referral_trial_bonus_days(veterinario) -> int:
@@ -416,7 +506,14 @@ def revoke_veterinarian_role(user):
     vet_profile = user.veterinario
     membership = getattr(vet_profile, 'membership', None)
     if membership:
-        db.session.delete(membership)
+        if getattr(membership, 'owner_user_id', None):
+            # A assinatura é do responsável pela clínica, não do CRMV que está
+            # sendo revogado: apagá-la destruiria a cobrança de quem continua
+            # respondendo pela operação. Só o vínculo profissional cai.
+            membership.veterinario = None
+            db.session.add(membership)
+        else:
+            db.session.delete(membership)
 
     db.session.delete(vet_profile)
     user.worker = None

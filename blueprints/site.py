@@ -9,7 +9,7 @@ from extensions import csrf, db, limiter
 from flask import abort, current_app, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import current_user, login_required
 from forms import AppointmentRequestForm, AppointmentRequestResponseForm, LoginForm, ProfessionalServiceForm, VetProfileForm, VeterinarianMembershipCancelRecurringForm, VeterinarianMembershipCancelTrialForm, VeterinarianMembershipCheckoutForm, VeterinarianMembershipRequestNewTrialForm
-from helpers import ensure_veterinarian_membership, has_veterinarian_profile
+from helpers import ensure_veterinarian_membership, has_veterinarian_profile, membership_for_user
 from models import (
     Animal,
     Appointment,
@@ -177,12 +177,14 @@ def veterinarian_membership():
     is_admin = bool(current_user.is_authenticated and role_lower == 'admin')
     has_profile = has_veterinarian_profile(current_user)
 
-    if not (is_admin or has_profile):
+    # A página é de quem paga, não de quem tem CRMV: o responsável por uma
+    # clínica também tem avaliação e precisa configurar a renovação.
+    membership = membership_for_user(current_user)
+
+    if not (is_admin or has_profile or membership is not None):
         abort(403)
 
-    membership = None
-    if has_profile:
-        membership = ensure_veterinarian_membership(current_user.veterinario)
+    if membership is not None:
         if membership.preapproval_id and not membership.has_payment_method():
             try:
                 preapproval_response = mp_sdk().preapproval().get(membership.preapproval_id)
@@ -239,7 +241,9 @@ def veterinarian_membership_checkout():
     is_admin = bool(current_user.is_authenticated and role_lower == 'admin')
     has_profile = has_veterinarian_profile(current_user)
 
-    if not (is_admin or has_profile):
+    membership = membership_for_user(current_user)
+
+    if not (is_admin or has_profile or membership is not None):
         abort(403)
 
     form = VeterinarianMembershipCheckoutForm()
@@ -247,12 +251,10 @@ def veterinarian_membership_checkout():
         flash('Não foi possível iniciar a assinatura. Tente novamente.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
-    membership = None
-    if has_profile:
-        membership = ensure_veterinarian_membership(current_user.veterinario)
     if membership is None:
         flash(
-            'Complete o cadastro profissional antes de configurar uma assinatura.',
+            'Cadastre sua clínica ou complete o cadastro profissional antes de '
+            'configurar uma assinatura.',
             'warning',
         )
         return redirect(url_for('veterinarian_membership'))
@@ -957,6 +959,70 @@ WAITLIST_FEATURES = {
 }
 
 
+def _alert_team_about_lead(lead) -> None:
+    """Avisa a equipe na hora em que o lead levanta a mão.
+
+    Uma clínica nova já dispara aviso; um pedido de demonstração não disparava
+    nada e ficava esperando alguém abrir a tabela no admin. Quem pede demo é o
+    lead mais qualificado que existe, e ele esfria em horas.
+    """
+
+    from services.notifications import notify_admins
+
+    feature_label = WAITLIST_FEATURES.get(lead.feature, lead.feature)
+    origem = f' — {lead.city}' if lead.city else ''
+    urgente = lead.feature == 'demo_clinica'
+    texto = (
+        f'{"Pedido de demonstração" if urgente else "Novo lead na lista de espera"}: '
+        f'{feature_label}{origem}. Contato: {lead.contact}.'
+    )
+    try:
+        notify_admins(texto, kind='waitlist_lead')
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning('Falha ao avisar a equipe sobre lead da lista de espera', exc_info=True)
+
+
+def _confirm_lead_registration(lead) -> None:
+    """Primeira mensagem da conversa comercial, e não um recibo.
+
+    Só vale para quem deixou e-mail; telefone continua sendo contato manual.
+    """
+
+    if '@' not in (lead.contact or ''):
+        return
+
+    from services.notifications import notify_contact
+
+    if lead.feature == 'demo_clinica':
+        assunto = 'Sua demonstração da PetOrlândia'
+        corpo = (
+            'Olá! Recebemos seu pedido de demonstração.\n\n'
+            'Entramos em contato em até um dia útil para combinar o horário. '
+            'A conversa leva 15 minutos e mostra a agenda, o prontuário e o '
+            'controle de vacinas funcionando com um caso real da sua clínica.\n\n'
+            'Se preferir adiantar, responda este e-mail com dois horários que '
+            'funcionem para você.\n\n'
+            'Equipe PetOrlândia'
+        )
+    else:
+        feature_label = WAITLIST_FEATURES.get(lead.feature, 'a novidade')
+        assunto = f'Você está na lista: {feature_label}'
+        corpo = (
+            'Olá! Seu interesse ficou registrado.\n\n'
+            f'Avisamos você assim que {feature_label} abrir — sem envio '
+            'de propaganda no meio do caminho.\n\n'
+            'Equipe PetOrlândia'
+        )
+
+    try:
+        notify_contact(lead.contact, assunto, corpo)
+        lead.notified_at = utcnow()
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.warning('Falha ao confirmar inscrição na lista de espera', exc_info=True)
+
+
 @bp.route('/lista-de-espera', methods=['POST'])
 def waitlist_signup():
     """Registra interesse numa funcionalidade ainda não publicada.
@@ -983,12 +1049,15 @@ def waitlist_signup():
         }), 400
 
     existing = WaitlistLead.query.filter_by(feature=feature, contact=contact).first()
-    if existing is None:
+    lead = existing
+    is_new = existing is None
+    if is_new:
         lead = WaitlistLead(
             feature=feature,
             contact=contact[:180],
             city=city[:120] if city else None,
             user_id=current_user.id if current_user.is_authenticated else None,
+            status='novo',
         )
         db.session.add(lead)
         try:
@@ -997,8 +1066,13 @@ def waitlist_signup():
             # Corrida entre dois envios simultâneos: o contato já está salvo,
             # que é exatamente o resultado desejado.
             db.session.rollback()
+            is_new = False
 
     track_event('waitlist_joined', channel=feature)
+
+    if is_new:
+        _alert_team_about_lead(lead)
+        _confirm_lead_registration(lead)
 
     success_message = (
         'Pedido recebido! Vamos falar com você para combinar a demonstração.'
@@ -1807,6 +1881,9 @@ def responder_solicitacao(request_id):
         kind='appointment_request',
     )
     db.session.commit()
+    from services.activation import note_first_appointment
+
+    note_first_appointment(appt.clinica_id)
     flash('Agendamento confirmado e tutor avisado.', 'success')
     return redirect(url_for('solicitacoes_recebidas'))
 

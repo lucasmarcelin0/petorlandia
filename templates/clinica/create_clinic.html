@@ -10,8 +10,9 @@
     <span class="landing-eyebrow"><i class="fa-solid fa-wand-magic-sparkles"></i> Leva cerca de 2 minutos</span>
     <h1>Vamos colocar sua clínica para funcionar.</h1>
     <p>
-      Para começar, precisamos apenas do nome da clínica e do seu registro profissional.
-      Endereço, logo, equipe e configurações podem ser completados depois.
+      Para começar, precisamos apenas do <strong>nome da clínica</strong>. Sua avaliação
+      gratuita começa aqui, com ou sem CRMV — endereço, logo, equipe e configurações
+      podem ser completados depois.
     </p>
     <div class="clinic-activation__benefits" aria-label="Resumo da oferta">
       <span><i class="fa-solid fa-check"></i> Acesso imediato</span>
@@ -21,7 +22,7 @@
   </div>
 
   <div class="clinic-activation__card">
-    <div class="clinic-activation__step">Etapa 1 de 2 · dados essenciais</div>
+    <div class="clinic-activation__step">Só o nome é obrigatório</div>
     <form method="post" enctype="multipart/form-data" novalidate>
       {{ form.hidden_tag() }}
 
@@ -36,7 +37,11 @@
           {{ form.sou_veterinario(class="form-check-input", **{'aria-controls': 'professionalFields'}) }}
           {{ form.sou_veterinario.label(class="form-check-label fw-semibold") }}
         </div>
-        <p class="small text-muted mb-0">Marque para iniciar sua avaliação profissional agora.</p>
+        <p class="small text-muted mb-0">
+          O CRMV libera assinar prontuário e publicar seu perfil no catálogo. Se você
+          responde pela clínica sem ser veterinário, desmarque: a avaliação começa do
+          mesmo jeito e você convida a equipe depois.
+        </p>
       </div>
 
       <div id="professionalFields" class="row g-3 mb-3">

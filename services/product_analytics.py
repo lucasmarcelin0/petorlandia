@@ -14,6 +14,9 @@ from extensions import db
 _SAFE_PROPERTY_KEYS = {
     "city", "role", "service", "category", "channel", "success", "stage",
     "plan", "feature", "source_path", "link_text",
+    # Superfície que disparou o evento (CTA, job, webhook). Não é canal de
+    # aquisição: fica em ``properties`` justamente para não se passar por um.
+    "surface",
     # Dimensões de receita. Nenhuma identifica pessoa: valor da transação,
     # quantidade de itens, meio de pagamento e motivo da recusa.
     "amount", "items", "method", "reason",
@@ -95,14 +98,26 @@ def track_event(
     *,
     source: str | None = None,
     user_id: int | None = None,
+    commit: bool = True,
     **properties,
 ) -> None:
+    """Grava um evento de funil.
+
+    ``source`` descreve a superfície que disparou o evento (um CTA, um job) e
+    **não** é canal de aquisição: escrevê-lo em ``utm_source`` apagava a
+    campanha que trouxe a pessoa e fazia 'cta' aparecer no painel de origens
+    como se fosse tráfego. Ele fica em ``properties['surface']``; a atribuição
+    vem sempre da sessão.
+    """
+
     safe_properties = {
         key: value
         for key, value in properties.items()
         if key in _SAFE_PROPERTY_KEYS
         and value is not None
     }
+    if source:
+        safe_properties.setdefault("surface", str(source)[:60])
     # Fora de um request — jobs do scheduler, CLI — não há sessão nem
     # cabeçalhos. O evento continua valendo (uma conversão de avaliação é
     # justamente assíncrona), então o contexto degrada em vez de estourar.
@@ -134,12 +149,13 @@ def track_event(
             user_id=actor_id,
             source_path=source_path,
             referrer_host=referrer_host,
-            utm_source=(source or attribution.get("utm_source") or "")[:120] or None,
+            utm_source=(attribution.get("utm_source") or "")[:120] or None,
             utm_medium=(attribution.get("utm_medium") or "")[:120] or None,
             utm_campaign=(attribution.get("utm_campaign") or "")[:160] or None,
             properties=safe_properties,
         ))
-        db.session.commit()
+        if commit:
+            db.session.commit()
     except Exception:  # telemetry must never block the product
         db.session.rollback()
         current_app.logger.warning("product_event_persist_failed", exc_info=True)
@@ -148,7 +164,8 @@ def track_event(
         "product_event",
         extra={
             "event_name": name,
-            "event_source": source or attribution.get("utm_source"),
+            "event_source": source,
+            "event_utm_source": attribution.get("utm_source"),
             "event_user_id": actor_id,
             "event_role": actor_role,
             "event_path": source_path,

@@ -8812,8 +8812,10 @@ def enviar_lembretes_fim_trial() -> None:
             if dias_restantes not in TRIAL_REMINDER_OFFSETS:
                 continue
 
-            vet = getattr(membership, 'veterinario', None)
-            user = getattr(vet, 'user', None)
+            # ``membership.user`` cobre as duas âncoras: quem tem CRMV e quem
+            # responde pela clínica. Ler só ``veterinario.user`` deixava o
+            # responsável sem nenhum aviso de fim de avaliação.
+            user = membership.user
             if user is None:
                 continue
 
@@ -8864,6 +8866,8 @@ def enviar_lembretes_fim_trial() -> None:
                 assunto,
                 f'{abertura}\n\n{fecho}',
                 kind='trial_ending',
+                push_url='/veterinario/assinatura',
+                push_body=abertura,
             )
             enviados += 1
 
@@ -8915,8 +8919,10 @@ def enviar_winback_pos_trial() -> None:
             if dias_desde_fim not in WINBACK_OFFSETS:
                 continue
 
-            vet = getattr(membership, 'veterinario', None)
-            user = getattr(vet, 'user', None)
+            # ``membership.user`` cobre as duas âncoras: quem tem CRMV e quem
+            # responde pela clínica. Ler só ``veterinario.user`` deixava o
+            # responsável sem nenhum aviso de fim de avaliação.
+            user = membership.user
             if user is None:
                 continue
 
@@ -8947,7 +8953,13 @@ def enviar_winback_pos_trial() -> None:
                     f'Se preferir seguir sozinho, seus dados continuam aqui:\n{link}'
                 )
 
-            notify_user(user, assunto, corpo, kind='trial_winback')
+            notify_user(
+                user,
+                assunto,
+                corpo,
+                kind='trial_winback',
+                push_url='/veterinario/assinatura',
+            )
             enviados += 1
 
         db.session.commit()
@@ -8959,13 +8971,39 @@ def enviar_winback_pos_trial() -> None:
 #: Horas de carrinho parado antes do lembrete. Curto o bastante para a compra
 #: ainda fazer sentido, longo o bastante para não atropelar quem só pausou.
 ABANDONED_CART_HOURS = 24
+#: Segundo toque do carrinho. Um lembrete só alcança quem estava disponível
+#: naquele dia; três viram insistência. Dois, espaçados, é onde a recuperação
+#: para de crescer.
+ABANDONED_CART_SECOND_HOURS = 72
+#: Abaixo deste valor o segundo toque não se paga: gasta frequência com quem
+#: montou carrinho de teste e treina a pessoa a ignorar a próxima mensagem.
+ABANDONED_CART_SECOND_MIN_VALUE = Decimal('50')
+
+
+def _cart_summary(order) -> tuple[str, Decimal, int]:
+    """Itens em texto, valor total e quantidade — o que o lembrete precisa."""
+
+    itens = ', '.join(
+        (item.item_name or (item.product.name if item.product else 'item'))
+        for item in order.items[:3]
+    )
+    restantes = max(0, len(order.items) - 3)
+    if restantes:
+        itens += f' e mais {restantes} item{"ns" if restantes > 1 else ""}'
+    total = sum(
+        (Decimal(str(item.unit_price or 0)) * int(item.quantity or 0))
+        for item in order.items
+    ) or Decimal('0')
+    quantidade = sum(int(item.quantity or 0) for item in order.items)
+    return itens, total, quantidade
 
 
 def enviar_lembretes_carrinho_abandonado() -> None:
     """Job diário: lembra quem montou um carrinho e não concluiu o pagamento.
 
-    Um único toque por carrinho. O lembrete leva de volta ao carrinho já
-    montado — não pede para começar de novo.
+    Dois toques por carrinho — 24h e 72h —, ambos por e-mail e por push, e o
+    segundo só para carrinho que se paga. O lembrete leva de volta ao carrinho
+    já montado: não pede para começar de novo.
     """
     from models import Order, Payment, PaymentStatus
     from services.notifications import notify_user
@@ -8973,15 +9011,27 @@ def enviar_lembretes_carrinho_abandonado() -> None:
     with app.app_context():
         base_url = _notification_base_url()
         agora = utcnow()
-        limite = agora - timedelta(hours=ABANDONED_CART_HOURS)
+        primeiro_limite = agora - timedelta(hours=ABANDONED_CART_HOURS)
+        segundo_limite = agora - timedelta(hours=ABANDONED_CART_SECOND_HOURS)
         enviados = 0
-        abandoned_events = []
+        reminder_events = []
 
         candidatos = (
             Order.query
-            .filter(Order.abandoned_reminder_at.is_(None))
+            .filter(
+                db.or_(
+                    db.and_(
+                        Order.abandoned_reminder_at.is_(None),
+                        Order.created_at <= primeiro_limite,
+                    ),
+                    db.and_(
+                        Order.abandoned_reminder_at.isnot(None),
+                        Order.abandoned_reminder_2_at.is_(None),
+                        Order.created_at <= segundo_limite,
+                    ),
+                )
+            )
             .filter(Order.created_at.isnot(None))
-            .filter(Order.created_at <= limite)
             .filter(Order.user_id.isnot(None))
             .order_by(Order.created_at)
             .limit(200)
@@ -9000,51 +9050,73 @@ def enviar_lembretes_carrinho_abandonado() -> None:
             if pago:
                 continue
 
+            segundo_toque = order.abandoned_reminder_at is not None
+
             user = order.user
             if user is None:
                 order.abandoned_reminder_at = agora
+                order.abandoned_reminder_2_at = agora
+                continue
+
+            itens, total, quantidade = _cart_summary(order)
+
+            if segundo_toque and total < ABANDONED_CART_SECOND_MIN_VALUE:
+                # Carrinho pequeno recebe um toque e para por aí.
+                order.abandoned_reminder_2_at = agora
                 continue
 
             primeiro_nome = (user.name or '').split(' ')[0] or 'tudo bem'
-            itens = ', '.join(
-                (item.item_name or (item.product.name if item.product else 'item'))
-                for item in order.items[:3]
-            )
-            restantes = max(0, len(order.items) - 3)
-            if restantes:
-                itens += f' e mais {restantes} item{"ns" if restantes > 1 else ""}'
 
-            notify_user(
-                user,
-                'Seu carrinho ainda está guardado — PetOrlândia',
-                (
+            if segundo_toque:
+                assunto = f'{itens} ainda espera por você — PetOrlândia'
+                corpo = (
+                    f'Olá {primeiro_nome}! O carrinho continua montado, com o mesmo preço.\n\n'
+                    f'Finalizar leva menos de um minuto:\n{base_url}/carrinho\n\n'
+                    'Este é o último lembrete deste carrinho.'
+                )
+            else:
+                assunto = 'Seu carrinho ainda está guardado — PetOrlândia'
+                corpo = (
                     f'Olá {primeiro_nome}! Você deixou {itens} no carrinho e o pagamento '
                     'não foi concluído.\n\n'
                     'Está tudo lá, com o mesmo preço. É só abrir e finalizar:\n'
                     f'{base_url}/carrinho\n\n'
                     'Se desistiu, ignore esta mensagem — não vamos insistir.'
-                ),
+                )
+
+            notify_user(
+                user,
+                assunto,
+                corpo,
                 kind='cart_abandoned',
+                push_url='/carrinho',
+                push_body=f'{itens} continua no seu carrinho.',
             )
-            order.abandoned_reminder_at = agora
-            abandoned_events.append({
+            if segundo_toque:
+                order.abandoned_reminder_2_at = agora
+            else:
+                order.abandoned_reminder_at = agora
+            reminder_events.append({
                 'user_id': order.user_id,
-                'amount': float(sum(
-                    Decimal(str(item.unit_price or 0)) * int(item.quantity or 0)
-                    for item in order.items
-                )),
-                'items': sum(int(item.quantity or 0) for item in order.items),
+                'amount': float(total),
+                'items': quantidade,
+                'stage': 'segundo' if segundo_toque else 'primeiro',
             })
             enviados += 1
 
         db.session.commit()
-        # Mede o abandono depois de salvar o estado primário. A telemetria usa
+        # Mede o envio depois de salvar o estado primário. A telemetria usa
         # commit próprio e jamais pode decidir se o lembrete foi ou não enviado.
+        #
+        # O nome do evento diz o que ele é: lembrete enviado. Chamá-lo de
+        # ``checkout_abandoned`` media o alcance deste job — quem tem e-mail
+        # utilizável e coube no lote — e não o abandono, que o painel calcula
+        # pela diferença entre checkout iniciado e compra aprovada.
         from services.product_analytics import track_event
 
-        for payload in abandoned_events:
+        for payload in reminder_events:
             track_event(
-                'checkout_abandoned',
+                'cart_reminder_sent',
                 source_path='/carrinho',
                 **payload,
             )

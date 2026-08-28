@@ -132,6 +132,19 @@ class WaitlistLead(db.Model):
         db.UniqueConstraint('feature', 'contact', name='uq_waitlist_feature_contact'),
     )
 
+    #: Estados da fila de contato. A lista existia como arquivo: sem estado,
+    #: ninguém sabia quem já tinha sido procurado, e um pedido de demonstração
+    #: — o lead mais qualificado do funil — esperava por uma consulta manual à
+    #: tabela que ninguém tinha motivo para fazer.
+    STATUSES = ('novo', 'contatado', 'demo_marcada', 'convertido', 'perdido')
+    STATUS_LABELS = {
+        'novo': 'Novo',
+        'contatado': 'Contatado',
+        'demo_marcada': 'Demo marcada',
+        'convertido': 'Convertido',
+        'perdido': 'Perdido',
+    }
+
     id = db.Column(db.Integer, primary_key=True)
     #: Chave da funcionalidade ('loja', 'plano_saude').
     feature = db.Column(db.String(60), nullable=False, index=True)
@@ -141,8 +154,18 @@ class WaitlistLead(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='novo', index=True)
+    followup_note = db.Column(db.String(500), nullable=True)
 
     user = db.relationship('User')
+
+    @property
+    def status_label(self) -> str:
+        return self.STATUS_LABELS.get(self.status or 'novo', 'Novo')
+
+    @property
+    def is_email(self) -> bool:
+        return '@' in (self.contact or '')
 
     def __repr__(self) -> str:  # pragma: no cover - conveniência de debug
         return f'<WaitlistLead {self.feature} {self.contact}>'
