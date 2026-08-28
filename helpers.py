@@ -327,6 +327,35 @@ def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     return membership.is_active()
 
 
+#: Valor de ``User.role`` que marca a conta como estagiaria. Diferente de
+#: ``worker``, ``role`` so e definido pelo admin -- e o marcador confiavel.
+INTERN_ROLE = 'estagiario'
+#: Valor de ``User.worker`` para a mesma coisa. ATENCAO: este e auto-atribuivel
+#: (cadastro publico, login Google e o botao "entrar como estudante" gravam
+#: sozinhos), entao ele identifica a conta mas nunca concede permissao por si.
+INTERN_WORKER = 'estudante'
+
+
+def is_intern_account(user=None) -> bool:
+    """``True`` quando a conta esta marcada como estagiaria em ``role`` ou ``worker``.
+
+    Identificacao, nao autorizacao. Quem pode operar numa clinica continua
+    sendo decidido pelo vinculo ``ClinicStaff`` -- ver ``is_active_intern``.
+    Misturar as duas coisas abriria escalonamento: qualquer visitante consegue
+    se dar ``worker='estudante'`` sozinho pelo cadastro publico.
+    """
+
+    if user is None:
+        user = current_user if getattr(current_user, 'is_authenticated', False) else None
+
+    if not user:
+        return False
+
+    if (getattr(user, 'role', None) or '').lower() == INTERN_ROLE:
+        return True
+    return (getattr(user, 'worker', None) or '').lower() == INTERN_WORKER
+
+
 def active_internship_staff(user=None):
     """Vinculo de estagio ATIVO do usuario, ou ``None``.
 

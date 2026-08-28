@@ -34,12 +34,14 @@ USER_ROLE_CHOICES = [
     ('admin', 'Administrador'),
     ('vacinador', 'Vacinador PMO'),
     ('parceiro', 'Parceiro de cadastro'),
+    ('estagiario', 'Estagiário(a)'),
 ]
 
 USER_WORKER_CHOICES = [
     ('', 'Sem perfil interno'),
     ('veterinario', 'Veterinário'),
     ('colaborador', 'Colaborador de clínica'),
+    ('estudante', 'Estagiário(a) / Estudante'),
     ('delivery', 'Entregador'),
     ('seguradora', 'Seguradora'),
     ('gestor', 'Gestor financeiro'),

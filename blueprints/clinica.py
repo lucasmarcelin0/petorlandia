@@ -13,7 +13,7 @@ from flask_login import current_user, login_required
 from flask_mail import Message as MailMessage
 from models.usuarios import HABILITACAO_CRMV, HABILITACAO_ESTAGIARIO
 from forms import APPOINTMENT_KIND_CHOICES, DIAS_SEMANA, ClinicAddSpecialistForm, ClinicAddStaffForm, ClinicForm, ClinicHoursForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm, ClinicInviteVeterinarianForm, ClinicProductEditForm, ClinicProductForm, ClinicStaffPermissionForm, InventoryItemForm, OrcamentoForm, VetProfileForm, VetScheduleForm, VeterinarianProfileForm
-from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, grant_veterinarian_role, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, unique_items_by_id
+from helpers import _user_can_access_accounting, appointments_to_events, clinicas_do_usuario, ensure_veterinarian_membership, grant_veterinarian_role, group_appointments_by_day, group_vet_schedules_by_day, has_veterinarian_profile, is_intern_account, INTERN_WORKER, unique_items_by_id
 from models import (
     Animal,
     Appointment,
@@ -634,7 +634,7 @@ def clinic_detail(clinica_id):
             if staff:
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                is_intern = getattr(user, 'worker', None) == 'estudante'
+                is_intern = is_intern_account(user)
                 staff = ClinicStaff(
                     clinic_id=clinica.id,
                     user_id=user.id,
@@ -854,6 +854,11 @@ def clinic_detail(clinica_id):
             # Colaboradores não têm perfil de veterinário — impede atribuição indevida
             if new_view == 'veterinario' and not getattr(s.user, 'veterinario', None):
                 new_view = 'colaborador'
+            # "— padrão —" não pode apagar o marcador de estágio: sem isto,
+            # salvar as permissões de um estagiário zera o ``worker`` e a conta
+            # deixa de ser identificável como estagiária.
+            if new_view is None and (s.user.worker or '').lower() == INTERN_WORKER:
+                new_view = s.user.worker
             s.user.worker = new_view
             db.session.add(s.user)
             db.session.commit()
@@ -2386,7 +2391,7 @@ def clinic_staff(clinica_id):
                     return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
             else:
-                is_intern = getattr(user, 'worker', None) == 'estudante'
+                is_intern = is_intern_account(user)
                 staff = ClinicStaff(
                     clinic_id=clinic.id,
                     user_id=user.id,
