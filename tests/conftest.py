@@ -42,16 +42,19 @@ def _isolate_app_state():
 
 @pytest.fixture(autouse=True)
 def _clear_context_cache():
-    """Zera o cache de badges (TTL 30s) entre testes.
+    """Zera o cache de badges (TTL 30s) e offer_availability entre testes.
 
     O cache é keyed por user_id; testes recriam usuários com os mesmos ids e
     herdariam contadores/flags do teste anterior (ex.: has_clinic_access).
     """
     from context_processors import _context_cache
+    from services.offer_availability import invalidate_cache
 
     _context_cache.clear()
+    invalidate_cache()
     yield
     _context_cache.clear()
+    invalidate_cache()
 
 
 @pytest.fixture()
