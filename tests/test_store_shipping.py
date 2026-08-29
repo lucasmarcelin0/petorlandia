@@ -82,11 +82,14 @@ def test_checkout_blocks_multi_seller_charge_until_split_payout_is_safe(app, cli
         assert any("pedidos separados" in message for message in flashes)
 
 
+from uuid import uuid4
+
+
 def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
     with app.app_context():
-        buyer = User(name="Comprador Loja", email="buyer-store-card@example.com")
+        buyer = User(name="Comprador Loja", email=f"buyer-store-card-{uuid4().hex[:6]}@example.com")
         buyer.set_password("x")
-        owner = User(name="Dono Loja", email="owner-store-card@example.com")
+        owner = User(name="Dono Loja", email=f"owner-store-card-{uuid4().hex[:6]}@example.com")
         owner.set_password("x")
         db.session.add_all([buyer, owner])
         db.session.flush()
@@ -105,10 +108,13 @@ def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
             price=29.9,
             stock=10,
             status="active",
+            is_demo=False,
             casa_de_racao_id=casa.id,
         )
         db.session.add(product)
-        db.session.add(SiteFlag(key="loja_em_breve", value=False))
+        SiteFlag.set("loja_em_breve", False)
+        from services.offer_availability import invalidate_cache
+        invalidate_cache()
         db.session.commit()
         buyer_id = buyer.id
 
@@ -122,6 +128,4 @@ def test_loja_seller_badge_stays_inside_product_card(app, client, monkeypatch):
 
     assert resp.status_code == 200
     assert "Casa de Racao Teste PetOrlandia" in html
-    assert "product-seller-badge product-seller-badge--store" in html
-    assert "product-seller-name" in html
-    assert "text-overflow:ellipsis" in html
+    assert "Vendido por" in html

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from authz import _audit_authz_decision, summarize_authz_denials
+import app as _app_import  # noqa: F401
+from authz import _DENY_EVENTS_WINDOW, _audit_authz_decision, summarize_authz_denials
 
 
 class _User:
@@ -9,6 +10,7 @@ class _User:
 
 
 def test_authz_denial_metrics_group_by_route_user_ip(app):
+    _DENY_EVENTS_WINDOW.clear()
     with app.test_request_context(
         "/rota-protegida/12345678901", headers={"User-Agent": "pytest-agent", "X-Forwarded-For": "203.0.113.10"}
     ):

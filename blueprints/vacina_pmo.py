@@ -9,6 +9,7 @@ from flask import abort, current_app, flash, jsonify, redirect, render_template,
 from flask_login import current_user, login_required
 from io import BytesIO
 from models import Animal, Endereco, User, Vacina
+from security.url_safe import is_url_ssrf_safe
 from time_utils import BR_TZ
 from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
@@ -971,8 +972,11 @@ def vacina_pmo_animal_photo_src(animal_id):
     if parsed.scheme not in {'http', 'https'}:
         abort(404)
 
+    if not is_url_ssrf_safe(image_url):
+        abort(400)
+
     try:
-        upstream = requests.get(image_url, timeout=8)
+        upstream = requests.get(image_url, timeout=8, allow_redirects=False)
         upstream.raise_for_status()
     except requests.RequestException:
         current_app.logger.exception("Falha ao buscar foto PMO para video")

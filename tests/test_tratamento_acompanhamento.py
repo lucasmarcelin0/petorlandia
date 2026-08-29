@@ -98,6 +98,11 @@ def _setup_bloco(app):
 
 
 def _login(client, email, password):
+    from extensions import limiter
+    try:
+        limiter.reset()
+    except Exception:
+        pass
     resp = client.post(
         '/login',
         data={'email': email, 'password': password},
